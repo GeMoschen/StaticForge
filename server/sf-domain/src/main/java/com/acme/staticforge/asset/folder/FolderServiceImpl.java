@@ -19,6 +19,7 @@ import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -54,29 +55,43 @@ public class FolderServiceImpl implements FolderService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FolderNode> tree(long projectId, int depth, RevisionContext ctx) {
+    public List<FolderNode> tree(long projectId, FolderScope scope, int depth, RevisionContext ctx) {
         List<AssetVersion> folders = assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.FOLDER);
 
         java.util.Map<Long, FolderInfo> info = new java.util.LinkedHashMap<>();
         java.util.Map<Long, List<Long>> children = new java.util.LinkedHashMap<>();
+        Long hiddenRootId = null;
         for (AssetVersion version : folders) {
             Asset asset = assetRepository.findById(version.getAssetId()).orElse(null);
             if (asset == null) {
                 continue;
             }
-            info.put(asset.getId(), new FolderInfo(asset.getUuid(), asset.getUid(), version.getDisplayName(), version.getFolderPath()));
+            if (PathService.ROOT_UID.equals(asset.getUid())) {
+                hiddenRootId = asset.getId();
+            }
+            info.put(asset.getId(), new FolderInfo(
+                    asset.getUuid(), asset.getUid(), version.getDisplayName(), version.getFolderPath(),
+                    FolderScope.fromPayload(version.getPayload())));
             children.put(asset.getId(), new java.util.ArrayList<>());
         }
         List<Long> roots = new java.util.ArrayList<>();
         for (AssetVersion version : folders) {
+            Long assetId = version.getAssetId();
+            if (!children.containsKey(assetId) || assetId.equals(hiddenRootId)) {
+                continue;
+            }
             Long parentId = version.getFolderId();
-            if (parentId != null && children.containsKey(parentId) && children.containsKey(version.getAssetId())) {
-                children.get(parentId).add(version.getAssetId());
-            } else if (children.containsKey(version.getAssetId())) {
-                roots.add(version.getAssetId());
+            boolean topLevel = parentId == null || parentId.equals(hiddenRootId) || !children.containsKey(parentId);
+            if (topLevel) {
+                roots.add(assetId);
+            } else {
+                children.get(parentId).add(assetId);
             }
         }
-        return roots.stream().map(id -> toNode(id, info, children, depth)).toList();
+        return roots.stream()
+                .map(id -> toNode(id, info, children, depth))
+                .filter(node -> node.scope() == scope)
+                .toList();
     }
 
     private static FolderNode toNode(Long id, java.util.Map<Long, FolderInfo> info,
@@ -85,23 +100,39 @@ public class FolderServiceImpl implements FolderService {
         List<FolderNode> childNodes = (depth == 0)
                 ? List.of()
                 : children.get(id).stream().map(cid -> toNode(cid, info, children, depth - 1)).toList();
-        return new FolderNode(f.uuid(), f.uid(), f.displayName(), f.path(), childNodes);
+        return new FolderNode(f.uuid(), f.uid(), f.displayName(), f.path(), f.scope(), childNodes);
     }
 
-    private record FolderInfo(UUID uuid, String uid, String displayName, String path) {}
+    private record FolderInfo(UUID uuid, String uid, String displayName, String path, FolderScope scope) {}
 
     @Override
     @Transactional
-    public AssetVersionView create(UUID parentFolderUuid, String displayName, RevisionContext ctx) {
-        String parentPath = parentFolderUuid == null
-                ? PathService.ROOT_PATH
-                : requireOpen(requireFolder(parentFolderUuid, ctx.projectId()).getId()).getFolderPath();
+    public AssetVersionView create(UUID parentFolderUuid, String displayName, FolderScope scope, RevisionContext ctx) {
+        String parentPath = PathService.ROOT_PATH;
+        FolderScope effectiveScope = scope;
+        if (parentFolderUuid != null) {
+            Asset parentAsset = requireFolder(parentFolderUuid, ctx.projectId());
+            AssetVersion parentVersion = requireOpen(parentAsset.getId());
+            parentPath = parentVersion.getFolderPath();
+            FolderScope parentScope = FolderScope.fromPayload(parentVersion.getPayload());
+            if (parentScope != null) {
+                if (scope != null && scope != parentScope) {
+                    throw new SfException(ProblemFactory.unprocessableEntity("A subfolder's store must match its parent folder's."));
+                }
+                effectiveScope = parentScope;
+            }
+        }
+        if (effectiveScope == null) {
+            throw new SfException(ProblemFactory.unprocessableEntity("Folder scope is required."));
+        }
         if (pathService.depth(parentPath) + 1 > PathService.MAX_DEPTH) {
             throw new SfException(ProblemFactory.other(
                     422, "SF-DOM-0103", "Validation Failed", "Folder depth limit of " + PathService.MAX_DEPTH + " exceeded."));
         }
+        ObjectNode payload = (ObjectNode) JsonUtil.parse("{}");
+        payload.put("scope", effectiveScope.name());
         return assetService.create(
-                new CreateAssetCommand(ctx.projectId(), AssetType.FOLDER, displayName, parentFolderUuid, JsonUtil.parse("{}"), null),
+                new CreateAssetCommand(ctx.projectId(), AssetType.FOLDER, displayName, parentFolderUuid, payload, null),
                 ctx);
     }
 
@@ -122,6 +153,16 @@ public class FolderServiceImpl implements FolderService {
 
         if (targetParentFolderUuid != null && targetParentFolderUuid.equals(folderUuid)) {
             throw new SfException(ProblemFactory.unprocessableEntity("A folder cannot be moved into itself."));
+        }
+
+        if (targetParentFolderUuid != null) {
+            Asset targetAsset = requireFolder(targetParentFolderUuid, ctx.projectId());
+            AssetVersion targetVersion = requireOpen(targetAsset.getId());
+            FolderScope targetScope = FolderScope.fromPayload(targetVersion.getPayload());
+            FolderScope ownScope = FolderScope.fromPayload(current.getPayload());
+            if (targetScope != null && ownScope != null && targetScope != ownScope) {
+                throw new SfException(ProblemFactory.unprocessableEntity("Cannot move a folder into a different store's folder tree."));
+            }
         }
 
         FolderRef target = resolveTarget(targetParentFolderUuid, ctx.projectId(), ctx);

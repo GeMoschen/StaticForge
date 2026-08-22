@@ -1,3 +1,5 @@
+@use '../../design/interactive';
+
 :host {
   display: block;
   height: 100%;
@@ -16,6 +18,19 @@
 
 .rail--expanded {
   width: 220px;
+}
+
+// mirrors --sf-bp-md (media queries can't read custom properties directly)
+@media (max-width: 960px) {
+  .rail {
+    width: 64px !important;
+  }
+
+  .rail__switcher-label,
+  .rail__item-label,
+  .rail__toggle-label {
+    display: none;
+  }
 }
 
 .rail__switcher {
@@ -67,7 +82,9 @@
   color: var(--sf-slate);
   text-decoration: none;
   white-space: nowrap;
-  transition: background var(--sf-motion-fast) var(--sf-ease);
+  transition:
+    background var(--sf-motion-fast) var(--sf-ease),
+    color var(--sf-motion-fast) var(--sf-ease);
 }
 
 .rail__item:hover {
@@ -75,15 +92,17 @@
 }
 
 .rail__item.is-active {
-  background: color-mix(in srgb, var(--sf-signal) 12%, transparent);
+  background: color-mix(in srgb, var(--sf-signal) 10%, transparent);
   color: var(--sf-signal);
+  @include interactive.sf-pour-left;
 }
 
 .rail__item-icon {
   flex-shrink: 0;
   width: 20px;
-  text-align: center;
-  font-size: var(--sf-text-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .rail__item-label {
@@ -91,6 +110,7 @@
   text-overflow: ellipsis;
 }
 
+.rail__theme,
 .rail__toggle {
   display: flex;
   align-items: center;
@@ -103,10 +123,20 @@
   color: var(--sf-slate);
   cursor: pointer;
   white-space: nowrap;
+  @include interactive.sf-interactive;
 }
 
+.rail__theme:hover,
+.rail__toggle:hover {
+  border-color: var(--sf-signal);
+  color: var(--sf-signal);
+}
+
+.rail__theme-icon,
 .rail__toggle-icon {
   flex-shrink: 0;
   width: 20px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

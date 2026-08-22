@@ -12,7 +12,7 @@
   </header>
 
   @if (loading()) {
-    <sf-empty-state title="Loading diff" />
+    <sf-spinner label="Loading diff…" />
   } @else if (error()) {
     <sf-empty-state title="Error" [description]="error() ?? ''" />
   } @else {

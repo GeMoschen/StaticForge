@@ -1,0 +1,31 @@
+<div class="panel">
+  <h2 class="panel__title">Media</h2>
+  <p class="panel__subtitle">
+    Which MIME types this project accepts on upload. One pattern per line — a family
+    wildcard like <code class="mono">image/*</code>, an exact type like
+    <code class="mono">application/pdf</code>, or a lone <code class="mono">*</code> to allow
+    everything. Leave empty to use the instance-wide default.
+  </p>
+
+  @if (loading()) {
+    <sf-spinner label="Loading media settings…" />
+  } @else {
+    <div class="form">
+      <sf-field label="Allowed MIME types" hint="One pattern per line.">
+        <textarea
+          class="textarea"
+          rows="8"
+          spellcheck="false"
+          placeholder="image/*&#10;application/pdf&#10;*"
+          [value]="patterns()"
+          (input)="onPatternsInput($event)"
+        ></textarea>
+      </sf-field>
+      <div class="form__actions">
+        <sf-button variant="primary" [disabled]="saving()" (click)="save()">
+          {{ saving() ? 'Saving…' : 'Save changes' }}
+        </sf-button>
+      </div>
+    </div>
+  }
+</div>

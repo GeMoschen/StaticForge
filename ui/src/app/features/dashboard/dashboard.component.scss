@@ -1,3 +1,5 @@
+@use '../../design/forms';
+
 :host {
   display: block;
 }
@@ -42,15 +44,7 @@
 }
 
 .input {
-  width: 100%;
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
-  box-sizing: border-box;
+  @include forms.sf-form-control;
 }
 
 .form__error {
@@ -71,21 +65,9 @@
 }
 
 .dashboard__search {
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-  background: var(--sf-surface);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  padding: var(--sf-2) var(--sf-3);
-  width: 100%;
+  @include forms.sf-form-control;
   max-width: 360px;
   margin-bottom: var(--sf-5);
-  outline: none;
-}
-
-.dashboard__search:focus {
-  border-color: var(--sf-signal);
 }
 
 .dashboard__hint {

@@ -19,8 +19,9 @@
       (click)="toggleCollapsed($event)"
       aria-label="Toggle section"
     >
-      {{ collapsed() ? '▸' : '▾' }}
+      <sf-icon [name]="collapsed() ? 'chevron_right' : 'expand_more'" />
     </button>
+    <sf-icon class="section-card__icon" name="widgets" />
     <span class="section-card__title">{{ title() }}</span>
     @if (!readOnly()) {
       <div class="section-card__actions">

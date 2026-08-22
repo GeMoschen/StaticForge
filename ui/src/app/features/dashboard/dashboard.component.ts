@@ -14,6 +14,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 
 type ProjectSummary = components['schemas']['ProjectSummary'];
 
@@ -26,6 +27,7 @@ type ProjectSummary = components['schemas']['ProjectSummary'];
     SfButtonComponent,
     SfEmptyStateComponent,
     SfFieldComponent,
+    SfSpinnerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dashboard.component.html',
@@ -82,7 +84,7 @@ export class DashboardComponent {
         this.loading.set(false);
       },
       error: () => {
-        this.error.set('Failed to load projects');
+        this.error.set('Could not load projects — check your connection and try again.');
         this.loading.set(false);
       },
     });
@@ -119,6 +121,17 @@ export class DashboardComponent {
           this.closeForm();
           this.toasts.show('Project created', 'success');
           this.reload();
+          // The access token's embedded `projects` claim (what the `/p/:projectKey`
+          // route guard checks) is baked in at token-issue time and doesn't include
+          // the new project yet. `/auth/me` just re-decodes that same stale token, so
+          // it can't help — only minting a fresh token via `/auth/refresh` (which
+          // re-reads current project memberships from the DB) picks up the new role.
+          this.api.refresh().subscribe({
+            next: (res) => this.auth.setSession(res),
+            error: () => {
+              /* the guard will still work after the next natural token refresh */
+            },
+          });
         },
         error: (err) => this.onSubmitError(err),
       });
@@ -139,6 +152,6 @@ export class DashboardComponent {
       message?: string;
       error?: { detail?: string; message?: string };
     };
-    this.formError.set(e?.error?.detail ?? e?.error?.message ?? e?.message ?? 'Failed to create project');
+    this.formError.set(e?.error?.detail ?? e?.error?.message ?? e?.message ?? 'Could not create project — check the key is unique.');
   }
 }

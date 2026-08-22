@@ -103,13 +103,25 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public Project update(String key, String name, String description, Long actingUserId, String comment) {
+    public Project update(String key, String name, String description, List<String> allowedMimeTypes, Long actingUserId, String comment) {
         Project project = requireByKey(key);
         project.setName(name);
         project.setDescription(description);
+        project.setAllowedMimeTypes(joinMimeTypes(allowedMimeTypes));
         projectRepository.save(project);
         revisionService.allocate(project.getId(), ChangeType.UPDATE, comment, actingUserId);
         return project;
+    }
+
+    private static String joinMimeTypes(List<String> patterns) {
+        if (patterns == null || patterns.isEmpty()) {
+            return null;
+        }
+        String joined = patterns.stream()
+                .map(String::trim)
+                .filter(p -> !p.isBlank())
+                .collect(java.util.stream.Collectors.joining(","));
+        return joined.isBlank() ? null : joined;
     }
 
     @Override

@@ -1,0 +1,68 @@
+<div class="scrim" (click)="close()"></div>
+<div class="dialog" role="dialog" aria-modal="true" aria-label="Choose an asset">
+  <header class="dialog__header">
+    <h2 class="dialog__title">Choose an asset</h2>
+    <button type="button" class="dialog__close" aria-label="Close" (click)="close()">
+      <sf-icon name="close" />
+    </button>
+  </header>
+
+  <div class="dialog__toolbar">
+    @if (typeOptions().length > 1) {
+      <select class="dialog__type" [value]="type()" (change)="onTypeChange($event)" aria-label="Asset type">
+        @for (option of typeOptions(); track option.value) {
+          <option [value]="option.value">{{ option.label }}</option>
+        }
+      </select>
+    }
+    <input
+      type="search"
+      class="dialog__search"
+      placeholder="Search…"
+      (input)="onSearchInput($event)"
+    />
+  </div>
+
+  <div class="dialog__body">
+    @if (hasFolders()) {
+      <aside class="dialog__tree">
+        <button
+          type="button"
+          class="dialog__tree-root"
+          [class.dialog__tree-root--active]="!folderUuid()"
+          (click)="selectFolder(null)"
+        >
+          <sf-icon name="home" />
+          All
+        </button>
+        @for (folder of tree(); track folder.uuid) {
+          <sf-asset-picker-folder-node
+            [node]="folder"
+            [depth]="0"
+            [selectedUuid]="folderUuid()"
+            (select)="selectFolder($event)"
+          />
+        }
+      </aside>
+    }
+
+    <div class="dialog__results">
+      @if (loading()) {
+        <sf-spinner label="Loading…" />
+      } @else if (items().length === 0) {
+        <sf-empty-state title="No assets found" description="Try a different search or folder." />
+      } @else {
+        <ul class="dialog__list">
+          @for (item of items(); track item.uuid) {
+            <li>
+              <button type="button" class="dialog__item" (click)="pick(item)">
+                <span class="dialog__item-name">{{ item.displayName ?? item.uid }}</span>
+                <span class="dialog__item-meta">{{ item.uid }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </div>
+</div>

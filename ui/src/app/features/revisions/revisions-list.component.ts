@@ -12,6 +12,7 @@ import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { RevisionsService } from './revisions.service';
 
@@ -24,7 +25,7 @@ const OVERSCAN = 8;
 @Component({
   selector: 'sf-revisions-list',
   standalone: true,
-  imports: [RouterLink, SfRelativeTimePipe, SfEmptyStateComponent],
+  imports: [RouterLink, SfRelativeTimePipe, SfEmptyStateComponent, SfSpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './revisions-list.component.html',
   styleUrl: './revisions-list.component.scss',
@@ -79,16 +80,19 @@ export class RevisionsListComponent {
   protected readonly offset = computed(() => this.startIndex() * ITEM_HEIGHT);
 
   constructor() {
-    effect(() => {
-      const key = this.projectKey();
-      if (!key) {
-        return;
-      }
-      this.api.listMembers(key).subscribe({
-        next: (list) => this.members.set(list ?? []),
-      });
-      this.service.load(key);
-    });
+    effect(
+      () => {
+        const key = this.projectKey();
+        if (!key) {
+          return;
+        }
+        this.api.listMembers(key).subscribe({
+          next: (list) => this.members.set(list ?? []),
+        });
+        this.service.load(key);
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   ngOnInit(): void {

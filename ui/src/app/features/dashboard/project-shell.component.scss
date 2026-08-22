@@ -55,4 +55,12 @@
   font-family: var(--sf-font-ui);
   font-size: var(--sf-text-sm);
   cursor: pointer;
+  transition:
+    background var(--sf-motion-fast) var(--sf-ease),
+    color var(--sf-motion-fast) var(--sf-ease);
+}
+
+.shell__timemachine-back:hover {
+  background: var(--sf-amber);
+  color: #fff;
 }

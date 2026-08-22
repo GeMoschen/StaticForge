@@ -8,34 +8,47 @@ import {
   signal,
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { RouterOutlet } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
+import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { FolderDetailComponent } from './folder-detail.component';
 import { FolderNodeComponent } from './folder-node.component';
+import { PageNavNodeComponent } from './page-nav-node.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { FolderMoveEvent } from './types';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
+type FolderView = components['schemas']['FolderView'];
 
 /**
- * Pages list: a folder tree on the left and a page table on the right.
- * Supports folder filtering, search, multi-select, and bulk move/delete.
+ * Pages list: one unified navigation tree — folders contain pages, pages
+ * contain bodies, bodies contain their currently assigned sections.
+ * Clicking a page/body/section navigates to `PageEditorComponent` (see
+ * `PageNavNodeComponent`). Supports search; "All pages" is the project's
+ * page root.
  */
 @Component({
   selector: 'sf-pages-list',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    FolderDetailComponent,
     FolderNodeComponent,
+    PageNavNodeComponent,
     SfButtonComponent,
     SfEmptyStateComponent,
     SfFieldComponent,
+    SfIconComponent,
     ReactiveFormsModule,
+    RouterOutlet,
   ],
   templateUrl: './pages-list.component.html',
   styleUrl: './pages-list.component.scss',
@@ -43,20 +56,51 @@ type TemplateSummary = components['schemas']['TemplateSummary'];
 export class PagesListComponent {
   private readonly api = inject(ApiClient);
   private readonly store = inject(ProjectContextStore);
-  private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
+  private readonly menu = inject(ContextMenuService);
+  protected readonly clipboard = inject(TreeClipboardService);
 
   readonly projectKey = input.required<string>();
 
-  protected readonly tree = this.store.folderTree;
+  protected readonly tree = this.store.pageFolderTree;
   protected readonly pageTemplates = computed<TemplateSummary[]>(() => this.store.pageTemplates());
 
   protected readonly selectedFolder = signal<string | null>(null);
   protected readonly search = signal('');
   protected readonly pages = signal<AssetSummaryView[]>([]);
-  protected readonly selectedUuids = signal<string[]>([]);
   protected readonly loading = signal(false);
+
+  /** Pages grouped by their canonical folder path, for the unified tree. */
+  protected readonly pagesByFolder = computed<Map<string, AssetSummaryView[]>>(() => {
+    const map = new Map<string, AssetSummaryView[]>();
+    for (const page of this.pages()) {
+      const path = page.folderPath ?? '/';
+      const list = map.get(path);
+      if (list) {
+        list.push(page);
+      } else {
+        map.set(path, [page]);
+      }
+    }
+    return map;
+  });
+
+  /** The currently selected folder's own node, for the metadata panel. */
+  protected readonly selectedFolderNode = computed<FolderView | null>(() => {
+    const uuid = this.selectedFolder();
+    return uuid ? findFolder(this.tree(), uuid) : null;
+  });
+
+  protected readonly selectedFolderPageCount = computed<number>(
+    () => (this.pagesByFolder().get(this.selectedFolderNode()?.path ?? '') ?? []).length,
+  );
+
+  protected readonly selectedFolderSubfolderCount = computed<number>(
+    () => (this.selectedFolderNode()?.children ?? []).length,
+  );
+
+  protected readonly rootPages = computed<AssetSummaryView[]>(() => this.pagesByFolder().get('/') ?? []);
 
   protected readonly newPageOpen = signal(false);
   protected readonly creatingPage = signal(false);
@@ -80,23 +124,17 @@ export class PagesListComponent {
         if (!key) {
           return;
         }
-        const folder = this.selectedFolder();
         const q = this.search();
-        this.reload(key, folder, q);
+        this.reload(key, q);
       },
       { allowSignalWrites: true },
     );
   }
 
-  protected reload(
-    key: string,
-    folder: string | null,
-    q: string,
-  ): void {
+  protected reload(key: string, q: string): void {
     this.loading.set(true);
     this.api
       .listPages(key, {
-        folder: folder ?? undefined,
         q: q.trim() || undefined,
       })
       .subscribe({
@@ -109,22 +147,23 @@ export class PagesListComponent {
   }
 
   protected newFolder(): void {
+    this.createFolderUnder(this.selectedFolder() ?? undefined);
+  }
+
+  private createFolderUnder(parentUuid: string | undefined): void {
     const displayName = window.prompt('Folder name');
     if (!displayName || !displayName.trim()) {
       return;
     }
     const key = this.projectKey();
     this.api
-      .createFolder(key, {
-        displayName: displayName.trim(),
-        parentFolderUuid: this.selectedFolder() ?? undefined,
-      })
+      .createFolder(key, { displayName: displayName.trim(), parentFolderUuid: parentUuid, scope: 'PAGES' })
       .subscribe({
         next: () => {
           this.toast.show('Folder created', 'success');
-          this.store.loadFor(key, true).subscribe();
+          this.onTreeChanged();
         },
-        error: () => this.toast.show('Failed to create folder', 'error'),
+        error: () => this.toast.show('Could not create folder — a folder with that name may already exist here.', 'error'),
       });
   }
 
@@ -155,18 +194,17 @@ export class PagesListComponent {
           this.creatingPage.set(false);
           this.newPageOpen.set(false);
           this.toast.show('Page created', 'success');
-          this.reload(key, this.selectedFolder(), this.search());
+          this.reload(key, this.search());
         },
         error: () => {
           this.creatingPage.set(false);
-          this.toast.show('Failed to create page', 'error');
+          this.toast.show('Could not create page — check a template is selected and try again.', 'error');
         },
       });
   }
 
   protected selectFolder(uuid: string | null): void {
     this.selectedFolder.set(uuid);
-    this.selectedUuids.set([]);
   }
 
   protected onSearch(event: Event): void {
@@ -174,101 +212,78 @@ export class PagesListComponent {
     this.search.set(value);
   }
 
-  protected isSelected(uuid?: string): boolean {
-    return uuid != null && this.selectedUuids().includes(uuid);
-  }
-
-  protected toggleSelect(uuid: string): void {
-    if (!uuid) {
-      return;
-    }
-    this.selectedUuids.update((list) =>
-      list.includes(uuid) ? list.filter((u) => u !== uuid) : [...list, uuid],
-    );
-  }
-
-  protected allSelected(): boolean {
-    return (
-      this.pages().length > 0 &&
-      this.pages().every((p) => p.uuid != null && this.selectedUuids().includes(p.uuid as string))
-    );
-  }
-
-  protected toggleAll(): void {
-    if (this.allSelected()) {
-      this.selectedUuids.set([]);
-    } else {
-      this.selectedUuids.set(
-        (this.pages() as AssetSummaryView[])
-          .map((p) => p.uuid)
-          .filter((u): u is string => u != null),
-      );
-    }
-  }
-
-  protected open(uuid: string): void {
-    if (!uuid) {
-      return;
-    }
-    void this.router.navigate(['/p', this.projectKey(), 'pages', uuid]);
-  }
-
-  protected bulkMove(): void {
-    const key = this.projectKey();
-    const target = this.selectedFolder();
-    const uuids = this.selectedUuids();
-    if (uuids.length === 0) {
-      return;
-    }
-    let pending = uuids.length;
-    for (const uuid of uuids) {
-      this.api.moveAsset(key, uuid, { folderUuid: target ?? undefined }).subscribe({
-        next: () => this.afterBulk(uuids, --pending),
-        error: () => this.afterBulk(uuids, --pending),
-      });
-    }
-  }
-
-  protected bulkDelete(): void {
-    const uuids = this.selectedUuids();
-    if (uuids.length === 0) {
-      return;
-    }
-    if (
-      uuids.length > 1 &&
-      !window.confirm(`Delete ${uuids.length} pages? This cannot be undone.`)
-    ) {
-      return;
-    }
-    const key = this.projectKey();
-    let pending = uuids.length;
-    for (const uuid of uuids) {
-      this.api.deleteAsset(key, uuid).subscribe({
-        next: () => this.afterBulk(uuids, --pending),
-        error: () => this.afterBulk(uuids, --pending),
-      });
-    }
-  }
-
-  private afterBulk(uuids: string[], remaining: number): void {
-    if (remaining <= 0) {
-      this.selectedUuids.set([]);
-      this.reload(this.projectKey(), this.selectedFolder(), this.search());
-    }
-  }
-
-  protected moveFolderTo(event: FolderMoveEvent): void {
+  /** Handles both folder-onto-folder and page-onto-folder drags — the generic move endpoint dispatches by asset type. */
+  protected moveItemTo(event: FolderMoveEvent): void {
     if (!event.source || !event.target) {
       return;
     }
-    this.api
-      .moveFolder(this.projectKey(), event.source, { folderUuid: event.target })
-      .subscribe({
-        next: () => {
-          this.toast.show('Folder moved', 'success');
-          this.store.loadFor(this.projectKey(), true).subscribe();
-        },
-        error: () => this.toast.show('Failed to move folder', 'error'),
-      });
+    this.api.moveAsset(this.projectKey(), event.source, { folderUuid: event.target }).subscribe({
+      next: () => {
+        this.toast.show('Moved', 'success');
+        this.onTreeChanged();
+      },
+      error: () => this.toast.show('Could not move — that may create a cycle.', 'error'),
+    });
   }
+
+  /** Drop target for the "All pages" root button — moves the dragged item to the project root. */
+  protected onRootDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
+  }
+
+  protected onRootDrop(event: DragEvent): void {
+    event.preventDefault();
+    const source = event.dataTransfer?.getData('text/plain');
+    if (!source) {
+      return;
+    }
+    this.api.moveAsset(this.projectKey(), source, {}).subscribe({
+      next: () => {
+        this.toast.show('Moved to root', 'success');
+        this.onTreeChanged();
+      },
+      error: () => this.toast.show('Could not move — try again in a moment.', 'error'),
+    });
+  }
+
+  /** "All pages" is the project's page root — it can't be renamed, deleted, cut, or pasted into, but you can create pages/subfolders directly in it. */
+  protected onRootContextMenu(event: MouseEvent): void {
+    const items: ContextMenuItem[] = [
+      {
+        label: 'New page',
+        icon: 'note_add',
+        action: () => {
+          this.selectFolder(null);
+          this.openNewPage();
+        },
+      },
+      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.createFolderUnder(undefined) },
+    ];
+    this.menu.open(event, items);
+  }
+
+  /** Reloads both the folder tree and the pages list — used after any create/rename/move/delete/duplicate. */
+  protected onTreeChanged(): void {
+    this.store.loadFor(this.projectKey(), true).subscribe();
+    this.reload(this.projectKey(), this.search());
+  }
+
+  protected onFolderDeleted(): void {
+    this.selectedFolder.set(null);
+    this.onTreeChanged();
+  }
+}
+
+function findFolder(nodes: FolderView[], uuid: string): FolderView | null {
+  for (const node of nodes) {
+    if (node.uuid === uuid) {
+      return node;
+    }
+    const found = findFolder(node.children ?? [], uuid);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }

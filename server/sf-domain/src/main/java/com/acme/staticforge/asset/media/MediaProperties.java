@@ -26,9 +26,8 @@ public class MediaProperties {
     /** Whether to strip EXIF metadata (including GPS) from uploaded images. */
     private boolean stripExif = true;
 
-    /** MIME allow-list; {@code image/*} style family wildcards are supported. */
-    private List<String> allowedMime = new ArrayList<>(List.of(
-            "image/*", "video/mp4", "application/pdf", "text/css", "application/javascript", "font/*"));
+    /** MIME allow-list; {@code image/*} style family wildcards are supported, and {@code *} allows everything (the default — the media store accepts any file type). */
+    private List<String> allowedMime = new ArrayList<>(List.of("*"));
 
     /** Maximum image dimension (width or height) in pixels. */
     private int maxImageDimension = 12_000;

@@ -75,6 +75,27 @@ public class BodyService {
         return page;
     }
 
+    /** Returns the section instance node with the given {@code instanceId}, or {@code null} if absent. */
+    public JsonNode extractSection(JsonNode payload, String bodyName, String instanceId) {
+        ObjectNode page = object(payload);
+        for (JsonNode section : sections(page, bodyName)) {
+            if (instanceId.equals(section.path("instanceId").asText())) {
+                return section.deepCopy();
+            }
+        }
+        return null;
+    }
+
+    /** Inserts an already-built section instance node into {@code bodyName} at {@code position}. */
+    public ObjectNode insertSection(JsonNode payload, String bodyName, Integer position, JsonNode section) {
+        ObjectNode page = object(payload);
+        List<JsonNode> sections = sections(page, bodyName);
+        int index = (position == null || position < 0 || position > sections.size()) ? sections.size() : position;
+        sections.add(index, section.deepCopy());
+        setSections(page, bodyName, sections);
+        return page;
+    }
+
     private static ObjectNode object(JsonNode node) {
         return (ObjectNode) (node != null && node.isObject() ? node : JsonUtil.parse("{}"));
     }

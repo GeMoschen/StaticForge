@@ -7,16 +7,19 @@ import {
   inject,
   input,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { FormGroup } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import {
   BodyDefinition,
   ContentDefinition,
@@ -24,16 +27,15 @@ import {
   SfContentFormComponent,
 } from '../forms';
 import type { components } from '../../core/api/generated/schema.d.ts';
-import { FolderNodeComponent } from './folder-node.component';
 import { SectionEditorComponent } from './section-editor.component';
 import { ConflictDrawerComponent } from './conflict-drawer.component';
 import { PageAutosaveService, PagePayload } from './autosave.service';
+import { composePagePayload } from './page-payload.util';
 import { mergePayload } from './conflict-util';
 import { SfPreviewFrameComponent } from '../preview';
 import type { BodiesMap, FieldResolveEvent, ResolveMode, SectionInstance } from './types';
 
 type PageView = components['schemas']['PageView'];
-type TemplateDetail = components['schemas']['TemplateDetail'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
 type AssetDetailView = components['schemas']['AssetDetailView'];
 
@@ -50,12 +52,13 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    FolderNodeComponent,
     SectionEditorComponent,
     ConflictDrawerComponent,
     SfContentFormComponent,
     SfButtonComponent,
     SfEmptyStateComponent,
+    SfIconComponent,
+    SfSpinnerComponent,
     SfPreviewFrameComponent,
   ],
   providers: [PageAutosaveService],
@@ -64,24 +67,24 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
 })
 export class PageEditorComponent {
   private readonly api = inject(ApiClient);
-  private readonly http = inject(HttpClient);
   private readonly store = inject(ProjectContextStore);
   private readonly fb = inject(FormBuilderService);
   private readonly toast = inject(ToastService);
   private readonly timeTravel = inject(TimeTravelStore);
+  private readonly router = inject(Router);
   protected readonly autosave = inject(PageAutosaveService);
 
   readonly projectKey = input.required<string>();
   readonly uuid = input.required<string>();
-
-  protected readonly tree = this.store.folderTree;
+  /** Bound from `?body=`/`?section=` query params (see `PageNavNodeComponent`). */
+  readonly focusBody = input<string | undefined>(undefined, { alias: 'body' });
+  readonly focusSection = input<string | undefined>(undefined, { alias: 'section' });
 
   protected readonly page = signal<PageView | null>(null);
   protected readonly contentDefinition = signal<ContentDefinition | null>(null);
   protected readonly fieldsForm = signal<FormGroup | null>(null);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly treeOpen = signal(true);
   protected readonly paletteBody = signal<BodyDefinition | null>(null);
 
   protected readonly liveTemplateUuid = computed(
@@ -148,9 +151,72 @@ export class PageEditorComponent {
       { allowSignalWrites: true },
     );
 
+    // Kept separate from the load effect above so that changing `?body=`/`?section=` (e.g.
+    // clicking a different section) only updates the nav-tree's active-row highlight, not a
+    // full reload of the page.
+    effect(
+      () => {
+        this.store.setActivePage(this.uuid(), this.focusBody() ?? null, this.focusSection() ?? null);
+      },
+      { allowSignalWrites: true },
+    );
+
+    // Picks up section moves made *outside* this editor — e.g. dragging one of this page's
+    // sections onto another page's row in the nav tree — which otherwise leave this editor's
+    // own `page()` showing the section that was just moved away. `applyServerPage()` already
+    // notifies `pageMutated` for every in-editor mutation too, so `selfMutating` distinguishes
+    // "I already have the fresh state, this is just my own echo" from an external one.
+    effect(
+      () => {
+        const mutated = this.store.pageMutated();
+        if (!mutated || mutated !== this.uuid()) {
+          return;
+        }
+        if (this.selfMutating) {
+          this.selfMutating = false;
+          return;
+        }
+        untracked(() => this.refreshFromServer());
+      },
+      { allowSignalWrites: true },
+    );
+
     this.autosave.setPayloadProvider(() => this.composePayload());
     this.autosave.setRefetchHandler((page, mode) => this.onResolved(page, mode));
   }
+
+  /**
+   * What the centre pane shows, driven by `?section=`/`?body=` (see
+   * `PageNavNodeComponent`): a single section, a single body's sections, or
+   * — when neither is set — just the page's own fields with no bodies at
+   * all.
+   */
+  protected readonly focusedSection = computed<{ bodyName: string; section: SectionInstance; index: number; count: number } | null>(() => {
+    const target = this.focusSection();
+    if (!target) {
+      return null;
+    }
+    const bodies = (this.page()?.bodies ?? {}) as unknown as BodiesMap;
+    for (const bodyName of Object.keys(bodies)) {
+      const arr = bodies[bodyName] ?? [];
+      const index = arr.findIndex((s) => s.instanceId === target);
+      if (index >= 0) {
+        return { bodyName, section: arr[index], index, count: arr.length };
+      }
+    }
+    return null;
+  });
+
+  protected readonly focusedBody = computed<BodyDefinition | null>(() => {
+    if (this.focusSection()) {
+      return null;
+    }
+    const name = this.focusBody();
+    if (!name) {
+      return null;
+    }
+    return this.bodies().find((b) => b.name === name) ?? null;
+  });
 
   private readSplitRatio(): number {
     if (typeof localStorage === 'undefined') {
@@ -160,8 +226,8 @@ export class PageEditorComponent {
     return Number.isFinite(stored) && stored > 0 ? stored : 0.6;
   }
 
-  protected toggleTree(): void {
-    this.treeOpen.update((v) => !v);
+  protected closeEditor(): void {
+    void this.router.navigate(['/p', this.projectKey(), 'pages']);
   }
 
   // ── Loading ────────────────────────────────────────────────────────────
@@ -174,7 +240,7 @@ export class PageEditorComponent {
         next: (detail) => this.onPageLoaded(key, this.toPageView(detail)),
         error: () => {
           this.loading.set(false);
-          this.error.set('Failed to load page at revision ' + revision);
+          this.error.set('Could not load page at revision ' + revision + ' — it may have been deleted.');
         },
       });
       return;
@@ -183,7 +249,7 @@ export class PageEditorComponent {
       next: (page) => this.onPageLoaded(key, page),
       error: () => {
         this.loading.set(false);
-        this.error.set('Failed to load page');
+        this.error.set('Could not load page — check your connection and try again.');
       },
     });
   }
@@ -230,7 +296,7 @@ export class PageEditorComponent {
       },
       error: () => {
         this.loading.set(false);
-        this.error.set('Failed to load page template');
+        this.error.set('Could not load page template — check your connection and try again.');
       },
     });
   }
@@ -285,9 +351,7 @@ export class PageEditorComponent {
     }
     let pending = missing.length;
     for (const ref of missing) {
-      this.http
-        .get<TemplateDetail>(`/api/v1/projects/${key}/section-templates/${ref}`)
-        .subscribe({
+      this.api.sectionTemplateDetail(key, ref).subscribe({
           next: (td) => {
             this.sectionDefs.update((m) => ({ ...m, [ref]: this.toDefinition(td.compiledDefinition) }));
             this.sectionUids.update((m) => ({ ...m, [ref]: td.uid ?? ref }));
@@ -314,16 +378,7 @@ export class PageEditorComponent {
   // ── Payload / autosave ─────────────────────────────────────────────────
 
   private composePayload(): PagePayload {
-    const def = this.contentDefinition();
-    const form = this.fieldsForm();
-    const content = def && form ? this.fb.valueOf(def, form) : (this.page()?.content ?? {});
-    return {
-      content,
-      bodies: this.page()?.bodies ?? {},
-      nav: this.page()?.nav,
-      output: this.page()?.output,
-      meta: this.page()?.meta,
-    };
+    return composePagePayload(this.fb, this.contentDefinition(), this.fieldsForm(), this.page());
   }
 
   private onResolved(page: PageView, mode: ResolveMode): void {
@@ -348,16 +403,45 @@ export class PageEditorComponent {
     this.loadSectionDefs(this.projectKey(), page);
   }
 
+  /** Set right before `notifyPageChanged()` below so the `pageMutated` effect above can tell this call's own echo apart from a mutation made elsewhere. */
+  private selfMutating = false;
+
   private applyServerPage(page: PageView): void {
     this.page.set(page);
     this.autosave.setRevision(page.revision ?? null);
     this.loadSectionDefs(this.projectKey(), page);
+    // So an already-expanded nav-tree node for this same page (bodies/sections shown read-only alongside the editor) picks up the change without an F5.
+    this.selfMutating = true;
+    this.store.notifyPageChanged(this.uuid());
+  }
+
+  /** Re-fetches just this page (not its template/section defs) after an out-of-band mutation, e.g. a section dragged onto another page's row in the nav tree while this editor stayed open. */
+  private refreshFromServer(): void {
+    const key = this.projectKey();
+    const uuid = this.uuid();
+    if (!key || !uuid) {
+      return;
+    }
+    this.api.pageDetail(key, uuid).subscribe({
+      next: (page) => this.applyServerPage(page),
+      error: () => this.toast.show('Could not refresh this page — it may have changed elsewhere.', 'error'),
+    });
   }
 
   // ── Bodies / sections ──────────────────────────────────────────────────
 
   protected bodies(): BodyDefinition[] {
     return this.contentDefinition()?.bodies ?? [];
+  }
+
+  /** The page's other bodies, shown as a compact drop-target rail next to the focused body so sections can be dragged straight across without leaving the editor. */
+  protected otherBodies(): BodyDefinition[] {
+    const current = this.focusedBody()?.name;
+    return this.bodies().filter((b) => b.name !== current);
+  }
+
+  protected switchBody(bodyName: string): void {
+    void this.router.navigate([], { queryParams: { body: bodyName } });
   }
 
   protected sectionsFor(bodyName: string): SectionInstance[] {
@@ -401,6 +485,15 @@ export class PageEditorComponent {
       return;
     }
     this.paletteBody.set(body);
+    // Refresh section templates every time the palette opens — a template created or
+    // uid-renamed on the Templates screen only reaches `store.sectionTemplates()` via that
+    // screen's own force-reload, so a page editor that was already open before that happened
+    // (the common case: create the template, then come back here to use it) would otherwise
+    // keep showing its stale pre-creation snapshot.
+    const key = this.projectKey();
+    if (key) {
+      this.store.loadFor(key, true).subscribe();
+    }
   }
 
   protected addSection(body: BodyDefinition, templateUuid: string): void {
@@ -419,7 +512,7 @@ export class PageEditorComponent {
           this.applyServerPage(page);
           this.toast.show('Section added', 'success');
         },
-        error: () => this.toast.show('Failed to add section', 'error'),
+        error: () => this.toast.show('Could not add section — someone may have edited this page, try reloading it.', 'error'),
       });
   }
 
@@ -435,7 +528,7 @@ export class PageEditorComponent {
           this.applyServerPage(page);
           this.toast.show('Section removed', 'success');
         },
-        error: () => this.toast.show('Failed to remove section', 'error'),
+        error: () => this.toast.show('Could not remove section — someone may have edited this page, try reloading it.', 'error'),
       });
   }
 
@@ -455,6 +548,68 @@ export class PageEditorComponent {
     this.drag.set(null);
   }
 
+  /** Dragover for a body's dropzone — only claims drags carrying our cross-body/cross-page section payload; same-body reorder stays with `sf-section-editor`'s own dragover/drop. */
+  protected onBodyDragOver(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes('application/x-sf-section')) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }
+
+  protected onBodyDrop(body: BodyDefinition, event: DragEvent): void {
+    if (this.readOnly() || !event.dataTransfer?.types.includes('application/x-sf-section')) {
+      return;
+    }
+    event.preventDefault();
+    const raw = event.dataTransfer.getData('application/x-sf-section');
+    if (!raw) {
+      return;
+    }
+    let payload: { pageUuid: string; bodyName: string; instanceId: string; templateRef: string };
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (payload.pageUuid === this.uuid() && payload.bodyName === body.name) {
+      return;
+    }
+    const allowed = this.filteredSectionTemplates(body).some((t) => t.uuid === payload.templateRef);
+    if (!allowed) {
+      this.toast.show("This section type isn't allowed in this body.", 'error');
+      return;
+    }
+    const revision = this.page()?.revision;
+    this.api
+      .moveSection(
+        this.projectKey(),
+        this.uuid(),
+        body.name,
+        {
+          sourcePageUuid: payload.pageUuid,
+          sourceBody: payload.bodyName,
+          instanceId: payload.instanceId,
+          position: this.bodyCount(body.name),
+        },
+        revision ?? undefined,
+      )
+      .subscribe({
+        next: (page) => {
+          this.applyServerPage(page);
+          if (payload.pageUuid !== this.uuid()) {
+            this.store.notifyPageChanged(payload.pageUuid);
+          }
+          this.toast.show('Section moved', 'success');
+        },
+        error: () =>
+          this.toast.show(
+            'Could not move section — someone may have edited one of the pages, try reloading.',
+            'error',
+          ),
+      });
+  }
+
   private reorderSections(bodyName: string, from: number, to: number): void {
     if (this.readOnly()) {
       return;
@@ -471,7 +626,7 @@ export class PageEditorComponent {
       .reorderSections(this.projectKey(), this.uuid(), bodyName, ids, revision ?? undefined)
       .subscribe({
         next: (page) => this.applyServerPage(page),
-        error: () => this.toast.show('Failed to reorder sections', 'error'),
+        error: () => this.toast.show('Could not reorder sections — someone may have edited this page, try reloading it.', 'error'),
       });
   }
 

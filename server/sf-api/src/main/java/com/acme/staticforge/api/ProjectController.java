@@ -93,7 +93,8 @@ public class ProjectController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ROLE_EXPR + ".PROJECT_ADMIN)")
     public ProjectDetail update(@PathVariable("key") String projectKey, @Valid @RequestBody ProjectUpdateRequest body) {
         Long actingUserId = securitySupport.currentUserId();
-        return toDetail(projectService.update(projectKey, body.name(), body.description(), actingUserId, null));
+        return toDetail(projectService.update(
+                projectKey, body.name(), body.description(), body.allowedMimeTypes(), actingUserId, null));
     }
 
     @PostMapping("/{key}/archive")
@@ -160,7 +161,8 @@ public class ProjectController {
                 project.getDescription(),
                 project.isArchived(),
                 project.getCreatedAt(),
-                project.getCreatedBy());
+                project.getCreatedBy(),
+                project.allowedMimeTypesList());
     }
 
     private static ProjectRole parseRole(String role) {

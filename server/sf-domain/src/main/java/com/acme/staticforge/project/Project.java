@@ -31,6 +31,11 @@ public class Project {
     @Column(name = "archived", nullable = false)
     private boolean archived;
 
+    /** Comma-joined MIME allow-list patterns overriding {@code sf.media.allowed-mime} for this project; {@code null}/blank means "use the instance-wide default". */
+    @Lob
+    @Column(name = "allowed_mime_types")
+    private String allowedMimeTypes;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -84,5 +89,24 @@ public class Project {
 
     public Long getCreatedBy() {
         return createdBy;
+    }
+
+    public String getAllowedMimeTypes() {
+        return allowedMimeTypes;
+    }
+
+    public void setAllowedMimeTypes(String allowedMimeTypes) {
+        this.allowedMimeTypes = allowedMimeTypes;
+    }
+
+    /** Parses {@link #getAllowedMimeTypes()} into a list, empty when unset. */
+    public java.util.List<String> allowedMimeTypesList() {
+        if (allowedMimeTypes == null || allowedMimeTypes.isBlank()) {
+            return java.util.List.of();
+        }
+        return java.util.Arrays.stream(allowedMimeTypes.split(","))
+                .map(String::trim)
+                .filter(p -> !p.isBlank())
+                .toList();
     }
 }

@@ -52,7 +52,7 @@
   </div>
 
   @if (loading()) {
-    <sf-empty-state title="Loading revisions" />
+    <sf-spinner label="Loading revisions…" />
   } @else if (revisions().length === 0) {
     <sf-empty-state title="No revisions" description="Nothing has changed in this project yet." />
   } @else {
@@ -63,7 +63,7 @@
           <a
             class="revisions__row"
             [style.height.px]="ITEM_HEIGHT"
-            [routerLink]="['../../revisions', rev.revisionId]"
+            [routerLink]="['/p', projectKey(), 'settings', 'revisions', rev.revisionId]"
             [attr.aria-label]="'Revision ' + rev.revisionId"
           >
             <span class="revisions__rev">{{ rev.revisionId }}</span>

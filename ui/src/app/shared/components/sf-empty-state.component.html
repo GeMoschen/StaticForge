@@ -1,6 +1,8 @@
 <div class="sf-empty-state">
   @if (icon()) {
-    <span class="sf-empty-state__icon" aria-hidden="true">{{ icon() }}</span>
+    <span class="sf-empty-state__icon">
+      <sf-icon [name]="icon()!" size="2.5rem" />
+    </span>
   }
   <h2 class="sf-empty-state__title">{{ title() }}</h2>
   @if (description()) {

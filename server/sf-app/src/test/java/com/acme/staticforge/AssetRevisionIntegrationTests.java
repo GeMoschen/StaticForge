@@ -8,6 +8,7 @@ import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.folder.MoveResult;
 import com.acme.staticforge.common.SfException;
@@ -54,7 +55,7 @@ class AssetRevisionIntegrationTests {
     void createThenUpdateClosesPriorVersionAndAllocatesGaplessRevisions() {
         Fixture fx = newFixture();
 
-        AssetVersionView created = folderService.create(null, "Products", fx.ctx());
+        AssetVersionView created = folderService.create(null, "Products", FolderScope.PAGES, fx.ctx());
         long firstRevision = created.validFromRevision();
 
         AssetVersionView updated = folderService.update(created.uuid(), "Products Revised", firstRevision, fx.ctx());
@@ -77,7 +78,7 @@ class AssetRevisionIntegrationTests {
     void staleExpectedRevisionThrows409Conflict() {
         Fixture fx = newFixture();
 
-        AssetVersionView created = folderService.create(null, "A", fx.ctx());
+        AssetVersionView created = folderService.create(null, "A", FolderScope.PAGES, fx.ctx());
         long originalRevision = created.validFromRevision();
 
         folderService.update(created.uuid(), "A Updated", originalRevision, fx.ctx());
@@ -91,7 +92,7 @@ class AssetRevisionIntegrationTests {
         Fixture fx = newFixture();
         ObjectMapper mapper = new ObjectMapper();
 
-        AssetVersionView created = folderService.create(null, "A", fx.ctx());
+        AssetVersionView created = folderService.create(null, "A", FolderScope.PAGES, fx.ctx());
         long originalRevision = created.validFromRevision();
 
         ObjectNode theirs = mapper.createObjectNode().put("v", 1);
@@ -118,8 +119,8 @@ class AssetRevisionIntegrationTests {
     void subtreeMoveRewritesDescendantPathsInOneRevision() {
         Fixture fx = newFixture();
 
-        AssetVersionView parent = folderService.create(null, "Products", fx.ctx());
-        AssetVersionView child = folderService.create(parent.uuid(), "Tools", fx.ctx());
+        AssetVersionView parent = folderService.create(null, "Products", FolderScope.PAGES, fx.ctx());
+        AssetVersionView child = folderService.create(parent.uuid(), "Tools", null, fx.ctx());
 
         long before = revisionRepository.findByProjectIdOrderByRevisionIdDesc(fx.project().getId()).stream()
                 .mapToLong(Revision::getRevisionId).max().orElseThrow();
@@ -137,7 +138,7 @@ class AssetRevisionIntegrationTests {
     void changeUidUpdatesIdentityAndRecordsHistory() {
         Fixture fx = newFixture();
 
-        AssetVersionView created = folderService.create(null, "About", fx.ctx());
+        AssetVersionView created = folderService.create(null, "About", FolderScope.PAGES, fx.ctx());
         assetService.changeUid(created.uuid(), "about_us", fx.ctx());
 
         AssetVersionView current = assetService.requireCurrent(created.uuid());

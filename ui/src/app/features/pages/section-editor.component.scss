@@ -32,6 +32,11 @@
   cursor: pointer;
 }
 
+.section-card__icon {
+  flex-shrink: 0;
+  color: var(--sf-jade);
+}
+
 .section-card__title {
   flex: 1;
   min-width: 0;

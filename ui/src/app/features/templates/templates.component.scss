@@ -1,3 +1,7 @@
+@use '../../design/interactive';
+@use '../../design/forms';
+@use '../../design/table';
+
 :host {
   display: block;
   height: 100%;
@@ -47,6 +51,7 @@
   font-family: var(--sf-font-ui);
   font-size: var(--sf-text-xs);
   cursor: pointer;
+  @include interactive.sf-interactive;
 }
 
 .templates__tab {
@@ -62,6 +67,7 @@
   background: var(--sf-surface);
   color: var(--sf-ink);
   border-color: var(--sf-signal);
+  @include interactive.sf-pour-under;
 }
 
 .templates__row {
@@ -232,7 +238,7 @@
 }
 
 .diagnostic--warning {
-  background: color-mix(in srgb, var(--sf-amber, #e5b800) 14%, transparent);
+  background: color-mix(in srgb, var(--sf-amber, #9c7a2e) 14%, transparent);
   color: var(--sf-ink);
 }
 

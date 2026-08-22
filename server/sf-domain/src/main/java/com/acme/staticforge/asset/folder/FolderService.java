@@ -12,11 +12,15 @@ import java.util.UUID;
  */
 public interface FolderService {
 
-    /** All current folders in the project, nested as a tree up to {@code depth} ({@code -1} = unlimited). */
-    List<FolderNode> tree(long projectId, int depth, RevisionContext ctx);
+    /** All current folders of {@code scope} in the project, nested as a tree up to {@code depth} ({@code -1} = unlimited). */
+    List<FolderNode> tree(long projectId, FolderScope scope, int depth, RevisionContext ctx);
 
-    /** Creates a folder under {@code parentFolderUuid} (root when null). */
-    AssetVersionView create(UUID parentFolderUuid, String displayName, RevisionContext ctx);
+    /**
+     * Creates a folder under {@code parentFolderUuid} (root when null). {@code scope} is
+     * required at the root; a subfolder inherits its parent's scope (an explicit scope that
+     * disagrees with the parent's is rejected).
+     */
+    AssetVersionView create(UUID parentFolderUuid, String displayName, FolderScope scope, RevisionContext ctx);
 
     /** Renames a folder (display name only — the path is UID-bound and unchanged). */
     AssetVersionView update(UUID uuid, String displayName, long expectedRevision, RevisionContext ctx);

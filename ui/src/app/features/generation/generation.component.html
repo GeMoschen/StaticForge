@@ -14,14 +14,15 @@
   </div>
 
   @if (loading()) {
-    <p class="num">Loading…</p>
+    <sf-spinner label="Loading generation runs…" />
   } @else if (runs().length === 0) {
     <sf-empty-state
       title="No generation runs yet"
       description="Start a generation to render your content to its export target."
-      icon="⚡"
+      icon="bolt"
     />
   } @else {
+    <div class="sf-table-wrap">
     <table class="table">
       <thead>
         <tr>
@@ -83,6 +84,7 @@
         }
       </tbody>
     </table>
+    </div>
   }
 
   @if (liveActive()) {

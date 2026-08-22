@@ -55,10 +55,25 @@ public class PreviewTokenService {
      * @return a compact HS256 JWS
      */
     public String issueShareToken(UUID pageUuid, Long revision, String channel, String projectKey) {
+        return issueAssetShareToken("page", pageUuid, revision, channel, projectKey);
+    }
+
+    /**
+     * Issues a share token for a media asset's binary — used by {@code PageRenderService}'s
+     * {@code urlResolver} to rewrite MEDIA references inside rendered preview HTML, since
+     * {@code MediaController}'s normal {@code /binary} route is Bearer-only and the preview is
+     * loaded by the browser's own (unauthenticated) frame navigation / {@code <img src>} fetch.
+     */
+    public String issueMediaShareToken(UUID mediaUuid, String projectKey) {
+        return issueAssetShareToken("media", mediaUuid, null, null, projectKey);
+    }
+
+    private String issueAssetShareToken(String kind, UUID assetUuid, Long revision, String channel, String projectKey) {
         Instant now = clock.instant();
         StringBuilder payload = new StringBuilder("{");
         payload.append("\"sub\":\"viewer\"");
-        payload.append(",\"pageUuid\":\"").append(pageUuid).append('"');
+        payload.append(",\"kind\":\"").append(kind).append('"');
+        payload.append(",\"pageUuid\":\"").append(assetUuid).append('"');
         if (revision != null) {
             payload.append(",\"revision\":").append(revision);
         }
@@ -76,11 +91,35 @@ public class PreviewTokenService {
     }
 
     /**
-     * Verifies a share token and returns its bound target.
+     * Verifies a page share token and returns its bound target.
      *
-     * @throws SfException (401) when the token is malformed, tampered with or expired
+     * @throws SfException (401) when the token is malformed, tampered with, expired, or was
+     *     issued for a different asset kind (e.g. a media token presented here)
      */
     public ShareTarget verifyShareToken(String token) {
+        ShareTarget target = verifyAssetShareToken(token);
+        if (!"page".equals(target.kind())) {
+            throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
+        }
+        return target;
+    }
+
+    /**
+     * Verifies a media share token (see {@link #issueMediaShareToken}) and returns its bound
+     * target.
+     *
+     * @throws SfException (401) when the token is malformed, tampered with, expired, or was
+     *     issued for a different asset kind
+     */
+    public ShareTarget verifyMediaShareToken(String token) {
+        ShareTarget target = verifyAssetShareToken(token);
+        if (!"media".equals(target.kind())) {
+            throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
+        }
+        return target;
+    }
+
+    private ShareTarget verifyAssetShareToken(String token) {
         if (token == null || token.isBlank()) {
             throw new SfException(ProblemFactory.unauthorized("Missing share token."));
         }
@@ -110,9 +149,12 @@ public class PreviewTokenService {
         if (pageUuid == null || pageUuid.isBlank()) {
             throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
         }
+        // Tokens issued before the "kind" claim existed are all page tokens.
+        String kind = blankToNull(claims.path("kind").asText(null));
         ShareTarget target;
         try {
             target = new ShareTarget(
+                    kind == null ? "page" : kind,
                     UUID.fromString(pageUuid),
                     claims.path("revision").isNumber() ? claims.path("revision").asLong() : null,
                     blankToNull(claims.path("channel").asText(null)),
@@ -149,6 +191,6 @@ public class PreviewTokenService {
         return value == null || value.isBlank() ? null : value;
     }
 
-    /** The page target bound to a verified share token. */
-    public record ShareTarget(UUID pageUuid, Long revision, String channel, String projectKey) {}
+    /** The asset target bound to a verified share token — {@code kind} is {@code "page"} or {@code "media"}. */
+    public record ShareTarget(String kind, UUID pageUuid, Long revision, String channel, String projectKey) {}
 }

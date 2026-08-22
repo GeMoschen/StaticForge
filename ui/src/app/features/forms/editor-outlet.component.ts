@@ -8,10 +8,13 @@ import {
 } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
-import { EditorDefinition } from './form.model';
+import { EditorDefinition, EditorType } from './form.model';
 import { EDITOR_REGISTRY } from './editor-registry';
 import { ExpressionEvaluator } from './expression-evaluator';
 import { SF_FORM_CONTEXT } from './form.context';
+
+/** Editor types whose component declares a `projectKey` input (MEDIA/REFERENCE pickers). */
+const PROJECT_KEY_EDITOR_TYPES = new Set<EditorType>(['MEDIA', 'REFERENCE']);
 
 /**
  * Renders a single editor by resolving its component type from
@@ -37,10 +40,16 @@ export class SfEditorOutlet {
     () => EDITOR_REGISTRY.get(this.definition().type) ?? null,
   );
 
-  readonly inputs = computed<Record<string, unknown>>(() => ({
-    definition: this.definition(),
-    control: this.control(),
-  }));
+  readonly inputs = computed<Record<string, unknown>>(() => {
+    const base: Record<string, unknown> = {
+      definition: this.definition(),
+      control: this.control(),
+    };
+    if (PROJECT_KEY_EDITOR_TYPES.has(this.definition().type)) {
+      base['projectKey'] = this.context?.projectKey();
+    }
+    return base;
+  });
 
   readonly visible = computed(() => {
     const definition = this.definition();

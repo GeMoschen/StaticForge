@@ -1,6 +1,8 @@
 package com.acme.staticforge.api;
 
 import com.acme.staticforge.api.dto.RevisionView;
+import com.acme.staticforge.asset.Asset;
+import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.DiffService;
 import com.acme.staticforge.revision.Revision;
@@ -24,12 +26,15 @@ public class RevisionController {
     private final ProjectService projectService;
     private final RevisionService revisionService;
     private final DiffService diffService;
+    private final AssetRepository assetRepository;
 
     public RevisionController(
-            ProjectService projectService, RevisionService revisionService, DiffService diffService) {
+            ProjectService projectService, RevisionService revisionService, DiffService diffService,
+            AssetRepository assetRepository) {
         this.projectService = projectService;
         this.revisionService = revisionService;
         this.diffService = diffService;
+        this.assetRepository = assetRepository;
     }
 
     @GetMapping
@@ -38,12 +43,29 @@ public class RevisionController {
             @PathVariable String projectKey,
             @RequestParam(required = false) Long since,
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) UUID assetUuid,
+            @RequestParam(required = false) String assetUuid,
             Pageable pageable) {
         long projectId = projectService.requireByKey(projectKey).getId();
-        return revisionService.findRecent(projectId, since, userId, assetUuid, pageable).stream()
+        UUID resolved = resolveAssetRef(projectId, assetUuid);
+        if (assetUuid != null && !assetUuid.isBlank() && resolved == null) {
+            return List.of();
+        }
+        return revisionService.findRecent(projectId, since, userId, resolved, pageable).stream()
                 .map(this::toView)
                 .toList();
+    }
+
+    /** Accepts either an asset UUID or its short UID (the "Asset" filter's placeholder promises both). Unparseable/unknown refs resolve to {@code null} rather than a 500. */
+    private UUID resolveAssetRef(long projectId, String ref) {
+        if (ref == null || ref.isBlank()) {
+            return null;
+        }
+        String trimmed = ref.trim();
+        try {
+            return UUID.fromString(trimmed);
+        } catch (IllegalArgumentException e) {
+            return assetRepository.findByProjectIdAndUid(projectId, trimmed).map(Asset::getUuid).orElse(null);
+        }
     }
 
     @GetMapping("/{revisionId}")

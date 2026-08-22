@@ -1,0 +1,22 @@
+<div class="panel">
+  <h2 class="panel__title">General</h2>
+  <p class="panel__subtitle">Basic project information.</p>
+
+  @if (loading()) {
+    <sf-spinner label="Loading project settings…" />
+  } @else {
+    <form class="form" [formGroup]="form" (ngSubmit)="save()">
+      <sf-field label="Name">
+        <input class="input" type="text" formControlName="name" autocomplete="off" />
+      </sf-field>
+      <sf-field label="Description">
+        <textarea class="textarea" formControlName="description" rows="4"></textarea>
+      </sf-field>
+      <div class="form__actions">
+        <sf-button type="submit" variant="primary" [disabled]="form.invalid || saving()">
+          {{ saving() ? 'Saving…' : 'Save changes' }}
+        </sf-button>
+      </div>
+    </form>
+  }
+</div>

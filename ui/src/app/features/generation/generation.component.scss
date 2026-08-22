@@ -1,3 +1,5 @@
+@use '../../design/table';
+
 :host {
   display: block;
   height: 100%;
@@ -28,24 +30,7 @@
 }
 
 .table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--sf-text-sm);
-}
-
-.table th,
-.table td {
-  text-align: left;
-  padding: var(--sf-2) var(--sf-3);
-  border-bottom: 1px solid var(--sf-line);
-}
-
-.table th {
-  color: var(--sf-slate);
-  font-weight: 500;
-  font-size: var(--sf-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  @include table.sf-table-base;
 }
 
 .cell-actions {
@@ -99,8 +84,8 @@
   height: 18rem;
   overflow: auto;
   padding: var(--sf-2) var(--sf-3);
-  background: #0f1115;
-  color: var(--sf-slate);
+  background: #16130f;
+  color: #a69c8d;
   font-family: var(--sf-font-mono, monospace);
   font-size: var(--sf-text-xs);
   line-height: 1.5;

@@ -1,0 +1,46 @@
+@use '../../design/forms';
+
+:host {
+  display: block;
+  height: 100%;
+  overflow: auto;
+}
+
+.panel {
+  padding: var(--sf-4);
+  max-width: 40rem;
+}
+
+.panel__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}
+
+.panel__subtitle {
+  margin: var(--sf-1) 0 var(--sf-4);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.mono {
+  font-family: var(--sf-font-mono, ui-monospace, monospace);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+}
+
+.textarea {
+  @include forms.sf-form-control;
+  resize: vertical;
+  font-family: var(--sf-font-mono, ui-monospace, monospace);
+}
+
+.form__actions {
+  display: flex;
+  justify-content: flex-end;
+}

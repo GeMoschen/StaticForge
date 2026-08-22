@@ -1,0 +1,51 @@
+<div class="folder-detail">
+  <header class="folder-detail__header">
+    <sf-icon name="folder" class="folder-detail__icon" />
+    @if (editingName()) {
+      <input
+        class="folder-detail__name-input"
+        type="text"
+        [value]="nameDraft()"
+        (input)="onNameInput($event)"
+        (keydown.enter)="saveName()"
+        (keydown.escape)="cancelEditName()"
+        autofocus
+      />
+      <sf-button variant="primary" [disabled]="savingName()" (click)="saveName()">Save</sf-button>
+      <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
+    } @else {
+      <h2 class="folder-detail__title">{{ folder().displayName ?? folder().uid }}</h2>
+      <button type="button" class="folder-detail__edit" (click)="startEditName()" aria-label="Rename folder">
+        <sf-icon name="edit" />
+      </button>
+    }
+    <span class="folder-detail__spacer"></span>
+    <sf-button variant="ghost" (click)="close.emit()">Close</sf-button>
+  </header>
+
+  <div class="folder-detail__body">
+    <section class="folder-detail__section">
+      <h3 class="folder-detail__section-title">Metadata</h3>
+      <dl class="folder-detail__meta">
+        <dt>Path</dt>
+        <dd class="folder-detail__mono">{{ parentPath() }}</dd>
+        <dt>Contains</dt>
+        <dd>{{ pageCount() }} page(s), {{ folderCount() }} sub-folder(s)</dd>
+      </dl>
+    </section>
+
+    <section class="folder-detail__section">
+      <h3 class="folder-detail__section-title">Identity</h3>
+      <sf-uid-rename
+        [projectKey]="projectKey()"
+        [uuid]="folder().uuid ?? ''"
+        [uid]="folder().uid ?? ''"
+        (uidChanged)="onUidChanged()"
+      />
+    </section>
+  </div>
+
+  <footer class="folder-detail__footer">
+    <sf-button variant="danger" (click)="requestDelete()">Delete folder</sf-button>
+  </footer>
+</div>

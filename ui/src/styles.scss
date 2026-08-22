@@ -1,5 +1,6 @@
 @use './app/design/tokens';
 @use './app/design/typography';
+@use './app/design/interactive';
 
 *,
 *::before,
@@ -20,6 +21,11 @@ body {
   font-size: var(--sf-text-md);
   line-height: var(--sf-lh-md);
   -webkit-font-smoothing: antialiased;
+
+  & > sf-root {
+    position: absolute;
+    inset: 0;
+  }
 }
 
 /* Accessibility — visible focus ring for keyboard users only (§24.7). */
@@ -49,6 +55,23 @@ body {
 
 .sf-skip-link:focus {
   top: var(--sf-3);
+}
+
+.material-symbols-outlined {
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+  vertical-align: middle;
+  line-height: 1;
+  user-select: none;
+}
+
+@keyframes sf-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Visually hidden, still announced by assistive tech. */

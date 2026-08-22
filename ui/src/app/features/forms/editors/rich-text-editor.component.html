@@ -14,13 +14,19 @@
         <button type="button" (click)="execBlock('h3')" title="Heading 3">H3</button>
       }
       @if (enabled('list')) {
-        <button type="button" (click)="exec('insertUnorderedList')" title="List">•</button>
+        <button type="button" (click)="exec('insertUnorderedList')" title="List">
+          <sf-icon name="format_list_bulleted" />
+        </button>
       }
       @if (enabled('quote')) {
-        <button type="button" (click)="execBlock('blockquote')" title="Quote">❝</button>
+        <button type="button" (click)="execBlock('blockquote')" title="Quote">
+          <sf-icon name="format_quote" />
+        </button>
       }
       @if (enabled('link')) {
-        <button type="button" (click)="insertLink()" title="Link">🔗</button>
+        <button type="button" (click)="insertLink()" title="Link">
+          <sf-icon name="link" />
+        </button>
       }
     </div>
     <div

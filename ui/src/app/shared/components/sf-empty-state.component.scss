@@ -14,7 +14,8 @@
 }
 
 .sf-empty-state__icon {
-  font-size: var(--sf-text-2xl);
+  display: inline-flex;
+  color: var(--sf-line);
   line-height: 1;
 }
 

@@ -41,26 +41,21 @@ export const routes: Routes = [
           import('./features/pages/pages-list.component').then(
             (m) => m.PagesListComponent,
           ),
-      },
-      {
-        path: 'pages/:uuid',
-        loadComponent: () =>
-          import('./features/pages/page-editor.component').then(
-            (m) => m.PageEditorComponent,
-          ),
+        children: [
+          {
+            path: ':uuid',
+            loadComponent: () =>
+              import('./features/pages/page-editor.component').then(
+                (m) => m.PageEditorComponent,
+              ),
+          },
+        ],
       },
       {
         path: 'media',
         loadComponent: () =>
           import('./features/media/media-library.component').then(
             (m) => m.MediaLibraryComponent,
-          ),
-      },
-      {
-        path: 'generation',
-        loadComponent: () =>
-          import('./features/generation/generation.component').then(
-            (m) => m.GenerationComponent,
           ),
       },
       {
@@ -78,25 +73,56 @@ export const routes: Routes = [
           ),
       },
       {
-        path: 'channels',
+        path: 'settings',
         loadComponent: () =>
-          import('./features/channels/channels.component').then(
-            (m) => m.ChannelsComponent,
+          import('./features/settings/project-settings-shell.component').then(
+            (m) => m.ProjectSettingsShellComponent,
           ),
-      },
-      {
-        path: 'revisions',
-        loadComponent: () =>
-          import('./features/revisions/revisions-list.component').then(
-            (m) => m.RevisionsListComponent,
-          ),
-      },
-      {
-        path: 'revisions/:revisionId',
-        loadComponent: () =>
-          import('./features/revisions/revision-diff.component').then(
-            (m) => m.RevisionDiffComponent,
-          ),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'general' },
+          {
+            path: 'general',
+            loadComponent: () =>
+              import('./features/settings/project-settings-general.component').then(
+                (m) => m.ProjectSettingsGeneralComponent,
+              ),
+          },
+          {
+            path: 'media',
+            loadComponent: () =>
+              import('./features/settings/project-settings-media.component').then(
+                (m) => m.ProjectSettingsMediaComponent,
+              ),
+          },
+          {
+            path: 'channels',
+            loadComponent: () =>
+              import('./features/channels/channels.component').then(
+                (m) => m.ChannelsComponent,
+              ),
+          },
+          {
+            path: 'generation',
+            loadComponent: () =>
+              import('./features/generation/generation.component').then(
+                (m) => m.GenerationComponent,
+              ),
+          },
+          {
+            path: 'revisions',
+            loadComponent: () =>
+              import('./features/revisions/revisions-list.component').then(
+                (m) => m.RevisionsListComponent,
+              ),
+          },
+          {
+            path: 'revisions/:revisionId',
+            loadComponent: () =>
+              import('./features/revisions/revision-diff.component').then(
+                (m) => m.RevisionDiffComponent,
+              ),
+          },
+        ],
       },
     ],
   },

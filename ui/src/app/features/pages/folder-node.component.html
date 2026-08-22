@@ -16,6 +16,7 @@
     (dragover)="onDragOver($event)"
     (drop)="onDrop($event)"
     (dragend)="onDragEnd()"
+    (contextmenu)="onContextMenu($event)"
   >
     <button
       type="button"
@@ -24,8 +25,9 @@
       (click)="toggle($event)"
       [attr.aria-label]="hasChildren() ? 'Toggle folder' : 'Folder'"
     >
-      {{ expanded() ? '▾' : '▸' }}
+      <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
     </button>
+    <sf-icon class="folder-node__icon" [name]="expanded() && hasChildren() ? 'folder_open' : 'folder'" />
     <span class="folder-node__name">{{ node().displayName ?? node().uid }}</span>
   </div>
 
@@ -36,8 +38,20 @@
           [node]="child"
           [depth]="depth() + 1"
           [selectedUuid]="selectedUuid()"
+          [projectKey]="projectKey()"
+          [pagesByFolder]="pagesByFolder()"
           (select)="select.emit($event)"
           (move)="move.emit($event)"
+          (newPage)="newPage.emit()"
+          (changed)="changed.emit()"
+        />
+      }
+      @for (page of ownPages(); track page.uuid) {
+        <sf-page-nav-node
+          [projectKey]="projectKey()"
+          [summary]="page"
+          [depth]="depth() + 1"
+          (changed)="changed.emit()"
         />
       }
     </div>

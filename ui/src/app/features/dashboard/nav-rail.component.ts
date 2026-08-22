@@ -8,6 +8,8 @@ import {
 } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { ThemeService } from '../../core/ui/theme.service';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 
 const STORAGE_KEY = 'sf-nav-rail-expanded';
 
@@ -20,13 +22,14 @@ interface NavItem {
 @Component({
   selector: 'sf-nav-rail',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, SfIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav-rail.component.html',
   styleUrl: './nav-rail.component.scss',
 })
 export class NavRailComponent {
   private readonly store = inject(ProjectContextStore);
+  protected readonly theme = inject(ThemeService);
 
   readonly activeKey = this.store.activeProjectKey;
   readonly expanded = signal(this.readInitial());
@@ -43,13 +46,11 @@ export class NavRailComponent {
     }
     const base = `/p/${key}`;
     return [
-      { label: 'Pages', icon: '▤', route: `${base}/pages` },
-      { label: 'Media', icon: '◫', route: `${base}/media` },
-      { label: 'Generate', icon: '⇢', route: `${base}/generation` },
-      { label: 'Structures', icon: '⌗', route: `${base}/structures` },
-      { label: 'Templates', icon: '▦', route: `${base}/templates` },
-      { label: 'Channels', icon: '▣', route: `${base}/channels` },
-      { label: 'Revisions', icon: '⇄', route: `${base}/revisions` },
+      { label: 'Pages', icon: 'description', route: `${base}/pages` },
+      { label: 'Media', icon: 'perm_media', route: `${base}/media` },
+      { label: 'Structures', icon: 'account_tree', route: `${base}/structures` },
+      { label: 'Templates', icon: 'dashboard_customize', route: `${base}/templates` },
+      { label: 'Settings', icon: 'settings', route: `${base}/settings` },
     ];
   });
 
@@ -61,6 +62,10 @@ export class NavRailComponent {
 
   toggle(): void {
     this.expanded.update((v) => !v);
+  }
+
+  toggleTheme(): void {
+    this.theme.toggle();
   }
 
   private readInitial(): boolean {

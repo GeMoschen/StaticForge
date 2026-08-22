@@ -1,8 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  OnInit,
   computed,
+  effect,
   inject,
   input,
   signal,
@@ -13,6 +13,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfDiffComponent } from '../../shared/components/sf-diff.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
 
 type RevisionDiff = components['schemas']['RevisionDiff'];
@@ -21,12 +22,12 @@ type AssetDiff = components['schemas']['AssetDiff'];
 @Component({
   selector: 'sf-revision-diff',
   standalone: true,
-  imports: [SfButtonComponent, SfDiffComponent, SfEmptyStateComponent],
+  imports: [SfButtonComponent, SfDiffComponent, SfEmptyStateComponent, SfSpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './revision-diff.component.html',
   styleUrl: './revision-diff.component.scss',
 })
-export class RevisionDiffComponent implements OnInit {
+export class RevisionDiffComponent {
   private readonly api = inject(ApiClient);
   protected readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
@@ -43,15 +44,25 @@ export class RevisionDiffComponent implements OnInit {
   protected readonly restoring = signal(false);
   protected readonly confirmText = signal('');
 
-  ngOnInit(): void {
-    this.load();
+  constructor() {
+    effect(
+      () => {
+        const key = this.projectKey();
+        const revisionId = this.revisionId();
+        if (!key || !revisionId) {
+          return;
+        }
+        this.load(key, revisionId);
+      },
+      { allowSignalWrites: true },
+    );
   }
 
-  private load(): void {
+  private load(key: string, revisionId: string): void {
     this.loading.set(true);
     this.error.set(null);
     this.api
-      .revisionDiff(this.projectKey(), Number(this.revisionId()))
+      .revisionDiff(key, Number(revisionId))
       .subscribe({
         next: (d) => {
           this.diff.set(d);
@@ -59,7 +70,7 @@ export class RevisionDiffComponent implements OnInit {
         },
         error: () => {
           this.loading.set(false);
-          this.error.set('Failed to load diff');
+          this.error.set('Could not load diff — check your connection and try again.');
         },
       });
   }
@@ -80,7 +91,7 @@ export class RevisionDiffComponent implements OnInit {
         },
         error: () => {
           this.restoring.set(false);
-          this.toast.show('Failed to restore asset', 'error');
+          this.toast.show('Could not restore asset — someone may have edited it since, try reloading.', 'error');
         },
       });
   }
@@ -121,7 +132,7 @@ export class RevisionDiffComponent implements OnInit {
         },
         error: () => {
           this.restoring.set(false);
-          this.toast.show('Failed to roll back project', 'error');
+          this.toast.show('Could not roll back project — try again in a moment.', 'error');
         },
       });
   }

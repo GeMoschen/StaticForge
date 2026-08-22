@@ -47,6 +47,8 @@ export interface EditorDefinition {
   pattern?: string;
   patternMessage?: string;
   mimeTypes?: string[];
+  /** For REFERENCE editors: restricts the asset picker to these asset types (e.g. `['PAGE']`); empty/absent allows any type. */
+  assetTypes?: string[];
   options?: SelectOption[];
   features?: string[];
   visibleWhen?: string;

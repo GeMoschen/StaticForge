@@ -7,7 +7,10 @@ import com.acme.staticforge.api.dto.MoveResultDto;
 import com.acme.staticforge.api.dto.RenameFolderRequest;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.folder.FolderNode;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
+import com.acme.staticforge.common.ProblemFactory;
+import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
@@ -44,17 +47,28 @@ public class FolderController {
     @GetMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public List<FolderView> tree(
-            @PathVariable String projectKey, @RequestParam(required = false) Integer depth) {
+            @PathVariable String projectKey,
+            @RequestParam String scope,
+            @RequestParam(required = false) Integer depth) {
         int d = depth == null ? -1 : depth;
-        List<FolderNode> nodes = folderService.tree(projectId(projectKey), d, ctx(projectKey, null));
+        List<FolderNode> nodes = folderService.tree(projectId(projectKey), parseScope(scope), d, ctx(projectKey, null));
         return nodes.stream().map(FolderController::toView).toList();
     }
 
     @PostMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<FolderView> create(@PathVariable String projectKey, @RequestBody CreateFolderRequest body) {
-        AssetVersionView view = folderService.create(body.parentFolderUuid(), body.displayName(), ctx(projectKey, "create folder"));
+        FolderScope scope = body.scope() == null || body.scope().isBlank() ? null : parseScope(body.scope());
+        AssetVersionView view = folderService.create(body.parentFolderUuid(), body.displayName(), scope, ctx(projectKey, "create folder"));
         return ResponseEntity.ok(toView(view));
+    }
+
+    private static FolderScope parseScope(String scope) {
+        try {
+            return FolderScope.valueOf(scope);
+        } catch (IllegalArgumentException e) {
+            throw new SfException(ProblemFactory.badRequest("scope must be PAGES or MEDIA."));
+        }
     }
 
     @PutMapping("/{uuid}")
@@ -100,10 +114,12 @@ public class FolderController {
 
     private static FolderView toView(FolderNode node) {
         return new FolderView(node.uuid(), node.uid(), node.displayName(), node.path(),
+                node.scope() == null ? null : node.scope().name(),
                 node.children().stream().map(FolderController::toView).toList());
     }
 
     private static FolderView toView(AssetVersionView v) {
-        return new FolderView(v.uuid(), v.uid(), v.displayName(), v.folderPath(), List.of());
+        FolderScope scope = FolderScope.fromPayload(v.payload());
+        return new FolderView(v.uuid(), v.uid(), v.displayName(), v.folderPath(), scope == null ? null : scope.name(), List.of());
     }
 }

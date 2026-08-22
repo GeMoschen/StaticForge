@@ -5,5 +5,6 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sf-table.component.html',
+  styleUrl: './sf-table.component.scss',
 })
 export class SfTableComponent {}

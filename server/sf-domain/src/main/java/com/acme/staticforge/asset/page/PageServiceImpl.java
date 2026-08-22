@@ -137,6 +137,57 @@ public class PageServiceImpl implements PageService {
 
     @Override
     @Transactional
+    public AssetVersionView moveSection(
+            UUID sourcePageUuid,
+            String sourceBody,
+            String instanceId,
+            UUID targetUuid,
+            String targetBody,
+            Integer position,
+            long expectedTargetRevision,
+            RevisionContext ctx) {
+        if (sourcePageUuid.equals(targetUuid)) {
+            Asset page = requirePage(targetUuid, ctx.projectId());
+            AssetVersion current = requireOpen(page.getId());
+
+            JsonNode section = bodyService.extractSection(current.getPayload(), sourceBody, instanceId);
+            if (section == null) {
+                throw new SfException(ProblemFactory.notFound("Section not found."));
+            }
+            ObjectNode withoutSection = bodyService.removeSection(current.getPayload(), sourceBody, instanceId);
+            ObjectNode newPayload = bodyService.insertSection(withoutSection, targetBody, position, section);
+            validatePagePayload(newPayload, ctx.projectId());
+
+            return assetService.update(
+                    targetUuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedTargetRevision, ctx);
+        }
+
+        Asset sourcePage = requirePage(sourcePageUuid, ctx.projectId());
+        AssetVersion sourceCurrent = requireOpen(sourcePage.getId());
+
+        JsonNode section = bodyService.extractSection(sourceCurrent.getPayload(), sourceBody, instanceId);
+        if (section == null) {
+            throw new SfException(ProblemFactory.notFound("Section not found."));
+        }
+        ObjectNode sourceNewPayload = bodyService.removeSection(sourceCurrent.getPayload(), sourceBody, instanceId);
+        validatePagePayload(sourceNewPayload, ctx.projectId());
+        assetService.update(
+                sourcePageUuid,
+                new UpdateAssetCommand(sourceCurrent.getDisplayName(), sourceNewPayload),
+                sourceCurrent.getValidFromRevision(),
+                ctx);
+
+        Asset targetPage = requirePage(targetUuid, ctx.projectId());
+        AssetVersion targetCurrent = requireOpen(targetPage.getId());
+        ObjectNode targetNewPayload = bodyService.insertSection(targetCurrent.getPayload(), targetBody, position, section);
+        validatePagePayload(targetNewPayload, ctx.projectId());
+
+        return assetService.update(
+                targetUuid, new UpdateAssetCommand(targetCurrent.getDisplayName(), targetNewPayload), expectedTargetRevision, ctx);
+    }
+
+    @Override
+    @Transactional
     public AssetVersionView duplicate(UUID uuid, RevisionContext ctx) {
         Asset page = requirePage(uuid, ctx.projectId());
         AssetVersion current = requireOpen(page.getId());

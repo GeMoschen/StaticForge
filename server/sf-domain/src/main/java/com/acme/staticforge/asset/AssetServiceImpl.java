@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset;
 
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.Problem;
@@ -67,6 +68,7 @@ public class AssetServiceImpl implements AssetService {
         UUID uuid = UUID.randomUUID();
         String uid = uidGenerator.deriveUid(displayName, cmd.projectId(), cmd.type());
 
+        validateFolderScope(cmd.parentFolderUuid(), cmd.type());
         FolderRef parent = resolveParent(cmd.parentFolderUuid(), cmd.projectId(), ctx);
         String folderPath;
         if (cmd.type() == AssetType.FOLDER) {
@@ -315,6 +317,7 @@ public class AssetServiceImpl implements AssetService {
                     "Folder moves must use the folder move operation."));
         }
 
+        validateFolderScope(newParentFolderUuid, asset.getAssetType());
         FolderRef parent = resolveParent(newParentFolderUuid, asset.getProjectId(), ctx);
         Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.MOVE, ctx.comment(), ctx.userId());
         AssetVersion current = requireOpen(asset.getId());
@@ -396,6 +399,30 @@ public class AssetServiceImpl implements AssetService {
                     .property("theirs", theirs != null ? theirs : NullNode.getInstance())
                     .build();
             throw new SfException(problem);
+        }
+    }
+
+    /**
+     * Pages and media each live in their own separate folder tree (§10.2 scope split). When an
+     * explicit target folder is given, it must belong to the store the asset type requires;
+     * the implicit root (parentFolderUuid == null) and legacy/scope-less folders are permissive.
+     */
+    private void validateFolderScope(UUID parentFolderUuid, AssetType assetType) {
+        FolderScope required = FolderScope.requiredFor(assetType);
+        if (required == null || parentFolderUuid == null) {
+            return;
+        }
+        Asset folder = assetRepository.findByUuid(parentFolderUuid)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Parent folder not found.")));
+        if (folder.getAssetType() != AssetType.FOLDER) {
+            return;
+        }
+        AssetVersion version = requireOpen(folder.getId());
+        FolderScope actual = FolderScope.fromPayload(version.getPayload());
+        if (actual != null && actual != required) {
+            throw new SfException(ProblemFactory.unprocessableEntity(
+                    "This folder belongs to the " + actual.name().toLowerCase()
+                            + " store — " + assetType.name().toLowerCase() + " assets can't be placed here."));
         }
     }
 

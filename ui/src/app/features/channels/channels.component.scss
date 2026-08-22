@@ -1,3 +1,6 @@
+@use '../../design/forms';
+@use '../../design/table';
+
 :host {
   display: block;
   height: 100%;
@@ -48,19 +51,7 @@
 
 .input,
 .select {
-  width: 100%;
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
-  box-sizing: border-box;
-}
-
-.input:disabled {
-  opacity: 0.55;
+  @include forms.sf-form-control;
 }
 
 .checkbox {
@@ -114,27 +105,7 @@
 }
 
 .table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-}
-
-.table th {
-  text-align: left;
-  padding: var(--sf-2) var(--sf-3);
-  border-bottom: 1px solid var(--sf-line);
-  color: var(--sf-slate);
-  font-weight: 500;
-  font-size: var(--sf-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.table td {
-  padding: var(--sf-2) var(--sf-3);
-  border-bottom: 1px solid var(--sf-line);
-  vertical-align: middle;
+  @include table.sf-table-base;
 }
 
 .table__actions {

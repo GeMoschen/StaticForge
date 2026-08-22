@@ -51,25 +51,25 @@
   }
 
   @if (loading()) {
-    <p class="dashboard__hint">Loading projects…</p>
+    <sf-spinner label="Loading projects…" />
   } @else if (error()) {
     <sf-empty-state
       title="Could not load projects"
       [description]="error()!"
-      icon="⚠"
+      icon="error"
     />
   } @else if (projects().length === 0) {
     <sf-empty-state
       title="No projects yet"
       description="Create your first project to start authoring static pages."
-      icon="▲"
+      icon="folder_off"
     >
       @if (isAdmin()) {
         <sf-button variant="primary" (click)="openCreate()">Create project</sf-button>
       }
     </sf-empty-state>
   } @else if (filtered().length === 0) {
-    <sf-empty-state title="No matches" description="Try a different search." icon="⌕" />
+    <sf-empty-state title="No matches" description="Try a different search." icon="search_off" />
   } @else {
     <section class="dashboard__grid">
       @for (p of filtered(); track trackProject($index, p)) {

@@ -1,32 +1,46 @@
 <sf-field [label]="definition().label" [hint]="definition().help">
-  <div class="sf-reference">
-    <div class="sf-reference__current" sfDropTarget (drop)="onDrop($event)">
-      {{ summary() || 'No asset selected' }}
+  <div class="sf-reference" sfDropTarget (drop)="onDrop($event)">
+    <div class="sf-reference__current">
+      @if (uuid(); as u) {
+        <sf-icon class="sf-reference__icon" name="link" />
+        @if (link(); as route) {
+          <a class="sf-reference__label sf-reference__label--link" [routerLink]="route" target="_blank" title="Open in a new tab">
+            {{ resolvedLabel() ?? u }}
+          </a>
+        } @else {
+          <span class="sf-reference__label">{{ resolvedLabel() ?? u }}</span>
+        }
+        @if (assetType(); as t) {
+          <span class="sf-reference__type">{{ t }}</span>
+        }
+      } @else {
+        <span class="sf-reference__empty">No asset selected</span>
+      }
     </div>
 
-    @if (projectKey()) {
-      <sf-button variant="secondary" (click)="choose()">Choose</sf-button>
+    @if (!definition().readOnly) {
+      <sf-button variant="secondary" (click)="openPicker()">Choose…</sf-button>
+      @if (uuid()) {
+        <button
+          type="button"
+          class="sf-reference__reset"
+          title="Clear reference"
+          aria-label="Clear reference"
+          (click)="reset()"
+        >
+          <sf-icon name="close" />
+        </button>
+      }
     }
-
-    @if (results().length > 0) {
-      <div class="sf-reference__results">
-        @for (item of results(); track item.uuid) {
-          <button type="button" (click)="select(item.uuid, '')">{{ item.label }}</button>
-        }
-      </div>
-    }
-
-    <input
-      type="text"
-      placeholder="Asset UUID"
-      [formControl]="field('uuid')"
-      [attr.readonly]="definition().readOnly ? '' : null"
-    />
-    <input
-      type="text"
-      placeholder="Asset type"
-      [formControl]="field('assetType')"
-      [attr.readonly]="definition().readOnly ? '' : null"
-    />
   </div>
 </sf-field>
+
+@if (pickerOpen() && projectKey()) {
+  <sf-asset-picker-dialog
+    [projectKey]="projectKey()!"
+    [initialType]="assetType()"
+    [allowedTypes]="definition().assetTypes ?? null"
+    (picked)="onPicked($event)"
+    (closed)="closePicker()"
+  />
+}

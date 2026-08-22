@@ -127,6 +127,7 @@ final class CdlValidator {
                 node.pattern,
                 node.patternMessage,
                 node.mimeTypes,
+                node.assetTypes,
                 node.options,
                 node.features,
                 node.visibleWhen,

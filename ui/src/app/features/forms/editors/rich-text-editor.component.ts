@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { ReactiveFormsModule, FormControl, FormGroup } from '@angular/forms';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
+import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { EditorDefinition } from '../form.model';
 import { errorMessageFor } from '../form-builder.service';
 
@@ -16,7 +17,7 @@ import { errorMessageFor } from '../form-builder.service';
   selector: 'sf-rich-text-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, SfFieldComponent],
+  imports: [ReactiveFormsModule, SfFieldComponent, SfIconComponent],
   templateUrl: './rich-text-editor.component.html',
   styleUrl: './rich-text-editor.component.scss',
 })

@@ -44,7 +44,7 @@ export class RevisionsService {
           this.loading.set(false);
         },
         error: () => {
-          this.error.set('Failed to load revisions');
+          this.error.set('Could not load revisions — check your connection and try again.');
           this.loading.set(false);
         },
       });

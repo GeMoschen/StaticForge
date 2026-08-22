@@ -92,7 +92,9 @@ export class AuthStore {
       this.systemRole.set(systemRole);
     }
 
-    const roles = claims['roles'];
+    // The access token embeds project memberships under the "projects" claim (see
+    // JwtServiceImpl#issueAccessToken) — not "roles".
+    const roles = claims['projects'];
     if (roles && typeof roles === 'object' && !Array.isArray(roles)) {
       this.projectRoles.set(roles as Record<string, string>);
     }

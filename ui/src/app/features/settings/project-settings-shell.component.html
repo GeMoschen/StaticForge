@@ -1,0 +1,49 @@
+<div class="settings">
+  <h1 class="sf-sr-only">Project settings</h1>
+  <nav class="settings__tabs" role="tablist" aria-label="Project settings">
+    <a
+      class="settings__tab"
+      role="tab"
+      routerLink="general"
+      routerLinkActive="settings__tab--active"
+    >
+      General
+    </a>
+    <a
+      class="settings__tab"
+      role="tab"
+      routerLink="media"
+      routerLinkActive="settings__tab--active"
+    >
+      Media
+    </a>
+    <a
+      class="settings__tab"
+      role="tab"
+      routerLink="channels"
+      routerLinkActive="settings__tab--active"
+    >
+      Channels
+    </a>
+    <a
+      class="settings__tab"
+      role="tab"
+      routerLink="generation"
+      routerLinkActive="settings__tab--active"
+    >
+      Generation
+    </a>
+    <a
+      class="settings__tab"
+      role="tab"
+      routerLink="revisions"
+      routerLinkActive="settings__tab--active"
+    >
+      Revisions
+    </a>
+  </nav>
+
+  <div class="settings__body">
+    <router-outlet />
+  </div>
+</div>

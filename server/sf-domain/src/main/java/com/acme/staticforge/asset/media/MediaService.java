@@ -39,7 +39,8 @@ public interface MediaService {
     AssetVersionView require(UUID uuid);
 
     /** Current media versions filtered by MIME family, folder and display-name substring. */
-    Page<AssetVersionView> list(long projectId, String mimeType, String folder, String q, Pageable pageable);
+    /** {@code recursive} controls whether {@code folder} matches that folder's own contents only, or also its descendants. */
+    Page<AssetVersionView> list(long projectId, String mimeType, String folder, boolean recursive, String q, Pageable pageable);
 
     /** The bytes of a media asset (or a named variant), or throws when the blob is absent. */
     MediaBinary binary(UUID uuid, String variantName);

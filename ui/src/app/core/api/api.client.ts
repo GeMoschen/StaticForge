@@ -105,6 +105,12 @@ export class ApiClient {
     });
   }
 
+  updateProject(key: string, body: S['ProjectUpdateRequest']): Observable<S['ProjectDetail']> {
+    return this.http.put<S['ProjectDetail']>(`${BASE}/projects/${key}`, body, {
+      withCredentials: true,
+    });
+  }
+
   listMembers(key: string): Observable<S['ProjectMemberView'][]> {
     return this.http.get<S['ProjectMemberView'][]>(
       `${BASE}/projects/${key}/members`,
@@ -114,10 +120,10 @@ export class ApiClient {
 
   // ── Folders ─────────────────────────────────────────────────────────────
 
-  listFolders(projectKey: string, depth?: number): Observable<S['FolderView'][]> {
+  listFolders(projectKey: string, scope: 'PAGES' | 'MEDIA', depth?: number): Observable<S['FolderView'][]> {
     return this.http.get<S['FolderView'][]>(`${BASE}/projects/${projectKey}/folders`, {
       withCredentials: true,
-      params: this.params({ depth }),
+      params: this.params({ scope, depth }),
     });
   }
 
@@ -314,6 +320,20 @@ export class ApiClient {
     );
   }
 
+  moveSection(
+    projectKey: string,
+    targetUuid: string,
+    targetBody: string,
+    request: S['MoveSectionRequest'],
+    etag?: number,
+  ): Observable<S['PageView']> {
+    return this.http.post<S['PageView']>(
+      `${BASE}/projects/${projectKey}/pages/${targetUuid}/bodies/${targetBody}/sections/move`,
+      request,
+      this.mutationOptions(etag),
+    );
+  }
+
   duplicatePage(projectKey: string, uuid: string): Observable<S['PageView']> {
     return this.http.post<S['PageView']>(
       `${BASE}/projects/${projectKey}/pages/${uuid}/duplicate`,
@@ -349,6 +369,13 @@ export class ApiClient {
   templateDetail(projectKey: string, uuid: string): Observable<S['TemplateDetail']> {
     return this.http.get<S['TemplateDetail']>(
       `${BASE}/projects/${projectKey}/page-templates/${uuid}`,
+      { withCredentials: true },
+    );
+  }
+
+  sectionTemplateDetail(projectKey: string, uuid: string): Observable<S['TemplateDetail']> {
+    return this.http.get<S['TemplateDetail']>(
+      `${BASE}/projects/${projectKey}/section-templates/${uuid}`,
       { withCredentials: true },
     );
   }

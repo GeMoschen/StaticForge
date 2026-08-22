@@ -11,7 +11,9 @@
   cursor: pointer;
   transition:
     background var(--sf-motion-fast) var(--sf-ease),
-    border-color var(--sf-motion-fast) var(--sf-ease);
+    border-color var(--sf-motion-fast) var(--sf-ease),
+    box-shadow var(--sf-motion-fast) var(--sf-ease),
+    color var(--sf-motion-fast) var(--sf-ease);
 }
 
 .sf-button:disabled {
@@ -24,10 +26,20 @@
   color: #fff;
 }
 
+.sf-button--primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--sf-signal) 88%, black);
+  box-shadow: var(--sf-shadow-1);
+}
+
 .sf-button--secondary {
   background: var(--sf-surface);
   border-color: var(--sf-line);
   color: var(--sf-ink);
+}
+
+.sf-button--secondary:not(:disabled):hover {
+  border-color: var(--sf-signal);
+  color: var(--sf-signal);
 }
 
 .sf-button--ghost {
@@ -35,7 +47,17 @@
   color: var(--sf-slate);
 }
 
+.sf-button--ghost:not(:disabled):hover {
+  background: color-mix(in srgb, var(--sf-ink) 6%, transparent);
+  color: var(--sf-ink);
+}
+
 .sf-button--danger {
   background: var(--sf-rust);
   color: #fff;
+}
+
+.sf-button--danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--sf-rust) 88%, black);
+  box-shadow: var(--sf-shadow-1);
 }

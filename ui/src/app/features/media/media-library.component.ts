@@ -18,20 +18,19 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
+import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfDropTargetDirective } from '../../shared/directives/sf-drop-target.directive';
 import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
 import { MediaDetailDrawerComponent } from './media-detail-drawer.component';
+import { MediaFolderNodeComponent, FolderMoveEvent } from './media-folder-node.component';
 
 type MediaView = components['schemas']['MediaView'];
 type FolderView = components['schemas']['FolderView'];
-
-interface FolderOption {
-  uuid?: string;
-  path: string;
-  label: string;
-}
 
 interface UploadItem {
   id: number;
@@ -50,9 +49,12 @@ const PAGE_SIZE = 40;
   imports: [
     SfButtonComponent,
     SfEmptyStateComponent,
+    SfIconComponent,
+    SfSpinnerComponent,
     SfDropTargetDirective,
     SfFileSizePipe,
     MediaDetailDrawerComponent,
+    MediaFolderNodeComponent,
   ],
   templateUrl: './media-library.component.html',
   styleUrl: './media-library.component.scss',
@@ -63,6 +65,8 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly project = inject(ProjectContextStore);
   private readonly toasts = inject(ToastService);
+  private readonly menu = inject(ContextMenuService);
+  protected readonly clipboard = inject(TreeClipboardService);
 
   private readonly search$ = new Subject<string>();
   private uploadSeq = 0;
@@ -93,20 +97,15 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   readonly hasMore = computed(() => this.items().length < this.totalElements());
   readonly dragActive = computed(() => this.dragCounter() > 0);
 
-  readonly folderOptions = computed<FolderOption[]>(() => {
-    const result: FolderOption[] = [{ path: '', label: 'All folders' }];
-    const walk = (nodes: FolderView[] | undefined, depth: number) => {
-      for (const node of nodes ?? []) {
-        result.push({
-          uuid: node.uuid,
-          path: node.path ?? node.uuid ?? '',
-          label: '\u00a0\u00a0'.repeat(depth) + (node.displayName ?? node.path ?? node.uid ?? ''),
-        });
-        walk(node.children ?? [], depth + 1);
-      }
-    };
-    walk(this.project.folderTree(), 0);
-    return result;
+  protected readonly tree = this.project.mediaFolderTree;
+
+  /** The selected folder's direct subfolders (root when nothing is selected) — the content grid shows these, then this folder's own media, never descendants. */
+  protected readonly currentFolderChildren = computed<FolderView[]>(() => {
+    const uuid = this.folderUuid();
+    if (!uuid) {
+      return this.tree();
+    }
+    return findFolder(this.tree(), uuid)?.children ?? [];
   });
 
   constructor() {
@@ -125,7 +124,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     effect(() => {
       const key = this.projectKey();
       for (const item of this.items()) {
-        if (item.uuid) {
+        if (item.uuid && (item.mimeType ?? '').startsWith('image/')) {
           this.requestThumb(key, item.uuid);
         }
       }
@@ -172,6 +171,33 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   thumb(uuid?: string): string | null {
     return uuid ? (this.thumbUrls()[uuid] ?? null) : null;
+  }
+
+  /** Material Symbols icon for a mime type that has no thumbnail preview (anything non-image). */
+  protected mediaIconFor(mimeType?: string): string {
+    const mime = mimeType ?? '';
+    if (mime.startsWith('video/')) {
+      return 'movie';
+    }
+    if (mime.startsWith('audio/')) {
+      return 'audiotrack';
+    }
+    if (mime.startsWith('font/')) {
+      return 'font_download';
+    }
+    if (mime === 'application/pdf') {
+      return 'picture_as_pdf';
+    }
+    if (mime === 'application/zip' || mime === 'application/x-zip-compressed' || mime === 'application/gzip') {
+      return 'folder_zip';
+    }
+    if (mime === 'text/css' || mime === 'application/javascript' || mime === 'application/json' || mime === 'text/html') {
+      return 'code';
+    }
+    if (mime.startsWith('text/')) {
+      return 'description';
+    }
+    return 'draft';
   }
 
   isSelected(uuid?: string): boolean {
@@ -258,12 +284,218 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     this.reload();
   }
 
-  onFolderChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.folderPath.set(value);
-    const option = this.folderOptions().find((o) => o.path === value);
-    this.folderUuid.set(option?.uuid ?? '');
+  protected selectFolder(node: FolderView | null): void {
+    this.folderPath.set(node?.path ?? '');
+    this.folderUuid.set(node?.uuid ?? '');
     this.reload();
+  }
+
+  protected onFolderSelected(uuid: string): void {
+    this.selectFolder(findFolder(this.tree(), uuid));
+  }
+
+  protected newFolder(): void {
+    this.createFolderUnder(this.folderUuid() || undefined);
+  }
+
+  private createFolderUnder(parentUuid: string | undefined): void {
+    const displayName = window.prompt('Folder name');
+    if (!displayName || !displayName.trim()) {
+      return;
+    }
+    const key = this.projectKey();
+    this.api
+      .createFolder(key, { displayName: displayName.trim(), parentFolderUuid: parentUuid, scope: 'MEDIA' })
+      .subscribe({
+        next: () => {
+          this.toasts.show('Folder created', 'success');
+          this.reloadFolders();
+        },
+        error: () => this.toasts.show('Could not create folder — a folder with that name may already exist here.', 'error'),
+      });
+  }
+
+  protected reloadFolders(): void {
+    this.project.loadFor(this.projectKey(), true).subscribe();
+    this.reload();
+  }
+
+  protected moveItemTo(event: FolderMoveEvent): void {
+    if (!event.source || !event.target) {
+      return;
+    }
+    this.api.moveAsset(this.projectKey(), event.source, { folderUuid: event.target }).subscribe({
+      next: () => {
+        this.toasts.show('Moved', 'success');
+        this.reloadFolders();
+      },
+      error: () => this.toasts.show('Could not move — that may create a cycle.', 'error'),
+    });
+  }
+
+  protected onRootDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
+  }
+
+  protected onRootDrop(event: DragEvent): void {
+    event.preventDefault();
+    const source = event.dataTransfer?.getData('text/plain');
+    if (!source) {
+      return;
+    }
+    this.api.moveAsset(this.projectKey(), source, {}).subscribe({
+      next: () => {
+        this.toasts.show('Moved to root', 'success');
+        this.reloadFolders();
+      },
+      error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
+    });
+  }
+
+  /** "All media" is the project's media root — its only folder action is creating a subfolder there (it can't be renamed, deleted, cut, or pasted into). */
+  protected onRootContextMenu(event: MouseEvent): void {
+    const items: ContextMenuItem[] = [
+      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.createFolderUnder(undefined) },
+    ];
+    this.menu.open(event, items);
+  }
+
+  protected onFolderCardClick(folder: FolderView): void {
+    this.selectFolder(folder);
+  }
+
+  protected onFolderCardDragStart(folder: FolderView, event: DragEvent): void {
+    if (!folder.uuid) {
+      return;
+    }
+    event.dataTransfer?.setData('text/plain', folder.uuid);
+    event.dataTransfer && (event.dataTransfer.effectAllowed = 'move');
+  }
+
+  protected onFolderCardDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
+  }
+
+  protected onFolderCardDrop(folder: FolderView, event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const source = event.dataTransfer?.getData('text/plain');
+    if (source && folder.uuid && source !== folder.uuid) {
+      this.moveItemTo({ source, target: folder.uuid });
+    }
+  }
+
+  protected onFolderCardContextMenu(folder: FolderView, event: MouseEvent): void {
+    const uuid = folder.uuid;
+    if (!uuid) {
+      return;
+    }
+    const clip = this.clipboard.entry();
+    this.menu.open(event, [
+      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.createFolderUnder(uuid) },
+      { label: 'Rename', icon: 'edit', action: () => this.renameFolder(folder) },
+      { label: '', separator: true },
+      {
+        label: 'Cut',
+        icon: 'content_cut',
+        action: () => this.clipboard.cut('FOLDER', uuid, folder.displayName ?? folder.uid ?? 'folder'),
+      },
+      { label: 'Paste', icon: 'content_paste', disabled: !clip, action: () => this.pasteInto(uuid) },
+      { label: '', separator: true },
+      { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(folder) },
+    ]);
+  }
+
+  private renameFolder(folder: FolderView): void {
+    const uuid = folder.uuid;
+    if (!uuid) {
+      return;
+    }
+    const displayName = window.prompt('Folder name', folder.displayName ?? '');
+    if (!displayName || !displayName.trim()) {
+      return;
+    }
+    this.api.renameFolder(this.projectKey(), uuid, { displayName: displayName.trim() }).subscribe({
+      next: () => {
+        this.toasts.show('Folder renamed', 'success');
+        this.reloadFolders();
+      },
+      error: () => this.toasts.show('Could not rename folder — try again in a moment.', 'error'),
+    });
+  }
+
+  private deleteFolder(folder: FolderView): void {
+    const uuid = folder.uuid;
+    if (!uuid) {
+      return;
+    }
+    const name = folder.displayName ?? folder.uid ?? 'this folder';
+    if (!window.confirm(`Delete "${name}" and everything inside it? This cannot be undone.`)) {
+      return;
+    }
+    this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({
+      next: () => {
+        this.toasts.show('Folder deleted', 'success');
+        if (this.folderUuid() === uuid) {
+          this.selectFolder(null);
+        } else {
+          this.reloadFolders();
+        }
+      },
+      error: () => this.toasts.show('Could not delete folder — try again in a moment.', 'error'),
+    });
+  }
+
+  private pasteInto(targetUuid: string): void {
+    const entry = this.clipboard.entry();
+    if (!entry || entry.mode !== 'cut') {
+      return;
+    }
+    this.api.moveAsset(this.projectKey(), entry.uuid, { folderUuid: targetUuid }).subscribe({
+      next: () => {
+        this.clipboard.clear();
+        this.toasts.show(`Moved "${entry.label}"`, 'success');
+        this.reloadFolders();
+      },
+      error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
+    });
+  }
+
+  protected onItemDragStart(uuid: string | undefined, event: DragEvent): void {
+    if (!uuid) {
+      return;
+    }
+    event.dataTransfer?.setData('text/plain', uuid);
+    event.dataTransfer && (event.dataTransfer.effectAllowed = 'move');
+  }
+
+  protected onItemContextMenu(item: MediaView, event: MouseEvent): void {
+    const uuid = item.uuid;
+    if (!uuid) {
+      return;
+    }
+    const label = item.displayName ?? uuid;
+    this.menu.open(event, [
+      { label: 'Open details', icon: 'info', action: () => this.openDetail(uuid) },
+      { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('MEDIA', uuid, label) },
+      { label: '', separator: true },
+      { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteOne(uuid, label) },
+    ]);
+  }
+
+  private deleteOne(uuid: string, label: string): void {
+    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) {
+      return;
+    }
+    this.api.deleteAsset(this.projectKey(), uuid).subscribe({
+      next: () => {
+        this.onDeleted(uuid);
+        this.toasts.show('Media deleted', 'success');
+      },
+      error: () => this.toasts.show('Could not delete media — try again in a moment.', 'error'),
+    });
   }
 
   onFileInput(event: Event): void {
@@ -272,7 +504,10 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     input.value = '';
   }
 
-  onDragEnter(): void {
+  onDragEnter(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes('Files')) {
+      return;
+    }
     this.dragCounter.update((n) => n + 1);
   }
 
@@ -282,7 +517,10 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   onDrop(event: DragEvent): void {
     this.dragCounter.set(0);
-    this.uploadFiles(Array.from(event.dataTransfer?.files ?? []));
+    if (!event.dataTransfer?.types.includes('Files')) {
+      return;
+    }
+    this.uploadFiles(Array.from(event.dataTransfer.files ?? []));
   }
 
   private uploadFiles(files: File[]): void {
@@ -334,13 +572,14 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   } {
     const q = this.search().trim();
     const mime = this.mimeFilter().trim();
-    const folder = this.folderPath().trim();
+    // Root has no folderPath of its own — "/" matches only items placed directly at the project root, never nested ones (see `recursive`, default false).
+    const folder = this.folderPath().trim() || '/';
     return {
       page,
       size: PAGE_SIZE,
+      folder,
       ...(q ? { q } : {}),
       ...(mime ? { mimeType: mime } : {}),
-      ...(folder ? { folder } : {}),
     };
   }
 
@@ -382,4 +621,17 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     };
     return e?.error?.detail ?? e?.error?.message ?? e?.message ?? 'Failed';
   }
+}
+
+function findFolder(nodes: FolderView[], uuid: string): FolderView | null {
+  for (const node of nodes) {
+    if (node.uuid === uuid) {
+      return node;
+    }
+    const found = findFolder(node.children ?? [], uuid);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }

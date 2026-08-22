@@ -24,6 +24,7 @@ public record EditorDefinition(
         String pattern,
         String patternMessage,
         List<String> mimeTypes,
+        List<String> assetTypes,
         List<SelectOption> options,
         List<String> features,
         String visibleWhen,
@@ -33,6 +34,7 @@ public record EditorDefinition(
     public EditorDefinition {
         items = items == null ? List.of() : items;
         mimeTypes = mimeTypes == null ? List.of() : mimeTypes;
+        assetTypes = assetTypes == null ? List.of() : assetTypes;
         options = options == null ? List.of() : options;
         features = features == null ? List.of() : features;
     }

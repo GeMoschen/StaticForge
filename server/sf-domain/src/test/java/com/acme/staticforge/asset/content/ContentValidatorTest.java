@@ -111,7 +111,7 @@ class ContentValidatorTest {
     private static EditorDefinition editor(String name, EditorType type, List<SelectOption> options, boolean required) {
         return new EditorDefinition(
                 name, type, name, null, required, false, false, null, null, null, null, null, null, null,
-                List.of(), options, List.of(), null, null, List.of());
+                List.of(), List.of(), options, List.of(), null, null, List.of());
     }
 
     private static EditorDefinition editor(
@@ -140,6 +140,6 @@ class ContentValidatorTest {
             boolean required) {
         return new EditorDefinition(
                 name, type, name, null, required, false, false, null, min, max, maxLength, maxChars,
-                pattern, patternMessage, List.of(), List.of(), List.of(), visibleWhen, null, List.of());
+                pattern, patternMessage, List.of(), List.of(), List.of(), List.of(), visibleWhen, null, List.of());
     }
 }

@@ -59,10 +59,30 @@ public class SecurityConfig {
         return http.securityMatcher("/api/**")
                 .csrf(CsrfConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Default is DENY; PreviewController serves signed share links meant to be framed
+                // by the app's own preview iframe (spec §19.3) and sets its own X-Frame-Options —
+                // but Spring MVC applies ResponseEntity headers via HttpServletResponse#addHeader
+                // (append), not #setHeader (replace), so a controller-level header lands *alongside*
+                // this filter's default rather than overriding it. Two X-Frame-Options values with
+                // different verdicts on the same response makes browsers refuse the frame outright
+                // (observed as "X-Frame-Options set to 'deny'" even though the controller asked for
+                // SAMEORIGIN). Setting the one true default here, instead of fighting it per-controller,
+                // avoids the duplicate header entirely.
+                .headers(h -> h.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(a -> a.requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh")
                         .permitAll()
                         .requestMatchers("/api/v1/auth/**")
                         .authenticated()
+                        // Signed, expiring share-token route (spec §19.3) — the token itself is the
+                        // credential (verified in PreviewController#share), so this must be reachable
+                        // without a Bearer session; filter-chain authorization runs before method-level
+                        // @PreAuthorize, so permitAll() there alone can never take effect.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/projects/*/preview/share")
+                        .permitAll()
+                        // Same reasoning, for MEDIA references inside that same rendered preview HTML —
+                        // see MediaController#shareBinary.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/projects/*/media/*/share")
+                        .permitAll()
                         .anyRequest()
                         .authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(jwtDecoder)

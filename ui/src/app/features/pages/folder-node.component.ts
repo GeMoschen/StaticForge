@@ -1,39 +1,67 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  inject,
   input,
   output,
   signal,
 } from '@angular/core';
+import { ApiClient } from '../../core/api/api.client';
+import { ToastService } from '../../core/ui/toast.service';
+import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
+import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { PageNavNodeComponent } from './page-nav-node.component';
 import type { FolderMoveEvent } from './types';
 
 type FolderView = components['schemas']['FolderView'];
+type AssetSummaryView = components['schemas']['AssetSummaryView'];
 
 /**
- * Recursive folder-tree node. Supports expand/collapse, selection, and
- * native HTML5 drag-move (drag a folder onto another folder to move it).
- * The parent is responsible for performing the move via the ApiClient.
+ * Recursive folder-tree node. Supports expand/collapse, selection, native
+ * HTML5 drag-move (drag a folder or page onto another folder to move it —
+ * the parent performs the move via the generic `ApiClient.moveAsset`), and
+ * a right-click menu (new page/subfolder, rename, cut/paste, delete). Also
+ * renders this folder's own pages (from `pagesByFolder`, keyed by the
+ * folder's canonical path) as navigable `sf-page-nav-node` leaves — always
+ * after its sub-folders, so folders sort first.
  */
 @Component({
   selector: 'sf-folder-node',
   standalone: true,
+  imports: [SfIconComponent, PageNavNodeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './folder-node.component.html',
   styleUrl: './folder-node.component.scss',
 })
 export class FolderNodeComponent {
+  private readonly api = inject(ApiClient);
+  private readonly toast = inject(ToastService);
+  private readonly menu = inject(ContextMenuService);
+  private readonly clipboard = inject(TreeClipboardService);
+
   readonly node = input.required<FolderView>();
   readonly depth = input<number>(0);
   readonly selectedUuid = input<string | null>(null);
+  readonly projectKey = input<string>('');
+  readonly pagesByFolder = input<ReadonlyMap<string, AssetSummaryView[]>>(new Map());
 
   readonly select = output<string>();
   readonly move = output<FolderMoveEvent>();
+  /** Request to open the "new page" form targeting this folder (already selected). */
+  readonly newPage = output<void>();
+  /** Emitted after this folder (or something inside it) was created/renamed/moved/deleted, so the parent reloads. */
+  readonly changed = output<void>();
 
   protected readonly expanded = signal(true);
 
+  protected ownPages(): AssetSummaryView[] {
+    return this.pagesByFolder().get(this.node().path ?? '') ?? [];
+  }
+
   protected hasChildren(): boolean {
-    return (this.node().children ?? []).length > 0;
+    return (this.node().children ?? []).length > 0 || this.ownPages().length > 0;
   }
 
   protected isSelected(): boolean {
@@ -89,5 +117,119 @@ export class FolderNodeComponent {
 
   protected onDragEnd(): void {
     // No-op; sibling visual state is managed by the parent.
+  }
+
+  protected onContextMenu(event: MouseEvent): void {
+    const uuid = this.node().uuid;
+    if (!uuid) {
+      return;
+    }
+    const clip = this.clipboard.entry();
+    const items: ContextMenuItem[] = [
+      {
+        label: 'New page here',
+        icon: 'note_add',
+        action: () => {
+          this.select.emit(uuid);
+          this.newPage.emit();
+        },
+      },
+      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newSubfolder(uuid) },
+      { label: 'Rename', icon: 'edit', action: () => this.rename(uuid) },
+      { label: '', separator: true },
+      {
+        label: 'Cut',
+        icon: 'content_cut',
+        action: () => this.clipboard.cut('FOLDER', uuid, this.node().displayName ?? this.node().uid ?? 'folder'),
+      },
+      { label: 'Paste', icon: 'content_paste', disabled: !clip, action: () => this.paste(uuid) },
+      { label: '', separator: true },
+      { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(uuid) },
+    ];
+    this.menu.open(event, items);
+  }
+
+  private newSubfolder(parentUuid: string): void {
+    const displayName = window.prompt('Folder name');
+    if (!displayName || !displayName.trim()) {
+      return;
+    }
+    this.api
+      .createFolder(this.projectKey(), { displayName: displayName.trim(), parentFolderUuid: parentUuid, scope: 'PAGES' })
+      .subscribe({
+        next: () => {
+          this.toast.show('Folder created', 'success');
+          this.changed.emit();
+        },
+        error: () => this.toast.show('Could not create folder — a folder with that name may already exist here.', 'error'),
+      });
+  }
+
+  private rename(uuid: string): void {
+    const displayName = window.prompt('Folder name', this.node().displayName ?? '');
+    if (!displayName || !displayName.trim()) {
+      return;
+    }
+    this.api.renameFolder(this.projectKey(), uuid, { displayName: displayName.trim() }).subscribe({
+      next: () => {
+        this.toast.show('Folder renamed', 'success');
+        this.changed.emit();
+      },
+      error: () => this.toast.show('Could not rename folder — try again in a moment.', 'error'),
+    });
+  }
+
+  private deleteFolder(uuid: string): void {
+    const name = this.node().displayName ?? this.node().uid ?? 'this folder';
+    if (!window.confirm(`Delete "${name}" and everything inside it? This cannot be undone.`)) {
+      return;
+    }
+    this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({
+      next: () => {
+        this.toast.show('Folder deleted', 'success');
+        this.changed.emit();
+      },
+      error: () => this.toast.show('Could not delete folder — try again in a moment.', 'error'),
+    });
+  }
+
+  private paste(targetUuid: string): void {
+    const entry = this.clipboard.entry();
+    if (!entry) {
+      return;
+    }
+    const key = this.projectKey();
+    if (entry.mode === 'cut') {
+      this.api.moveAsset(key, entry.uuid, { folderUuid: targetUuid }).subscribe({
+        next: () => {
+          this.clipboard.clear();
+          this.toast.show(`Moved "${entry.label}"`, 'success');
+          this.changed.emit();
+        },
+        error: () => this.toast.show('Could not move — try again in a moment.', 'error'),
+      });
+      return;
+    }
+    if (entry.assetType !== 'PAGE') {
+      this.toast.show('Only pages can be copied — try Cut instead.', 'error');
+      return;
+    }
+    this.api.duplicatePage(key, entry.uuid).subscribe({
+      next: (duplicated) => {
+        const newUuid = duplicated.uuid;
+        if (!newUuid) {
+          this.changed.emit();
+          return;
+        }
+        this.api.moveAsset(key, newUuid, { folderUuid: targetUuid }).subscribe({
+          next: () => {
+            this.toast.show('Page duplicated', 'success');
+            this.changed.emit();
+          },
+          error: () => this.toast.show('Duplicated the page, but could not move it into this folder.', 'error'),
+        });
+      },
+      error: () => this.toast.show('Could not duplicate page — try again in a moment.', 'error'),
+    });
   }
 }

@@ -96,15 +96,12 @@ public class PreviewController {
     }
 
     /**
-     * Public share route: renders one read-only page bound to a verified share token.
-     *
-     * <p>NOTE (spec §19.3): a truly unauthenticated route cannot be reached in the current M3
-     * wiring because {@code SecurityConfig} authorizes {@code /api/**} as {@code
-     * authenticated()} except the auth login/refresh endpoints, and method-level {@code
-     * permitAll()} is only consulted after the filter chain. Marking this endpoint {@code
-     * permitAll()} documents the intent; exposing it without authentication requires adding
-     * the route to the public permit chain in {@code SecurityConfig}, which is deferred here
-     * (and is explicitly out of scope for M3).
+     * Public share route: renders one read-only page bound to a verified share token. Reachable
+     * without a Bearer session — {@code SecurityConfig} permits {@code GET .../preview/share} at
+     * the filter-chain level (method-level {@code @PreAuthorize} alone can't achieve this, since
+     * filter-chain authorization runs first) — and is also what internal page links inside a
+     * rendered preview are rewritten to (see {@code PageRenderService#urlResolver}), so clicking
+     * through pages inside the preview iframe works without carrying the app's session into it.
      */
     @GetMapping("/share")
     @PreAuthorize("permitAll()")
@@ -145,7 +142,10 @@ public class PreviewController {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(contentType);
         headers.set("Content-Security-Policy", csp);
-        headers.set("X-Frame-Options", "SAMEORIGIN");
+        // X-Frame-Options: SAMEORIGIN is applied uniformly by SecurityConfig — setting it again here
+        // would land as a second, conflicting header (Spring MVC appends ResponseEntity headers rather
+        // than replacing the security filter's default) and browsers refuse to frame a response with
+        // conflicting values, even when one of them is otherwise permissive.
         headers.set("X-Content-Type-Options", "nosniff");
         return ResponseEntity.ok().headers(headers).body(output);
     }

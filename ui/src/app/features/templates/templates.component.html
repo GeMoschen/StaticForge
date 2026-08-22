@@ -28,7 +28,7 @@
     </div>
 
     @if (loading()) {
-      <div class="loading">Loading…</div>
+      <sf-spinner label="Loading templates…" />
     }
 
     @if (!loading() && templates().length === 0) {

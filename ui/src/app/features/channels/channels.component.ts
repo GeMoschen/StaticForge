@@ -15,6 +15,8 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTableComponent } from '../../shared/components/sf-table.component';
 import { ChannelsService } from './channels.service';
 
@@ -49,6 +51,8 @@ const isProtected = (channel: ChannelView): boolean =>
     SfButtonComponent,
     SfEmptyStateComponent,
     SfFieldComponent,
+    SfSpinnerComponent,
+    SfIconComponent,
     SfTableComponent,
   ],
   templateUrl: './channels.component.html',
@@ -104,7 +108,7 @@ export class ChannelsComponent {
       },
       error: () => {
         this.loading.set(false);
-        this.toasts.show('Failed to load channels', 'error');
+        this.toasts.show('Could not load channels — check your connection and try again.', 'error');
       },
     });
   }
@@ -206,7 +210,7 @@ export class ChannelsComponent {
         this.replaceChannel(updated);
         this.toasts.show(`Channel ${action}d`, 'success');
       },
-      error: () => this.toasts.show(`Failed to ${action} channel`, 'error'),
+      error: () => this.toasts.show(`Could not ${action} that channel — try again in a moment.`, 'error'),
     });
   }
 
@@ -221,7 +225,7 @@ export class ChannelsComponent {
           this.performDelete(channel);
         }
       },
-      error: () => this.toasts.show('Failed to check channel usage', 'error'),
+      error: () => this.toasts.show('Could not check channel usage — try again in a moment.', 'error'),
     });
   }
 
@@ -251,7 +255,7 @@ export class ChannelsComponent {
         if (blocked) {
           this.blocked.set(blocked);
         } else {
-          this.toasts.show('Failed to delete channel', 'error');
+          this.toasts.show('Could not delete channel — it may still be used by a template.', 'error');
         }
       },
     });
@@ -265,7 +269,7 @@ export class ChannelsComponent {
 
   private onSubmitError(err: unknown): void {
     this.submitting.set(false);
-    this.error.set(this.describeError(err) ?? 'Failed to save channel');
+    this.error.set(this.describeError(err) ?? 'Could not save channel — try again in a moment.');
   }
 
   private describeError(err: unknown): string | null {

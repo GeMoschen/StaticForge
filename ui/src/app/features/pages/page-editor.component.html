@@ -3,8 +3,9 @@
     {{ page()?.displayName ?? page()?.uid ?? 'Page editor' }}
   </h1>
   <header class="page-editor__top">
-    <button type="button" class="page-editor__tree-toggle" (click)="toggleTree()">
-      Pages
+    <button type="button" class="page-editor__tree-toggle" (click)="closeEditor()">
+      <sf-icon name="arrow_back" />
+      Back to tree
     </button>
     @if (page(); as p) {
       <span class="page-editor__title">{{ p.displayName ?? p.uid }}</span>
@@ -13,30 +14,43 @@
   </header>
 
   <div class="page-editor__body">
-    <aside class="page-editor__tree" [style.width.px]="treeOpen() ? 240 : 0">
-      <div class="page-editor__tree-inner">
-        @for (folder of tree(); track folder.uuid) {
-          <sf-folder-node [node]="folder" [depth]="0" [selectedUuid]="null" />
-        }
-      </div>
-    </aside>
-
     <div class="page-editor__main" #main>
       <div class="page-editor__centre" [style.flex]="centreFlex()">
         @if (loading()) {
-          <sf-empty-state title="Loading page" />
+          <sf-spinner label="Loading page…" />
         } @else if (error()) {
-          <sf-empty-state title="Error" [description]="error() ?? ''" />
+          <sf-empty-state title="Could not load page" [description]="error() ?? ''" icon="error" />
         } @else if (page()) {
-          @if (contentDefinition(); as def) {
-            <sf-content-form
-              [definition]="def"
-              [formGroup]="fieldsForm()!"
-              [projectKey]="projectKey()"
-            />
-
-            @for (body of def.bodies; track body.name) {
-              <section class="page-editor__body">
+          @if (focusedSection(); as ctx) {
+            <!-- Section scope: only this one section. -->
+            <section class="page-editor__body">
+              <header class="page-editor__body-header">
+                <span class="page-editor__body-title">{{ sectionTitle(ctx.section.templateRef) }}</span>
+              </header>
+              <sf-section-editor
+                [contentDefinition]="defFor(ctx.section.templateRef)"
+                [section]="ctx.section"
+                [projectKey]="projectKey()"
+                [bodyName]="ctx.bodyName"
+                [templateUid]="uidFor(ctx.section.templateRef)"
+                [title]="sectionTitle(ctx.section.templateRef)"
+                [index]="ctx.index"
+                [count]="ctx.count"
+                [readOnly]="readOnly()"
+                (valueChange)="onSectionValueChange(ctx.bodyName, ctx.section.instanceId, $event)"
+                (remove)="removeSection(ctx.bodyName, ctx.section.instanceId)"
+                (moveUp)="moveSectionBy(ctx.bodyName, ctx.index, -1)"
+                (moveDown)="moveSectionBy(ctx.bodyName, ctx.index, 1)"
+              />
+            </section>
+          } @else {
+            @if (focusedBody(); as body) {
+              <!-- Body scope: only this body's sections. -->
+              <section
+                class="page-editor__body"
+                (dragover)="onBodyDragOver($event)"
+                (drop)="onBodyDrop(body, $event)"
+              >
                 <header class="page-editor__body-header">
                   <span class="page-editor__body-title">{{ body.label ?? body.name }}</span>
                   @if (!readOnly()) {
@@ -46,6 +60,23 @@
                   }
                 </header>
 
+                @if (otherBodies().length > 0) {
+                  <!-- Drag a section here to move it into another body of this page without leaving the editor. -->
+                  <div class="page-editor__body-rail">
+                    @for (other of otherBodies(); track other.name) {
+                      <button
+                        type="button"
+                        class="page-editor__body-chip"
+                        (click)="switchBody(other.name)"
+                        (dragover)="onBodyDragOver($event)"
+                        (drop)="onBodyDrop(other, $event)"
+                      >
+                        {{ other.label ?? other.name }}
+                      </button>
+                    }
+                  </div>
+                }
+
                 @for (
                   section of sectionsFor(body.name);
                   track trackSection($index, section)
@@ -54,6 +85,7 @@
                     [contentDefinition]="defFor(section.templateRef)"
                     [section]="section"
                     [projectKey]="projectKey()"
+                    [pageUuid]="uuid()"
                     [bodyName]="body.name"
                     [templateUid]="uidFor(section.templateRef)"
                     [title]="sectionTitle(section.templateRef)"
@@ -70,6 +102,15 @@
                   />
                 }
               </section>
+            } @else {
+              <!-- Page scope: only the page's own fields, no bodies/sections. -->
+              @if (contentDefinition(); as def) {
+                <sf-content-form
+                  [definition]="def"
+                  [formGroup]="fieldsForm()!"
+                  [projectKey]="projectKey()"
+                />
+              }
             }
           }
         }

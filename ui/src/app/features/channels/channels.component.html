@@ -84,7 +84,7 @@
   }
 
   @if (loading()) {
-    <div class="loading">Loading channels…</div>
+    <sf-spinner label="Loading channels…" />
   } @else if (channels().length === 0) {
     <sf-empty-state
       title="No channels yet"
@@ -113,7 +113,9 @@
                     <span class="badge badge--default">default</span>
                   }
                   @if (isProtected(channel)) {
-                    <span class="badge badge--protected" title="Protected channel">🔒 protected</span>
+                    <span class="badge badge--protected" title="Protected channel">
+                      <sf-icon name="lock" size="0.9rem" /> protected
+                    </span>
                   }
                 </span>
               </td>

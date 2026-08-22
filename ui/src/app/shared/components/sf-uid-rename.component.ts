@@ -93,7 +93,7 @@ export class SfUidRenameComponent {
         },
         error: () => {
           this.saving.set(false);
-          this.toasts.show('Failed to change UID', 'error');
+          this.toasts.show('Could not change UID — it may already be used by another asset.', 'error');
         },
       });
   }

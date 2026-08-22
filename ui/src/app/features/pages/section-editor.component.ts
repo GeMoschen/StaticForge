@@ -1,7 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  OnInit,
+  effect,
   inject,
   input,
   output,
@@ -13,6 +13,7 @@ import {
   FormBuilderService,
   SfContentFormComponent,
 } from '../forms';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { SectionInstance } from './types';
 
 /**
@@ -25,16 +26,18 @@ import type { SectionInstance } from './types';
   selector: 'sf-section-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfContentFormComponent],
+  imports: [SfContentFormComponent, SfIconComponent],
   templateUrl: './section-editor.component.html',
   styleUrl: './section-editor.component.scss',
 })
-export class SectionEditorComponent implements OnInit {
+export class SectionEditorComponent {
   private readonly fb = inject(FormBuilderService);
 
   readonly contentDefinition = input.required<ContentDefinition>();
   readonly section = input.required<SectionInstance>();
   readonly projectKey = input<string>();
+  /** The page this section belongs to — carried in the drag payload so a drop target elsewhere in the same editor (another body) knows where it came from. */
+  readonly pageUuid = input<string>();
   readonly bodyName = input.required<string>();
   readonly templateUid = input.required<string>();
   readonly title = input<string>('');
@@ -54,22 +57,46 @@ export class SectionEditorComponent implements OnInit {
   protected readonly fieldForm = signal<FormGroup | null>(null);
 
   private valueSub: { unsubscribe(): void } | null = null;
+  /** Guards the effect below so it only rebuilds the form when it starts editing a *different* section — an `@if`-scoped (as opposed to `@for`-tracked) host reuses the same component instance across navigations between sections, and re-syncing on every `section` reference change (e.g. after this same section's own autosave round-trip) would otherwise clobber in-progress edits. */
+  private lastInstanceId: string | null = null;
+  /**
+   * Also rebuild whenever the *definition* itself changes reference, even for the same
+   * section instance — e.g. `page-editor.component.ts` filling in a section template's
+   * compiled definition asynchronously right after this section first mounted. Without
+   * this, `fieldForm` stays built from the (possibly empty) old definition while the
+   * template rebinds `[definition]` to the new one, so `SfContentFormComponent.controlFor()`
+   * looks up a control by a name the stale form group never got — returning `null` and
+   * crashing editors that dereference `control()` in their template (e.g. `SfBooleanEditor`).
+   */
+  private lastDefinition: ContentDefinition | null = null;
 
-  ngOnInit(): void {
-    const content = (this.section().content ?? {}) as Record<string, unknown>;
-    const form = this.fb.build(this.contentDefinition(), content);
-    if (this.readOnly()) {
-      form.disable();
-    }
-    this.fieldForm.set(form);
-    this.valueSub = form.valueChanges.subscribe(() => {
-      this.valueChange.emit(
-        this.fb.valueOf(this.contentDefinition(), form),
-      );
-    });
+  constructor() {
+    effect(
+      () => {
+        const definition = this.contentDefinition();
+        const section = this.section();
+        if (section.instanceId === this.lastInstanceId && definition === this.lastDefinition) {
+          return;
+        }
+        this.lastInstanceId = section.instanceId;
+        this.lastDefinition = definition;
 
-    const key = this.collapseKey();
-    this.collapsed.set(localStorage.getItem(key) === '1');
+        const content = (section.content ?? {}) as Record<string, unknown>;
+        const form = this.fb.build(definition, content);
+        if (this.readOnly()) {
+          form.disable();
+        }
+        this.valueSub?.unsubscribe();
+        this.valueSub = form.valueChanges.subscribe(() => {
+          this.valueChange.emit(this.fb.valueOf(definition, form));
+        });
+        this.fieldForm.set(form);
+
+        const key = this.collapseKey();
+        this.collapsed.set(localStorage.getItem(key) === '1');
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   ngOnDestroy(): void {
@@ -104,6 +131,16 @@ export class SectionEditorComponent implements OnInit {
 
   protected onDragStart(event: DragEvent): void {
     event.dataTransfer?.setData('text/plain', String(this.index()));
+    const pageUuid = this.pageUuid();
+    if (pageUuid) {
+      const payload = {
+        pageUuid,
+        bodyName: this.bodyName(),
+        instanceId: this.section().instanceId,
+        templateRef: this.section().templateRef,
+      };
+      event.dataTransfer?.setData('application/x-sf-section', JSON.stringify(payload));
+    }
     event.dataTransfer && (event.dataTransfer.effectAllowed = 'move');
     this.dragStarted.emit(this.index());
   }

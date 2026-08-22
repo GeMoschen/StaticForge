@@ -11,8 +11,14 @@ import type { ConflictInfo, ResolveMode, SaveState } from './types';
 
 type PageView = components['schemas']['PageView'];
 
-/** Full page payload persisted on flush. */
+/**
+ * Full page payload persisted on flush. `templateRef` is required by the
+ * backend's PUT /pages/{uuid} validator (a full-replace merge against no
+ * base, unlike the PATCH /content endpoint) — omitting it is rejected with
+ * a 422 "Page payload requires templateRef."
+ */
 export interface PagePayload {
+  templateRef?: string;
   content?: unknown;
   bodies?: unknown;
   nav?: unknown;
@@ -48,6 +54,7 @@ export class PageAutosaveService implements OnDestroy {
 
   private dirty = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private debounceMs = DEBOUNCE_MS;
 
   private readonly onKeydownRef = (event: KeyboardEvent) => this.onKeydown(event);
 
@@ -67,13 +74,19 @@ export class PageAutosaveService implements OnDestroy {
     }
   }
 
-  configure(projectKey: string, uuid: string, initialRevision: number | null = null): void {
+  configure(
+    projectKey: string,
+    uuid: string,
+    initialRevision: number | null = null,
+    debounceMs: number = DEBOUNCE_MS,
+  ): void {
     this.projectKey = projectKey;
     this.uuid = uuid;
     this.revision.set(initialRevision);
     this.saveState.set('idle');
     this.conflict.set(null);
     this.dirty = false;
+    this.debounceMs = debounceMs;
   }
 
   setPayloadProvider(provider: () => PagePayload): void {
@@ -98,7 +111,7 @@ export class PageAutosaveService implements OnDestroy {
     if (this.timer) {
       clearTimeout(this.timer);
     }
-    this.timer = setTimeout(() => this.flush(), DEBOUNCE_MS);
+    this.timer = setTimeout(() => this.flush(), this.debounceMs);
   }
 
   flush(): void {

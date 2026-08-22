@@ -348,6 +348,13 @@ public final class OctlRenderer implements Renderer {
         if ("MEDIA_REF".equals(type)) {
             return "media";
         }
+        if ("ASSET_REF".equals(type)) {
+            // REFERENCE editor values (`{type:"ASSET_REF", uuid, assetType}`) carry the target
+            // kind in `assetType`, not `kind` — falling through to the "page" default below made
+            // every REFERENCE-typed link (including ones pointing at MEDIA) render as a page URL.
+            String assetType = value.has("assetType") ? value.get("assetType").asText() : "";
+            return mapKind(assetType.toLowerCase(java.util.Locale.ROOT));
+        }
         String kind = value.has("kind") ? value.get("kind").asText() : "";
         if ("MEDIA".equals(kind)) {
             return "media";

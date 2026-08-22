@@ -3,6 +3,7 @@ package com.acme.staticforge.api;
 import com.acme.staticforge.api.dto.AddSectionRequest;
 import com.acme.staticforge.api.dto.AssetSummaryView;
 import com.acme.staticforge.api.dto.CreatePageRequest;
+import com.acme.staticforge.api.dto.MoveSectionRequest;
 import com.acme.staticforge.api.dto.PageView;
 import com.acme.staticforge.api.dto.ReorderRequest;
 import com.acme.staticforge.api.dto.TemplateView;
@@ -118,6 +119,26 @@ public class PageController {
             @RequestBody ReorderRequest request) {
         AssetVersionView view = pageService.reorderSections(
                 uuid, body, request.instanceIds(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "reorder sections"));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+    }
+
+    @PostMapping("/{uuid}/bodies/{body}/sections/move")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<PageView> moveSection(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @PathVariable String body,
+            @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestBody MoveSectionRequest request) {
+        AssetVersionView view = pageService.moveSection(
+                request.sourcePageUuid(),
+                request.sourceBody(),
+                request.instanceId(),
+                uuid,
+                body,
+                request.position(),
+                RevisionHeaders.expectedRevision(ifMatch),
+                ctx(projectKey, "move section"));
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
     }
 

@@ -1295,6 +1295,8 @@ export interface components {
             uid?: string;
             displayName?: string;
             path?: string;
+            /** @enum {string} */
+            scope?: 'PAGES' | 'MEDIA';
             children?: components["schemas"]["FolderView"][];
         };
         ChannelUpdateRequest: {
@@ -1322,6 +1324,7 @@ export interface components {
         ProjectUpdateRequest: {
             name: string;
             description?: string;
+            allowedMimeTypes?: string[];
         };
         ProjectDetail: {
             key?: string;
@@ -1332,6 +1335,7 @@ export interface components {
             createdAt?: string;
             /** Format: int64 */
             createdBy?: number;
+            allowedMimeTypes?: string[];
         };
         SetMemberRoleRequest: {
             role: string;
@@ -1420,6 +1424,14 @@ export interface components {
             /** Format: int32 */
             position?: number;
         };
+        MoveSectionRequest: {
+            /** Format: uuid */
+            sourcePageUuid?: string;
+            sourceBody?: string;
+            instanceId?: string;
+            /** Format: int32 */
+            position?: number;
+        };
         OctlValidateRequest: {
             source?: string;
             channelKey?: string;
@@ -1495,6 +1507,8 @@ export interface components {
             displayName?: string;
             /** Format: uuid */
             parentFolderUuid?: string;
+            /** @enum {string} */
+            scope?: 'PAGES' | 'MEDIA';
         };
         MoveRequest: {
             /** Format: uuid */

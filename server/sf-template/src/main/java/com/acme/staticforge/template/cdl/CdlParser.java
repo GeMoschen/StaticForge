@@ -47,6 +47,7 @@ final class CdlParser {
         int visibleWhenCol = -1;
         String renamedFrom;
         final List<String> mimeTypes = new ArrayList<>();
+        final List<String> assetTypes = new ArrayList<>();
         final List<SelectOption> options = new ArrayList<>();
         final List<String> features = new ArrayList<>();
         final List<EditorNode> items = new ArrayList<>();
@@ -204,11 +205,12 @@ final class CdlParser {
             case "maxLength" -> node.maxLength = expectInt(attrTok);
             case "maxChars" -> node.maxChars = expectInt(attrTok);
             case "mimeTypes" -> node.mimeTypes.addAll(expectStringArray(attrTok));
+            case "assetTypes" -> node.assetTypes.addAll(expectIdentArray(attrTok));
             case "options" -> node.options.addAll(parseOptions(attrTok));
             case "features" -> node.features.addAll(expectIdentArray(attrTok));
             case "validate" -> parseValidate(node);
             case "item" -> parseItem(attrTok, node);
-            case "format", "folder", "assetTypes", "minWidth", "group", "order", "pattern", "message" ->
+            case "format", "folder", "minWidth", "group", "order", "pattern", "message" ->
                     skipValue();
             default -> {
                 error(DiagnosticCodes.CDL_INVALID_ATTRIBUTE, "Unknown attribute '" + attr + "'", attrTok);

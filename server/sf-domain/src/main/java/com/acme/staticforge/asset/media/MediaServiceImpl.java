@@ -11,6 +11,8 @@ import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.project.Project;
+import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.drew.imaging.ImageMetadataReader;
@@ -71,6 +73,7 @@ public class MediaServiceImpl implements MediaService {
     private final BlobRepository blobRepository;
     private final BlobStore blobStore;
     private final MediaProperties properties;
+    private final ProjectRepository projectRepository;
     private final SvgSanitizer svgSanitizer = new SvgSanitizer();
     private final ObjectMapper mapper = new ObjectMapper();
     private final Tika tika = new Tika();
@@ -78,13 +81,15 @@ public class MediaServiceImpl implements MediaService {
 
     public MediaServiceImpl(AssetService assetService, AssetRepository assetRepository,
             MediaVersionRepository mediaVersionRepository, BlobRepository blobRepository,
-            BlobStore blobStore, MediaProperties properties, MeterRegistry meterRegistry) {
+            BlobStore blobStore, MediaProperties properties, ProjectRepository projectRepository,
+            MeterRegistry meterRegistry) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.mediaVersionRepository = mediaVersionRepository;
         this.blobRepository = blobRepository;
         this.blobStore = blobStore;
         this.properties = properties;
+        this.projectRepository = projectRepository;
         this.uploadBytesCounter = Counter.builder("sf.media.upload.bytes")
                 .description("Bytes of media uploaded (spec §26.4).")
                 .register(meterRegistry);
@@ -123,9 +128,12 @@ public class MediaServiceImpl implements MediaService {
     public AssetVersionView replace(UUID uuid, String fileName, String suppliedMimeType,
             byte[] bytes, RevisionContext ctx) {
         AssetVersionView current = require(uuid);
+        long projectId = assetRepository.findByUuid(uuid)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset not found.")))
+                .getProjectId();
         checkSize(bytes);
         String mimeType = sniff(bytes, fileName);
-        requireAllowed(mimeType);
+        requireAllowed(mimeType, effectiveAllowedMime(projectId));
         int orientation = readOrientation(bytes);
         BufferedImage image = decode(bytes, mimeType);
         checkDimensions(image);
@@ -179,9 +187,9 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AssetVersionView> list(long projectId, String mimeType, String folder, String q, Pageable pageable) {
+    public Page<AssetVersionView> list(long projectId, String mimeType, String folder, boolean recursive, String q, Pageable pageable) {
         return mediaVersionRepository
-                .searchMedia(projectId, mimePattern(mimeType), trimToNull(q), folderPattern(folder), pageable)
+                .searchMedia(projectId, mimePattern(mimeType), trimToNull(q), folderPattern(folder, recursive), pageable)
                 .map(this::toView);
     }
 
@@ -245,7 +253,7 @@ public class MediaServiceImpl implements MediaService {
         uploadBytesCounter.increment(bytes.length);
         checkSize(bytes);
         String mimeType = sniff(bytes, fileName);
-        requireAllowed(mimeType);
+        requireAllowed(mimeType, effectiveAllowedMime(projectId));
         int orientation = readOrientation(bytes);
         BufferedImage image = decode(bytes, mimeType);
         checkDimensions(image);
@@ -283,11 +291,19 @@ public class MediaServiceImpl implements MediaService {
         return mime == null || mime.isBlank() ? "application/octet-stream" : mime;
     }
 
-    private void requireAllowed(String mimeType) {
-        if (!allowed(mimeType, properties.getAllowedMime())) {
+    private void requireAllowed(String mimeType, List<String> patterns) {
+        if (!allowed(mimeType, patterns)) {
             throw new SfException(ProblemFactory.other(
                     415, "SF-MEDIA-0415", "Unsupported Media Type", "MIME type '" + mimeType + "' is not allowed."));
         }
+    }
+
+    /** The project's own MIME allow-list override if it has one, else the instance-wide {@code sf.media.allowed-mime} default. */
+    private List<String> effectiveAllowedMime(long projectId) {
+        List<String> projectOverride = projectRepository.findById(projectId)
+                .map(Project::allowedMimeTypesList)
+                .orElse(List.of());
+        return projectOverride.isEmpty() ? properties.getAllowedMime() : projectOverride;
     }
 
     private static boolean allowed(String mimeType, List<String> patterns) {
@@ -295,6 +311,9 @@ public class MediaServiceImpl implements MediaService {
             return false;
         }
         for (String pattern : patterns) {
+            if (pattern.equals("*") || pattern.equals("*/*")) {
+                return true;
+            }
             if (pattern.endsWith("/*")) {
                 if (mimeType.startsWith(pattern.substring(0, pattern.length() - 2))) {
                     return true;
@@ -575,9 +594,12 @@ public class MediaServiceImpl implements MediaService {
         return escapeLike(trimmed) + "%";
     }
 
-    private static String folderPattern(String folder) {
+    private static String folderPattern(String folder, boolean recursive) {
         String trimmed = trimToNull(folder);
-        return trimmed == null ? null : escapeLike(trimmed) + "%";
+        if (trimmed == null) {
+            return null;
+        }
+        return recursive ? escapeLike(trimmed) + "%" : escapeLike(trimmed);
     }
 
     private static String trimToNull(String value) {

@@ -1,0 +1,32 @@
+// Shared form-control visual language, `@use`d from feature components that
+// own their own <input>/<select>/<textarea> markup (sf-field is a thin
+// label wrapper and doesn't style the control itself).
+
+@mixin sf-form-control {
+  width: 100%;
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+  box-sizing: border-box;
+  transition:
+    border-color var(--sf-motion-fast) var(--sf-ease),
+    box-shadow var(--sf-motion-fast) var(--sf-ease);
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--sf-signal) 40%, var(--sf-line));
+  }
+
+  &:focus-visible {
+    border-color: var(--sf-signal);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--sf-signal) 18%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}

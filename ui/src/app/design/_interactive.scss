@@ -1,0 +1,46 @@
+@mixin sf-interactive {
+  transition:
+    background var(--sf-motion-fast) var(--sf-ease),
+    border-color var(--sf-motion-fast) var(--sf-ease),
+    box-shadow var(--sf-motion-fast) var(--sf-ease),
+    color var(--sf-motion-fast) var(--sf-ease);
+}
+
+// The signature "pour" — a tapered accent rule used only for active-state
+// indicators (nav items, tabs) and primary-CTA hover underlines. One motif,
+// used sparingly; nothing else in the system uses a gradient fill.
+// Include on a `position: relative` element.
+@mixin sf-pour-left($width: var(--sf-pour-width)) {
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-block: 20%;
+    inset-inline-start: 0;
+    width: $width;
+    background: linear-gradient(
+      to bottom,
+      var(--sf-pour-color) 0%,
+      color-mix(in srgb, var(--sf-pour-color) 40%, transparent) 100%
+    );
+    border-radius: var(--sf-radius-sm);
+  }
+}
+
+@mixin sf-pour-under {
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-inline: 10% 40%;
+    bottom: 0;
+    height: 2px;
+    background: linear-gradient(
+      to right,
+      var(--sf-pour-color) 0%,
+      color-mix(in srgb, var(--sf-pour-color) 15%, transparent) 100%
+    );
+  }
+}

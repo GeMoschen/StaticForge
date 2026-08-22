@@ -26,7 +26,7 @@ export class ProjectShellComponent {
       return;
     }
     this.timeTravel.enter(revision);
-    this.router.navigate(['/p', key, 'revisions', revision]);
+    this.router.navigate(['/p', key, 'settings', 'revisions', revision]);
   }
 
   protected backToNow(): void {

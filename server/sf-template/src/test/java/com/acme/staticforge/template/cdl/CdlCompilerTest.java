@@ -90,6 +90,15 @@ class CdlCompilerTest {
     }
 
     @Test
+    void referenceEditorCarriesAssetTypes() {
+        CdlResult result = compiler.compile(FULL_EXAMPLE);
+
+        EditorDefinition relatedPage = result.definition().findEditor("relatedPage").orElseThrow();
+        assertThat(relatedPage.type()).isEqualTo(EditorType.REFERENCE);
+        assertThat(relatedPage.assetTypes()).containsExactly("PAGE");
+    }
+
+    @Test
     void listEditorIsRepresentedAsListWithItemEditors() {
         CdlResult result = compiler.compile(FULL_EXAMPLE);
 

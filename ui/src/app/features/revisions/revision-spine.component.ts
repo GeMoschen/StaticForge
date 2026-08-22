@@ -68,30 +68,33 @@ export class RevisionSpineComponent {
       });
     });
 
-    effect(() => {
-      const key = this.projectKey() ?? '';
-      if (key !== this.prevKey) {
-        this.prevKey = key;
-        this.prevMaxRevision = 0;
-      }
-      const revs = this.revisions();
-      const max = revs.reduce(
-        (acc, r) => Math.max(acc, r.revisionId ?? 0),
-        0,
-      );
-      if (max <= this.prevMaxRevision) {
-        return;
-      }
-      const newest = revs.find((r) => r.revisionId === max);
-      if (
-        this.prevMaxRevision !== 0 &&
-        newest &&
-        newest.createdBy !== this.auth.userId()
-      ) {
-        this.pulse(max);
-      }
-      this.prevMaxRevision = max;
-    });
+    effect(
+      () => {
+        const key = this.projectKey() ?? '';
+        if (key !== this.prevKey) {
+          this.prevKey = key;
+          this.prevMaxRevision = 0;
+        }
+        const revs = this.revisions();
+        const max = revs.reduce(
+          (acc, r) => Math.max(acc, r.revisionId ?? 0),
+          0,
+        );
+        if (max <= this.prevMaxRevision) {
+          return;
+        }
+        const newest = revs.find((r) => r.revisionId === max);
+        if (
+          this.prevMaxRevision !== 0 &&
+          newest &&
+          newest.createdBy !== this.auth.userId()
+        ) {
+          this.pulse(max);
+        }
+        this.prevMaxRevision = max;
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   protected isOwn(rev: RevisionView): boolean {

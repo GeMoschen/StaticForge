@@ -19,6 +19,7 @@ import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import {
   GenerationService,
   StartGenerationRequest,
@@ -41,7 +42,7 @@ interface GenerationForm {
   selector: 'sf-generation-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, SfButtonComponent, SfFieldComponent],
+  imports: [ReactiveFormsModule, SfButtonComponent, SfFieldComponent, SfIconComponent],
   templateUrl: './generation-dialog.component.html',
   styleUrl: './generation-dialog.component.scss',
 })
@@ -122,7 +123,7 @@ export class GenerationDialogComponent {
       error?: { detail?: string; message?: string };
     };
     return (
-      e?.error?.detail ?? e?.error?.message ?? e?.message ?? 'Failed to start'
+      e?.error?.detail ?? e?.error?.message ?? e?.message ?? 'Could not start generation — check a target is configured.'
     );
   }
 }

@@ -11,7 +11,9 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.media.FocalPoint;
 import com.acme.staticforge.asset.media.MediaBinary;
 import com.acme.staticforge.asset.media.MediaService;
+import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.preview.PreviewTokenService;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
@@ -53,11 +55,17 @@ public class MediaController {
     private final ProjectService projectService;
     private final MediaService mediaService;
     private final SecuritySupport securitySupport;
+    private final PreviewTokenService previewTokenService;
 
-    public MediaController(ProjectService projectService, MediaService mediaService, SecuritySupport securitySupport) {
+    public MediaController(
+            ProjectService projectService,
+            MediaService mediaService,
+            SecuritySupport securitySupport,
+            PreviewTokenService previewTokenService) {
         this.projectService = projectService;
         this.mediaService = mediaService;
         this.securitySupport = securitySupport;
+        this.previewTokenService = previewTokenService;
     }
 
     @GetMapping
@@ -66,11 +74,12 @@ public class MediaController {
             @PathVariable String projectKey,
             @RequestParam(required = false) String mimeType,
             @RequestParam(required = false) String folder,
+            @RequestParam(defaultValue = "false") boolean recursive,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         return mediaService
-                .list(projectId(projectKey), mimeType, folder, q, PageRequest.of(page, size))
+                .list(projectId(projectKey), mimeType, folder, recursive, q, PageRequest.of(page, size))
                 .map(this::toSummary);
     }
 
@@ -156,6 +165,34 @@ public class MediaController {
     public ResponseEntity<byte[]> binary(
             @PathVariable String projectKey, @PathVariable UUID uuid,
             @RequestParam(required = false) String variant) {
+        MediaBinary binary = mediaService.binary(uuid, variant);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(binary.mimeType()));
+        if (!isRenderable(binary.mimeType())) {
+            headers.setContentDisposition(ContentDisposition.attachment().filename(binary.fileName()).build());
+        }
+        return new ResponseEntity<>(binary.bytes(), headers, HttpStatus.OK);
+    }
+
+    /**
+     * Public, token-gated binary route (spec §19.3, mirroring {@code PreviewController#share}):
+     * MEDIA references inside rendered preview HTML are rewritten to this route by
+     * {@code PageRenderService}'s {@code urlResolver}, since the browser's own frame navigation /
+     * {@code <img src>} fetch of that HTML doesn't carry the app's Bearer session. Reachable
+     * without one — {@code SecurityConfig} permits {@code GET .../media/*}/share} at the
+     * filter-chain level, since method-level {@code @PreAuthorize} alone can't achieve that.
+     */
+    @GetMapping("/{uuid}/share")
+    @PreAuthorize("permitAll()")
+    public ResponseEntity<byte[]> shareBinary(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestParam("t") String token,
+            @RequestParam(required = false) String variant) {
+        PreviewTokenService.ShareTarget target = previewTokenService.verifyMediaShareToken(token);
+        if (!target.pageUuid().equals(uuid) || (target.projectKey() != null && !target.projectKey().equals(projectKey))) {
+            throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
+        }
         MediaBinary binary = mediaService.binary(uuid, variant);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(binary.mimeType()));

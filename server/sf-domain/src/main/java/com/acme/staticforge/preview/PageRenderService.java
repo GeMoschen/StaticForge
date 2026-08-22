@@ -48,6 +48,7 @@ public class PageRenderService {
     private final AssetRepository assetRepository;
     private final ProjectRepository projectRepository;
     private final ObjectMapper objectMapper;
+    private final PreviewTokenService previewTokenService;
 
     private final OctlCompiler octlCompiler = new OctlCompiler();
     private final CdlCompiler cdlCompiler = new CdlCompiler();
@@ -57,11 +58,13 @@ public class PageRenderService {
             AssetService assetService,
             AssetRepository assetRepository,
             ProjectRepository projectRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PreviewTokenService previewTokenService) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.projectRepository = projectRepository;
         this.objectMapper = objectMapper;
+        this.previewTokenService = previewTokenService;
     }
 
     /**
@@ -160,7 +163,7 @@ public class PageRenderService {
             return ""; // missing channel template degrades gracefully to an empty body
         }
 
-        UrlResolver urlResolver = urlResolver(projectKey, rewriteLinks, baseUrl);
+        UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl);
         BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
 
         RenderContext context = RenderContext.builder()
@@ -286,7 +289,7 @@ public class PageRenderService {
                 .pageValues(pageValues != null ? pageValues : objectMapper.createObjectNode())
                 .meta("uid", TextNode.valueOf(uid))
                 .meta("uuid", TextNode.valueOf(sectionTemplateUuid.toString()))
-                .urlResolver(urlResolver(projectKey, rewriteLinks, baseUrl))
+                .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl))
                 .blockResolver(blockResolver(
                         projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl));
         if (instanceId != null && !instanceId.isBlank()) {
@@ -321,19 +324,32 @@ public class PageRenderService {
                 .orElse(null);
     }
 
-    private UrlResolver urlResolver(String projectKey, boolean rewriteLinks, String baseUrl) {
+    /**
+     * Internal page links are rewritten to the signed, unauthenticated {@code /preview/share}
+     * route (not the Bearer-only {@code /preview/pages/{uuid}}) — this HTML is loaded into the
+     * browser's own iframe navigation (not Angular's authenticated {@code HttpClient}) whenever
+     * the viewer clicks a link inside the preview, so the auth has to travel in the URL itself.
+     */
+    private UrlResolver urlResolver(String projectKey, String channel, boolean rewriteLinks, String baseUrl) {
         if (!rewriteLinks) {
             return (kind, uid, uuid, args) -> uid != null && !uid.isBlank() ? uid : (uuid == null ? "" : uuid.toString());
         }
         String base = baseUrl == null ? "" : baseUrl;
         return (kind, uid, uuid, args) -> {
-            String target = uuid == null ? "" : uuid.toString();
-            if ("media".equals(kind)) {
-                String variant = args == null ? null : args.get("variant");
-                String query = variant == null || variant.isBlank() ? "" : "?variant=" + variant;
-                return base + "/projects/" + projectKey + "/media/" + target + "/binary" + query;
+            if (uuid == null) {
+                return "";
             }
-            return base + "/projects/" + projectKey + "/preview/pages/" + target;
+            if ("media".equals(kind)) {
+                // Signed, unauthenticated route (mirrors the page branch below) — the plain
+                // `/media/{uuid}/binary` route is Bearer-only, and this HTML's `<img src>`/link
+                // is fetched by the browser directly, without the app's session.
+                String variant = args == null ? null : args.get("variant");
+                String mediaToken = previewTokenService.issueMediaShareToken(uuid, projectKey);
+                String query = variant == null || variant.isBlank() ? "" : "&variant=" + variant;
+                return base + "/projects/" + projectKey + "/media/" + uuid + "/share?t=" + mediaToken + query;
+            }
+            String token = previewTokenService.issueShareToken(uuid, null, channel, projectKey);
+            return base + "/projects/" + projectKey + "/preview/share?t=" + token;
         };
     }
 

@@ -1,0 +1,66 @@
+<div class="page-nav">
+  <div
+    class="page-nav__row"
+    [class.page-nav__row--active]="isActivePage()"
+    [style.padding-left.px]="depth() * 14"
+    role="treeitem"
+    draggable="true"
+    [attr.aria-expanded]="expanded()"
+    (click)="openPage()"
+    (dragstart)="onPageDragStart($event)"
+    (contextmenu)="onContextMenu($event)"
+  >
+    <button
+      type="button"
+      class="page-nav__toggle"
+      (click)="toggle($event)"
+      [attr.aria-label]="expanded() ? 'Collapse page' : 'Expand page'"
+    >
+      <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
+    </button>
+    <sf-icon class="page-nav__icon" name="description" />
+    <span class="page-nav__name">{{ summary().displayName ?? summary().uid }}</span>
+    <span class="page-nav__mono">{{ summary().uid }}</span>
+  </div>
+
+  @if (expanded()) {
+    @if (loading() && !loaded()) {
+      <div class="page-nav__hint">Loading…</div>
+    } @else if (error()) {
+      <div class="page-nav__hint page-nav__hint--error">{{ error() }}</div>
+    } @else {
+      @for (body of bodies(); track body.name) {
+        <div
+          class="page-nav__row"
+          [class.page-nav__row--active]="isActiveBody(body.name)"
+          [style.padding-left.px]="(depth() + 1) * 14"
+          role="treeitem"
+          (click)="openBody(body.name, $event)"
+          (dragover)="onBodyDragOver($event)"
+          (drop)="onBodyDrop(body, $event)"
+        >
+          <span class="page-nav__spacer"></span>
+          <sf-icon class="page-nav__icon page-nav__icon--body" name="view_agenda" />
+          <span class="page-nav__name">{{ body.label ?? body.name }}</span>
+        </div>
+
+        @for (section of sectionsFor(body.name); track trackSection($index, section)) {
+          <div
+            class="page-nav__row"
+            [class.page-nav__row--active]="isActiveSection(section.instanceId)"
+            [style.padding-left.px]="(depth() + 2) * 14"
+            role="treeitem"
+            draggable="true"
+            (click)="openSection(section.instanceId, $event)"
+            (dragstart)="onSectionDragStart(body.name, section, $event)"
+            (contextmenu)="onSectionContextMenu(body.name, section, $event)"
+          >
+            <span class="page-nav__spacer"></span>
+            <sf-icon class="page-nav__icon page-nav__icon--section" name="widgets" />
+            <span class="page-nav__name">{{ sectionTitle(section.templateRef) }}</span>
+          </div>
+        }
+      }
+    }
+  }
+</div>

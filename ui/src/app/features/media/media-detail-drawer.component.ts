@@ -219,7 +219,7 @@ export class MediaDetailDrawerComponent implements OnInit {
       },
       error: () => {
         this.deleting.set(false);
-        this.toasts.show('Failed to delete media', 'error');
+        this.toasts.show('Could not delete media — it may still be referenced by a page or template.', 'error');
       },
     });
   }

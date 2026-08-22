@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { ReactiveFormsModule, FormArray, FormControl, FormGroup } from '@angular/forms';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
+import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { EditorDefinition } from '../form.model';
 import { buildRowGroup, errorMessageFor } from '../form-builder.service';
 import { SfEditorOutlet } from '../editor-outlet.component';
@@ -10,7 +11,7 @@ import { SfEditorOutlet } from '../editor-outlet.component';
   selector: 'sf-list-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, SfFieldComponent, SfButtonComponent, SfEditorOutlet],
+  imports: [ReactiveFormsModule, SfFieldComponent, SfButtonComponent, SfIconComponent, SfEditorOutlet],
   templateUrl: './list-editor.component.html',
   styleUrl: './list-editor.component.scss',
 })

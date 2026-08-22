@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="012-project-media-settings-allowed-mime" author="sf">
+        <comment>Per-project override of the media MIME allow-list (falls back to sf.media.allowed-mime when null).</comment>
+        <addColumn tableName="project">
+            <column name="allowed_mime_types" type="CLOB"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

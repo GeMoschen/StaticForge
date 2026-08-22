@@ -3,6 +3,7 @@ package com.acme.staticforge;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
@@ -41,8 +42,8 @@ class RevisionFilterIntegrationTest {
     @Test
     void sinceReturnsOnlyNewerRevisions() {
         Fixture fx = newFixture();
-        AssetVersionView first = folderService.create(null, "One", fx.ctx());
-        AssetVersionView second = folderService.create(null, "Two", fx.ctx());
+        AssetVersionView first = folderService.create(null, "One", FolderScope.PAGES, fx.ctx());
+        AssetVersionView second = folderService.create(null, "Two", FolderScope.PAGES, fx.ctx());
         long firstRevision = first.validFromRevision();
 
         List<Revision> result = revisionService.findRecent(
@@ -58,8 +59,8 @@ class RevisionFilterIntegrationTest {
         Fixture fx = newFixture();
         AppUser other = userService.create(
                 "other-" + SEQ.get(), "other-" + SEQ.get() + "@example.com", "Other User", "secret-password");
-        folderService.create(null, "Mine", fx.ctx());
-        folderService.create(null, "Theirs", RevisionContext.of(fx.project().getId(), other.getId(), "test"));
+        folderService.create(null, "Mine", FolderScope.PAGES, fx.ctx());
+        folderService.create(null, "Theirs", FolderScope.PAGES, RevisionContext.of(fx.project().getId(), other.getId(), "test"));
 
         List<Revision> result = revisionService.findRecent(
                 fx.project().getId(), null, other.getId(), null, Pageable.unpaged());
@@ -71,8 +72,8 @@ class RevisionFilterIntegrationTest {
     @Test
     void assetUuidRestrictsToTouchingRevisions() {
         Fixture fx = newFixture();
-        AssetVersionView target = folderService.create(null, "Target", fx.ctx());
-        folderService.create(null, "Other", fx.ctx());
+        AssetVersionView target = folderService.create(null, "Target", FolderScope.PAGES, fx.ctx());
+        folderService.create(null, "Other", FolderScope.PAGES, fx.ctx());
 
         List<Revision> result = revisionService.findRecent(
                 fx.project().getId(), null, null, target.uuid(), Pageable.unpaged());
@@ -85,9 +86,9 @@ class RevisionFilterIntegrationTest {
     @Test
     void filtersComposeWithPagination() {
         Fixture fx = newFixture();
-        UUID touched = folderService.create(null, "A", fx.ctx()).uuid();
+        UUID touched = folderService.create(null, "A", FolderScope.PAGES, fx.ctx()).uuid();
         for (int i = 0; i < 5; i++) {
-            folderService.create(null, "B" + i, fx.ctx());
+            folderService.create(null, "B" + i, FolderScope.PAGES, fx.ctx());
         }
 
         List<Revision> result = revisionService.findRecent(

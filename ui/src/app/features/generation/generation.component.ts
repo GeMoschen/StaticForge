@@ -12,6 +12,7 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { GenerationService } from './generation.service';
 import { GenerationDialogComponent } from './generation-dialog.component';
@@ -39,6 +40,7 @@ interface LiveSummary {
   imports: [
     SfButtonComponent,
     SfEmptyStateComponent,
+    SfSpinnerComponent,
     SfRelativeTimePipe,
     GenerationDialogComponent,
   ],
@@ -127,7 +129,7 @@ export class GenerationComponent implements OnDestroy {
     const id = run.id ?? 0;
     this.api.promote(this.projectKey(), id).subscribe({
       next: () => this.toasts.show('Generation promoted', 'success'),
-      error: () => this.toasts.show('Failed to promote generation', 'error'),
+      error: () => this.toasts.show('Could not promote generation — try again in a moment.', 'error'),
     });
   }
 
@@ -135,7 +137,7 @@ export class GenerationComponent implements OnDestroy {
     const id = run.id ?? 0;
     this.api.promote(this.projectKey(), id).subscribe({
       next: () => this.toasts.show('Rolled back to previous generation', 'success'),
-      error: () => this.toasts.show('Failed to roll back', 'error'),
+      error: () => this.toasts.show('Could not roll back — try again in a moment.', 'error'),
     });
   }
 
@@ -146,7 +148,7 @@ export class GenerationComponent implements OnDestroy {
         this.toasts.show('Generation cancelled', 'info');
         this.refreshRun(id);
       },
-      error: () => this.toasts.show('Failed to cancel generation', 'error'),
+      error: () => this.toasts.show('Could not cancel generation — it may have already finished.', 'error'),
     });
   }
 

@@ -11,115 +11,172 @@
 <div
   class="library"
   sfDropTarget
-  (dragenter)="onDragEnter()"
+  (dragenter)="onDragEnter($event)"
   (dragleave)="onDragLeave()"
   (drop)="onDrop($event)"
 >
   <h1 class="sf-sr-only">Media</h1>
-  <div class="toolbar">
-    <input
-      class="search"
-      type="search"
-      placeholder="Search media"
-      aria-label="Search media"
-      [value]="search()"
-      (input)="onSearchInput($event)"
-    />
 
-    <select
-      [value]="mimeFilter()"
-      (change)="onMimeChange($event)"
-      aria-label="Filter by media type"
-    >
-      <option value="">All types</option>
-      <option value="image/">Images</option>
-      <option value="video/">Videos</option>
-      <option value="audio/">Audio</option>
-      <option value="application/">Documents</option>
-    </select>
+  <aside class="library__sidebar">
+    <div class="library__sidebar-head">
+      <h2>Folders</h2>
+      <button type="button" class="library__icon-btn" title="New folder" (click)="newFolder()">
+        +
+      </button>
+    </div>
 
-    <select
-      [value]="folderPath()"
-      (change)="onFolderChange($event)"
-      aria-label="Filter by folder"
+    <button
+      type="button"
+      class="library__clear"
+      [class.library__clear--active]="!folderUuid()"
+      (click)="selectFolder(null)"
+      (dragover)="onRootDragOver($event)"
+      (drop)="onRootDrop($event)"
+      (contextmenu)="onRootContextMenu($event)"
     >
-      @for (option of folderOptions(); track option.path) {
-        <option [value]="option.path">{{ option.label }}</option>
+      <sf-icon name="home" />
+      All media
+    </button>
+
+    <div class="library__tree-body">
+      @for (folder of tree(); track folder.uuid) {
+        <sf-media-folder-node
+          [node]="folder"
+          [depth]="0"
+          [selectedUuid]="folderUuid()"
+          [projectKey]="projectKey()"
+          (select)="onFolderSelected($event)"
+          (move)="moveItemTo($event)"
+          (changed)="reloadFolders()"
+        />
       }
-    </select>
+    </div>
+  </aside>
 
-    @if (selected().length > 0) {
-      <sf-button variant="danger" (click)="deleteSelection()">
-        Delete ({{ selected().length }})
-      </sf-button>
+  <div class="library__main">
+    <div class="toolbar">
+      <input
+        class="search"
+        type="search"
+        placeholder="Search media"
+        aria-label="Search media"
+        [value]="search()"
+        (input)="onSearchInput($event)"
+      />
+
+      <select
+        [value]="mimeFilter()"
+        (change)="onMimeChange($event)"
+        aria-label="Filter by media type"
+      >
+        <option value="">All types</option>
+        <option value="image/">Images</option>
+        <option value="video/">Videos</option>
+        <option value="audio/">Audio</option>
+        <option value="application/">Documents</option>
+      </select>
+
+      @if (selected().length > 0) {
+        <sf-button variant="danger" (click)="deleteSelection()">
+          Delete ({{ selected().length }})
+        </sf-button>
+      }
+
+      <span class="toolbar__spacer"></span>
+
+      <sf-button variant="secondary" (click)="fileInput.click()">Upload</sf-button>
+      <input
+        #fileInput
+        class="visually-hidden"
+        type="file"
+        multiple
+        (change)="onFileInput($event)"
+      />
+    </div>
+
+    @if (loading() && items().length === 0 && currentFolderChildren().length === 0) {
+      <sf-spinner label="Loading media…" />
+    } @else if (items().length === 0 && currentFolderChildren().length === 0) {
+      <sf-empty-state
+        title="No media yet"
+        description="Drop files anywhere in this window or click Upload to add media."
+      />
+    } @else {
+      <div class="grid">
+        @for (folder of currentFolderChildren(); track folder.uuid) {
+          <div
+            class="cell cell--folder"
+            draggable="true"
+            (click)="onFolderCardClick(folder)"
+            (dragstart)="onFolderCardDragStart(folder, $event)"
+            (dragover)="onFolderCardDragOver($event)"
+            (drop)="onFolderCardDrop(folder, $event)"
+            (contextmenu)="onFolderCardContextMenu(folder, $event)"
+          >
+            <div class="cell__body">
+              <div class="cell__icon cell__icon--folder">
+                <sf-icon name="folder" />
+              </div>
+              <span class="cell__name">{{ folder.displayName ?? folder.uid }}</span>
+            </div>
+          </div>
+        }
+        @for (item of items(); track item.uuid) {
+          <div
+            class="cell"
+            [class.cell--selected]="isSelected(item.uuid)"
+            draggable="true"
+            (dragstart)="onItemDragStart(item.uuid, $event)"
+            (contextmenu)="onItemContextMenu(item, $event)"
+          >
+            <input
+              class="cell__check"
+              type="checkbox"
+              [checked]="isSelected(item.uuid)"
+              (click)="$event.stopPropagation()"
+              (change)="toggle(item.uuid)"
+            />
+            <button class="cell__body" type="button" (click)="openDetail(item.uuid)">
+              @if (thumb(item.uuid); as thumbUrl) {
+                <img
+                  class="cell__img"
+                  [src]="thumbUrl"
+                  [alt]="item.altText ?? item.displayName ?? ''"
+                  loading="lazy"
+                />
+              } @else {
+                <div class="cell__icon">
+                  <sf-icon [name]="mediaIconFor(item.mimeType)" />
+                </div>
+              }
+              <span class="cell__name">{{ item.displayName }}</span>
+              <span class="cell__meta">
+                {{ item.mimeType }} · {{ item.sizeBytes | sfFileSize }}
+              </span>
+            </button>
+          </div>
+        }
+      </div>
+      <div #sentinel class="sentinel" aria-hidden="true"></div>
     }
 
-    <span class="toolbar__spacer"></span>
-
-    <sf-button variant="secondary" (click)="fileInput.click()">Upload</sf-button>
-    <input
-      #fileInput
-      class="visually-hidden"
-      type="file"
-      multiple
-      (change)="onFileInput($event)"
-    />
-  </div>
-
-  @if (loading() && items().length === 0) {
-    <div class="loading">Loading media…</div>
-  } @else if (items().length === 0) {
-    <sf-empty-state
-      title="No media yet"
-      description="Drop files anywhere in this window or click Upload to add media."
-    />
-  } @else {
-    <div class="grid">
-      @for (item of items(); track item.uuid) {
-        <div class="cell" [class.cell--selected]="isSelected(item.uuid)">
-          <input
-            class="cell__check"
-            type="checkbox"
-            [checked]="isSelected(item.uuid)"
-            (click)="$event.stopPropagation()"
-            (change)="toggle(item.uuid)"
-          />
-          <button class="cell__body" type="button" (click)="openDetail(item.uuid)">
-            @if (thumb(item.uuid); as thumbUrl) {
-              <img
-                class="cell__img"
-                [src]="thumbUrl"
-                [alt]="item.altText ?? item.displayName ?? ''"
-                loading="lazy"
-              />
+    @if (uploads().length > 0) {
+      <div class="uploads">
+        @for (upload of uploads(); track upload.id) {
+          <div class="upload">
+            <span>{{ upload.fileName }}</span>
+            @if (upload.status === 'uploading') {
+              <span>Uploading…</span>
+            } @else if (upload.status === 'done') {
+              <span>Done</span>
+            } @else {
+              <span class="upload__err">{{ upload.message ?? 'Failed' }}</span>
             }
-            <span class="cell__name">{{ item.displayName }}</span>
-            <span class="cell__meta">
-              {{ item.mimeType }} · {{ item.sizeBytes | sfFileSize }}
-            </span>
-          </button>
-        </div>
-      }
-    </div>
-    <div #sentinel class="sentinel" aria-hidden="true"></div>
-  }
-
-  @if (uploads().length > 0) {
-    <div class="uploads">
-      @for (upload of uploads(); track upload.id) {
-        <div class="upload">
-          <span>{{ upload.fileName }}</span>
-          @if (upload.status === 'uploading') {
-            <span>Uploading…</span>
-          } @else if (upload.status === 'done') {
-            <span>Done</span>
-          } @else {
-            <span class="upload__err">{{ upload.message ?? 'Failed' }}</span>
-          }
-        </div>
-      }
-    </div>
-  }
+          </div>
+        }
+      </div>
+    }
+  </div>
 </div>
 
 @if (dragActive()) {

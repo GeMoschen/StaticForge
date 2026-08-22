@@ -66,10 +66,10 @@ function contrastRatio(foreground: string, background: string): number {
 
 describe('design-token contrast matrix', () => {
   it('parses the light and dark token blocks', () => {
-    expect(light['--sf-paper']).toBe('#f6f7f8');
-    expect(dark['--sf-paper']).toBe('#0c0f12');
-    expect(light['--sf-ink']).toBe('#101418');
-    expect(dark['--sf-ink']).toBe('#e8ebee');
+    expect(light['--sf-paper']).toBe('#f1eee8');
+    expect(dark['--sf-paper']).toBe('#17140f');
+    expect(light['--sf-ink']).toBe('#161311');
+    expect(dark['--sf-ink']).toBe('#efeae2');
   });
 
   describe('body text (AAA ≥ 7:1)', () => {

@@ -8,13 +8,15 @@
           }
         </div>
         <div class="sf-list__actions">
-          <sf-button variant="ghost" (click)="move(i, -1)" [disabled]="i === 0">↑</sf-button>
+          <sf-button variant="ghost" (click)="move(i, -1)" [disabled]="i === 0">
+            <sf-icon name="arrow_upward" />
+          </sf-button>
           <sf-button
             variant="ghost"
             (click)="move(i, 1)"
             [disabled]="i === control().controls.length - 1"
           >
-            ↓
+            <sf-icon name="arrow_downward" />
           </sf-button>
           <sf-button variant="danger" (click)="removeRow(i)" [disabled]="!canRemove()">
             Remove

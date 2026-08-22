@@ -22,7 +22,9 @@
           [attr.title]="item.label"
           [attr.aria-label]="item.label"
         >
-          <span class="rail__item-icon" aria-hidden="true">{{ item.icon }}</span>
+          <span class="rail__item-icon">
+            <sf-icon [name]="item.icon" />
+          </span>
           @if (expanded()) {
             <span class="rail__item-label">{{ item.label }}</span>
           }
@@ -32,12 +34,28 @@
   </ul>
 
   <button
+    class="rail__theme"
+    type="button"
+    (click)="toggleTheme()"
+    [attr.aria-label]="theme.theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+  >
+    <span class="rail__theme-icon">
+      <sf-icon [name]="theme.theme() === 'dark' ? 'light_mode' : 'dark_mode'" />
+    </span>
+    @if (expanded()) {
+      <span class="rail__toggle-label">{{ theme.theme() === 'dark' ? 'Light theme' : 'Dark theme' }}</span>
+    }
+  </button>
+
+  <button
     class="rail__toggle"
     type="button"
     (click)="toggle()"
     [attr.aria-label]="expanded() ? 'Collapse navigation' : 'Expand navigation'"
   >
-    <span class="rail__toggle-icon" aria-hidden="true">{{ expanded() ? '◀' : '▶' }}</span>
+    <span class="rail__toggle-icon">
+      <sf-icon [name]="expanded() ? 'chevron_left' : 'chevron_right'" />
+    </span>
     @if (expanded()) {
       <span class="rail__toggle-label">Collapse</span>
     }

@@ -1,0 +1,42 @@
+// Shared data-table visual language. `@use` this from any feature
+// component's own stylesheet (not sf-table.component.scss, which stays a
+// passthrough) so the compiled rules are scoped per-component by Angular's
+// emulated encapsulation, without ::ng-deep.
+
+@mixin sf-table-base {
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--sf-text-sm);
+    color: var(--sf-ink);
+  }
+
+  th {
+    text-align: left;
+    padding: var(--sf-2) var(--sf-3);
+    border-bottom: 1px solid var(--sf-line);
+    color: var(--sf-slate);
+    font-weight: 500;
+    font-size: var(--sf-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  td {
+    padding: var(--sf-2) var(--sf-3);
+    border-bottom: 1px solid var(--sf-line);
+    vertical-align: middle;
+  }
+
+  tbody tr {
+    transition: background var(--sf-motion-fast) var(--sf-ease);
+  }
+
+  tbody tr:hover {
+    background: color-mix(in srgb, var(--sf-ink) 3%, var(--sf-surface));
+  }
+}
+
+.sf-table-wrap {
+  overflow-x: auto;
+}

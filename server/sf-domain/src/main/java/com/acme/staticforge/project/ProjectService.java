@@ -25,7 +25,8 @@ public interface ProjectService {
     /** All projects ordered by key (used by INSTANCE_ADMIN listing). */
     List<Project> listAll();
 
-    Project update(String key, String name, String description, Long actingUserId, String comment);
+    /** {@code allowedMimeTypes} is always fully replaced; an empty/null list clears the override back to the instance-wide default. */
+    Project update(String key, String name, String description, List<String> allowedMimeTypes, Long actingUserId, String comment);
 
     void archive(String key, Long actingUserId, String comment);
 

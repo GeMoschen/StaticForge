@@ -9,10 +9,12 @@ import {
   signal,
 } from '@angular/core';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { ChannelsService } from '../channels/channels.service';
 import {
   etagFor,
@@ -36,7 +38,7 @@ const NEW_CONTENT_DEFINITION = '';
   selector: 'sf-templates',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfEmptyStateComponent, SfFieldComponent],
+  imports: [SfButtonComponent, SfEmptyStateComponent, SfFieldComponent, SfSpinnerComponent],
   templateUrl: './templates.component.html',
   styleUrl: './templates.component.scss',
 })
@@ -45,7 +47,16 @@ export class TemplatesComponent {
 
   private readonly service = inject(TemplatesService);
   private readonly channelsService = inject(ChannelsService);
+  private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
+
+  /** `ProjectContextStore.pageTemplates`/`sectionTemplates` (used by the "new page" template picker and the page editor's "add section" palette) are only loaded once per project — force a refresh whenever a template is created/renamed/deleted here so those stay in sync without an F5. */
+  private refreshTemplateStore(): void {
+    const key = this.projectKey();
+    if (key) {
+      this.store.loadFor(key, true).subscribe();
+    }
+  }
 
   readonly kind = signal<TemplateKind>('section');
 
@@ -154,8 +165,9 @@ export class TemplatesComponent {
           this.toast.show('Template created', 'success');
           this.reloadList(key);
           this.selectedUuid.set(created.uuid ?? null);
+          this.refreshTemplateStore();
         },
-        error: () => this.toast.show('Failed to create template', 'error'),
+        error: () => this.toast.show('Could not create template — try again in a moment.', 'error'),
       });
   }
 
@@ -192,7 +204,7 @@ export class TemplatesComponent {
             : 'success',
         );
       },
-      error: () => this.toast.show('Failed to validate CDL', 'error'),
+      error: () => this.toast.show('Could not validate CDL — check your connection and try again.', 'error'),
     });
   }
 
@@ -225,6 +237,7 @@ export class TemplatesComponent {
           this.toast.show('Template saved', 'success');
           this.saving.set(false);
           this.cdlDiagnostics.set([]);
+          this.refreshTemplateStore();
         },
         error: (err) => {
           const diagnostics = this.diagnosticsOf(err);
@@ -235,7 +248,7 @@ export class TemplatesComponent {
               'error',
             );
           } else {
-            this.toast.show('Failed to save template', 'error');
+            this.toast.show('Could not save template — someone may have edited it, try reloading.', 'error');
           }
           this.saving.set(false);
         },
@@ -284,7 +297,7 @@ export class TemplatesComponent {
           this.selectedChannel.set(channelKey);
         },
         error: () => {
-          this.toast.show(`Failed to add channel ${channelKey}`, 'error');
+          this.toast.show(`Could not add channel ${channelKey} — it may already exist.`, 'error');
           this.channelSaving.set(false);
         },
       });
@@ -315,7 +328,7 @@ export class TemplatesComponent {
           this.reloadDetail(key, uuid);
         },
         error: () => {
-          this.toast.show(`Failed to save channel ${channel}`, 'error');
+          this.toast.show(`Could not save channel ${channel} — check the OCTL source compiles.`, 'error');
           this.channelSaving.set(false);
         },
       });
@@ -341,7 +354,7 @@ export class TemplatesComponent {
           this.reloadDetail(key, uuid);
         },
         error: () => {
-          this.toast.show(`Failed to remove channel ${channel}`, 'error');
+          this.toast.show(`Could not remove channel ${channel} — try again in a moment.`, 'error');
           this.channelSaving.set(false);
         },
       });
@@ -368,9 +381,10 @@ export class TemplatesComponent {
         this.selectedUuid.set(null);
         this.detail.set(null);
         this.reloadList(key);
+        this.refreshTemplateStore();
       },
       error: () => {
-        this.toast.show('Failed to delete template', 'error');
+        this.toast.show('Could not delete template — it may still be in use by a page.', 'error');
         this.confirmDelete.set(false);
       },
     });
@@ -426,7 +440,7 @@ export class TemplatesComponent {
         }
       },
       error: () => {
-        this.toast.show('Failed to load templates', 'error');
+        this.toast.show('Could not load templates — check your connection and try again.', 'error');
         this.loading.set(false);
       },
     });
@@ -460,7 +474,7 @@ export class TemplatesComponent {
           this.channelSource.set('');
         }
       },
-      error: () => this.toast.show('Failed to load template', 'error'),
+      error: () => this.toast.show('Could not load template — check your connection and try again.', 'error'),
     });
   }
 

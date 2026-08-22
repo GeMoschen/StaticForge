@@ -25,6 +25,24 @@ public interface PageService {
 
     AssetVersionView deleteSection(UUID uuid, String bodyName, String instanceId, long expectedRevision, RevisionContext ctx);
 
+    /**
+     * Moves a section instance from {@code sourceBody} of {@code sourcePageUuid} into
+     * {@code targetBody} of {@code targetUuid} at {@code position}. When both pages are the
+     * same asset, this is a single-payload edit; otherwise the source page's own current
+     * revision is used to remove it there (there is no client-observed revision for a page
+     * shown only read-only in the nav tree), while {@code expectedTargetRevision} still
+     * guards the page actually open for editing. Returns the target page's new view.
+     */
+    AssetVersionView moveSection(
+            UUID sourcePageUuid,
+            String sourceBody,
+            String instanceId,
+            UUID targetUuid,
+            String targetBody,
+            Integer position,
+            long expectedTargetRevision,
+            RevisionContext ctx);
+
     AssetVersionView duplicate(UUID uuid, RevisionContext ctx);
 
     AssetVersionView find(UUID uuid);

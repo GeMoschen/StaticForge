@@ -13,6 +13,8 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
+import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import {
   etagFor,
   StructuresService,
@@ -47,7 +49,7 @@ const KIND_LABELS: Record<string, string> = {
   selector: 'sf-structures',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfEmptyStateComponent, SfFieldComponent],
+  imports: [SfButtonComponent, SfEmptyStateComponent, SfFieldComponent, SfSpinnerComponent, SfUidRenameComponent],
   templateUrl: './structures.component.html',
   styleUrl: './structures.component.scss',
 })
@@ -160,8 +162,18 @@ export class StructuresComponent {
         this.reloadList(key);
         this.selectedUuid.set(created.uuid ?? null);
       },
-      error: () => this.toast.show('Failed to create structure', 'error'),
+      error: () => this.toast.show('Could not create structure — try again in a moment.', 'error'),
     });
+  }
+
+  onUidChanged(): void {
+    const key = this.projectKey();
+    const uuid = this.selectedUuid();
+    if (!key || !uuid) {
+      return;
+    }
+    this.reloadList(key);
+    this.reloadDetail(key, uuid);
   }
 
   onFilterChange(event: Event): void {
@@ -182,7 +194,7 @@ export class StructuresComponent {
     }
     this.sourceSaving.set(true);
     this.service
-      .update(key, uuid, { sourceText: this.sourceText() }, this.etag(detail))
+      .update(key, uuid, { displayName: detail.displayName ?? detail.uid ?? '', sourceText: this.sourceText() }, this.etag(detail))
       .subscribe({
         next: (updated) => {
           this.applyUpdated(updated);
@@ -191,7 +203,7 @@ export class StructuresComponent {
           this.loadPreview(key, uuid);
         },
         error: () => {
-          this.toast.show('Failed to save source', 'error');
+          this.toast.show('Could not save source — someone may have edited it, try reloading.', 'error');
           this.sourceSaving.set(false);
         },
       });
@@ -224,7 +236,7 @@ export class StructuresComponent {
           this.reloadDetail(key, uuid);
         },
         error: () => {
-          this.toast.show(`Failed to save channel ${channel}`, 'error');
+          this.toast.show(`Could not save channel ${channel} — check the OCTL source compiles.`, 'error');
           this.channelSaving.set(false);
         },
       });
@@ -287,7 +299,7 @@ export class StructuresComponent {
         }
       },
       error: () => {
-        this.toast.show('Failed to load structures', 'error');
+        this.toast.show('Could not load structures — check your connection and try again.', 'error');
         this.loading.set(false);
       },
     });
@@ -329,7 +341,7 @@ export class StructuresComponent {
         }
         this.loadPreview(key, uuid);
       },
-      error: () => this.toast.show('Failed to load structure', 'error'),
+      error: () => this.toast.show('Could not load structure — check your connection and try again.', 'error'),
     });
   }
 
