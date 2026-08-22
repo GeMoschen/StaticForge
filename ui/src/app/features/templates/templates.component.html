@@ -1,0 +1,203 @@
+  <div class="templates">
+  <h1 class="sf-sr-only">Templates</h1>
+  <aside class="templates__list">
+    <div class="templates__tabs" role="tablist" aria-label="Template type">
+      <button
+        type="button"
+        role="tab"
+        class="templates__tab"
+        [class.templates__tab--active]="isSection()"
+        (click)="switchKind('section')"
+      >
+        Sections
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="templates__tab"
+        [class.templates__tab--active]="!isSection()"
+        (click)="switchKind('page')"
+      >
+        Pages
+      </button>
+    </div>
+
+    <div class="templates__list-head">
+      <h2>{{ isSection() ? 'Section templates' : 'Page templates' }}</h2>
+      <sf-button (click)="newTemplate()">New</sf-button>
+    </div>
+
+    @if (loading()) {
+      <div class="loading">Loading…</div>
+    }
+
+    @if (!loading() && templates().length === 0) {
+      <sf-empty-state
+        title="No templates"
+        description="Create a template to define reusable content."
+      />
+    }
+
+    @for (item of templates(); track trackByUuid($index, item)) {
+      <button
+        type="button"
+        class="templates__row"
+        [class.templates__row--active]="item.uuid === selectedUuid()"
+        (click)="select(item.uuid)"
+      >
+        <span class="templates__row-name">{{ item.displayName ?? item.uid }}</span>
+        @if (item.assetType?.toLowerCase() === 'section_template') {
+          <span class="badge badge--section">section</span>
+        } @else {
+          <span class="badge badge--page">page</span>
+        }
+      </button>
+    }
+  </aside>
+
+  <section class="templates__detail">
+    @if (detail(); as d) {
+      <div class="detail__scroll">
+        <div class="detail__head">
+          <div>
+            <h3>{{ d.displayName ?? d.uid }}</h3>
+            <div class="detail__meta">{{ d.uid ?? '' }} · rev {{ d.revision ?? '' }}</div>
+          </div>
+          <div class="actions">
+            <sf-button variant="danger" (click)="requestDelete()">Delete</sf-button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="inline">
+            <sf-field label="Display name" class="inline__field">
+              <input
+                type="text"
+                [value]="displayName()"
+                (input)="onDisplayNameInput($event)"
+              />
+            </sf-field>
+            <sf-field label="Category" class="inline__field">
+              <input
+                type="text"
+                [value]="category()"
+                (input)="onCategoryInput($event)"
+              />
+            </sf-field>
+            @if (isSection()) {
+              <label>
+                <input
+                  type="checkbox"
+                  [checked]="deprecated()"
+                  (change)="onDeprecatedChange($event)"
+                />
+                Deprecated
+              </label>
+            }
+          </div>
+        </div>
+
+        <div class="panel">
+          <sf-field
+            label="Content definition (CDL)"
+            hint="Declares the editors this template exposes."
+          >
+            <textarea
+              [value]="contentDefinition()"
+              (input)="onContentDefinitionInput($event)"
+              spellcheck="false"
+            ></textarea>
+          </sf-field>
+          <div class="actions">
+            <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>
+            <sf-button variant="primary" [disabled]="saving()" (click)="saveDefinition()">
+              Save template
+            </sf-button>
+          </div>
+        </div>
+
+        @if (cdlDiagnostics().length > 0) {
+          <div class="diagnostics" aria-live="polite">
+            @for (diag of cdlDiagnostics(); track $index) {
+              <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+                {{ diag.severity }} {{ diag.code }} @if (diag.line != null) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
+              </div>
+            }
+          </div>
+        }
+
+        <div class="panel">
+          <sf-field label="Channel templates (OCTL)" hint="Per-channel rendering source.">
+            @if (channelKeys().length > 0) {
+              <div class="channels__tabs">
+                @for (key of channelKeys(); track key) {
+                  <button
+                    type="button"
+                    class="channels__tab"
+                    [class.channels__tab--active]="key === selectedChannel()"
+                    (click)="selectChannel(key)"
+                  >
+                    {{ key }}
+                  </button>
+                }
+              </div>
+              <textarea
+                [value]="channelSource()"
+                (input)="onChannelInput($event)"
+                spellcheck="false"
+              ></textarea>
+              <div class="actions">
+                <sf-button
+                  variant="primary"
+                  [disabled]="channelSaving()"
+                  (click)="saveChannel()"
+                >
+                  Save channel
+                </sf-button>
+                <sf-button variant="ghost" [disabled]="channelSaving()" (click)="deleteChannel()">
+                  Remove channel
+                </sf-button>
+              </div>
+            } @else {
+              <p class="detail__meta">No channels configured.</p>
+            }
+          </sf-field>
+
+          @if (availableChannels().length > 0) {
+            <div class="inline">
+              <select
+                class="channels__select"
+                aria-label="Add channel"
+                (change)="onAddChannel($event)"
+                [value]="''"
+              >
+                <option value="">Add channel…</option>
+                @for (channel of availableChannels(); track channel.key) {
+                  <option [value]="channel.key">{{ channel.name ?? channel.key }}</option>
+                }
+              </select>
+            </div>
+          }
+        </div>
+      </div>
+    } @else {
+      <sf-empty-state
+        title="No template selected"
+        description="Select a template on the left, or create a new one."
+      />
+    }
+  </section>
+</div>
+
+@if (confirmDelete()) {
+  <div class="scrim" (click)="cancelDelete()"></div>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Confirm delete">
+    <div class="dialog__body">
+      <p>Delete this template? Existing pages using it will keep their content but may break on next generation.</p>
+    </div>
+    <footer class="dialog__footer">
+      <sf-button variant="ghost" (click)="cancelDelete()">Cancel</sf-button>
+      <sf-button variant="danger" (click)="confirmDeleteAction()">Delete</sf-button>
+    </footer>
+  </div>
+}

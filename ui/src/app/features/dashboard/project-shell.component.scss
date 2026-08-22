@@ -1,0 +1,58 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.shell {
+  display: flex;
+  height: 100%;
+}
+
+.shell__spine {
+  flex-shrink: 0;
+}
+
+.shell__rail {
+  flex-shrink: 0;
+}
+
+.shell__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.shell__content--time-travel {
+  outline: 2px solid var(--sf-amber);
+  outline-offset: -2px;
+}
+
+.shell__timemachine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-3);
+  padding: var(--sf-2) var(--sf-4);
+  background: color-mix(in srgb, var(--sf-amber) 12%, transparent);
+  border-bottom: 1px solid var(--sf-amber);
+  flex-shrink: 0;
+}
+
+.shell__timemachine-label {
+  font-size: var(--sf-text-sm);
+  color: var(--sf-amber);
+  font-weight: 500;
+}
+
+.shell__timemachine-back {
+  padding: var(--sf-1) var(--sf-2);
+  border: 1px solid var(--sf-amber);
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-amber);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+  cursor: pointer;
+}

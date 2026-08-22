@@ -1,0 +1,62 @@
+info:
+  app:
+    name: staticforge-server
+    version: 0.1.0
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: staticforge-server
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+  threads:
+    virtual:
+      enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+
+sf:
+  security:
+    jwt:
+      algorithm: HS256
+      issuer: https://cms.example.com
+      secret: "${SF_JWT_SECRET:}"
+      # access-token-ttl/refresh-token-ttl/… populated in M1
+  media:
+    store: filesystem
+    root: "${SF_MEDIA_ROOT:./build/media}"
+    max-upload-size: 100MB
+    strip-exif: true
+  generate:
+    parallelism: 16
+    output-root: "${SF_OUTPUT_ROOT:./build/out}"
+    keep-builds: 5
+    max-file-size: 32MB
+    render-timeout: 5s
+  revision:
+    retention-days: unlimited

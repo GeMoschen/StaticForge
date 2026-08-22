@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Versioned changesets are loaded from per-version directories. Changesets are
+         immutable once merged (spec §22.4); fixes always arrive as NEW changesets. -->
+    <includeAll path="db/changelog/v1.0/" relativeToChangelogFile="false"/>
+
+    <!-- Context-scoped data: demo seeds only in the 'demo' profile, test fixtures only
+         in the 'test' profile (§22.4 rule 5). -->
+    <include file="db/changelog/data/demo-project.xml" context="demo" relativeToChangelogFile="false"/>
+    <include file="db/changelog/data/test-fixtures.xml" context="test" relativeToChangelogFile="false"/>
+
+</databaseChangeLog>

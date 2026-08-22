@@ -1,0 +1,45 @@
+<nav
+  class="rail"
+  [class.rail--expanded]="expanded()"
+  aria-label="Project navigation"
+>
+  <div class="rail__switcher">
+    <span class="rail__switcher-glyph">{{ switcherGlyph() }}</span>
+    @if (expanded()) {
+      <span class="rail__switcher-label">{{ activeKey() ?? 'StaticForge' }}</span>
+    }
+  </div>
+
+  <ul class="rail__items">
+    @for (item of navItems(); track item.route) {
+      <li class="rail__item-wrap">
+        <a
+          class="rail__item"
+          [routerLink]="item.route"
+          routerLinkActive="is-active"
+          [ariaCurrentWhenActive]="'page'"
+          [routerLinkActiveOptions]="{ exact: false }"
+          [attr.title]="item.label"
+          [attr.aria-label]="item.label"
+        >
+          <span class="rail__item-icon" aria-hidden="true">{{ item.icon }}</span>
+          @if (expanded()) {
+            <span class="rail__item-label">{{ item.label }}</span>
+          }
+        </a>
+      </li>
+    }
+  </ul>
+
+  <button
+    class="rail__toggle"
+    type="button"
+    (click)="toggle()"
+    [attr.aria-label]="expanded() ? 'Collapse navigation' : 'Expand navigation'"
+  >
+    <span class="rail__toggle-icon" aria-hidden="true">{{ expanded() ? '◀' : '▶' }}</span>
+    @if (expanded()) {
+      <span class="rail__toggle-label">Collapse</span>
+    }
+  </button>
+</nav>

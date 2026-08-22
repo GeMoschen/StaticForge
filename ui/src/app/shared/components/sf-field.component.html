@@ -1,0 +1,9 @@
+<label class="sf-field">
+  @if (label()) {
+    <span class="sf-field__label">{{ label() }}</span>
+  }
+  <ng-content />
+  @if (hint()) {
+    <span class="sf-field__hint">{{ hint() }}</span>
+  }
+</label>

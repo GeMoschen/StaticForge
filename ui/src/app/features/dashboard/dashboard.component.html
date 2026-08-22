@@ -1,0 +1,93 @@
+<main class="dashboard">
+  <header class="dashboard__header">
+    <div>
+      <h1 class="dashboard__title">Projects</h1>
+      <p class="dashboard__subtitle">{{ projects().length }} project(s)</p>
+    </div>
+    @if (isAdmin()) {
+      <sf-button variant="primary" (click)="openCreate()">New project</sf-button>
+    }
+  </header>
+
+  @if (formOpen()) {
+    <form class="form" [formGroup]="form" (ngSubmit)="submit()">
+      <sf-field label="Key" hint="A short, URL-safe identifier, e.g. 'acme-website'.">
+        <input class="input" type="text" formControlName="key" autocomplete="off" />
+      </sf-field>
+
+      <sf-field label="Name">
+        <input class="input" type="text" formControlName="name" />
+      </sf-field>
+
+      <sf-field label="Description">
+        <input class="input" type="text" formControlName="description" />
+      </sf-field>
+
+      @if (formError()) {
+        <p class="form__error" role="alert">{{ formError() }}</p>
+      }
+
+      <div class="form__actions">
+        <sf-button variant="ghost" (click)="closeForm()">Cancel</sf-button>
+        <sf-button
+          variant="primary"
+          [disabled]="form.invalid || submitting()"
+          (click)="submit()"
+        >
+          {{ submitting() ? 'Creating…' : 'Create project' }}
+        </sf-button>
+      </div>
+    </form>
+  }
+
+  @if (searchActive()) {
+    <input
+      class="dashboard__search"
+      type="search"
+      placeholder="Search projects by name or key…"
+      [value]="query()"
+      (input)="onSearch($event)"
+    />
+  }
+
+  @if (loading()) {
+    <p class="dashboard__hint">Loading projects…</p>
+  } @else if (error()) {
+    <sf-empty-state
+      title="Could not load projects"
+      [description]="error()!"
+      icon="⚠"
+    />
+  } @else if (projects().length === 0) {
+    <sf-empty-state
+      title="No projects yet"
+      description="Create your first project to start authoring static pages."
+      icon="▲"
+    >
+      @if (isAdmin()) {
+        <sf-button variant="primary" (click)="openCreate()">Create project</sf-button>
+      }
+    </sf-empty-state>
+  } @else if (filtered().length === 0) {
+    <sf-empty-state title="No matches" description="Try a different search." icon="⌕" />
+  } @else {
+    <section class="dashboard__grid">
+      @for (p of filtered(); track trackProject($index, p)) {
+        <a class="card" [routerLink]="['/p', p.key, 'pages']">
+          <div class="card__top">
+            <h2 class="card__name">{{ p.name ?? p.key }}</h2>
+            @if (p.yourRole) {
+              <span class="card__role">{{ p.yourRole }}</span>
+            }
+          </div>
+          @if (p.description) {
+            <p class="card__desc">{{ p.description }}</p>
+          }
+          @if (p.key) {
+            <span class="card__key">{{ p.key }}</span>
+          }
+        </a>
+      }
+    </section>
+  }
+</main>

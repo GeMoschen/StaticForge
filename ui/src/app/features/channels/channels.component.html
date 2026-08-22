@@ -1,0 +1,179 @@
+<div class="channels">
+  <header class="channels__header">
+    <div>
+      <h1 class="channels__title">Channels</h1>
+      <p class="channels__subtitle">
+        Output channels define how content is serialized, such as HTML or
+        Markdown.
+      </p>
+    </div>
+    <sf-button variant="primary" (click)="openCreate()">New channel</sf-button>
+  </header>
+
+  @if (formOpen()) {
+    <form class="form" [formGroup]="form" (ngSubmit)="submit()">
+      <sf-field label="Key">
+        <input class="input" type="text" formControlName="key" autocomplete="off" />
+      </sf-field>
+
+      <sf-field label="Name">
+        <input class="input" type="text" formControlName="name" />
+      </sf-field>
+
+      <sf-field label="File extension">
+        <input
+          class="input"
+          type="text"
+          formControlName="fileExtension"
+          autocomplete="off"
+        />
+      </sf-field>
+
+      <sf-field label="Default escaping">
+        <select class="select" formControlName="defaultEscaping">
+          @for (option of escapingOptions; track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </sf-field>
+
+      <sf-field label="Enabled">
+        <input class="checkbox" type="checkbox" formControlName="enabled" />
+      </sf-field>
+
+      @if (!editing()) {
+        <sf-field
+          label="Copy templates from channel"
+          hint="Optionally seed this channel's templates from an existing channel."
+        >
+          <select class="select" formControlName="copyFrom">
+            <option value="">None</option>
+            @for (option of copyFromOptions(); track option.key) {
+              <option [value]="option.key">{{ option.name ?? option.key }}</option>
+            }
+          </select>
+        </sf-field>
+      }
+
+      @if (error()) {
+        <p class="form__error" role="alert">{{ error() }}</p>
+      }
+
+      <div class="form__actions">
+        <sf-button variant="ghost" (click)="closeForm()">Cancel</sf-button>
+        <sf-button
+          type="submit"
+          variant="primary"
+          [disabled]="form.invalid || submitting()"
+        >
+          {{ submitting() ? 'Saving…' : editing() ? 'Save changes' : 'Create channel' }}
+        </sf-button>
+      </div>
+    </form>
+  }
+
+  @if (blocked()) {
+    <div class="blocked" role="alert">
+      <p class="blocked__detail">{{ blocked()!.detail ?? 'Deletion was blocked.' }}</p>
+      <ul class="blocked__list">
+        @for (item of blocked()!.blockedBy; track item.uuid ?? item.uid) {
+          <li>{{ item.displayName ?? item.uid ?? item.uuid ?? 'Unknown' }}</li>
+        }
+      </ul>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="loading">Loading channels…</div>
+  } @else if (channels().length === 0) {
+    <sf-empty-state
+      title="No channels yet"
+      description="Create a channel to start serializing content. An HTML channel is created by default."
+    />
+  } @else {
+    <sf-table>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Key</th>
+            <th>File extension</th>
+            <th>Default escaping</th>
+            <th>Status</th>
+            <th class="table__actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (channel of channels(); track channel.key) {
+            <tr>
+              <td>
+                <span class="name">
+                  {{ channel.name ?? channel.key ?? 'Untitled' }}
+                  @if (channel.isDefault) {
+                    <span class="badge badge--default">default</span>
+                  }
+                  @if (isProtected(channel)) {
+                    <span class="badge badge--protected" title="Protected channel">🔒 protected</span>
+                  }
+                </span>
+              </td>
+              <td><code class="mono">{{ channel.key }}</code></td>
+              <td><code class="mono">{{ channel.fileExtension ?? '—' }}</code></td>
+              <td>{{ channel.defaultEscaping ?? '—' }}</td>
+              <td>
+                <span
+                  class="badge"
+                  [class.badge--enabled]="channel.enabled"
+                  [class.badge--disabled]="!channel.enabled"
+                >
+                  {{ channel.enabled ? 'Enabled' : 'Disabled' }}
+                </span>
+              </td>
+              <td class="table__actions">
+                <sf-button variant="ghost" (click)="openEdit(channel)">Edit</sf-button>
+                <sf-button
+                  [variant]="channel.enabled ? 'secondary' : 'primary'"
+                  (click)="toggleEnabled(channel)"
+                >
+                  {{ channel.enabled ? 'Disable' : 'Enable' }}
+                </sf-button>
+                @if (!isProtected(channel)) {
+                  <sf-button variant="danger" (click)="requestDelete(channel)">
+                    Delete
+                  </sf-button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </sf-table>
+  }
+</div>
+
+@if (confirmDelete(); as confirm) {
+  <div class="scrim" (click)="confirmDelete.set(null)"></div>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Confirm delete">
+    <header class="dialog__header">
+      <h2 class="dialog__title">Delete channel</h2>
+    </header>
+    <div class="dialog__body">
+      <p>
+        Deleting this channel will remove the
+        '<code class="mono">{{ confirm.channel.key }}</code>' body from
+        {{ confirm.affected.length }} template{{ confirm.affected.length === 1 ? '' : 's' }}:
+      </p>
+      <ul class="dialog__list">
+        @for (tpl of confirm.affected; track tpl.uuid ?? tpl.uid) {
+          <li>{{ tpl.displayName ?? tpl.uid ?? tpl.uuid ?? 'Unknown' }}</li>
+        }
+      </ul>
+    </div>
+    <footer class="dialog__footer">
+      <sf-button variant="ghost" (click)="confirmDelete.set(null)">Cancel</sf-button>
+      <sf-button variant="danger" [disabled]="submitting()" (click)="confirmDeleteAction()">
+        Delete
+      </sf-button>
+    </footer>
+  </div>
+}

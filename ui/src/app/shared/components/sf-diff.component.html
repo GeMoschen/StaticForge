@@ -1,0 +1,30 @@
+@for (change of changes(); track trackChange($index, change)) {
+  <div class="sf-diff__field" [class.sf-diff__field--add]="change.add" [class.sf-diff__field--remove]="change.remove">
+    <div class="sf-diff__path">{{ change.path ?? '' }}</div>
+
+    @if (change.blocks && change.blocks.length > 0) {
+      <div class="sf-diff__blocks">
+        @for (block of change.blocks; track block.index) {
+          <div class="sf-diff__block sf-diff__block--{{ kindOfBlock(block) }}">
+            <span class="sf-diff__block-index">{{ block.index }}</span>
+            @if (block.before !== undefined && block.after !== undefined) {
+              <span class="sf-diff__cell sf-diff__cell-before">{{ block.before }}</span>
+              <span class="sf-diff__cell sf-diff__cell-after">{{ block.after }}</span>
+            } @else if (block.after !== undefined) {
+              <span class="sf-diff__cell sf-diff__cell-after">{{ block.after }}</span>
+            } @else {
+              <span class="sf-diff__cell sf-diff__cell-before">{{ block.before }}</span>
+            }
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="sf-diff__row">
+        <div class="sf-diff__cell sf-diff__cell-before">{{ formatValue(change.before) }}</div>
+        <div class="sf-diff__cell sf-diff__cell-after">{{ formatValue(change.after) }}</div>
+      </div>
+    }
+  </div>
+} @empty {
+  <p class="sf-diff__empty">No changes in this asset.</p>
+}

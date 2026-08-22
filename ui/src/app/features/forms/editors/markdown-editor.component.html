@@ -1,0 +1,13 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <div class="sf-markdown">
+    <textarea
+      [formControl]="control()"
+      rows="8"
+      [attr.readonly]="definition().readOnly ? '' : null"
+      class="sf-markdown__source"
+    ></textarea>
+    @if (preview) {
+      <div class="sf-markdown__preview" [innerHTML]="previewHtml()"></div>
+    }
+  </div>
+</sf-field>

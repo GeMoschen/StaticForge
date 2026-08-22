@@ -1,0 +1,14 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <input
+    type="text"
+    [formControl]="control()"
+    [maxlength]="definition().maxLength ?? null"
+    [attr.readonly]="definition().readOnly ? '' : null"
+  />
+  @if (definition().maxLength) {
+    <span class="sf-editor__count">{{ count() }}/{{ definition().maxLength }}</span>
+  }
+  @if (message()) {
+    <span class="sf-editor__error">{{ message() }}</span>
+  }
+</sf-field>

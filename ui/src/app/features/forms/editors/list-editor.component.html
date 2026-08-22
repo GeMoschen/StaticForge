@@ -1,0 +1,34 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <div class="sf-list">
+    @for (row of control().controls; track $index; let i = $index) {
+      <div class="sf-list__row">
+        <div class="sf-list__items">
+          @for (item of definition().items ?? []; track item.name) {
+            <sf-editor-outlet [definition]="item" [control]="rowControl(row, item)" />
+          }
+        </div>
+        <div class="sf-list__actions">
+          <sf-button variant="ghost" (click)="move(i, -1)" [disabled]="i === 0">↑</sf-button>
+          <sf-button
+            variant="ghost"
+            (click)="move(i, 1)"
+            [disabled]="i === control().controls.length - 1"
+          >
+            ↓
+          </sf-button>
+          <sf-button variant="danger" (click)="removeRow(i)" [disabled]="!canRemove()">
+            Remove
+          </sf-button>
+        </div>
+      </div>
+    }
+
+    @if (canAdd()) {
+      <sf-button variant="secondary" (click)="addRow()">Add row</sf-button>
+    }
+
+    @if (message()) {
+      <span class="sf-editor__error">{{ message() }}</span>
+    }
+  </div>
+</sf-field>

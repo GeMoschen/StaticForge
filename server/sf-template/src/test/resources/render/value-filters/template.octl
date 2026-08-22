@@ -1,0 +1,1 @@
+$CMS_VALUE(headline | upper)$-$CMS_VALUE(kicker | truncate(3) | upper)$

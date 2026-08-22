@@ -1,0 +1,54 @@
+name: E2E journeys
+
+# Full Playwright journey suite (§25.6) across the three browsers. workflow_dispatch
+# only for now: the journeys are gated on a live backend + seeded demo project
+# (SF_RUN_E2E), and the demo seed is still deferred (db/changelog/data/demo-project.xml
+# is a placeholder). Available on an optional weekly schedule once the seed lands.
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 4 * * 7" # weekly, re-enable once the demo seed is provisioned
+
+jobs:
+  e2e:
+    name: Playwright (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # firefox/webkit need matching `projects` entries in ui/playwright.config.ts
+        # (currently only `chromium` is defined); the matrix is ready for them.
+        browser: [chromium]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ui
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      # SF_RUN_E2E unblocks the journey specs; they assume `npm start` (ng serve) on
+      # :4200 proxying /api. The seeded-demo backend is expected to already be running.
+      - name: Run journeys
+        working-directory: ui
+        env:
+          SF_RUN_E2E: "1"
+        run: npx playwright test --project=${{ matrix.browser }}
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: ui/playwright-report/
+          if-no-files-found: warn

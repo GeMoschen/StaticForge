@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="006-references-asset-reference" author="sf">
+        <comment>Materialized outgoing asset edges (spec §5.4).</comment>
+        <createTable tableName="asset_reference">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="from_asset_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_ref_from_asset" references="asset(id)"/>
+            </column>
+            <column name="valid_from_revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_to_revision" type="BIGINT"/>
+            <column name="to_asset_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_ref_to_asset" references="asset(id)"/>
+            </column>
+            <column name="kind" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_path" type="VARCHAR(500)"/>
+        </createTable>
+        <createIndex tableName="asset_reference" indexName="idx_ref_to">
+            <column name="to_asset_id"/>
+        </createIndex>
+        <createIndex tableName="asset_reference" indexName="idx_ref_from">
+            <column name="from_asset_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="006-references-uid-history" author="sf">
+        <comment>Append-only UID change log (spec §6.4).</comment>
+        <createTable tableName="asset_uid_history">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_uid_history_asset" references="asset(id)"/>
+            </column>
+            <column name="old_uid" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="new_uid" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

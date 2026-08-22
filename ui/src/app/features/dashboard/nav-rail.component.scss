@@ -1,0 +1,112 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--sf-surface);
+  border-right: 1px solid var(--sf-line);
+  width: 64px;
+  transition: width var(--sf-motion-fast) var(--sf-ease);
+  overflow: hidden;
+}
+
+.rail--expanded {
+  width: 220px;
+}
+
+.rail__switcher {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  padding: var(--sf-4) var(--sf-3);
+  border-bottom: 1px solid var(--sf-line);
+  white-space: nowrap;
+}
+
+.rail__switcher-glyph {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-signal);
+  color: #fff;
+  font-weight: 600;
+  font-size: var(--sf-text-sm);
+}
+
+.rail__switcher-label {
+  font-weight: 500;
+  color: var(--sf-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail__items {
+  list-style: none;
+  margin: 0;
+  padding: var(--sf-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+  flex: 1;
+}
+
+.rail__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-3);
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  color: var(--sf-slate);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--sf-motion-fast) var(--sf-ease);
+}
+
+.rail__item:hover {
+  background: color-mix(in srgb, var(--sf-slate) 8%, transparent);
+}
+
+.rail__item.is-active {
+  background: color-mix(in srgb, var(--sf-signal) 12%, transparent);
+  color: var(--sf-signal);
+}
+
+.rail__item-icon {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-size: var(--sf-text-base);
+}
+
+.rail__item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-3);
+  padding: var(--sf-3) var(--sf-3);
+  margin: var(--sf-2);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: transparent;
+  color: var(--sf-slate);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rail__toggle-icon {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}

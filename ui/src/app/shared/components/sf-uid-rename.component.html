@@ -1,0 +1,59 @@
+<div class="uid-rename">
+  @if (!editing()) {
+    <div class="uid-rename__row">
+      <code class="uid-rename__value">{{ uid() }}</code>
+      <button class="uid-rename__edit" type="button" (click)="startEdit()">
+        Change UID
+      </button>
+    </div>
+  } @else {
+    <div class="uid-rename__form">
+      <input
+        class="uid-rename__input"
+        type="text"
+        [value]="draft()"
+        (input)="onInput($event)"
+        [attr.aria-invalid]="error() ? 'true' : null"
+        placeholder="lowercase letters, numbers, underscores"
+        spellcheck="false"
+        autocomplete="off"
+      />
+      @if (error()) {
+        <span class="uid-rename__error">{{ error() }}</span>
+      }
+      <div class="uid-rename__actions">
+        <button class="uid-rename__btn" type="button" (click)="cancelEdit()">
+          Cancel
+        </button>
+        <button
+          class="uid-rename__btn uid-rename__btn--primary"
+          type="button"
+          [disabled]="saving()"
+          (click)="submit()"
+        >
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (warning(); as w) {
+    <div class="uid-rename__warning" role="status">
+      <p class="uid-rename__warning-text">
+        Some templates still reference the old uid
+        <code>{{ w.oldUid }}</code> literally and need a manual fix.
+      </p>
+      <ul class="uid-rename__affected">
+        @for (t of w.affected; track t.assetUuid ?? t.assetUid) {
+          <li>
+            <span class="uid-rename__affected-name">{{ t.displayName ?? t.assetUid }}</span>
+            <span class="uid-rename__affected-meta">
+              {{ t.assetType }}@if (t.channelKey) { · {{ t.channelKey }} }
+            </span>
+            <code class="uid-rename__affected-uid">{{ t.assetUid }}</code>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</div>

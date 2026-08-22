@@ -1,0 +1,107 @@
+<div class="conflict-drawer" role="dialog" aria-label="Revision conflict">
+  <header class="conflict-drawer__header">
+    <h2 class="conflict-drawer__title">Revision conflict</h2>
+  </header>
+
+  <p class="conflict-drawer__summary">
+    This page changed since you loaded it. Pick a value for each changed field.
+  </p>
+
+  <dl class="conflict-drawer__meta">
+    <div>
+      <dt>Your revision</dt>
+      <dd>{{ conflict().expectedRevision }}</dd>
+    </div>
+    <div>
+      <dt>Current revision</dt>
+      <dd>{{ conflict().currentRevision }}</dd>
+    </div>
+    @if (conflict().changedBy != null) {
+      <div>
+        <dt>Changed by</dt>
+        <dd>{{ conflict().changedBy }}</dd>
+      </div>
+    }
+    @if (conflict().changedAt) {
+      <div>
+        <dt>Changed at</dt>
+        <dd>{{ conflict().changedAt }}</dd>
+      </div>
+    }
+  </dl>
+
+  @if (conflict().detail) {
+    <p class="conflict-drawer__detail">{{ conflict().detail }}</p>
+  }
+
+  @if (fields().length > 0) {
+    <div class="conflict-drawer__legend">
+      <span>Mine</span>
+      <span>Server</span>
+    </div>
+
+    <div class="conflict-drawer__fields">
+      @for (field of fields(); track field.path) {
+        <div class="conflict-drawer__field">
+          <div class="conflict-drawer__field-path">{{ field.path }}</div>
+          <div class="conflict-drawer__values">
+            <div class="conflict-drawer__value conflict-drawer__value--mine">
+              {{ fmt(field.base) }}
+            </div>
+            <div class="conflict-drawer__value conflict-drawer__value--theirs">
+              {{ fmt(field.theirs) }}
+            </div>
+          </div>
+          <div class="conflict-drawer__choice" role="radiogroup" [attr.aria-label]="'Choose value for ' + field.path">
+            <button
+              type="button"
+              [class.conflict-drawer__toggle--active]="pickFor(field.path) === 'mine'"
+              (click)="choose(field.path, 'mine')"
+            >
+              Keep mine
+            </button>
+            <button
+              type="button"
+              [class.conflict-drawer__toggle--active]="pickFor(field.path) === 'theirs'"
+              (click)="choose(field.path, 'theirs')"
+            >
+              Take theirs
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="conflict-drawer__actions">
+      <button type="button" class="conflict-drawer__secondary" (click)="applyAll('mine')">
+        Keep all mine
+      </button>
+      <button type="button" class="conflict-drawer__secondary" (click)="applyAll('theirs')">
+        Take all theirs
+      </button>
+      <button type="button" class="conflict-drawer__primary" (click)="apply()">
+        Apply changes
+      </button>
+    </div>
+  } @else {
+    @if (changedKeys().length > 0) {
+      <div class="conflict-drawer__changes">
+        <h3>Changed fields</h3>
+        <ul>
+          @for (key of changedKeys(); track key) {
+            <li>{{ key }}</li>
+          }
+        </ul>
+      </div>
+    }
+
+    <div class="conflict-drawer__actions">
+      <button type="button" class="conflict-drawer__primary" (click)="keepMine.emit()">
+        Keep mine
+      </button>
+      <button type="button" class="conflict-drawer__secondary" (click)="takeTheirs.emit()">
+        Take theirs
+      </button>
+    </div>
+  }
+</div>

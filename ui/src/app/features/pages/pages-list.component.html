@@ -1,0 +1,123 @@
+<div class="pages">
+  <h1 class="sf-sr-only">Pages</h1>
+  <aside class="pages__tree">
+    <div class="pages__tree-head">
+      <h2>Folders</h2>
+      <button type="button" class="pages__icon-btn" title="New folder" (click)="newFolder()">
+        +
+      </button>
+    </div>
+    <button
+      type="button"
+      class="pages__clear"
+      [class.pages__clear--active]="!selectedFolder()"
+      (click)="selectFolder(null)"
+    >
+      All pages
+    </button>
+    @for (folder of tree(); track folder.uuid) {
+      <sf-folder-node
+        [node]="folder"
+        [depth]="0"
+        [selectedUuid]="selectedFolder()"
+        (select)="selectFolder($event)"
+        (move)="moveFolderTo($event)"
+      />
+    }
+  </aside>
+
+  <section class="pages__content">
+    <div class="pages__toolbar">
+      <input
+        type="search"
+        class="pages__search"
+        placeholder="Search pages"
+        [value]="search()"
+        (input)="onSearch($event)"
+      />
+      <span class="pages__toolbar-spacer"></span>
+      @if (selectedUuids().length > 0) {
+        <sf-button
+          variant="secondary"
+          [disabled]="!selectedFolder()"
+          (click)="bulkMove()"
+        >
+          Move to folder
+        </sf-button>
+        <sf-button variant="danger" (click)="bulkDelete()">Delete</sf-button>
+      }
+      <sf-button variant="primary" (click)="openNewPage()">New page</sf-button>
+    </div>
+
+    @if (newPageOpen()) {
+      <form class="pages__form" [formGroup]="newPageForm" (ngSubmit)="submitNewPage()">
+        <sf-field label="Name">
+          <input class="pages__input" type="text" formControlName="displayName" autocomplete="off" />
+        </sf-field>
+        <sf-field label="Template">
+          <select class="pages__select" formControlName="templateUuid">
+            <option value="" disabled>Select a template</option>
+            @for (tpl of pageTemplates(); track tpl.uuid) {
+              <option [value]="tpl.uuid">{{ tpl.displayName ?? tpl.uid }}</option>
+            }
+          </select>
+        </sf-field>
+        <div class="pages__form-actions">
+          <sf-button variant="ghost" (click)="closeNewPage()">Cancel</sf-button>
+          <sf-button
+            type="submit"
+            variant="primary"
+            [disabled]="newPageForm.invalid || creatingPage()"
+          >
+            {{ creatingPage() ? 'Creating…' : 'Create page' }}
+          </sf-button>
+        </div>
+      </form>
+    }
+
+    @if (!loading() && pages().length === 0) {
+      <sf-empty-state
+        title="No pages"
+        description="Create a page to see it listed here."
+      />
+    }
+
+    <table class="pages__table">
+      <thead>
+        <tr>
+          <th class="pages__check">
+            <input
+              type="checkbox"
+              [checked]="allSelected()"
+              (change)="toggleAll()"
+              aria-label="Select all pages"
+            />
+          </th>
+          <th>Name</th>
+          <th>UID</th>
+          <th>Revision</th>
+          <th>Folder</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (page of pages(); track page.uuid) {
+          <tr (click)="open(page.uuid ?? '')">
+            <td class="pages__check">
+              <input
+                type="checkbox"
+                [checked]="isSelected(page.uuid)"
+                (change)="toggleSelect(page.uuid ?? '')"
+                (click)="$event.stopPropagation()"
+                aria-label="Select page"
+              />
+            </td>
+            <td>{{ page.displayName ?? page.uid }}</td>
+            <td class="pages__mono">{{ page.uid }}</td>
+            <td>{{ page.revision ?? '' }}</td>
+            <td>{{ page.folderPath }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+</div>

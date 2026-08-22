@@ -1,0 +1,122 @@
+.uid-rename {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+}
+
+.uid-rename__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-2);
+}
+
+.uid-rename__value {
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uid-rename__edit,
+.uid-rename__btn {
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+  border-radius: var(--sf-radius-md);
+  border: 1px solid var(--sf-line);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  padding: var(--sf-1) var(--sf-3);
+  cursor: pointer;
+}
+
+.uid-rename__btn--primary {
+  background: var(--sf-signal);
+  border-color: var(--sf-signal);
+  color: #fff;
+}
+
+.uid-rename__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.uid-rename__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+}
+
+.uid-rename__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-sm);
+}
+
+.uid-rename__error {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-rust);
+}
+
+.uid-rename__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+}
+
+.uid-rename__warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-amber);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-amber) 10%, transparent);
+  color: var(--sf-amber);
+  font-size: var(--sf-text-sm);
+}
+
+.uid-rename__warning-text {
+  margin: 0;
+}
+
+.uid-rename__warning code {
+  font-family: var(--sf-font-mono, monospace);
+}
+
+.uid-rename__affected {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+}
+
+.uid-rename__affected li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+  font-size: var(--sf-text-xs);
+}
+
+.uid-rename__affected-name {
+  color: var(--sf-ink);
+}
+
+.uid-rename__affected-meta {
+  color: var(--sf-slate);
+}
+
+.uid-rename__affected-uid {
+  font-family: var(--sf-font-mono, monospace);
+  color: var(--sf-amber);
+}

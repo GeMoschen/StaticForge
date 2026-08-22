@@ -1,0 +1,55 @@
+<header class="preview-toolbar">
+  <div class="preview-toolbar__group">
+    @for (option of viewports; track option.key) {
+      <button
+        type="button"
+        class="preview-toolbar__button"
+        [class.preview-toolbar__button--active]="viewport() === option.key"
+        (click)="viewport.set(option.key)"
+      >
+        {{ option.label }}
+      </button>
+    }
+  </div>
+
+  <div class="preview-toolbar__group">
+    <button type="button" class="preview-toolbar__button" (click)="refreshManually()">
+      Refresh
+    </button>
+
+    @if (pageUuid()) {
+      <label class="preview-toolbar__toggle">
+        <input
+          type="checkbox"
+          [checked]="savedMode()"
+          (change)="onSavedToggle($event)"
+        />
+        Saved
+      </label>
+      <button type="button" class="preview-toolbar__button" (click)="share()">
+        Share
+      </button>
+    }
+  </div>
+</header>
+
+<div class="preview-stage">
+  <div class="preview-stage__frame" [style.width]="viewportWidth()">
+    <iframe
+      #frame
+      class="preview-frame"
+      [srcdoc]="srcdoc()"
+      sandbox="allow-scripts allow-same-origin"
+      title="Live preview"
+    ></iframe>
+  </div>
+</div>
+
+@if (shareUrl()) {
+  <div class="preview-share">
+    <input class="preview-share__input" type="text" readonly [value]="shareUrl() ?? ''" />
+    <button type="button" class="preview-share__copy" (click)="copyShareUrl()">
+      Copy
+    </button>
+  </div>
+}

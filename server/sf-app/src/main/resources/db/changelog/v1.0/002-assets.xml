@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="002-assets-asset" author="sf">
+        <comment>Asset identity row — immutable (spec §5.2, §22.2).</comment>
+        <createTable tableName="asset">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="uuid" type="UUID">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="project_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_project" references="project(id)"/>
+            </column>
+            <column name="asset_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="uid" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_created_by" references="app_user(id)"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="asset" columnNames="project_id, asset_type, uid"
+                             constraintName="uq_asset_project_type_uid"/>
+
+        <createIndex tableName="asset" indexName="idx_asset_project_type">
+            <column name="project_id"/>
+            <column name="asset_type"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- asset_version.payload is a JSON column, declared per-dialect so Hibernate's
+         @JdbcTypeCode(SqlTypes.JSON) mapping validates against the actual schema
+         (spec §5.3, §22.3). PostgreSQL uses JSONB; H2 (and other test stores) use the
+         native JSON type. -->
+    <changeSet id="002-assets-version-postgresql" author="sf" dbms="postgresql">
+        <createTable tableName="asset_version">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_version_asset" references="asset(id)"/>
+            </column>
+            <column name="valid_from_revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_to_revision" type="BIGINT"/>
+            <column name="deleted" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="folder_id" type="BIGINT"/>
+            <column name="folder_path" type="VARCHAR(1024)" defaultValue="/">
+                <constraints nullable="false"/>
+            </column>
+            <column name="template_asset_id" type="BIGINT"/>
+            <column name="mime_type" type="VARCHAR(150)"/>
+            <column name="size_bytes" type="BIGINT"/>
+            <column name="payload" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_by" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_version_changed_by" references="app_user(id)"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="002-assets-version-h2" author="sf" dbms="h2">
+        <createTable tableName="asset_version">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_version_asset" references="asset(id)"/>
+            </column>
+            <column name="valid_from_revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_to_revision" type="BIGINT"/>
+            <column name="deleted" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="folder_id" type="BIGINT"/>
+            <column name="folder_path" type="VARCHAR(1024)" defaultValue="/">
+                <constraints nullable="false"/>
+            </column>
+            <column name="template_asset_id" type="BIGINT"/>
+            <column name="mime_type" type="VARCHAR(150)"/>
+            <column name="size_bytes" type="BIGINT"/>
+            <column name="payload" type="JSON">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_by" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_version_changed_by" references="app_user(id)"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="002-assets-version-index" author="sf">
+        <createIndex tableName="asset_version" indexName="idx_av_lookup">
+            <column name="asset_id"/>
+            <column name="valid_from_revision"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,45 @@
+<div
+  class="folder-node"
+  [class.folder-node--selected]="isSelected()"
+  [style.padding-left.px]="depth() * 14"
+>
+  <div
+    class="folder-node__row"
+    draggable="true"
+    role="treeitem"
+    tabindex="0"
+    [attr.aria-expanded]="expanded()"
+    [attr.aria-selected]="isSelected()"
+    (click)="onSelect()"
+    (keydown)="onKeydown($event)"
+    (dragstart)="onDragStart($event)"
+    (dragover)="onDragOver($event)"
+    (drop)="onDrop($event)"
+    (dragend)="onDragEnd()"
+  >
+    <button
+      type="button"
+      class="folder-node__toggle"
+      [class.folder-node__toggle--leaf]="!hasChildren()"
+      (click)="toggle($event)"
+      [attr.aria-label]="hasChildren() ? 'Toggle folder' : 'Folder'"
+    >
+      {{ expanded() ? '▾' : '▸' }}
+    </button>
+    <span class="folder-node__name">{{ node().displayName ?? node().uid }}</span>
+  </div>
+
+  @if (expanded() && hasChildren()) {
+    <div class="folder-node__children" role="group">
+      @for (child of node().children ?? []; track child.uuid) {
+        <sf-folder-node
+          [node]="child"
+          [depth]="depth() + 1"
+          [selectedUuid]="selectedUuid()"
+          (select)="select.emit($event)"
+          (move)="move.emit($event)"
+        />
+      }
+    </div>
+  }
+</div>

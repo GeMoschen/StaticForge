@@ -1,0 +1,32 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <div class="sf-reference">
+    <div class="sf-reference__current" sfDropTarget (drop)="onDrop($event)">
+      {{ summary() || 'No asset selected' }}
+    </div>
+
+    @if (projectKey()) {
+      <sf-button variant="secondary" (click)="choose()">Choose</sf-button>
+    }
+
+    @if (results().length > 0) {
+      <div class="sf-reference__results">
+        @for (item of results(); track item.uuid) {
+          <button type="button" (click)="select(item.uuid, '')">{{ item.label }}</button>
+        }
+      </div>
+    }
+
+    <input
+      type="text"
+      placeholder="Asset UUID"
+      [formControl]="field('uuid')"
+      [attr.readonly]="definition().readOnly ? '' : null"
+    />
+    <input
+      type="text"
+      placeholder="Asset type"
+      [formControl]="field('assetType')"
+      [attr.readonly]="definition().readOnly ? '' : null"
+    />
+  </div>
+</sf-field>

@@ -1,0 +1,65 @@
+<div class="diff">
+  <header class="diff__header">
+    <div>
+      <h1 class="diff__title">Revision {{ revisionId() }}</h1>
+      <p class="diff__subtitle">
+        Restoring never rewrites history: it appends a new revision on top.
+      </p>
+    </div>
+    <sf-button variant="danger" [disabled]="restoring()" (click)="requestRollback()">
+      Roll back project
+    </sf-button>
+  </header>
+
+  @if (loading()) {
+    <sf-empty-state title="Loading diff" />
+  } @else if (error()) {
+    <sf-empty-state title="Error" [description]="error() ?? ''" />
+  } @else {
+    @for (asset of assets(); track asset.uuid) {
+      <section class="diff__asset">
+        <header class="diff__asset-header">
+          <span class="diff__asset-meta">
+            <span class="diff__asset-uid">{{ asset.uid ?? asset.uuid }}</span>
+            <span class="diff__asset-type">{{ asset.type }} · {{ asset.action }}</span>
+          </span>
+          <sf-button variant="secondary" (click)="restoreAsset(asset)">
+            Restore this asset
+          </sf-button>
+        </header>
+        <sf-diff [changes]="asset.changes ?? []" />
+      </section>
+    } @empty {
+      <sf-empty-state title="No changes" description="This revision has no asset changes." />
+    }
+  }
+
+  @if (dialog.state(); as d) {
+    <div class="diff__scrim" (click)="cancelRollback()"></div>
+    <div class="diff__dialog" role="dialog" aria-modal="true" [attr.aria-label]="d.title">
+      <header class="diff__dialog-header">
+        <h2 class="diff__dialog-title">{{ d.title }}</h2>
+      </header>
+      <div class="diff__dialog-body">
+        <p class="diff__dialog-message">{{ d.message }}</p>
+        <input
+          class="diff__dialog-input"
+          type="text"
+          [value]="confirmText()"
+          (input)="onConfirmInput($event)"
+          placeholder="Type ROLLBACK to confirm"
+        />
+      </div>
+      <footer class="diff__dialog-footer">
+        <sf-button variant="ghost" (click)="cancelRollback()">Cancel</sf-button>
+        <sf-button
+          variant="danger"
+          [disabled]="confirmText().trim() !== ROLLBACK_TOKEN || restoring()"
+          (click)="confirmRollback()"
+        >
+          Roll back
+        </sf-button>
+      </footer>
+    </div>
+  }
+</div>

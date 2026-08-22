@@ -1,0 +1,51 @@
+name: OWASP dependency-check nightly
+
+# OWASP dependency-check (§25.7). Nightly + manual only: the NVD feed download is
+# heavy and flaky, so it is deliberately NOT a PR gate. The Gradle plugin is not
+# applied in the default build (offline builds would break), so this job uses the
+# standalone dependency-check action against the committed lock/manifest files.
+
+on:
+  schedule:
+    - cron: "30 2 * * *" # 02:30 UTC nightly
+  workflow_dispatch:
+
+jobs:
+  dependency-check:
+    name: Dependency check
+    runs-on: ubuntu-latest
+    # continue-on-error so an NVD outage or feed timeout does not block the report.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: OWASP dependency-check
+        uses: dependency-check/Dependency-Check_Action@4
+        with:
+          project: StaticForge
+          path: .
+          format: HTML
+          # Gradle/Kotlin + npm lockfiles; the action walks the supplied path.
+          args: >
+            --out ./dependency-check-report
+            --scan ./build.gradle.kts
+            --scan ./server/**/build.gradle.kts
+            --scan ./gradle/libs.versions.toml
+            --scan ./ui/package-lock.json
+
+      - name: Upload dependency-check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: dependency-check-report/
+          if-no-files-found: warn
+
+      # Once the plugin is wired into a `ci`-only Gradle build, this becomes:
+      #   ./gradlew dependencyCheckAnalyze
+      # with `tasks.dependencyCheck { failBuildOnCVSS = 7.0 }` (see docs/security-review.md).
+      - name: Note Gradle wiring
+        run: |
+          echo "Alternative: add 'org.owasp.dependencycheck' version 12.1.0 to a ci-only"
+          echo "build and run './gradlew dependencyCheckAnalyze'. Gate: no HIGH/CRITICAL"
+          echo "without a documented, time-boxed exception."

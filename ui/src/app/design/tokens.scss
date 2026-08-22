@@ -1,0 +1,37 @@
+:root {
+  --sf-paper:      #F6F7F8;
+  --sf-surface:    #FFFFFF;
+  --sf-ink:        #101418;
+  --sf-slate:      #5A6472;
+  --sf-line:       #DFE3E8;
+  --sf-signal:     #2B44E8;
+  --sf-amber:      #C77A0A;
+  --sf-jade:       #0E7A5F;
+  --sf-rust:       #B3261E;
+  --sf-font-ui:      "Geist Sans", system-ui, sans-serif;
+  --sf-font-display: "Space Grotesk", "Geist Sans", sans-serif;
+  --sf-font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  --sf-text-xs:  0.75rem;   --sf-lh-xs:  1.1rem;
+  --sf-text-sm:  0.8125rem; --sf-lh-sm:  1.25rem;
+  --sf-text-md:  0.875rem;  --sf-lh-md:  1.375rem;
+  --sf-text-lg:  1.0625rem; --sf-lh-lg:  1.5rem;
+  --sf-text-xl:  1.375rem;  --sf-lh-xl:  1.75rem;
+  --sf-text-2xl: 1.875rem;  --sf-lh-2xl: 2.25rem;
+  --sf-1: 4px;  --sf-2: 8px;  --sf-3: 12px; --sf-4: 16px;
+  --sf-5: 24px; --sf-6: 32px; --sf-7: 48px; --sf-8: 64px;
+  --sf-radius-sm: 4px; --sf-radius-md: 6px; --sf-radius-lg: 10px;
+  --sf-shadow-1: 0 1px 2px rgb(16 20 24 / 0.06);
+  --sf-shadow-2: 0 4px 16px rgb(16 20 24 / 0.10);
+  --sf-motion-fast: 120ms; --sf-motion-base: 180ms;
+  --sf-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-theme="dark"] {
+  --sf-paper: #0C0F12; --sf-surface: #161A1F; --sf-ink: #E8EBEE;
+  --sf-slate: #97A1AE; --sf-line: #262C33; --sf-signal: #6E82FF;
+  --sf-amber: #E0A040; --sf-jade: #35A585; --sf-rust: #E5675E;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

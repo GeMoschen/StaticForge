@@ -1,0 +1,21 @@
+.sf-color {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-3);
+}
+.sf-color__swatches {
+  display: flex;
+  gap: var(--sf-1);
+}
+.sf-color__swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--sf-radius-sm);
+  border: 1px solid var(--sf-line);
+  cursor: pointer;
+  padding: 0;
+}
+.sf-color__swatch--active {
+  outline: 2px solid var(--sf-signal);
+  outline-offset: 1px;
+}

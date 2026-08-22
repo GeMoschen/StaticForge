@@ -1,0 +1,61 @@
+<div
+  class="section-card"
+  [attr.draggable]="readOnly() ? null : 'true'"
+  (dragstart)="onDragStart($event)"
+  (dragover)="onDragOver($event)"
+  (drop)="onDrop($event)"
+  (dragend)="onDragEnd()"
+>
+  <header
+    class="section-card__header"
+    tabindex="0"
+    role="group"
+    (click)="toggleCollapsed()"
+    (keydown)="onHeaderKeydown($event)"
+  >
+    <button
+      type="button"
+      class="section-card__toggle"
+      (click)="toggleCollapsed($event)"
+      aria-label="Toggle section"
+    >
+      {{ collapsed() ? '▸' : '▾' }}
+    </button>
+    <span class="section-card__title">{{ title() }}</span>
+    @if (!readOnly()) {
+      <div class="section-card__actions">
+        <button
+          type="button"
+          [disabled]="index() <= 0"
+          (click)="moveUp.emit(); $event.stopPropagation()"
+        >
+          Move up
+        </button>
+        <button
+          type="button"
+          [disabled]="index() >= count() - 1"
+          (click)="moveDown.emit(); $event.stopPropagation()"
+        >
+          Move down
+        </button>
+        <button
+          type="button"
+          class="section-card__remove"
+          (click)="remove.emit(); $event.stopPropagation()"
+        >
+          Remove
+        </button>
+      </div>
+    }
+  </header>
+
+  @if (!collapsed() && fieldForm()) {
+    <div class="section-card__body">
+      <sf-content-form
+        [definition]="contentDefinition()"
+        [formGroup]="fieldForm()!"
+        [projectKey]="projectKey()"
+      />
+    </div>
+  }
+</div>

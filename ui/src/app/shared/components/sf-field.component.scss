@@ -1,0 +1,15 @@
+.sf-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+}
+
+.sf-field__label {
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.sf-field__hint {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}

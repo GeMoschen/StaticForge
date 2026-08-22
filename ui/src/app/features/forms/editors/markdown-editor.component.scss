@@ -1,0 +1,15 @@
+.sf-markdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sf-3);
+}
+.sf-markdown__source {
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-sm);
+}
+.sf-markdown__preview {
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-sm);
+  padding: var(--sf-2);
+  overflow: auto;
+}

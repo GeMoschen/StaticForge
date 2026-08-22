@@ -1,0 +1,1 @@
+$CMS_FOR(item : items)$[$CMS_VALUE(item._index)$]$CMS_VALUE(item.name)$;$CMS_END_FOR$

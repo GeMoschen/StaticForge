@@ -1,0 +1,17 @@
+spring:
+  config:
+    activate:
+      on-profile: demo
+  datasource:
+    url: jdbc:h2:mem:sf;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  liquibase:
+    contexts: demo
+
+sf:
+  security:
+    jwt:
+      algorithm: HS256
+      secret: demo-only-secret-0123456789abcdef0123456789

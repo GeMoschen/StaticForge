@@ -1,0 +1,5 @@
+<div class="sf-content-form">
+  @for (editor of definition().editors; track editor.name) {
+    <sf-editor-outlet [definition]="editor" [control]="controlFor(editor)" />
+  }
+</div>

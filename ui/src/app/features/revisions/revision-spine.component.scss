@@ -1,0 +1,131 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.spine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 44px;
+  height: 100%;
+  background: var(--sf-surface);
+  border-right: 1px solid var(--sf-line);
+  overflow: visible;
+}
+
+.spine__current {
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-ink);
+  padding: var(--sf-3) 0 var(--sf-2);
+  user-select: none;
+}
+
+.spine__ticks {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--sf-1);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  gap: 1px;
+}
+
+.spine__dot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: var(--sf-radius-sm);
+  cursor: pointer;
+  padding: 0;
+  color: var(--sf-slate);
+}
+
+.spine__dot:hover,
+.spine__dot:focus-visible {
+  background: color-mix(in srgb, var(--sf-slate) 10%, transparent);
+}
+
+.spine__mark {
+  font-size: var(--sf-text-xs);
+  line-height: 1;
+}
+
+.spine__dot--own .spine__mark {
+  color: var(--sf-signal);
+}
+
+.spine__label {
+  position: absolute;
+  left: calc(100% + var(--sf-2));
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--sf-ink);
+  color: var(--sf-paper);
+  font-size: var(--sf-text-xs);
+  white-space: nowrap;
+  padding: var(--sf-1) var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 20;
+  transition: opacity var(--sf-motion-fast) var(--sf-ease);
+}
+
+.spine__dot:hover .spine__label,
+.spine__dot:focus-visible .spine__label {
+  opacity: 1;
+}
+
+.spine__dot--pulse .spine__mark {
+  animation: spine-pulse 180ms var(--sf-ease) 1;
+}
+
+@keyframes spine-pulse {
+  0% {
+    color: var(--sf-amber);
+    transform: scale(1.4);
+  }
+  100% {
+    color: var(--sf-slate);
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spine__dot--pulse .spine__mark {
+    animation: none;
+  }
+}
+
+@media (max-width: 1099px) {
+  .spine,
+  :host {
+    width: 6px;
+  }
+
+  .spine__current,
+  .spine__mark,
+  .spine__label {
+    display: none;
+  }
+
+  .spine__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--sf-line);
+  }
+
+  .spine__dot:hover,
+  .spine__dot--own {
+    background: var(--sf-signal);
+  }
+}

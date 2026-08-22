@@ -1,0 +1,245 @@
+package com.acme.staticforge.asset.folder;
+
+import com.acme.staticforge.asset.Asset;
+import com.acme.staticforge.asset.AssetRepository;
+import com.acme.staticforge.asset.AssetService;
+import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.AssetVersion;
+import com.acme.staticforge.asset.AssetVersionRepository;
+import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.CreateAssetCommand;
+import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.common.JsonUtil;
+import com.acme.staticforge.common.ProblemFactory;
+import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.revision.AssetChange;
+import com.acme.staticforge.revision.ChangeType;
+import com.acme.staticforge.revision.Revision;
+import com.acme.staticforge.revision.RevisionAware;
+import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.revision.RevisionService;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * {@link FolderService} implementation. Subtree moves close and reopen every affected
+ * version row in a single revision; deletion is {@code deleted=true} rows, never physical.
+ */
+@Service
+@RevisionAware
+public class FolderServiceImpl implements FolderService {
+
+    private final AssetRepository assetRepository;
+    private final AssetVersionRepository assetVersionRepository;
+    private final AssetService assetService;
+    private final PathService pathService;
+    private final RevisionService revisionService;
+
+    public FolderServiceImpl(
+            AssetRepository assetRepository,
+            AssetVersionRepository assetVersionRepository,
+            AssetService assetService,
+            PathService pathService,
+            RevisionService revisionService) {
+        this.assetRepository = assetRepository;
+        this.assetVersionRepository = assetVersionRepository;
+        this.assetService = assetService;
+        this.pathService = pathService;
+        this.revisionService = revisionService;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FolderNode> tree(long projectId, int depth, RevisionContext ctx) {
+        List<AssetVersion> folders = assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.FOLDER);
+
+        java.util.Map<Long, FolderInfo> info = new java.util.LinkedHashMap<>();
+        java.util.Map<Long, List<Long>> children = new java.util.LinkedHashMap<>();
+        for (AssetVersion version : folders) {
+            Asset asset = assetRepository.findById(version.getAssetId()).orElse(null);
+            if (asset == null) {
+                continue;
+            }
+            info.put(asset.getId(), new FolderInfo(asset.getUuid(), asset.getUid(), version.getDisplayName(), version.getFolderPath()));
+            children.put(asset.getId(), new java.util.ArrayList<>());
+        }
+        List<Long> roots = new java.util.ArrayList<>();
+        for (AssetVersion version : folders) {
+            Long parentId = version.getFolderId();
+            if (parentId != null && children.containsKey(parentId) && children.containsKey(version.getAssetId())) {
+                children.get(parentId).add(version.getAssetId());
+            } else if (children.containsKey(version.getAssetId())) {
+                roots.add(version.getAssetId());
+            }
+        }
+        return roots.stream().map(id -> toNode(id, info, children, depth)).toList();
+    }
+
+    private static FolderNode toNode(Long id, java.util.Map<Long, FolderInfo> info,
+            java.util.Map<Long, List<Long>> children, int depth) {
+        FolderInfo f = info.get(id);
+        List<FolderNode> childNodes = (depth == 0)
+                ? List.of()
+                : children.get(id).stream().map(cid -> toNode(cid, info, children, depth - 1)).toList();
+        return new FolderNode(f.uuid(), f.uid(), f.displayName(), f.path(), childNodes);
+    }
+
+    private record FolderInfo(UUID uuid, String uid, String displayName, String path) {}
+
+    @Override
+    @Transactional
+    public AssetVersionView create(UUID parentFolderUuid, String displayName, RevisionContext ctx) {
+        String parentPath = parentFolderUuid == null
+                ? PathService.ROOT_PATH
+                : requireOpen(requireFolder(parentFolderUuid, ctx.projectId()).getId()).getFolderPath();
+        if (pathService.depth(parentPath) + 1 > PathService.MAX_DEPTH) {
+            throw new SfException(ProblemFactory.other(
+                    422, "SF-DOM-0103", "Validation Failed", "Folder depth limit of " + PathService.MAX_DEPTH + " exceeded."));
+        }
+        return assetService.create(
+                new CreateAssetCommand(ctx.projectId(), AssetType.FOLDER, displayName, parentFolderUuid, JsonUtil.parse("{}"), null),
+                ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView update(UUID uuid, String displayName, long expectedRevision, RevisionContext ctx) {
+        Asset folder = requireFolder(uuid, ctx.projectId());
+        AssetVersion current = requireOpen(folder.getId());
+        return assetService.update(uuid, new UpdateAssetCommand(displayName, current.getPayload()), expectedRevision, ctx);
+    }
+
+    @Override
+    @Transactional
+    public MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx) {
+        Asset folder = requireFolder(folderUuid, ctx.projectId());
+        AssetVersion current = requireOpen(folder.getId());
+        String oldPath = current.getFolderPath();
+
+        if (targetParentFolderUuid != null && targetParentFolderUuid.equals(folderUuid)) {
+            throw new SfException(ProblemFactory.unprocessableEntity("A folder cannot be moved into itself."));
+        }
+
+        FolderRef target = resolveTarget(targetParentFolderUuid, ctx.projectId(), ctx);
+        if (pathService.isUnder(target.path(), oldPath)) {
+            throw new SfException(ProblemFactory.unprocessableEntity("A folder cannot be moved into its own descendant."));
+        }
+
+        String newPath = pathService.childPath(target.path(), folder.getUid());
+        if (newPath.equals(oldPath)) {
+            return new MoveResult(0, current.getValidFromRevision());
+        }
+
+        List<AssetVersion> subtree = assetVersionRepository.findCurrentByProject(ctx.projectId()).stream()
+                .filter(v -> pathService.isUnder(v.getFolderPath(), oldPath))
+                .toList();
+
+        Revision revision = revisionService.allocate(ctx.projectId(), ChangeType.MOVE, ctx.comment(), ctx.userId());
+        for (AssetVersion version : subtree) {
+            Long newFolderId = version.getAssetId().equals(folder.getId()) ? target.id() : version.getFolderId();
+            String rebased = pathService.rebase(version.getFolderPath(), oldPath, newPath);
+            close(version.getAssetId(), revision.getRevisionId());
+            insertVersion(
+                    version.getAssetId(),
+                    revision.getRevisionId(),
+                    version.getDisplayName(),
+                    version.getPayload(),
+                    ctx.userId(),
+                    Instant.now(),
+                    newFolderId,
+                    rebased,
+                    version.getTemplateAssetId(),
+                    version.isDeleted());
+        }
+        appendSummary(folder, revision, "MOVE", List.of("folder"));
+        return new MoveResult(subtree.size(), revision.getRevisionId());
+    }
+
+    @Override
+    @Transactional
+    public void delete(UUID uuid, boolean cascade, RevisionContext ctx) {
+        Asset folder = requireFolder(uuid, ctx.projectId());
+        AssetVersion current = requireOpen(folder.getId());
+
+        List<AssetVersion> subtree = assetVersionRepository.findCurrentByProject(ctx.projectId()).stream()
+                .filter(v -> pathService.isUnder(v.getFolderPath(), current.getFolderPath()))
+                .toList();
+
+        if (!cascade && subtree.size() > 1) {
+            throw new SfException(ProblemFactory.other(409, "SF-DOM-0110", "Conflict", "Folder is not empty."));
+        }
+
+        Revision revision = revisionService.allocate(ctx.projectId(), ChangeType.DELETE, ctx.comment(), ctx.userId());
+        for (AssetVersion version : subtree) {
+            close(version.getAssetId(), revision.getRevisionId());
+            insertVersion(
+                    version.getAssetId(),
+                    revision.getRevisionId(),
+                    version.getDisplayName(),
+                    version.getPayload(),
+                    ctx.userId(),
+                    Instant.now(),
+                    version.getFolderId(),
+                    version.getFolderPath(),
+                    version.getTemplateAssetId(),
+                    true);
+        }
+        appendSummary(folder, revision, "DELETE", List.of());
+    }
+
+    private Asset requireFolder(UUID uuid, long projectId) {
+        Asset asset = assetRepository.findByUuid(uuid)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Folder not found.")));
+        if (asset.getAssetType() != AssetType.FOLDER) {
+            throw new SfException(ProblemFactory.unprocessableEntity("Asset is not a folder."));
+        }
+        return asset;
+    }
+
+    private FolderRef resolveTarget(UUID targetUuid, long projectId, RevisionContext ctx) {
+        if (targetUuid == null) {
+            AssetVersionView root = assetService.ensureRootFolder(projectId, ctx);
+            Asset rootAsset = assetRepository.findByUuid(root.uuid()).orElseThrow();
+            return new FolderRef(rootAsset.getId(), PathService.ROOT_PATH);
+        }
+        Asset target = requireFolder(targetUuid, projectId);
+        AssetVersion version = requireOpen(target.getId());
+        return new FolderRef(target.getId(), version.getFolderPath());
+    }
+
+    private AssetVersion requireOpen(Long assetId) {
+        return assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(assetId)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Folder has no current version.")));
+    }
+
+    private void close(Long assetId, long revisionId) {
+        assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(assetId).ifPresent(v -> {
+            v.setValidToRevision(revisionId);
+            assetVersionRepository.save(v);
+        });
+    }
+
+    private void insertVersion(
+            Long assetId, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
+            Long folderId, String folderPath, Long templateAssetId, boolean deleted) {
+        AssetVersion version = new AssetVersion(assetId, revisionId, displayName, payload, changedBy, changedAt);
+        version.setFolderId(folderId);
+        version.setFolderPath(folderPath);
+        version.setTemplateAssetId(templateAssetId);
+        version.setDeleted(deleted);
+        assetVersionRepository.save(version);
+    }
+
+    private void appendSummary(Asset asset, Revision revision, String action, List<String> fields) {
+        revisionService.appendSummary(
+                asset.getProjectId(),
+                revision.getRevisionId(),
+                AssetChange.create(asset.getUuid().toString(), asset.getAssetType().name(), action, fields));
+    }
+
+    private record FolderRef(Long id, String path) {}
+}

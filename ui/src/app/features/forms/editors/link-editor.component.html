@@ -1,0 +1,48 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <div class="sf-link">
+    <div class="sf-link__summary">
+      <span class="sf-link__kind">{{ kind().toLowerCase() }}</span>
+      <span class="sf-link__target">{{ summary() }}</span>
+      @if (!definition().readOnly) {
+        <sf-button variant="secondary" (click)="open.set(!open())">
+          {{ open() ? 'Close' : 'Edit' }}
+        </sf-button>
+      }
+    </div>
+
+    @if (open()) {
+      <div class="sf-link__dialog">
+        <select
+          [formControl]="field('kind')"
+          [attr.disabled]="definition().readOnly ? '' : null"
+        >
+          @for (k of kinds; track k) {
+            <option [ngValue]="k">{{ k.toLowerCase() }}</option>
+          }
+        </select>
+
+        @switch (kind()) {
+          @case ('INTERNAL') {
+            <input type="text" placeholder="Target UUID" [formControl]="field('uuid')" />
+          }
+          @case ('MEDIA') {
+            <input type="text" placeholder="Media UUID" [formControl]="field('uuid')" />
+          }
+          @case ('EXTERNAL') {
+            <input type="url" placeholder="https://…" [formControl]="field('url')" />
+            <input type="text" placeholder="Target" [formControl]="field('target')" />
+            <input type="text" placeholder="Title" [formControl]="field('title')" />
+          }
+          @case ('ANCHOR') {
+            <input type="text" placeholder="#anchor" [formControl]="field('anchor')" />
+            <input type="text" placeholder="Target" [formControl]="field('target')" />
+          }
+          @case ('MAIL') {
+            <input type="email" placeholder="name@example.com" [formControl]="field('url')" />
+            <input type="text" placeholder="Title" [formControl]="field('title')" />
+          }
+        }
+      </div>
+    }
+  </div>
+</sf-field>

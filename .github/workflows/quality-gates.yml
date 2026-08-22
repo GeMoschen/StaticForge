@@ -1,0 +1,84 @@
+name: Quality gates
+
+# PR/push quality gates (§25.7). Kept separate from ci.yml so the heavier
+# verification steps (coverage, contract, drift) can evolve independently of
+# the build/test pipeline. Coverage is REPORTED here, not enforced — current
+# measured coverage (~59%) is below the §25.7 80% target, so the gate task is
+# intentionally soft until the owning features close the gap (M7.5.1 out of scope).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    name: Coverage, contract & drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # Build + test (exercises the test JVMs that Jacoco instruments).
+      - name: Build backend
+        run: ./gradlew build --no-daemon
+
+      # Produce the aggregate Jacoco report (HTML + XML) across all backend modules.
+      - name: Generate coverage report
+        run: ./gradlew jacocoAggregateReport --no-daemon
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-aggregate-report
+          path: |
+            build/reports/jacoco/jacocoAggregateReport/
+            **/build/reports/jacoco/**/*.xml
+          if-no-files-found: warn
+
+      # Report-only gate: fails on the §25.7 thresholds but is NOT allowed to
+      # break the pipeline (once coverage reaches target, remove continue-on-error
+      # and wire the task into `check`).
+      - name: Coverage gate (report-only)
+        continue-on-error: true
+        run: ./gradlew jacocoCoverageGate --no-daemon
+
+      # Reproduce the machine-readable OpenAPI contract. openapi-diff against a
+      # checked-in baseline is documented but NOT wired (the diff tool + a baseline
+      # openapi.json are not yet committed), so this step only proves the document
+      # regenerates cleanly.
+      - name: Generate OpenAPI contract
+        run: ./gradlew :server:sf-app:generateOpenApi --no-daemon
+
+      # Liquibase drift gate (§22.4 rule 6): documented, not yet enforced. It needs
+      # a production-dump schema to run `liquibase status` against, which is a
+      # separate infra artifact. Left as a note rather than a failing step.
+      - name: Liquibase status (documented)
+        run: |
+          echo "§25.7 Liquibase-drift gate: run './gradlew liquibaseStatus' against a"
+          echo "schema restored from a production dump. Not enforced here — the dump"
+          echo "artifact is not yet provisioned."

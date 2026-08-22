@@ -1,0 +1,25 @@
+# Backend image build context is the repository root (see infra/docker/docker-compose.yml,
+# `context: ../..`). This file keeps that context lean: the server image only needs the
+# Gradle wrapper + settings + the `server/` modules.
+
+# Build outputs
+build/
+**/build/
+.gradle/
+**/.gradle/
+
+# Frontend (source is included to bundle the SPA; generated output & deps are excluded)
+ui/node_modules/
+ui/dist/
+ui/.angular/
+
+# VCS, docs, and task artifacts
+.git/
+.idea/
+tasks/
+docs/
+cms-specification.md
+
+# Misc
+*.log
+*.iml

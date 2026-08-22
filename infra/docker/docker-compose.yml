@@ -1,0 +1,75 @@
+# StaticForge local/production-packaging stack: PostgreSQL + backend + nginx/SPA.
+#
+# Secrets are injected via environment variables — copy .env.example to .env and fill in
+# real values. Nothing sensitive is hardcoded here.
+#
+# Startup order is enforced by healthchecks:
+#   - `db` must report `pg_isready` success.
+#   - `backend` depends on `db` being healthy, and becomes healthy itself only when
+#     /actuator/health reports UP — which happens after Liquibase migrations succeed
+#     (a failed migration keeps the container unhealthy, per spec §26.6).
+#   - `web` depends on `backend` being healthy.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-staticforge}
+      POSTGRES_USER: ${DB_USER:-staticforge}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-staticforge} -d ${DB_NAME:-staticforge}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: server/sf-app/Dockerfile
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: db
+      DB_NAME: ${DB_NAME:-staticforge}
+      DB_USER: ${DB_USER:-staticforge}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      # Placeholder only — the prod profile signs JWTs with RS256 (spec §9.3), so this
+      # secret is not used in prod; kept for parity with the shared application.yml.
+      SF_JWT_SECRET: ${SF_JWT_SECRET:-replace-me}
+      # Optional — a mounted keystore is required once RS256 keys are provisioned (M1).
+      # SF_JWT_KEYSTORE: ${SF_JWT_KEYSTORE:-}
+      SF_MEDIA_ROOT: /var/lib/staticforge/media
+      SF_OUTPUT_ROOT: /var/lib/staticforge/out
+    volumes:
+      - media-data:/var/lib/staticforge/media
+      - output-data:/var/lib/staticforge/out
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: ui/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  media-data:
+  output-data:

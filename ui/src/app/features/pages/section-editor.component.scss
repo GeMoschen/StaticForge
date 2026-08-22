@@ -1,0 +1,74 @@
+:host {
+  display: block;
+}
+
+.section-card {
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.section-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  padding: var(--sf-2) var(--sf-3);
+  cursor: pointer;
+  outline: none;
+}
+
+.section-card__header:focus-visible {
+  box-shadow: 0 0 0 2px var(--sf-signal);
+}
+
+.section-card__toggle {
+  flex-shrink: 0;
+  width: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+  cursor: pointer;
+}
+
+.section-card__title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-card__actions {
+  display: flex;
+  gap: var(--sf-1);
+}
+
+.section-card__actions button {
+  padding: var(--sf-1) var(--sf-2);
+  background: transparent;
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-sm);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+  cursor: pointer;
+}
+
+.section-card__actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.section-card__remove {
+  color: var(--sf-rust) !important;
+}
+
+.section-card__body {
+  padding: var(--sf-3);
+  border-top: 1px solid var(--sf-line);
+}

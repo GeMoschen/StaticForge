@@ -1,0 +1,10 @@
+{
+  "kicker": "New season",
+  "headline": "Autumn Collection",
+  "heroImage": { "altText": "A wool coat" },
+  "body": "<p>Warm layers for <strong>colder</strong> days.</p>",
+  "links": [
+    { "label": "Shop now" },
+    { "label": "Read more" }
+  ]
+}

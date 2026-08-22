@@ -1,0 +1,17 @@
+@if (open()) {
+  <div class="sf-command-palette__backdrop" (click)="close()"></div>
+  <div
+    class="sf-command-palette"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Command palette"
+  >
+    <input
+      [sfAutofocus]="true"
+      class="sf-command-palette__input"
+      type="text"
+      placeholder="Type a command..."
+      (keydown.escape)="close()"
+    />
+  </div>
+}

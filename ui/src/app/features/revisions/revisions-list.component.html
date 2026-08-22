@@ -1,0 +1,83 @@
+<div class="revisions">
+  <header class="revisions__header">
+    <div>
+      <h1 class="revisions__title">Revisions</h1>
+      <p class="revisions__subtitle">
+        Every change is on the record. Select a revision to diff or restore.
+      </p>
+    </div>
+  </header>
+
+  <div class="revisions__filters">
+    <label class="revisions__filter">
+      <span>User</span>
+      <select
+        class="revisions__input"
+        [value]="userId() ?? ''"
+        (change)="onUserChange($event)"
+      >
+        <option value="">All users</option>
+        @for (member of members(); track member.userId) {
+          <option [value]="member.userId">
+            {{ member.displayName ?? member.username ?? member.userId }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="revisions__filter">
+      <span>Asset</span>
+      <input
+        class="revisions__input"
+        type="text"
+        placeholder="UUID or UID"
+        [value]="assetUuid() ?? ''"
+        (input)="onAssetInput($event)"
+      />
+    </label>
+
+    <label class="revisions__filter">
+      <span>Type</span>
+      <select
+        class="revisions__input"
+        [value]="changeType() ?? ''"
+        (change)="onTypeChange($event)"
+      >
+        <option value="">All types</option>
+        @for (type of changeTypes(); track type) {
+          <option [value]="type">{{ type }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @if (loading()) {
+    <sf-empty-state title="Loading revisions" />
+  } @else if (revisions().length === 0) {
+    <sf-empty-state title="No revisions" description="Nothing has changed in this project yet." />
+  } @else {
+    <div class="revisions__viewport" (scroll)="onScroll($event)">
+      <div class="revisions__spacer" [style.height.px]="totalHeight()"></div>
+      <div class="revisions__window" [style.transform]="'translateY(' + offset() + 'px)'">
+        @for (rev of slice(); track rev.revisionId) {
+          <a
+            class="revisions__row"
+            [style.height.px]="ITEM_HEIGHT"
+            [routerLink]="['../../revisions', rev.revisionId]"
+            [attr.aria-label]="'Revision ' + rev.revisionId"
+          >
+            <span class="revisions__rev">{{ rev.revisionId }}</span>
+            <span class="revisions__type" [class.revisions__type--own]="isOwn(rev)">
+              {{ rev.changeType }}
+            </span>
+            <span class="revisions__summary">
+              {{ summaryFor(rev) }}
+              <span class="revisions__author">{{ nameFor(rev) }}</span>
+            </span>
+            <span class="revisions__time">{{ rev.createdAt | sfRelativeTime }}</span>
+          </a>
+        }
+      </div>
+    </div>
+  }
+</div>

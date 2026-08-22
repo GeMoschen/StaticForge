@@ -1,0 +1,153 @@
+  <div class="structures">
+  <h1 class="sf-sr-only">Structures</h1>
+  <aside class="structures__list">
+    <div class="structures__list-head">
+      <h2>Structures</h2>
+      <sf-button (click)="newStructure()">New</sf-button>
+    </div>
+
+    <select
+      class="structures__filter"
+      [value]="kindFilter()"
+      (change)="onFilterChange($event)"
+      aria-label="Filter structures by kind"
+    >
+      <option value="">All kinds</option>
+      <option value="navigation">Navigation</option>
+      <option value="breadcrumb">Breadcrumb</option>
+      <option value="list">List</option>
+    </select>
+
+    @if (loading()) {
+      <div class="loading">Loading…</div>
+    }
+
+    @if (!loading() && filteredStructures().length === 0) {
+      <sf-empty-state
+        title="No structures"
+        description="Create a structure to define your site's navigation."
+      />
+    }
+
+    @for (item of filteredStructures(); track trackByUuid($index, item)) {
+      <button
+        type="button"
+        class="structures__row"
+        [class.structures__row--active]="item.uuid === selectedUuid()"
+        (click)="select(item.uuid)"
+      >
+        <span class="structures__row-name">{{ item.displayName ?? item.uid }}</span>
+        <span [class]="badgeClass(item)">{{ kindLabel(item) }}</span>
+      </button>
+    }
+  </aside>
+
+  <section class="structures__detail">
+    @if (detail(); as d) {
+      <div class="detail__scroll">
+        <div class="detail__head">
+          <div>
+            <h3>{{ d.displayName ?? d.uid }}</h3>
+            <div class="detail__meta">
+              {{ d.uid ?? '' }} · rev {{ d.revision ?? '' }}
+            </div>
+          </div>
+          <span [class]="'badge badge--' + (d.kind ?? '').toLowerCase()">
+            {{ d.kind ?? '' }}
+          </span>
+        </div>
+
+        <div class="panel">
+          <sf-field label="Source grammar" hint="OCTL grammar powering this structure.">
+            <textarea
+              [value]="sourceText()"
+              (input)="onSourceInput($event)"
+              spellcheck="false"
+            ></textarea>
+          </sf-field>
+          <div class="actions">
+            <sf-button variant="primary" [disabled]="sourceSaving()" (click)="saveSource()">
+              Save source
+            </sf-button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <sf-field label="Channel renderers" hint="Per-channel OCTL renderer source.">
+            @if (channelKeys().length > 0) {
+              <div class="channels__tabs">
+                @for (key of channelKeys(); track key) {
+                  <button
+                    type="button"
+                    class="channels__tab"
+                    [class.channels__tab--active]="key === selectedChannel()"
+                    (click)="selectChannel(key)"
+                  >
+                    {{ key }}
+                  </button>
+                }
+              </div>
+              <textarea
+                [value]="channelSource()"
+                (input)="onChannelInput($event)"
+                spellcheck="false"
+              ></textarea>
+              <div class="actions">
+                <sf-button
+                  variant="primary"
+                  [disabled]="channelSaving()"
+                  (click)="saveChannel()"
+                >
+                  Save channel
+                </sf-button>
+              </div>
+            } @else {
+              <p class="detail__meta">No channels configured.</p>
+            }
+          </sf-field>
+        </div>
+
+        <div class="panel">
+          <sf-field label="Live tree preview" hint="Preview the navigation tree for a page.">
+            <select
+              class="preview__select"
+              [value]="selectedPageUuid()"
+              (change)="onPageChange($event)"
+              aria-label="Select a page to preview"
+            >
+              @for (page of pages(); track page.uuid) {
+                <option [value]="page.uuid">{{ page.displayName ?? page.uid }}</option>
+              }
+            </select>
+          </sf-field>
+
+          @if (previewLoading()) {
+            <div class="loading">Rendering…</div>
+          } @else if (flatNav().length === 0) {
+            <sf-empty-state
+              title="No preview"
+              description="Select a page to render the navigation tree."
+            />
+          } @else {
+            <ul class="preview__tree">
+              @for (item of flatNav(); track item.key) {
+                <li
+                  [style.padding-left.px]="item.depth * 16 + 8"
+                  [class.preview__item--active]="item.active"
+                  [class.preview__item--trail]="item.trail"
+                >
+                  {{ item.label || '·' }}
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+    } @else {
+      <sf-empty-state
+        title="No structure selected"
+        description="Select a structure on the left to edit its source, channels, and preview."
+      />
+    }
+  </section>
+</div>

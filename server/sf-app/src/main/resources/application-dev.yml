@@ -1,0 +1,19 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:mem:sf;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+sf:
+  security:
+    jwt:
+      algorithm: HS256
+      secret: dev-only-secret-please-change-0123456789
+
+logging:
+  level:
+    com.acme.staticforge: DEBUG

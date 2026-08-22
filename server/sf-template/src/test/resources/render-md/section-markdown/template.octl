@@ -1,0 +1,10 @@
+$CMS_IF(kicker)$_$CMS_VALUE(kicker)$_
+
+$CMS_END_IF$## $CMS_VALUE(headline)$
+
+$CMS_IF(heroImage)$![$CMS_VALUE(heroImage.altText)$]($CMS_REF(heroImage)$)
+
+$CMS_END_IF$$CMS_VALUE(body | plain)$
+
+$CMS_FOR(link : links)$- [$CMS_VALUE(link.label)$]($CMS_REF(link.target)$)
+$CMS_END_FOR$

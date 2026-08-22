@@ -1,0 +1,23 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:sf_${random.uuid};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    contexts: test
+
+sf:
+  security:
+    jwt:
+      algorithm: HS256
+      secret: test-secret-please-do-not-use-in-production-0123456789
+  media:
+    store: filesystem
+    root: ${java.io.tmpdir}/sf-test-media

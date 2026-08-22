@@ -1,0 +1,41 @@
+.sf-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-2);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+  font-weight: 500;
+  border-radius: var(--sf-radius-md);
+  border: 1px solid transparent;
+  padding: var(--sf-2) var(--sf-3);
+  cursor: pointer;
+  transition:
+    background var(--sf-motion-fast) var(--sf-ease),
+    border-color var(--sf-motion-fast) var(--sf-ease);
+}
+
+.sf-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sf-button--primary {
+  background: var(--sf-signal);
+  color: #fff;
+}
+
+.sf-button--secondary {
+  background: var(--sf-surface);
+  border-color: var(--sf-line);
+  color: var(--sf-ink);
+}
+
+.sf-button--ghost {
+  background: transparent;
+  color: var(--sf-slate);
+}
+
+.sf-button--danger {
+  background: var(--sf-rust);
+  color: #fff;
+}

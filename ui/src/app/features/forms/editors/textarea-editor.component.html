@@ -1,0 +1,12 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <textarea
+    [formControl]="control()"
+    [maxlength]="definition().maxLength ?? null"
+    [attr.readonly]="definition().readOnly ? '' : null"
+    rows="3"
+    class="sf-textarea"
+  ></textarea>
+  @if (message()) {
+    <span class="sf-editor__error">{{ message() }}</span>
+  }
+</sf-field>

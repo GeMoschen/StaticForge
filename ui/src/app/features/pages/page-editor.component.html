@@ -1,0 +1,133 @@
+<div class="page-editor" [class.page-editor--time-travel]="readOnly()">
+  <h1 class="sf-sr-only">
+    {{ page()?.displayName ?? page()?.uid ?? 'Page editor' }}
+  </h1>
+  <header class="page-editor__top">
+    <button type="button" class="page-editor__tree-toggle" (click)="toggleTree()">
+      Pages
+    </button>
+    @if (page(); as p) {
+      <span class="page-editor__title">{{ p.displayName ?? p.uid }}</span>
+    }
+    <span class="page-editor__status" aria-live="polite">{{ statusLabel() }}</span>
+  </header>
+
+  <div class="page-editor__body">
+    <aside class="page-editor__tree" [style.width.px]="treeOpen() ? 240 : 0">
+      <div class="page-editor__tree-inner">
+        @for (folder of tree(); track folder.uuid) {
+          <sf-folder-node [node]="folder" [depth]="0" [selectedUuid]="null" />
+        }
+      </div>
+    </aside>
+
+    <div class="page-editor__main" #main>
+      <div class="page-editor__centre" [style.flex]="centreFlex()">
+        @if (loading()) {
+          <sf-empty-state title="Loading page" />
+        } @else if (error()) {
+          <sf-empty-state title="Error" [description]="error() ?? ''" />
+        } @else if (page()) {
+          @if (contentDefinition(); as def) {
+            <sf-content-form
+              [definition]="def"
+              [formGroup]="fieldsForm()!"
+              [projectKey]="projectKey()"
+            />
+
+            @for (body of def.bodies; track body.name) {
+              <section class="page-editor__body">
+                <header class="page-editor__body-header">
+                  <span class="page-editor__body-title">{{ body.label ?? body.name }}</span>
+                  @if (!readOnly()) {
+                    <sf-button variant="secondary" (click)="openPalette(body)">
+                      + Section
+                    </sf-button>
+                  }
+                </header>
+
+                @for (
+                  section of sectionsFor(body.name);
+                  track trackSection($index, section)
+                ) {
+                  <sf-section-editor
+                    [contentDefinition]="defFor(section.templateRef)"
+                    [section]="section"
+                    [projectKey]="projectKey()"
+                    [bodyName]="body.name"
+                    [templateUid]="uidFor(section.templateRef)"
+                    [title]="sectionTitle(section.templateRef)"
+                    [index]="$index"
+                    [count]="bodyCount(body.name)"
+                    [readOnly]="readOnly()"
+                    (valueChange)="onSectionValueChange(body.name, section.instanceId, $event)"
+                    (remove)="removeSection(body.name, section.instanceId)"
+                    (moveUp)="moveSectionBy(body.name, $index, -1)"
+                    (moveDown)="moveSectionBy(body.name, $index, 1)"
+                    (dragStarted)="onDragStarted(body.name, $event)"
+                    (dropOn)="onDrop(body.name, $event)"
+                    (dragEnd)="drag.set(null)"
+                  />
+                }
+              </section>
+            }
+          }
+        }
+      </div>
+
+      <div
+        class="page-editor__divider"
+        role="separator"
+        aria-orientation="vertical"
+        (pointerdown)="onDividerPointerDown($event)"
+      ></div>
+
+      <div class="page-editor__preview" [style.flex]="previewFlex()">
+        <sf-preview-frame
+          [projectKey]="projectKey()"
+          [templateUuid]="liveTemplateUuid()"
+          [content]="liveContent()"
+          [bodies]="liveBodies()"
+          [pageUuid]="uuid()"
+          (sectionClick)="onPreviewSectionClick($event)"
+        />
+      </div>
+    </div>
+  </div>
+
+  @if (paletteBody(); as body) {
+    <div class="page-editor__overlay" (click)="paletteBody.set(null)">
+      <div
+        class="page-editor__palette"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="page-editor-palette-title"
+      >
+        <h3 id="page-editor-palette-title" class="page-editor__palette-title">
+          Add section to {{ body.label ?? body.name }}
+        </h3>
+        <ul class="page-editor__palette-list">
+          @for (tpl of filteredSectionTemplates(body); track tpl.uuid) {
+            <li>
+              <button type="button" (click)="addSection(body, tpl.uuid ?? '')">
+                <span>{{ tpl.displayName ?? tpl.uid }}</span>
+                <span class="page-editor__mono">{{ tpl.uid }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+    </div>
+  }
+
+  @if (autosave.conflict(); as conflict) {
+    <sf-conflict-drawer
+      [conflict]="conflict"
+      [changedKeys]="changedKeys()"
+      (keepMine)="onResolve('mine')"
+      (takeTheirs)="onResolve('theirs')"
+      (resolve)="onResolveFields($event)"
+    />
+  }
+</div>

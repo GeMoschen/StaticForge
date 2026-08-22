@@ -1,0 +1,117 @@
+@if (dialogOpen()) {
+  <sf-generation-dialog
+    [projectKey]="projectKey()"
+    [targets]="targets()"
+    (started)="onStarted($event)"
+    (cancelled)="onDialogCancelled()"
+  />
+}
+
+<div class="generation">
+  <div class="toolbar">
+    <h1 class="toolbar__title">Generation</h1>
+    <sf-button variant="primary" (click)="openDialog()">New generation</sf-button>
+  </div>
+
+  @if (loading()) {
+    <p class="num">Loading…</p>
+  } @else if (runs().length === 0) {
+    <sf-empty-state
+      title="No generation runs yet"
+      description="Start a generation to render your content to its export target."
+      icon="⚡"
+    />
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Mode</th>
+          <th>Status</th>
+          <th>Files</th>
+          <th>Errors</th>
+          <th>Warnings</th>
+          <th>Started</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (run of runs(); track trackRun($index, run)) {
+          <tr>
+            <td class="num">#{{ run.id }}</td>
+            <td>{{ run.mode ?? '—' }}</td>
+            <td>
+              <span class="badge" [style.color]="statusColor(run.status)">
+                {{ run.status ?? 'UNKNOWN' }}
+              </span>
+            </td>
+            <td class="num">{{ run.filesWritten ?? 0 }}</td>
+            <td
+              class="num"
+              [style.color]="(run.errorCount ?? 0) > 0 ? 'var(--sf-rust)' : ''"
+            >
+              {{ run.errorCount ?? 0 }}
+            </td>
+            <td
+              class="num"
+              [style.color]="(run.warningCount ?? 0) > 0 ? 'var(--sf-amber)' : ''"
+            >
+              {{ run.warningCount ?? 0 }}
+            </td>
+            <td>{{ run.startedAt | sfRelativeTime }}</td>
+            <td>
+              <div class="cell-actions">
+                @if (run.status === 'QUEUED' || run.status === 'RUNNING') {
+                  <sf-button variant="secondary" (click)="watchLive(run)">
+                    Live log
+                  </sf-button>
+                  <sf-button variant="danger" (click)="cancel(run)">
+                    Cancel
+                  </sf-button>
+                } @else if (run.status === 'SUCCESS') {
+                  <sf-button variant="secondary" (click)="promote(run)">
+                    Promote
+                  </sf-button>
+                } @else if (run.status === 'FAILED') {
+                  <sf-button variant="secondary" (click)="rollback(run)">
+                    Rollback
+                  </sf-button>
+                }
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (liveActive()) {
+    <section class="live" aria-label="Live generation log">
+      <header class="live__header">
+        <strong>Live log — run #{{ liveRunId() }}</strong>
+        <div class="live__summary" aria-live="polite">
+          <span class="summary-good">
+            files: {{ liveSummary().filesWritten }}
+          </span>
+          <span [class.summary-bad]="liveSummary().errors > 0">
+            errors: {{ liveSummary().errors }}
+          </span>
+          <span [class.summary-warn]="liveSummary().warnings > 0">
+            warnings: {{ liveSummary().warnings }}
+          </span>
+          <sf-button variant="ghost" (click)="closeLive()">Close</sf-button>
+        </div>
+      </header>
+      <div class="live__log">
+        @for (line of liveLines(); track line.id) {
+          <div class="log-line">
+            <span class="log-line__stage">{{ line.stage }}</span>{{ line.message }}
+          </div>
+        }
+        @if (liveLines().length === 0) {
+          <div class="log-line">Awaiting events…</div>
+        }
+      </div>
+    </section>
+  }
+</div>

@@ -1,0 +1,22 @@
+<nav class="spine" aria-label="Revision history">
+  <div class="spine__current">{{ currentRevision() ?? '···' }}</div>
+  <ul class="spine__ticks">
+    @for (rev of visibleRevisions(); track rev.revisionId) {
+      <li class="spine__tick">
+        <button
+          type="button"
+          class="spine__dot"
+          [class.spine__dot--own]="isOwn(rev)"
+          [class.spine__dot--pulse]="pulseRevision() === rev.revisionId"
+          (click)="onTick(rev)"
+        >
+          <span class="spine__mark" aria-hidden="true">{{ isOwn(rev) ? '●' : '○' }}</span>
+          <span class="spine__label">
+            {{ rev.revisionId }} {{ nameFor(rev) }} · {{ summaryFor(rev) }} ·
+            {{ rev.createdAt | sfRelativeTime }}
+          </span>
+        </button>
+      </li>
+    }
+  </ul>
+</nav>

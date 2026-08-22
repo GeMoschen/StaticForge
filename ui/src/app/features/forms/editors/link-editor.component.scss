@@ -1,0 +1,30 @@
+.sf-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+}
+.sf-link__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-2);
+}
+.sf-link__kind {
+  text-transform: uppercase;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+.sf-link__target {
+  flex: 1;
+  color: var(--sf-slate);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-link__dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  padding: var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+}

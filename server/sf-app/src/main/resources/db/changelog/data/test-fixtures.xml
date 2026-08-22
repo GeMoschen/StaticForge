@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Context: test. Reference fixtures (one project, one user per role, a page
+         template, two section templates, three media files) are added in M1 when the
+         domain services exist (spec §25.2). -->
+    <changeSet id="test-fixtures-placeholder" author="sf">
+        <comment>M1 populates the reference test fixtures.</comment>
+    </changeSet>
+
+</databaseChangeLog>

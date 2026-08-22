@@ -1,0 +1,108 @@
+:host {
+  display: block;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 51;
+  width: min(28rem, 92vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-lg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sf-4);
+  border-bottom: 1px solid var(--sf-line);
+}
+
+.dialog__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}
+
+.dialog__close {
+  border: none;
+  background: transparent;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xl);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding: var(--sf-4);
+  overflow: auto;
+}
+
+.radios,
+.checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-3);
+}
+
+.radio,
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+  cursor: pointer;
+}
+
+.select,
+.textarea {
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+  box-sizing: border-box;
+}
+
+.textarea {
+  resize: vertical;
+}
+
+.dialog__error {
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+  font-size: var(--sf-text-sm);
+}
+
+.dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+  margin-top: var(--sf-1);
+}

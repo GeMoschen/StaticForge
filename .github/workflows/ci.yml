@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Cache the Gradle wrapper + dependency caches, keyed on the wrapper version so a
+      # Gradle upgrade invalidates cleanly.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # Compiles every server module, runs unit + slice tests, `spotlessCheck`, and the
+      # `checkModuleLayers` dependency graph guard (see root build.gradle.kts). Fails the
+      # pipeline on any non-zero exit.
+      - name: Build backend
+        run: ./gradlew build --no-daemon
+
+      # The Angular workspace lives in `ui/` and is maintained by a separate agent. It is
+      # expected to define `build` (production bundle) and `test` (unit test) npm scripts
+      # in ui/package.json. These steps no-op while ui/ is absent so the skeleton pipeline
+      # stays green, and activate automatically once the workspace is committed.
+      - name: Build frontend
+        if: hashFiles('ui/package.json') != ''
+        run: |
+          cd ui
+          npm ci
+          npm run build
+
+      - name: Test frontend
+        if: hashFiles('ui/package.json') != ''
+        run: |
+          cd ui
+          npm test

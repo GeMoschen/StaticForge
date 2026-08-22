@@ -1,0 +1,39 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <div class="sf-richtext">
+    <div class="sf-richtext__toolbar">
+      @if (enabled('bold')) {
+        <button type="button" (click)="exec('bold')" title="Bold"><b>B</b></button>
+      }
+      @if (enabled('italic')) {
+        <button type="button" (click)="exec('italic')" title="Italic"><i>I</i></button>
+      }
+      @if (enabled('h2')) {
+        <button type="button" (click)="execBlock('h2')" title="Heading 2">H2</button>
+      }
+      @if (enabled('h3')) {
+        <button type="button" (click)="execBlock('h3')" title="Heading 3">H3</button>
+      }
+      @if (enabled('list')) {
+        <button type="button" (click)="exec('insertUnorderedList')" title="List">•</button>
+      }
+      @if (enabled('quote')) {
+        <button type="button" (click)="execBlock('blockquote')" title="Quote">❝</button>
+      }
+      @if (enabled('link')) {
+        <button type="button" (click)="insertLink()" title="Link">🔗</button>
+      }
+    </div>
+    <div
+      #editor
+      class="sf-richtext__body"
+      [attr.contenteditable]="definition().readOnly ? 'false' : 'true'"
+      (input)="onInput($event)"
+    ></div>
+    @if (definition().maxChars) {
+      <span class="sf-editor__count">{{ count() }}/{{ definition().maxChars }}</span>
+    }
+    @if (message()) {
+      <span class="sf-editor__error">{{ message() }}</span>
+    }
+  </div>
+</sf-field>

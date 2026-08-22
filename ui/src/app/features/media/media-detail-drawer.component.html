@@ -1,0 +1,154 @@
+<div class="scrim" (click)="closeDrawer()"></div>
+
+<aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="media-drawer-title">
+  <header class="drawer__header">
+    <h2 id="media-drawer-title" class="drawer__title">
+      {{ media().displayName ?? media().uid ?? 'Media' }}
+    </h2>
+    <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
+  </header>
+
+  <div class="drawer__body">
+    <div class="preview">
+      <img
+        class="preview__img"
+        [src]="previewUrl()"
+        [alt]="media().altText ?? ''"
+        [style.object-position]="focalPosition()"
+      />
+    </div>
+
+    @if (usages().length > 0) {
+      <div class="banner banner--warning">
+        This file is referenced by {{ usages().length }} asset(s). Deleting it will
+        break those references.
+      </div>
+    }
+
+    <form [formGroup]="form">
+      <sf-field label="Alt text" hint="Required before publishing">
+        <input type="text" formControlName="altText" placeholder="Descriptive alt text" />
+        @if (form.controls.altText.invalid && form.controls.altText.touched) {
+          <span class="error">Alt text is required before publishing</span>
+        }
+      </sf-field>
+
+      <sf-field label="Caption">
+        <input type="text" formControlName="caption" placeholder="Optional caption" />
+      </sf-field>
+
+      <sf-field label="Copyright">
+        <input type="text" formControlName="copyright" placeholder="© Owner (year)" />
+      </sf-field>
+
+      <div class="focal">
+        <sf-field label="Focal point X" hint="0 – 1">
+          <input type="number" formControlName="focalX" min="0" max="1" step="0.01" />
+        </sf-field>
+        <sf-field label="Focal point Y" hint="0 – 1">
+          <input type="number" formControlName="focalY" min="0" max="1" step="0.01" />
+        </sf-field>
+      </div>
+
+      <sf-button variant="primary" [disabled]="saving()" (click)="save()">
+        Save metadata
+      </sf-button>
+    </form>
+
+    @if (variants().length > 0) {
+      <section class="section">
+        <h3 class="section__title">Variants</h3>
+        <ul class="variants">
+          @for (variant of variants(); track variant.name) {
+            <li>
+              <span>{{ variant.name }}</span>
+              <span class="meta">{{ variant.width ?? 0 }}px · {{ variant.format }}</span>
+              <a [href]="downloadUrl(variant.name)" download>Download</a>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <section class="section">
+      <h3 class="section__title">Referenced by</h3>
+      @if (usagesLoading()) {
+        <span class="muted">Loading…</span>
+      } @else if (usages().length === 0) {
+        <span class="muted">Not referenced by any asset.</span>
+      } @else {
+        <ul class="usages">
+          @for (usage of usages(); track usage.fromUuid) {
+            <li>
+              <code>{{ usage.fromUid }}</code>
+              <span>{{ usage.fromType }}</span>
+              @if (usage.sourcePath) {
+                <span class="muted">{{ usage.sourcePath }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="section identity">
+      <h3 class="section__title">Identity</h3>
+      <sf-uid-rename
+        [projectKey]="projectKey()"
+        [uuid]="media().uuid ?? ''"
+        [uid]="media().uid ?? ''"
+        (uidChanged)="onUidChanged($event)"
+      />
+    </section>
+  </div>
+
+  <footer class="drawer__footer">
+    <sf-field label="Replace binary">
+      <input type="file" (change)="onReplaceFile($event)" />
+    </sf-field>
+    <div class="drawer__footer-actions">
+      <sf-button variant="danger" [disabled]="deleting()" (click)="confirmDelete()">
+        Delete
+      </sf-button>
+    </div>
+  </footer>
+</aside>
+
+@if (dialog.state(); as d) {
+  <div class="dlg-scrim" (click)="cancelDelete()"></div>
+  <div class="dlg" role="dialog" aria-modal="true" [attr.aria-label]="d.title">
+    <header class="dlg__header">
+      <h2 class="dlg__title">{{ d.title }}</h2>
+    </header>
+    <div class="dlg__body">
+      <p class="dlg__message">{{ d.message }}</p>
+      @if (usages().length > 0) {
+        <ul class="dlg__usages">
+          @for (usage of usages(); track usage.fromUuid) {
+            <li>
+              <code>{{ usage.fromUid }}</code>
+              <span>{{ usage.fromType }}</span>
+            </li>
+          }
+        </ul>
+        <input
+          class="dlg__input"
+          type="text"
+          [value]="confirmText()"
+          (input)="onDeleteInput($event)"
+          placeholder="Type DELETE to confirm"
+        />
+      }
+    </div>
+    <footer class="dlg__footer">
+      <sf-button variant="ghost" (click)="cancelDelete()">Cancel</sf-button>
+      <sf-button
+        variant="danger"
+        [disabled]="!canConfirmDelete() || deleting()"
+        (click)="performDelete()"
+      >
+        Delete
+      </sf-button>
+    </footer>
+  </div>
+}

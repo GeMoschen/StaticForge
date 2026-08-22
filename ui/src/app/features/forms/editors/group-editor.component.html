@@ -1,0 +1,10 @@
+<details class="sf-group" [open]="true">
+  <summary class="sf-group__summary">
+    {{ definition().label ?? definition().name }}
+  </summary>
+  <div class="sf-group__items">
+    @for (item of definition().items ?? []; track item.name) {
+      <sf-editor-outlet [definition]="item" [control]="controlFor(item)" />
+    }
+  </div>
+</details>

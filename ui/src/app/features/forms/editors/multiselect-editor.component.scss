@@ -1,0 +1,11 @@
+.sf-multiselect {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-3);
+}
+.sf-multiselect__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  cursor: pointer;
+}

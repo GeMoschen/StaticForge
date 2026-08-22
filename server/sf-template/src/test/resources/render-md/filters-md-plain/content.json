@@ -1,0 +1,4 @@
+{
+  "mdVal": "**bold** and *italic*",
+  "htmlVal": "<p>Hello <strong>world</strong></p>"
+}

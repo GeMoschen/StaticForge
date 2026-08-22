@@ -1,0 +1,1 @@
+$CMS_VALUE(mdVal | md)$|$CMS_VALUE(htmlVal | plain)$

@@ -1,0 +1,47 @@
+package com.acme.staticforge.template.content;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.List;
+
+/**
+ * A single declared editor in a content definition (spec §14.2–§14.4). The normalized
+ * JSON AST the CDL compiler emits; consumed by the content validator and the OCTL
+ * renderer's scope resolution.
+ */
+public record EditorDefinition(
+        String name,
+        EditorType type,
+        String label,
+        String help,
+        boolean required,
+        boolean readOnly,
+        boolean hidden,
+        JsonNode defaultValue,
+        Integer min,
+        Integer max,
+        Integer maxLength,
+        Integer maxChars,
+        String pattern,
+        String patternMessage,
+        List<String> mimeTypes,
+        List<SelectOption> options,
+        List<String> features,
+        String visibleWhen,
+        String renamedFrom,
+        List<EditorDefinition> items) {
+
+    public EditorDefinition {
+        items = items == null ? List.of() : items;
+        mimeTypes = mimeTypes == null ? List.of() : mimeTypes;
+        options = options == null ? List.of() : options;
+        features = features == null ? List.of() : features;
+    }
+
+    public boolean isGroup() {
+        return type == EditorType.GROUP;
+    }
+
+    public boolean isList() {
+        return type == EditorType.LIST;
+    }
+}

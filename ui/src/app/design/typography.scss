@@ -1,0 +1,46 @@
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--sf-font-display);
+  color: var(--sf-ink);
+  margin: 0 0 var(--sf-3);
+  line-height: var(--sf-lh-sm);
+  font-weight: 600;
+}
+
+h1 {
+  font-size: var(--sf-text-2xl);
+  line-height: var(--sf-lh-2xl);
+}
+
+h2 {
+  font-size: var(--sf-text-xl);
+  line-height: var(--sf-lh-xl);
+}
+
+h3 {
+  font-size: var(--sf-text-lg);
+  line-height: var(--sf-lh-lg);
+}
+
+p {
+  margin: 0 0 var(--sf-3);
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--sf-font-mono);
+}
+
+a {
+  color: var(--sf-signal);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

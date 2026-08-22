@@ -1,0 +1,24 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  @if (useRadios()) {
+    <div class="sf-select__radios">
+      @for (option of definition().options ?? []; track option.value) {
+        <label class="sf-select__radio">
+          <input
+            type="radio"
+            [formControl]="control()"
+            [value]="option.value"
+            [attr.disabled]="definition().readOnly ? '' : null"
+          />
+          <span>{{ option.label }}</span>
+        </label>
+      }
+    </div>
+  } @else {
+    <select [formControl]="control()" [attr.disabled]="definition().readOnly ? '' : null">
+      <option [ngValue]="''">Select…</option>
+      @for (option of definition().options ?? []; track option.value) {
+        <option [ngValue]="option.value">{{ option.label }}</option>
+      }
+    </select>
+  }
+</sf-field>

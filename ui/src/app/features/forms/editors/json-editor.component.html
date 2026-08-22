@@ -1,0 +1,11 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <textarea
+    [formControl]="control()"
+    rows="6"
+    [attr.readonly]="definition().readOnly ? '' : null"
+    class="sf-json"
+  ></textarea>
+  @if (message()) {
+    <span class="sf-editor__error">{{ message() }}</span>
+  }
+</sf-field>

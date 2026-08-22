@@ -1,0 +1,35 @@
+.sf-command-palette__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(16 20 24 / 0.4);
+  z-index: 1000;
+}
+
+.sf-command-palette {
+  position: fixed;
+  top: 20vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, 90vw);
+  background: var(--sf-surface);
+  border-radius: var(--sf-radius-lg);
+  box-shadow: var(--sf-shadow-2);
+  z-index: 1001;
+  padding: var(--sf-3);
+}
+
+.sf-command-palette__input {
+  width: 100%;
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+  background: var(--sf-paper);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  padding: var(--sf-3);
+  outline: none;
+}
+
+.sf-command-palette__input:focus {
+  border-color: var(--sf-signal);
+}

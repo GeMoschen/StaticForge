@@ -1,0 +1,29 @@
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sf-3) var(--sf-5);
+  border-bottom: 1px solid var(--sf-line);
+  background: var(--sf-surface);
+}
+
+.site-header__brand {
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}
+
+.site-header__theme {
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+  background: transparent;
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-sm);
+  padding: var(--sf-1) var(--sf-3);
+  cursor: pointer;
+}
+
+.site-main {
+  padding: var(--sf-5);
+}

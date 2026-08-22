@@ -1,0 +1,127 @@
+@if (selectedMedia(); as media) {
+  <sf-media-detail-drawer
+    [projectKey]="projectKey()"
+    [media]="media"
+    (closed)="closeDetail()"
+    (updated)="onUpdated($event)"
+    (deleted)="onDeleted($event)"
+  />
+}
+
+<div
+  class="library"
+  sfDropTarget
+  (dragenter)="onDragEnter()"
+  (dragleave)="onDragLeave()"
+  (drop)="onDrop($event)"
+>
+  <h1 class="sf-sr-only">Media</h1>
+  <div class="toolbar">
+    <input
+      class="search"
+      type="search"
+      placeholder="Search media"
+      aria-label="Search media"
+      [value]="search()"
+      (input)="onSearchInput($event)"
+    />
+
+    <select
+      [value]="mimeFilter()"
+      (change)="onMimeChange($event)"
+      aria-label="Filter by media type"
+    >
+      <option value="">All types</option>
+      <option value="image/">Images</option>
+      <option value="video/">Videos</option>
+      <option value="audio/">Audio</option>
+      <option value="application/">Documents</option>
+    </select>
+
+    <select
+      [value]="folderPath()"
+      (change)="onFolderChange($event)"
+      aria-label="Filter by folder"
+    >
+      @for (option of folderOptions(); track option.path) {
+        <option [value]="option.path">{{ option.label }}</option>
+      }
+    </select>
+
+    @if (selected().length > 0) {
+      <sf-button variant="danger" (click)="deleteSelection()">
+        Delete ({{ selected().length }})
+      </sf-button>
+    }
+
+    <span class="toolbar__spacer"></span>
+
+    <sf-button variant="secondary" (click)="fileInput.click()">Upload</sf-button>
+    <input
+      #fileInput
+      class="visually-hidden"
+      type="file"
+      multiple
+      (change)="onFileInput($event)"
+    />
+  </div>
+
+  @if (loading() && items().length === 0) {
+    <div class="loading">Loading media…</div>
+  } @else if (items().length === 0) {
+    <sf-empty-state
+      title="No media yet"
+      description="Drop files anywhere in this window or click Upload to add media."
+    />
+  } @else {
+    <div class="grid">
+      @for (item of items(); track item.uuid) {
+        <div class="cell" [class.cell--selected]="isSelected(item.uuid)">
+          <input
+            class="cell__check"
+            type="checkbox"
+            [checked]="isSelected(item.uuid)"
+            (click)="$event.stopPropagation()"
+            (change)="toggle(item.uuid)"
+          />
+          <button class="cell__body" type="button" (click)="openDetail(item.uuid)">
+            @if (thumb(item.uuid); as thumbUrl) {
+              <img
+                class="cell__img"
+                [src]="thumbUrl"
+                [alt]="item.altText ?? item.displayName ?? ''"
+                loading="lazy"
+              />
+            }
+            <span class="cell__name">{{ item.displayName }}</span>
+            <span class="cell__meta">
+              {{ item.mimeType }} · {{ item.sizeBytes | sfFileSize }}
+            </span>
+          </button>
+        </div>
+      }
+    </div>
+    <div #sentinel class="sentinel" aria-hidden="true"></div>
+  }
+
+  @if (uploads().length > 0) {
+    <div class="uploads">
+      @for (upload of uploads(); track upload.id) {
+        <div class="upload">
+          <span>{{ upload.fileName }}</span>
+          @if (upload.status === 'uploading') {
+            <span>Uploading…</span>
+          } @else if (upload.status === 'done') {
+            <span>Done</span>
+          } @else {
+            <span class="upload__err">{{ upload.message ?? 'Failed' }}</span>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
+
+@if (dragActive()) {
+  <div class="drop-overlay">Drop files to upload</div>
+}

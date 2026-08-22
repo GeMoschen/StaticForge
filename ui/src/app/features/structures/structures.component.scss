@@ -1,0 +1,229 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.structures {
+  display: flex;
+  height: 100%;
+}
+
+.structures__list {
+  flex-shrink: 0;
+  width: 260px;
+  padding: var(--sf-4) var(--sf-3);
+  border-right: 1px solid var(--sf-line);
+  overflow-y: auto;
+}
+
+.structures__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-2);
+  margin-bottom: var(--sf-3);
+}
+
+.structures__list-head h2 {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-md);
+  color: var(--sf-ink);
+}
+
+.structures__filter {
+  width: 100%;
+  padding: var(--sf-1) var(--sf-2);
+  margin-bottom: var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-xs);
+}
+
+.structures__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  width: 100%;
+  padding: var(--sf-2);
+  margin-bottom: var(--sf-1);
+  border: 1px solid transparent;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--sf-ink);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+}
+
+.structures__row:hover {
+  background: var(--sf-surface);
+}
+
+.structures__row--active {
+  background: var(--sf-surface);
+  border-color: var(--sf-signal);
+}
+
+.structures__row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 0 var(--sf-1);
+  border-radius: var(--sf-radius-sm);
+  font-size: var(--sf-text-xs);
+  text-transform: capitalize;
+  color: var(--sf-slate);
+  background: var(--sf-line);
+}
+
+.badge--navigation {
+  color: #fff;
+  background: var(--sf-signal);
+}
+
+.badge--breadcrumb {
+  color: #fff;
+  background: var(--sf-rust);
+}
+
+.badge--list {
+  color: var(--sf-ink);
+  background: var(--sf-amber, #e5b800);
+}
+
+.structures__detail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detail__scroll {
+  flex: 1;
+  padding: var(--sf-4);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-4);
+}
+
+.detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-2);
+}
+
+.detail__head h3 {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}
+
+.detail__meta {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+  font-family: var(--sf-font-mono, monospace);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+}
+
+.panel textarea {
+  width: 100%;
+  min-height: 9rem;
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-sm);
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.channels__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-1);
+}
+
+.channels__tab {
+  padding: var(--sf-1) var(--sf-2);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: transparent;
+  color: var(--sf-slate);
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+  cursor: pointer;
+}
+
+.channels__tab--active {
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  border-color: var(--sf-signal);
+}
+
+.preview__select {
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+}
+
+.preview__tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+}
+
+.preview__tree li {
+  padding: var(--sf-1) var(--sf-2);
+  border-left: 1px solid var(--sf-line);
+}
+
+.preview__item--active {
+  font-weight: 600;
+  background: var(--sf-surface);
+  color: var(--sf-signal);
+}
+
+.preview__item--trail {
+  color: var(--sf-slate);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+}
+
+.loading {
+  padding: var(--sf-6);
+  text-align: center;
+  color: var(--sf-slate);
+}

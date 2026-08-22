@@ -1,0 +1,17 @@
+.sf-group {
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  padding: var(--sf-2) var(--sf-3);
+}
+.sf-group__summary {
+  cursor: pointer;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-md);
+  color: var(--sf-ink);
+}
+.sf-group__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding-top: var(--sf-3);
+}
