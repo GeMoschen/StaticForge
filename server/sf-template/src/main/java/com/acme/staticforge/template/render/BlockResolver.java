@@ -56,4 +56,18 @@ public interface BlockResolver {
     default String renderNavRecurse(JsonNode node) {
         return "";
     }
+
+    /**
+     * Renders a CATALOG editor's cards — when a {@code $CMS_VALUE(accessor)$} resolves to a
+     * CATALOG-typed value ({@code {type:"CATALOG", cards:[…]}}) — one per element of the
+     * resolved {@code cards} array, each rendered exactly like a body's section instance
+     * (spec-analogous to {@link #renderBody}), so a card's own template may itself declare
+     * another CATALOG editor and recurse. The default implementation returns an empty string.
+     *
+     * @param cards the resolved {@code cards} array (each {@code {instanceId, templateRef, content}})
+     * @return the rendered cards, or {@code null}/{@code ""} when not applicable
+     */
+    default String renderCatalog(JsonNode cards) {
+        return "";
+    }
 }

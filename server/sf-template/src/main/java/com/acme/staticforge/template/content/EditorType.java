@@ -18,5 +18,6 @@ public enum EditorType {
     REFERENCE,
     LIST,
     GROUP,
-    JSON
+    JSON,
+    CATALOG
 }

@@ -24,7 +24,8 @@ export type EditorType =
   | 'REFERENCE'
   | 'LIST'
   | 'GROUP'
-  | 'JSON';
+  | 'JSON'
+  | 'CATALOG';
 
 export interface SelectOption {
   value: string;
@@ -51,6 +52,8 @@ export interface EditorDefinition {
   assetTypes?: string[];
   options?: SelectOption[];
   features?: string[];
+  /** For CATALOG editors: restricts cards to these section-template UIDs; empty/absent allows any. */
+  allow?: string[];
   visibleWhen?: string;
   renamedFrom?: string;
   items?: EditorDefinition[];
@@ -99,6 +102,19 @@ export interface AssetRef {
   assetType: string;
 }
 
+/** A single card in a CATALOG editor — same shape as a page body's section instance. */
+export interface CatalogCard {
+  instanceId: string;
+  templateRef: string;
+  content: Record<string, unknown>;
+}
+
+/** Value shape of a CATALOG editor (`{ type: 'CATALOG', cards: [...] }`). */
+export interface CatalogValue {
+  type: 'CATALOG';
+  cards: CatalogCard[];
+}
+
 /**
  * A type-appropriate default for an editor when no configured `defaultValue`
  * and no persisted value are available.
@@ -113,6 +129,8 @@ export function defaultEditorValue(type: EditorType): unknown {
       return [];
     case 'LIST':
       return [];
+    case 'CATALOG':
+      return { type: 'CATALOG', cards: [] } satisfies CatalogValue;
     case 'TEXT':
     case 'TEXTAREA':
     case 'MARKDOWN':

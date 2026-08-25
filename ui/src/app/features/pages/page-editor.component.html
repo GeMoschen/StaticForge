@@ -3,10 +3,6 @@
     {{ page()?.displayName ?? page()?.uid ?? 'Page editor' }}
   </h1>
   <header class="page-editor__top">
-    <button type="button" class="page-editor__tree-toggle" (click)="closeEditor()">
-      <sf-icon name="arrow_back" />
-      Back to tree
-    </button>
     @if (page(); as p) {
       <span class="page-editor__title">{{ p.displayName ?? p.uid }}</span>
     }
@@ -37,6 +33,7 @@
                 [index]="ctx.index"
                 [count]="ctx.count"
                 [readOnly]="readOnly()"
+                [hideActions]="true"
                 (valueChange)="onSectionValueChange(ctx.bodyName, ctx.section.instanceId, $event)"
                 (remove)="removeSection(ctx.bodyName, ctx.section.instanceId)"
                 (moveUp)="moveSectionBy(ctx.bodyName, ctx.index, -1)"

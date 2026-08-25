@@ -8,11 +8,14 @@ import {
   signal,
 } from '@angular/core';
 import { FormGroup } from '@angular/forms';
-import {
-  ContentDefinition,
-  FormBuilderService,
-  SfContentFormComponent,
-} from '../forms';
+// Imported from their own files, not the `../forms` barrel: that barrel re-exports
+// `editor-registry.ts`, which imports `SfCatalogEditor`, which imports this component to
+// render cards — going through the barrel here would close that into a circular import
+// (harmless for `ng build`'s bundler, but breaks Vite dev-server module evaluation with a
+// "Cannot read properties of undefined (reading 'ɵcmp')" crash the first time a card renders).
+import { ContentDefinition } from '../forms/form.model';
+import { FormBuilderService } from '../forms/form-builder.service';
+import { SfContentFormComponent } from '../forms/sf-content-form.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { SectionInstance } from './types';
 
@@ -44,6 +47,8 @@ export class SectionEditorComponent {
   readonly index = input.required<number>();
   readonly count = input.required<number>();
   readonly readOnly = input(false);
+  /** When true, the move/remove action buttons are hidden (e.g. single-section focus view). */
+  readonly hideActions = input(false);
 
   readonly valueChange = output<Record<string, unknown>>();
   readonly remove = output<void>();

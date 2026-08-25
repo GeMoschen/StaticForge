@@ -74,6 +74,10 @@ public final class OctlRenderer implements Renderer {
     private void renderValue(OctlNode.Value v, State s) {
         JsonNode value = resolve(v.accessor(), s);
         s.collectDeps(value);
+        if (isCatalog(value)) {
+            renderCatalogValue(value, s);
+            return;
+        }
         s.append(applyFilters(value, v.filters(), s));
     }
 
@@ -104,6 +108,44 @@ public final class OctlRenderer implements Renderer {
     private void renderBody(OctlNode.Body b, State s) {
         BlockResolver resolver = s.context.blockResolver();
         s.append(resolver == null ? "" : nullToEmpty(resolver.renderBody(b.name())));
+    }
+
+    /**
+     * A CATALOG editor's value is a typed object {@code {type:"CATALOG", cards:[…]}}. When a
+     * {@code $CMS_VALUE(accessor)$} resolves to one, render its cards instead of stringifying
+     * the object — each card rendered exactly like a body's section instance via
+     * {@link BlockResolver#renderCatalog}, so a card's own template may itself declare another
+     * CATALOG editor and recurse.
+     */
+    private static boolean isCatalog(JsonNode value) {
+        return value != null && value.isObject()
+                && "CATALOG".equals(value.path("type").asText(null))
+                && value.path("cards").isArray();
+    }
+
+    private void renderCatalogValue(JsonNode value, State s) {
+        JsonNode cards = value == null ? MissingNode.getInstance() : value.path("cards");
+        collectCatalogDeps(cards, s);
+        BlockResolver resolver = s.context.blockResolver();
+        s.append(resolver == null ? "" : nullToEmpty(resolver.renderCatalog(cards)));
+    }
+
+    /** {@code State.collectDeps} only recognizes a {@code uuid} field; cards reference their section template via {@code templateRef}. */
+    private static void collectCatalogDeps(JsonNode cards, State s) {
+        if (cards == null || !cards.isArray()) {
+            return;
+        }
+        for (JsonNode card : cards) {
+            String templateRef = card == null ? null : card.path("templateRef").asText(null);
+            if (templateRef == null || templateRef.isBlank()) {
+                continue;
+            }
+            try {
+                s.deps.add(UUID.fromString(templateRef));
+            } catch (IllegalArgumentException ignore) {
+                // not a valid uuid value; skip
+            }
+        }
     }
 
     private void renderInclude(OctlNode.Include i, State s) {

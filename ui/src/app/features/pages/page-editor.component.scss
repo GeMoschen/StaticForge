@@ -22,20 +22,6 @@
   border-bottom: 1px solid var(--sf-line);
 }
 
-.page-editor__tree-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sf-1);
-  padding: var(--sf-1) var(--sf-2);
-  background: transparent;
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-sm);
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-  cursor: pointer;
-}
-
 .page-editor__title {
   font-family: var(--sf-font-display);
   font-size: var(--sf-text-md);
@@ -53,6 +39,7 @@
   display: flex;
   min-height: 0;
   flex-direction: column;
+  gap: var(--sf-3);
 }
 
 .page-editor__main {

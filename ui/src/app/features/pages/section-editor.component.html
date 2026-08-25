@@ -23,28 +23,31 @@
     </button>
     <sf-icon class="section-card__icon" name="widgets" />
     <span class="section-card__title">{{ title() }}</span>
-    @if (!readOnly()) {
+    @if (!readOnly() && !hideActions()) {
       <div class="section-card__actions">
         <button
           type="button"
           [disabled]="index() <= 0"
           (click)="moveUp.emit(); $event.stopPropagation()"
+          aria-label="Move up"
         >
-          Move up
+          <sf-icon name="arrow_upward" />
         </button>
         <button
           type="button"
           [disabled]="index() >= count() - 1"
           (click)="moveDown.emit(); $event.stopPropagation()"
+          aria-label="Move down"
         >
-          Move down
+          <sf-icon name="arrow_downward" />
         </button>
         <button
           type="button"
           class="section-card__remove"
           (click)="remove.emit(); $event.stopPropagation()"
+          aria-label="Remove section"
         >
-          Remove
+          <sf-icon name="delete" />
         </button>
       </div>
     }

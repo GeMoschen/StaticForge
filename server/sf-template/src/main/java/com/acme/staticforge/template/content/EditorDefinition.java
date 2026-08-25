@@ -27,6 +27,8 @@ public record EditorDefinition(
         List<String> assetTypes,
         List<SelectOption> options,
         List<String> features,
+        /** For CATALOG editors: restricts cards to these section-template UIDs (empty/`["*"]` allows any). */
+        List<String> allow,
         String visibleWhen,
         String renamedFrom,
         List<EditorDefinition> items) {
@@ -37,6 +39,7 @@ public record EditorDefinition(
         assetTypes = assetTypes == null ? List.of() : assetTypes;
         options = options == null ? List.of() : options;
         features = features == null ? List.of() : features;
+        allow = allow == null ? List.of() : allow;
     }
 
     public boolean isGroup() {
@@ -45,5 +48,9 @@ public record EditorDefinition(
 
     public boolean isList() {
         return type == EditorType.LIST;
+    }
+
+    public boolean isCatalog() {
+        return type == EditorType.CATALOG;
     }
 }

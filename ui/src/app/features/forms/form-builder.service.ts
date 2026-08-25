@@ -134,6 +134,13 @@ export function buildEditorControl(
       return buildObjectGroup(editor, seed, REFERENCE_FIELDS);
     case 'RICHTEXT':
       return buildRichTextGroup(editor, seed);
+    case 'CATALOG':
+      // A single FormControl holding the plain `{type:'CATALOG', cards}` value — card
+      // sub-schemas are dynamic (each comes from a different section template fetched by
+      // UUID), unlike LIST's statically-known `item` schema, so they can't be modeled as typed
+      // sub-controls here. `SfCatalogEditor` manages its own internal per-card forms and pushes
+      // the consolidated value back via `control.setValue(...)`.
+      return buildScalarControl(editor, seed);
     default:
       return buildScalarControl(editor, seed);
   }

@@ -74,6 +74,13 @@ public class ContentReferenceService {
                 out.add(new PendingReference(kind, uuid, path));
                 return;
             }
+            // A CATALOG card (`{instanceId, templateRef, content}`) references its section
+            // template by `templateRef`, not `uuid` — record that edge, then keep recursing so
+            // refs nested in the card's own `content` are still picked up.
+            String templateRef = text(node, "templateRef");
+            if (templateRef != null && text(node, "instanceId") != null) {
+                out.add(new PendingReference(ReferenceKind.CONTENT_REF, templateRef, path + ".templateRef"));
+            }
             node.fields().forEachRemaining(entry -> scan(entry.getValue(), path + "." + entry.getKey(), out));
         } else if (node.isArray()) {
             for (int i = 0; i < node.size(); i++) {

@@ -50,6 +50,7 @@ final class CdlParser {
         final List<String> assetTypes = new ArrayList<>();
         final List<SelectOption> options = new ArrayList<>();
         final List<String> features = new ArrayList<>();
+        final List<String> allow = new ArrayList<>();
         final List<EditorNode> items = new ArrayList<>();
     }
 
@@ -208,6 +209,7 @@ final class CdlParser {
             case "assetTypes" -> node.assetTypes.addAll(expectIdentArray(attrTok));
             case "options" -> node.options.addAll(parseOptions(attrTok));
             case "features" -> node.features.addAll(expectIdentArray(attrTok));
+            case "allow" -> node.allow.addAll(expectStringArray(attrTok));
             case "validate" -> parseValidate(node);
             case "item" -> parseItem(attrTok, node);
             case "format", "folder", "minWidth", "group", "order", "pattern", "message" ->

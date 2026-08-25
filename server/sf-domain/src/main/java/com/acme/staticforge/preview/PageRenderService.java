@@ -227,6 +227,19 @@ public class PageRenderService {
             }
 
             @Override
+            public String renderCatalog(JsonNode cards) {
+                if (cards == null || !cards.isArray()) {
+                    return "";
+                }
+                StringBuilder out = new StringBuilder();
+                for (JsonNode card : cards) {
+                    out.append(renderSectionInstance(
+                            projectId, projectKey, page.content(), card, channel, rewriteLinks, baseUrl));
+                }
+                return out.toString();
+            }
+
+            @Override
             public String renderInclude(String uid, Map<String, String> args) {
                 UUID uuid = resolveSectionTemplateByUid(projectId, uid);
                 if (uuid == null) {

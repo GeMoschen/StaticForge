@@ -278,6 +278,18 @@ final class GenerationRenderer {
             }
 
             @Override
+            public String renderCatalog(JsonNode cards) {
+                if (cards == null || !cards.isArray()) {
+                    return "";
+                }
+                StringBuilder out = new StringBuilder();
+                for (JsonNode card : cards) {
+                    out.append(renderSectionInstance(pageContent, card, channel, activePageUuid, deps, warnings));
+                }
+                return out.toString();
+            }
+
+            @Override
             public String renderInclude(String uid, Map<String, String> args) {
                 UUID uuid = resolveByUid(AssetType.SECTION_TEMPLATE, uid);
                 if (uuid == null) {

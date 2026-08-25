@@ -14,7 +14,7 @@ import { ExpressionEvaluator } from './expression-evaluator';
 import { SF_FORM_CONTEXT } from './form.context';
 
 /** Editor types whose component declares a `projectKey` input (MEDIA/REFERENCE pickers). */
-const PROJECT_KEY_EDITOR_TYPES = new Set<EditorType>(['MEDIA', 'REFERENCE']);
+const PROJECT_KEY_EDITOR_TYPES = new Set<EditorType>(['MEDIA', 'REFERENCE', 'CATALOG']);
 
 /**
  * Renders a single editor by resolving its component type from

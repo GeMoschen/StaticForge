@@ -26,7 +26,7 @@ export interface PagePayload {
   meta?: unknown;
 }
 
-const DEBOUNCE_MS = 1500;
+const DEBOUNCE_MS = 500;
 
 function clockLabel(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

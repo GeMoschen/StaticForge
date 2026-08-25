@@ -44,7 +44,8 @@ final class CdlValidator {
             Map.entry("reference", EditorType.REFERENCE),
             Map.entry("list", EditorType.LIST),
             Map.entry("group", EditorType.GROUP),
-            Map.entry("json", EditorType.JSON));
+            Map.entry("json", EditorType.JSON),
+            Map.entry("catalog", EditorType.CATALOG));
 
     private final ExpressionEvaluator expressionEvaluator = new ExpressionEvaluator();
     private int groupCounter;
@@ -130,6 +131,7 @@ final class CdlValidator {
                 node.assetTypes,
                 node.options,
                 node.features,
+                node.allow,
                 node.visibleWhen,
                 node.renamedFrom,
                 items);

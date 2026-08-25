@@ -226,10 +226,6 @@ export class PageEditorComponent {
     return Number.isFinite(stored) && stored > 0 ? stored : 0.6;
   }
 
-  protected closeEditor(): void {
-    void this.router.navigate(['/p', this.projectKey(), 'pages']);
-  }
-
   // ── Loading ────────────────────────────────────────────────────────────
 
   private load(key: string, uuid: string, revision: number | null): void {

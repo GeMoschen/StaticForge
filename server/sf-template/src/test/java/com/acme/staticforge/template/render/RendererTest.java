@@ -42,6 +42,52 @@ class RendererTest {
         assertThat(raw).contains("<script>");
     }
 
+    @Test
+    void catalogValueRendersCardsViaBlockResolver() {
+        OctlResult compiled = compiler.compile("$CMS_VALUE(related)$", "html", null);
+        assertThat(compiled.hasErrors()).isFalse();
+
+        String cardsJson =
+                "\"cards\":["
+                        + "{\"instanceId\":\"a\",\"templateRef\":\"" + HOME + "\",\"content\":{\"title\":\"One\"}},"
+                        + "{\"instanceId\":\"b\",\"templateRef\":\"" + HOME + "\",\"content\":{\"title\":\"Two\"}}"
+                        + "]";
+        List<JsonNode> seen = new java.util.ArrayList<>();
+        BlockResolver resolver = new BlockResolver() {
+            @Override
+            public String renderBody(String bodyName) {
+                return "";
+            }
+
+            @Override
+            public String renderInclude(String uid, java.util.Map<String, String> args) {
+                return "";
+            }
+
+            @Override
+            public String renderNav(String structureUid, java.util.Map<String, String> args) {
+                return "";
+            }
+
+            @Override
+            public String renderCatalog(JsonNode cards) {
+                seen.add(cards);
+                return "<cards:" + cards.size() + ">";
+            }
+        };
+
+        RenderContext context = RenderContext.builder()
+                .values(values("{\"related\":{\"type\":\"CATALOG\"," + cardsJson + "}}"))
+                .blockResolver(resolver)
+                .build();
+        RenderResult result = renderer.render(compiled.template(), context);
+
+        assertThat(result.output()).isEqualTo("<cards:2>");
+        assertThat(seen).hasSize(1);
+        assertThat(seen.get(0).path(0).path("templateRef").asText()).isEqualTo(HOME.toString());
+        assertThat(result.dependencies()).containsExactly(HOME);
+    }
+
     // ------------------------------------------------------------------
     // Filters
     // ------------------------------------------------------------------

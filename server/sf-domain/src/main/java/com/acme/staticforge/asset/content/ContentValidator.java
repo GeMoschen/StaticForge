@@ -59,6 +59,8 @@ public final class ContentValidator {
             JsonNode value = nodeValue(node, editor.name());
             if (editor.isList()) {
                 validateList(editor, scope, value, path, issues);
+            } else if (editor.isCatalog()) {
+                validateCatalog(editor, value, path, issues);
             } else {
                 validateScalar(editor, value, path, issues);
             }
@@ -122,6 +124,37 @@ public final class ContentValidator {
             JsonNode element = value.get(i);
             if (element != null && element.isObject()) {
                 validateEditors(editor.items(), scope, element, path + "[" + i + "]", issues);
+            }
+        }
+    }
+
+    /**
+     * Validates a CATALOG editor's cardinality and per-card shape ({@code instanceId}/{@code
+     * templateRef} present). A card's own fields come from another asset's template, not this
+     * one's, so — same as bodies/sections — this class doesn't validate a card's field values.
+     */
+    private void validateCatalog(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
+        if (editor.required() && isEmpty(value)) {
+            issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
+        }
+        if (isEmpty(value)) {
+            validateListBounds(editor, 0, path, issues);
+            return;
+        }
+        if (!isTyped(value, "CATALOG") || !value.path("cards").isArray()) {
+            issues.add(new ContentIssue(path, "type", Severity.ERROR, "Editor '" + editor.name() + "' has an invalid value shape."));
+            return;
+        }
+        JsonNode cards = value.path("cards");
+        validateListBounds(editor, cards.size(), path, issues);
+        for (int i = 0; i < cards.size(); i++) {
+            JsonNode card = cards.get(i);
+            boolean valid = card != null && card.isObject()
+                    && card.hasNonNull("instanceId") && card.hasNonNull("templateRef");
+            if (!valid) {
+                issues.add(new ContentIssue(
+                        path + ".cards[" + i + "]", "type", Severity.ERROR,
+                        "Editor '" + editor.name() + "' has a card missing 'instanceId'/'templateRef'."));
             }
         }
     }
@@ -255,6 +288,7 @@ public final class ContentValidator {
             case MEDIA -> isTyped(value, "MEDIA_REF");
             case REFERENCE -> isTyped(value, "ASSET_REF");
             case LIST -> value.isArray();
+            case CATALOG -> isTyped(value, "CATALOG");
             case JSON -> true;
         };
     }

@@ -73,6 +73,13 @@ class CdlCompilerTest {
               }
 
               editor date publishedOn { label "Published on" format "yyyy-MM-dd" }
+
+              editor catalog related {
+                label "Related cards"
+                allow ["teaser", "cta_box"]
+                min 0
+                max 6
+              }
             }
             """;
 
@@ -96,6 +103,17 @@ class CdlCompilerTest {
         EditorDefinition relatedPage = result.definition().findEditor("relatedPage").orElseThrow();
         assertThat(relatedPage.type()).isEqualTo(EditorType.REFERENCE);
         assertThat(relatedPage.assetTypes()).containsExactly("PAGE");
+    }
+
+    @Test
+    void catalogEditorCarriesAllowAndCardinality() {
+        CdlResult result = compiler.compile(FULL_EXAMPLE);
+
+        EditorDefinition related = result.definition().findEditor("related").orElseThrow();
+        assertThat(related.type()).isEqualTo(EditorType.CATALOG);
+        assertThat(related.allow()).containsExactly("teaser", "cta_box");
+        assertThat(related.min()).isEqualTo(0);
+        assertThat(related.max()).isEqualTo(6);
     }
 
     @Test

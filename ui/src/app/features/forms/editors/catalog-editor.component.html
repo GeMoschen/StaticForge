@@ -1,0 +1,58 @@
+<sf-field [label]="definition().label" [hint]="definition().help">
+  <div class="sf-catalog">
+    @for (card of cards(); track card.instanceId; let i = $index) {
+      <div
+        class="sf-catalog__card"
+        (dragover)="$event.preventDefault()"
+        (drop)="onDropOn(i)"
+      >
+        @if (isLoaded(card.templateRef)) {
+          <sf-section-editor
+            [contentDefinition]="contentDefFor(card.templateRef)"
+            [section]="asSection(card)"
+            [projectKey]="projectKey()"
+            [bodyName]="'catalog'"
+            [templateUid]="uidFor(card.templateRef)"
+            [title]="titleFor(card.templateRef)"
+            [index]="i"
+            [count]="cards().length"
+            [readOnly]="definition().readOnly ?? false"
+            (valueChange)="onCardValueChange(card.instanceId, $event)"
+            (remove)="removeCard(card.instanceId)"
+            (moveUp)="moveCard(i, -1)"
+            (moveDown)="moveCard(i, 1)"
+            (dragStarted)="onDragStarted(i)"
+            (dropOn)="onDropOn($event)"
+            (dragEnd)="onDragEnd()"
+          />
+        } @else {
+          <div class="sf-catalog__loading">{{ titleFor(card.templateRef) }} — loading…</div>
+        }
+      </div>
+    }
+
+    @if (!definition().readOnly) {
+      <div class="sf-catalog__add">
+        <sf-button variant="secondary" (click)="togglePalette()">
+          <sf-icon name="add" />
+          Add card
+        </sf-button>
+
+        @if (paletteOpen()) {
+          <ul class="sf-catalog__palette">
+            @for (tpl of allowedTemplates(); track tpl.uuid) {
+              <li>
+                <button type="button" (click)="addCard(tpl.uuid ?? '')">
+                  <span>{{ tpl.displayName ?? tpl.uid }}</span>
+                  <span class="sf-catalog__mono">{{ tpl.uid }}</span>
+                </button>
+              </li>
+            } @empty {
+              <li class="sf-catalog__empty">No allowed card types configured.</li>
+            }
+          </ul>
+        }
+      </div>
+    }
+  </div>
+</sf-field>
