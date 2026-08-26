@@ -15,6 +15,7 @@ so treat the specs as documentation of the intended flow until that seed lands.
 | 5–8 (UID rename warning, conflict resolver, time travel, referenced-media delete) | `m6-journeys.spec.ts` | M6 |
 | 9–12 (required-editor timing, non-member 404, template-IDE 403, keyboard publish) | `m7-journeys.spec.ts` | M7 |
 | structural a11y (landmarks/h1/aria-current) + axe-stub | `a11y.spec.ts` | M7 |
+| navigation tree + URL registry stability/reset | `m8-journeys.spec.ts` | M8 |
 | unauthenticated → login redirect | `example.spec.ts` | — |
 
 ## Gating
@@ -34,3 +35,8 @@ so treat the specs as documentation of the intended flow until that seed lands.
   activation is a known gap; the journey exercises the rest of the flow with Tab/Enter.
 - `playwright.config.ts` only defines the `chromium` project; firefox/webkit are staged in
   `.github/workflows/e2e.yml` and should be added here to complete the three-browser matrix.
+- **`m8-journeys.spec.ts`** documents the intended flow the same way m5/m7 do — it was not run
+  against a live browser (no seeded demo backend, no interactive browser in that task's
+  environment). The actual proof for `M8.3.1` is `M8NavigationJourneyIntegrationTest`
+  (`server/sf-app`), a `@SpringBootTest` that exercises the identical scenario end-to-end via
+  real service calls against a real generation pipeline.

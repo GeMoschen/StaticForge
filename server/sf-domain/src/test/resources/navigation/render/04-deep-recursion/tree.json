@@ -1,0 +1,48 @@
+{
+  "assetUuid": "00000000-0000-0000-0000-000000000301",
+  "type": "FOLDER",
+  "uid": "root",
+  "displayName": "Main Navigation",
+  "label": "Main Navigation",
+  "resolvedPageUuid": null,
+  "children": [
+    {
+      "assetUuid": "00000000-0000-0000-0000-000000000302",
+      "type": "FOLDER",
+      "uid": "section",
+      "displayName": "Section",
+      "label": "Section",
+      "resolvedPageUuid": null,
+      "children": [
+        {
+          "assetUuid": "00000000-0000-0000-0000-000000000303",
+          "type": "FOLDER",
+          "uid": "sub",
+          "displayName": "Sub",
+          "label": "Sub",
+          "resolvedPageUuid": null,
+          "children": [
+            {
+              "assetUuid": "00000000-0000-0000-0000-000000000304",
+              "type": "PAGE_REFERENCE",
+              "uid": "leaf-one-ref",
+              "displayName": "leaf-one-ref",
+              "label": "Leaf One",
+              "resolvedPageUuid": "00000000-0000-0000-0000-000000000400",
+              "children": []
+            },
+            {
+              "assetUuid": "00000000-0000-0000-0000-000000000305",
+              "type": "PAGE_REFERENCE",
+              "uid": "leaf-two-ref",
+              "displayName": "leaf-two-ref",
+              "label": "Leaf Two",
+              "resolvedPageUuid": "00000000-0000-0000-0000-000000000401",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

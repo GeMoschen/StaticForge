@@ -34,9 +34,13 @@ settings panel to inspect, override, and reset it.
       existing entry — a URL changes only via explicit reset.
 - [x] Project settings has a "Navigation URLs" panel listing registry entries per
       channel/area with per-entry manual override and project- or channel-scoped reset.
-- [ ] Golden/integration tests prove: nav rendering resolves through the registry,
+- [x] Golden/integration tests prove: nav rendering resolves through the registry,
       `PREVIEW` and `GENERATED` areas never leak into each other, and a reset followed
-      by a rebuild reassigns URLs deterministically.
+      by a rebuild reassigns URLs deterministically. (`M8.2.3`'s
+      `NavigationUrlRegistryIntegrationTest` plus `M8.3.1`'s
+      `M8NavigationJourneyIntegrationTest`, both green.)
+
+**Epic status: all exit criteria met — M8 is complete.**
 
 ## Features (dependency order)
 

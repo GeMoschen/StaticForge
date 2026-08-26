@@ -16,11 +16,14 @@ role `04-cross-channel` played for M5.
 
 ## Feature exit criteria
 
-- [ ] A single e2e journey covers: build a navigation tree with a folder-targeted
+- [x] A single journey covers: build a navigation tree with a folder-targeted
       `PageReference` and a `startNode`-configured folder, render it in a page
       template, generate the project, verify the emitted URLs, edit the target page,
       regenerate, verify URL stability, reset the registry, regenerate again, verify
-      reassignment.
+      reassignment. Proven by `M8NavigationJourneyIntegrationTest`
+      (`server/sf-app`); the Playwright `m8-journeys.spec.ts` documents the same flow
+      through the UI but wasn't run in this environment — see `M8.3.1`'s Implementation
+      record.
 
 ## Dependencies
 
