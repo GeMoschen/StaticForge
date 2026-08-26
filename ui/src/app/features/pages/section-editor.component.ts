@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   inject,
   input,
@@ -59,44 +60,51 @@ export class SectionEditorComponent {
   readonly dragEnd = output<void>();
 
   protected readonly collapsed = signal(false);
-  protected readonly fieldForm = signal<FormGroup | null>(null);
+  /**
+   * A `computed`, not a signal rebuilt by a side-effect: the effect this replaced rebuilt
+   * `fieldForm` asynchronously after `contentDefinition` changed reference (e.g.
+   * `page-editor.component.ts` filling in a section template's compiled definition once it
+   * loads), which left one render where the template already saw the new `[definition]` but
+   * the old, pre-load form group — `SfContentFormComponent.controlFor()` would look up a
+   * control by a name the stale group never got, returning `null` and crashing editors that
+   * dereference `control()` (e.g. `SfBooleanEditor`). A computed re-derives synchronously
+   * within the same read, so `definition` and `formGroup` are never out of step.
+   */
+  protected readonly fieldForm = computed<FormGroup>(() => {
+    const definition = this.contentDefinition();
+    const section = this.section();
+    const content = (section.content ?? {}) as Record<string, unknown>;
+    const form = this.fb.build(definition, content);
+    if (this.readOnly()) {
+      form.disable();
+    }
+    return form;
+  });
 
   private valueSub: { unsubscribe(): void } | null = null;
-  /** Guards the effect below so it only rebuilds the form when it starts editing a *different* section — an `@if`-scoped (as opposed to `@for`-tracked) host reuses the same component instance across navigations between sections, and re-syncing on every `section` reference change (e.g. after this same section's own autosave round-trip) would otherwise clobber in-progress edits. */
+  /** Guards the collapse-state effect below so it only re-reads localStorage when it starts editing a *different* section — an `@if`-scoped (as opposed to `@for`-tracked) host reuses the same component instance across navigations between sections, and re-syncing on every `section` reference change (e.g. after this same section's own autosave round-trip) would otherwise clobber the in-progress collapsed state. */
   private lastInstanceId: string | null = null;
-  /**
-   * Also rebuild whenever the *definition* itself changes reference, even for the same
-   * section instance — e.g. `page-editor.component.ts` filling in a section template's
-   * compiled definition asynchronously right after this section first mounted. Without
-   * this, `fieldForm` stays built from the (possibly empty) old definition while the
-   * template rebinds `[definition]` to the new one, so `SfContentFormComponent.controlFor()`
-   * looks up a control by a name the stale form group never got — returning `null` and
-   * crashing editors that dereference `control()` in their template (e.g. `SfBooleanEditor`).
-   */
-  private lastDefinition: ContentDefinition | null = null;
 
   constructor() {
     effect(
-      () => {
+      (onCleanup) => {
+        const form = this.fieldForm();
         const definition = this.contentDefinition();
+        const sub = form.valueChanges.subscribe(() => {
+          this.valueChange.emit(this.fb.valueOf(definition, form));
+        });
+        this.valueSub = sub;
+        onCleanup(() => sub.unsubscribe());
+      },
+    );
+
+    effect(
+      () => {
         const section = this.section();
-        if (section.instanceId === this.lastInstanceId && definition === this.lastDefinition) {
+        if (section.instanceId === this.lastInstanceId) {
           return;
         }
         this.lastInstanceId = section.instanceId;
-        this.lastDefinition = definition;
-
-        const content = (section.content ?? {}) as Record<string, unknown>;
-        const form = this.fb.build(definition, content);
-        if (this.readOnly()) {
-          form.disable();
-        }
-        this.valueSub?.unsubscribe();
-        this.valueSub = form.valueChanges.subscribe(() => {
-          this.valueChange.emit(this.fb.valueOf(definition, form));
-        });
-        this.fieldForm.set(form);
-
         const key = this.collapseKey();
         this.collapsed.set(localStorage.getItem(key) === '1');
       },

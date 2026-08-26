@@ -498,7 +498,7 @@ export class PageEditorComponent {
     }
     const key = this.projectKey();
     const uuid = this.uuid();
-    const revision = this.page()?.revision;
+    const revision = this.autosave.revision();
     const position = this.bodyCount(body.name);
     this.api
       .addSection(key, uuid, body.name, { templateUuid, position }, revision ?? undefined)
@@ -516,7 +516,7 @@ export class PageEditorComponent {
     if (this.readOnly()) {
       return;
     }
-    const revision = this.page()?.revision;
+    const revision = this.autosave.revision();
     this.api
       .deleteSection(this.projectKey(), this.uuid(), bodyName, instanceId, revision ?? undefined)
       .subscribe({
@@ -576,7 +576,7 @@ export class PageEditorComponent {
       this.toast.show("This section type isn't allowed in this body.", 'error');
       return;
     }
-    const revision = this.page()?.revision;
+    const revision = this.autosave.revision();
     this.api
       .moveSection(
         this.projectKey(),
@@ -617,7 +617,7 @@ export class PageEditorComponent {
     const ids = arr.map((s) => s.instanceId);
     const [moved] = ids.splice(from, 1);
     ids.splice(to, 0, moved);
-    const revision = this.page()?.revision;
+    const revision = this.autosave.revision();
     this.api
       .reorderSections(this.projectKey(), this.uuid(), bodyName, ids, revision ?? undefined)
       .subscribe({

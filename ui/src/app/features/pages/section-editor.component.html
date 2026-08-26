@@ -53,11 +53,11 @@
     }
   </header>
 
-  @if (!collapsed() && fieldForm()) {
+  @if (!collapsed()) {
     <div class="section-card__body">
       <sf-content-form
         [definition]="contentDefinition()"
-        [formGroup]="fieldForm()!"
+        [formGroup]="fieldForm()"
         [projectKey]="projectKey()"
       />
     </div>
