@@ -92,6 +92,13 @@ export const routes: Routes = [
             path: 'revisions/:revisionId',
             component: RevisionDiffComponent,
           },
+          {
+            path: 'url-registry',
+            loadComponent: () =>
+              import('./features/settings/project-settings-url-registry.component').then(
+                (m) => m.ProjectSettingsUrlRegistryComponent,
+              ),
+          },
         ],
       },
     ],

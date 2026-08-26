@@ -24,11 +24,11 @@ and explicit reset.
 
 ## Feature exit criteria
 
-- [ ] A `PageReference`'s URL for a given channel, once assigned in an area, is stable
+- [x] A `PageReference`'s URL for a given channel, once assigned in an area, is stable
       across repeated generations/previews until an explicit reset touches that entry.
-- [ ] `PREVIEW` and `GENERATED` entries for the same `(PageReference, channel)` are
+- [x] `PREVIEW` and `GENERATED` entries for the same `(PageReference, channel)` are
       independent and never overwrite each other.
-- [ ] Project settings exposes a working "Navigation URLs" panel.
+- [x] Project settings exposes a working "Navigation URLs" panel.
 
 ## Dependencies
 

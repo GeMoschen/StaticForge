@@ -29,10 +29,10 @@ settings panel to inspect, override, and reset it.
 - [x] Templates render navigation via a new `navigation` OCTL instruction (its own
       grammar, not a repurposed `$CMS_NAV(structure:...)$`) that walks the nav-store
       tree from a given folder.
-- [ ] `URLRegistry` persists the first-assigned URL per
+- [x] `URLRegistry` persists the first-assigned URL per
       `(project, channel, PageReference, area)` tuple and never silently recomputes an
       existing entry — a URL changes only via explicit reset.
-- [ ] Project settings has a "Navigation URLs" panel listing registry entries per
+- [x] Project settings has a "Navigation URLs" panel listing registry entries per
       channel/area with per-entry manual override and project- or channel-scoped reset.
 - [ ] Golden/integration tests prove: nav rendering resolves through the registry,
       `PREVIEW` and `GENERATED` areas never leak into each other, and a reset followed
