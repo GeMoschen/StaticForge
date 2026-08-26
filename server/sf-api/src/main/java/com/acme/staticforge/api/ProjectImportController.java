@@ -1,14 +1,18 @@
 package com.acme.staticforge.api;
 
+import com.acme.staticforge.api.dto.ConflictReportView;
+import com.acme.staticforge.api.dto.ImportConflictView;
 import com.acme.staticforge.api.dto.ImportResultView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.exportimport.ConflictReport;
 import com.acme.staticforge.exportimport.ImportResult;
 import com.acme.staticforge.exportimport.ProjectExportImportService;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
 import java.io.IOException;
+import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,6 +53,23 @@ public class ProjectImportController {
         ImportResult result = exportImportService.importProject(projectId, bytes(file), ctx);
         return new ImportResultView(
                 result.sourceProjectKey(), result.importedAssetCount(), result.importedBlobCount());
+    }
+
+    @PostMapping("/import/analyze")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
+    public ConflictReportView analyzeImport(
+            @PathVariable String projectKey, @RequestParam("file") MultipartFile file) {
+        long projectId = projectService.requireByKey(projectKey).getId();
+        ConflictReport report = exportImportService.analyzeImport(projectId, bytes(file));
+        return toView(report);
+    }
+
+    private static ConflictReportView toView(ConflictReport report) {
+        List<ImportConflictView> conflicts = report.conflicts().stream()
+                .map(c -> new ImportConflictView(
+                        c.severity().name(), c.type().name(), c.elementUuid(), c.elementLabel(), c.detail()))
+                .toList();
+        return new ConflictReportView(conflicts, report.hasBlocking());
     }
 
     private static byte[] bytes(MultipartFile file) {

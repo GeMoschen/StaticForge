@@ -1,0 +1,206 @@
+package com.acme.staticforge;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.acme.staticforge.asset.AssetService;
+import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.CreateAssetCommand;
+import com.acme.staticforge.exportimport.ExportArchive;
+import com.acme.staticforge.exportimport.ExportedAsset;
+import com.acme.staticforge.project.CreateProjectRequest;
+import com.acme.staticforge.project.Project;
+import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.user.AppUser;
+import com.acme.staticforge.user.UserService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.ByteArrayInputStream;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+/**
+ * {@code POST .../export/selection} REST endpoint (feature `selective-export`, `M10.1.3`).
+ * Mirrors the MockMvc + {@code JwtService} bearer-token pattern used by
+ * {@code ProjectApiIntegrationTests}; unzips the raw response body the same way
+ * {@code ProjectExportImportIntegrationTest} does at the service layer.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class ProjectExportSelectionApiTest {
+
+    private static final AtomicInteger SEQ = new AtomicInteger();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Autowired MockMvc mvc;
+    @Autowired UserService userService;
+    @Autowired com.acme.staticforge.project.ProjectService projectService;
+    @Autowired AssetService assetService;
+    @Autowired JwtService jwtService;
+
+    @Test
+    void selectionOfAFolderReturnsZipContainingExactlyThatSubtree() throws Exception {
+        Fixture fixture = newFixture("exp_sel_folder");
+
+        AssetVersionView topFolder = assetService.create(
+                new CreateAssetCommand(fixture.project().getId(), AssetType.FOLDER, "Top", null,
+                        MAPPER.createObjectNode(), null),
+                fixture.ctx());
+        AssetVersionView pageInFolder = assetService.create(
+                new CreateAssetCommand(fixture.project().getId(), AssetType.PAGE, "Nested Page", topFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                fixture.ctx());
+        AssetVersionView siblingFolder = assetService.create(
+                new CreateAssetCommand(fixture.project().getId(), AssetType.FOLDER, "Sibling", null,
+                        MAPPER.createObjectNode(), null),
+                fixture.ctx());
+        AssetVersionView pageInSibling = assetService.create(
+                new CreateAssetCommand(fixture.project().getId(), AssetType.PAGE, "Sibling Page",
+                        siblingFolder.uuid(), MAPPER.createObjectNode(), null),
+                fixture.ctx());
+
+        ObjectNode requestBody = MAPPER.createObjectNode();
+        requestBody.putArray("assetUuids").add(topFolder.uuid().toString());
+        requestBody.put("includeChannels", false);
+        requestBody.put("includeGenerationTargets", false);
+        String body = requestBody.toString();
+
+        MvcResult result = mvc.perform(post("/api/v1/projects/" + fixture.project().getKey() + "/export/selection")
+                        .header("Authorization", "Bearer " + fixture.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Content-Type", "application/zip"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Content-Disposition",
+                                "attachment; filename=\"" + fixture.project().getKey() + ".zip\""))
+                .andReturn();
+
+        List<ExportedAsset> assets = parseAssets(result.getResponse().getContentAsByteArray());
+        Set<String> uuids = assets.stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).contains(topFolder.uuid().toString(), pageInFolder.uuid().toString());
+        assertThat(uuids).doesNotContain(siblingFolder.uuid().toString(), pageInSibling.uuid().toString());
+    }
+
+    /**
+     * Acceptance criterion M10.1.3 says a channels-only selection with no asset UUIDs
+     * returns a ZIP with "only manifest.json + settings.json, no assets.json entries" —
+     * but {@code ProjectExportImportServiceImpl.exportSelection} (M10.1.1/M10.1.2, already
+     * shipped) unconditionally writes {@code assets.json} (with an empty {@code assets}
+     * array when nothing is selected). This REST-layer task doesn't change that service
+     * behavior, so this test asserts the actual shipped shape: {@code assets.json} IS
+     * present but its {@code assets} list is empty, and {@code settings.json} is present.
+     */
+    @Test
+    void channelsOnlySelectionWithNoAssetsReturnsEmptyAssetsArrayAndSettings() throws Exception {
+        Fixture fixture = newFixture("exp_sel_chan");
+
+        ObjectNode requestBody = MAPPER.createObjectNode();
+        requestBody.putArray("assetUuids");
+        requestBody.put("includeChannels", true);
+        requestBody.put("includeGenerationTargets", false);
+        String body = requestBody.toString();
+
+        MvcResult result = mvc.perform(post("/api/v1/projects/" + fixture.project().getKey() + "/export/selection")
+                        .header("Authorization", "Bearer " + fixture.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        byte[] archive = result.getResponse().getContentAsByteArray();
+        Set<String> entryNames = zipEntryNames(archive);
+        assertThat(entryNames).contains("manifest.json", "settings.json", "assets.json");
+        assertThat(parseAssets(archive)).isEmpty();
+    }
+
+    @Test
+    void malformedEmptySelectionReturns422WithProblemDetailBody() throws Exception {
+        Fixture fixture = newFixture("exp_sel_empty");
+
+        String body = "{\"assetUuids\":[],\"includeChannels\":false,\"includeGenerationTargets\":false}";
+
+        mvc.perform(post("/api/v1/projects/" + fixture.project().getKey() + "/export/selection")
+                        .header("Authorization", "Bearer " + fixture.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.code").value("SF-API-0422"))
+                .andExpect(jsonPath("$.detail").value("Export selection is empty — nothing to export."));
+    }
+
+    @Test
+    void invalidUuidInSelectionReturns400() throws Exception {
+        Fixture fixture = newFixture("exp_sel_badid");
+
+        String body = "{\"assetUuids\":[\"not-a-uuid\"],\"includeChannels\":false,\"includeGenerationTargets\":false}";
+
+        mvc.perform(post("/api/v1/projects/" + fixture.project().getKey() + "/export/selection")
+                        .header("Authorization", "Bearer " + fixture.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.code").value("SF-API-0400"));
+    }
+
+    private Set<String> zipEntryNames(byte[] archiveBytes) throws Exception {
+        Set<String> names = new java.util.HashSet<>();
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                names.add(entry.getName());
+            }
+        }
+        return names;
+    }
+
+    private List<ExportedAsset> parseAssets(byte[] archiveBytes) throws Exception {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if ("assets.json".equals(entry.getName())) {
+                    return MAPPER.readValue(zip.readAllBytes(), ExportArchive.class).assets();
+                }
+            }
+        }
+        throw new IllegalStateException("assets.json entry not found in archive");
+    }
+
+    private Fixture newFixture(String key) {
+        int n = SEQ.incrementAndGet();
+        AppUser user = userService.create(
+                key + "-user-" + n, key + "-user-" + n + "@example.com", key + " User " + n, "secret-password");
+        Project project = projectService.create(
+                new CreateProjectRequest(key + n, key + n, null, null), user.getId());
+        String token = jwtService.issueAccessToken(user);
+        return new Fixture(project, user, token);
+    }
+
+    private record Fixture(Project project, AppUser user, String token) {
+        RevisionContext ctx() {
+            return RevisionContext.of(project().getId(), user().getId(), "export-selection-api test");
+        }
+    }
+}

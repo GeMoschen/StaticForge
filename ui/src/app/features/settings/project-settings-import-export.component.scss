@@ -1,0 +1,26 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.import-export {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-5);
+  height: 100%;
+  overflow: auto;
+}
+
+.import-export__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+}
+
+.import-export__heading {
+  margin: 0;
+  padding: var(--sf-4) var(--sf-4) 0;
+  font-size: var(--sf-text-lg);
+  font-family: var(--sf-font-ui);
+  color: var(--sf-ink);
+}

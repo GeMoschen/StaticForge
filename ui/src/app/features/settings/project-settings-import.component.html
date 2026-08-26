@@ -1,0 +1,110 @@
+<div class="import">
+  <header class="import__header">
+    <h1 class="import__title">Import</h1>
+    <p class="import__subtitle">
+      Upload a `.zip` archive produced by this project's export to bring assets, blobs, and
+      settings back in. Every archive is analyzed for conflicts first — nothing is written until
+      you review the report and choose to proceed.
+    </p>
+  </header>
+
+  @if (!file()) {
+    <div
+      class="dropzone"
+      [class.dropzone--active]="dragActive()"
+      sfDropTarget
+      (dragenter)="onDragEnter($event)"
+      (dragleave)="onDragLeave()"
+      (drop)="onDrop($event)"
+    >
+      <sf-icon name="upload_file" size="2.5rem" />
+      <p class="dropzone__label">Drag a `.zip` archive here, or</p>
+      <sf-button variant="secondary" (click)="fileInput.click()">Choose file…</sf-button>
+      <input
+        #fileInput
+        type="file"
+        accept=".zip"
+        hidden
+        (change)="onFileInput($event)"
+      />
+    </div>
+
+    @if (pickError()) {
+      <p class="import__error" role="alert">{{ pickError() }}</p>
+    }
+
+    @if (result(); as r) {
+      <div class="result-summary" role="status">
+        <sf-icon name="check_circle" />
+        <span>
+          Imported {{ r.importedAssetCount ?? 0 }} asset(s), {{ r.importedBlobCount ?? 0 }}
+          blob(s) from "{{ r.sourceProjectKey }}".
+        </span>
+      </div>
+    }
+  } @else {
+    <div class="archive-bar">
+      <sf-icon name="folder_zip" />
+      <span class="archive-bar__name">{{ file()?.name }}</span>
+    </div>
+
+    @if (analyzing()) {
+      <sf-spinner label="Checking archive…" />
+    } @else if (report()) {
+      @if (commitError()) {
+        <p class="import__error" role="alert">{{ commitError() }}</p>
+      }
+
+      @if (noConflicts()) {
+        <sf-empty-state
+          icon="check_circle"
+          title="No conflicts found"
+          description="This archive is clean and ready to import."
+        />
+      } @else {
+        @if (blocking().length > 0) {
+          <section class="conflict-section conflict-section--blocking">
+            <h2 class="conflict-section__title">
+              Blocking issues
+              <span class="badge badge--blocking">{{ blocking().length }}</span>
+            </h2>
+            <ul class="conflict-list">
+              @for (c of blocking(); track $index) {
+                <li class="conflict-item">
+                  <sf-icon [name]="iconFor(c.type)" />
+                  <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+                  <span class="conflict-item__detail">{{ c.detail }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        @if (warnings().length > 0) {
+          <section class="conflict-section conflict-section--warning">
+            <h2 class="conflict-section__title">
+              Warnings
+              <span class="badge badge--warning">{{ warnings().length }}</span>
+            </h2>
+            <ul class="conflict-list">
+              @for (c of warnings(); track $index) {
+                <li class="conflict-item">
+                  <sf-icon [name]="iconFor(c.type)" />
+                  <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+                  <span class="conflict-item__detail">{{ c.detail }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      }
+
+      <div class="import__actions">
+        <sf-button variant="ghost" (click)="cancel()">Cancel</sf-button>
+        <sf-button variant="primary" [disabled]="hasBlocking() || committing()" (click)="commit()">
+          {{ committing() ? 'Importing…' : 'Import' }}
+        </sf-button>
+      </div>
+    }
+  }
+</div>

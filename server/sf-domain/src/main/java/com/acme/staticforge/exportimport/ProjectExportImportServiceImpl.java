@@ -12,9 +12,15 @@ import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.media.Blob;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.channel.OutputChannel;
+import com.acme.staticforge.channel.OutputChannelRepository;
 import com.acme.staticforge.common.JsonUtil;
+import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.generate.GenerationTarget;
+import com.acme.staticforge.generate.GenerationTargetRepository;
+import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.revision.AssetChange;
@@ -25,6 +31,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -34,11 +41,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -69,8 +79,25 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     private static final String MANIFEST_ENTRY = "manifest.json";
     private static final String ASSETS_ENTRY = "assets.json";
+    private static final String SETTINGS_ENTRY = "settings.json";
     private static final String BLOBS_PREFIX = "blobs/";
     private static final String ROOT_UID = "root";
+
+    /**
+     * Known-sensitive JSON field names (case-insensitive), stripped recursively from
+     * {@code OutputChannel.settings}/{@code GenerationTarget.config} before either is
+     * written to an export archive (spec §26.3: secrets never leave the secret manager).
+     * No field in {@code OutputChannel}/{@code GenerationTarget} carries credentials today
+     * (both {@code settings}/{@code config} are free-form JSON columns with no defined
+     * secret fields as of this writing — verified by tracing every consumer of {@code
+     * GenerationTarget.config} in {@code TargetWriterSelector}/{@code S3TargetWriter}/
+     * {@code GenerationService}), but these columns accept arbitrary JSON, so a future
+     * S3/remote target config could add access-key-shaped fields — this denylist is
+     * defense in depth, not a response to a known leak. DO NOT casually "fix" this by
+     * adding fields back without re-confirming they're safe.
+     */
+    private static final Set<String> REDACTED_KEYS = Set.of(
+            "accesskey", "secretkey", "secretaccesskey", "password", "token", "credentials");
 
     /** Import order for non-folder assets: templates first, dependents last. */
     private static final List<String> NON_FOLDER_ORDER =
@@ -86,6 +113,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final BlobStore blobStore;
     private final BlobRepository blobRepository;
     private final ObjectMapper objectMapper;
+    private final OutputChannelRepository outputChannelRepository;
+    private final GenerationTargetRepository generationTargetRepository;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -97,7 +126,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             RevisionService revisionService,
             BlobStore blobStore,
             BlobRepository blobRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            OutputChannelRepository outputChannelRepository,
+            GenerationTargetRepository generationTargetRepository) {
         this.projectRepository = projectRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetRepository = assetRepository;
@@ -108,6 +139,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         this.blobStore = blobStore;
         this.blobRepository = blobRepository;
         this.objectMapper = objectMapper;
+        this.outputChannelRepository = outputChannelRepository;
+        this.generationTargetRepository = generationTargetRepository;
     }
 
     // ------------------------------------------------------------------
@@ -116,18 +149,41 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     @Override
     public byte[] exportProject(long projectId) {
+        List<AssetVersion> versions = assetVersionRepository.findCurrentSnapshot(projectId);
+        Set<UUID> allUuids = versions.stream()
+                .map(version -> version.getAsset().getUuid())
+                .collect(Collectors.toSet());
+        return exportSelection(projectId, new ExportSelection(allUuids, true, true));
+    }
+
+    @Override
+    public byte[] exportSelection(long projectId, ExportSelection selection) {
+        if ((selection.assetUuids() == null || selection.assetUuids().isEmpty())
+                && !selection.includeChannels()
+                && !selection.includeGenerationTargets()) {
+            throw new SfException(
+                    ProblemFactory.unprocessableEntity("Export selection is empty — nothing to export."));
+        }
+
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Project not found.")));
 
         List<AssetVersion> versions = assetVersionRepository.findCurrentSnapshot(projectId);
         Map<Long, String> uuidByAssetId = new HashMap<>();
+        Map<Long, AssetVersion> versionByAssetId = new HashMap<>();
         for (AssetVersion version : versions) {
             uuidByAssetId.put(version.getAssetId(), version.getAsset().getUuid().toString());
+            versionByAssetId.put(version.getAssetId(), version);
         }
+
+        Set<Long> includedIds = resolveIncludedAssetIds(versions, versionByAssetId, selection.assetUuids());
 
         List<ExportedAsset> assets = new ArrayList<>();
         Map<String, byte[]> blobs = new TreeMap<>();
         for (AssetVersion version : versions) {
+            if (!includedIds.contains(version.getAssetId())) {
+                continue;
+            }
             Asset asset = version.getAsset();
             assets.add(new ExportedAsset(
                     asset.getUuid().toString(),
@@ -154,6 +210,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             try (ZipOutputStream zip = new ZipOutputStream(out)) {
                 writeJson(zip, MANIFEST_ENTRY, manifest);
                 writeJson(zip, ASSETS_ENTRY, new ExportArchive(PROTOCOL_VERSION, assets));
+                if (selection.includeChannels() || selection.includeGenerationTargets()) {
+                    writeJson(zip, SETTINGS_ENTRY, buildExportedSettings(projectId, selection));
+                }
                 for (Map.Entry<String, byte[]> blob : blobs.entrySet()) {
                     zip.putNextEntry(new ZipEntry(BLOBS_PREFIX + blob.getKey()));
                     zip.write(blob.getValue());
@@ -168,6 +227,53 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         }
     }
 
+    /**
+     * Expands the caller's explicit {@code assetUuids} picks into the full set of asset
+     * ids to export: a picked folder pulls in every live descendant transitively (matched
+     * by {@code folderPath} prefix), a picked non-folder asset is included by itself
+     * (its own template reference is deliberately left out, see {@link
+     * ProjectExportImportService#exportSelection}), and every ancestor folder of an
+     * included asset is always added too, up to the project root.
+     */
+    private Set<Long> resolveIncludedAssetIds(
+            List<AssetVersion> versions, Map<Long, AssetVersion> versionByAssetId, Set<UUID> assetUuids) {
+        Set<Long> included = new HashSet<>();
+        if (assetUuids != null) {
+            for (UUID uuid : assetUuids) {
+                AssetVersion picked = versions.stream()
+                        .filter(v -> v.getAsset().getUuid().equals(uuid))
+                        .findFirst()
+                        .orElse(null);
+                if (picked == null) {
+                    // Stale/foreign UUID — out of scope for this task (M10.2 handles conflicts).
+                    continue;
+                }
+                if (picked.getAsset().getAssetType() == AssetType.FOLDER) {
+                    String folderPath = picked.getFolderPath();
+                    for (AssetVersion candidate : versions) {
+                        if (pathService.isUnder(candidate.getFolderPath(), folderPath)) {
+                            included.add(candidate.getAssetId());
+                        }
+                    }
+                } else {
+                    included.add(picked.getAssetId());
+                }
+            }
+        }
+
+        // Always include every ancestor folder up to the project root.
+        Set<Long> ancestors = new HashSet<>();
+        for (Long id : included) {
+            Long folderId = versionByAssetId.get(id).getFolderId();
+            while (folderId != null && !included.contains(folderId) && ancestors.add(folderId)) {
+                AssetVersion folderVersion = versionByAssetId.get(folderId);
+                folderId = folderVersion == null ? null : folderVersion.getFolderId();
+            }
+        }
+        included.addAll(ancestors);
+        return included;
+    }
+
     // ------------------------------------------------------------------
     // Import
     // ------------------------------------------------------------------
@@ -177,10 +283,20 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     public ImportResult importProject(long targetProjectId, byte[] zipBytes, RevisionContext ctx) {
         ArchiveContent content = readArchive(zipBytes);
         ExportManifest manifest = content.manifest();
-        if (manifest.protocolVersion() != PROTOCOL_VERSION) {
-            throw new SfException(ProblemFactory.unprocessableEntity(
-                    "Unsupported export protocol version " + manifest.protocolVersion() + "."));
-        }
+
+        // Re-run the exact same conflict detection analyzeImport uses, unconditionally — a
+        // caller that skipped straight past a blocking analyzeImport report (or never called
+        // it at all) must still be refused here, before any write happens. DUPLICATE_UUID is
+        // deliberately excluded from the set that actually aborts the commit: unlike the other
+        // BLOCKING types, it already has an established, safe automatic resolution right here in
+        // importProject (mint a fresh UUIDv7 instead of the colliding source UUID — feature
+        // cross-project-import-identity, M9.3.1, see the remap/collided map below), so reporting
+        // it as BLOCKING in analyzeImport's UI-facing report does not mean commit must refuse it.
+        ConflictReport report = detectConflicts(targetProjectId, content);
+        List<ImportConflict> hardBlocking = report.conflicts().stream()
+                .filter(c -> c.severity() == ConflictSeverity.BLOCKING && c.type() != ConflictType.DUPLICATE_UUID)
+                .toList();
+        assertNoBlockingConflicts(new ConflictReport(hardBlocking));
 
         List<ExportedAsset> assets = content.assets();
 
@@ -234,7 +350,171 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             created++;
         }
 
+        if (content.settings() != null) {
+            importSettings(targetProjectId, content.settings());
+        }
+
         return new ImportResult(manifest.sourceProjectKey(), created, importedShas.size());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ConflictReport analyzeImport(long targetProjectId, byte[] zipBytes) {
+        ArchiveContent content = readArchive(zipBytes);
+        return detectConflicts(targetProjectId, content);
+    }
+
+    /**
+     * Shared conflict-detection logic reused by both {@link #analyzeImport} (read-only) and
+     * {@link #importProject} (which re-runs this unconditionally right before it starts
+     * writing, so the two paths can never drift apart). Performs no writes.
+     */
+    private ConflictReport detectConflicts(long targetProjectId, ArchiveContent content) {
+        ExportManifest manifest = content.manifest();
+        if (manifest.protocolVersion() > PROTOCOL_VERSION) {
+            // Protocol mismatch short-circuits: no point reporting template/folder issues in an
+            // archive we can't even trust the shape of.
+            return new ConflictReport(List.of(ImportConflict.of(
+                    ConflictType.PROTOCOL_VERSION_MISMATCH,
+                    null,
+                    null,
+                    "Archive protocol version " + manifest.protocolVersion()
+                            + " is newer than the supported version " + PROTOCOL_VERSION + ".")));
+        }
+
+        List<ImportConflict> conflicts = new ArrayList<>();
+        List<ExportedAsset> assets = content.assets();
+        Set<String> archiveUuids = assets.stream()
+                .map(a -> a.uuid().toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+
+        for (ExportedAsset asset : assets) {
+            String label = asset.displayName() != null ? asset.displayName() : asset.uid();
+
+            if (assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(asset.uuid())).isPresent()) {
+                conflicts.add(ImportConflict.of(
+                        ConflictType.DUPLICATE_UUID,
+                        asset.uuid(),
+                        label,
+                        "An asset with this UUID already exists in the target project."));
+            }
+
+            String templateUuid = asset.templateUuid();
+            if (templateUuid != null && !templateUuid.isBlank()) {
+                boolean satisfied = archiveUuids.contains(templateUuid.toLowerCase(Locale.ROOT))
+                        || assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(templateUuid))
+                                .isPresent();
+                if (!satisfied) {
+                    // Deliberately no UID-based fallback lookup here: once the missing template is
+                    // excluded from the archive, its human-assigned UID isn't derivable from what
+                    // remains — scope limitation, not an oversight.
+                    conflicts.add(ImportConflict.of(
+                            ConflictType.MISSING_TEMPLATE_REFERENCE,
+                            asset.uuid(),
+                            label,
+                            "References template " + templateUuid
+                                    + ", which is not in this archive and does not exist in the target project."));
+                }
+            }
+
+            String parentFolderUuid = asset.parentFolderUuid();
+            if (parentFolderUuid != null && !archiveUuids.contains(parentFolderUuid.toLowerCase(Locale.ROOT))) {
+                conflicts.add(ImportConflict.of(
+                        ConflictType.MISSING_PARENT_FOLDER,
+                        asset.uuid(),
+                        label,
+                        "Parent folder " + parentFolderUuid + " is not present in this archive."));
+            }
+        }
+
+        if (content.settings() != null) {
+            for (ExportedChannel c : content.settings().channels()) {
+                if (outputChannelRepository.existsByProjectIdAndKey(targetProjectId, c.key())) {
+                    conflicts.add(ImportConflict.of(
+                            ConflictType.SETTINGS_KEY_COLLISION,
+                            null,
+                            c.key(),
+                            "A channel with key '" + c.key()
+                                    + "' already exists in the target project and will be skipped."));
+                }
+            }
+            List<GenerationTarget> existingTargets = generationTargetRepository.findByProjectId(targetProjectId);
+            Set<String> existingNames =
+                    existingTargets.stream().map(GenerationTarget::getName).collect(Collectors.toSet());
+            for (ExportedGenerationTarget t : content.settings().targets()) {
+                if (existingNames.contains(t.name())) {
+                    conflicts.add(ImportConflict.of(
+                            ConflictType.SETTINGS_KEY_COLLISION,
+                            null,
+                            t.name(),
+                            "A generation target named '" + t.name()
+                                    + "' already exists in the target project and will be skipped."));
+                }
+            }
+        }
+
+        return new ConflictReport(conflicts);
+    }
+
+    private void assertNoBlockingConflicts(ConflictReport report) {
+        if (!report.hasBlocking()) {
+            return;
+        }
+        List<Map<String, Object>> conflictBodies = report.conflicts().stream()
+                .map(c -> {
+                    Map<String, Object> body = new HashMap<>();
+                    body.put("severity", c.severity().name());
+                    body.put("type", c.type().name());
+                    body.put("elementUuid", c.elementUuid());
+                    body.put("elementLabel", c.elementLabel());
+                    body.put("detail", c.detail());
+                    return body;
+                })
+                .toList();
+        Problem problem = Problem.builder()
+                .type("https://cms.example.com/problems/sf-api-0409")
+                .title("Conflict")
+                .status(409)
+                .detail("The import archive has one or more blocking conflicts with the target project.")
+                .property("code", "SF-API-0409")
+                .property("conflicts", conflictBodies)
+                .build();
+        throw new SfException(problem);
+    }
+
+    /**
+     * Merges exported channels/targets into the target project: a key/name that already
+     * exists there is left untouched and skipped silently — settings import only *adds*
+     * new entries, never overwrites (collisions surface as an `M10.2` conflict later, out
+     * of scope here).
+     */
+    private void importSettings(long targetProjectId, ExportedSettings settings) {
+        for (ExportedChannel c : settings.channels()) {
+            if (outputChannelRepository.existsByProjectIdAndKey(targetProjectId, c.key())) {
+                continue;
+            }
+            outputChannelRepository.save(new OutputChannel(
+                    targetProjectId,
+                    c.key(),
+                    c.name(),
+                    c.fileExtension(),
+                    c.mimeType(),
+                    c.defaultEscaping(),
+                    c.enabled(),
+                    c.isDefault(),
+                    c.position() == null ? 0 : c.position(),
+                    c.settings()));
+        }
+
+        List<GenerationTarget> existingTargets = generationTargetRepository.findByProjectId(targetProjectId);
+        Set<String> existingNames = existingTargets.stream().map(GenerationTarget::getName).collect(Collectors.toSet());
+        for (ExportedGenerationTarget t : settings.targets()) {
+            if (existingNames.contains(t.name())) {
+                continue;
+            }
+            generationTargetRepository.save(new GenerationTarget(
+                    targetProjectId, t.name(), TargetType.valueOf(t.type()), t.config(), t.isDefault()));
+        }
     }
 
     private void createImportedAsset(
@@ -363,6 +643,67 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         }
     }
 
+    private ExportedSettings buildExportedSettings(long projectId, ExportSelection selection) {
+        List<ExportedChannel> channels = selection.includeChannels()
+                ? outputChannelRepository.findByProjectIdOrderByPositionAsc(projectId).stream()
+                        .map(c -> new ExportedChannel(
+                                c.getKey(),
+                                c.getName(),
+                                c.getFileExtension(),
+                                c.getMimeType(),
+                                c.getDefaultEscaping(),
+                                c.isEnabled(),
+                                c.isDefaultChannel(),
+                                c.getPosition(),
+                                redact(c.getSettings())))
+                        .toList()
+                : List.of();
+        List<ExportedGenerationTarget> targets = selection.includeGenerationTargets()
+                ? generationTargetRepository.findByProjectId(projectId).stream()
+                        .map(t -> new ExportedGenerationTarget(
+                                t.getName(), t.getType().name(), redact(t.getConfig()), t.isDefaultTarget()))
+                        .toList()
+                : List.of();
+        return new ExportedSettings(channels, targets);
+    }
+
+    /**
+     * Strips any JSON object field whose name matches a known-sensitive key (case-insensitive,
+     * see {@link #REDACTED_KEYS}), recursively through nested objects/arrays, returning a deep
+     * copy. Fields are removed entirely (not just blanked) so the UI/JSON doesn't even hint the
+     * key existed. Returns {@code null} for {@code null} input.
+     */
+    private static JsonNode redact(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isObject()) {
+            ObjectNode copy = node.deepCopy();
+            Iterator<String> fieldNames = copy.fieldNames();
+            List<String> toRemove = new ArrayList<>();
+            while (fieldNames.hasNext()) {
+                String field = fieldNames.next();
+                if (REDACTED_KEYS.contains(field.toLowerCase(Locale.ROOT))) {
+                    toRemove.add(field);
+                }
+            }
+            toRemove.forEach(copy::remove);
+            for (Iterator<Map.Entry<String, JsonNode>> it = copy.fields(); it.hasNext(); ) {
+                Map.Entry<String, JsonNode> entry = it.next();
+                copy.set(entry.getKey(), redact(entry.getValue()));
+            }
+            return copy;
+        }
+        if (node.isArray()) {
+            ArrayNode copy = node.deepCopy();
+            for (int i = 0; i < copy.size(); i++) {
+                copy.set(i, redact(copy.get(i)));
+            }
+            return copy;
+        }
+        return node;
+    }
+
     private void writeJson(ZipOutputStream zip, String name, Object value) throws IOException {
         zip.putNextEntry(new ZipEntry(name));
         zip.write(objectMapper.writeValueAsBytes(value));
@@ -372,6 +713,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private ArchiveContent readArchive(byte[] zipBytes) {
         ExportManifest manifest = null;
         List<ExportedAsset> assets = null;
+        ExportedSettings settings = null;
         Map<String, byte[]> blobs = new HashMap<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
             ZipEntry entry;
@@ -381,6 +723,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     manifest = objectMapper.readValue(zip.readAllBytes(), ExportManifest.class);
                 } else if (ASSETS_ENTRY.equals(name)) {
                     assets = new ArrayList<>(objectMapper.readValue(zip.readAllBytes(), ExportArchive.class).assets());
+                } else if (SETTINGS_ENTRY.equals(name)) {
+                    settings = objectMapper.readValue(zip.readAllBytes(), ExportedSettings.class);
                 } else if (name.startsWith(BLOBS_PREFIX)) {
                     blobs.put(name.substring(BLOBS_PREFIX.length()), zip.readAllBytes());
                 }
@@ -393,7 +737,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             throw new SfException(ProblemFactory.badRequest("Export archive is missing a manifest or assets document."));
         }
         assets.sort(Comparator.comparing(ExportedAsset::uuid));
-        return new ArchiveContent(manifest, assets, blobs);
+        return new ArchiveContent(manifest, assets, blobs, settings);
     }
 
     private static String textOrNull(JsonNode node) {
@@ -420,5 +764,6 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     }
 
     private record ArchiveContent(
-            ExportManifest manifest, List<ExportedAsset> assets, Map<String, byte[]> blobs) {}
+            ExportManifest manifest, List<ExportedAsset> assets, Map<String, byte[]> blobs,
+            ExportedSettings settings) {}
 }

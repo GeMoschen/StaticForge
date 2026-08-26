@@ -1,0 +1,146 @@
+<div class="export">
+  <header class="export__header">
+    <h1 class="export__title">Export</h1>
+    <p class="export__subtitle">
+      Pick the pages and media to include — checking a folder includes its full current
+      subtree — plus any output channels or generation targets, then download a ZIP.
+    </p>
+  </header>
+
+  @if (store.error()) {
+    <p class="export__error" role="alert">{{ store.error() }}</p>
+  }
+
+  @if (store.loading()) {
+    <sf-spinner label="Loading project…" />
+  } @else {
+    <div class="trees">
+      <section class="tree-section">
+        <h2 class="tree-section__title">Pages</h2>
+        @if (store.pageFolderTree().length === 0) {
+          <sf-empty-state title="No page folders" description="This project has no page folders yet." />
+        } @else {
+          <div class="tree" role="tree">
+            @for (node of store.pageFolderTree(); track nodeKey(node)) {
+              <ng-container
+                *ngTemplateOutlet="
+                  folderNode;
+                  context: { $implicit: node, scope: 'PAGE', ancestorChecked: false, depth: 0 }
+                "
+              ></ng-container>
+            }
+          </div>
+        }
+      </section>
+
+      <section class="tree-section">
+        <h2 class="tree-section__title">Media</h2>
+        @if (store.mediaFolderTree().length === 0) {
+          <sf-empty-state title="No media folders" description="This project has no media folders yet." />
+        } @else {
+          <div class="tree" role="tree">
+            @for (node of store.mediaFolderTree(); track nodeKey(node)) {
+              <ng-container
+                *ngTemplateOutlet="
+                  folderNode;
+                  context: { $implicit: node, scope: 'MEDIA', ancestorChecked: false, depth: 0 }
+                "
+              ></ng-container>
+            }
+          </div>
+        }
+      </section>
+    </div>
+  }
+
+  <section class="options">
+    <h2 class="options__title">Additional data</h2>
+    <label class="options__toggle">
+      <input type="checkbox" [checked]="includeChannels()" (change)="onToggleChannels($event)" />
+      Include output channels
+    </label>
+    <label class="options__toggle">
+      <input
+        type="checkbox"
+        [checked]="includeGenerationTargets()"
+        (change)="onToggleGenerationTargets($event)"
+      />
+      Include generation targets
+    </label>
+  </section>
+
+  @if (exportError()) {
+    <p class="export__error" role="alert">{{ exportError() }}</p>
+  }
+
+  <div class="export__actions">
+    <sf-button variant="primary" [disabled]="exportDisabled() || exporting()" (click)="exportNow()">
+      {{ exporting() ? 'Exporting…' : 'Export' }}
+    </sf-button>
+  </div>
+</div>
+
+<ng-template #folderNode let-node let-scope="scope" let-ancestorChecked="ancestorChecked" let-depth="depth">
+  <div class="tree-row" [style.padding-left.px]="depth * 16" role="treeitem">
+    <button
+      type="button"
+      class="tree-row__toggle"
+      [class.tree-row__toggle--leaf]="(node.children ?? []).length === 0"
+      (click)="toggleExpand(node, scope)"
+      [attr.aria-label]="isExpanded(node) ? 'Collapse folder' : 'Expand folder'"
+    >
+      <sf-icon [name]="isExpanded(node) ? 'expand_more' : 'chevron_right'" />
+    </button>
+    <input
+      type="checkbox"
+      class="tree-row__checkbox"
+      [id]="'export-node-' + nodeKey(node)"
+      [checked]="folderState(node, ancestorChecked).checked"
+      [indeterminate]="folderState(node, ancestorChecked).indeterminate"
+      [disabled]="ancestorChecked"
+      (change)="toggleFolder(node, ancestorChecked)"
+    />
+    <sf-icon class="tree-row__icon" name="folder" />
+    <label class="tree-row__name" [for]="'export-node-' + nodeKey(node)">
+      {{ node.displayName ?? node.uid ?? node.path }}
+    </label>
+  </div>
+
+  @if (isExpanded(node)) {
+    @for (child of node.children ?? []; track nodeKey(child)) {
+      <ng-container
+        *ngTemplateOutlet="
+          folderNode;
+          context: {
+            $implicit: child,
+            scope: scope,
+            ancestorChecked: folderState(node, ancestorChecked).checked,
+            depth: depth + 1,
+          }
+        "
+      ></ng-container>
+    }
+
+    @if (isFolderLoading(node)) {
+      <sf-spinner label="Loading…" />
+    } @else {
+      @for (asset of folderAssets(node); track asset.uuid) {
+        <div class="tree-row tree-row--leaf" [style.padding-left.px]="(depth + 1) * 16" role="treeitem">
+          <span class="tree-row__toggle tree-row__toggle--leaf"></span>
+          <input
+            type="checkbox"
+            class="tree-row__checkbox"
+            [id]="'export-asset-' + asset.uuid"
+            [checked]="assetChecked(asset, folderState(node, ancestorChecked).checked)"
+            [disabled]="folderState(node, ancestorChecked).checked"
+            (change)="toggleAsset(asset, folderState(node, ancestorChecked).checked)"
+          />
+          <sf-icon class="tree-row__icon" name="description" />
+          <label class="tree-row__name" [for]="'export-asset-' + asset.uuid">
+            {{ asset.displayName ?? asset.uid ?? asset.uuid }}
+          </label>
+        </div>
+      }
+    }
+  }
+</ng-template>

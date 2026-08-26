@@ -484,6 +484,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/import/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["analyzeImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/generations": {
         parameters: {
             query?: never;
@@ -558,6 +574,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["move"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/export/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["exportSelection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1554,6 +1586,17 @@ export interface components {
             /** Format: int32 */
             importedBlobCount?: number;
         };
+        ConflictReportView: {
+            conflicts?: components["schemas"]["ImportConflictView"][];
+            hasBlocking?: boolean;
+        };
+        ImportConflictView: {
+            severity?: string;
+            type?: string;
+            elementUuid?: string;
+            elementLabel?: string;
+            detail?: string;
+        };
         GenerationRequestDto: {
             /** @enum {string} */
             mode?: "FULL" | "INCREMENTAL";
@@ -1607,6 +1650,11 @@ export interface components {
             touchedAssetCount?: number;
             /** Format: int64 */
             revision?: number;
+        };
+        ExportSelectionRequest: {
+            assetUuids?: string[];
+            includeChannels?: boolean;
+            includeGenerationTargets?: boolean;
         };
         ChannelCreateRequest: {
             key?: string;
@@ -1724,10 +1772,10 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -1742,7 +1790,6 @@ export interface components {
             empty?: boolean;
         };
         PageableObject: {
-            unpaged?: boolean;
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
@@ -1751,6 +1798,7 @@ export interface components {
             /** Format: int32 */
             pageSize?: number;
             paged?: boolean;
+            unpaged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -1760,10 +1808,10 @@ export interface components {
             ignoreCase?: boolean;
         };
         PageTemplateSummary: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -1868,10 +1916,10 @@ export interface components {
             revision?: number;
         };
         PageMediaSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -1911,10 +1959,10 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -3207,6 +3255,35 @@ export interface operations {
             };
         };
     };
+    analyzeImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ConflictReportView"];
+                };
+            };
+        };
+    };
     history: {
         parameters: {
             query?: never;
@@ -3379,6 +3456,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MoveResultDto"];
+                };
+            };
+        };
+    };
+    exportSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
                 };
             };
         };

@@ -17,6 +17,8 @@ import { ChannelsComponent } from './features/channels/channels.component';
 import { GenerationComponent } from './features/generation/generation.component';
 import { RevisionsListComponent } from './features/revisions/revisions-list.component';
 import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
+import { ProjectSettingsImportExportComponent } from './features/settings/project-settings-import-export.component';
+import { ProjectSettingsUrlRegistryComponent } from './features/settings/project-settings-url-registry.component';
 
 export const routes: Routes = [
   {
@@ -94,10 +96,11 @@ export const routes: Routes = [
           },
           {
             path: 'url-registry',
-            loadComponent: () =>
-              import('./features/settings/project-settings-url-registry.component').then(
-                (m) => m.ProjectSettingsUrlRegistryComponent,
-              ),
+            component: ProjectSettingsUrlRegistryComponent,
+          },
+          {
+            path: 'import-export',
+            component: ProjectSettingsImportExportComponent,
           },
         ],
       },
