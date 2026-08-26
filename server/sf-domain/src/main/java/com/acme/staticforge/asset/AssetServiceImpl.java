@@ -12,6 +12,7 @@ import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
+import com.acme.staticforge.urlregistry.UrlRegistryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import java.time.Instant;
@@ -43,6 +44,7 @@ public class AssetServiceImpl implements AssetService {
     private final UidGenerator uidGenerator;
     private final RevisionService revisionService;
     private final PathService pathService;
+    private final UrlRegistryRepository urlRegistryRepository;
 
     public AssetServiceImpl(
             AssetRepository assetRepository,
@@ -51,7 +53,8 @@ public class AssetServiceImpl implements AssetService {
             AssetUidHistoryRepository assetUidHistoryRepository,
             UidGenerator uidGenerator,
             RevisionService revisionService,
-            PathService pathService) {
+            PathService pathService,
+            UrlRegistryRepository urlRegistryRepository) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetReferenceRepository = assetReferenceRepository;
@@ -59,6 +62,7 @@ public class AssetServiceImpl implements AssetService {
         this.uidGenerator = uidGenerator;
         this.revisionService = revisionService;
         this.pathService = pathService;
+        this.urlRegistryRepository = urlRegistryRepository;
     }
 
     @Override
@@ -161,6 +165,15 @@ public class AssetServiceImpl implements AssetService {
                 current.getTemplateAssetId(),
                 true);
         appendSummary(asset, revision, "DELETE", List.of());
+
+        // URL registry cascade-cleanup (feature url-registry, M8.2.1): a PageReference's
+        // cached URLs (both PREVIEW and GENERATED areas, every channel) are unenforced-by-FK
+        // value references keyed on this asset's uuid, so they cannot be cleaned up by
+        // ON DELETE CASCADE — remove them explicitly here so a dangling registry row never
+        // outlives the reference it was assigned to.
+        if (asset.getAssetType() == AssetType.PAGE_REFERENCE) {
+            urlRegistryRepository.deleteByPageReferenceUuid(asset.getUuid());
+        }
     }
 
     @Override
