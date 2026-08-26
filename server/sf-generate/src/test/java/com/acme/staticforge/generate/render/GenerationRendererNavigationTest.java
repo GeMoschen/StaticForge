@@ -216,6 +216,17 @@ class GenerationRendererNavigationTest {
         public void reset(long projectId, ResetScope scope, RevisionContext ctx) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
+
+        @Override
+        public org.springframework.data.domain.Page<UrlRegistryEntry> search(
+                long projectId, String channelKey, UrlArea area, org.springframework.data.domain.Pageable pageable) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public UrlRegistryEntry require(long projectId, long id) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
     }
 
     // ------------------------------------------------------------------
