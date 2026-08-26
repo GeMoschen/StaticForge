@@ -64,7 +64,8 @@ public class PreviewController {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.set("content", body.content());
         payload.set("bodies", body.bodies());
-        String output = pageRenderService.renderLive(payload, body.templateUuid(), channel, true, apiBase(request));
+        String output = pageRenderService.renderLive(
+                projectId(projectKey), payload, body.templateUuid(), channel, true, apiBase(request));
         return respond(output, channel);
     }
 
@@ -78,7 +79,8 @@ public class PreviewController {
             @RequestParam(defaultValue = "html") String channel,
             @RequestParam(defaultValue = "true") boolean rewriteLinks,
             HttpServletRequest request) {
-        String output = pageRenderService.renderPage(uuid, revision, channel, rewriteLinks, apiBase(request));
+        String output = pageRenderService.renderPage(
+                projectId(projectKey), uuid, revision, channel, rewriteLinks, apiBase(request));
         return respond(output, channel);
     }
 
@@ -115,7 +117,8 @@ public class PreviewController {
             return respond("", channel);
         }
         String resolvedChannel = target.channel() != null ? target.channel() : channel;
-        String output = pageRenderService.renderPage(target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request));
+        String output = pageRenderService.renderPage(
+                projectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request));
         return respond(output, resolvedChannel);
     }
 
@@ -127,7 +130,7 @@ public class PreviewController {
             @RequestParam(defaultValue = "html") String channel,
             @RequestBody PreviewSectionRequest body,
             HttpServletRequest request) {
-        String output = pageRenderService.renderSection(body.templateUuid(), body.sampleContent(), channel);
+        String output = pageRenderService.renderSection(projectId(projectKey), body.templateUuid(), body.sampleContent(), channel);
         return respond(output, channel);
     }
 
@@ -164,5 +167,9 @@ public class PreviewController {
         String url = request.getRequestURL().toString();
         int idx = url.indexOf("/projects/");
         return idx < 0 ? "" : url.substring(0, idx);
+    }
+
+    private long projectId(String key) {
+        return projectService.requireByKey(key).getId();
     }
 }

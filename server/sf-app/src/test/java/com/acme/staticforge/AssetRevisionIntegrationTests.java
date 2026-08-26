@@ -60,8 +60,8 @@ class AssetRevisionIntegrationTests {
 
         AssetVersionView updated = folderService.update(created.uuid(), "Products Revised", firstRevision, fx.ctx());
 
-        AssetVersionView atFirst = assetService.findAt(created.uuid(), firstRevision).orElseThrow();
-        AssetVersionView atCurrent = assetService.requireCurrent(created.uuid());
+        AssetVersionView atFirst = assetService.findAt(fx.project().getId(), created.uuid(), firstRevision).orElseThrow();
+        AssetVersionView atCurrent = assetService.requireCurrent(fx.project().getId(), created.uuid());
 
         assertThat(atFirst.displayName()).isEqualTo("Products");
         assertThat(atCurrent.displayName()).isEqualTo("Products Revised");
@@ -130,7 +130,7 @@ class AssetRevisionIntegrationTests {
         assertThat(result.touchedAssetCount()).isEqualTo(1);
         assertThat(result.revision()).isEqualTo(before + 1);
 
-        AssetVersionView moved = assetService.requireCurrent(child.uuid());
+        AssetVersionView moved = assetService.requireCurrent(fx.project().getId(), child.uuid());
         assertThat(moved.folderPath()).isEqualTo("/tools/");
     }
 
@@ -141,7 +141,7 @@ class AssetRevisionIntegrationTests {
         AssetVersionView created = folderService.create(null, "About", FolderScope.PAGES, fx.ctx());
         assetService.changeUid(created.uuid(), "about_us", fx.ctx());
 
-        AssetVersionView current = assetService.requireCurrent(created.uuid());
+        AssetVersionView current = assetService.requireCurrent(fx.project().getId(), created.uuid());
         assertThat(current.uid()).isEqualTo("about_us");
     }
 

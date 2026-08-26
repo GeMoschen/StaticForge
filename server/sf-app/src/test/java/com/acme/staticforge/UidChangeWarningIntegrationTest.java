@@ -54,7 +54,7 @@ class UidChangeWarningIntegrationTest {
                         Map.of("html", "<div>$CMS_INCLUDE(section_template:card)$</div>"), null, false, null),
                 fx.ctx());
 
-        assertThat(assetService.requireCurrent(card.uuid()).uid()).isEqualTo("card");
+        assertThat(assetService.requireCurrent(fx.project().getId(), card.uuid()).uid()).isEqualTo("card");
 
         UidChangeResult result = assetService.changeUid(card.uuid(), "card_renamed", fx.ctx());
 

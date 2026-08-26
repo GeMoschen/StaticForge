@@ -45,9 +45,9 @@ public interface PageService {
 
     AssetVersionView duplicate(UUID uuid, RevisionContext ctx);
 
-    AssetVersionView find(UUID uuid);
+    AssetVersionView find(long projectId, UUID uuid);
 
-    TemplateRefView resolveTemplate(UUID uuid);
+    TemplateRefView resolveTemplate(long projectId, UUID uuid);
 
     List<AssetVersionView> list(long projectId, PageQuery query);
 }

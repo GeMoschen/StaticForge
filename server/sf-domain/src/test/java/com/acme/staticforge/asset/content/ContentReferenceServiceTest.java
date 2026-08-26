@@ -42,8 +42,8 @@ class ContentReferenceServiceTest {
         UUID pageUuid = UUID.randomUUID();
         Asset media = asset(11L);
         Asset page = asset(22L);
-        when(assets.findByUuid(mediaUuid)).thenReturn(Optional.of(media));
-        when(assets.findByUuid(pageUuid)).thenReturn(Optional.of(page));
+        when(assets.findByProjectIdAndUuid(1L, mediaUuid)).thenReturn(Optional.of(media));
+        when(assets.findByProjectIdAndUuid(1L, pageUuid)).thenReturn(Optional.of(page));
 
         JsonNode content = JsonUtil.parse("""
                 {
@@ -52,7 +52,7 @@ class ContentReferenceServiceTest {
                 }
                 """.formatted(mediaUuid, pageUuid));
 
-        List<AssetReference> result = service.materialize(1L, 5L, content);
+        List<AssetReference> result = service.materialize(1L, 1L, 5L, content);
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(AssetReference::getKind)
@@ -70,8 +70,8 @@ class ContentReferenceServiceTest {
         UUID mediaUuid = UUID.randomUUID();
         Asset page = asset(10L);
         Asset media = asset(20L);
-        when(assets.findByUuid(pageUuid)).thenReturn(Optional.of(page));
-        when(assets.findByUuid(mediaUuid)).thenReturn(Optional.of(media));
+        when(assets.findByProjectIdAndUuid(1L, pageUuid)).thenReturn(Optional.of(page));
+        when(assets.findByProjectIdAndUuid(1L, mediaUuid)).thenReturn(Optional.of(media));
 
         JsonNode content = JsonUtil.parse("""
                 {
@@ -80,7 +80,7 @@ class ContentReferenceServiceTest {
                 }
                 """.formatted(pageUuid, mediaUuid));
 
-        List<AssetReference> result = service.materialize(1L, 5L, content);
+        List<AssetReference> result = service.materialize(1L, 1L, 5L, content);
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(AssetReference::getKind)
@@ -90,11 +90,11 @@ class ContentReferenceServiceTest {
     @Test
     void skipsDanglingReferences() {
         UUID dangling = UUID.randomUUID();
-        when(assets.findByUuid(dangling)).thenReturn(Optional.empty());
+        when(assets.findByProjectIdAndUuid(1L, dangling)).thenReturn(Optional.empty());
 
         JsonNode content = JsonUtil.parse("{\"heroImage\":{\"type\":\"MEDIA_REF\",\"uuid\":\"%s\"}}".formatted(dangling));
 
-        List<AssetReference> result = service.materialize(1L, 5L, content);
+        List<AssetReference> result = service.materialize(1L, 1L, 5L, content);
 
         assertThat(result).isEmpty();
         verify(references, never()).save(any(AssetReference.class));
@@ -104,13 +104,13 @@ class ContentReferenceServiceTest {
     void keepsReferencesAtDistinctPathsToSameTarget() {
         UUID mediaUuid = UUID.randomUUID();
         Asset media = asset(11L);
-        when(assets.findByUuid(mediaUuid)).thenReturn(Optional.of(media));
+        when(assets.findByProjectIdAndUuid(1L, mediaUuid)).thenReturn(Optional.of(media));
 
         JsonNode content = JsonUtil.parse("""
                 { "a": { "type": "MEDIA_REF", "uuid": "%s" }, "b": { "type": "MEDIA_REF", "uuid": "%s" } }
                 """.formatted(mediaUuid, mediaUuid));
 
-        List<AssetReference> result = service.materialize(1L, 5L, content);
+        List<AssetReference> result = service.materialize(1L, 1L, 5L, content);
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(AssetReference::getSourcePath)
@@ -121,13 +121,13 @@ class ContentReferenceServiceTest {
     void materializesReferencesInsideLists() {
         UUID mediaUuid = UUID.randomUUID();
         Asset media = asset(11L);
-        when(assets.findByUuid(mediaUuid)).thenReturn(Optional.of(media));
+        when(assets.findByProjectIdAndUuid(1L, mediaUuid)).thenReturn(Optional.of(media));
 
         JsonNode content = JsonUtil.parse("""
                 { "gallery": [ { "type": "MEDIA_REF", "uuid": "%s" }, { "type": "MEDIA_REF", "uuid": "%s" } ] }
                 """.formatted(mediaUuid, mediaUuid));
 
-        List<AssetReference> result = service.materialize(1L, 5L, content);
+        List<AssetReference> result = service.materialize(1L, 1L, 5L, content);
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(AssetReference::getSourcePath)

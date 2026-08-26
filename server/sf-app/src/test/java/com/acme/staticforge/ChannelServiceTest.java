@@ -151,7 +151,7 @@ class ChannelServiceTest {
 
         assertThat(markdown.getKey()).isEqualTo("markdown");
 
-        AssetVersionView seeded = assetService.requireCurrent(template.uuid());
+        AssetVersionView seeded = assetService.requireCurrent(fx.project().getId(), template.uuid());
         assertThat(seeded.payload().path("channelTemplates").has("markdown")).isTrue();
         assertThat(seeded.payload().path("channelTemplates").path("markdown").path("source").asText())
                 .isEqualTo("<h1>$CMS_VALUE(headline)$</h1>");

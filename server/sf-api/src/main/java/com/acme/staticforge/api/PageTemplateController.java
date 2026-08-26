@@ -72,7 +72,7 @@ public class PageTemplateController extends AbstractTemplateController {
     @GetMapping("/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<TemplateDetail> detail(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        TemplateView view = templateService.get(uuid);
+        TemplateView view = templateService.get(projectId(projectKey), uuid);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
                 .body(toDetail(view));

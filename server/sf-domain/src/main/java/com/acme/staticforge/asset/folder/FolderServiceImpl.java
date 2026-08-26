@@ -155,7 +155,7 @@ public class FolderServiceImpl implements FolderService {
         }
 
         if (startNode != null) {
-            Asset targetAsset = assetRepository.findByUuid(startNode.assetUuid())
+            Asset targetAsset = assetRepository.findByProjectIdAndUuid(ctx.projectId(), startNode.assetUuid())
                     .orElseThrow(() -> new SfException(ProblemFactory.unprocessableEntity("startNode target not found.")));
             AssetVersion targetVersion = requireOpen(targetAsset.getId());
             if (targetVersion.getFolderId() == null || !targetVersion.getFolderId().equals(folder.getId())) {
@@ -269,7 +269,7 @@ public class FolderServiceImpl implements FolderService {
     }
 
     private Asset requireFolder(UUID uuid, long projectId) {
-        Asset asset = assetRepository.findByUuid(uuid)
+        Asset asset = assetRepository.findByProjectIdAndUuid(projectId, uuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Folder not found.")));
         if (asset.getAssetType() != AssetType.FOLDER) {
             throw new SfException(ProblemFactory.unprocessableEntity("Asset is not a folder."));
@@ -280,7 +280,7 @@ public class FolderServiceImpl implements FolderService {
     private FolderRef resolveTarget(UUID targetUuid, long projectId, RevisionContext ctx) {
         if (targetUuid == null) {
             AssetVersionView root = assetService.ensureRootFolder(projectId, ctx);
-            Asset rootAsset = assetRepository.findByUuid(root.uuid()).orElseThrow();
+            Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
             return new FolderRef(rootAsset.getId(), PathService.ROOT_PATH);
         }
         Asset target = requireFolder(targetUuid, projectId);

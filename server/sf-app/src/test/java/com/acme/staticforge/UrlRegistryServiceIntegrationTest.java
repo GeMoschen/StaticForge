@@ -78,7 +78,7 @@ class UrlRegistryServiceIntegrationTest {
         assertThat(persisted.isOverridden()).isFalse();
 
         // Edit the underlying page: its slug-derived URL would be different if recomputed.
-        AssetVersionView targetPage = assetService.requireCurrent(pageTargetUuid(pageRef));
+        AssetVersionView targetPage = assetService.requireCurrent(fx.project().getId(), pageTargetUuid(pageRef));
         assetService.update(
                 targetPage.uuid(),
                 new UpdateAssetCommand("Totally Different Title", targetPage.payload()),
@@ -227,7 +227,7 @@ class UrlRegistryServiceIntegrationTest {
     private AssetVersionView navRoot(Fixture fx) {
         List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
         FolderNode root = tree.get(0);
-        return assetService.requireCurrent(root.uuid());
+        return assetService.requireCurrent(fx.project().getId(), root.uuid());
     }
 
     private AssetVersionView createPage(Fixture fx, String name) {

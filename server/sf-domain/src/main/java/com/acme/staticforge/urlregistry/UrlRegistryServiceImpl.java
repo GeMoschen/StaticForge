@@ -155,12 +155,12 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
     }
 
     private UrlRegistryEntry computeAndPersist(UUID pageReferenceUuid, String channelKey, UrlArea area, RevisionContext ctx) {
-        UUID resolvedPageUuid = navigationService.resolve(pageReferenceUuid, navigationLookup);
+        UUID resolvedPageUuid = navigationService.resolve(ctx.projectId(), pageReferenceUuid, navigationLookup);
         if (resolvedPageUuid == null) {
             throw new SfException(ProblemFactory.notFound("Page reference does not resolve to a navigable page."));
         }
         String url = outputPathResolver
-                .resolveUrl(resolvedPageUuid, channelKey, DEFAULT_INDEX_UID, DEFAULT_TRAILING_SLASH, DEFAULT_URL_STRATEGY)
+                .resolveUrl(ctx.projectId(), resolvedPageUuid, channelKey, DEFAULT_INDEX_UID, DEFAULT_TRAILING_SLASH, DEFAULT_URL_STRATEGY)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Resolved page not found.")));
         UrlRegistryEntry entry = new UrlRegistryEntry(
                 ctx.projectId(), channelKey, pageReferenceUuid, area, url, Instant.now(), currentRevision(ctx.projectId()), false);

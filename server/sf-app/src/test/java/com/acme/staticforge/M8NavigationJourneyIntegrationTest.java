@@ -207,13 +207,13 @@ class M8NavigationJourneyIntegrationTest {
         // access), but a PREVIEW-only override must never leak into GENERATED nor be affected by
         // a later GENERATED-only reset/regeneration.
         // ------------------------------------------------------------------
-        String previewHtmlBefore = pageRenderService.renderPage(homePage.uuid(), null, "html", false);
+        String previewHtmlBefore = pageRenderService.renderPage(fx.project().getId(), homePage.uuid(), null, "html", false);
         String previewHrefBefore = hrefFor(previewHtmlBefore, "Browse Catalog");
         assertThat(previewHrefBefore).isEqualTo(catalogRefHref3);
 
         urlRegistryService.override(catalogRef.uuid(), "html", UrlArea.PREVIEW, "preview-only/catalog.html", fx.ctx());
 
-        String previewHtmlAfter = pageRenderService.renderPage(homePage.uuid(), null, "html", false);
+        String previewHtmlAfter = pageRenderService.renderPage(fx.project().getId(), homePage.uuid(), null, "html", false);
         assertThat(hrefFor(previewHtmlAfter, "Browse Catalog")).isEqualTo("preview-only/catalog.html");
 
         long runId4 = runGenerationToSuccess(fx, target);
@@ -311,7 +311,7 @@ class M8NavigationJourneyIntegrationTest {
     private AssetVersionView navRootFolder(Fixture fx) {
         List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
         FolderNode root = tree.get(0);
-        return assetService.requireCurrent(root.uuid());
+        return assetService.requireCurrent(fx.project().getId(), root.uuid());
     }
 
     private Fixture newFixture() {

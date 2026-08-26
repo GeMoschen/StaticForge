@@ -61,7 +61,7 @@ class RevisionInvariantsTest {
 
         for (UpdateOp op : ops) {
             UUID uuid = uuids.get(op.index());
-            long expected = h.assets.requireCurrent(uuid).validFromRevision();
+            long expected = h.assets.requireCurrent(project.getId(), uuid).validFromRevision();
             h.assets.update(
                     uuid,
                     new UpdateAssetCommand(op.name(), payload.deepCopy()),
@@ -79,7 +79,7 @@ class RevisionInvariantsTest {
         }
 
         for (UUID uuid : uuids) {
-            Asset asset = h.assetRepository.findByUuid(uuid).orElseThrow();
+            Asset asset = h.assetRepository.findByProjectIdAndUuid(project.getId(), uuid).orElseThrow();
             List<AssetVersion> versions = h.versionRepository.findByAssetIdOrderByValidFromRevisionDesc(asset.getId());
             for (long r = 1; r <= n; r++) {
                 final long rr = r;

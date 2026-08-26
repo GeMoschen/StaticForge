@@ -33,16 +33,16 @@ public class NavigationServiceImpl implements NavigationService {
             .thenComparing(a -> nullToEmpty(a.uid()));
 
     @Override
-    public UUID resolve(UUID pageReferenceUuid, NavigationLookup lookup) {
-        return resolve(pageReferenceUuid, lookup, new ArrayList<>());
+    public UUID resolve(long projectId, UUID pageReferenceUuid, NavigationLookup lookup) {
+        return resolve(projectId, pageReferenceUuid, lookup, new ArrayList<>());
     }
 
     @Override
-    public UUID resolve(UUID pageReferenceUuid, NavigationLookup lookup, List<Diagnostic> diagnostics) {
+    public UUID resolve(long projectId, UUID pageReferenceUuid, NavigationLookup lookup, List<Diagnostic> diagnostics) {
         if (pageReferenceUuid == null) {
             return null;
         }
-        NavigationAsset ref = lookup.byUuid(pageReferenceUuid).orElse(null);
+        NavigationAsset ref = lookup.byUuid(projectId, pageReferenceUuid).orElse(null);
         if (ref == null || ref.type() != AssetType.PAGE_REFERENCE) {
             return null;
         }
@@ -54,25 +54,26 @@ public class NavigationServiceImpl implements NavigationService {
         }
 
         if ("PAGE".equals(kind)) {
-            NavigationAsset page = lookup.byUuid(targetAssetUuid).orElse(null);
+            NavigationAsset page = lookup.byUuid(projectId, targetAssetUuid).orElse(null);
             return (page != null && page.type() == AssetType.PAGE) ? targetAssetUuid : null;
         }
         if ("FOLDER".equals(kind)) {
-            return firstNavigablePage(targetAssetUuid, lookup).orElse(null);
+            return firstNavigablePage(projectId, targetAssetUuid, lookup).orElse(null);
         }
         return null;
     }
 
     @Override
-    public Optional<UUID> firstNavigablePage(UUID pageStoreFolderUuid, NavigationLookup lookup) {
-        return firstNavigablePage(pageStoreFolderUuid, lookup, new LinkedHashSet<>(), 0);
+    public Optional<UUID> firstNavigablePage(long projectId, UUID pageStoreFolderUuid, NavigationLookup lookup) {
+        return firstNavigablePage(projectId, pageStoreFolderUuid, lookup, new LinkedHashSet<>(), 0);
     }
 
-    private Optional<UUID> firstNavigablePage(UUID folderUuid, NavigationLookup lookup, Set<UUID> visited, int depth) {
+    private Optional<UUID> firstNavigablePage(
+            long projectId, UUID folderUuid, NavigationLookup lookup, Set<UUID> visited, int depth) {
         if (folderUuid == null || depth > PathService.MAX_DEPTH || !visited.add(folderUuid)) {
             return Optional.empty();
         }
-        List<NavigationAsset> children = lookup.childrenOf(folderUuid);
+        List<NavigationAsset> children = lookup.childrenOf(projectId, folderUuid);
 
         List<NavigationAsset> pages = children.stream()
                 .filter(a -> a.type() == AssetType.PAGE)
@@ -87,7 +88,7 @@ public class NavigationServiceImpl implements NavigationService {
                 .sorted(FOLDER_ORDER)
                 .toList();
         for (NavigationAsset sub : subfolders) {
-            Optional<UUID> found = firstNavigablePage(sub.uuid(), lookup, visited, depth + 1);
+            Optional<UUID> found = firstNavigablePage(projectId, sub.uuid(), lookup, visited, depth + 1);
             if (found.isPresent()) {
                 return found;
             }
@@ -96,17 +97,23 @@ public class NavigationServiceImpl implements NavigationService {
     }
 
     @Override
-    public Optional<UUID> resolveFolderEntry(UUID navFolderUuid, NavigationLookup lookup) {
-        return resolveFolderEntry(navFolderUuid, lookup, new ArrayList<>());
+    public Optional<UUID> resolveFolderEntry(long projectId, UUID navFolderUuid, NavigationLookup lookup) {
+        return resolveFolderEntry(projectId, navFolderUuid, lookup, new ArrayList<>());
     }
 
     @Override
-    public Optional<UUID> resolveFolderEntry(UUID navFolderUuid, NavigationLookup lookup, List<Diagnostic> diagnostics) {
-        return resolveFolderEntry(navFolderUuid, lookup, diagnostics, new LinkedHashSet<>(), 0);
+    public Optional<UUID> resolveFolderEntry(
+            long projectId, UUID navFolderUuid, NavigationLookup lookup, List<Diagnostic> diagnostics) {
+        return resolveFolderEntry(projectId, navFolderUuid, lookup, diagnostics, new LinkedHashSet<>(), 0);
     }
 
     private Optional<UUID> resolveFolderEntry(
-            UUID navFolderUuid, NavigationLookup lookup, List<Diagnostic> diagnostics, Set<UUID> visited, int depth) {
+            long projectId,
+            UUID navFolderUuid,
+            NavigationLookup lookup,
+            List<Diagnostic> diagnostics,
+            Set<UUID> visited,
+            int depth) {
         if (navFolderUuid == null) {
             return Optional.empty();
         }
@@ -128,7 +135,7 @@ public class NavigationServiceImpl implements NavigationService {
             return Optional.empty();
         }
 
-        NavigationAsset folder = lookup.byUuid(navFolderUuid).orElse(null);
+        NavigationAsset folder = lookup.byUuid(projectId, navFolderUuid).orElse(null);
         if (folder == null || folder.type() != AssetType.FOLDER) {
             return Optional.empty();
         }
@@ -137,44 +144,44 @@ public class NavigationServiceImpl implements NavigationService {
             return Optional.empty();
         }
         if (startNode.kind() == StartNodeKind.PAGE_REFERENCE) {
-            return Optional.ofNullable(resolve(startNode.assetUuid(), lookup, diagnostics));
+            return Optional.ofNullable(resolve(projectId, startNode.assetUuid(), lookup, diagnostics));
         }
-        return resolveFolderEntry(startNode.assetUuid(), lookup, diagnostics, visited, depth + 1);
+        return resolveFolderEntry(projectId, startNode.assetUuid(), lookup, diagnostics, visited, depth + 1);
     }
 
     @Override
-    public NavTreeNode tree(UUID navFolderUuid, int depth, NavigationLookup lookup, List<Diagnostic> diagnostics) {
-        return buildNode(navFolderUuid, depth, lookup, diagnostics, 0);
+    public NavTreeNode tree(long projectId, UUID navFolderUuid, int depth, NavigationLookup lookup, List<Diagnostic> diagnostics) {
+        return buildNode(projectId, navFolderUuid, depth, lookup, diagnostics, 0);
     }
 
     private NavTreeNode buildNode(
-            UUID uuid, int maxDepth, NavigationLookup lookup, List<Diagnostic> diagnostics, int level) {
-        NavigationAsset asset = lookup.byUuid(uuid).orElse(null);
+            long projectId, UUID uuid, int maxDepth, NavigationLookup lookup, List<Diagnostic> diagnostics, int level) {
+        NavigationAsset asset = lookup.byUuid(projectId, uuid).orElse(null);
         if (asset == null) {
             return null;
         }
 
         UUID resolvedPageUuid = switch (asset.type()) {
-            case FOLDER -> resolveFolderEntry(uuid, lookup, diagnostics).orElse(null);
-            case PAGE_REFERENCE -> resolve(uuid, lookup, diagnostics);
+            case FOLDER -> resolveFolderEntry(projectId, uuid, lookup, diagnostics).orElse(null);
+            case PAGE_REFERENCE -> resolve(projectId, uuid, lookup, diagnostics);
             default -> null;
         };
 
         List<NavTreeNode> children = List.of();
         boolean depthAllows = (maxDepth < 0 || level < maxDepth) && level < PathService.MAX_DEPTH;
         if (asset.type() == AssetType.FOLDER && depthAllows) {
-            children = lookup.childrenOf(uuid).stream()
+            children = lookup.childrenOf(projectId, uuid).stream()
                     .filter(a -> a.type() == AssetType.FOLDER || a.type() == AssetType.PAGE_REFERENCE)
                     .sorted(FOLDER_ORDER)
-                    .map(a -> buildNode(a.uuid(), maxDepth, lookup, diagnostics, level + 1))
+                    .map(a -> buildNode(projectId, a.uuid(), maxDepth, lookup, diagnostics, level + 1))
                     .filter(Objects::nonNull)
                     .toList();
         }
 
-        return new NavTreeNode(asset.uuid(), asset.type(), asset.uid(), asset.displayName(), label(asset, lookup), resolvedPageUuid, children);
+        return new NavTreeNode(asset.uuid(), asset.type(), asset.uid(), asset.displayName(), label(projectId, asset, lookup), resolvedPageUuid, children);
     }
 
-    private String label(NavigationAsset asset, NavigationLookup lookup) {
+    private String label(long projectId, NavigationAsset asset, NavigationLookup lookup) {
         if (asset.type() != AssetType.PAGE_REFERENCE) {
             return asset.displayName();
         }
@@ -186,7 +193,7 @@ public class NavigationServiceImpl implements NavigationService {
         JsonNode target = payload == null ? null : payload.get("target");
         UUID targetUuid = parseUuid(JsonUtil.text(target, "assetUuid").orElse(null));
         if (targetUuid != null) {
-            NavigationAsset resolvedTarget = lookup.byUuid(targetUuid).orElse(null);
+            NavigationAsset resolvedTarget = lookup.byUuid(projectId, targetUuid).orElse(null);
             if (resolvedTarget != null && resolvedTarget.displayName() != null) {
                 return resolvedTarget.displayName();
             }

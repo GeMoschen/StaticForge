@@ -55,9 +55,13 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p><strong>Import</strong> parses the archive and recreates every asset in the target
  * project as a single {@code IMPORT} bulk revision (spec §7.2), written through the real
- * revision machinery. Each asset receives a fresh UUIDv7, a UID re-derived by
- * {@link UidGenerator} so it stays unique, a remapped payload (via {@link UuidRemapper})
- * with {@code payload.origin} provenance (§6.1), and resolved folder/template edges.
+ * revision machinery. Each asset preserves its source UUID by default (feature
+ * `cross-project-import-identity`, `M9.3.1`) — a fresh UUIDv7 is minted only when that UUID
+ * already exists in the target project ({@code asset.uuid} is unique per {@code (project_id,
+ * uuid)}, not server-wide, since `M9.1`) — a UID re-derived by {@link UidGenerator} so it stays
+ * unique, a remapped payload (via {@link UuidRemapper}) with {@code payload.origin} provenance
+ * (§6.1, plus {@code origin.sourceUuid} when the collision path re-keyed the asset), and
+ * resolved folder/template edges.
  */
 @Service
 @RevisionAware
@@ -183,14 +187,26 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Revision revision = revisionService.allocate(
                 targetProjectId, ChangeType.IMPORT, ctx.comment(), ctx.userId());
 
+        // Preserve each asset's source UUID by default (feature cross-project-import-identity,
+        // M9.3.1) — a fresh UUIDv7 is only minted when the source UUID already exists in the
+        // *target* project, which is now a real, per-asset possibility rather than an impossible
+        // case, since M9.1 loosened asset.uuid uniqueness to (project_id, uuid).
         Map<String, UUID> remap = new HashMap<>();
+        Set<String> collided = new HashSet<>();
         for (ExportedAsset asset : assets) {
-            remap.put(asset.uuid().toLowerCase(), UuidV7.generate());
+            String key = asset.uuid().toLowerCase();
+            UUID sourceUuid = UUID.fromString(asset.uuid());
+            if (assetRepository.findByProjectIdAndUuid(targetProjectId, sourceUuid).isPresent()) {
+                remap.put(key, UuidV7.generate());
+                collided.add(key);
+            } else {
+                remap.put(key, sourceUuid);
+            }
         }
 
         ExportedAsset rootAsset = findRootFolder(assets);
         AssetVersionView targetRoot = assetService.ensureRootFolder(targetProjectId, ctx);
-        Long targetRootId = assetRepository.findByUuid(targetRoot.uuid())
+        Long targetRootId = assetRepository.findByProjectIdAndUuid(targetProjectId, targetRoot.uuid())
                 .map(Asset::getId)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Root folder not found.")));
         if (rootAsset != null) {
@@ -213,7 +229,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             if (asset == rootAsset) {
                 continue;
             }
-            createImportedAsset(targetProjectId, asset, remap, idMaps, manifest, importedAt,
+            createImportedAsset(targetProjectId, asset, remap, collided, idMaps, manifest, importedAt,
                     revision.getRevisionId(), ctx);
             created++;
         }
@@ -222,7 +238,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     }
 
     private void createImportedAsset(
-            long projectId, ExportedAsset asset, Map<String, UUID> remap, IdMaps idMaps,
+            long projectId, ExportedAsset asset, Map<String, UUID> remap, Set<String> collided, IdMaps idMaps,
             ExportManifest manifest, Instant importedAt, long revision, RevisionContext ctx) {
         AssetType type = AssetType.valueOf(asset.type());
         UUID uuid = remap.get(asset.uuid().toLowerCase());
@@ -241,6 +257,12 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         origin.put("from", "import");
         origin.put("sourceProjectKey", manifest.sourceProjectKey());
         origin.put("importedAt", importedAt.toString());
+        if (collided.contains(asset.uuid().toLowerCase())) {
+            // Debugging/audit metadata only (§6.1) — the DB-level (project_id, uuid) existence
+            // check above is what actually drove the collision path, this just lets a human
+            // inspecting the asset's history see it was re-keyed on import.
+            origin.put("sourceUuid", asset.uuid());
+        }
 
         Asset saved = assetRepository.save(new Asset(uuid, projectId, type, uid, importedAt, ctx.userId()));
         idMaps.put(asset.uuid().toLowerCase(), saved.getId(), folderPath);

@@ -3,6 +3,7 @@ package com.acme.staticforge.urlregistry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -50,8 +51,8 @@ class UrlRegistryServiceImplTest {
         LiveNavigationLookup lookup = mock(LiveNavigationLookup.class);
         service = new UrlRegistryServiceImpl(repository, navigationService, lookup, outputPathResolver, revisionService);
 
-        when(navigationService.resolve(eq(PAGE_REF), any())).thenReturn(PAGE);
-        when(outputPathResolver.resolveUrl(eq(PAGE), eq("html"), any(), anyBoolean(), any()))
+        when(navigationService.resolve(eq(PROJECT_ID), eq(PAGE_REF), any())).thenReturn(PAGE);
+        when(outputPathResolver.resolveUrl(eq(PROJECT_ID), eq(PAGE), eq("html"), any(), anyBoolean(), any()))
                 .thenReturn(Optional.of("products/hammer.html"));
         when(revisionService.findRecent(eq(PROJECT_ID), any())).thenReturn(List.of());
     }
@@ -80,7 +81,7 @@ class UrlRegistryServiceImplTest {
         String url = service.resolve(PAGE_REF, "html", UrlArea.GENERATED, ctx);
 
         assertThat(url).isEqualTo("cached/url.html");
-        verify(navigationService, never()).resolve(any(), any());
+        verify(navigationService, never()).resolve(anyLong(), any(), any());
         verify(repository, never()).save(any());
     }
 

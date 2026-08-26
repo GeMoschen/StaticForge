@@ -5,8 +5,8 @@ import com.acme.staticforge.revision.RevisionContext;
 /**
  * Project portability and migration path (spec §26.5): exports a project's current state to
  * a deterministic ZIP (assets JSON + content-addressed media blobs + a manifest) and imports
- * such an archive into a target project, assigning fresh UUIDv7s and recording import
- * provenance in {@code payload.origin} (§6.1).
+ * such an archive into a target project, preserving each asset's source UUID by default and
+ * recording import provenance in {@code payload.origin} (§6.1).
  */
 public interface ProjectExportImportService {
 
@@ -17,9 +17,11 @@ public interface ProjectExportImportService {
     byte[] exportProject(long projectId);
 
     /**
-     * Recreates the exported project's assets inside {@code targetProjectId}. Every asset
-     * receives a fresh UUIDv7, {@code payload.origin} provenance, remapped references and a
-     * UID that is re-derived to stay unique within the target project.
+     * Recreates the exported project's assets inside {@code targetProjectId}. Each asset
+     * preserves its source UUID unless that UUID already exists in the target project, in which
+     * case a fresh UUIDv7 is minted instead (feature `cross-project-import-identity`, `M9.3.1`);
+     * every asset gets {@code payload.origin} provenance, remapped references and a UID that is
+     * re-derived to stay unique within the target project.
      */
     ImportResult importProject(long targetProjectId, byte[] zipBytes, RevisionContext ctx);
 }

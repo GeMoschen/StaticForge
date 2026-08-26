@@ -22,8 +22,8 @@ import org.springframework.stereotype.Component;
  * page's live state matches what a given revision's snapshot would show — sf-domain cannot
  * depend on sf-generate, so a live equivalent (not a Snapshot bypass) was the only option.
  *
- * <p>Stateless; asset uuids are globally unique so no project scoping is needed here, matching
- * {@code LiveNavigationLookup}'s convention.
+ * <p>Stateless; takes an explicit {@code projectId} for every asset uuid lookup, matching
+ * {@code LiveNavigationLookup}'s (now-corrected) convention.
  */
 @Component
 public class LiveOutputPathResolver {
@@ -42,27 +42,27 @@ public class LiveOutputPathResolver {
      * live, non-deleted asset.
      */
     public Optional<String> resolveUrl(
-            UUID pageUuid, String channel, String indexUid, boolean trailingSlash, String urlStrategy) {
-        return pageContext(pageUuid)
+            long projectId, UUID pageUuid, String channel, String indexUid, boolean trailingSlash, String urlStrategy) {
+        return pageContext(projectId, pageUuid)
                 .map(context -> normalize(OutputPathExpander.resolveUrl(context, channel, indexUid, trailingSlash, urlStrategy)));
     }
 
-    private Optional<OutputPathExpander.PageContext> pageContext(UUID pageUuid) {
+    private Optional<OutputPathExpander.PageContext> pageContext(long projectId, UUID pageUuid) {
         if (pageUuid == null) {
             return Optional.empty();
         }
         return assetRepository
-                .findByUuid(pageUuid)
+                .findByProjectIdAndUuid(projectId, pageUuid)
                 .flatMap(asset -> currentVersion(asset.getId())
                         .map(version -> new OutputPathExpander.PageContext(
                                 asset.getUid(),
                                 version.getDisplayName(),
                                 version.getFolderPath(),
                                 version.getPayload(),
-                                templatePayload(version.getPayload()))));
+                                templatePayload(projectId, version.getPayload()))));
     }
 
-    private JsonNode templatePayload(JsonNode payload) {
+    private JsonNode templatePayload(long projectId, JsonNode payload) {
         if (payload == null) {
             return null;
         }
@@ -77,7 +77,7 @@ public class LiveOutputPathResolver {
             return null;
         }
         return assetRepository
-                .findByUuid(templateUuid)
+                .findByProjectIdAndUuid(projectId, templateUuid)
                 .flatMap(template -> currentVersion(template.getId()))
                 .map(AssetVersion::getPayload)
                 .orElse(null);

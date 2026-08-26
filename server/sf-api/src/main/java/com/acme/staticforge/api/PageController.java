@@ -64,14 +64,14 @@ public class PageController {
     public ResponseEntity<PageView> create(@PathVariable String projectKey, @RequestBody CreatePageRequest body) {
         AssetVersionView view = pageService.create(
                 new CreatePageCommand(body.displayName(), body.folderUuid(), body.templateUuid()), ctx(projectKey, "create page"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     @GetMapping("/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<PageView> detail(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        AssetVersionView view = pageService.find(uuid);
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        AssetVersionView view = pageService.find(projectId(projectKey), uuid);
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     @PutMapping("/{uuid}")
@@ -82,7 +82,7 @@ public class PageController {
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody JsonNode payload) {
         AssetVersionView view = pageService.update(uuid, payload, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "update page"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     @PatchMapping("/{uuid}/content")
@@ -93,7 +93,7 @@ public class PageController {
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody JsonNode patch) {
         AssetVersionView view = pageService.patchContent(uuid, patch, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "patch content"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     @PostMapping("/{uuid}/bodies/{body}/sections")
@@ -106,7 +106,7 @@ public class PageController {
             @RequestBody AddSectionRequest request) {
         AssetVersionView view = pageService.addSection(
                 uuid, body, request.templateUuid(), request.position(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "add section"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     @PutMapping("/{uuid}/bodies/{body}/order")
@@ -119,7 +119,7 @@ public class PageController {
             @RequestBody ReorderRequest request) {
         AssetVersionView view = pageService.reorderSections(
                 uuid, body, request.instanceIds(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "reorder sections"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     @PostMapping("/{uuid}/bodies/{body}/sections/move")
@@ -139,7 +139,7 @@ public class PageController {
                 request.position(),
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, "move section"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     @DeleteMapping("/{uuid}/bodies/{body}/sections/{instanceId}")
@@ -152,14 +152,14 @@ public class PageController {
             @RequestHeader(value = "If-Match", required = false) String ifMatch) {
         AssetVersionView view = pageService.deleteSection(
                 uuid, body, instanceId, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "delete section"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     @PostMapping("/{uuid}/duplicate")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<PageView> duplicate(@PathVariable String projectKey, @PathVariable UUID uuid) {
         AssetVersionView view = pageService.duplicate(uuid, ctx(projectKey, "duplicate page"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 
     private long projectId(String key) {
@@ -170,12 +170,12 @@ public class PageController {
         return RevisionContext.of(projectId(key), securitySupport.currentUserId(), comment);
     }
 
-    private PageView toPage(AssetVersionView v) {
+    private PageView toPage(long projectId, AssetVersionView v) {
         JsonNode payload = v.payload();
         String templateRef = payload != null ? payload.path("templateRef").asText() : "";
         TemplateView template = null;
         if (!templateRef.isBlank()) {
-            TemplateRefView t = pageService.resolveTemplate(UUID.fromString(templateRef));
+            TemplateRefView t = pageService.resolveTemplate(projectId, UUID.fromString(templateRef));
             template = new TemplateView(t.uuid(), t.uid(), t.displayName());
         }
         return new PageView(

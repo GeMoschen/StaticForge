@@ -77,26 +77,26 @@ public class AssetController {
     @GetMapping("/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<AssetDetailView> detail(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        AssetVersionView view = assetService.requireCurrent(uuid);
+        AssetVersionView view = assetService.requireCurrent(projectId(projectKey), uuid);
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toDetail(view));
     }
 
     @GetMapping("/{uuid}/usages")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public List<UsageDto> usages(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        return assetService.usages(uuid).stream().map(AssetController::toUsage).toList();
+        return assetService.usages(projectId(projectKey), uuid).stream().map(AssetController::toUsage).toList();
     }
 
     @GetMapping("/{uuid}/history")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public List<AssetHistoryEntry> history(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        return assetService.history(uuid).stream().map(AssetController::toHistory).toList();
+        return assetService.history(projectId(projectKey), uuid).stream().map(AssetController::toHistory).toList();
     }
 
     @GetMapping("/{uuid}/versions/{revision}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public AssetDetailView version(@PathVariable String projectKey, @PathVariable UUID uuid, @PathVariable long revision) {
-        AssetVersionView view = assetService.findAt(uuid, revision)
+        AssetVersionView view = assetService.findAt(projectId(projectKey), uuid, revision)
                 .orElseThrow(() -> new com.acme.staticforge.common.SfException(
                         com.acme.staticforge.common.ProblemFactory.notFound("No version at revision " + revision + ".")));
         return toDetail(view);
@@ -125,7 +125,7 @@ public class AssetController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<?> move(
             @PathVariable String projectKey, @PathVariable UUID uuid, @RequestBody MoveRequest body) {
-        AssetVersionView current = assetService.requireCurrent(uuid);
+        AssetVersionView current = assetService.requireCurrent(projectId(projectKey), uuid);
         RevisionContext revisionContext = ctx(projectKey, "move");
         if (current.type() == AssetType.FOLDER) {
             return ResponseEntity.ok(toMoveResult(folderService.move(uuid, body.folderUuid(), revisionContext)));

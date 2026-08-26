@@ -134,7 +134,7 @@ class NavigationUrlRegistryIntegrationTest {
         long runId = runGenerationToSuccess(fx, target);
         String generatedHref = navHrefFromOutput(runId);
 
-        String previewHtml = pageRenderService.renderPage(homePage.uuid(), null, "html", false);
+        String previewHtml = pageRenderService.renderPage(fx.project().getId(), homePage.uuid(), null, "html", false);
         String previewHref = firstHref(previewHtml);
 
         // Both areas compute via the exact same algorithm on first access (`M8.2.2`'s "net
@@ -144,7 +144,8 @@ class NavigationUrlRegistryIntegrationTest {
         // ...but overriding PREVIEW only must not leak into GENERATED.
         urlRegistryService.override(pageRef.uuid(), "html", UrlArea.PREVIEW, "custom/preview-only.html", fx.ctx());
 
-        String previewHtmlAfterOverride = pageRenderService.renderPage(homePage.uuid(), null, "html", false);
+        String previewHtmlAfterOverride =
+                pageRenderService.renderPage(fx.project().getId(), homePage.uuid(), null, "html", false);
         assertThat(firstHref(previewHtmlAfterOverride)).isEqualTo("custom/preview-only.html");
 
         long runId2 = runGenerationToSuccess(fx, target);
@@ -254,7 +255,7 @@ class NavigationUrlRegistryIntegrationTest {
     private AssetVersionView navRoot(Fixture fx) {
         List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
         FolderNode root = tree.get(0);
-        return assetService.requireCurrent(root.uuid());
+        return assetService.requireCurrent(fx.project().getId(), root.uuid());
     }
 
     private Fixture newFixture() {

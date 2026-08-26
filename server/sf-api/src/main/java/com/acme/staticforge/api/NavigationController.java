@@ -86,20 +86,23 @@ public class NavigationController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public NavTreeView tree(@PathVariable String projectKey, @RequestParam(required = false) Integer depth) {
         int d = depth == null ? -1 : depth;
+        long projectId = projectId(projectKey);
         UUID rootUuid = navigationRootUuid(projectKey);
         List<Diagnostic> diagnostics = new ArrayList<>();
-        NavTreeNode root = navigationService.tree(rootUuid, d, navigationLookup, diagnostics);
+        NavTreeNode root = navigationService.tree(projectId, rootUuid, d, navigationLookup, diagnostics);
         if (root == null) {
             throw new SfException(ProblemFactory.notFound("Navigation root folder not found."));
         }
-        return toView(root);
+        return toView(projectId(projectKey), root);
     }
 
-    private NavTreeView toView(NavTreeNode node) {
-        String path = node.resolvedPageUuid() == null ? null : assetService.requireCurrent(node.resolvedPageUuid()).folderPath();
+    private NavTreeView toView(long projectId, NavTreeNode node) {
+        String path = node.resolvedPageUuid() == null
+                ? null
+                : assetService.requireCurrent(projectId, node.resolvedPageUuid()).folderPath();
         return new NavTreeView(
                 node.assetUuid(), node.type().name(), node.uid(), node.displayName(), node.label(),
-                node.resolvedPageUuid(), path, node.children().stream().map(this::toView).toList());
+                node.resolvedPageUuid(), path, node.children().stream().map(c -> toView(projectId, c)).toList());
     }
 
     /** Renames a navigation folder and/or sets (or clears) its {@code startNode}. */
@@ -123,7 +126,7 @@ public class NavigationController {
             view = folderService.updateStartNode(uuid, startNode, expectedRevision, ctx(projectKey, "update navigation folder startNode"));
         }
         if (view == null) {
-            view = assetService.requireCurrent(uuid);
+            view = assetService.requireCurrent(projectId(projectKey), uuid);
         }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toFolderView(view));
     }
@@ -160,7 +163,7 @@ public class NavigationController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<Void> deleteReference(
             @PathVariable String projectKey, @PathVariable UUID uuid, @RequestParam(defaultValue = "false") boolean force) {
-        pageReferenceService.find(uuid); // 404s / 422s if uuid isn't a live PageReference
+        pageReferenceService.find(projectId(projectKey), uuid); // 404s / 422s if uuid isn't a live PageReference
         assetService.softDelete(uuid, force, ctx(projectKey, "delete page reference"));
         return ResponseEntity.noContent().build();
     }
@@ -169,12 +172,13 @@ public class NavigationController {
     @GetMapping("/references/{uuid}/resolve")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public PageReferenceResolveView resolve(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        pageReferenceService.find(uuid); // 404s if uuid isn't a live PageReference
-        UUID pageUuid = navigationService.resolve(uuid, navigationLookup);
+        long projectId = projectId(projectKey);
+        pageReferenceService.find(projectId, uuid); // 404s if uuid isn't a live PageReference
+        UUID pageUuid = navigationService.resolve(projectId, uuid, navigationLookup);
         if (pageUuid == null) {
             return new PageReferenceResolveView(null, null);
         }
-        AssetVersionView page = assetService.requireCurrent(pageUuid);
+        AssetVersionView page = assetService.requireCurrent(projectId(projectKey), pageUuid);
         return new PageReferenceResolveView(page.uuid(), page.folderPath());
     }
 

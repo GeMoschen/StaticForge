@@ -32,10 +32,10 @@ public interface NavigationService {
      * for data written before validation start blocking it, or a target soft-deleted after the
      * reference was created (see this task's Notes on {@code asset_reference} materialization).
      */
-    UUID resolve(UUID pageReferenceUuid, NavigationLookup lookup);
+    UUID resolve(long projectId, UUID pageReferenceUuid, NavigationLookup lookup);
 
-    /** Same as {@link #resolve(UUID, NavigationLookup)}; also resolves through it via {@code diagnostics}. */
-    UUID resolve(UUID pageReferenceUuid, NavigationLookup lookup, List<Diagnostic> diagnostics);
+    /** Same as {@link #resolve(long, UUID, NavigationLookup)}; also resolves through it via {@code diagnostics}. */
+    UUID resolve(long projectId, UUID pageReferenceUuid, NavigationLookup lookup, List<Diagnostic> diagnostics);
 
     /**
      * The first navigable page in a page-store folder's subtree: the folder's own direct child
@@ -45,7 +45,7 @@ public interface NavigationService {
      * depth-first, returning the first page found. Empty when the entire subtree has no pages
      * (a "dangling" folder).
      */
-    Optional<UUID> firstNavigablePage(UUID pageStoreFolderUuid, NavigationLookup lookup);
+    Optional<UUID> firstNavigablePage(long projectId, UUID pageStoreFolderUuid, NavigationLookup lookup);
 
     /**
      * Resolves a {@code NAVIGATION} folder's {@code startNode} chain to a {@code Page} uuid: a
@@ -53,10 +53,10 @@ public interface NavigationService {
      * {@code startNode} recurses into this same method. Empty (never an exception) when
      * {@code startNode} is {@code null} — the folder is a pure grouping node with no entry page.
      */
-    Optional<UUID> resolveFolderEntry(UUID navFolderUuid, NavigationLookup lookup);
+    Optional<UUID> resolveFolderEntry(long projectId, UUID navFolderUuid, NavigationLookup lookup);
 
-    /** Same as {@link #resolveFolderEntry(UUID, NavigationLookup)}; reports cycle/depth truncation into {@code diagnostics}. */
-    Optional<UUID> resolveFolderEntry(UUID navFolderUuid, NavigationLookup lookup, List<Diagnostic> diagnostics);
+    /** Same as {@link #resolveFolderEntry(long, UUID, NavigationLookup)}; reports cycle/depth truncation into {@code diagnostics}. */
+    Optional<UUID> resolveFolderEntry(long projectId, UUID navFolderUuid, NavigationLookup lookup, List<Diagnostic> diagnostics);
 
     /**
      * Builds the nested navigation tree rooted at {@code navFolderUuid}: nested folders and
@@ -67,5 +67,5 @@ public interface NavigationService {
      * resolving entries is appended to {@code diagnostics}. Returns {@code null} if
      * {@code navFolderUuid} is not a live {@code FOLDER}.
      */
-    NavTreeNode tree(UUID navFolderUuid, int depth, NavigationLookup lookup, List<Diagnostic> diagnostics);
+    NavTreeNode tree(long projectId, UUID navFolderUuid, int depth, NavigationLookup lookup, List<Diagnostic> diagnostics);
 }

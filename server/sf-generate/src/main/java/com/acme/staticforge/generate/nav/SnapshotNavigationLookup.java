@@ -36,7 +36,8 @@ public final class SnapshotNavigationLookup implements NavigationLookup {
     }
 
     @Override
-    public Optional<NavigationAsset> byUuid(UUID uuid) {
+    public Optional<NavigationAsset> byUuid(long projectId, UUID uuid) {
+        // projectId is unused: interface conformance only — a Snapshot is already project-scoped by construction.
         if (uuid == null) {
             return Optional.empty();
         }
@@ -48,7 +49,8 @@ public final class SnapshotNavigationLookup implements NavigationLookup {
     }
 
     @Override
-    public List<NavigationAsset> childrenOf(UUID folderUuid) {
+    public List<NavigationAsset> childrenOf(long projectId, UUID folderUuid) {
+        // projectId is unused: interface conformance only — a Snapshot is already project-scoped by construction.
         if (folderUuid == null) {
             return List.of();
         }

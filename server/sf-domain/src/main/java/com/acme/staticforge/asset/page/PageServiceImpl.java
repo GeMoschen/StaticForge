@@ -204,21 +204,21 @@ public class PageServiceImpl implements PageService {
 
     @Override
     @Transactional(readOnly = true)
-    public AssetVersionView find(UUID uuid) {
-        return assetService.requireCurrent(uuid);
+    public AssetVersionView find(long projectId, UUID uuid) {
+        return assetService.requireCurrent(projectId, uuid);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public TemplateRefView resolveTemplate(UUID uuid) {
-        return resolveTemplate(uuid, projectOf(uuid), AssetType.PAGE_TEMPLATE).view();
+    public TemplateRefView resolveTemplate(long projectId, UUID uuid) {
+        return resolveTemplate(uuid, projectId, AssetType.PAGE_TEMPLATE).view();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AssetVersionView> list(long projectId, PageQuery query) {
-        Long folderId = query.folderUuid() == null ? null : folderId(query.folderUuid());
-        Long templateId = query.templateUuid() == null ? null : templateId(query.templateUuid());
+        Long folderId = query.folderUuid() == null ? null : folderId(projectId, query.folderUuid());
+        Long templateId = query.templateUuid() == null ? null : templateId(projectId, query.templateUuid());
         String q = query.q() == null ? null : query.q().toLowerCase();
 
         return assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.PAGE).stream()
@@ -255,7 +255,7 @@ public class PageServiceImpl implements PageService {
     }
 
     private Template resolveTemplate(UUID templateUuid, long projectId, AssetType expectedType) {
-        Asset template = assetRepository.findByUuid(templateUuid)
+        Asset template = assetRepository.findByProjectIdAndUuid(projectId, templateUuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found.")));
         if (template.getAssetType() != expectedType) {
             throw new SfException(ProblemFactory.unprocessableEntity("Template is not a " + expectedType + "."));
@@ -286,7 +286,7 @@ public class PageServiceImpl implements PageService {
     }
 
     private Asset requirePage(UUID uuid, long projectId) {
-        Asset asset = assetRepository.findByUuid(uuid)
+        Asset asset = assetRepository.findByProjectIdAndUuid(projectId, uuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found.")));
         if (asset.getAssetType() != AssetType.PAGE) {
             throw new SfException(ProblemFactory.unprocessableEntity("Asset is not a page."));
@@ -299,8 +299,8 @@ public class PageServiceImpl implements PageService {
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset has no current version.")));
     }
 
-    private Long folderId(UUID folderUuid) {
-        return assetRepository.findByUuid(folderUuid).map(Asset::getId)
+    private Long folderId(long projectId, UUID folderUuid) {
+        return assetRepository.findByProjectIdAndUuid(projectId, folderUuid).map(Asset::getId)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Folder not found.")));
     }
 
@@ -309,13 +309,8 @@ public class PageServiceImpl implements PageService {
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Folder not found.")));
     }
 
-    private long projectOf(UUID uuid) {
-        return assetRepository.findByUuid(uuid).map(Asset::getProjectId)
-                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset not found.")));
-    }
-
-    private Long templateId(UUID templateUuid) {
-        return assetRepository.findByUuid(templateUuid).map(Asset::getId)
+    private Long templateId(long projectId, UUID templateUuid) {
+        return assetRepository.findByProjectIdAndUuid(projectId, templateUuid).map(Asset::getId)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found.")));
     }
 

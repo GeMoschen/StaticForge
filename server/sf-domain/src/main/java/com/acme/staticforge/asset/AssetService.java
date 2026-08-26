@@ -30,19 +30,19 @@ public interface AssetService {
     AssetVersionView restore(UUID uuid, long fromRevision, RevisionContext ctx);
 
     /** The version valid at {@code revision}, or empty when the asset did not exist yet. */
-    Optional<AssetVersionView> findAt(UUID uuid, long revision);
+    Optional<AssetVersionView> findAt(long projectId, UUID uuid, long revision);
 
     /** The asset's current (open) version, or throws 404. */
-    AssetVersionView requireCurrent(UUID uuid);
+    AssetVersionView requireCurrent(long projectId, UUID uuid);
 
     /** Current-version summaries filtered by project/type/folder and a display-name substring. */
     Page<AssetSummary> search(AssetQuery query, Pageable pageable);
 
     /** Inbound {@link AssetReference}s, resolved to the referring asset's identity. */
-    List<UsageView> usages(UUID uuid);
+    List<UsageView> usages(long projectId, UUID uuid);
 
     /** All versions of the asset, newest first. */
-    List<AssetVersionView> history(UUID uuid);
+    List<AssetVersionView> history(long projectId, UUID uuid);
 
     /**
      * Explicit UID rename (spec §6.4): validates, allocates a revision, records history and updates

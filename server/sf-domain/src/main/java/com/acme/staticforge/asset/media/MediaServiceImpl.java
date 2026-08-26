@@ -127,8 +127,8 @@ public class MediaServiceImpl implements MediaService {
     @Transactional
     public AssetVersionView replace(UUID uuid, String fileName, String suppliedMimeType,
             byte[] bytes, RevisionContext ctx) {
-        AssetVersionView current = require(uuid);
-        long projectId = assetRepository.findByUuid(uuid)
+        AssetVersionView current = require(ctx.projectId(), uuid);
+        long projectId = assetRepository.findByProjectIdAndUuid(ctx.projectId(), uuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset not found.")))
                 .getProjectId();
         checkSize(bytes);
@@ -152,7 +152,7 @@ public class MediaServiceImpl implements MediaService {
 
         AssetVersionView updated = assetService.update(uuid,
                 new UpdateAssetCommand(current.displayName(), payload), current.validFromRevision(), ctx);
-        setMediaColumns(uuid, mimeType, finalBytes.length);
+        setMediaColumns(ctx.projectId(), uuid, mimeType, finalBytes.length);
         return updated;
     }
 
@@ -160,7 +160,7 @@ public class MediaServiceImpl implements MediaService {
     @Transactional
     public AssetVersionView updateMetadata(UUID uuid, String altText, String caption, String copyright,
             FocalPoint focalPoint, long expectedRevision, RevisionContext ctx) {
-        AssetVersionView current = require(uuid);
+        AssetVersionView current = require(ctx.projectId(), uuid);
         ObjectNode payload = JsonUtil.object(current.payload()).deepCopy();
         payload.put("altText", altText);
         payload.put("caption", caption);
@@ -177,8 +177,8 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     @Transactional(readOnly = true)
-    public AssetVersionView require(UUID uuid) {
-        AssetVersionView view = assetService.requireCurrent(uuid);
+    public AssetVersionView require(long projectId, UUID uuid) {
+        AssetVersionView view = assetService.requireCurrent(projectId, uuid);
         if (view.type() != AssetType.MEDIA) {
             throw new SfException(ProblemFactory.unprocessableEntity("Asset is not media."));
         }
@@ -195,8 +195,8 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     @Transactional(readOnly = true)
-    public MediaBinary binary(UUID uuid, String variantName) {
-        AssetVersionView view = require(uuid);
+    public MediaBinary binary(long projectId, UUID uuid, String variantName) {
+        AssetVersionView view = require(projectId, uuid);
         JsonNode payload = view.payload();
         String fileName = JsonUtil.text(payload, "fileName").orElse(view.displayName());
 
@@ -222,8 +222,8 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     @Transactional(readOnly = true)
-    public MediaBinary thumbnail(UUID uuid) {
-        AssetVersionView view = require(uuid);
+    public MediaBinary thumbnail(long projectId, UUID uuid) {
+        AssetVersionView view = require(projectId, uuid);
         String mime = JsonUtil.text(view.payload(), "mimeType").orElse("");
         if (!isRasterImage(mime)) {
             throw new SfException(ProblemFactory.unprocessableEntity("Thumbnails require an image media asset."));
@@ -266,7 +266,7 @@ public class MediaServiceImpl implements MediaService {
 
         AssetVersionView created = assetService.create(
                 new CreateAssetCommand(projectId, AssetType.MEDIA, displayName(fileName), folderUuid, payload, null), ctx);
-        setMediaColumns(created.uuid(), mimeType, finalBytes.length);
+        setMediaColumns(projectId, created.uuid(), mimeType, finalBytes.length);
         return created;
     }
 
@@ -502,8 +502,8 @@ public class MediaServiceImpl implements MediaService {
                 });
     }
 
-    private void setMediaColumns(UUID uuid, String mimeType, long sizeBytes) {
-        Asset asset = assetRepository.findByUuid(uuid)
+    private void setMediaColumns(long projectId, UUID uuid, String mimeType, long sizeBytes) {
+        Asset asset = assetRepository.findByProjectIdAndUuid(projectId, uuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset not found.")));
         mediaVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()).ifPresent(version -> {
             version.setMimeType(mimeType);

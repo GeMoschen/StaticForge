@@ -72,7 +72,7 @@ public class AssetServiceImpl implements AssetService {
         UUID uuid = UUID.randomUUID();
         String uid = uidGenerator.deriveUid(displayName, cmd.projectId(), cmd.type());
 
-        validateFolderScope(cmd.parentFolderUuid(), cmd.type());
+        validateFolderScope(cmd.projectId(), cmd.parentFolderUuid(), cmd.type());
         FolderRef parent = resolveParent(cmd.parentFolderUuid(), cmd.projectId(), ctx);
         String folderPath;
         if (cmd.type() == AssetType.FOLDER) {
@@ -84,7 +84,7 @@ public class AssetServiceImpl implements AssetService {
         JsonNode payload = cmd.initialPayload() != null ? cmd.initialPayload() : JsonUtil.parse("{}");
         Long templateAssetId = cmd.templateUuid() == null
                 ? null
-                : assetRepository.findByUuid(cmd.templateUuid())
+                : assetRepository.findByProjectIdAndUuid(cmd.projectId(), cmd.templateUuid())
                         .map(Asset::getId)
                         .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found.")));
         return createInternal(cmd.projectId(), cmd.type(), displayName, uid, uuid, parent.id(), folderPath, payload, templateAssetId, ctx);
@@ -113,7 +113,7 @@ public class AssetServiceImpl implements AssetService {
     @Override
     @Transactional
     public AssetVersionView update(UUID uuid, UpdateAssetCommand cmd, long expectedRevision, RevisionContext ctx) {
-        Asset asset = require(uuid);
+        Asset asset = require(ctx.projectId(), uuid);
         AssetVersion current = requireOpen(asset.getId());
 
         Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
@@ -138,7 +138,7 @@ public class AssetServiceImpl implements AssetService {
     @Override
     @Transactional
     public void softDelete(UUID uuid, boolean force, RevisionContext ctx) {
-        Asset asset = require(uuid);
+        Asset asset = require(ctx.projectId(), uuid);
 
         if (!force && !assetReferenceRepository.findByToAssetId(asset.getId()).isEmpty()) {
             throw new SfException(ProblemFactory.other(
@@ -179,7 +179,7 @@ public class AssetServiceImpl implements AssetService {
     @Override
     @Transactional
     public AssetVersionView restore(UUID uuid, long fromRevision, RevisionContext ctx) {
-        Asset asset = require(uuid);
+        Asset asset = require(ctx.projectId(), uuid);
         AssetVersion source = assetVersionRepository
                 .findValidAtRevision(asset.getId(), fromRevision)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("No version valid at revision " + fromRevision + ".")));
@@ -205,15 +205,15 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<AssetVersionView> findAt(UUID uuid, long revision) {
-        Asset asset = require(uuid);
+    public Optional<AssetVersionView> findAt(long projectId, UUID uuid, long revision) {
+        Asset asset = require(projectId, uuid);
         return assetVersionRepository.findValidAtRevision(asset.getId(), revision).map(this::toView);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public AssetVersionView requireCurrent(UUID uuid) {
-        Asset asset = require(uuid);
+    public AssetVersionView requireCurrent(long projectId, UUID uuid) {
+        Asset asset = require(projectId, uuid);
         return toView(requireOpen(asset.getId()));
     }
 
@@ -238,8 +238,8 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UsageView> usages(UUID uuid) {
-        Asset asset = require(uuid);
+    public List<UsageView> usages(long projectId, UUID uuid) {
+        Asset asset = require(projectId, uuid);
         return assetReferenceRepository.findByToAssetId(asset.getId()).stream()
                 .filter(ref -> ref.getValidToRevision() == null)
                 .map(ref -> {
@@ -256,8 +256,8 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AssetVersionView> history(UUID uuid) {
-        Asset asset = require(uuid);
+    public List<AssetVersionView> history(long projectId, UUID uuid) {
+        Asset asset = require(projectId, uuid);
         return assetVersionRepository.findByAssetIdOrderByValidFromRevisionDesc(asset.getId()).stream()
                 .map(this::toView)
                 .toList();
@@ -266,7 +266,7 @@ public class AssetServiceImpl implements AssetService {
     @Override
     @Transactional
     public UidChangeResult changeUid(UUID uuid, String newUid, RevisionContext ctx) {
-        Asset asset = require(uuid);
+        Asset asset = require(ctx.projectId(), uuid);
         String oldUid = asset.getUid();
         String uid = validatedUid(newUid);
 
@@ -324,13 +324,13 @@ public class AssetServiceImpl implements AssetService {
     @Override
     @Transactional
     public AssetVersionView move(UUID uuid, UUID newParentFolderUuid, RevisionContext ctx) {
-        Asset asset = require(uuid);
+        Asset asset = require(ctx.projectId(), uuid);
         if (asset.getAssetType() == AssetType.FOLDER) {
             throw new SfException(ProblemFactory.unprocessableEntity(
                     "Folder moves must use the folder move operation."));
         }
 
-        validateFolderScope(newParentFolderUuid, asset.getAssetType());
+        validateFolderScope(asset.getProjectId(), newParentFolderUuid, asset.getAssetType());
         FolderRef parent = resolveParent(newParentFolderUuid, asset.getProjectId(), ctx);
         Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.MOVE, ctx.comment(), ctx.userId());
         AssetVersion current = requireOpen(asset.getId());
@@ -420,12 +420,12 @@ public class AssetServiceImpl implements AssetService {
      * explicit target folder is given, it must belong to the store the asset type requires;
      * the implicit root (parentFolderUuid == null) and legacy/scope-less folders are permissive.
      */
-    private void validateFolderScope(UUID parentFolderUuid, AssetType assetType) {
+    private void validateFolderScope(long projectId, UUID parentFolderUuid, AssetType assetType) {
         FolderScope required = FolderScope.requiredFor(assetType);
         if (required == null || parentFolderUuid == null) {
             return;
         }
-        Asset folder = assetRepository.findByUuid(parentFolderUuid)
+        Asset folder = assetRepository.findByProjectIdAndUuid(projectId, parentFolderUuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Parent folder not found.")));
         if (folder.getAssetType() != AssetType.FOLDER) {
             return;
@@ -442,10 +442,10 @@ public class AssetServiceImpl implements AssetService {
     private FolderRef resolveParent(UUID parentFolderUuid, long projectId, RevisionContext ctx) {
         if (parentFolderUuid == null) {
             AssetVersionView root = ensureRootFolder(projectId, ctx);
-            Asset rootAsset = assetRepository.findByUuid(root.uuid()).orElseThrow();
+            Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
             return new FolderRef(rootAsset.getId(), PathService.ROOT_PATH);
         }
-        Asset folder = assetRepository.findByUuid(parentFolderUuid)
+        Asset folder = assetRepository.findByProjectIdAndUuid(projectId, parentFolderUuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Parent folder not found.")));
         if (folder.getAssetType() != AssetType.FOLDER) {
             throw new SfException(ProblemFactory.unprocessableEntity("Parent is not a folder."));
@@ -454,8 +454,8 @@ public class AssetServiceImpl implements AssetService {
         return new FolderRef(folder.getId(), version.getFolderPath());
     }
 
-    private Asset require(UUID uuid) {
-        return assetRepository.findByUuid(uuid)
+    private Asset require(long projectId, UUID uuid) {
+        return assetRepository.findByProjectIdAndUuid(projectId, uuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset not found.")));
     }
 

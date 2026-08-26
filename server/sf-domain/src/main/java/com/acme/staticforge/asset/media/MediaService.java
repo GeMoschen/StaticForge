@@ -36,15 +36,15 @@ public interface MediaService {
             FocalPoint focalPoint, long expectedRevision, RevisionContext ctx);
 
     /** The current media version. */
-    AssetVersionView require(UUID uuid);
+    AssetVersionView require(long projectId, UUID uuid);
 
     /** Current media versions filtered by MIME family, folder and display-name substring. */
     /** {@code recursive} controls whether {@code folder} matches that folder's own contents only, or also its descendants. */
     Page<AssetVersionView> list(long projectId, String mimeType, String folder, boolean recursive, String q, Pageable pageable);
 
     /** The bytes of a media asset (or a named variant), or throws when the blob is absent. */
-    MediaBinary binary(UUID uuid, String variantName);
+    MediaBinary binary(long projectId, UUID uuid, String variantName);
 
     /** A 320px-wide preview thumbnail of an image media asset. */
-    MediaBinary thumbnail(UUID uuid);
+    MediaBinary thumbnail(long projectId, UUID uuid);
 }

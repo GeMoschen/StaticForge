@@ -69,7 +69,7 @@ class TemplateServiceTest {
         assertThat(created.payload().get("compiledDefinition")).isNotNull();
         assertThat(created.payload().path("deprecated").asBoolean()).isFalse();
 
-        AssetVersionView current = assetService.requireCurrent(created.uuid());
+        AssetVersionView current = assetService.requireCurrent(fx.project().getId(), created.uuid());
         String compiledHash = current.payload().path("channelTemplates").path("html").path("compiledHash").asText();
         assertThat(compiledHash).isNotEmpty();
         assertThat(current.payload().path("contentDefinition").asText()).contains("headline");
@@ -155,8 +155,8 @@ class TemplateServiceTest {
         long after = maxRevision(fx);
         assertThat(after).isEqualTo(before + 2);
 
-        AssetVersionView migratedOne = assetService.requireCurrent(pageOne.uuid());
-        AssetVersionView migratedTwo = assetService.requireCurrent(pageTwo.uuid());
+        AssetVersionView migratedOne = assetService.requireCurrent(fx.project().getId(), pageOne.uuid());
+        AssetVersionView migratedTwo = assetService.requireCurrent(fx.project().getId(), pageTwo.uuid());
 
         JsonNode contentOne = migratedOne.payload().path("bodies").path("main").get(0).path("content");
         assertThat(contentOne.has("headline")).isFalse();

@@ -52,7 +52,7 @@ public class PageReferenceServiceImpl implements PageReferenceService {
     @Override
     @Transactional
     public AssetVersionView create(CreatePageReferenceCommand cmd, RevisionContext ctx) {
-        requireValidTarget(cmd.targetKind(), cmd.targetAssetUuid());
+        requireValidTarget(ctx.projectId(), cmd.targetKind(), cmd.targetAssetUuid());
 
         ObjectNode payload = JsonUtil.object(null);
         writeTarget(payload, cmd.targetKind(), cmd.targetAssetUuid());
@@ -73,9 +73,9 @@ public class PageReferenceServiceImpl implements PageReferenceService {
             String label,
             long expectedRevision,
             RevisionContext ctx) {
-        requireValidTarget(targetKind, targetAssetUuid);
+        requireValidTarget(ctx.projectId(), targetKind, targetAssetUuid);
 
-        Asset pageReference = requirePageReference(uuid);
+        Asset pageReference = requirePageReference(ctx.projectId(), uuid);
         AssetVersion current = requireOpen(pageReference.getId());
 
         ObjectNode payload = current.getPayload().deepCopy();
@@ -88,9 +88,9 @@ public class PageReferenceServiceImpl implements PageReferenceService {
 
     @Override
     @Transactional(readOnly = true)
-    public AssetVersionView find(UUID uuid) {
-        requirePageReference(uuid);
-        return assetService.requireCurrent(uuid);
+    public AssetVersionView find(long projectId, UUID uuid) {
+        requirePageReference(projectId, uuid);
+        return assetService.requireCurrent(projectId, uuid);
     }
 
     /**
@@ -99,11 +99,11 @@ public class PageReferenceServiceImpl implements PageReferenceService {
      * target must be a live {@code Folder} whose payload scope is {@code FolderScope.PAGES} (not
      * a navigation folder).
      */
-    private void requireValidTarget(PageReferenceTargetKind kind, UUID targetAssetUuid) {
+    private void requireValidTarget(long projectId, PageReferenceTargetKind kind, UUID targetAssetUuid) {
         if (kind == null || targetAssetUuid == null) {
             throw new SfException(ProblemFactory.unprocessableEntity("PageReference target requires a kind and assetUuid."));
         }
-        Asset target = assetRepository.findByUuid(targetAssetUuid)
+        Asset target = assetRepository.findByProjectIdAndUuid(projectId, targetAssetUuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.unprocessableEntity(
                         "PageReference target " + targetAssetUuid + " does not exist.")));
         AssetVersion version = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(target.getId())
@@ -131,7 +131,7 @@ public class PageReferenceServiceImpl implements PageReferenceService {
             throw new SfException(ProblemFactory.unprocessableEntity(
                     "PageReference FOLDER target must be a page-store folder (FolderScope.PAGES)."));
         }
-        if (navigationService.firstNavigablePage(targetAssetUuid, navigationLookup).isEmpty()) {
+        if (navigationService.firstNavigablePage(projectId, targetAssetUuid, navigationLookup).isEmpty()) {
             throw new SfException(ProblemFactory.other(
                     422,
                     "SF-DOM-0130",
@@ -154,8 +154,8 @@ public class PageReferenceServiceImpl implements PageReferenceService {
         }
     }
 
-    private Asset requirePageReference(UUID uuid) {
-        Asset asset = assetRepository.findByUuid(uuid)
+    private Asset requirePageReference(long projectId, UUID uuid) {
+        Asset asset = assetRepository.findByProjectIdAndUuid(projectId, uuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("PageReference not found.")));
         if (asset.getAssetType() != AssetType.PAGE_REFERENCE) {
             throw new SfException(ProblemFactory.unprocessableEntity("Asset is not a PageReference."));

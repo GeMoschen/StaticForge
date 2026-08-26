@@ -29,7 +29,7 @@ class NavigationServiceImplTest {
         UUID page = lookup.addPage(null, "Home", 0);
         UUID ref = lookup.addPageReferenceToPage(navRoot, "Home Link", page, null);
 
-        assertThat(service.resolve(ref, lookup)).isEqualTo(page);
+        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(page);
     }
 
     @Test
@@ -42,7 +42,7 @@ class NavigationServiceImplTest {
         lookup.addPage(pagesFolder, "Beta", 5);
         UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
 
-        assertThat(service.resolve(ref, lookup)).isEqualTo(first);
+        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(first);
     }
 
     @Test
@@ -55,8 +55,8 @@ class NavigationServiceImplTest {
         UUID deepPage = lookup.addPage(subB, "Road Bikes", 0);
         UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
 
-        assertThat(service.resolve(ref, lookup)).isEqualTo(deepPage);
-        assertThat(service.firstNavigablePage(emptySubA, lookup)).isEmpty();
+        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(deepPage);
+        assertThat(service.firstNavigablePage(1L, emptySubA, lookup)).isEmpty();
     }
 
     @Test
@@ -66,8 +66,8 @@ class NavigationServiceImplTest {
         UUID danglingFolder = lookup.addFolder(null, "Empty");
         UUID ref = lookup.addPageReferenceToFolder(navRoot, "Dead Link", danglingFolder, null);
 
-        assertThat(service.resolve(ref, lookup)).isNull();
-        assertThat(service.firstNavigablePage(danglingFolder, lookup)).isEmpty();
+        assertThat(service.resolve(1L, ref, lookup)).isNull();
+        assertThat(service.firstNavigablePage(1L, danglingFolder, lookup)).isEmpty();
     }
 
     @Test
@@ -78,7 +78,7 @@ class NavigationServiceImplTest {
         UUID ref = lookup.addPageReferenceToPage(navRoot, "Home Link", page, null);
         lookup.remove(page); // simulate a stale target (the documented asset_reference gap)
 
-        assertThat(service.resolve(ref, lookup)).isNull();
+        assertThat(service.resolve(1L, ref, lookup)).isNull();
     }
 
     @Test
@@ -86,7 +86,7 @@ class NavigationServiceImplTest {
         FakeNavigationLookup lookup = new FakeNavigationLookup();
         UUID folder = lookup.addFolder(null, "Section");
 
-        assertThat(service.resolveFolderEntry(folder, lookup)).isEmpty();
+        assertThat(service.resolveFolderEntry(1L, folder, lookup)).isEmpty();
     }
 
     @Test
@@ -97,7 +97,7 @@ class NavigationServiceImplTest {
         UUID ref = lookup.addPageReferenceToPage(folder, "Home Link", page, null);
         lookup.setStartNode(folder, "PAGE_REFERENCE", ref);
 
-        assertThat(service.resolveFolderEntry(folder, lookup)).contains(page);
+        assertThat(service.resolveFolderEntry(1L, folder, lookup)).contains(page);
     }
 
     @Test
@@ -110,7 +110,7 @@ class NavigationServiceImplTest {
         lookup.setStartNode(inner, "PAGE_REFERENCE", ref);
         lookup.setStartNode(outer, "FOLDER", inner);
 
-        assertThat(service.resolveFolderEntry(outer, lookup)).contains(page);
+        assertThat(service.resolveFolderEntry(1L, outer, lookup)).contains(page);
     }
 
     @Test
@@ -122,7 +122,7 @@ class NavigationServiceImplTest {
         lookup.setStartNode(b, "FOLDER", a);
 
         List<Diagnostic> diagnostics = new ArrayList<>();
-        Optional<UUID> result = service.resolveFolderEntry(a, lookup, diagnostics);
+        Optional<UUID> result = service.resolveFolderEntry(1L, a, lookup, diagnostics);
 
         assertThat(result).isEmpty();
         assertThat(diagnostics).hasSize(1);
@@ -142,7 +142,7 @@ class NavigationServiceImplTest {
         }
 
         List<Diagnostic> diagnostics = new ArrayList<>();
-        Optional<UUID> result = service.resolveFolderEntry(root, lookup, diagnostics);
+        Optional<UUID> result = service.resolveFolderEntry(1L, root, lookup, diagnostics);
 
         assertThat(result).isEmpty();
         assertThat(diagnostics).isNotEmpty();
@@ -163,7 +163,7 @@ class NavigationServiceImplTest {
         lookup.setStartNode(childFolder, "PAGE_REFERENCE", productRef);
 
         List<Diagnostic> diagnostics = new ArrayList<>();
-        NavTreeNode tree = service.tree(root, -1, lookup, diagnostics);
+        NavTreeNode tree = service.tree(1L, root, -1, lookup, diagnostics);
 
         assertThat(tree).isNotNull();
         assertThat(tree.assetUuid()).isEqualTo(root);
@@ -191,7 +191,7 @@ class NavigationServiceImplTest {
         UUID page = lookup.addPage(null, "Home", 0);
         lookup.addPageReferenceToPage(root, "Home", page, null);
 
-        NavTreeNode tree = service.tree(root, 0, lookup, new ArrayList<>());
+        NavTreeNode tree = service.tree(1L, root, 0, lookup, new ArrayList<>());
 
         assertThat(tree.children()).isEmpty();
     }
@@ -199,6 +199,6 @@ class NavigationServiceImplTest {
     @Test
     void treeReturnsNullForAnUnknownRoot() {
         FakeNavigationLookup lookup = new FakeNavigationLookup();
-        assertThat(service.tree(UUID.randomUUID(), -1, lookup, new ArrayList<>())).isNull();
+        assertThat(service.tree(1L, UUID.randomUUID(), -1, lookup, new ArrayList<>())).isNull();
     }
 }

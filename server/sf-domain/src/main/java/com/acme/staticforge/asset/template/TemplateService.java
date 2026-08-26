@@ -33,7 +33,7 @@ public interface TemplateService {
     TemplateView deleteChannel(UUID uuid, String channelKey, long expectedRevision, RevisionContext ctx);
 
     /** The template's current (open) version, or throws 404. */
-    TemplateView get(UUID uuid);
+    TemplateView get(long projectId, UUID uuid);
 
     /** Current-version summaries of the given template kind within a project. */
     Page<AssetSummary> list(long projectId, AssetType kind, Pageable pageable);

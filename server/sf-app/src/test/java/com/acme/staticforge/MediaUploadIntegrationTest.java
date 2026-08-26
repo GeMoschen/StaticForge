@@ -77,13 +77,13 @@ class MediaUploadIntegrationTest {
 
         AssetVersionView uploaded = mediaService.upload(fx.project().getId(), null, "blue.png", "image/jpeg", png, fx.ctx());
 
-        MediaBinary original = mediaService.binary(uploaded.uuid(), null);
+        MediaBinary original = mediaService.binary(fx.project().getId(), uploaded.uuid(), null);
         assertThat(original.mimeType()).isEqualTo("image/png");
         assertThat(original.bytes()).isNotEmpty();
 
         JsonNode variants = uploaded.payload().get("variants");
         String variantName = variants.get(0).path("name").asText();
-        MediaBinary variant = mediaService.binary(uploaded.uuid(), variantName);
+        MediaBinary variant = mediaService.binary(fx.project().getId(), uploaded.uuid(), variantName);
         assertThat(variant.mimeType()).isEqualTo("image/jpeg");
         assertThat(variant.bytes()).isNotEmpty();
     }

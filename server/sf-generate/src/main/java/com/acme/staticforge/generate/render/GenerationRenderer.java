@@ -387,7 +387,7 @@ final class GenerationRenderer {
         String navChannel = args != null && args.containsKey("channel") ? args.get("channel") : defaultChannel;
 
         List<Diagnostic> navDiagnostics = new ArrayList<>();
-        NavTreeNode tree = navigationService.tree(navFolderUuid, depth, navigationLookup, navDiagnostics);
+        NavTreeNode tree = navigationService.tree(snapshot.projectId(), navFolderUuid, depth, navigationLookup, navDiagnostics);
         warnings.addAll(navDiagnostics);
         if (tree == null) {
             return null;

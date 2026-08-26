@@ -14,13 +14,13 @@ import java.util.UUID;
  */
 public interface NavigationLookup {
 
-    /** The current, non-deleted asset with this uuid, or empty if missing/deleted. */
-    Optional<NavigationAsset> byUuid(UUID uuid);
+    /** The current, non-deleted asset with this uuid in the given project, or empty if missing/deleted. */
+    Optional<NavigationAsset> byUuid(long projectId, UUID uuid);
 
     /**
      * The direct children of a folder (any asset type — callers filter by {@code type}
      * themselves), in the store's deterministic order for that asset type. Empty (never
      * {@code null}) when {@code folderUuid} is not a live folder or has no children.
      */
-    List<NavigationAsset> childrenOf(UUID folderUuid);
+    List<NavigationAsset> childrenOf(long projectId, UUID folderUuid);
 }

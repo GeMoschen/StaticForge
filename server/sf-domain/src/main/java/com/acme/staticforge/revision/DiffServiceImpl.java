@@ -47,14 +47,14 @@ public class DiffServiceImpl implements DiffService {
         JsonNode summary = revision.getSummary();
         if (summary != null && summary.has("assets")) {
             for (JsonNode entry : summary.get("assets")) {
-                Optional<AssetDiff> assetDiff = diffEntry(entry, revisionId);
+                Optional<AssetDiff> assetDiff = diffEntry(projectId, entry, revisionId);
                 assetDiff.ifPresent(diffs::add);
             }
         }
         return new RevisionDiff(projectId, revisionId, diffs);
     }
 
-    private Optional<AssetDiff> diffEntry(JsonNode entry, long revisionId) {
+    private Optional<AssetDiff> diffEntry(long projectId, JsonNode entry, long revisionId) {
         String uuidText = entry.has("uuid") ? entry.get("uuid").asText() : null;
         if (uuidText == null || uuidText.isBlank()) {
             return Optional.empty();
@@ -65,7 +65,7 @@ public class DiffServiceImpl implements DiffService {
         } catch (IllegalArgumentException e) {
             return Optional.empty(); // non-asset summary entries (e.g. membership changes)
         }
-        Asset asset = assetRepository.findByUuid(uuid).orElse(null);
+        Asset asset = assetRepository.findByProjectIdAndUuid(projectId, uuid).orElse(null);
         if (asset == null) {
             return Optional.empty();
         }

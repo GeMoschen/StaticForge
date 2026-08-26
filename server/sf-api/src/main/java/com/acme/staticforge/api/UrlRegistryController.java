@@ -98,7 +98,7 @@ public class UrlRegistryController {
             List<UrlRegistryEntryView> all = urlRegistryService
                     .search(projectId, normalizedChannelKey, urlArea, Pageable.unpaged())
                     .stream()
-                    .map(this::toView)
+                    .map(e -> toView(projectId, e))
                     .filter(v -> matches(v, needle))
                     .toList();
             int from = Math.min(page * size, all.size());
@@ -106,7 +106,7 @@ public class UrlRegistryController {
             return new PageImpl<>(all.subList(from, to), PageRequest.of(page, size), all.size());
         }
 
-        return urlRegistryService.search(projectId, normalizedChannelKey, urlArea, PageRequest.of(page, size)).map(this::toView);
+        return urlRegistryService.search(projectId, normalizedChannelKey, urlArea, PageRequest.of(page, size)).map(e -> toView(projectId, e));
     }
 
     @PatchMapping("/{id}")
@@ -121,7 +121,7 @@ public class UrlRegistryController {
                 existing.getArea(),
                 body.url(),
                 ctx(projectKey, "override URL registry entry"));
-        return toView(updated);
+        return toView(projectId, updated);
     }
 
     @PostMapping("/reset")
@@ -191,12 +191,12 @@ public class UrlRegistryController {
         return RevisionContext.of(projectId(key), securitySupport.currentUserId(), comment);
     }
 
-    private UrlRegistryEntryView toView(UrlRegistryEntry e) {
+    private UrlRegistryEntryView toView(long projectId, UrlRegistryEntry e) {
         return new UrlRegistryEntryView(
                 e.getId(),
                 e.getChannelKey(),
                 e.getPageReferenceUuid(),
-                pageReferenceLabel(e.getPageReferenceUuid()),
+                pageReferenceLabel(projectId, e.getPageReferenceUuid()),
                 e.getArea().name(),
                 e.getUrl(),
                 e.isOverridden(),
@@ -211,9 +211,9 @@ public class UrlRegistryController {
      * reference is a stale/dangling uuid (e.g. deleted out from under a registry entry that
      * hasn't been reset yet).
      */
-    private String pageReferenceLabel(UUID pageReferenceUuid) {
+    private String pageReferenceLabel(long projectId, UUID pageReferenceUuid) {
         try {
-            AssetVersionView v = assetService.requireCurrent(pageReferenceUuid);
+            AssetVersionView v = assetService.requireCurrent(projectId, pageReferenceUuid);
             JsonNode labelNode = v.payload() == null ? null : v.payload().path("label");
             if (labelNode != null && !labelNode.isMissingNode() && !labelNode.isNull() && !labelNode.asText().isBlank()) {
                 return labelNode.asText();

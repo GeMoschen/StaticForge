@@ -87,12 +87,12 @@ final class FakeNavigationLookup implements NavigationLookup {
     }
 
     @Override
-    public Optional<NavigationAsset> byUuid(UUID uuid) {
+    public Optional<NavigationAsset> byUuid(long projectId, UUID uuid) {
         return Optional.ofNullable(assets.get(uuid));
     }
 
     @Override
-    public List<NavigationAsset> childrenOf(UUID folderUuid) {
+    public List<NavigationAsset> childrenOf(long projectId, UUID folderUuid) {
         return childrenByParent.getOrDefault(folderUuid, List.of()).stream().map(assets::get).toList();
     }
 }

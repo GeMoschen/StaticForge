@@ -165,7 +165,7 @@ public class MediaController {
     public ResponseEntity<byte[]> binary(
             @PathVariable String projectKey, @PathVariable UUID uuid,
             @RequestParam(required = false) String variant) {
-        MediaBinary binary = mediaService.binary(uuid, variant);
+        MediaBinary binary = mediaService.binary(projectId(projectKey), uuid, variant);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(binary.mimeType()));
         if (!isRenderable(binary.mimeType())) {
@@ -193,7 +193,7 @@ public class MediaController {
         if (!target.pageUuid().equals(uuid) || (target.projectKey() != null && !target.projectKey().equals(projectKey))) {
             throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
         }
-        MediaBinary binary = mediaService.binary(uuid, variant);
+        MediaBinary binary = mediaService.binary(projectId(projectKey), uuid, variant);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(binary.mimeType()));
         if (!isRenderable(binary.mimeType())) {
@@ -205,7 +205,7 @@ public class MediaController {
     @GetMapping("/{uuid}/thumbnail")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<byte[]> thumbnail(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        MediaBinary thumb = mediaService.thumbnail(uuid);
+        MediaBinary thumb = mediaService.thumbnail(projectId(projectKey), uuid);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(thumb.mimeType()))
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=" + THUMBNAIL_CACHE_SECONDS)

@@ -67,7 +67,7 @@ class ConcurrentWritersTest {
                     for (int i = 0; i < each; i++) {
                         boolean committed = false;
                         while (!committed) {
-                            long expected = assets.requireCurrent(folder.uuid()).validFromRevision();
+                            long expected = assets.requireCurrent(project.getId(), folder.uuid()).validFromRevision();
                             try {
                                 assets.update(
                                         folder.uuid(),
@@ -90,7 +90,7 @@ class ConcurrentWritersTest {
             }
         }
 
-        Asset asset = assetRepository.findByUuid(folder.uuid()).orElseThrow();
+        Asset asset = assetRepository.findByProjectIdAndUuid(project.getId(), folder.uuid()).orElseThrow();
         List<AssetVersion> versions = versionRepository.findByAssetIdOrderByValidFromRevisionDesc(asset.getId());
         assertThat(versions).as("one version per create + each update").hasSize(total + 1);
 

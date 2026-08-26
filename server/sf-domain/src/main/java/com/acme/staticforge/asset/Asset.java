@@ -15,6 +15,12 @@ import java.util.UUID;
  * Asset identity row (spec §5.2). One row per asset for its entire lifetime; the
  * identity columns are never updated (with the sole exception of {@code uid} on an
  * explicit rename — recorded as a revisioned change).
+ *
+ * <p>{@code uuid} is unique per {@code (projectId, uuid)}, not server-wide — enforced by a
+ * DB unique constraint ({@code uq_asset_project_uuid}, feature `09-m9-project-scoped-uuids`)
+ * rather than JPA metadata, matching how {@code UrlRegistryEntry}'s composite tuple
+ * constraint is likewise DB-only. The same UUID may legitimately exist in two different
+ * projects; every lookup must go through {@link AssetRepository#findByProjectIdAndUuid}.
  */
 @Entity
 @Table(name = "asset")
@@ -24,7 +30,7 @@ public class Asset {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "uuid", nullable = false, unique = true)
+    @Column(name = "uuid", nullable = false)
     private UUID uuid;
 
     @Column(name = "project_id", nullable = false)

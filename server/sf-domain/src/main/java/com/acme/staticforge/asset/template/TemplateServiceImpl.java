@@ -98,7 +98,7 @@ public class TemplateServiceImpl implements TemplateService {
     @Override
     @Transactional
     public TemplateView update(UUID uuid, UpdateTemplateCommand cmd, long expectedRevision, RevisionContext ctx) {
-        Asset template = requireTemplate(uuid);
+        Asset template = requireTemplate(ctx.projectId(), uuid);
         ContentDefinition definition = compileDefinition(cmd.contentDefinition());
         ObjectNode payload = buildPayload(
                 template.getProjectId(), template.getAssetType(), cmd.contentDefinition(), cmd.channelSources(),
@@ -116,7 +116,7 @@ public class TemplateServiceImpl implements TemplateService {
     @Override
     @Transactional
     public TemplateView saveChannel(UUID uuid, String channelKey, String octlSource, long expectedRevision, RevisionContext ctx) {
-        Asset template = requireTemplate(uuid);
+        Asset template = requireTemplate(ctx.projectId(), uuid);
         AssetVersion current = requireOpen(template.getId());
 
         ContentDefinition definition = compileDefinition(current.getPayload().path("contentDefinition").asText(""));
@@ -135,7 +135,7 @@ public class TemplateServiceImpl implements TemplateService {
     @Override
     @Transactional
     public TemplateView deleteChannel(UUID uuid, String channelKey, long expectedRevision, RevisionContext ctx) {
-        Asset template = requireTemplate(uuid);
+        Asset template = requireTemplate(ctx.projectId(), uuid);
         AssetVersion current = requireOpen(template.getId());
 
         ObjectNode payload = (ObjectNode) current.getPayload().deepCopy();
@@ -148,8 +148,8 @@ public class TemplateServiceImpl implements TemplateService {
 
     @Override
     @Transactional(readOnly = true)
-    public TemplateView get(UUID uuid) {
-        return toView(assetService.requireCurrent(uuid));
+    public TemplateView get(long projectId, UUID uuid) {
+        return toView(assetService.requireCurrent(projectId, uuid));
     }
 
     @Override
@@ -161,7 +161,7 @@ public class TemplateServiceImpl implements TemplateService {
     @Override
     @Transactional
     public void delete(UUID uuid, RevisionContext ctx) {
-        requireTemplate(uuid);
+        requireTemplate(ctx.projectId(), uuid);
         assetService.softDelete(uuid, false, ctx);
     }
 
@@ -389,8 +389,8 @@ public class TemplateServiceImpl implements TemplateService {
         }
     }
 
-    private Asset requireTemplate(UUID uuid) {
-        Asset asset = assetRepository.findByUuid(uuid)
+    private Asset requireTemplate(long projectId, UUID uuid) {
+        Asset asset = assetRepository.findByProjectIdAndUuid(projectId, uuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found.")));
         if (asset.getAssetType() != AssetType.SECTION_TEMPLATE && asset.getAssetType() != AssetType.PAGE_TEMPLATE) {
             throw new SfException(ProblemFactory.unprocessableEntity("Asset is not a template."));

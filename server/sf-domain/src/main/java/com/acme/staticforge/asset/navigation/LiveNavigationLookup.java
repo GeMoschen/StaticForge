@@ -13,9 +13,8 @@ import org.springframework.stereotype.Component;
  * {@link NavigationLookup} over the live repositories (spec §17, `M8.1.3`) — backs preview's
  * read path, mirroring how {@code PageRenderService} reads live assets (as opposed to
  * generation's revision-pinned {@code Snapshot} path, {@code SnapshotNavigationLookup} in
- * sf-generate). Stateless; asset uuids are globally unique so no project scoping is needed
- * here — callers are expected to have already checked the assets they hand in belong to the
- * project they care about (exactly as {@code AssetService}/{@code FolderService} do today).
+ * sf-generate). Stateless; takes an explicit {@code projectId} like every other project-scoped
+ * lookup in this codebase, so asset uuid resolution is scoped to the caller's project.
  */
 @Component
 public class LiveNavigationLookup implements NavigationLookup {
@@ -29,22 +28,22 @@ public class LiveNavigationLookup implements NavigationLookup {
     }
 
     @Override
-    public Optional<NavigationAsset> byUuid(UUID uuid) {
+    public Optional<NavigationAsset> byUuid(long projectId, UUID uuid) {
         if (uuid == null) {
             return Optional.empty();
         }
-        return assetRepository.findByUuid(uuid).flatMap(asset -> assetVersionRepository
+        return assetRepository.findByProjectIdAndUuid(projectId, uuid).flatMap(asset -> assetVersionRepository
                 .findByAssetIdAndValidToRevisionIsNull(asset.getId())
                 .filter(v -> !v.isDeleted())
                 .map(v -> toNavigationAsset(asset, v)));
     }
 
     @Override
-    public List<NavigationAsset> childrenOf(UUID folderUuid) {
+    public List<NavigationAsset> childrenOf(long projectId, UUID folderUuid) {
         if (folderUuid == null) {
             return List.of();
         }
-        return assetRepository.findByUuid(folderUuid)
+        return assetRepository.findByProjectIdAndUuid(projectId, folderUuid)
                 .map(folder -> assetVersionRepository
                         .findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(folder.getId())
                         .stream()

@@ -38,7 +38,8 @@ public class ContentReferenceService {
      * targets whose UUID does not resolve are skipped.
      */
     @Transactional
-    public List<AssetReference> materialize(Long fromAssetId, Long validFromRevision, JsonNode content) {
+    public List<AssetReference> materialize(
+            long projectId, Long fromAssetId, Long validFromRevision, JsonNode content) {
         List<PendingReference> pending = new ArrayList<>();
         scan(content, "content", pending);
 
@@ -49,7 +50,7 @@ public class ContentReferenceService {
             if (uuid == null) {
                 continue;
             }
-            Asset target = assets.findByUuid(uuid).orElse(null);
+            Asset target = assets.findByProjectIdAndUuid(projectId, uuid).orElse(null);
             if (target == null) {
                 continue;
             }

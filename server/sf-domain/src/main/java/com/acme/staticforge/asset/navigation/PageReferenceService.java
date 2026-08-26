@@ -22,5 +22,5 @@ public interface PageReferenceService {
             long expectedRevision,
             RevisionContext ctx);
 
-    AssetVersionView find(UUID uuid);
+    AssetVersionView find(long projectId, UUID uuid);
 }

@@ -95,8 +95,8 @@ public class PageRenderService {
      * @param channel the channel key (for example {@code "html"})
      * @param rewriteLinks whether {@code $CMS_REF} targets are rewritten to preview URLs
      */
-    public String renderPage(UUID pageUuid, Long revision, String channel, boolean rewriteLinks) {
-        return renderPage(pageUuid, revision, channel, rewriteLinks, null);
+    public String renderPage(long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks) {
+        return renderPage(projectId, pageUuid, revision, channel, rewriteLinks, null);
     }
 
     /**
@@ -106,8 +106,9 @@ public class PageRenderService {
      * @param baseUrl the API base (for example {@code http://host/api/v1}); required for link
      *                rewriting, may be {@code null} otherwise
      */
-    public String renderPage(UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl) {
-        return doRender(pageUuid, revision, channel, rewriteLinks, baseUrl, null);
+    public String renderPage(
+            long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl) {
+        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, null);
     }
 
     /**
@@ -118,14 +119,20 @@ public class PageRenderService {
      * @param channel the channel key
      * @param rewriteLinks whether {@code $CMS_REF} targets are rewritten to preview URLs
      */
-    public String renderLive(JsonNode unsavedPayload, UUID pageTemplateUuid, String channel, boolean rewriteLinks) {
-        return renderLive(unsavedPayload, pageTemplateUuid, channel, rewriteLinks, null);
+    public String renderLive(
+            long projectId, JsonNode unsavedPayload, UUID pageTemplateUuid, String channel, boolean rewriteLinks) {
+        return renderLive(projectId, unsavedPayload, pageTemplateUuid, channel, rewriteLinks, null);
     }
 
     /** {@code renderLive} variant taking an explicit API base for link rewriting. */
     public String renderLive(
-            JsonNode unsavedPayload, UUID pageTemplateUuid, String channel, boolean rewriteLinks, String baseUrl) {
-        return doRender(pageTemplateUuid, unsavedPayload, channel, rewriteLinks, baseUrl);
+            long projectId,
+            JsonNode unsavedPayload,
+            UUID pageTemplateUuid,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl) {
+        return doRender(projectId, pageTemplateUuid, unsavedPayload, channel, rewriteLinks, baseUrl);
     }
 
     /**
@@ -135,8 +142,7 @@ public class PageRenderService {
      * @param sampleContent editor values to feed the section template
      * @param channel the channel key
      */
-    public String renderSection(UUID sectionTemplateUuid, JsonNode sampleContent, String channel) {
-        long projectId = projectIdOf(sectionTemplateUuid);
+    public String renderSection(long projectId, UUID sectionTemplateUuid, JsonNode sampleContent, String channel) {
         return renderSectionTemplate(
                 projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, channel, false, null);
     }
@@ -146,26 +152,36 @@ public class PageRenderService {
     // ------------------------------------------------------------------
 
     private String doRender(
-            UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl, JsonNode livePayload) {
-        long projectId = projectIdOf(pageUuid);
+            long projectId,
+            UUID pageUuid,
+            Long revision,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl,
+            JsonNode livePayload) {
         String projectKey = projectKeyOf(projectId);
 
         PageView page;
         if (livePayload != null) {
             page = PageView.fromLivePayload(pageUuid, livePayload);
         } else if (revision == null) {
-            page = PageView.from(assetService.requireCurrent(pageUuid));
+            page = PageView.from(assetService.requireCurrent(projectId, pageUuid));
         } else {
             AssetVersionView view = assetService
-                    .findAt(pageUuid, revision)
+                    .findAt(projectId, pageUuid, revision)
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found at revision " + revision + ".")));
             page = PageView.from(view);
         }
         return renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
     }
 
-    private String doRender(UUID pageTemplateUuid, JsonNode unsavedPayload, String channel, boolean rewriteLinks, String baseUrl) {
-        long projectId = projectIdOf(pageTemplateUuid);
+    private String doRender(
+            long projectId,
+            UUID pageTemplateUuid,
+            JsonNode unsavedPayload,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl) {
         String projectKey = projectKeyOf(projectId);
         PageView page = PageView.fromLivePayload(pageTemplateUuid, unsavedPayload);
         return renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
@@ -177,7 +193,7 @@ public class PageRenderService {
 
     private String renderPage(
             long projectId, String projectKey, PageView page, String channel, boolean rewriteLinks, String baseUrl) {
-        AssetVersionView pageTemplate = assetService.requireCurrent(page.pageTemplateUuid());
+        AssetVersionView pageTemplate = assetService.requireCurrent(projectId, page.pageTemplateUuid());
         CompiledTemplate compiled = compilePageChannel(pageTemplate.payload(), channel, projectId);
         if (compiled == null) {
             return ""; // missing channel template degrades gracefully to an empty body
@@ -320,7 +336,7 @@ public class PageRenderService {
         // Diagnostics (cycle/depth-cap truncation) aren't surfaced by this preview path today —
         // renderPage already discards RenderResult.warnings() the same way, so this keeps parity
         // rather than introducing a new reporting channel just for navigation.
-        NavTreeNode tree = navigationService.tree(navFolderUuid, depth, navigationLookup, new ArrayList<>());
+        NavTreeNode tree = navigationService.tree(projectId, navFolderUuid, depth, navigationLookup, new ArrayList<>());
         if (tree == null) {
             return null;
         }
@@ -331,7 +347,7 @@ public class PageRenderService {
             // PAGE_REFERENCE used to silently render as a non-linked <span>; fail the render with
             // a diagnostic instead. Preview has no diagnostics-reporting channel (see the comment
             // above), so this surfaces as a thrown SfException, consistent with every other
-            // unresolvable-asset failure in this class (e.g. `projectIdOf`, `assetService.requireCurrent`).
+            // unresolvable-asset failure in this class (e.g. `assetService.requireCurrent`).
             throw new SfException(ProblemFactory.other(
                     422,
                     NavigationDiagnosticCodes.NAV_DANGLING_PAGE_REFERENCE,
@@ -411,7 +427,7 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl) {
-        AssetVersionView template = assetService.requireCurrent(sectionTemplateUuid);
+        AssetVersionView template = assetService.requireCurrent(projectId, sectionTemplateUuid);
         CompiledTemplate compiled = compileChannel(template.payload(), channel, projectId);
         if (compiled == null) {
             return ""; // section template has no channel template
@@ -519,13 +535,6 @@ public class PageRenderService {
     // ------------------------------------------------------------------
     // Identity lookups
     // ------------------------------------------------------------------
-
-    private long projectIdOf(UUID uuid) {
-        return assetRepository
-                .findByUuid(uuid)
-                .map(Asset::getProjectId)
-                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset not found.")));
-    }
 
     private String projectKeyOf(long projectId) {
         return projectRepository.findById(projectId).map(Project::getKey).orElse("");

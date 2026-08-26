@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AssetRepository extends JpaRepository<Asset, Long> {
 
-    Optional<Asset> findByUuid(UUID uuid);
+    Optional<Asset> findByProjectIdAndUuid(long projectId, UUID uuid);
 
     Optional<Asset> findByProjectIdAndUid(Long projectId, String uid);
 

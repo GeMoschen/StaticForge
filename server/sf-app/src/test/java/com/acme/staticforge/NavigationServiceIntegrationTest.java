@@ -80,7 +80,7 @@ class NavigationServiceIntegrationTest {
                 new CreatePageReferenceCommand("Home Link", navRoot.uuid(), PageReferenceTargetKind.PAGE, page.uuid(), null),
                 fx.ctx());
 
-        assertThat(navigationService.resolve(ref.uuid(), liveNavigationLookup)).isEqualTo(page.uuid());
+        assertThat(navigationService.resolve(fx.project().getId(), ref.uuid(), liveNavigationLookup)).isEqualTo(page.uuid());
     }
 
     @Test
@@ -145,23 +145,27 @@ class NavigationServiceIntegrationTest {
                 navRoot.uuid(), new StartNode(StartNodeKind.FOLDER, sectionFolder.uuid()),
                 navRoot.validFromRevision(), fx.ctx());
 
+        long projectId = fx.project().getId();
+
         // -- live path --
         List<Diagnostic> liveDiagnostics = new ArrayList<>();
-        UUID liveHomeResolve = navigationService.resolve(homeRef.uuid(), liveNavigationLookup);
-        UUID liveProductsResolve = navigationService.resolve(productsRef.uuid(), liveNavigationLookup);
-        UUID liveStartNodeResolve =
-                navigationService.resolveFolderEntry(navRoot.uuid(), liveNavigationLookup, liveDiagnostics).orElse(null);
-        NavTreeNode liveTree = navigationService.tree(navRoot.uuid(), -1, liveNavigationLookup, liveDiagnostics);
+        UUID liveHomeResolve = navigationService.resolve(projectId, homeRef.uuid(), liveNavigationLookup);
+        UUID liveProductsResolve = navigationService.resolve(projectId, productsRef.uuid(), liveNavigationLookup);
+        UUID liveStartNodeResolve = navigationService
+                .resolveFolderEntry(projectId, navRoot.uuid(), liveNavigationLookup, liveDiagnostics)
+                .orElse(null);
+        NavTreeNode liveTree = navigationService.tree(projectId, navRoot.uuid(), -1, liveNavigationLookup, liveDiagnostics);
 
         // -- snapshot path (same project, same fixture) --
-        Snapshot snapshot = snapshotService.snapshot(fx.project().getId(), null);
+        Snapshot snapshot = snapshotService.snapshot(projectId, null);
         SnapshotNavigationLookup snapshotLookup = new SnapshotNavigationLookup(snapshot);
         List<Diagnostic> snapshotDiagnostics = new ArrayList<>();
-        UUID snapshotHomeResolve = navigationService.resolve(homeRef.uuid(), snapshotLookup);
-        UUID snapshotProductsResolve = navigationService.resolve(productsRef.uuid(), snapshotLookup);
-        UUID snapshotStartNodeResolve =
-                navigationService.resolveFolderEntry(navRoot.uuid(), snapshotLookup, snapshotDiagnostics).orElse(null);
-        NavTreeNode snapshotTree = navigationService.tree(navRoot.uuid(), -1, snapshotLookup, snapshotDiagnostics);
+        UUID snapshotHomeResolve = navigationService.resolve(projectId, homeRef.uuid(), snapshotLookup);
+        UUID snapshotProductsResolve = navigationService.resolve(projectId, productsRef.uuid(), snapshotLookup);
+        UUID snapshotStartNodeResolve = navigationService
+                .resolveFolderEntry(projectId, navRoot.uuid(), snapshotLookup, snapshotDiagnostics)
+                .orElse(null);
+        NavTreeNode snapshotTree = navigationService.tree(projectId, navRoot.uuid(), -1, snapshotLookup, snapshotDiagnostics);
 
         assertThat(liveHomeResolve).isEqualTo(homePage.uuid()).isEqualTo(snapshotHomeResolve);
         assertThat(liveProductsResolve).isEqualTo(deepPage.uuid()).isEqualTo(snapshotProductsResolve);
@@ -198,7 +202,7 @@ class NavigationServiceIntegrationTest {
     private AssetVersionView navRoot(Fixture fx) {
         List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
         FolderNode root = tree.get(0);
-        return assetService.requireCurrent(root.uuid());
+        return assetService.requireCurrent(fx.project().getId(), root.uuid());
     }
 
     private AssetVersionView createPage(Fixture fx, String name) {

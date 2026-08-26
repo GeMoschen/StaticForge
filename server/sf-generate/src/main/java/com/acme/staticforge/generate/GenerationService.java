@@ -50,6 +50,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
@@ -172,7 +174,21 @@ public class GenerationService {
             if (idemKey != null) {
                 idempotencyKeys.putIfAbsent(idemKey, runId);
             }
-            executor.submit(() -> executeRun(projectKey, runId, request));
+            // Defer submission until the row we just saved is actually committed and visible to
+            // other sessions — executor.submit(...) hands off to a virtual thread that can start
+            // running concurrently, and if it queries before this transaction commits,
+            // executeRun's findById sees nothing and silently returns, leaving the run stuck at
+            // QUEUED forever (a pre-existing race, not related to any specific feature work).
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        executor.submit(() -> executeRun(projectKey, runId, request));
+                    }
+                });
+            } else {
+                executor.submit(() -> executeRun(projectKey, runId, request));
+            }
             return run;
         }
     }
@@ -392,7 +408,8 @@ public class GenerationService {
             }
             Long pageAssetId = page.assetId();
             if (page.payload() != null) {
-                contentReferenceService.materialize(pageAssetId, snapshot.revision(), page.payload());
+                contentReferenceService.materialize(
+                        snapshot.projectId(), pageAssetId, snapshot.revision(), page.payload());
             }
             Set<UUID> deps = depsByPage.get(entry.pageUuid());
             if (deps == null) {
