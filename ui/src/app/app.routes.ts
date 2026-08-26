@@ -8,7 +8,6 @@ import { ProjectShellComponent } from './features/dashboard/project-shell.compon
 import { PagesListComponent } from './features/pages/pages-list.component';
 import { PageEditorComponent } from './features/pages/page-editor.component';
 import { MediaLibraryComponent } from './features/media/media-library.component';
-import { StructuresComponent } from './features/structures/structures.component';
 import { TemplatesComponent } from './features/templates/templates.component';
 import { ProjectSettingsShellComponent } from './features/settings/project-settings-shell.component';
 import { ProjectSettingsGeneralComponent } from './features/settings/project-settings-general.component';
@@ -54,10 +53,6 @@ export const routes: Routes = [
       {
         path: 'media',
         component: MediaLibraryComponent,
-      },
-      {
-        path: 'structures',
-        component: StructuresComponent,
       },
       {
         path: 'templates',

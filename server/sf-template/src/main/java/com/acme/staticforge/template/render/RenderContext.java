@@ -125,7 +125,7 @@ public final class RenderContext {
             return this;
         }
 
-        /** Sets the block resolver used by {@code $CMS_BODY}/{@code $CMS_INCLUDE}/{@code $CMS_NAV}. */
+        /** Sets the block resolver used by {@code $CMS_BODY}/{@code $CMS_INCLUDE}. */
         public Builder blockResolver(BlockResolver resolver) {
             this.blockResolver = resolver;
             return this;

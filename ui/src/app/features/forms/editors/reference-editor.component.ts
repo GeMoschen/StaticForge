@@ -9,7 +9,7 @@ import { SfDropTargetDirective } from '../../../shared/directives/sf-drop-target
 import { SfAssetPickerDialogComponent, AssetPicked } from '../../../shared/components/sf-asset-picker-dialog.component';
 import { EditorDefinition } from '../form.model';
 
-/** Feature areas that have their own route — used to link a resolved reference open in a new tab. Types without a per-item route (templates, structures) link to their list page; MEDIA has no dedicated route today. */
+/** Feature areas that have their own route — used to link a resolved reference open in a new tab. Types without a per-item route (templates) link to their list page; MEDIA has no dedicated route today. */
 function linkFor(projectKey: string, assetType: string | null, uuid: string): string[] | null {
   switch (assetType) {
     case 'PAGE':
@@ -17,8 +17,6 @@ function linkFor(projectKey: string, assetType: string | null, uuid: string): st
     case 'PAGE_TEMPLATE':
     case 'SECTION_TEMPLATE':
       return ['/p', projectKey, 'templates'];
-    case 'STRUCTURE':
-      return ['/p', projectKey, 'structures'];
     default:
       return null;
   }

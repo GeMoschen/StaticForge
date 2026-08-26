@@ -23,14 +23,13 @@ import { SfAssetPickerFolderNodeComponent } from './sf-asset-picker-folder-node.
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type FolderView = components['schemas']['FolderView'];
 
-type PickerType = 'PAGE' | 'MEDIA' | 'PAGE_TEMPLATE' | 'SECTION_TEMPLATE' | 'STRUCTURE';
+type PickerType = 'PAGE' | 'MEDIA' | 'PAGE_TEMPLATE' | 'SECTION_TEMPLATE';
 
 const TYPE_OPTIONS: { value: PickerType; label: string }[] = [
   { value: 'PAGE', label: 'Pages' },
   { value: 'MEDIA', label: 'Media' },
   { value: 'PAGE_TEMPLATE', label: 'Page templates' },
   { value: 'SECTION_TEMPLATE', label: 'Section templates' },
-  { value: 'STRUCTURE', label: 'Structures' },
 ];
 
 export interface AssetPicked {

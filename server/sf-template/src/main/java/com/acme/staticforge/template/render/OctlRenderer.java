@@ -60,8 +60,6 @@ public final class OctlRenderer implements Renderer {
                 case OctlNode.Ref r -> renderRef(r, s);
                 case OctlNode.Body b -> renderBody(b, s);
                 case OctlNode.Include i -> renderInclude(i, s);
-                case OctlNode.Nav n -> renderNav(n, s);
-                case OctlNode.NavRecurse nr -> renderNavRecurse(nr, s);
                 case OctlNode.If f -> renderIf(f, s);
                 case OctlNode.For f -> renderFor(f, s);
                 case OctlNode.Set st -> renderSet(st, s);
@@ -164,28 +162,6 @@ public final class OctlRenderer implements Renderer {
             s.append(nullToEmpty(resolver.renderInclude(uid, namedArgs(i.args()))));
         }
         s.includeDepth--;
-    }
-
-    private void renderNav(OctlNode.Nav n, State s) {
-        noteReference(n.accessor(), s);
-        BlockResolver resolver = s.context.blockResolver();
-        if (resolver == null) {
-            s.append(""); // no resolver wired: renders empty
-            return;
-        }
-        String uid = resolvedUid(n.accessor(), s);
-        s.append(nullToEmpty(resolver.renderNav(uid, namedArgs(n.args()))));
-    }
-
-    private void renderNavRecurse(OctlNode.NavRecurse nr, State s) {
-        BlockResolver resolver = s.context.blockResolver();
-        if (resolver == null) {
-            s.append("");
-            return;
-        }
-        LoopFrame loop = s.findLoop(nr.variable());
-        JsonNode node = loop == null ? MissingNode.getInstance() : loop.item;
-        s.append(nullToEmpty(resolver.renderNavRecurse(node)));
     }
 
     /** The UID string stored on the reference, falling back to the resolved UUID when absent. */

@@ -41,16 +41,6 @@ public sealed interface OctlNode {
         }
     }
 
-    /** {@code $CMS_NAV(structure:uid [, args])$}. */
-    record Nav(Accessor accessor, List<NamedArg> args, int line, int col) implements OctlNode {
-        public Nav {
-            args = args == null ? List.of() : List.copyOf(args);
-        }
-    }
-
-    /** {@code $CMS_NAV_RECURSE(node)$}. */
-    record NavRecurse(String variable, int line, int col) implements OctlNode {}
-
     /** {@code $CMS_IF(expr)$ … $CMS_ELSEIF(expr)$ … $CMS_ELSE$ … $CMS_END_IF$}. */
     record If(List<Branch> branches, List<OctlNode> elseBody, int line, int col) implements OctlNode {
         public If {

@@ -248,11 +248,6 @@ public class PageRenderService {
                 return renderSectionTemplate(
                         projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, channel, rewriteLinks, baseUrl);
             }
-
-            @Override
-            public String renderNav(String structureUid, Map<String, String> args) {
-                return ""; // navigation is a later milestone (§17)
-            }
         };
     }
 

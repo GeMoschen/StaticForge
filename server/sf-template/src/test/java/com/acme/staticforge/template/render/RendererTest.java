@@ -65,11 +65,6 @@ class RendererTest {
             }
 
             @Override
-            public String renderNav(String structureUid, java.util.Map<String, String> args) {
-                return "";
-            }
-
-            @Override
             public String renderCatalog(JsonNode cards) {
                 seen.add(cards);
                 return "<cards:" + cards.size() + ">";
@@ -205,52 +200,6 @@ class RendererTest {
     void unresolvableRefReports0110() {
         OctlResult result = compiler.compile("$CMS_REF(page:nope)$", "html", (assetType, uid) -> Optional.empty());
         assertThat(codes(result.diagnostics())).contains(DiagnosticCodes.OCTL_UNRESOLVABLE_REF);
-    }
-
-    // ------------------------------------------------------------------
-    // Navigation recursion
-    // ------------------------------------------------------------------
-
-    @Test
-    void navRecurseDelegatesResolvedLoopItemToBlockResolver() {
-        OctlResult compiled = compiler.compile(
-                "$CMS_FOR(node : nodes)$[$CMS_NAV_RECURSE(node)$]$CMS_END_FOR$", "html", null);
-        assertThat(compiled.hasErrors()).isFalse();
-
-        List<JsonNode> seen = new java.util.ArrayList<>();
-        BlockResolver resolver = new BlockResolver() {
-            @Override
-            public String renderBody(String bodyName) {
-                return "";
-            }
-
-            @Override
-            public String renderInclude(String uid, java.util.Map<String, String> args) {
-                return "";
-            }
-
-            @Override
-            public String renderNav(String structureUid, java.util.Map<String, String> args) {
-                return "";
-            }
-
-            @Override
-            public String renderNavRecurse(JsonNode node) {
-                seen.add(node);
-                return "child:" + node.path("level").asInt();
-            }
-        };
-
-        RenderContext context = RenderContext.builder()
-                .values(values("{\"nodes\":[{\"children\":[],\"level\":1},{\"children\":[],\"level\":2}]}"))
-                .blockResolver(resolver)
-                .build();
-        String out = renderer.render(compiled.template(), context).output();
-
-        assertThat(out).isEqualTo("[child:1][child:2]");
-        assertThat(seen).hasSize(2);
-        assertThat(seen.get(0).path("level").asInt()).isEqualTo(1);
-        assertThat(seen.get(1).path("level").asInt()).isEqualTo(2);
     }
 
     // ------------------------------------------------------------------

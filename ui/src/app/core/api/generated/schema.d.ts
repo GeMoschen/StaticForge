@@ -20,7 +20,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/structures/{uuid}": {
+    "/api/v1/projects/{projectKey}/section-templates/{uuid}": {
         parameters: {
             query?: never;
             header?: never;
@@ -29,38 +29,6 @@ export interface paths {
         };
         get: operations["detail"];
         put: operations["update_1"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectKey}/structures/{uuid}/channels/{channelKey}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["saveChannel"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectKey}/section-templates/{uuid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["detail_1"];
-        put: operations["update_2"];
         post?: never;
         delete: operations["delete_1"];
         options?: never;
@@ -76,7 +44,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["saveChannel_1"];
+        put: operations["saveChannel"];
         post?: never;
         delete: operations["deleteChannel"];
         options?: never;
@@ -91,8 +59,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_2"];
-        put: operations["update_3"];
+        get: operations["detail_1"];
+        put: operations["update_2"];
         post?: never;
         delete?: never;
         options?: never;
@@ -123,8 +91,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_3"];
-        put: operations["update_4"];
+        get: operations["detail_2"];
+        put: operations["update_3"];
         post?: never;
         delete: operations["delete_2"];
         options?: never;
@@ -140,7 +108,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["saveChannel_2"];
+        put: operations["saveChannel_1"];
         post?: never;
         delete: operations["deleteChannel_1"];
         options?: never;
@@ -188,7 +156,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_5"];
+        put: operations["update_4"];
         post?: never;
         delete: operations["delete_4"];
         options?: never;
@@ -203,8 +171,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_5"];
-        put: operations["update_6"];
+        get: operations["detail_4"];
+        put: operations["update_5"];
         post?: never;
         delete?: never;
         options?: never;
@@ -260,7 +228,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/structures": {
+    "/api/v1/projects/{projectKey}/section-templates": {
         parameters: {
             query?: never;
             header?: never;
@@ -270,38 +238,6 @@ export interface paths {
         get: operations["list_2"];
         put?: never;
         post: operations["create_2"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectKey}/structures/{uuid}/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["preview"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectKey}/section-templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_3"];
-        put?: never;
-        post: operations["create_3"];
         delete?: never;
         options?: never;
         head?: never;
@@ -363,9 +299,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_4"];
         put?: never;
-        post: operations["create_4"];
+        post: operations["create_3"];
         delete?: never;
         options?: never;
         head?: never;
@@ -404,6 +340,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/pages/{uuid}/bodies/{body}/sections/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["moveSection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/page-templates": {
         parameters: {
             query?: never;
@@ -411,9 +363,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_6"];
+        get: operations["list_5"];
         put?: never;
-        post: operations["create_5"];
+        post: operations["create_4"];
         delete?: never;
         options?: never;
         head?: never;
@@ -443,7 +395,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_7"];
+        get: operations["list_6"];
         put?: never;
         post: operations["upload"];
         delete?: never;
@@ -557,7 +509,7 @@ export interface paths {
         };
         get: operations["tree"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -587,9 +539,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_7"];
         put?: never;
-        post: operations["create_7"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -811,7 +763,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_3"];
         put?: never;
         post?: never;
         delete?: never;
@@ -916,6 +868,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/media/{uuid}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["shareBinary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/media/{uuid}/binary": {
         parameters: {
             query?: never;
@@ -1003,7 +971,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_8"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1019,7 +987,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_9"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1035,7 +1003,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_4"];
+        get: operations["detail_3"];
         put?: never;
         post?: never;
         delete: operations["delete_5"];
@@ -1159,34 +1127,6 @@ export interface components {
             config?: components["schemas"]["JsonNode"];
             isDefault?: boolean;
         };
-        StructureUpdateRequest: {
-            displayName?: string;
-            sourceText?: string;
-            channelSources?: {
-                [key: string]: string;
-            };
-        };
-        StructureDetail: {
-            /** Format: uuid */
-            uuid?: string;
-            uid?: string;
-            displayName?: string;
-            kind?: string;
-            sourceText?: string;
-            source?: components["schemas"]["JsonNode"];
-            channelTemplates?: components["schemas"]["JsonNode"];
-            /** Format: int64 */
-            revision?: number;
-        };
-        ChannelTemplateRequest: {
-            source?: string;
-        };
-        ChannelTemplateDto: {
-            channelKey?: string;
-            source?: string;
-            compiledHash?: string;
-            compiled?: components["schemas"]["JsonNode"];
-        };
         UpdateTemplateRequest: {
             displayName?: string;
             contentDefinition?: string;
@@ -1214,6 +1154,15 @@ export interface components {
             deprecated?: boolean;
             bodies?: components["schemas"]["JsonNode"];
             outputPath?: components["schemas"]["JsonNode"];
+        };
+        ChannelTemplateRequest: {
+            source?: string;
+        };
+        ChannelTemplateDto: {
+            channelKey?: string;
+            source?: string;
+            compiledHash?: string;
+            compiled?: components["schemas"]["JsonNode"];
         };
         PageView: {
             /** Format: uuid */
@@ -1295,8 +1244,7 @@ export interface components {
             uid?: string;
             displayName?: string;
             path?: string;
-            /** @enum {string} */
-            scope?: 'PAGES' | 'MEDIA';
+            scope?: string;
             children?: components["schemas"]["FolderView"][];
         };
         ChannelUpdateRequest: {
@@ -1356,21 +1304,6 @@ export interface components {
             key: string;
             name: string;
             description?: string;
-        };
-        StructureCreateRequest: {
-            displayName?: string;
-            /** @enum {string} */
-            kind?: "NAVIGATION" | "BREADCRUMB" | "LIST";
-            sourceText?: string;
-            channelSources?: {
-                [key: string]: string;
-            };
-            /** Format: uuid */
-            folderUuid?: string;
-        };
-        StructurePreviewRequest: {
-            /** Format: uuid */
-            pageUuid?: string;
         };
         CreateTemplateRequest: {
             displayName?: string;
@@ -1507,8 +1440,7 @@ export interface components {
             displayName?: string;
             /** Format: uuid */
             parentFolderUuid?: string;
-            /** @enum {string} */
-            scope?: 'PAGES' | 'MEDIA';
+            scope?: string;
         };
         MoveRequest: {
             /** Format: uuid */
@@ -1596,52 +1528,6 @@ export interface components {
             yourRole?: string;
             archived?: boolean;
         };
-        PageStructureSummary: {
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
-            /** Format: int32 */
-            size?: number;
-            content?: components["schemas"]["StructureSummary"][];
-            /** Format: int32 */
-            number?: number;
-            sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
-            pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
-            empty?: boolean;
-        };
-        PageableObject: {
-            /** Format: int64 */
-            offset?: number;
-            sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
-            /** Format: int32 */
-            pageSize?: number;
-            /** Format: int32 */
-            pageNumber?: number;
-            unpaged?: boolean;
-        };
-        SortObject: {
-            direction?: string;
-            nullHandling?: string;
-            ascending?: boolean;
-            property?: string;
-            ignoreCase?: boolean;
-        };
-        StructureSummary: {
-            /** Format: uuid */
-            uuid?: string;
-            uid?: string;
-            assetType?: string;
-            displayName?: string;
-            folderPath?: string;
-            /** Format: int64 */
-            revision?: number;
-        };
         PageTemplateSummary: {
             /** Format: int64 */
             totalElements?: number;
@@ -1659,6 +1545,24 @@ export interface components {
             first?: boolean;
             last?: boolean;
             empty?: boolean;
+        };
+        PageableObject: {
+            /** Format: int64 */
+            offset?: number;
+            sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            pageSize?: number;
+            /** Format: int32 */
+            pageNumber?: number;
+            paged?: boolean;
+            unpaged?: boolean;
+        };
+        SortObject: {
+            direction?: string;
+            nullHandling?: string;
+            ascending?: boolean;
+            property?: string;
+            ignoreCase?: boolean;
         };
         TemplateSummary: {
             /** Format: uuid */
@@ -1897,94 +1801,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["StructureDetail"];
-                };
-            };
-        };
-    };
-    update_1: {
-        parameters: {
-            query?: never;
-            header?: {
-                "If-Match"?: string;
-            };
-            path: {
-                projectKey: string;
-                uuid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StructureUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["StructureDetail"];
-                };
-            };
-        };
-    };
-    saveChannel: {
-        parameters: {
-            query?: never;
-            header?: {
-                "If-Match"?: string;
-            };
-            path: {
-                projectKey: string;
-                uuid: string;
-                channelKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChannelTemplateRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ChannelTemplateDto"];
-                };
-            };
-        };
-    };
-    detail_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectKey: string;
-                uuid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
                     "*/*": components["schemas"]["TemplateDetail"];
                 };
             };
         };
     };
-    update_2: {
+    update_1: {
         parameters: {
             query?: never;
             header?: {
@@ -2034,7 +1856,7 @@ export interface operations {
             };
         };
     };
-    saveChannel_1: {
+    saveChannel: {
         parameters: {
             query?: never;
             header?: {
@@ -2088,7 +1910,7 @@ export interface operations {
             };
         };
     };
-    detail_2: {
+    detail_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -2111,7 +1933,7 @@ export interface operations {
             };
         };
     };
-    update_3: {
+    update_2: {
         parameters: {
             query?: never;
             header?: {
@@ -2170,7 +1992,7 @@ export interface operations {
             };
         };
     };
-    detail_3: {
+    detail_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -2193,7 +2015,7 @@ export interface operations {
             };
         };
     };
-    update_4: {
+    update_3: {
         parameters: {
             query?: never;
             header?: {
@@ -2243,7 +2065,7 @@ export interface operations {
             };
         };
     };
-    saveChannel_2: {
+    saveChannel_1: {
         parameters: {
             query?: never;
             header?: {
@@ -2378,7 +2200,7 @@ export interface operations {
             };
         };
     };
-    update_5: {
+    update_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -2426,7 +2248,7 @@ export interface operations {
             };
         };
     };
-    detail_5: {
+    detail_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -2448,7 +2270,7 @@ export interface operations {
             };
         };
     };
-    update_6: {
+    update_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -2634,90 +2456,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageStructureSummary"];
-                };
-            };
-        };
-    };
-    create_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StructureCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["StructureDetail"];
-                };
-            };
-        };
-    };
-    preview: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectKey: string;
-                uuid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["StructurePreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["JsonNode"];
-                };
-            };
-        };
-    };
-    list_3: {
-        parameters: {
-            query?: {
-                page?: number;
-                size?: number;
-            };
-            header?: never;
-            path: {
-                projectKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
                     "*/*": components["schemas"]["PageTemplateSummary"];
                 };
             };
         };
     };
-    create_3: {
+    create_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -2825,7 +2569,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_4: {
         parameters: {
             query?: {
                 folder?: string;
@@ -2851,7 +2595,7 @@ export interface operations {
             };
         };
     };
-    create_4: {
+    create_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2930,7 +2674,37 @@ export interface operations {
             };
         };
     };
-    list_6: {
+    moveSection: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+                body: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveSectionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageView"];
+                };
+            };
+        };
+    };
+    list_5: {
         parameters: {
             query?: {
                 page?: number;
@@ -2955,7 +2729,7 @@ export interface operations {
             };
         };
     };
-    create_5: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -3007,11 +2781,12 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_6: {
         parameters: {
             query?: {
                 mimeType?: string;
                 folder?: string;
+                recursive?: boolean;
                 q?: string;
                 page?: number;
                 size?: number;
@@ -3250,7 +3025,8 @@ export interface operations {
     };
     tree: {
         parameters: {
-            query?: {
+            query: {
+                scope: string;
                 depth?: number;
             };
             header?: never;
@@ -3272,7 +3048,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -3327,7 +3103,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -3349,7 +3125,7 @@ export interface operations {
             };
         };
     };
-    create_7: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -3683,7 +3459,7 @@ export interface operations {
             };
         };
     };
-    list_4: {
+    list_3: {
         parameters: {
             query: {
                 since?: number;
@@ -3857,6 +3633,32 @@ export interface operations {
             };
         };
     };
+    shareBinary: {
+        parameters: {
+            query: {
+                t: string;
+                variant?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
     binary: {
         parameters: {
             query?: {
@@ -3973,7 +3775,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_8: {
         parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
@@ -3997,7 +3799,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_9: {
         parameters: {
             query?: {
                 type?: string;
@@ -4025,7 +3827,7 @@ export interface operations {
             };
         };
     };
-    detail_4: {
+    detail_3: {
         parameters: {
             query?: never;
             header?: never;

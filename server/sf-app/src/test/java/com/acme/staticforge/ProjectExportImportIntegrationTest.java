@@ -20,9 +20,6 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.structure.StructureKind;
-import com.acme.staticforge.structure.StructureService;
-import com.acme.staticforge.structure.StructureView;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,10 +41,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Project export → import round-trip (spec §26.5, §6.1). Verifies that assets, media,
- * templates and structures survive an export/import cycle, that imported assets receive
- * fresh UUIDv7s plus {@code payload.origin} provenance, and that UUID references are
- * remapped onto the imported assets.
+ * Project export → import round-trip (spec §26.5, §6.1). Verifies that assets, media and
+ * templates survive an export/import cycle, that imported assets receive fresh UUIDv7s
+ * plus {@code payload.origin} provenance, and that UUID references are remapped onto the
+ * imported assets.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -61,7 +58,6 @@ class ProjectExportImportIntegrationTest {
     @Autowired AssetService assetService;
     @Autowired MediaService mediaService;
     @Autowired TemplateService templateService;
-    @Autowired StructureService structureService;
     @Autowired ProjectExportImportService exportImportService;
     @Autowired BlobRepository blobRepository;
 
@@ -98,15 +94,6 @@ class ProjectExportImportIntegrationTest {
                         false,
                         null),
                 source.ctx());
-        StructureView structure = structureService.create(
-                source.project().getId(),
-                null,
-                "Main Nav",
-                StructureKind.NAVIGATION,
-                "navigation { source { depth 3 } }",
-                Map.of("html", "<nav>$CMS_VALUE(title)$</nav>"),
-                source.ctx());
-
         ObjectNode pagePayload = MAPPER.createObjectNode();
         pagePayload.put("templateRef", pageTemplate.uuid().toString());
         ObjectNode content = pagePayload.putObject("content");
@@ -126,19 +113,17 @@ class ProjectExportImportIntegrationTest {
         ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx());
 
         assertThat(result.sourceProjectKey()).isEqualTo(source.project().getKey());
-        assertThat(result.importedAssetCount()).isEqualTo(5);
+        assertThat(result.importedAssetCount()).isEqualTo(4);
         assertThat(result.importedBlobCount()).isEqualTo(1 + sourceVariantCount);
 
         Map<String, UUID> targetMedia = uidsByType(target.project().getId(), AssetType.MEDIA);
         Map<String, UUID> targetSections = uidsByType(target.project().getId(), AssetType.SECTION_TEMPLATE);
         Map<String, UUID> targetPageTemplates = uidsByType(target.project().getId(), AssetType.PAGE_TEMPLATE);
-        Map<String, UUID> targetStructures = uidsByType(target.project().getId(), AssetType.STRUCTURE);
         Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
 
         assertThat(targetMedia).containsKey("hero_png");
         assertThat(targetSections).containsKey("teaser");
         assertThat(targetPageTemplates).containsKey("landing");
-        assertThat(targetStructures).containsKey("main_nav");
         assertThat(targetPages).containsKey("home");
 
         UUID importedPageUuid = targetPages.get("home");

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M8.1.1: the legacy `structure` feature (§17, M5.3.*) is removed wholesale rather
+         than evolved — AssetType.STRUCTURE no longer exists. Per product decision this is
+         dev/demo data only with no production migration path, so existing STRUCTURE-typed
+         asset rows are hard-deleted rather than exported. Deletes walk the FK graph
+         (asset_uid_history / asset_reference / asset_version all reference asset(id))
+         before removing the asset rows themselves. -->
+    <changeSet id="013-remove-structure-assets" author="sf">
+        <comment>Hard-delete any existing STRUCTURE-typed asset rows and their dependents.</comment>
+        <sql>
+            DELETE FROM asset_uid_history
+            WHERE asset_id IN (SELECT id FROM asset WHERE asset_type = 'STRUCTURE');
+
+            DELETE FROM asset_reference
+            WHERE from_asset_id IN (SELECT id FROM asset WHERE asset_type = 'STRUCTURE')
+               OR to_asset_id IN (SELECT id FROM asset WHERE asset_type = 'STRUCTURE');
+
+            DELETE FROM asset_version
+            WHERE asset_id IN (SELECT id FROM asset WHERE asset_type = 'STRUCTURE');
+
+            DELETE FROM asset
+            WHERE asset_type = 'STRUCTURE';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

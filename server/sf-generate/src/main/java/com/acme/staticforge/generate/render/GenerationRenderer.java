@@ -3,7 +3,6 @@ package com.acme.staticforge.generate.render;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
-import com.acme.staticforge.generate.nav.NavRenderer;
 import com.acme.staticforge.generate.pipeline.MediaPaths;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.PlanEntry;
@@ -50,7 +49,6 @@ final class GenerationRenderer {
     private final OutputPathResolver paths;
     private final String projectKey;
     private final ChannelService channelService;
-    private final NavRenderer navRenderer;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<AssetType, Map<String, UUID>> uidIndex;
 
@@ -62,13 +60,11 @@ final class GenerationRenderer {
             Snapshot snapshot,
             OutputPathResolver paths,
             String projectKey,
-            ChannelService channelService,
-            NavRenderer navRenderer) {
+            ChannelService channelService) {
         this.snapshot = snapshot;
         this.paths = paths;
         this.projectKey = projectKey == null ? "" : projectKey;
         this.channelService = channelService;
-        this.navRenderer = navRenderer;
         this.uidIndex = indexUids(snapshot);
     }
 
@@ -296,19 +292,6 @@ final class GenerationRenderer {
                     return "";
                 }
                 return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, null, deps, warnings);
-            }
-
-            @Override
-            public String renderNav(String structureUid, Map<String, String> args) {
-                UUID structureUuid = resolveByUid(AssetType.STRUCTURE, structureUid);
-                if (structureUuid == null || navRenderer == null) {
-                    return "";
-                }
-                NavRenderer.NavRenderResult result =
-                        navRenderer.renderNav(snapshot, structureUuid, structureUid, activePageUuid, channel, paths);
-                deps.addAll(result.dependencies());
-                warnings.addAll(result.diagnostics());
-                return result.output();
             }
         };
     }

@@ -132,7 +132,7 @@ public class BuildPlanner {
                     case PAGE -> affected.add(asset.uuid());
                     case PAGE_TEMPLATE -> affected.addAll(pagesByTemplate.getOrDefault(asset.uuid(), List.of()));
                     case SECTION_TEMPLATE -> affected.addAll(pagesBySection.getOrDefault(asset.uuid(), List.of()));
-                    default -> { /* template/media/structure/folder: propagate via references */ }
+                    default -> { /* media/folder: propagate via references */ }
                 }
             }
             for (AssetReference ref : references.findByToAssetId(id)) {

@@ -5,7 +5,6 @@ import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.GenerationProperties;
-import com.acme.staticforge.generate.nav.NavRenderer;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.PlanEntry;
@@ -49,7 +48,6 @@ public class RenderPipeline {
     private final GenerationProperties properties;
     private final ProjectRepository projects;
     private final ChannelService channelService;
-    private final NavRenderer navRenderer;
     private final MeterRegistry meterRegistry;
 
     private volatile Map<UUID, Set<UUID>> dependenciesByPage = Map.of();
@@ -58,12 +56,10 @@ public class RenderPipeline {
             GenerationProperties properties,
             ProjectRepository projects,
             ChannelService channelService,
-            NavRenderer navRenderer,
             MeterRegistry meterRegistry) {
         this.properties = properties;
         this.projects = projects;
         this.channelService = channelService;
-        this.navRenderer = navRenderer;
         this.meterRegistry = meterRegistry;
     }
 
@@ -73,7 +69,7 @@ public class RenderPipeline {
      * the renderer encounters them.
      */
     public List<Diagnostic> validate(Snapshot snapshot, BuildPlan plan) {
-        GenerationRenderer renderer = new GenerationRenderer(snapshot, null, "", channelService, navRenderer);
+        GenerationRenderer renderer = new GenerationRenderer(snapshot, null, "", channelService);
         Set<String> seen = new HashSet<>();
         List<Diagnostic> errors = new ArrayList<>();
         for (PlanEntry entry : plan.entries()) {
@@ -121,7 +117,7 @@ public class RenderPipeline {
         }
 
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
-        GenerationRenderer renderer = new GenerationRenderer(snapshot, paths, projectKey, channelService, navRenderer);
+        GenerationRenderer renderer = new GenerationRenderer(snapshot, paths, projectKey, channelService);
 
         RenderBatch batch = renderParallel(renderer, plan, snapshot);
 

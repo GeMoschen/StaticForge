@@ -7,6 +7,5 @@ public enum ReferenceKind {
     MEDIA_REF,
     OCTL_VALUE,
     OCTL_REF,
-    OCTL_INCLUDE,
-    NAV
+    OCTL_INCLUDE
 }

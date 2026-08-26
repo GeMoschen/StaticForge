@@ -87,8 +87,6 @@ public final class OctlCompiler {
                 case OctlNode.Ref r -> checkAccessorRoot(r.accessor(), shadowed, r.line(), r.col(), ctx);
                 case OctlNode.Body b -> checkBody(b, ctx);
                 case OctlNode.Include i -> resolveReference(i.accessor(), i.line(), i.col(), ctx);
-                case OctlNode.Nav n -> resolveReference(n.accessor(), n.line(), n.col(), ctx);
-                case OctlNode.NavRecurse nr -> { /* deferred */ }
                 case OctlNode.If f -> {
                     for (OctlNode.Branch branch : f.branches()) {
                         validateExpr(branch.condition(), shadowed, ctx);

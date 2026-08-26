@@ -80,18 +80,6 @@ final class OctlParser {
                 List<NamedArg> args = parseNamedArgs(c);
                 out.add(new OctlNode.Include(accessor, args, line, col));
             }
-            case "NAV" -> {
-                Cursor c = cursor(token);
-                Accessor accessor = parseAccessor(c);
-                List<NamedArg> args = parseNamedArgs(c);
-                out.add(new OctlNode.Nav(accessor, args, line, col));
-            }
-            case "NAV_RECURSE" -> {
-                Cursor c = cursor(token);
-                c.skipWs();
-                String variable = c.readIdent();
-                out.add(new OctlNode.NavRecurse(variable, line, col));
-            }
             case "SET" -> {
                 Cursor c = cursor(token);
                 c.skipWs();

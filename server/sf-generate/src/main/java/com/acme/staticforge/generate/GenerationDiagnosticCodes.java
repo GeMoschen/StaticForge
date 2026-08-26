@@ -10,6 +10,4 @@ public final class GenerationDiagnosticCodes {
     private GenerationDiagnosticCodes() {}
 
     public static final String GEN_CHANNEL_MISSING = "SF-GEN-0210";
-
-    public static final String GEN_NAV_CYCLE = "SF-GEN-0410";
 }
