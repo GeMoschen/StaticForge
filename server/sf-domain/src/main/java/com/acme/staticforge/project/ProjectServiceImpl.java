@@ -1,5 +1,7 @@
 package com.acme.staticforge.project;
 
+import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
@@ -8,6 +10,7 @@ import com.acme.staticforge.revision.AssetChange;
 import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionAware;
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionCounterRepository;
 import com.acme.staticforge.revision.RevisionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +42,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ChannelService channelService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final FolderService folderService;
 
     public ProjectServiceImpl(
             ProjectRepository projectRepository,
@@ -47,7 +51,8 @@ public class ProjectServiceImpl implements ProjectService {
             RevisionCounterRepository counterRepository,
             ChannelService channelService,
             AuditService auditService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            FolderService folderService) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.revisionService = revisionService;
@@ -55,6 +60,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.channelService = channelService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.folderService = folderService;
     }
 
     @Override
@@ -78,6 +84,11 @@ public class ProjectServiceImpl implements ProjectService {
         projectMemberRepository.save(member);
 
         channelService.ensureDefaultChannels(project.getId(), actingUserId);
+
+        // The navigation store is rooted like the Page/Media stores (spec §17, `M8.1.2`):
+        // a normal FolderScope.NAVIGATION folder, created here through the same shared
+        // FolderService/PathService machinery every other folder uses — no special-casing.
+        folderService.create(null, "Navigation", FolderScope.NAVIGATION, RevisionContext.of(project.getId(), actingUserId, cmd.comment()));
 
         return project;
     }

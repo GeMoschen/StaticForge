@@ -69,10 +69,17 @@ class ProjectApiIntegrationTests {
         assertThat(project.getId()).isNotNull();
         assertThat(project.getKey()).isEqualTo("demo");
 
+        // Revision 1 is the project's own CREATE; two more follow in the same call for the
+        // implicit hidden root folder and the auto-created navigation root folder (spec §17,
+        // `M8.1.2` — the navigation store is rooted like the Page/Media stores).
         List<Revision> revisions = revisionRepository.findByProjectIdOrderByRevisionIdDesc(project.getId());
-        assertThat(revisions).hasSize(1);
-        assertThat(revisions.get(0).getRevisionId()).isEqualTo(1L);
-        assertThat(revisions.get(0).getChangeType()).isEqualTo(ChangeType.CREATE);
+        assertThat(revisions).hasSize(3);
+        Revision projectCreateRevision = revisions.stream()
+                .filter(r -> r.getRevisionId() == 1L)
+                .findFirst()
+                .orElseThrow();
+        assertThat(projectCreateRevision.getChangeType()).isEqualTo(ChangeType.CREATE);
+        assertThat(revisions).allSatisfy(r -> assertThat(r.getChangeType()).isEqualTo(ChangeType.CREATE));
 
         Optional<ProjectMember> member =
                 projectMemberRepository.findByProjectIdAndUserId(project.getId(), admin.getId());

@@ -6,5 +6,6 @@ public enum AssetType {
     MEDIA,
     SECTION_TEMPLATE,
     PAGE_TEMPLATE,
-    FOLDER
+    FOLDER,
+    PAGE_REFERENCE
 }

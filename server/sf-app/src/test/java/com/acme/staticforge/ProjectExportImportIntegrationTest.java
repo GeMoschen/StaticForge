@@ -113,7 +113,9 @@ class ProjectExportImportIntegrationTest {
         ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx());
 
         assertThat(result.sourceProjectKey()).isEqualTo(source.project().getKey());
-        assertThat(result.importedAssetCount()).isEqualTo(4);
+        // media, section template, page template, page, plus the auto-created navigation
+        // root folder every project now carries (spec §17, `M8.1.2`).
+        assertThat(result.importedAssetCount()).isEqualTo(5);
         assertThat(result.importedBlobCount()).isEqualTo(1 + sourceVariantCount);
 
         Map<String, UUID> targetMedia = uidsByType(target.project().getId(), AssetType.MEDIA);

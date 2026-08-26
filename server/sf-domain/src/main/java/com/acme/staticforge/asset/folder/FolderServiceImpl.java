@@ -146,6 +146,42 @@ public class FolderServiceImpl implements FolderService {
 
     @Override
     @Transactional
+    public AssetVersionView updateStartNode(UUID uuid, StartNode startNode, long expectedRevision, RevisionContext ctx) {
+        Asset folder = requireFolder(uuid, ctx.projectId());
+        AssetVersion current = requireOpen(folder.getId());
+        FolderScope scope = FolderScope.fromPayload(current.getPayload());
+        if (scope != FolderScope.NAVIGATION) {
+            throw new SfException(ProblemFactory.unprocessableEntity("startNode only applies to navigation folders."));
+        }
+
+        if (startNode != null) {
+            Asset targetAsset = assetRepository.findByUuid(startNode.assetUuid())
+                    .orElseThrow(() -> new SfException(ProblemFactory.unprocessableEntity("startNode target not found.")));
+            AssetVersion targetVersion = requireOpen(targetAsset.getId());
+            if (targetVersion.getFolderId() == null || !targetVersion.getFolderId().equals(folder.getId())) {
+                throw new SfException(ProblemFactory.unprocessableEntity(
+                        "startNode must reference a direct child of this folder."));
+            }
+            AssetType expectedType = startNode.kind() == StartNodeKind.FOLDER ? AssetType.FOLDER : AssetType.PAGE_REFERENCE;
+            if (targetAsset.getAssetType() != expectedType) {
+                throw new SfException(ProblemFactory.unprocessableEntity(
+                        "startNode kind does not match the target asset's type."));
+            }
+        }
+
+        ObjectNode payload = current.getPayload().deepCopy();
+        if (startNode == null) {
+            payload.putNull("startNode");
+        } else {
+            ObjectNode startNodeNode = payload.putObject("startNode");
+            startNodeNode.put("kind", startNode.kind().name());
+            startNodeNode.put("assetUuid", startNode.assetUuid().toString());
+        }
+        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx);
+    }
+
+    @Override
+    @Transactional
     public MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx) {
         Asset folder = requireFolder(folderUuid, ctx.projectId());
         AssetVersion current = requireOpen(folder.getId());

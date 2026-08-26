@@ -70,7 +70,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     /** Import order for non-folder assets: templates first, dependents last. */
     private static final List<String> NON_FOLDER_ORDER =
-            List.of("SECTION_TEMPLATE", "PAGE_TEMPLATE", "MEDIA", "PAGE");
+            List.of("SECTION_TEMPLATE", "PAGE_TEMPLATE", "MEDIA", "PAGE", "PAGE_REFERENCE");
 
     private final ProjectRepository projectRepository;
     private final AssetVersionRepository assetVersionRepository;

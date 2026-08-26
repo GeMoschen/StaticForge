@@ -25,6 +25,14 @@ public interface FolderService {
     /** Renames a folder (display name only — the path is UID-bound and unchanged). */
     AssetVersionView update(UUID uuid, String displayName, long expectedRevision, RevisionContext ctx);
 
+    /**
+     * Sets or clears a {@code NAVIGATION}-scoped folder's {@code startNode}. {@code startNode}
+     * {@code null} clears it (pure grouping node). A non-null {@code startNode} must reference a
+     * direct child of this same folder whose asset type matches the declared kind — rejected
+     * otherwise. Rejected outright for folders outside the {@code NAVIGATION} scope.
+     */
+    AssetVersionView updateStartNode(UUID uuid, StartNode startNode, long expectedRevision, RevisionContext ctx);
+
     /** Moves a folder and rewrites the entire subtree's paths in a single revision. */
     MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx);
 

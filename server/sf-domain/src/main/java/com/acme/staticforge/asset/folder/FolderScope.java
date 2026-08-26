@@ -11,13 +11,15 @@ import com.fasterxml.jackson.databind.JsonNode;
  */
 public enum FolderScope {
     PAGES,
-    MEDIA;
+    MEDIA,
+    NAVIGATION;
 
     /** The scope an asset of this type must be placed under, or {@code null} if the type isn't scoped to a store. */
     public static FolderScope requiredFor(AssetType type) {
         return switch (type) {
             case PAGE -> PAGES;
             case MEDIA -> MEDIA;
+            case PAGE_REFERENCE -> NAVIGATION;
             default -> null;
         };
     }
