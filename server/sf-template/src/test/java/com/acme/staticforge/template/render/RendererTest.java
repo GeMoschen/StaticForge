@@ -202,6 +202,67 @@ class RendererTest {
         assertThat(codes(result.diagnostics())).contains(DiagnosticCodes.OCTL_UNRESOLVABLE_REF);
     }
 
+    @Test
+    void unresolvableNavigationReferenceReports0110() {
+        OctlResult result = compiler.compile("$CMS_NAVIGATION(nav:nope)$", "html", (assetType, uid) -> Optional.empty());
+        assertThat(codes(result.diagnostics())).contains(DiagnosticCodes.OCTL_UNRESOLVABLE_REF);
+    }
+
+    // ------------------------------------------------------------------
+    // $CMS_NAVIGATION
+    // ------------------------------------------------------------------
+
+    @Test
+    void navigationCompilesAndDispatchesToBlockResolverWithResolvedUuidAndArgs() {
+        UUID navFolder = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        OctlResult compiled = compiler.compile(
+                "$CMS_NAVIGATION(nav:main, depth=2, channel=\"markdown\")$",
+                "html",
+                (assetType, uid) -> "nav".equals(assetType) && "main".equals(uid) ? Optional.of(navFolder) : Optional.empty());
+        assertThat(compiled.hasErrors()).isFalse();
+
+        List<UUID> seenUuid = new java.util.ArrayList<>();
+        List<java.util.Map<String, String>> seenArgs = new java.util.ArrayList<>();
+        BlockResolver resolver = new BlockResolver() {
+            @Override
+            public String renderBody(String bodyName) {
+                return "";
+            }
+
+            @Override
+            public String renderInclude(String uid, java.util.Map<String, String> args) {
+                return "";
+            }
+
+            @Override
+            public String renderNavigation(UUID navFolderUuid, java.util.Map<String, String> args) {
+                seenUuid.add(navFolderUuid);
+                seenArgs.add(args);
+                return "<nav-html>";
+            }
+        };
+
+        RenderContext context = RenderContext.builder().blockResolver(resolver).build();
+        RenderResult result = renderer.render(compiled.template(), context);
+
+        assertThat(result.output()).isEqualTo("<nav-html>");
+        assertThat(seenUuid).containsExactly(navFolder);
+        assertThat(seenArgs.get(0)).containsEntry("depth", "2").containsEntry("channel", "markdown");
+        assertThat(result.dependencies()).containsExactly(navFolder);
+    }
+
+    @Test
+    void navigationRendersEmptyWithNoBlockResolver() {
+        OctlResult compiled = compiler.compile(
+                "before-$CMS_NAVIGATION(nav:main)$-after",
+                "html",
+                (assetType, uid) -> Optional.of(HOME));
+        assertThat(compiled.hasErrors()).isFalse();
+
+        RenderResult result = renderer.render(compiled.template(), RenderContext.builder().build());
+        assertThat(result.output()).isEqualTo("before--after");
+    }
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------

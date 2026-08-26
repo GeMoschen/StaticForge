@@ -1,8 +1,15 @@
 package com.acme.staticforge.generate.render;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.navigation.NavTreeNode;
+import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
+import com.acme.staticforge.asset.navigation.NavigationLookup;
+import com.acme.staticforge.asset.navigation.NavigationService;
+import com.acme.staticforge.asset.navigation.NavigationServiceImpl;
+import com.acme.staticforge.asset.navigation.NavigationTreeJson;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
+import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
 import com.acme.staticforge.generate.pipeline.MediaPaths;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.PlanEntry;
@@ -56,6 +63,11 @@ final class GenerationRenderer {
     private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final Renderer renderer = new OctlRenderer();
 
+    // NavigationServiceImpl is pure/stateless (no dependencies) — instantiated directly, same as
+    // octlCompiler/cdlCompiler/renderer above, rather than threaded in as a Spring bean.
+    private final NavigationService navigationService = new NavigationServiceImpl();
+    private final NavigationLookup navigationLookup;
+
     GenerationRenderer(
             Snapshot snapshot,
             OutputPathResolver paths,
@@ -66,6 +78,7 @@ final class GenerationRenderer {
         this.projectKey = projectKey == null ? "" : projectKey;
         this.channelService = channelService;
         this.uidIndex = indexUids(snapshot);
+        this.navigationLookup = new SnapshotNavigationLookup(snapshot);
     }
 
     /** Renders one plan entry; produces empty bytes (with no deps) when the template has no channel source. */
@@ -183,10 +196,8 @@ final class GenerationRenderer {
 
     private ReferenceResolver referenceResolver() {
         return (assetType, uid) -> {
-            AssetType type;
-            try {
-                type = AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException | NullPointerException e) {
+            AssetType type = assetTypeForRef(assetType);
+            if (type == null) {
                 return Optional.empty();
             }
             Map<String, UUID> byUid = uidIndex.get(type);
@@ -195,6 +206,23 @@ final class GenerationRenderer {
             }
             return Optional.ofNullable(byUid.get(uid));
         };
+    }
+
+    /**
+     * {@code assetType:uid} accessor kind -> {@link AssetType}. Every kind but {@code nav} maps
+     * 1:1 onto an {@link AssetType} enum name; {@code nav:<uid>} (`M8.1.4`) is special-cased since
+     * a navigation folder is still just {@link AssetType#FOLDER} under the hood (`M8.1.2` — plain
+     * folders, no dedicated navigation-folder asset type).
+     */
+    private static AssetType assetTypeForRef(String assetType) {
+        if ("nav".equals(assetType)) {
+            return AssetType.FOLDER;
+        }
+        try {
+            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return null;
+        }
     }
 
     private UrlResolver urlResolver(String channel) {
@@ -293,7 +321,67 @@ final class GenerationRenderer {
                 }
                 return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, null, deps, warnings);
             }
+
+            @Override
+            public String renderNavigation(UUID navFolderUuid, Map<String, String> args) {
+                return GenerationRenderer.this.renderNavigation(navFolderUuid, args, channel, activePageUuid, deps, warnings);
+            }
+
+            @Override
+            public String renderNavigationRecurse(JsonNode node) {
+                return NavigationHtmlRenderer.renderChildren(node);
+            }
         };
+    }
+
+    // ------------------------------------------------------------------
+    // Navigation ($CMS_NAVIGATION)
+    // ------------------------------------------------------------------
+
+    private String renderNavigation(
+            UUID navFolderUuid, Map<String, String> args, String defaultChannel, UUID activePageUuid, Set<UUID> deps, List<Diagnostic> warnings) {
+        if (navFolderUuid == null) {
+            return "";
+        }
+        int depth = parseDepth(args);
+        String navChannel = args != null && args.containsKey("channel") ? args.get("channel") : defaultChannel;
+
+        List<Diagnostic> navDiagnostics = new ArrayList<>();
+        NavTreeNode tree = navigationService.tree(navFolderUuid, depth, navigationLookup, navDiagnostics);
+        warnings.addAll(navDiagnostics);
+        if (tree == null) {
+            return "";
+        }
+        deps.add(navFolderUuid);
+
+        JsonNode json = NavigationTreeJson.toJson(tree, activePageUuid, uuid -> navHref(uuid, navChannel));
+        return NavigationHtmlRenderer.renderRoot(json);
+    }
+
+    /**
+     * Href resolution swap point for `M8.2.3`: this task resolves a nav node's target page href
+     * via the existing {@link OutputPathResolver} path (a straight page-path lookup), same as
+     * {@code $CMS_REF(page:...)$}'s own "page" branch below in {@link #urlResolver}. Once the URL
+     * registry lands, only this one method's body needs to change.
+     */
+    private String navHref(UUID resolvedPageUuid, String channel) {
+        if (resolvedPageUuid == null || paths == null) {
+            return "";
+        }
+        return paths.resolvePageUrl(resolvedPageUuid, channel);
+    }
+
+    /** {@code depth} named arg → int, {@code -1} (unlimited, still hard-capped) when absent/invalid. */
+    private static int parseDepth(Map<String, String> args) {
+        String raw = args == null ? null : args.get("depth");
+        if (raw == null || raw.isBlank()) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private String renderSectionInstance(

@@ -60,6 +60,7 @@ public final class OctlRenderer implements Renderer {
                 case OctlNode.Ref r -> renderRef(r, s);
                 case OctlNode.Body b -> renderBody(b, s);
                 case OctlNode.Include i -> renderInclude(i, s);
+                case OctlNode.Navigation nav -> renderNavigation(nav, s);
                 case OctlNode.If f -> renderIf(f, s);
                 case OctlNode.For f -> renderFor(f, s);
                 case OctlNode.Set st -> renderSet(st, s);
@@ -162,6 +163,23 @@ public final class OctlRenderer implements Renderer {
             s.append(nullToEmpty(resolver.renderInclude(uid, namedArgs(i.args()))));
         }
         s.includeDepth--;
+    }
+
+    private void renderNavigation(OctlNode.Navigation nav, State s) {
+        // Resolving the referenced folder's UUID keeps it in the dependency set (mirrors
+        // renderInclude's noteReference call).
+        noteReference(nav.accessor(), s);
+        UUID navFolderUuid = s.template.references().get(nav.accessor().referenceKey());
+        if (navFolderUuid == null) {
+            s.append("");
+            return;
+        }
+        BlockResolver resolver = s.context.blockResolver();
+        if (resolver == null) {
+            s.append("");
+            return;
+        }
+        s.append(nullToEmpty(resolver.renderNavigation(navFolderUuid, namedArgs(nav.args()))));
     }
 
     /** The UID string stored on the reference, falling back to the resolved UUID when absent. */

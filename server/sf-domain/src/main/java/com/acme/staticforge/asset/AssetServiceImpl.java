@@ -283,7 +283,7 @@ public class AssetServiceImpl implements AssetService {
      */
     private List<UidLiteralReference> findUidLiteralReferences(long projectId, String oldUid) {
         Pattern pattern = Pattern.compile(
-                "\\b(?:page|media|section_template|page_template|folder):" + Pattern.quote(oldUid) + "\\b");
+                "\\b(?:page|media|section_template|page_template|folder|nav):" + Pattern.quote(oldUid) + "\\b");
         List<UidLiteralReference> found = new java.util.ArrayList<>();
         for (AssetType type : List.of(AssetType.SECTION_TEMPLATE, AssetType.PAGE_TEMPLATE)) {
             for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, type)) {
