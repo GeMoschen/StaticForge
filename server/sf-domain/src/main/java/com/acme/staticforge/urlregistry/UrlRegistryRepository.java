@@ -40,6 +40,9 @@ public interface UrlRegistryRepository extends JpaRepository<UrlRegistryEntry, L
     /** Reset scope: every entry for a project (all channels, both areas). */
     void deleteByProjectId(long projectId);
 
+    /** Reset scope: every entry in one area for a project (all channels), added for {@code M8.2.2}. */
+    void deleteByProjectIdAndArea(long projectId, UrlArea area);
+
     /** Cascade-delete hook for {@code PageReference} deletion — both areas, every channel. */
     void deleteByPageReferenceUuid(UUID pageReferenceUuid);
 }

@@ -1,0 +1,204 @@
+package com.acme.staticforge.channel;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.Locale;
+
+/**
+ * Pure §18.3 output-path/URL expansion algorithm — the placeholder-resolution order (page
+ * {@code pathOverride}, then the page template's {@code outputPath} expression, then the
+ * project default {@code {folder}{uid}.{ext}}) and placeholder expansion, extracted so it can
+ * be shared by both the generation-time path ({@code OutputPathResolver} in sf-generate, which
+ * reads a revision-pinned {@code Snapshot}) and any live-repository-backed caller (sf-domain
+ * cannot depend on sf-generate, so this class deliberately takes a small structural
+ * {@link PageContext} instead of a {@code SnapshotAsset}/{@code Snapshot} pair). Keeping the
+ * algorithm in exactly one place guarantees a page's {@code PREVIEW} and {@code GENERATED} URLs
+ * are computed identically (`M8.2.2`).
+ *
+ * <p>This class does not apply output-path syntax normalization (leading-slash stripping,
+ * {@code ..} rejection) — that stays with each caller's own notion of an "output path" (e.g.
+ * {@code OutputFile.normalize} in sf-generate), since a live URL-registry entry is a URL, not a
+ * filesystem-relative output path.
+ */
+public final class OutputPathExpander {
+
+    /** The default {@code indexUid}; a page whose UID equals this renders as {@code index.ext}. */
+    public static final String DEFAULT_INDEX_UID = "index";
+
+    /** {@code urlStrategy} value that turns {@code /products/hammer.html} into the pretty form. */
+    public static final String STRATEGY_PRETTY = "PRETTY";
+
+    private OutputPathExpander() {}
+
+    /**
+     * The minimal page shape the expansion algorithm needs: a snapshot-backed and a
+     * live-repository-backed page both reduce to this. {@code templatePayload} is the
+     * referenced template asset's payload (already resolved by the caller), or {@code null}
+     * when the page has no {@code templateRef} or it doesn't resolve.
+     */
+    public record PageContext(
+            String uid, String displayName, String folderPath, JsonNode payload, JsonNode templatePayload) {}
+
+    /** {@code true} when {@code urlStrategy} is the PRETTY strategy. */
+    public static boolean isPretty(String urlStrategy) {
+        return STRATEGY_PRETTY.equalsIgnoreCase(urlStrategy);
+    }
+
+    /** The file extension for a channel key (html→html, markdown→md, else the key itself). */
+    public static String extensionForChannel(String channel) {
+        if ("markdown".equals(channel)) {
+            return "md";
+        }
+        return channel == null || channel.isBlank() ? "html" : channel;
+    }
+
+    /**
+     * Resolves the (not-yet-syntax-normalized) relative output path for a page in a channel,
+     * applying the PRETTY/trailingSlash directory rewrite when applicable.
+     */
+    public static String resolvePath(PageContext page, String channel, String indexUid, boolean trailingSlash, String urlStrategy) {
+        String resolvedIndexUid = indexUid == null || indexUid.isBlank() ? DEFAULT_INDEX_UID : indexUid;
+        String path = expand(expressionFor(page, channel), page, channel, resolvedIndexUid);
+        if (isPretty(urlStrategy) && trailingSlash) {
+            path = prettify(path);
+        }
+        return path;
+    }
+
+    /**
+     * Resolves the URL (href) a {@code $CMS_REF(page:...)} should emit for a page. With
+     * {@code urlStrategy=PRETTY} and {@code trailingSlash} this is the directory form
+     * ({@code products/hammer/}); otherwise it matches the (unnormalized) output path.
+     */
+    public static String resolveUrl(PageContext page, String channel, String indexUid, boolean trailingSlash, String urlStrategy) {
+        String path = resolvePath(page, channel, indexUid, trailingSlash, urlStrategy);
+        if (!isPretty(urlStrategy) || !trailingSlash) {
+            return path;
+        }
+        int slash = path.lastIndexOf('/');
+        return slash >= 0 ? path.substring(0, slash + 1) : "";
+    }
+
+    // ------------------------------------------------------------------
+    // Resolution order and placeholder expansion
+    // ------------------------------------------------------------------
+
+    private static String expressionFor(PageContext page, String channel) {
+        JsonNode payload = page.payload();
+        if (payload != null) {
+            JsonNode override = payload.path("output").path("pathOverride").path(channel);
+            if (override.isTextual() && !override.asText().isBlank()) {
+                return override.asText();
+            }
+        }
+        JsonNode templatePayload = page.templatePayload();
+        if (templatePayload != null) {
+            JsonNode expression = templatePayload.path("outputPath").path(channel);
+            if (expression.isTextual() && !expression.asText().isBlank()) {
+                return expression.asText();
+            }
+        }
+        return "{folder}{uid}.{ext}";
+    }
+
+    private static String expand(String expression, PageContext page, String channel, String indexUid) {
+        String folder = relativeFolder(page.folderPath());
+        String uid = indexUid.equals(page.uid()) ? DEFAULT_INDEX_UID : (page.uid() == null ? "" : page.uid());
+        String ext = extensionForChannel(channel);
+        DateParts date = dateParts(page);
+        return expression
+                .replace("{displayNameSlug}", slugify(page.displayName()))
+                .replace("{folder}", folder)
+                .replace("{uid}", uid)
+                .replace("{ext}", ext)
+                .replace("{channel}", channel)
+                .replace("{year}", date.year)
+                .replace("{month}", date.month)
+                .replace("{day}", date.day);
+    }
+
+    /** {@code /products/} → {@code products/}; {@code /} → {@code ""}. Trailing slash preserved. */
+    private static String relativeFolder(String folderPath) {
+        if (folderPath == null || folderPath.isBlank() || "/".equals(folderPath)) {
+            return "";
+        }
+        String path = folderPath.replace('\\', '/');
+        while (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+        if (path.isEmpty()) {
+            return "";
+        }
+        return path.endsWith("/") ? path : path + "/";
+    }
+
+    /** Lowercased, non-alphanumerics → {@code -}, trimmed of leading/trailing dashes. */
+    private static String slugify(String displayName) {
+        if (displayName == null) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder(displayName.length());
+        for (char c : displayName.toLowerCase(Locale.ROOT).toCharArray()) {
+            if (Character.isLetterOrDigit(c)) {
+                out.append(c);
+            } else if (out.length() > 0 && out.charAt(out.length() - 1) != '-') {
+                out.append('-');
+            }
+        }
+        while (out.length() > 0 && out.charAt(out.length() - 1) == '-') {
+            out.deleteCharAt(out.length() - 1);
+        }
+        return out.toString();
+    }
+
+    /** {@code year}/{@code month}/{@code day} from {@code nav.date} or {@code publishedOn} (ISO date). */
+    private static DateParts dateParts(PageContext page) {
+        JsonNode payload = page.payload();
+        String value = null;
+        if (payload != null) {
+            JsonNode navDate = payload.path("nav").path("date");
+            if (navDate.isTextual() && !navDate.asText().isBlank()) {
+                value = navDate.asText();
+            } else {
+                JsonNode publishedOn = payload.path("publishedOn");
+                if (publishedOn.isTextual()) {
+                    value = publishedOn.asText();
+                }
+            }
+        }
+        if (value == null || value.isBlank()) {
+            return DateParts.EMPTY;
+        }
+        String iso = value.trim().length() >= 10 ? value.trim().substring(0, 10) : value.trim();
+        try {
+            LocalDate date = LocalDate.parse(iso);
+            return new DateParts(
+                    String.valueOf(date.getYear()),
+                    String.format(Locale.ROOT, "%02d", date.getMonthValue()),
+                    String.format(Locale.ROOT, "%02d", date.getDayOfMonth()));
+        } catch (DateTimeParseException e) {
+            return DateParts.EMPTY;
+        }
+    }
+
+    /** {@code products/hammer.html} → {@code products/hammer/index.html} (already-index paths unchanged). */
+    private static String prettify(String path) {
+        int slash = path.lastIndexOf('/');
+        String dir = slash >= 0 ? path.substring(0, slash + 1) : "";
+        String leaf = path.substring(slash + 1);
+        int dot = leaf.lastIndexOf('.');
+        if (dot < 0) {
+            return path;
+        }
+        String stem = leaf.substring(0, dot);
+        if ("index".equals(stem)) {
+            return path;
+        }
+        return dir + stem + "/index" + leaf.substring(dot);
+    }
+
+    private record DateParts(String year, String month, String day) {
+        static final DateParts EMPTY = new DateParts("", "", "");
+    }
+}
