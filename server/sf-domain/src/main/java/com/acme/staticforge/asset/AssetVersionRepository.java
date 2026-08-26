@@ -69,6 +69,9 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
 
     boolean existsByFolderIdAndValidToRevisionIsNull(Long folderId);
 
+    /** The current, non-deleted, direct children of a folder (by parent {@code folderId}). */
+    List<AssetVersion> findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(Long folderId);
+
     /** Eager snapshot: every version (deleted included) valid at revision {@code R}, asset joined. */
     @Query("""
             SELECT v FROM AssetVersion v JOIN FETCH v.asset

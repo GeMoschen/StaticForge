@@ -33,12 +33,20 @@ public class PageReferenceServiceImpl implements PageReferenceService {
     private final AssetRepository assetRepository;
     private final AssetVersionRepository assetVersionRepository;
     private final AssetService assetService;
+    private final NavigationService navigationService;
+    private final NavigationLookup navigationLookup;
 
     public PageReferenceServiceImpl(
-            AssetRepository assetRepository, AssetVersionRepository assetVersionRepository, AssetService assetService) {
+            AssetRepository assetRepository,
+            AssetVersionRepository assetVersionRepository,
+            AssetService assetService,
+            NavigationService navigationService,
+            LiveNavigationLookup navigationLookup) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
+        this.navigationService = navigationService;
+        this.navigationLookup = navigationLookup;
     }
 
     @Override
@@ -122,6 +130,13 @@ public class PageReferenceServiceImpl implements PageReferenceService {
         if (scope != FolderScope.PAGES) {
             throw new SfException(ProblemFactory.unprocessableEntity(
                     "PageReference FOLDER target must be a page-store folder (FolderScope.PAGES)."));
+        }
+        if (navigationService.firstNavigablePage(targetAssetUuid, navigationLookup).isEmpty()) {
+            throw new SfException(ProblemFactory.other(
+                    422,
+                    "SF-DOM-0130",
+                    "Validation Failed",
+                    "PageReference FOLDER target " + targetAssetUuid + " has no page anywhere in its subtree."));
         }
     }
 
