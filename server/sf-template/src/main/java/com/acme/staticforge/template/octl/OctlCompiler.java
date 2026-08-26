@@ -87,7 +87,23 @@ public final class OctlCompiler {
                 case OctlNode.Ref r -> checkAccessorRoot(r.accessor(), shadowed, r.line(), r.col(), ctx);
                 case OctlNode.Body b -> checkBody(b, ctx);
                 case OctlNode.Include i -> resolveReference(i.accessor(), i.line(), i.col(), ctx);
-                case OctlNode.Navigation nav -> resolveReference(nav.accessor(), nav.line(), nav.col(), ctx);
+                case OctlNode.Navigation nav -> {
+                    resolveReference(nav.accessor(), nav.line(), nav.col(), ctx);
+                    if (nav.variable() != null) {
+                        Set<String> inner = new HashSet<>(shadowed);
+                        inner.add(nav.variable());
+                        validate(nav.body(), inner, ctx);
+                    }
+                }
+                case OctlNode.NavigationRecurse nr -> {
+                    if (!shadowed.contains(nr.variable())) {
+                        ctx.diagnostics.add(Diagnostic.error(
+                                DiagnosticCodes.OCTL_UNKNOWN_NAV_VARIABLE,
+                                "$CMS_NAVIGATION_RECURSE references an unbound variable: " + nr.variable(),
+                                nr.line(),
+                                nr.col()));
+                    }
+                }
                 case OctlNode.If f -> {
                     for (OctlNode.Branch branch : f.branches()) {
                         validateExpr(branch.condition(), shadowed, ctx);

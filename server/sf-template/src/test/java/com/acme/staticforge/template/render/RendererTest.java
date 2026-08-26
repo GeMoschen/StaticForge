@@ -264,6 +264,118 @@ class RendererTest {
     }
 
     // ------------------------------------------------------------------
+    // $CMS_FOR(item : nav:uid) — direct template access to nav nodes
+    // ------------------------------------------------------------------
+
+    @Test
+    void forOverNavAccessorDispatchesToResolveNavigationChildrenAndBindsFields() {
+        UUID navFolder = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        OctlResult compiled = compiler.compile(
+                "$CMS_FOR(item : nav:main, depth=2)$$CMS_VALUE(item.label)$:$CMS_VALUE(item.href)$;"
+                        + "$CMS_IF(item.children | size > 0)$$CMS_FOR(sub : item.children)$[$CMS_VALUE(sub.label)$]$CMS_END_FOR$$CMS_END_IF$"
+                        + "$CMS_END_FOR$",
+                "html",
+                (assetType, uid) -> "nav".equals(assetType) && "main".equals(uid) ? Optional.of(navFolder) : Optional.empty());
+        assertThat(compiled.hasErrors()).isFalse();
+
+        List<UUID> seenUuid = new java.util.ArrayList<>();
+        List<java.util.Map<String, String>> seenArgs = new java.util.ArrayList<>();
+        BlockResolver resolver = new BlockResolver() {
+            @Override
+            public String renderBody(String bodyName) {
+                return "";
+            }
+
+            @Override
+            public String renderInclude(String uid, java.util.Map<String, String> args) {
+                return "";
+            }
+
+            @Override
+            public JsonNode resolveNavigationChildren(UUID navFolderUuid, java.util.Map<String, String> args) {
+                seenUuid.add(navFolderUuid);
+                seenArgs.add(args);
+                return values(
+                        "[{\"label\":\"A\",\"href\":\"/a/\",\"children\":[]},"
+                                + "{\"label\":\"B\",\"href\":\"/b/\",\"children\":[{\"label\":\"B1\",\"href\":\"/b1/\",\"children\":[]}]}]");
+            }
+        };
+
+        RenderResult result = renderer.render(compiled.template(), RenderContext.builder().blockResolver(resolver).build());
+
+        assertThat(result.output()).isEqualTo("A:/a/;B:/b/;[B1]");
+        assertThat(seenUuid).containsExactly(navFolder);
+        assertThat(seenArgs.get(0)).containsEntry("depth", "2");
+        assertThat(result.dependencies()).containsExactly(navFolder);
+    }
+
+    @Test
+    void forOverNavAccessorRendersEmptyWithNoBlockResolver() {
+        OctlResult compiled = compiler.compile(
+                "before-$CMS_FOR(item : nav:main)$X$CMS_END_FOR$-after",
+                "html",
+                (assetType, uid) -> Optional.of(HOME));
+        assertThat(compiled.hasErrors()).isFalse();
+
+        RenderResult result = renderer.render(compiled.template(), RenderContext.builder().build());
+        assertThat(result.output()).isEqualTo("before--after");
+    }
+
+    // ------------------------------------------------------------------
+    // $CMS_NAVIGATION(...) as item$ … $CMS_END_NAVIGATION$ + $CMS_NAVIGATION_RECURSE
+    // ------------------------------------------------------------------
+
+    @Test
+    void navigationBlockFormRendersPerNodeTemplateAndRecursesWithDepth() {
+        UUID navFolder = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        OctlResult compiled = compiler.compile(
+                "$CMS_NAVIGATION(nav:main) as item$"
+                        + "($CMS_VALUE(item._depth)$:$CMS_VALUE(item.label)$"
+                        + "$CMS_IF(item.children | size > 0)$$CMS_NAVIGATION_RECURSE(item)$$CMS_END_IF$)"
+                        + "$CMS_END_NAVIGATION$",
+                "html",
+                (assetType, uid) -> "nav".equals(assetType) && "main".equals(uid) ? Optional.of(navFolder) : Optional.empty());
+        assertThat(compiled.hasErrors()).isFalse();
+
+        BlockResolver resolver = new BlockResolver() {
+            @Override
+            public String renderBody(String bodyName) {
+                return "";
+            }
+
+            @Override
+            public String renderInclude(String uid, java.util.Map<String, String> args) {
+                return "";
+            }
+
+            @Override
+            public JsonNode resolveNavigationChildren(UUID navFolderUuid, java.util.Map<String, String> args) {
+                return values(
+                        "[{\"label\":\"A\",\"children\":[]},"
+                                + "{\"label\":\"B\",\"children\":[{\"label\":\"B1\",\"children\":[]}]}]");
+            }
+        };
+
+        RenderResult result = renderer.render(compiled.template(), RenderContext.builder().blockResolver(resolver).build());
+
+        assertThat(result.output()).isEqualTo("(0:A)(0:B(1:B1))");
+    }
+
+    @Test
+    void navigationRecurseOnUnboundVariableReportsDiagnostic() {
+        OctlResult compiled = compiler.compile(
+                "$CMS_NAVIGATION_RECURSE(bogus)$", "html", (assetType, uid) -> Optional.of(HOME));
+        assertThat(codes(compiled.diagnostics())).contains(DiagnosticCodes.OCTL_UNKNOWN_NAV_VARIABLE);
+    }
+
+    @Test
+    void navigationBlockFormWithoutEndReportsUnbalancedBlock() {
+        OctlResult compiled = compiler.compile(
+                "$CMS_NAVIGATION(nav:main) as item$no end", "html", (assetType, uid) -> Optional.of(HOME));
+        assertThat(codes(compiled.diagnostics())).contains(DiagnosticCodes.OCTL_UNBALANCED_BLOCK);
+    }
+
+    // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
 

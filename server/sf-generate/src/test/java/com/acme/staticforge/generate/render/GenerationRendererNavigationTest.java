@@ -149,6 +149,50 @@ class GenerationRendererNavigationTest {
     }
 
     @Test
+    void forOverNavAccessorRendersCustomMarkupEndToEnd() {
+        SnapshotAsset template = pageTemplate(
+                PAGE_TEMPLATE, "$CMS_FOR(item : nav:main)$[$CMS_VALUE(item.label)$|$CMS_VALUE(item.href)$]$CMS_END_FOR$");
+        SnapshotAsset navRoot = folder(NAV_ROOT, "main", "/nav/", "{\"scope\":\"NAVIGATION\"}");
+        SnapshotAsset homeRef = pageReference(HOME_REF, "home-ref", "/nav/", HOME_PAGE, "Home");
+        SnapshotAsset aboutRef = pageReference(ABOUT_REF, "about-ref", "/nav/", ABOUT_PAGE, "About Us");
+        SnapshotAsset homePage = page(HOME_PAGE, "home", "/", PAGE_TEMPLATE);
+        SnapshotAsset aboutPage = page(ABOUT_PAGE, "about", "/", PAGE_TEMPLATE);
+
+        Snapshot snapshot = snapshot(template, navRoot, homeRef, aboutRef, homePage, aboutPage);
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+
+        RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
+        String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+        assertThat(html).isEqualTo("[About Us|about.html][Home|home.html]");
+        assertThat(file.dependencies()).contains(NAV_ROOT);
+    }
+
+    @Test
+    void navigationBlockFormRecursesThroughRealTreeEndToEnd() {
+        SnapshotAsset template = pageTemplate(
+                PAGE_TEMPLATE,
+                "$CMS_NAVIGATION(nav:main) as item$"
+                        + "($CMS_VALUE(item.label)$$CMS_IF(item.children | size > 0)$$CMS_NAVIGATION_RECURSE(item)$$CMS_END_IF$)"
+                        + "$CMS_END_NAVIGATION$");
+        SnapshotAsset navRoot = folder(NAV_ROOT, "main", "/nav/", "{\"scope\":\"NAVIGATION\"}");
+        SnapshotAsset products = folder(PRODUCTS_FOLDER, "products", "/nav/products/", "{\"scope\":\"NAVIGATION\"}");
+        SnapshotAsset widgetRef = pageReference(WIDGET_REF, "widget-ref", "/nav/products/", WIDGET_PAGE, "Widget");
+        SnapshotAsset homePage = page(HOME_PAGE, "home", "/", PAGE_TEMPLATE);
+        SnapshotAsset widgetPage = page(WIDGET_PAGE, "widget", "/", PAGE_TEMPLATE);
+
+        Snapshot snapshot = snapshot(template, navRoot, products, widgetRef, homePage, widgetPage);
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+
+        RenderedFile file = renderer.render(new PlanEntry(WIDGET_PAGE, "html", "widget.html"));
+        String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+        assertThat(html).isEqualTo("(products(Widget))");
+    }
+
+    @Test
     void navigationHrefsForPageReferenceNodesRouteThroughTheUrlRegistryGeneratedArea() {
         SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:main)$");
         SnapshotAsset navRoot = folder(NAV_ROOT, "main", "/nav/", "{\"scope\":\"NAVIGATION\"}");

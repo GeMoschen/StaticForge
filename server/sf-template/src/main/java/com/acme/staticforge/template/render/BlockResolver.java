@@ -83,4 +83,22 @@ public interface BlockResolver {
     default String renderNavigationRecurse(JsonNode node) {
         return "";
     }
+
+    /**
+     * Resolves a navigation folder's top-level children as plain JSON — the data-access
+     * counterpart to {@link #renderNavigation}, used by {@code $CMS_FOR(item : nav:uid [, depth=N]
+     * [, channel=key])$} and by {@code $CMS_NAVIGATION(nav:uid [, args]) as item$}'s block form
+     * (`M8.3.x`) so a template author can iterate and render nav nodes with their own markup
+     * instead of the fixed {@code NavigationHtmlRenderer} output. Each element has the same shape
+     * {@link #renderNavigationRecurse}'s {@code node} does: {@code assetUuid, type, uid,
+     * displayName, label, href, active, trail, children[]} — {@code children} lets a template
+     * descend further (another {@code $CMS_FOR}, or {@code $CMS_NAVIGATION_RECURSE}).
+     *
+     * @param navFolderUuid the resolved {@code nav:} folder UUID
+     * @param args named arguments from the instruction ({@code depth}, {@code channel}, …)
+     * @return the top-level children as a JSON array, or {@code null} when unresolvable
+     */
+    default JsonNode resolveNavigationChildren(UUID navFolderUuid, Map<String, String> args) {
+        return null;
+    }
 }

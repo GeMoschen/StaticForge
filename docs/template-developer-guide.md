@@ -8,106 +8,20 @@ Normative reference: `cms-specification.md` §14 and §16. This guide is a worki
 
 CDL declares the editors a template exposes. It lives in a section template's or page template's `contentDefinition`. You edit it in the template IDE (Monaco) and can validate it live with `POST /projects/{p}/cdl/validate`.
 
-### 1.1 A complete example (§14.2)
+Full per-type reference — attributes, stored-value shape, and a rendering example for each of the
+18 editor types — lives in [`editors/`](editors/README.md), one file per type (`editors/text.md`,
+`editors/richtext.md`, `editors/media.md`, `editors/list.md`, `editors/catalog.md`, …); start at
+[`editors/README.md`](editors/README.md) for the index, the attributes common to every type,
+grouping, validation, and the full worked example (§14.2). Bodies (page templates only, §14.6) and
+migration-on-rename (`renamedFrom`, §12.3) are also covered there.
 
-```
-content {
-  group "Headline area" {
-    editor text headline {
-      label       "Headline"
-      help        "Shown as H1. Keep it under 60 characters."
-      required
-      maxLength   80
-      default     "New headline"
-    }
-    editor text kicker { label "Kicker" maxLength 40 }
-  }
-
-  editor richtext body { label "Body text" features [bold, italic, link, list, h2, h3, quote] maxChars 4000 }
-
-  editor media heroImage {
-    label      "Hero image"
-    mimeTypes  ["image/jpeg", "image/png", "image/webp"]
-    minWidth   1200
-    required
-  }
-
-  editor reference relatedPage { label "Related page" assetTypes [PAGE] folder "/products/" }
-
-  editor select layout {
-    label "Layout"
-    options [
-      { value "left",  label "Image left"  },
-      { value "right", label "Image right" },
-      { value "full",  label "Full bleed"  }
-    ]
-    default "left"
-  }
-
-  editor boolean showCta { label "Show call to action" default false }
-
-  editor list links {
-    label "Link list"
-    min 0
-    max 8
-    item {
-      editor text      label  { label "Link text" required }
-      editor link      target { label "Target" }
-    }
-  }
-
-  editor date publishedOn { label "Published on" format "yyyy-MM-dd" }
-}
-```
-
-### 1.2 Editor types (§14.3)
-
-| Type | Stored value |
-|---|---|
-| `text`, `textarea` | `string` |
-| `richtext` | `{ "format":"html", "value":"…" }` |
-| `markdown` | `string` |
-| `number` | `number` |
-| `boolean` | `boolean` |
-| `date`/`datetime` | ISO-8601 `string` |
-| `select` | `string` |
-| `multiselect` | `string[]` |
-| `color` | `#rrggbb` |
-| `link` | `{kind, uuid?, url?, anchor?, target?, title?}` |
-| `media` | `{type:"MEDIA_REF", uuid, variant?, altOverride?}` |
-| `reference` | `{type:"ASSET_REF", uuid, assetType}` |
-| `list` | array of item objects |
-| `group` | nested object |
-| `json` | arbitrary JSON |
-
-Common attributes: `label`, `help`, `required`, `default`, `readOnly`, `hidden`, `group`, `order`, `visibleWhen`, `validate`.
-
-### 1.3 Conditional visibility (§14.4)
+Conditional visibility (§14.4) is a language feature usable on any editor, not type-specific:
 
 ```
 editor text ctaLabel { label "Button label" visibleWhen "showCta == true" }
 ```
 
 Grammar is deliberately tiny: `identifier (== | != | > | < | >= | <= | in) literal` with `&&`, `||`, `!`, parentheses. Evaluated by `ExpressionEvaluator` (backend) and the Angular form engine from one shared fixture file, so it behaves identically everywhere.
-
-### 1.4 Bodies — page templates only (§14.6)
-
-```
-bodies {
-  body main    { label "Main content" allow ["*"] }
-  body sidebar { label "Sidebar" allow ["teaser","cta_box"] max 4 }
-}
-```
-
-`allow` entries are section-template **UIDs** or `"*"`. The compiler cross-checks this against `$CMS_BODY` occurrences in each channel template.
-
-### 1.5 Migration on CDL change (§12.3)
-
-Renaming an editor can declare `renamedFrom` so the server migrates existing content in one revision:
-
-```
-editor richtext body { label "Body", renamedFrom "text" }
-```
 
 ## Part 2 — OCTL (output channel template language)
 
@@ -123,7 +37,7 @@ OCTL renders content into a channel. One template per (template asset, channel).
 | `$CMS_REF(editorName)$` | URL for a link/media/reference value |
 | `$CMS_BODY(name)$` | render a body (page templates only) |
 | `$CMS_INCLUDE(section_template:uid)$` | render a section inline |
-| `$CMS_NAV(structure:uid)$` | render a navigation |
+| `$CMS_NAVIGATION(nav:uid [, depth=N] [, channel=key])$` | render a navigation folder's tree — see `navigation-template-syntax.md` / `navigation-html-output.md` |
 | `$CMS_IF(expr)$ … $CMS_ELSEIF(expr)$ … $CMS_ELSE$ … $CMS_END_IF$` | conditional |
 | `$CMS_FOR(item : listEditor)$ … $CMS_END_FOR$` | iteration over lists/nav nodes |
 | `$CMS_SET(name = expr)$` | local variable |
@@ -214,6 +128,7 @@ $CMS_END_FOR$
 | `SF-TPL-0104` | error | unknown filter |
 | `SF-TPL-0110` | error | unresolvable asset reference |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
+| `SF-TPL-0134` | error | `$CMS_NAVIGATION_RECURSE(name)$` references a variable not bound by an enclosing `$CMS_NAVIGATION(...) as name$` |
 | `SF-TPL-0201` | warning | body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | editor declared but never used in any channel template |
@@ -237,6 +152,7 @@ $CMS_END_FOR$
 | `SF-GEN-0110` | error | output path collision |
 | `SF-GEN-0210` | warning | no channel template for an enabled channel |
 | `SF-GEN-0410` | warning | navigation cycle truncated |
+| `SF-GEN-0411` | error | `$CMS_NAVIGATION` tree contains a dangling `PAGE_REFERENCE` (target missing/deleted, or an empty folder subtree) |
 | `SF-GEN-0500` | 409 | a generation run is already active |
 
 ### 3.4 Errors carry the fix

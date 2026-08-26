@@ -271,22 +271,38 @@ public class PageRenderService {
 
             @Override
             public String renderNavigation(UUID navFolderUuid, Map<String, String> args) {
-                return PageRenderService.this.renderNavigation(
+                JsonNode json = PageRenderService.this.navigationTreeJson(
                         navFolderUuid, args, projectId, projectKey, page.uuid(), channel, rewriteLinks, baseUrl);
+                return json == null ? "" : NavigationHtmlRenderer.renderRoot(json);
             }
 
             @Override
             public String renderNavigationRecurse(JsonNode node) {
                 return NavigationHtmlRenderer.renderChildren(node);
             }
+
+            @Override
+            public JsonNode resolveNavigationChildren(UUID navFolderUuid, Map<String, String> args) {
+                JsonNode json = PageRenderService.this.navigationTreeJson(
+                        navFolderUuid, args, projectId, projectKey, page.uuid(), channel, rewriteLinks, baseUrl);
+                return json == null ? null : json.path("children");
+            }
         };
     }
 
     // ------------------------------------------------------------------
-    // Navigation ($CMS_NAVIGATION)
+    // Navigation ($CMS_NAVIGATION, $CMS_FOR(... : nav:uid))
     // ------------------------------------------------------------------
 
-    private String renderNavigation(
+    /**
+     * Builds the resolved navigation folder's tree as {@link NavigationTreeJson}'s JSON shape, or
+     * {@code null} when unresolvable — the shared data step behind both the default HTML renderer
+     * ({@code renderNavigation}) and direct template access to nav nodes ({@code
+     * resolveNavigationChildren}, `M8.3.x`), mirroring {@code GenerationRenderer}'s equivalent
+     * refactor so depth-parsing, channel resolution, and the dangling-reference check live in
+     * exactly one place.
+     */
+    private JsonNode navigationTreeJson(
             UUID navFolderUuid,
             Map<String, String> args,
             long projectId,
@@ -296,7 +312,7 @@ public class PageRenderService {
             boolean rewriteLinks,
             String baseUrl) {
         if (navFolderUuid == null) {
-            return "";
+            return null;
         }
         int depth = parseDepth(args);
         String navChannel = args != null && args.containsKey("channel") ? args.get("channel") : defaultChannel;
@@ -306,7 +322,7 @@ public class PageRenderService {
         // rather than introducing a new reporting channel just for navigation.
         NavTreeNode tree = navigationService.tree(navFolderUuid, depth, navigationLookup, new ArrayList<>());
         if (tree == null) {
-            return "";
+            return null;
         }
 
         List<UUID> dangling = NavigationTreeJson.danglingPageReferences(tree);
@@ -323,9 +339,8 @@ public class PageRenderService {
                     "Navigation reference '" + dangling.get(0) + "' does not resolve to any page."));
         }
 
-        JsonNode json = NavigationTreeJson.toJson(
+        return NavigationTreeJson.toJson(
                 tree, activePageUuid, node -> navHref(node, projectId, projectKey, navChannel, rewriteLinks, baseUrl));
-        return NavigationHtmlRenderer.renderRoot(json);
     }
 
     /**

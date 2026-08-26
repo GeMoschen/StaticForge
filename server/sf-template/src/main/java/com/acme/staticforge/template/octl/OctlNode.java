@@ -42,16 +42,33 @@ public sealed interface OctlNode {
     }
 
     /**
-     * {@code $CMS_NAVIGATION(nav:uid [, depth=N] [, channel=key])$} (spec §16.9, `M8.1.4`). A
-     * self-closing (leaf) instruction, like {@link Include}: rendering the resolved navigation
-     * folder's tree — including any nested-list markup — is delegated entirely to
-     * {@code BlockResolver#renderNavigation}, so no template body/close tag is needed here.
+     * {@code $CMS_NAVIGATION(nav:uid [, depth=N] [, channel=key])$} (spec §16.9, `M8.1.4`), or
+     * its block form {@code $CMS_NAVIGATION(nav:uid [, args]) as item$ … $CMS_END_NAVIGATION$}.
+     *
+     * <p>{@code variable == null} (equivalently {@code body.isEmpty()}) is the original
+     * self-closing (leaf) form, like {@link Include}: rendering the resolved navigation folder's
+     * tree — including any nested-list markup — is delegated entirely to {@code
+     * BlockResolver#renderNavigation}. When {@code variable} is present, the folder's top-level
+     * children are fetched via {@code BlockResolver#resolveNavigationChildren} and {@code body}
+     * is rendered once per child with {@code variable} bound to it in loop scope (mirroring
+     * {@link For}) — letting a template author supply their own per-node markup, descending
+     * further via {@link NavigationRecurse}.
      */
-    record Navigation(Accessor accessor, List<NamedArg> args, int line, int col) implements OctlNode {
+    record Navigation(Accessor accessor, List<NamedArg> args, String variable, List<OctlNode> body, int line, int col)
+            implements OctlNode {
         public Navigation {
             args = args == null ? List.of() : List.copyOf(args);
+            body = body == null ? List.of() : List.copyOf(body);
         }
     }
+
+    /**
+     * {@code $CMS_NAVIGATION_RECURSE(item)$} — valid only inside the body of a block-form {@link
+     * Navigation} bound to the same {@code variable} name; renders that node's children using the
+     * enclosing {@code Navigation}'s own body template, one level deeper (spec-analogous to the
+     * old {@code $CMS_NAV_RECURSE$}).
+     */
+    record NavigationRecurse(String variable, int line, int col) implements OctlNode {}
 
     /** {@code $CMS_IF(expr)$ … $CMS_ELSEIF(expr)$ … $CMS_ELSE$ … $CMS_END_IF$}. */
     record If(List<Branch> branches, List<OctlNode> elseBody, int line, int col) implements OctlNode {
@@ -68,9 +85,16 @@ public sealed interface OctlNode {
         }
     }
 
-    /** {@code $CMS_FOR(item : accessor)$ … $CMS_END_FOR$}. */
-    record For(String variable, Accessor accessor, List<OctlNode> body, int line, int col) implements OctlNode {
+    /**
+     * {@code $CMS_FOR(item : accessor [, namedArgs])$ … $CMS_END_FOR$}. {@code args} only means
+     * something when {@code accessor} is a {@code nav:} reference ({@code depth}, {@code
+     * channel}, mirroring {@link Navigation}'s own named args) — ignored for a plain list/editor
+     * accessor.
+     */
+    record For(String variable, Accessor accessor, List<NamedArg> args, List<OctlNode> body, int line, int col)
+            implements OctlNode {
         public For {
+            args = args == null ? List.of() : List.copyOf(args);
             body = body == null ? List.of() : List.copyOf(body);
         }
     }

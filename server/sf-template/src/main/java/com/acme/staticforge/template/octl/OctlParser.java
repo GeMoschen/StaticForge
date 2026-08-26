@@ -80,11 +80,12 @@ final class OctlParser {
                 List<NamedArg> args = parseNamedArgs(c);
                 out.add(new OctlNode.Include(accessor, args, line, col));
             }
-            case "NAVIGATION" -> {
+            case "NAVIGATION" -> out.add(parseNavigation(token, line, col));
+            case "NAVIGATION_RECURSE" -> {
                 Cursor c = cursor(token);
-                Accessor accessor = parseAccessor(c);
-                List<NamedArg> args = parseNamedArgs(c);
-                out.add(new OctlNode.Navigation(accessor, args, line, col));
+                c.skipWs();
+                String variable = c.readIdent();
+                out.add(new OctlNode.NavigationRecurse(variable, line, col));
             }
             case "SET" -> {
                 Cursor c = cursor(token);
@@ -150,13 +151,43 @@ final class OctlParser {
         c.skipWs();
         c.expect(':');
         Accessor accessor = parseAccessor(c);
+        List<NamedArg> args = parseNamedArgs(c);
         List<OctlNode> body = parseSequence(Set.of("END_FOR"));
         if (!consumeInstruction("END_FOR")) {
             diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.OCTL_UNBALANCED_BLOCK,
                     "Unbalanced block: $CMS_FOR$ without $CMS_END_FOR$", line, col));
         }
-        return new OctlNode.For(variable, accessor, body, line, col);
+        return new OctlNode.For(variable, accessor, args, body, line, col);
+    }
+
+    /**
+     * {@code $CMS_NAVIGATION(nav:uid [, args])$} (leaf form) or {@code $CMS_NAVIGATION(nav:uid
+     * [, args]) as item$ … $CMS_END_NAVIGATION$} (block form). The {@code as item} clause lives
+     * *after* the closing paren, outside what {@link #cursor} exposes (it only sees the
+     * parenthesized content), so it's read separately from the token's raw text.
+     */
+    private OctlNode.Navigation parseNavigation(OctlLexer.Token token, int line, int col) {
+        Cursor c = cursor(token);
+        Accessor accessor = parseAccessor(c);
+        List<NamedArg> args = parseNamedArgs(c);
+
+        String tail = afterParen(token.text()).trim();
+        if (!tail.startsWith("as")) {
+            return new OctlNode.Navigation(accessor, args, null, List.of(), line, col);
+        }
+        Cursor tailCursor = new Cursor(tail);
+        tailCursor.readIdent(); // "as"
+        tailCursor.skipWs();
+        String variable = tailCursor.readIdent();
+
+        List<OctlNode> body = parseSequence(Set.of("END_NAVIGATION"));
+        if (!consumeInstruction("END_NAVIGATION")) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_UNBALANCED_BLOCK,
+                    "Unbalanced block: $CMS_NAVIGATION$ without $CMS_END_NAVIGATION$", line, col));
+        }
+        return new OctlNode.Navigation(accessor, args, variable, body, line, col);
     }
 
     private void parseComment(int line, int col) {
@@ -503,6 +534,12 @@ final class OctlParser {
 
     private static Cursor cursor(OctlLexer.Token token) {
         return new Cursor(parenContent(token.text()));
+    }
+
+    /** Raw text following the instruction's closing paren (e.g. {@code "as item"}); {@code ""} if none. */
+    private static String afterParen(String raw) {
+        int close = raw.lastIndexOf(')');
+        return close < 0 || close + 1 >= raw.length() ? "" : raw.substring(close + 1);
     }
 
     private boolean isInstruction(String kw) {

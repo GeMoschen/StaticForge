@@ -61,6 +61,7 @@ public final class OctlRenderer implements Renderer {
                 case OctlNode.Body b -> renderBody(b, s);
                 case OctlNode.Include i -> renderInclude(i, s);
                 case OctlNode.Navigation nav -> renderNavigation(nav, s);
+                case OctlNode.NavigationRecurse nr -> renderNavigationRecurseInstruction(nr, s);
                 case OctlNode.If f -> renderIf(f, s);
                 case OctlNode.For f -> renderFor(f, s);
                 case OctlNode.Set st -> renderSet(st, s);
@@ -175,11 +176,47 @@ public final class OctlRenderer implements Renderer {
             return;
         }
         BlockResolver resolver = s.context.blockResolver();
-        if (resolver == null) {
-            s.append("");
+        if (nav.variable() == null) {
+            // Leaf form: the fixed default-rendered markup (NavigationHtmlRenderer), unchanged.
+            s.append(resolver == null ? "" : nullToEmpty(resolver.renderNavigation(navFolderUuid, namedArgs(nav.args()))));
             return;
         }
-        s.append(nullToEmpty(resolver.renderNavigation(navFolderUuid, namedArgs(nav.args()))));
+        // Block form: fetch the top-level children as data and let the template's own body
+        // render each one, exactly like $CMS_FOR — $CMS_NAVIGATION_RECURSE descends further.
+        JsonNode children = resolver == null ? null : resolver.resolveNavigationChildren(navFolderUuid, namedArgs(nav.args()));
+        renderNavItems(children, nav.variable(), nav.body(), 0, nav.line(), nav.col(), s);
+    }
+
+    /** Shared iteration for block-form {@code $CMS_NAVIGATION}'s top level and {@code $CMS_NAVIGATION_RECURSE}'s descent. */
+    private void renderNavItems(
+            JsonNode children, String variable, List<OctlNode> body, int depth, int line, int col, State s) {
+        if (children == null || !children.isArray()) {
+            return;
+        }
+        int count = children.size();
+        for (int index = 0; index < count; index++) {
+            s.loopIterations++;
+            if (s.loopIterations > MAX_LOOP_ITERATIONS) {
+                throw new RenderLimitException(Diagnostic.error(
+                        "SF-TPL-0131", "Loop iteration limit exceeded", line, col));
+            }
+            s.pushLoop(new LoopFrame(variable, children.get(index), index, count, depth, body));
+            try {
+                renderNodes(body, s);
+            } finally {
+                s.popLoop();
+            }
+        }
+    }
+
+    /** {@code $CMS_NAVIGATION_RECURSE(item)$}: renders {@code item}'s children with the enclosing block's own body. */
+    private void renderNavigationRecurseInstruction(OctlNode.NavigationRecurse nr, State s) {
+        LoopFrame frame = s.findLoop(nr.variable());
+        if (frame == null || frame.body == null) {
+            return;
+        }
+        JsonNode children = frame.item == null ? null : frame.item.path("children");
+        renderNavItems(children, frame.variable, frame.body, frame.depth + 1, nr.line(), nr.col(), s);
     }
 
     /** The UID string stored on the reference, falling back to the resolved UUID when absent. */
@@ -215,7 +252,7 @@ public final class OctlRenderer implements Renderer {
     }
 
     private void renderFor(OctlNode.For f, State s) {
-        JsonNode list = resolve(f.accessor(), s);
+        JsonNode list = resolveForList(f.accessor(), f.args(), s);
         if (list == null || !list.isArray()) {
             return;
         }
@@ -233,6 +270,25 @@ public final class OctlRenderer implements Renderer {
                 s.popLoop();
             }
         }
+    }
+
+    /**
+     * {@code $CMS_FOR$}'s accessor resolution: a {@code nav:uid} reference bootstraps its
+     * top-level children from {@link BlockResolver#resolveNavigationChildren} (the generic {@link
+     * #resolve} always returns {@code MissingNode} for any asset reference — cross-asset value
+     * rendering there is deferred/unsupported); every other accessor goes through the normal path.
+     */
+    private JsonNode resolveForList(Accessor accessor, List<NamedArg> args, State s) {
+        if (accessor.isAssetReference() && "nav".equals(accessor.assetType())) {
+            noteReference(accessor, s);
+            UUID navFolderUuid = s.template.references().get(accessor.referenceKey());
+            if (navFolderUuid == null) {
+                return null;
+            }
+            BlockResolver resolver = s.context.blockResolver();
+            return resolver == null ? null : resolver.resolveNavigationChildren(navFolderUuid, namedArgs(args));
+        }
+        return resolve(accessor, s);
     }
 
     private void renderSet(OctlNode.Set st, State s) {
@@ -290,6 +346,7 @@ public final class OctlRenderer implements Renderer {
                 case "_first" -> BooleanNode.valueOf(loop.index == 0);
                 case "_last" -> BooleanNode.valueOf(loop.index == loop.count - 1);
                 case "_count" -> IntNode.valueOf(loop.count);
+                case "_depth" -> IntNode.valueOf(loop.depth);
                 default -> resolveSub(loop.item, path, 1, s);
             };
         }
@@ -512,12 +569,22 @@ public final class OctlRenderer implements Renderer {
         final JsonNode item;
         final int index;
         final int count;
+        /** {@code 0} for a plain {@code $CMS_FOR$} loop; nesting depth for a nav-recursion frame (exposed as {@code _depth}). */
+        final int depth;
+        /** {@code null} for a plain {@code $CMS_FOR$} loop; the block body to replay for a nav-recursion frame's children. */
+        final List<OctlNode> body;
 
         LoopFrame(String variable, JsonNode item, int index, int count) {
+            this(variable, item, index, count, 0, null);
+        }
+
+        LoopFrame(String variable, JsonNode item, int index, int count, int depth, List<OctlNode> body) {
             this.variable = variable;
             this.item = item;
             this.index = index;
             this.count = count;
+            this.depth = depth;
+            this.body = body;
         }
     }
 

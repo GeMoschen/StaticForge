@@ -187,14 +187,31 @@ public class TemplateServiceImpl implements TemplateService {
 
     private ReferenceResolver referenceResolver(long projectId) {
         return (assetType, uid) -> {
-            AssetType type;
-            try {
-                type = AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException | NullPointerException e) {
+            AssetType type = assetTypeForRef(assetType);
+            if (type == null) {
                 return Optional.empty();
             }
             return assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
         };
+    }
+
+    /**
+     * A navigation folder is plain {@code AssetType.FOLDER} under the hood (`M8.1.2`) — there is
+     * no {@code AssetType.NAV} — so a {@code nav:uid} reference needs this one special-case before
+     * falling back to {@code AssetType.valueOf(...)}, mirroring {@code GenerationRenderer}'s and
+     * {@code PageRenderService}'s identical helper. Without it, {@code $CMS_NAVIGATION(nav:uid)$}
+     * always failed compile-on-save validation with a false {@code SF-TPL-0110}, even against a
+     * real {@code FOLDER} asset with that uid.
+     */
+    private static AssetType assetTypeForRef(String assetType) {
+        if ("nav".equals(assetType)) {
+            return AssetType.FOLDER;
+        }
+        try {
+            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return null;
+        }
     }
 
     private ObjectNode buildPayload(

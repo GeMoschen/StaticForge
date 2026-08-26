@@ -15,6 +15,7 @@ public final class DiagnosticCodes {
     public static final String OCTL_UNKNOWN_FILTER = "SF-TPL-0104";
     public static final String OCTL_UNRESOLVABLE_REF = "SF-TPL-0110";
     public static final String OCTL_BODY_IN_SECTION = "SF-TPL-0120";
+    public static final String OCTL_UNKNOWN_NAV_VARIABLE = "SF-TPL-0134";
 
     // OCTL warnings (§16.11)
     public static final String OCTL_BODY_NEVER_RENDERED = "SF-TPL-0201";

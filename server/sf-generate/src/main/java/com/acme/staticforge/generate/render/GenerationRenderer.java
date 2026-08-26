@@ -348,24 +348,40 @@ final class GenerationRenderer {
 
             @Override
             public String renderNavigation(UUID navFolderUuid, Map<String, String> args) {
-                return GenerationRenderer.this.renderNavigation(navFolderUuid, args, channel, activePageUuid, deps, warnings);
+                JsonNode json = GenerationRenderer.this.navigationTreeJson(
+                        navFolderUuid, args, channel, activePageUuid, deps, warnings);
+                return json == null ? "" : NavigationHtmlRenderer.renderRoot(json);
             }
 
             @Override
             public String renderNavigationRecurse(JsonNode node) {
                 return NavigationHtmlRenderer.renderChildren(node);
             }
+
+            @Override
+            public JsonNode resolveNavigationChildren(UUID navFolderUuid, Map<String, String> args) {
+                JsonNode json = GenerationRenderer.this.navigationTreeJson(
+                        navFolderUuid, args, channel, activePageUuid, deps, warnings);
+                return json == null ? null : json.path("children");
+            }
         };
     }
 
     // ------------------------------------------------------------------
-    // Navigation ($CMS_NAVIGATION)
+    // Navigation ($CMS_NAVIGATION, $CMS_FOR(... : nav:uid))
     // ------------------------------------------------------------------
 
-    private String renderNavigation(
+    /**
+     * Builds the resolved navigation folder's tree as {@link NavigationTreeJson}'s JSON shape, or
+     * {@code null} when unresolvable — the shared data step behind both the default HTML renderer
+     * ({@code renderNavigation}) and direct template access to nav nodes ({@code
+     * resolveNavigationChildren}, `M8.3.x`), so depth-parsing, channel resolution, the dangling-
+     * reference check (`SF-GEN-0411`), and dependency-tracking live in exactly one place.
+     */
+    private JsonNode navigationTreeJson(
             UUID navFolderUuid, Map<String, String> args, String defaultChannel, UUID activePageUuid, Set<UUID> deps, List<Diagnostic> warnings) {
         if (navFolderUuid == null) {
-            return "";
+            return null;
         }
         int depth = parseDepth(args);
         String navChannel = args != null && args.containsKey("channel") ? args.get("channel") : defaultChannel;
@@ -374,7 +390,7 @@ final class GenerationRenderer {
         NavTreeNode tree = navigationService.tree(navFolderUuid, depth, navigationLookup, navDiagnostics);
         warnings.addAll(navDiagnostics);
         if (tree == null) {
-            return "";
+            return null;
         }
         deps.add(navFolderUuid);
 
@@ -394,8 +410,7 @@ final class GenerationRenderer {
                     0));
         }
 
-        JsonNode json = NavigationTreeJson.toJson(tree, activePageUuid, node -> navHref(node, navChannel));
-        return NavigationHtmlRenderer.renderRoot(json);
+        return NavigationTreeJson.toJson(tree, activePageUuid, node -> navHref(node, navChannel));
     }
 
     /**
