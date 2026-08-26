@@ -1,8 +1,11 @@
 package com.acme.staticforge.asset.navigation;
 
+import com.acme.staticforge.asset.AssetType;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -27,15 +30,47 @@ public final class NavigationTreeJson {
     /**
      * @param root the resolved tree (from {@code NavigationService#tree})
      * @param currentPageUuid the page being rendered, or {@code null} outside a page context
-     * @param hrefResolver resolves a node's {@code resolvedPageUuid} to an href; see
-     *     {@code GenerationRenderer#navHref}/the preview equivalent for the current (§`M8.1.4`)
-     *     straight page-path implementation, spliced out for `M8.2.3`'s URL registry later
+     * @param hrefResolver resolves a node's href from the whole node (not just its
+     *     {@code resolvedPageUuid}) — the {@code PAGE_REFERENCE} identity (`node.assetUuid()`) is
+     *     what {@code M8.2.3}'s {@code UrlRegistryService.resolve(pageReferenceUuid, ...)} keys
+     *     off of, which a bare page uuid cannot supply. See {@code GenerationRenderer#navHref}/
+     *     {@code PageRenderService#navHref} for the current implementation: a {@code
+     *     PAGE_REFERENCE} node routes through the URL registry (keyed on {@code node.assetUuid()});
+     *     a {@code FOLDER} entry-point node (whose {@code resolvedPageUuid} comes from walking a
+     *     {@code startNode} chain, not from a {@code PageReference} the folder itself owns) keeps
+     *     resolving its href directly, since the registry has no {@code PageReference} identity to
+     *     key a folder's own href on.
      */
-    public static ObjectNode toJson(NavTreeNode root, UUID currentPageUuid, Function<UUID, String> hrefResolver) {
+    public static ObjectNode toJson(NavTreeNode root, UUID currentPageUuid, Function<NavTreeNode, String> hrefResolver) {
         return build(root, currentPageUuid, hrefResolver);
     }
 
-    private static ObjectNode build(NavTreeNode node, UUID currentPageUuid, Function<UUID, String> hrefResolver) {
+    /**
+     * The {@code assetUuid} of every {@code PAGE_REFERENCE} node (anywhere in the tree) whose
+     * {@code resolvedPageUuid} is {@code null} — a dangling reference that bypassed `M8.1.2`
+     * validation (or whose target was soft-deleted afterward). Distinct from a grouping-only
+     * {@code FOLDER} node with no {@code startNode}, which is a legitimate, intentional
+     * non-{@code href} state, not an error.
+     */
+    public static List<UUID> danglingPageReferences(NavTreeNode root) {
+        List<UUID> out = new ArrayList<>();
+        collectDangling(root, out);
+        return out;
+    }
+
+    private static void collectDangling(NavTreeNode node, List<UUID> out) {
+        if (node == null) {
+            return;
+        }
+        if (node.type() == AssetType.PAGE_REFERENCE && node.resolvedPageUuid() == null) {
+            out.add(node.assetUuid());
+        }
+        for (NavTreeNode child : node.children()) {
+            collectDangling(child, out);
+        }
+    }
+
+    private static ObjectNode build(NavTreeNode node, UUID currentPageUuid, Function<NavTreeNode, String> hrefResolver) {
         ObjectNode json = JsonNodeFactory.instance.objectNode();
         if (node == null) {
             json.putArray("children");
@@ -63,7 +98,7 @@ public final class NavigationTreeJson {
         json.put("displayName", node.displayName());
         json.put("label", node.label());
         json.put("resolvedPageUuid", resolvedPageUuid == null ? null : resolvedPageUuid.toString());
-        String href = resolvedPageUuid == null || hrefResolver == null ? null : hrefResolver.apply(resolvedPageUuid);
+        String href = resolvedPageUuid == null || hrefResolver == null ? null : hrefResolver.apply(node);
         json.put("href", href);
         json.put("active", active);
         json.put("trail", !active && descendantOnTrail);

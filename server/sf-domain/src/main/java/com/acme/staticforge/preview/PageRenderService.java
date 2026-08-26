@@ -7,6 +7,7 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
+import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
 import com.acme.staticforge.asset.navigation.NavigationService;
 import com.acme.staticforge.asset.navigation.NavigationTreeJson;
@@ -14,6 +15,7 @@ import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.octl.CompiledTemplate;
@@ -26,10 +28,13 @@ import com.acme.staticforge.template.render.OctlRenderer;
 import com.acme.staticforge.template.render.RenderContext;
 import com.acme.staticforge.template.render.Renderer;
 import com.acme.staticforge.template.render.UrlResolver;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -57,6 +62,7 @@ public class PageRenderService {
     private final PreviewTokenService previewTokenService;
     private final NavigationService navigationService;
     private final LiveNavigationLookup navigationLookup;
+    private final UrlRegistryService urlRegistryService;
 
     private final OctlCompiler octlCompiler = new OctlCompiler();
     private final CdlCompiler cdlCompiler = new CdlCompiler();
@@ -69,7 +75,8 @@ public class PageRenderService {
             ObjectMapper objectMapper,
             PreviewTokenService previewTokenService,
             NavigationService navigationService,
-            LiveNavigationLookup navigationLookup) {
+            LiveNavigationLookup navigationLookup,
+            UrlRegistryService urlRegistryService) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.projectRepository = projectRepository;
@@ -77,6 +84,7 @@ public class PageRenderService {
         this.previewTokenService = previewTokenService;
         this.navigationService = navigationService;
         this.navigationLookup = navigationLookup;
+        this.urlRegistryService = urlRegistryService;
     }
 
     /**
@@ -264,7 +272,7 @@ public class PageRenderService {
             @Override
             public String renderNavigation(UUID navFolderUuid, Map<String, String> args) {
                 return PageRenderService.this.renderNavigation(
-                        navFolderUuid, args, projectKey, page.uuid(), channel, rewriteLinks, baseUrl);
+                        navFolderUuid, args, projectId, projectKey, page.uuid(), channel, rewriteLinks, baseUrl);
             }
 
             @Override
@@ -281,6 +289,7 @@ public class PageRenderService {
     private String renderNavigation(
             UUID navFolderUuid,
             Map<String, String> args,
+            long projectId,
             String projectKey,
             UUID activePageUuid,
             String defaultChannel,
@@ -300,20 +309,45 @@ public class PageRenderService {
             return "";
         }
 
+        List<UUID> dangling = NavigationTreeJson.danglingPageReferences(tree);
+        if (!dangling.isEmpty()) {
+            // `M8.2.3`: mirrors GenerationRenderer's dangling-reference handling — a dangling
+            // PAGE_REFERENCE used to silently render as a non-linked <span>; fail the render with
+            // a diagnostic instead. Preview has no diagnostics-reporting channel (see the comment
+            // above), so this surfaces as a thrown SfException, consistent with every other
+            // unresolvable-asset failure in this class (e.g. `projectIdOf`, `assetService.requireCurrent`).
+            throw new SfException(ProblemFactory.other(
+                    422,
+                    NavigationDiagnosticCodes.NAV_DANGLING_PAGE_REFERENCE,
+                    "Unresolvable Navigation Reference",
+                    "Navigation reference '" + dangling.get(0) + "' does not resolve to any page."));
+        }
+
         JsonNode json = NavigationTreeJson.toJson(
-                tree, activePageUuid, uuid -> navHref(uuid, projectKey, navChannel, rewriteLinks, baseUrl));
+                tree, activePageUuid, node -> navHref(node, projectId, projectKey, navChannel, rewriteLinks, baseUrl));
         return NavigationHtmlRenderer.renderRoot(json);
     }
 
     /**
-     * Href resolution swap point for `M8.2.3`: this task resolves a nav node's target page href
-     * through the same {@link UrlResolver} a {@code $CMS_REF(page:...)$} would use (share-token
-     * URL when rewriting, raw uuid otherwise). Once the URL registry lands, only this one
-     * method's body needs to change.
+     * Href resolution swap point for `M8.2.3`: a {@code PAGE_REFERENCE} node's href is keyed on
+     * the reference's own uuid ({@code node.assetUuid()}, exactly the {@code pageReferenceUuid}
+     * {@link UrlRegistryService#resolve} expects) and resolved through the {@code PREVIEW} area of
+     * the URL registry. A {@code FOLDER} entry-point node (its {@code resolvedPageUuid} comes from
+     * walking a {@code startNode} chain, not from a {@code PageReference} the folder itself owns)
+     * has no {@code PageReference} identity to key a registry lookup on, so it keeps resolving
+     * directly through the same {@link UrlResolver} a {@code $CMS_REF(page:...)$} would use
+     * (share-token URL when rewriting, raw uuid otherwise) — unchanged pre-`M8.2.3` behavior for
+     * that node kind.
      */
-    private String navHref(UUID resolvedPageUuid, String projectKey, String channel, boolean rewriteLinks, String baseUrl) {
+    private String navHref(
+            NavTreeNode node, long projectId, String projectKey, String channel, boolean rewriteLinks, String baseUrl) {
+        UUID resolvedPageUuid = node.resolvedPageUuid();
         if (resolvedPageUuid == null) {
             return "";
+        }
+        if (node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
+            RevisionContext ctx = RevisionContext.of(projectId, null, "preview");
+            return urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.PREVIEW, ctx);
         }
         return urlResolver(projectKey, channel, rewriteLinks, baseUrl).resolve("page", null, resolvedPageUuid, Map.of());
     }

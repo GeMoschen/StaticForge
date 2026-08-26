@@ -19,4 +19,15 @@ public final class NavigationDiagnosticCodes {
      * and treated as unresolved from there on.
      */
     public static final String NAV_START_NODE_CYCLE = "SF-GEN-0410";
+
+    /**
+     * A {@code PAGE_REFERENCE} node inside a rendered {@code $CMS_NAVIGATION} tree does not
+     * resolve to any page at all — {@code NavigationService.resolve} returned {@code null}
+     * (`M8.2.3`): the reference's target asset is missing/deleted, or (for a {@code FOLDER}
+     * target) the target folder has no navigable page anywhere in its subtree. This can only
+     * happen for data written before `M8.1.2`'s validation started blocking it, or a target
+     * soft-deleted after the reference was created. The page's render fails with this diagnostic
+     * rather than silently emitting a broken (non-linked) nav entry.
+     */
+    public static final String NAV_DANGLING_PAGE_REFERENCE = "SF-GEN-0411";
 }
