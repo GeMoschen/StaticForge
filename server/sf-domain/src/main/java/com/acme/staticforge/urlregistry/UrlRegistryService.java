@@ -2,6 +2,8 @@ package com.acme.staticforge.urlregistry;
 
 import com.acme.staticforge.revision.RevisionContext;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 /**
  * "Assign once, cache forever until reset" contract for a {@code PageReference}'s URL in one
@@ -37,4 +39,21 @@ public interface UrlRegistryService {
      * with {@code overridden} cleared back to {@code false}.
      */
     void reset(long projectId, ResetScope scope, RevisionContext ctx);
+
+    /**
+     * Paginated, filterable listing for the settings UI ({@code M8.2.4}). {@code channelKey}/
+     * {@code area} are optional (null = unfiltered); a thin passthrough to {@link
+     * UrlRegistryRepository#search}, matching how {@code AssetService.search} wraps its own
+     * repository's paginated query.
+     */
+    Page<UrlRegistryEntry> search(long projectId, String channelKey, UrlArea area, Pageable pageable);
+
+    /**
+     * Looks up a single entry, scoped to {@code projectId} so a project-scoped REST caller
+     * (`M8.2.4`) can never reach another project's row by guessing an id.
+     *
+     * @throws com.acme.staticforge.common.SfException (not-found) when no such entry exists in
+     *     this project
+     */
+    UrlRegistryEntry require(long projectId, long id);
 }

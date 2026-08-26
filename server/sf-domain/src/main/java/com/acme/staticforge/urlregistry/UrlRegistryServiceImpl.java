@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -128,6 +130,22 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
             case AREA -> repository.deleteByProjectIdAndArea(projectId, scope.area());
             case PROJECT -> repository.deleteByProjectId(projectId);
         }
+    }
+
+    @Override
+    public Page<UrlRegistryEntry> search(long projectId, String channelKey, UrlArea area, Pageable pageable) {
+        return repository.search(projectId, channelKey, area, pageable);
+    }
+
+    @Override
+    public UrlRegistryEntry require(long projectId, long id) {
+        UrlRegistryEntry entry = repository
+                .findById(id)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("URL registry entry not found.")));
+        if (entry.getProjectId() != projectId) {
+            throw new SfException(ProblemFactory.notFound("URL registry entry not found."));
+        }
+        return entry;
     }
 
     // ------------------------------------------------------------------
