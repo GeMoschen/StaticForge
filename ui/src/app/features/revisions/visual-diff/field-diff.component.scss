@@ -1,0 +1,43 @@
+.sf-fdiff__cells,
+.sf-fdiff__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sf-3);
+  align-items: start;
+}
+
+.sf-fdiff__cell {
+  min-width: 0;
+  padding: var(--sf-2) var(--sf-3);
+  background: var(--sf-paper);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-sm);
+}
+
+.sf-fdiff__cell--after {
+  background: color-mix(in srgb, var(--sf-jade) 5%, var(--sf-paper));
+  border-color: color-mix(in srgb, var(--sf-jade) 25%, var(--sf-line));
+}
+
+.sf-fdiff__cell-label {
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sf-slate);
+  margin-bottom: var(--sf-2);
+}
+
+.sf-fdiff__none {
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+}
+
+.sf-fdiff__pre {
+  margin: 0;
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  OnDestroy,
   computed,
   effect,
   inject,
@@ -10,12 +11,15 @@ import {
 } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import type { components } from '../../core/api/generated/schema.d.ts';
 
 type RevisionView = components['schemas']['RevisionView'];
 
 const MAX_TICKS = 40;
+/** How often to re-poll the revision list so the spine reflects newly saved revisions. */
+const POLL_MS = 5000;
 
 @Component({
   selector: 'sf-revision-spine',
@@ -25,9 +29,10 @@ const MAX_TICKS = 40;
   templateUrl: './revision-spine.component.html',
   styleUrl: './revision-spine.component.scss',
 })
-export class RevisionSpineComponent {
+export class RevisionSpineComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly auth = inject(AuthStore);
+  private readonly store = inject(ProjectContextStore);
 
   readonly projectKey = input<string | null>();
   readonly revisions = input<RevisionView[]>([]);
@@ -41,6 +46,7 @@ export class RevisionSpineComponent {
   private prevMaxRevision = 0;
   private prevKey = '';
   private pulseTimer: ReturnType<typeof setTimeout> | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   protected readonly visibleRevisions = computed<RevisionView[]>(() => {
     const sorted = [...this.revisions()].filter((r) => r.revisionId != null);
@@ -95,6 +101,27 @@ export class RevisionSpineComponent {
       },
       { allowSignalWrites: true },
     );
+
+    effect(() => {
+      const key = this.projectKey();
+      if (this.pollTimer) {
+        clearInterval(this.pollTimer);
+        this.pollTimer = null;
+      }
+      if (!key) {
+        return;
+      }
+      this.pollTimer = setInterval(() => {
+        this.store.refreshRevision(key);
+      }, POLL_MS);
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   }
 
   protected isOwn(rev: RevisionView): boolean {

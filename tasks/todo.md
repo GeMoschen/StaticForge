@@ -1,3 +1,88 @@
+# Visual editor diff for revisions — Plan
+
+## Goal
+Replace the text-only revision diff with a visual, editor-based diff for template-backed
+assets (PAGE, SECTION_TEMPLATE, PAGE_TEMPLATE, STRUCTURE). Render each changed field's
+"before" and "after" values side-by-side using the existing form editors (read-only),
+falling back to the current text/JSON display for paths we cannot map to an editor.
+
+## Key decisions (confirmed with user)
+- Scope: pages + all template-based assets; MEDIA/FOLDER fall back to text diff.
+- Presentation: side-by-side read-only editor instances (before | after) per changed field.
+- Resolution: resolve each diff `path` to an `EditorDefinition` via the asset's compiled
+  definition (page template + section templates for bodies).
+
+## Data model notes (from server)
+- `FieldChange` = `{ path, before, after, blocks? }`; paths are dotted (`content.title`).
+- `JsonDiffer` recurses into objects but compares **arrays as whole units** — so
+  `bodies.<name>` (a section array) is a single change with full before/after arrays, not
+  per-field. Body-section content changes therefore render as whole-array diffs, not as
+  individual editors. Top-level page `content.*` and `meta.*` leaf changes map cleanly to
+  editors.
+- `AssetDiff` = `{ uuid, uid, type, action, changes[] }`; asset types from `AssetType` enum.
+
+## Implementation steps (checkboxes)
+- [x] 1. New `sf-visual-diff` component (`features/revisions/visual-diff/`):
+      - inputs: `asset` (AssetDiff), `projectKey`.
+      - resolves needed compiled definitions (page template via asset's version payload `templateRef`)
+        using existing `api.assetVersion` + `api.templateDetail`.
+      - resolves each `FieldChange.path` to an `EditorDefinition` via a path→definition walker.
+      - renders side-by-side read-only editors via `sf-editor-outlet`; text fallback otherwise.
+- [x] 2. Path→definition resolver util (`resolve-editor.ts`): given `ContentDefinition` +
+      dotted path, return matching `EditorDefinition`; `READONLY_EDITOR_TYPES` set for the
+      widget types that render reliably read-only.
+- [x] 3. Read-only value rendering: build a disabled `FormControl`/`FormGroup` from a value
+      using `buildEditorControl` + seed; render through `sf-editor-outlet`.
+- [x] 4. Wire `sf-visual-diff` into `revision-diff.component.html` replacing the raw
+      `sf-diff` (kept `sf-diff` for conflict drawer; `formatValue` still shared).
+- [x] 5. Styles for the before/after side-by-side layout + add/remove highlighting.
+- [x] 6. Verify: `npm run build` green; only pre-existing `resolveComponentResources` test
+      failures in shared component specs (unrelated, fail on clean base too).
+
+## Result
+- Visual diff replaces the text diff in the revision diff view. For PAGE assets, resolvable
+  `content.*` leaf fields render as side-by-side read-only form editors (before | after);
+  non-resolvable paths (nav/output, complex widgets like richtext/list) fall back to
+  a structured JSON view. Non-PAGE asset types render the fallback.
+- **Body diff visualization added**: `bodies.<name>` whole-array changes are detected and
+  rendered by a new `sf-body-diff` component. Sections are aligned by `instanceId` via LCS
+  (flagged added / removed / moved / unchanged with position), and matched sections have
+  their `content` field-diffed with the section template's editors (read-only, side-by-side).
+- Refactored per-field rendering into a reusable `sf-field-diff` component shared by the
+  top-level content diff and the body section diffs.
+- **Object-typed editors visualized**: the server differ recurses into REFERENCE / LINK /
+  MEDIA / CATALOG values (emitting sub-paths like `content.field.uuid`). These are now
+  grouped back to their whole field and rendered with the actual editor widget. For pages,
+  the before/after field values are read from the fetched before (revision−1) and after
+  (revision) payloads; the catalog renders its cards read-only via `sf-section-editor`.
+- The diff now provides the real `projectKey` via `SF_FORM_CONTEXT`, so reference label
+  resolution, link routes, and catalog card-definition loading work in the diff view.
+
+## Follow-ups (post-implementation)
+- Consider per-field body/section diffing server-side (out of scope here; arrays are
+  currently compared whole in `JsonDiffer`).
+- Richtext `blocks` per-block rendering could later use a rich-text visual diff.
+
+## Fix: catalog `ɵcmp` crash from circular import across lazy chunks
+- **Symptom**: `Cannot read properties of undefined (reading 'ɵcmp')` in `catalog-editor.ts`
+  when a catalog renders — in both the page editor and the diff view.
+- **Root cause**: the editor module graph is circular (`editor-outlet → editor-registry →
+  catalog-editor → section-editor → sf-content-form → editor-outlet`). The visual-diff feature
+  imported `SfEditorOutlet` into the `revision-diff` lazy chunk, creating a SECOND lazy entry
+  into the cycle. Vite/esbuild split the circular modules across chunks (revision-diff,
+  page-editor, shared), leaving duplicated/inconsistent copies of `section-editor` so the
+  catalog's `forwardRef(() => SectionEditorComponent)` resolved to an unevaluated class
+  (`ɵcmp` undefined).
+- **Fix**: removed lazy loading entirely — replaced every `loadComponent: () => import(...)`
+  in `app.routes.ts` with eager `component:` references, so the whole app (including the
+  circular editor graph) bundles into a single `main-*.js`. No lazy chunks, no split cycle.
+- **Cost**: initial bundle grew ~270 kB → 689 kB (everything eager). Raised the `initial`
+  budget in `angular.json` to 800 kB warn / 900 kB error to match.
+- Verified: build green, output is a single `main-*.js` containing catalog/section/outlet
+  together; tests unchanged (86 pass, same 2 pre-existing infra failures).
+
+---
+
 # M7 — Hardening — Results
 
 ## Status: implemented (13/13 tasks), backend + frontend build + tests green, nightly/CI gates configured

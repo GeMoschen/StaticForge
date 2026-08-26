@@ -1,126 +1,96 @@
 import { Routes } from '@angular/router';
 import { authGuard, loginGuard, projectMemberGuard } from './core/auth/auth.guard';
 import { projectResolver } from './core/project/project.resolver';
+import { LoginComponent } from './features/auth/login.component';
+import { PasswordChangeComponent } from './features/auth/password-change.component';
+import { DashboardComponent } from './features/dashboard/dashboard.component';
+import { ProjectShellComponent } from './features/dashboard/project-shell.component';
+import { PagesListComponent } from './features/pages/pages-list.component';
+import { PageEditorComponent } from './features/pages/page-editor.component';
+import { MediaLibraryComponent } from './features/media/media-library.component';
+import { StructuresComponent } from './features/structures/structures.component';
+import { TemplatesComponent } from './features/templates/templates.component';
+import { ProjectSettingsShellComponent } from './features/settings/project-settings-shell.component';
+import { ProjectSettingsGeneralComponent } from './features/settings/project-settings-general.component';
+import { ProjectSettingsMediaComponent } from './features/settings/project-settings-media.component';
+import { ChannelsComponent } from './features/channels/channels.component';
+import { GenerationComponent } from './features/generation/generation.component';
+import { RevisionsListComponent } from './features/revisions/revisions-list.component';
+import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
 
 export const routes: Routes = [
   {
     path: 'login',
     canMatch: [loginGuard],
-    loadComponent: () =>
-      import('./features/auth/login.component').then((m) => m.LoginComponent),
+    component: LoginComponent,
   },
   {
     path: 'account/password',
     canMatch: [authGuard],
-    loadComponent: () =>
-      import('./features/auth/password-change.component').then(
-        (m) => m.PasswordChangeComponent,
-      ),
+    component: PasswordChangeComponent,
   },
   {
     path: '',
     canMatch: [authGuard],
-    loadComponent: () =>
-      import('./features/dashboard/dashboard.component').then(
-        (m) => m.DashboardComponent,
-      ),
+    component: DashboardComponent,
   },
   {
     path: 'p/:projectKey',
     canMatch: [authGuard, projectMemberGuard('VIEWER')],
     resolve: { project: projectResolver },
-    loadComponent: () =>
-      import('./features/dashboard/project-shell.component').then(
-        (m) => m.ProjectShellComponent,
-      ),
+    component: ProjectShellComponent,
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'pages' },
       {
         path: 'pages',
-        loadComponent: () =>
-          import('./features/pages/pages-list.component').then(
-            (m) => m.PagesListComponent,
-          ),
+        component: PagesListComponent,
         children: [
           {
             path: ':uuid',
-            loadComponent: () =>
-              import('./features/pages/page-editor.component').then(
-                (m) => m.PageEditorComponent,
-              ),
+            component: PageEditorComponent,
           },
         ],
       },
       {
         path: 'media',
-        loadComponent: () =>
-          import('./features/media/media-library.component').then(
-            (m) => m.MediaLibraryComponent,
-          ),
+        component: MediaLibraryComponent,
       },
       {
         path: 'structures',
-        loadComponent: () =>
-          import('./features/structures/structures.component').then(
-            (m) => m.StructuresComponent,
-          ),
+        component: StructuresComponent,
       },
       {
         path: 'templates',
-        loadComponent: () =>
-          import('./features/templates/templates.component').then(
-            (m) => m.TemplatesComponent,
-          ),
+        component: TemplatesComponent,
       },
       {
         path: 'settings',
-        loadComponent: () =>
-          import('./features/settings/project-settings-shell.component').then(
-            (m) => m.ProjectSettingsShellComponent,
-          ),
+        component: ProjectSettingsShellComponent,
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'general' },
           {
             path: 'general',
-            loadComponent: () =>
-              import('./features/settings/project-settings-general.component').then(
-                (m) => m.ProjectSettingsGeneralComponent,
-              ),
+            component: ProjectSettingsGeneralComponent,
           },
           {
             path: 'media',
-            loadComponent: () =>
-              import('./features/settings/project-settings-media.component').then(
-                (m) => m.ProjectSettingsMediaComponent,
-              ),
+            component: ProjectSettingsMediaComponent,
           },
           {
             path: 'channels',
-            loadComponent: () =>
-              import('./features/channels/channels.component').then(
-                (m) => m.ChannelsComponent,
-              ),
+            component: ChannelsComponent,
           },
           {
             path: 'generation',
-            loadComponent: () =>
-              import('./features/generation/generation.component').then(
-                (m) => m.GenerationComponent,
-              ),
+            component: GenerationComponent,
           },
           {
             path: 'revisions',
-            loadComponent: () =>
-              import('./features/revisions/revisions-list.component').then(
-                (m) => m.RevisionsListComponent,
-              ),
+            component: RevisionsListComponent,
           },
           {
             path: 'revisions/:revisionId',
-            loadComponent: () =>
-              import('./features/revisions/revision-diff.component').then(
-                (m) => m.RevisionDiffComponent,
-              ),
+            component: RevisionDiffComponent,
           },
         ],
       },

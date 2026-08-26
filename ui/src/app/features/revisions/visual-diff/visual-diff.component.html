@@ -1,0 +1,36 @@
+@if (loading()) {
+  <p class="sf-vdiff__loading">Loading diff…</p>
+} @else {
+  @for (body of bodyChanges(); track body.path) {
+    <div class="sf-vdiff__change sf-vdiff__change--body">
+      <header class="sf-vdiff__change-header">
+        <span class="sf-vdiff__path">{{ body.path }}</span>
+        <span class="sf-vdiff__badge sf-vdiff__badge--update">Body</span>
+      </header>
+      <sf-body-diff [change]="body" [projectKey]="projectKey()" />
+    </div>
+  }
+
+  @for (change of changes(); track $index) {
+    <div
+      class="sf-vdiff__change"
+      [class.sf-vdiff__change--add]="change.add"
+      [class.sf-vdiff__change--remove]="change.remove"
+    >
+      <header class="sf-vdiff__change-header">
+        <span class="sf-vdiff__path">{{ change.path }}</span>
+        @if (change.add) {
+          <span class="sf-vdiff__badge sf-vdiff__badge--add">Added</span>
+        } @else if (change.remove) {
+          <span class="sf-vdiff__badge sf-vdiff__badge--remove">Removed</span>
+        } @else {
+          <span class="sf-vdiff__badge sf-vdiff__badge--update">Changed</span>
+        }
+      </header>
+      <sf-field-diff [change]="change" />
+    </div>
+  }
+  @if (empty()) {
+    <p class="sf-vdiff__empty">No field changes in this asset.</p>
+  }
+}

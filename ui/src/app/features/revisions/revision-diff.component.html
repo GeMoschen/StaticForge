@@ -27,7 +27,11 @@
             Restore this asset
           </sf-button>
         </header>
-        <sf-diff [changes]="asset.changes ?? []" />
+        <sf-visual-diff
+          [asset]="asset"
+          [projectKey]="projectKey()"
+          [revisionId]="revisionNumber()"
+        />
       </section>
     } @empty {
       <sf-empty-state title="No changes" description="This revision has no asset changes." />

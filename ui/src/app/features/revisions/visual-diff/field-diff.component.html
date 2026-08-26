@@ -1,0 +1,31 @@
+@if (change().editor) {
+  <div class="sf-fdiff__cells">
+    <div class="sf-fdiff__cell">
+      <div class="sf-fdiff__cell-label">Before</div>
+      @if (change().before) {
+        <sf-editor-outlet [definition]="change().editor!" [control]="change().before!" />
+      } @else {
+        <span class="sf-fdiff__none">—</span>
+      }
+    </div>
+    <div class="sf-fdiff__cell sf-fdiff__cell--after">
+      <div class="sf-fdiff__cell-label">After</div>
+      @if (change().after) {
+        <sf-editor-outlet [definition]="change().editor!" [control]="change().after!" />
+      } @else {
+        <span class="sf-fdiff__none">—</span>
+      }
+    </div>
+  </div>
+} @else {
+  <div class="sf-fdiff__row">
+    <div class="sf-fdiff__cell">
+      <div class="sf-fdiff__cell-label">Before</div>
+      <pre class="sf-fdiff__pre">{{ formatValue(change().beforeJson) }}</pre>
+    </div>
+    <div class="sf-fdiff__cell sf-fdiff__cell--after">
+      <div class="sf-fdiff__cell-label">After</div>
+      <pre class="sf-fdiff__pre">{{ formatValue(change().afterJson) }}</pre>
+    </div>
+  </div>
+}

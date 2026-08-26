@@ -1,0 +1,58 @@
+:host {
+  display: block;
+}
+
+.sf-vdiff__loading,
+.sf-vdiff__empty {
+  margin: 0;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+}
+
+.sf-vdiff__change {
+  border-bottom: 1px solid var(--sf-line);
+  padding: var(--sf-2) 0;
+}
+
+.sf-vdiff__change--body {
+  padding-top: var(--sf-3);
+  padding-bottom: var(--sf-3);
+}
+
+.sf-vdiff__change-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  margin-bottom: var(--sf-2);
+}
+
+.sf-vdiff__path {
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-ink);
+  font-weight: 500;
+}
+
+.sf-vdiff__badge {
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px var(--sf-2);
+  border-radius: 999px;
+}
+
+.sf-vdiff__badge--add {
+  color: var(--sf-jade);
+  background: color-mix(in srgb, var(--sf-jade) 12%, transparent);
+}
+
+.sf-vdiff__badge--remove {
+  color: var(--sf-rust);
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+}
+
+.sf-vdiff__badge--update {
+  color: var(--sf-amber);
+  background: color-mix(in srgb, var(--sf-amber) 12%, transparent);
+}

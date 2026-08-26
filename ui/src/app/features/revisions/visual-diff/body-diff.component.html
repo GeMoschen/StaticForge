@@ -1,0 +1,72 @@
+@if (loading()) {
+  <p class="sf-bdiff__loading">Loading body diff…</p>
+} @else {
+  @for (section of sections(); track section.instanceId) {
+    <div
+      class="sf-bdiff__section"
+      [class.sf-bdiff__section--added]="section.status === 'added'"
+      [class.sf-bdiff__section--removed]="section.status === 'removed'"
+    >
+      <header class="sf-bdiff__section-header">
+        <span class="sf-bdiff__badge sf-bdiff__badge--{{ section.status }}">
+          {{ STATUS_LABEL[section.status] }}
+        </span>
+        <span class="sf-bdiff__section-title">{{ section.templateRef || '—' }}</span>
+        @if (section.beforeIndex !== undefined || section.afterIndex !== undefined) {
+          <span class="sf-bdiff__position">
+            @if (section.beforeIndex !== undefined) {
+              <span>#{{ section.beforeIndex + 1 }}</span>
+            }
+            @if (section.status === 'moved' && section.beforeIndex !== undefined && section.afterIndex !== undefined) {
+              <span>→</span>
+            }
+            @if (section.afterIndex !== undefined && section.status !== 'removed') {
+              <span>#{{ section.afterIndex + 1 }}</span>
+            }
+          </span>
+        }
+      </header>
+
+      @if (section.status === 'added') {
+        <sf-field-diff
+          [change]="{
+            path: 'content',
+            add: true,
+            remove: false,
+            editor: null,
+            before: null,
+            after: null,
+            beforeJson: undefined,
+            afterJson: section.afterContent
+          }"
+        />
+      } @else if (section.status === 'removed') {
+        <sf-field-diff
+          [change]="{
+            path: 'content',
+            add: false,
+            remove: true,
+            editor: null,
+            before: null,
+            after: null,
+            beforeJson: section.beforeContent,
+            afterJson: undefined
+          }"
+        />
+      } @else if (section.fieldChanges.length > 0) {
+        <div class="sf-bdiff__fields">
+          @for (change of section.fieldChanges; track $index) {
+            <div class="sf-bdiff__field">
+              <div class="sf-bdiff__field-path">{{ change.path }}</div>
+              <sf-field-diff [change]="change" />
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="sf-bdiff__none">No content changes.</p>
+      }
+    </div>
+  } @empty {
+    <p class="sf-bdiff__none">No changed sections in this body.</p>
+  }
+}

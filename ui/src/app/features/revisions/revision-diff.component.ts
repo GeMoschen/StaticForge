@@ -11,9 +11,9 @@ import { ApiClient } from '../../core/api/api.client';
 import { DialogService } from '../../core/ui/dialog.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfDiffComponent } from '../../shared/components/sf-diff.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { SfVisualDiffComponent } from './visual-diff/visual-diff.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
 
 type RevisionDiff = components['schemas']['RevisionDiff'];
@@ -22,7 +22,7 @@ type AssetDiff = components['schemas']['AssetDiff'];
 @Component({
   selector: 'sf-revision-diff',
   standalone: true,
-  imports: [SfButtonComponent, SfDiffComponent, SfEmptyStateComponent, SfSpinnerComponent],
+  imports: [SfButtonComponent, SfEmptyStateComponent, SfSpinnerComponent, SfVisualDiffComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './revision-diff.component.html',
   styleUrl: './revision-diff.component.scss',
@@ -39,6 +39,7 @@ export class RevisionDiffComponent {
 
   protected readonly diff = signal<RevisionDiff | null>(null);
   protected readonly assets = computed<AssetDiff[]>(() => this.diff()?.assets ?? []);
+  protected readonly revisionNumber = computed<number>(() => Number(this.revisionId()));
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly restoring = signal(false);
