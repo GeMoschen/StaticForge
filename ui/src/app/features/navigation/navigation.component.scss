@@ -1,0 +1,29 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.navigation {
+  display: flex;
+  height: 100%;
+}
+
+.navigation__tree {
+  flex-shrink: 0;
+  width: 340px;
+  padding: var(--sf-4) var(--sf-3);
+  border-right: 1px solid var(--sf-line);
+  overflow-y: auto;
+}
+
+.navigation__toolbar {
+  display: flex;
+  gap: var(--sf-2);
+  margin-bottom: var(--sf-3);
+}
+
+.navigation__detail {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}

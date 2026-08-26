@@ -1,0 +1,76 @@
+<div class="nav-ref-detail">
+  <header class="nav-ref-detail__header">
+    <sf-icon name="link" class="nav-ref-detail__icon" />
+    <h2 class="nav-ref-detail__title">{{ reference().displayName ?? reference().uid ?? 'Reference' }}</h2>
+    <span class="nav-ref-detail__spacer"></span>
+    <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
+  </header>
+
+  <div class="nav-ref-detail__body">
+    <section class="nav-ref-detail__section">
+      <h3 class="nav-ref-detail__section-title">Target</h3>
+
+      <sf-field label="Target kind">
+        <select [value]="targetKind()" (change)="onKindChange($event)">
+          <option value="PAGE">Page</option>
+          <option value="FOLDER">Folder (first navigable page)</option>
+        </select>
+      </sf-field>
+
+      @if (targetKind() === 'PAGE') {
+        <sf-field label="Page">
+          <div class="nav-ref-detail__target-picker">
+            <span class="nav-ref-detail__target-value">
+              {{ targetLabel() || targetUuid() || 'No page selected' }}
+            </span>
+            <sf-button variant="secondary" (click)="openPagePicker()">Choose page…</sf-button>
+          </div>
+        </sf-field>
+      } @else {
+        <sf-field label="Folder" hint="A page-store folder — resolves to that folder's first navigable page.">
+          <select [value]="targetUuid()" (change)="onFolderTargetChange($event)">
+            <option value="">— Choose a folder —</option>
+            @for (folder of folderOptions(); track folder.uuid) {
+              <option [value]="folder.uuid">{{ '  '.repeat(folder.depth) }}{{ folder.label }}</option>
+            }
+          </select>
+        </sf-field>
+      }
+
+      <sf-field label="Label override" hint="Falls back to the target's display name when left blank.">
+        <input type="text" [value]="labelDraft()" (input)="onLabelInput($event)" placeholder="Optional label" />
+      </sf-field>
+
+      <sf-button variant="primary" [disabled]="saving() || !targetUuid() || !dirty()" (click)="save()">
+        Save
+      </sf-button>
+    </section>
+
+    <section class="nav-ref-detail__section">
+      <h3 class="nav-ref-detail__section-title">Resolves to</h3>
+      @if (resolvedLoading()) {
+        <p class="nav-ref-detail__hint">Resolving…</p>
+      } @else if (unresolved()) {
+        <p class="nav-ref-detail__resolved nav-ref-detail__resolved--broken">
+          <sf-icon name="link_off" /> Could not resolve — the target may be missing or empty.
+        </p>
+      } @else {
+        <p class="nav-ref-detail__resolved">→ {{ resolvedPath() }}</p>
+      }
+    </section>
+  </div>
+
+  <footer class="nav-ref-detail__footer">
+    <sf-button variant="danger" [disabled]="deleting()" (click)="requestDelete()">Delete reference</sf-button>
+  </footer>
+</div>
+
+@if (pickerOpen()) {
+  <sf-asset-picker-dialog
+    [projectKey]="projectKey()"
+    [allowedTypes]="['PAGE']"
+    initialType="PAGE"
+    (picked)="onPagePicked($event)"
+    (closed)="closePicker()"
+  />
+}

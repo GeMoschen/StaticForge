@@ -388,6 +388,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/navigation/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createReference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/media": {
         parameters: {
             query?: never;
@@ -507,7 +523,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["tree"];
+        get: operations["tree_1"];
         put?: never;
         post: operations["create_5"];
         delete?: never;
@@ -724,6 +740,38 @@ export interface paths {
         patch: operations["patchContent"];
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/navigation/references/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteReference"];
+        options?: never;
+        head?: never;
+        patch: operations["updateReference"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/navigation/folders/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateFolder"];
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/assets/{uuid}/uid": {
         parameters: {
             query?: never;
@@ -844,6 +892,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["share_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/navigation/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["tree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/navigation/references/{uuid}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1383,6 +1463,28 @@ export interface components {
         OctlValidateResponse: {
             diagnostics?: components["schemas"]["Diagnostic"][];
         };
+        CreatePageReferenceRequest: {
+            displayName?: string;
+            /** Format: uuid */
+            folderUuid?: string;
+            targetKind?: string;
+            /** Format: uuid */
+            targetAssetUuid?: string;
+            label?: string;
+        };
+        PageReferenceView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            /** Format: int64 */
+            revision?: number;
+            folderPath?: string;
+            targetKind?: string;
+            /** Format: uuid */
+            targetAssetUuid?: string;
+            label?: string;
+        };
         MediaBulkItemResult: {
             fileName?: string;
             media?: components["schemas"]["MediaView"];
@@ -1505,6 +1607,27 @@ export interface components {
             username: string;
             password: string;
         };
+        UpdatePageReferenceRequest: {
+            targetKind?: string;
+            /** Format: uuid */
+            targetAssetUuid?: string;
+            label?: string;
+        };
+        NavigationFolderView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            /** Format: int64 */
+            revision?: number;
+            folderPath?: string;
+            startNode?: components["schemas"]["NavigationStartNodeView"];
+        };
+        NavigationStartNodeView: {
+            kind?: string;
+            /** Format: uuid */
+            assetUuid?: string;
+        };
         UidChangeRequest: {
             uid?: string;
         };
@@ -1529,10 +1652,10 @@ export interface components {
             archived?: boolean;
         };
         PageTemplateSummary: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -1547,13 +1670,13 @@ export interface components {
             empty?: boolean;
         };
         PageableObject: {
+            /** Format: int32 */
+            pageNumber?: number;
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
             /** Format: int32 */
             pageSize?: number;
-            /** Format: int32 */
-            pageNumber?: number;
             paged?: boolean;
             unpaged?: boolean;
         };
@@ -1625,6 +1748,23 @@ export interface components {
             /** Format: int64 */
             revision?: number;
         };
+        NavTreeView: {
+            /** Format: uuid */
+            uuid?: string;
+            type?: string;
+            uid?: string;
+            displayName?: string;
+            label?: string;
+            /** Format: uuid */
+            resolvedPageUuid?: string;
+            resolvedPagePath?: string;
+            children?: components["schemas"]["NavTreeView"][];
+        };
+        PageReferenceResolveView: {
+            /** Format: uuid */
+            pageUuid?: string;
+            path?: string;
+        };
         MediaSummaryView: {
             /** Format: uuid */
             uuid?: string;
@@ -1638,10 +1778,10 @@ export interface components {
             revision?: number;
         };
         PageMediaSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -1681,10 +1821,10 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -2781,6 +2921,32 @@ export interface operations {
             };
         };
     };
+    createReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePageReferenceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageReferenceView"];
+                };
+            };
+        };
+    };
     list_6: {
         parameters: {
             query?: {
@@ -3023,7 +3189,7 @@ export interface operations {
             };
         };
     };
-    tree: {
+    tree_1: {
         parameters: {
             query: {
                 scope: string;
@@ -3410,6 +3576,87 @@ export interface operations {
             };
         };
     };
+    deleteReference: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateReference: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePageReferenceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageReferenceView"];
+                };
+            };
+        };
+    };
+    updateFolder: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonNode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NavigationFolderView"];
+                };
+            };
+        };
+    };
     changeUid: {
         parameters: {
             query?: never;
@@ -3606,6 +3853,53 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PreviewShareLink"];
+                };
+            };
+        };
+    };
+    tree: {
+        parameters: {
+            query?: {
+                depth?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NavTreeView"];
+                };
+            };
+        };
+    };
+    resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageReferenceResolveView"];
                 };
             };
         };

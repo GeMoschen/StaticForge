@@ -15,18 +15,18 @@ settings panel to inspect, override, and reset it.
 
 ## Exit criteria (epic is done when)
 
-- [ ] `AssetType.STRUCTURE`, everything under `structure/` and `generate/nav/`,
+- [x] `AssetType.STRUCTURE`, everything under `structure/` and `generate/nav/`,
       `StructureController` + its DTOs, and `ui/.../features/structures/` are deleted;
       no live code references "structure" as a nav concept (revision history is exempt).
-- [ ] A navigation store exists per project: root folder auto-created on project create
+- [x] A navigation store exists per project: root folder auto-created on project create
       (same as the Page/Media store roots), arbitrarily nested navigation folders, each
       with an optional `startNode` (nullable reference to a child `PageReference` or
       child folder).
-- [ ] `PageReference` assets target either a `Page` or a page-store `Folder`; a
+- [x] `PageReference` assets target either a `Page` or a page-store `Folder`; a
       folder-targeted reference resolves at render time to that folder's first
       navigable page (via `startNode` chain when set, else a deterministic first-child
       order) — resolution never dead-ends.
-- [ ] Templates render navigation via a new `navigation` OCTL instruction (its own
+- [x] Templates render navigation via a new `navigation` OCTL instruction (its own
       grammar, not a repurposed `$CMS_NAV(structure:...)$`) that walks the nav-store
       tree from a given folder.
 - [ ] `URLRegistry` persists the first-assigned URL per

@@ -1,0 +1,59 @@
+<div
+  class="nav-node"
+  [class.nav-node--selected]="isSelected()"
+  [style.padding-left.px]="depth() * 14"
+>
+  <div
+    class="nav-node__row"
+    [attr.draggable]="!isRoot()"
+    role="treeitem"
+    tabindex="0"
+    [attr.aria-expanded]="isFolder() ? expanded() : null"
+    [attr.aria-selected]="isSelected()"
+    (click)="onSelect()"
+    (keydown)="onKeydown($event)"
+    (dragstart)="onDragStart($event)"
+    (dragover)="onDragOver($event)"
+    (drop)="onDrop($event)"
+  >
+    @if (isFolder()) {
+      <button
+        type="button"
+        class="nav-node__toggle"
+        [class.nav-node__toggle--leaf]="!hasChildren()"
+        (click)="toggle($event)"
+        [attr.aria-label]="hasChildren() ? 'Toggle folder' : 'Folder'"
+      >
+        <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
+      </button>
+    } @else {
+      <span class="nav-node__toggle nav-node__toggle--leaf"></span>
+    }
+    <sf-icon class="nav-node__icon" [name]="icon()" />
+    <span class="nav-node__name">{{ node().displayName ?? node().uid }}</span>
+    @if (node().type === 'PAGE_REFERENCE') {
+      @if (node().resolvedPagePath) {
+        <span class="nav-node__path">→ {{ node().resolvedPagePath }}</span>
+      } @else {
+        <span class="nav-node__path nav-node__path--broken">unresolved</span>
+      }
+    }
+    @if (isRoot()) {
+      <span class="nav-node__root-badge">root</span>
+    }
+  </div>
+
+  @if (isFolder() && expanded() && hasChildren()) {
+    <div class="nav-node__children" role="group">
+      @for (child of node().children ?? []; track child.uuid) {
+        <sf-nav-tree-node
+          [node]="child"
+          [depth]="depth() + 1"
+          [selectedUuid]="selectedUuid()"
+          (select)="select.emit($event)"
+          (move)="move.emit($event)"
+        />
+      }
+    </div>
+  }
+</div>

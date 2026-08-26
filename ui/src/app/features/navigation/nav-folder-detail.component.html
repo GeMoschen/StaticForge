@@ -1,0 +1,73 @@
+<div class="nav-folder-detail">
+  <header class="nav-folder-detail__header">
+    <sf-icon name="folder" class="nav-folder-detail__icon" />
+    @if (editingName()) {
+      <input
+        class="nav-folder-detail__name-input"
+        type="text"
+        [value]="nameDraft()"
+        (input)="onNameInput($event)"
+        (keydown.enter)="saveName()"
+        (keydown.escape)="cancelEditName()"
+        autofocus
+      />
+      <sf-button variant="primary" [disabled]="savingName()" (click)="saveName()">Save</sf-button>
+      <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
+    } @else {
+      <h2 class="nav-folder-detail__title">{{ folder().displayName ?? folder().uid }}</h2>
+      @if (!isRoot()) {
+        <button type="button" class="nav-folder-detail__edit" (click)="startEditName()" aria-label="Rename folder">
+          <sf-icon name="edit" />
+        </button>
+      }
+    }
+    <span class="nav-folder-detail__spacer"></span>
+    <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
+  </header>
+
+  <div class="nav-folder-detail__body">
+    @if (isRoot()) {
+      <p class="nav-folder-detail__hint">
+        This is the project's navigation root — it can't be renamed, moved, or deleted.
+      </p>
+    }
+
+    <section class="nav-folder-detail__section">
+      <h3 class="nav-folder-detail__section-title">Metadata</h3>
+      <dl class="nav-folder-detail__meta">
+        <dt>Path</dt>
+        <dd class="nav-folder-detail__mono">{{ folder().folderPath ?? '/' }}</dd>
+        <dt>UID</dt>
+        <dd class="nav-folder-detail__mono">{{ folder().uid }}</dd>
+      </dl>
+    </section>
+
+    <section class="nav-folder-detail__section">
+      <h3 class="nav-folder-detail__section-title">Entry page (startNode)</h3>
+      <sf-field
+        label="Entry page"
+        hint="What this folder links to when clicked — restricted to this folder's own direct children."
+      >
+        <select
+          [value]="selectedStartNodeValue()"
+          (change)="onStartNodeChange($event)"
+          [disabled]="savingStartNode() || startNodeOptions().length === 0"
+        >
+          <option value="">— No entry page (grouping only) —</option>
+          @for (option of startNodeOptions(); track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </sf-field>
+      @if (startNodeOptions().length === 0) {
+        <p class="nav-folder-detail__hint">Add a subfolder or reference here first to pick an entry page.</p>
+      }
+    </section>
+  </div>
+
+  <footer class="nav-folder-detail__footer">
+    @if (!isRoot()) {
+      <sf-button variant="danger" [disabled]="deleting()" (click)="requestDelete()">Delete folder</sf-button>
+    }
+  </footer>
+</div>

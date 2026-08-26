@@ -24,13 +24,18 @@ folder tree (`FolderScope.NAVIGATION`) rooted like the Page/Media stores, plus a
 
 ## Feature exit criteria
 
-- [ ] No compiled class references `AssetType.STRUCTURE`, `StructureService`,
-      `NavigationBuilder`, or `NavRenderer`.
-- [ ] A project's navigation folder tree and `PageReference` assets survive
-      create/rename/move/delete with full revision history, exactly like Pages.
-- [ ] `$CMS_NAVIGATION(nav:<uid>)$` (see task 004 for final grammar) renders a nested
+- [x] No compiled class references `AssetType.STRUCTURE`, `StructureService`,
+      `NavigationBuilder`, or `NavRenderer` (removed wholesale by task 001; confirmed no
+      remaining `ui/` references either — `grep -rn "structures\|Structures" ui/src/app`
+      is empty as of task 006).
+- [x] A project's navigation folder tree and `PageReference` assets survive
+      create/rename/move/delete with full revision history, exactly like Pages (backend:
+      `NavigationApiIntegrationTest`, task 005; frontend: `ui/.../features/navigation/`,
+      task 006 — wired to the same endpoints, not independently click-through-verified
+      against a live stack in this environment, see task 006's Notes).
+- [x] `$CMS_NAVIGATION(nav:<uid>)$` (see task 004 for final grammar) renders a nested
       list reflecting the tree, with folder-targeted references resolved to a concrete
-      page URL.
+      page URL (task 004).
 
 ## Dependencies
 
