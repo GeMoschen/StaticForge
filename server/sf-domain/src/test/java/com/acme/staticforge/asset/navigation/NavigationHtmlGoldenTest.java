@@ -51,7 +51,7 @@ class NavigationHtmlGoldenTest {
                     : null;
             String expected = Files.readString(dir.resolve("expected.html"));
 
-            JsonNode json = NavigationTreeJson.toJson(tree, activePageUuid, uuid -> "/page/" + uuid + "/");
+            JsonNode json = NavigationTreeJson.toJson(tree, activePageUuid, node -> "/page/" + node.resolvedPageUuid() + "/");
             String actual = NavigationHtmlRenderer.renderRoot(json);
 
             assertThat(normalize(actual))
@@ -66,7 +66,7 @@ class NavigationHtmlGoldenTest {
         NavTreeNode leaf = new NavTreeNode(UUID.randomUUID(), AssetType.FOLDER, "empty", "Empty", "Empty", null, List.of());
         NavTreeNode root = new NavTreeNode(UUID.randomUUID(), AssetType.FOLDER, "root", "Root", "Root", null, List.of(leaf));
 
-        JsonNode json = NavigationTreeJson.toJson(root, null, uuid -> "/page/" + uuid + "/");
+        JsonNode json = NavigationTreeJson.toJson(root, null, node -> "/page/" + node.resolvedPageUuid() + "/");
         String html = NavigationHtmlRenderer.renderRoot(json);
 
         assertThat(html).contains("<span>Empty</span>").doesNotContain("<a href");

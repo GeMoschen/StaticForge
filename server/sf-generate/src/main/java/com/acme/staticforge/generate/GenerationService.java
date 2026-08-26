@@ -269,7 +269,7 @@ public class GenerationService {
             }
 
             emit(runId, STAGE_RENDER, "Rendering pages", 0, 0, 0, null);
-            RenderOutcome outcome = renderPipeline.execute(snapshot, plan, paths);
+            RenderOutcome outcome = renderPipeline.execute(snapshot, plan, paths, run.getStartedBy());
             if (!outcome.errors().isEmpty()) {
                 fail(run, sample, generationTimer, outcome.errors(), outcome.warnings(), null);
                 return;

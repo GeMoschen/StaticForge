@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate.render;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
@@ -8,11 +9,19 @@ import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
+import com.acme.staticforge.template.render.RenderLimitException;
+import com.acme.staticforge.urlregistry.ResetScope;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlRegistryEntry;
+import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -117,6 +126,96 @@ class GenerationRendererNavigationTest {
         assertThat(file.diagnostics().stream().map(Diagnostic::code))
                 .contains(NavigationDiagnosticCodes.NAV_START_NODE_CYCLE);
         assertThat(NavigationDiagnosticCodes.NAV_START_NODE_CYCLE).isEqualTo("SF-GEN-0410");
+    }
+
+    @Test
+    void danglingPageReferenceFailsRenderWithSfGen0411() {
+        UUID missingTarget = UUID.fromString("00000000-0000-0000-0000-0000000000ff");
+        SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:main)$");
+        SnapshotAsset navRoot = folder(NAV_ROOT, "main", "/nav/", "{\"scope\":\"NAVIGATION\"}");
+        // Target asset uuid is never added to the snapshot below -> unresolvable (dangling).
+        SnapshotAsset danglingRef = pageReference(HOME_REF, "home-ref", "/nav/", missingTarget, "Home");
+        SnapshotAsset homePage = page(HOME_PAGE, "home", "/", PAGE_TEMPLATE);
+
+        Snapshot snapshot = snapshot(template, navRoot, danglingRef, homePage);
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+
+        assertThatThrownBy(() -> renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html")))
+                .isInstanceOf(RenderLimitException.class)
+                .satisfies(e -> assertThat(((RenderLimitException) e).diagnostic().code())
+                        .isEqualTo(NavigationDiagnosticCodes.NAV_DANGLING_PAGE_REFERENCE));
+        assertThat(NavigationDiagnosticCodes.NAV_DANGLING_PAGE_REFERENCE).isEqualTo("SF-GEN-0411");
+    }
+
+    @Test
+    void navigationHrefsForPageReferenceNodesRouteThroughTheUrlRegistryGeneratedArea() {
+        SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:main)$");
+        SnapshotAsset navRoot = folder(NAV_ROOT, "main", "/nav/", "{\"scope\":\"NAVIGATION\"}");
+        SnapshotAsset homeRef = pageReference(HOME_REF, "home-ref", "/nav/", HOME_PAGE, "Home");
+        SnapshotAsset aboutRef = pageReference(ABOUT_REF, "about-ref", "/nav/", ABOUT_PAGE, "About Us");
+        SnapshotAsset homePage = page(HOME_PAGE, "home", "/", PAGE_TEMPLATE);
+        SnapshotAsset aboutPage = page(ABOUT_PAGE, "about", "/", PAGE_TEMPLATE);
+
+        Snapshot snapshot = snapshot(template, navRoot, homeRef, aboutRef, homePage, aboutPage);
+        FakeUrlRegistryService registry = new FakeUrlRegistryService();
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot,
+                OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"),
+                "proj",
+                null,
+                registry,
+                42L);
+
+        RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
+        String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+        // Every href comes from the registry (UrlArea.GENERATED), keyed on the PAGE_REFERENCE's
+        // own uuid — not the resolved page's uuid.
+        assertThat(registry.resolvedPageReferenceUuids).containsExactlyInAnyOrder(HOME_REF, ABOUT_REF);
+        assertThat(registry.resolvedAreas).containsOnly(UrlArea.GENERATED);
+        assertThat(html).contains("href=\"registry/" + HOME_REF + ".html\"");
+        assertThat(html).contains("href=\"registry/" + ABOUT_REF + ".html\"");
+
+        // Second render of the same page (as a second generation run would do) re-resolves the
+        // same tuples; the fake's cache (mirroring the real read-through-cache contract) returns
+        // the identical url both times.
+        String htmlAgain = new String(
+                renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html")).bytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(htmlAgain).isEqualTo(html);
+    }
+
+    /**
+     * Minimal in-memory fake proving {@code GenerationRenderer} calls through {@link
+     * UrlRegistryService} for PAGE_REFERENCE nav hrefs, keyed by {@code pageReferenceUuid} —
+     * mirrors the real read-through-cache contract (`M8.2.2`) closely enough to assert routing
+     * and stability without a Spring/DB-backed integration test (that full end-to-end proof,
+     * including a real content rename between two full generation runs, lives in
+     * {@code NavigationUrlRegistryIntegrationTest}, sf-app).
+     */
+    private static final class FakeUrlRegistryService implements UrlRegistryService {
+        final Map<String, String> store = new HashMap<>();
+        final List<UUID> resolvedPageReferenceUuids = new ArrayList<>();
+        final List<UrlArea> resolvedAreas = new ArrayList<>();
+
+        @Override
+        public String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, RevisionContext ctx) {
+            resolvedPageReferenceUuids.add(pageReferenceUuid);
+            resolvedAreas.add(area);
+            String key = pageReferenceUuid + ":" + channelKey + ":" + area;
+            return store.computeIfAbsent(key, k -> "registry/" + pageReferenceUuid + ".html");
+        }
+
+        @Override
+        public UrlRegistryEntry override(UUID pageReferenceUuid, String channelKey, UrlArea area, String url, RevisionContext ctx) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public void reset(long projectId, ResetScope scope, RevisionContext ctx) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
     }
 
     // ------------------------------------------------------------------

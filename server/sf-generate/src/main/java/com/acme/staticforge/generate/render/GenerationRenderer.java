@@ -2,6 +2,7 @@ package com.acme.staticforge.generate.render;
 
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
+import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
 import com.acme.staticforge.asset.navigation.NavigationLookup;
 import com.acme.staticforge.asset.navigation.NavigationService;
@@ -15,6 +16,7 @@ import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
@@ -26,9 +28,12 @@ import com.acme.staticforge.template.render.BlockResolver;
 import com.acme.staticforge.template.render.Escaping;
 import com.acme.staticforge.template.render.OctlRenderer;
 import com.acme.staticforge.template.render.RenderContext;
+import com.acme.staticforge.template.render.RenderLimitException;
 import com.acme.staticforge.template.render.RenderResult;
 import com.acme.staticforge.template.render.Renderer;
 import com.acme.staticforge.template.render.UrlResolver;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -68,17 +73,36 @@ final class GenerationRenderer {
     private final NavigationService navigationService = new NavigationServiceImpl();
     private final NavigationLookup navigationLookup;
 
+    // `M8.2.3`: the URL registry a nav node's PAGE_REFERENCE href resolves through
+    // (UrlArea.GENERATED). May be null in tests/`RenderPipeline.validate()` (which never invokes
+    // navHref) — navHref falls back to the pre-`M8.2.3` direct OutputPathResolver path when null,
+    // the same graceful-degradation convention `channelService`/`paths` already use in this class.
+    private final UrlRegistryService urlRegistryService;
+    private final Long generationUserId;
+
     GenerationRenderer(
             Snapshot snapshot,
             OutputPathResolver paths,
             String projectKey,
             ChannelService channelService) {
+        this(snapshot, paths, projectKey, channelService, null, null);
+    }
+
+    GenerationRenderer(
+            Snapshot snapshot,
+            OutputPathResolver paths,
+            String projectKey,
+            ChannelService channelService,
+            UrlRegistryService urlRegistryService,
+            Long generationUserId) {
         this.snapshot = snapshot;
         this.paths = paths;
         this.projectKey = projectKey == null ? "" : projectKey;
         this.channelService = channelService;
         this.uidIndex = indexUids(snapshot);
         this.navigationLookup = new SnapshotNavigationLookup(snapshot);
+        this.urlRegistryService = urlRegistryService;
+        this.generationUserId = generationUserId;
     }
 
     /** Renders one plan entry; produces empty bytes (with no deps) when the template has no channel source. */
@@ -354,21 +378,47 @@ final class GenerationRenderer {
         }
         deps.add(navFolderUuid);
 
-        JsonNode json = NavigationTreeJson.toJson(tree, activePageUuid, uuid -> navHref(uuid, navChannel));
+        List<UUID> dangling = NavigationTreeJson.danglingPageReferences(tree);
+        if (!dangling.isEmpty()) {
+            // `M8.2.3`: a dangling PAGE_REFERENCE (its target asset is missing/deleted, or a
+            // FOLDER target with no navigable page anywhere in its subtree) used to silently
+            // render as a non-linked <span> — fail this page's render with a diagnostic instead
+            // of emitting a broken link. Reuses RenderLimitException as the established "abort
+            // this page's render, carry a Diagnostic" vehicle (RenderPipeline.renderEntry already
+            // catches it and reports the diagnostic verbatim as a build ERROR) — not itself a
+            // render-limit condition, but the same single-page-abort contract applies.
+            throw new RenderLimitException(Diagnostic.error(
+                    NavigationDiagnosticCodes.NAV_DANGLING_PAGE_REFERENCE,
+                    "Navigation reference '" + dangling.get(0) + "' does not resolve to any page.",
+                    0,
+                    0));
+        }
+
+        JsonNode json = NavigationTreeJson.toJson(tree, activePageUuid, node -> navHref(node, navChannel));
         return NavigationHtmlRenderer.renderRoot(json);
     }
 
     /**
-     * Href resolution swap point for `M8.2.3`: this task resolves a nav node's target page href
-     * via the existing {@link OutputPathResolver} path (a straight page-path lookup), same as
-     * {@code $CMS_REF(page:...)$}'s own "page" branch below in {@link #urlResolver}. Once the URL
-     * registry lands, only this one method's body needs to change.
+     * Href resolution swap point for `M8.2.3`: a {@code PAGE_REFERENCE} node's href is keyed on
+     * the reference's own uuid ({@code node.assetUuid()}, exactly the {@code pageReferenceUuid}
+     * {@link UrlRegistryService#resolve} expects) and resolved through the {@code GENERATED} area
+     * of the URL registry — cached after the first call, stable across subsequent generation runs
+     * even if the target page's slug/displayName changes, until an explicit reset. A {@code
+     * FOLDER} entry-point node (its {@code resolvedPageUuid} comes from walking a {@code
+     * startNode} chain, not from a {@code PageReference} the folder itself owns) has no {@code
+     * PageReference} identity to key a registry lookup on, so it keeps resolving directly via
+     * {@link OutputPathResolver} — unchanged pre-`M8.2.3` behavior for that node kind.
      */
-    private String navHref(UUID resolvedPageUuid, String channel) {
-        if (resolvedPageUuid == null || paths == null) {
+    private String navHref(NavTreeNode node, String channel) {
+        UUID resolvedPageUuid = node.resolvedPageUuid();
+        if (resolvedPageUuid == null) {
             return "";
         }
-        return paths.resolvePageUrl(resolvedPageUuid, channel);
+        if (node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
+            RevisionContext ctx = RevisionContext.of(snapshot.projectId(), generationUserId, "generation");
+            return urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.GENERATED, ctx);
+        }
+        return paths == null ? "" : paths.resolvePageUrl(resolvedPageUuid, channel);
     }
 
     /** {@code depth} named arg → int, {@code -1} (unlimited, still hard-capped) when absent/invalid. */

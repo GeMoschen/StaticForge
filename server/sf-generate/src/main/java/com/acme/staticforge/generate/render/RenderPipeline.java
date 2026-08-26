@@ -14,6 +14,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.render.RenderLimitException;
+import com.acme.staticforge.urlregistry.UrlRegistryService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
@@ -49,6 +50,7 @@ public class RenderPipeline {
     private final ProjectRepository projects;
     private final ChannelService channelService;
     private final MeterRegistry meterRegistry;
+    private final UrlRegistryService urlRegistryService;
 
     private volatile Map<UUID, Set<UUID>> dependenciesByPage = Map.of();
 
@@ -56,11 +58,13 @@ public class RenderPipeline {
             GenerationProperties properties,
             ProjectRepository projects,
             ChannelService channelService,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            UrlRegistryService urlRegistryService) {
         this.properties = properties;
         this.projects = projects;
         this.channelService = channelService;
         this.meterRegistry = meterRegistry;
+        this.urlRegistryService = urlRegistryService;
     }
 
     /**
@@ -98,7 +102,7 @@ public class RenderPipeline {
      */
     public RenderOutcome execute(Snapshot snapshot, BuildPlan plan) {
         return execute(snapshot, plan, OutputPathResolver.forSnapshot(
-                snapshot, OutputPathResolver.DEFAULT_INDEX_UID, false, "RELATIVE"));
+                snapshot, OutputPathResolver.DEFAULT_INDEX_UID, false, "RELATIVE"), null);
     }
 
     /**
@@ -106,6 +110,16 @@ public class RenderPipeline {
      * planner used), so PRETTY/trailing-slash projects resolve page references correctly.
      */
     public RenderOutcome execute(Snapshot snapshot, BuildPlan plan, OutputPathResolver paths) {
+        return execute(snapshot, plan, paths, null);
+    }
+
+    /**
+     * Same as {@link #execute(Snapshot, BuildPlan, OutputPathResolver)}, threading the
+     * generation run's triggering user (`M8.2.3`: the `RevisionContext.userId()` a nav node's
+     * {@code $CMS_NAVIGATION}-rendered {@code PageReference} href resolves through the URL
+     * registry with) — {@code null} for a run with no attributable user.
+     */
+    public RenderOutcome execute(Snapshot snapshot, BuildPlan plan, OutputPathResolver paths, Long userId) {
         List<Diagnostic> errors = validate(snapshot, plan);
         if (!errors.isEmpty()) {
             return new RenderOutcome(List.of(), errors, List.of());
@@ -117,7 +131,8 @@ public class RenderPipeline {
         }
 
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
-        GenerationRenderer renderer = new GenerationRenderer(snapshot, paths, projectKey, channelService);
+        GenerationRenderer renderer =
+                new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId);
 
         RenderBatch batch = renderParallel(renderer, plan, snapshot);
 
