@@ -41,6 +41,18 @@ public sealed interface OctlNode {
         }
     }
 
+    /**
+     * {@code $CMS_NAVIGATION(nav:uid [, depth=N] [, channel=key])$} (spec §16.9, `M8.1.4`). A
+     * self-closing (leaf) instruction, like {@link Include}: rendering the resolved navigation
+     * folder's tree — including any nested-list markup — is delegated entirely to
+     * {@code BlockResolver#renderNavigation}, so no template body/close tag is needed here.
+     */
+    record Navigation(Accessor accessor, List<NamedArg> args, int line, int col) implements OctlNode {
+        public Navigation {
+            args = args == null ? List.of() : List.copyOf(args);
+        }
+    }
+
     /** {@code $CMS_IF(expr)$ … $CMS_ELSEIF(expr)$ … $CMS_ELSE$ … $CMS_END_IF$}. */
     record If(List<Branch> branches, List<OctlNode> elseBody, int line, int col) implements OctlNode {
         public If {

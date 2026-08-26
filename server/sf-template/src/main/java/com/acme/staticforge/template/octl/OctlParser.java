@@ -80,6 +80,12 @@ final class OctlParser {
                 List<NamedArg> args = parseNamedArgs(c);
                 out.add(new OctlNode.Include(accessor, args, line, col));
             }
+            case "NAVIGATION" -> {
+                Cursor c = cursor(token);
+                Accessor accessor = parseAccessor(c);
+                List<NamedArg> args = parseNamedArgs(c);
+                out.add(new OctlNode.Navigation(accessor, args, line, col));
+            }
             case "SET" -> {
                 Cursor c = cursor(token);
                 c.skipWs();

@@ -1,0 +1,28 @@
+{
+  "assetUuid": "00000000-0000-0000-0000-000000000001",
+  "type": "FOLDER",
+  "uid": "root",
+  "displayName": "Main Navigation",
+  "label": "Main Navigation",
+  "resolvedPageUuid": null,
+  "children": [
+    {
+      "assetUuid": "00000000-0000-0000-0000-000000000002",
+      "type": "PAGE_REFERENCE",
+      "uid": "home-ref",
+      "displayName": "home-ref",
+      "label": "Home",
+      "resolvedPageUuid": "00000000-0000-0000-0000-000000000102",
+      "children": []
+    },
+    {
+      "assetUuid": "00000000-0000-0000-0000-000000000003",
+      "type": "PAGE_REFERENCE",
+      "uid": "about-ref",
+      "displayName": "about-ref",
+      "label": "About",
+      "resolvedPageUuid": "00000000-0000-0000-0000-000000000103",
+      "children": []
+    }
+  ]
+}

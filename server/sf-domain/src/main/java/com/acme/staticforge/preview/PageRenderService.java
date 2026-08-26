@@ -5,6 +5,11 @@ import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
+import com.acme.staticforge.asset.navigation.NavTreeNode;
+import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
+import com.acme.staticforge.asset.navigation.NavigationService;
+import com.acme.staticforge.asset.navigation.NavigationTreeJson;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.Project;
@@ -24,6 +29,7 @@ import com.acme.staticforge.template.render.UrlResolver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -49,6 +55,8 @@ public class PageRenderService {
     private final ProjectRepository projectRepository;
     private final ObjectMapper objectMapper;
     private final PreviewTokenService previewTokenService;
+    private final NavigationService navigationService;
+    private final LiveNavigationLookup navigationLookup;
 
     private final OctlCompiler octlCompiler = new OctlCompiler();
     private final CdlCompiler cdlCompiler = new CdlCompiler();
@@ -59,12 +67,16 @@ public class PageRenderService {
             AssetRepository assetRepository,
             ProjectRepository projectRepository,
             ObjectMapper objectMapper,
-            PreviewTokenService previewTokenService) {
+            PreviewTokenService previewTokenService,
+            NavigationService navigationService,
+            LiveNavigationLookup navigationLookup) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.projectRepository = projectRepository;
         this.objectMapper = objectMapper;
         this.previewTokenService = previewTokenService;
+        this.navigationService = navigationService;
+        this.navigationLookup = navigationLookup;
     }
 
     /**
@@ -248,7 +260,75 @@ public class PageRenderService {
                 return renderSectionTemplate(
                         projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, channel, rewriteLinks, baseUrl);
             }
+
+            @Override
+            public String renderNavigation(UUID navFolderUuid, Map<String, String> args) {
+                return PageRenderService.this.renderNavigation(
+                        navFolderUuid, args, projectKey, page.uuid(), channel, rewriteLinks, baseUrl);
+            }
+
+            @Override
+            public String renderNavigationRecurse(JsonNode node) {
+                return NavigationHtmlRenderer.renderChildren(node);
+            }
         };
+    }
+
+    // ------------------------------------------------------------------
+    // Navigation ($CMS_NAVIGATION)
+    // ------------------------------------------------------------------
+
+    private String renderNavigation(
+            UUID navFolderUuid,
+            Map<String, String> args,
+            String projectKey,
+            UUID activePageUuid,
+            String defaultChannel,
+            boolean rewriteLinks,
+            String baseUrl) {
+        if (navFolderUuid == null) {
+            return "";
+        }
+        int depth = parseDepth(args);
+        String navChannel = args != null && args.containsKey("channel") ? args.get("channel") : defaultChannel;
+
+        // Diagnostics (cycle/depth-cap truncation) aren't surfaced by this preview path today —
+        // renderPage already discards RenderResult.warnings() the same way, so this keeps parity
+        // rather than introducing a new reporting channel just for navigation.
+        NavTreeNode tree = navigationService.tree(navFolderUuid, depth, navigationLookup, new ArrayList<>());
+        if (tree == null) {
+            return "";
+        }
+
+        JsonNode json = NavigationTreeJson.toJson(
+                tree, activePageUuid, uuid -> navHref(uuid, projectKey, navChannel, rewriteLinks, baseUrl));
+        return NavigationHtmlRenderer.renderRoot(json);
+    }
+
+    /**
+     * Href resolution swap point for `M8.2.3`: this task resolves a nav node's target page href
+     * through the same {@link UrlResolver} a {@code $CMS_REF(page:...)$} would use (share-token
+     * URL when rewriting, raw uuid otherwise). Once the URL registry lands, only this one
+     * method's body needs to change.
+     */
+    private String navHref(UUID resolvedPageUuid, String projectKey, String channel, boolean rewriteLinks, String baseUrl) {
+        if (resolvedPageUuid == null) {
+            return "";
+        }
+        return urlResolver(projectKey, channel, rewriteLinks, baseUrl).resolve("page", null, resolvedPageUuid, Map.of());
+    }
+
+    /** {@code depth} named arg → int, {@code -1} (unlimited, still hard-capped) when absent/invalid. */
+    private static int parseDepth(Map<String, String> args) {
+        String raw = args == null ? null : args.get("depth");
+        if (raw == null || raw.isBlank()) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private String renderSectionInstance(
@@ -312,14 +392,29 @@ public class PageRenderService {
 
     private ReferenceResolver referenceResolver(long projectId) {
         return (assetType, uid) -> {
-            AssetType type;
-            try {
-                type = AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException | NullPointerException e) {
+            AssetType type = assetTypeForRef(assetType);
+            if (type == null) {
                 return Optional.empty();
             }
             return assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
         };
+    }
+
+    /**
+     * {@code assetType:uid} accessor kind -> {@link AssetType}. Every kind but {@code nav} maps
+     * 1:1 onto an {@link AssetType} enum name; {@code nav:<uid>} (`M8.1.4`) is special-cased since
+     * a navigation folder is still just {@link AssetType#FOLDER} under the hood (`M8.1.2` — plain
+     * folders, no dedicated navigation-folder asset type).
+     */
+    private static AssetType assetTypeForRef(String assetType) {
+        if ("nav".equals(assetType)) {
+            return AssetType.FOLDER;
+        }
+        try {
+            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return null;
+        }
     }
 
     private UUID resolveSectionTemplateByUid(long projectId, String uid) {

@@ -1,0 +1,38 @@
+{
+  "assetUuid": "00000000-0000-0000-0000-000000000001",
+  "type": "FOLDER",
+  "uid": "root",
+  "displayName": "Main Navigation",
+  "label": "Main Navigation",
+  "resolvedPageUuid": null,
+  "children": [
+    {
+      "assetUuid": "00000000-0000-0000-0000-000000000010",
+      "type": "FOLDER",
+      "uid": "products",
+      "displayName": "Products",
+      "label": "Products",
+      "resolvedPageUuid": null,
+      "children": [
+        {
+          "assetUuid": "00000000-0000-0000-0000-000000000011",
+          "type": "PAGE_REFERENCE",
+          "uid": "widget-ref",
+          "displayName": "widget-ref",
+          "label": "Widget",
+          "resolvedPageUuid": "00000000-0000-0000-0000-000000000201",
+          "children": []
+        },
+        {
+          "assetUuid": "00000000-0000-0000-0000-000000000012",
+          "type": "PAGE_REFERENCE",
+          "uid": "gadget-ref",
+          "displayName": "gadget-ref",
+          "label": "Gadget",
+          "resolvedPageUuid": "00000000-0000-0000-0000-000000000202",
+          "children": []
+        }
+      ]
+    }
+  ]
+}
