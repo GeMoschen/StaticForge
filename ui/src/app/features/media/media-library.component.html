@@ -8,6 +8,32 @@
   />
 }
 
+@if (renamingItem(); as ri) {
+  <sf-rename-asset-dialog
+    [open]="true"
+    [projectKey]="projectKey()"
+    [uuid]="ri.uuid ?? ''"
+    [uid]="ri.uid ?? ''"
+    [displayName]="ri.displayName ?? ri.uid ?? ''"
+    [submittingName]="renamingItemName()"
+    (renameDisplayName)="submitRenameItemDisplayName($event)"
+    (uidChanged)="onRenameItemUidChanged()"
+    (closed)="closeRenameItem()"
+  />
+}
+
+@if (renamingFolder(); as rf) {
+  <sf-media-folder-detail
+    [projectKey]="projectKey()"
+    [folder]="rf"
+    [mediaCount]="renamingFolderMediaCount()"
+    [folderCount]="rf.children?.length ?? 0"
+    (close)="closeFolderDetail()"
+    (renamed)="onFolderDetailChanged()"
+    (deleted)="onFolderDetailChanged()"
+  />
+}
+
 <div
   class="library"
   sfDropTarget
@@ -182,3 +208,13 @@
 @if (dragActive()) {
   <div class="drop-overlay">Drop files to upload</div>
 }
+
+<sf-create-asset-dialog
+  kind="FOLDER"
+  scope="MEDIA"
+  [open]="newFolderOpen()"
+  [submitting]="creatingFolder()"
+  [projectKey]="projectKey()"
+  (create)="submitNewFolder($event)"
+  (closed)="closeNewFolder()"
+/>

@@ -4,7 +4,56 @@
   </h1>
   <header class="page-editor__top">
     @if (page(); as p) {
-      <span class="page-editor__title">{{ p.displayName ?? p.uid }}</span>
+      <div class="page-editor__meta-anchor">
+        <button
+          type="button"
+          class="page-editor__title page-editor__title-button"
+          (click)="toggleMeta()"
+          aria-haspopup="true"
+          [attr.aria-expanded]="metaOpen()"
+        >
+          {{ p.displayName ?? p.uid }}
+        </button>
+        @if (metaOpen()) {
+          <div class="page-editor__meta-popover">
+            <section class="page-editor__meta-section">
+              <h3 class="page-editor__meta-title">Display name</h3>
+              @if (editingDisplayName()) {
+                <div class="page-editor__meta-row">
+                  <input
+                    class="page-editor__meta-input"
+                    type="text"
+                    [value]="displayNameDraft()"
+                    (input)="onDisplayNameInput($event)"
+                    (keydown.enter)="saveDisplayName()"
+                    (keydown.escape)="cancelEditDisplayName()"
+                    autofocus
+                  />
+                  <sf-button variant="primary" [disabled]="savingDisplayName()" (click)="saveDisplayName()">Save</sf-button>
+                  <sf-button variant="ghost" (click)="cancelEditDisplayName()">Cancel</sf-button>
+                </div>
+              } @else {
+                <div class="page-editor__meta-row">
+                  <span class="page-editor__meta-value">{{ p.displayName ?? '—' }}</span>
+                  <sf-button variant="ghost" (click)="startEditDisplayName()">Rename</sf-button>
+                </div>
+              }
+            </section>
+            <section class="page-editor__meta-section">
+              <h3 class="page-editor__meta-title">UID</h3>
+              <sf-uid-rename
+                [projectKey]="projectKey()"
+                [uuid]="uuid()"
+                [uid]="p.uid ?? ''"
+                (uidChanged)="onUidChanged($event)"
+              />
+            </section>
+            <div class="page-editor__meta-footer">
+              <sf-button variant="ghost" (click)="closeMeta()">Close</sf-button>
+            </div>
+          </div>
+        }
+      </div>
     }
     <span class="page-editor__status" aria-live="polite">{{ statusLabel() }}</span>
   </header>

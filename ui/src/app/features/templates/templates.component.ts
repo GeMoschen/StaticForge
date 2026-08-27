@@ -9,12 +9,17 @@ import {
   signal,
 } from '@angular/core';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
+import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { ChannelsService } from '../channels/channels.service';
 import {
   etagFor,
@@ -38,7 +43,15 @@ const NEW_CONTENT_DEFINITION = '';
   selector: 'sf-templates',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfEmptyStateComponent, SfFieldComponent, SfSpinnerComponent],
+  imports: [
+    SfButtonComponent,
+    SfCreateAssetDialogComponent,
+    SfEmptyStateComponent,
+    SfFieldComponent,
+    SfRenameAssetDialogComponent,
+    SfSpinnerComponent,
+    SfUidRenameComponent,
+  ],
   templateUrl: './templates.component.html',
   styleUrl: './templates.component.scss',
 })
@@ -49,6 +62,8 @@ export class TemplatesComponent {
   private readonly channelsService = inject(ChannelsService);
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
+  private readonly menu = inject(ContextMenuService);
+  private readonly api = inject(ApiClient);
 
   /** `ProjectContextStore.pageTemplates`/`sectionTemplates` (used by the "new page" template picker and the page editor's "add section" palette) are only loaded once per project — force a refresh whenever a template is created/renamed/deleted here so those stay in sync without an F5. */
   private refreshTemplateStore(): void {
@@ -149,25 +164,46 @@ export class TemplatesComponent {
     this.selectedUuid.set(uuid ?? null);
   }
 
+  readonly newTemplateOpen = signal(false);
+  readonly creatingTemplate = signal(false);
+
+  readonly createDialogKind = computed<'PAGE_TEMPLATE' | 'SECTION_TEMPLATE'>(() =>
+    this.isSection() ? 'SECTION_TEMPLATE' : 'PAGE_TEMPLATE',
+  );
+
   newTemplate(): void {
+    this.newTemplateOpen.set(true);
+  }
+
+  closeNewTemplate(): void {
+    this.newTemplateOpen.set(false);
+  }
+
+  submitNewTemplate(value: CreateAssetFormValue): void {
     const key = this.projectKey();
     if (!key) {
       return;
     }
+    this.creatingTemplate.set(true);
     this.service
       .create(this.kind(), key, {
-        displayName: this.isSection() ? 'New section template' : 'New page template',
+        displayName: value.displayName,
         contentDefinition: NEW_CONTENT_DEFINITION,
         channelSources: {},
       })
       .subscribe({
         next: (created) => {
+          this.creatingTemplate.set(false);
+          this.newTemplateOpen.set(false);
           this.toast.show('Template created', 'success');
           this.reloadList(key);
           this.selectedUuid.set(created.uuid ?? null);
           this.refreshTemplateStore();
         },
-        error: () => this.toast.show('Could not create template — try again in a moment.', 'error'),
+        error: () => {
+          this.creatingTemplate.set(false);
+          this.toast.show('Could not create template — try again in a moment.', 'error');
+        },
       });
   }
 
@@ -253,6 +289,90 @@ export class TemplatesComponent {
           this.saving.set(false);
         },
       });
+  }
+
+  onUidChanged(): void {
+    const key = this.projectKey();
+    const uuid = this.selectedUuid();
+    if (!key || !uuid) {
+      return;
+    }
+    this.reloadDetail(key, uuid);
+    this.reloadList(key);
+    this.refreshTemplateStore();
+  }
+
+  readonly renameOpen = signal(false);
+  readonly renamingName = signal(false);
+  private renameTarget: TemplateSummary | null = null;
+
+  onRowContextMenu(event: MouseEvent, item: TemplateSummary): void {
+    const items: ContextMenuItem[] = [
+      { label: 'Rename', icon: 'edit', action: () => this.openRename(item) },
+    ];
+    this.menu.open(event, items);
+  }
+
+  openRename(item: TemplateSummary): void {
+    this.renameTarget = item;
+    this.renameOpen.set(true);
+  }
+
+  renameTargetUuid(): string {
+    return this.renameTarget?.uuid ?? '';
+  }
+
+  renameTargetUid(): string {
+    return this.renameTarget?.uid ?? '';
+  }
+
+  renameTargetDisplayName(): string {
+    return this.renameTarget?.displayName ?? this.renameTarget?.uid ?? '';
+  }
+
+  closeRename(): void {
+    this.renameOpen.set(false);
+  }
+
+  submitRenameDisplayName(displayName: string): void {
+    const key = this.projectKey();
+    const uuid = this.renameTarget?.uuid;
+    if (!key || !uuid) {
+      return;
+    }
+    this.renamingName.set(true);
+    this.api.renameAsset(key, uuid, { displayName }).subscribe({
+      next: () => {
+        this.renamingName.set(false);
+        this.renameOpen.set(false);
+        this.toast.show('Template renamed', 'success');
+        this.reloadRenamedTemplate(uuid);
+      },
+      error: () => {
+        this.renamingName.set(false);
+        this.toast.show('Could not rename template — try again in a moment.', 'error');
+      },
+    });
+  }
+
+  onRenameUidChanged(): void {
+    // sf-uid-rename already toasts "UID changed" itself — just reload.
+    const uuid = this.renameTarget?.uuid;
+    if (uuid) {
+      this.reloadRenamedTemplate(uuid);
+    }
+  }
+
+  private reloadRenamedTemplate(uuid: string): void {
+    const key = this.projectKey();
+    if (!key) {
+      return;
+    }
+    this.reloadList(key);
+    if (this.selectedUuid() === uuid) {
+      this.reloadDetail(key, uuid);
+    }
+    this.refreshTemplateStore();
   }
 
   private diagnosticsOf(err: unknown): Diagnostic[] {

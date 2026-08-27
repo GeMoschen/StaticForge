@@ -563,4 +563,17 @@ export class ApiClient {
       { withCredentials: true },
     );
   }
+
+  renameAsset(
+    projectKey: string,
+    uuid: string,
+    body: S['RenameAssetRequest'],
+    etag?: number,
+  ): Observable<S['AssetDetailView']> {
+    return this.http.patch<S['AssetDetailView']>(
+      `${BASE}/projects/${projectKey}/assets/${uuid}/display-name`,
+      body,
+      this.mutationOptions(etag),
+    );
+  }
 }

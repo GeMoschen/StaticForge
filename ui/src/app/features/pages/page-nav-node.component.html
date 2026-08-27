@@ -63,4 +63,16 @@
       }
     }
   }
+
+  <sf-rename-asset-dialog
+    [open]="renameOpen()"
+    [projectKey]="projectKey()"
+    [uuid]="summary().uuid ?? ''"
+    [uid]="summary().uid ?? ''"
+    [displayName]="summary().displayName ?? summary().uid ?? ''"
+    [submittingName]="renamingName()"
+    (renameDisplayName)="submitRenameDisplayName($event)"
+    (uidChanged)="onRenameUidChanged()"
+    (closed)="closeRename()"
+  />
 </div>

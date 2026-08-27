@@ -1,0 +1,39 @@
+@use '../../design/forms';
+@use '../../design/dialog-shell';
+
+:host {
+  display: contents;
+}
+
+.dialog__body input {
+  @include forms.sf-form-control;
+}
+
+.dialog__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+}
+
+.dialog__section + .dialog__section {
+  padding-top: var(--sf-3);
+  border-top: 1px solid var(--sf-line);
+}
+
+.dialog__section-label {
+  font-size: var(--sf-text-sm);
+  font-weight: 600;
+  color: var(--sf-ink);
+}
+
+.dialog__actions--footer {
+  padding: var(--sf-3) var(--sf-4);
+  border-top: 1px solid var(--sf-line);
+  margin-top: 0;
+}
+
+.dialog__hint {
+  margin: 0;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+}

@@ -28,6 +28,8 @@ function makeNavStub(overrides: Partial<Record<keyof NavigationService, unknown>
 function makeApiStub(overrides: Partial<Record<keyof ApiClient, unknown>> = {}) {
   return {
     listFolders: vi.fn().mockReturnValue(of([])),
+    changeUid: vi.fn().mockReturnValue(of({ oldUid: 'products_home', newUid: 'new_uid', affectedTemplates: [] })),
+    renameAsset: vi.fn().mockReturnValue(of({})),
     ...overrides,
   };
 }
@@ -92,6 +94,46 @@ describe('NavReferenceDetailComponent', () => {
       { targetKind: 'PAGE', targetAssetUuid: 'page-uuid', label: 'Custom label' },
       '"rev-5"',
     );
+  });
+
+  it('renames the display name via ApiClient.renameAsset with the If-Match revision', async () => {
+    const nav = makeNavStub();
+    const api = makeApiStub();
+    await render(NavReferenceDetailComponent, {
+      componentInputs: { projectKey: 'proj', reference },
+      providers: [
+        { provide: NavigationService, useValue: nav },
+        { provide: ApiClient, useValue: api },
+      ],
+    });
+
+    screen.getByLabelText('Rename reference').click();
+    const input = screen.getByDisplayValue('Products Home') as HTMLInputElement;
+    input.value = 'New Name';
+    input.dispatchEvent(new Event('input'));
+    screen.getAllByText('Save')[0].click();
+
+    expect(api.renameAsset).toHaveBeenCalledWith('proj', 'ref-uuid', { displayName: 'New Name' }, 5);
+  });
+
+  it('changes the UID via ApiClient.changeUid', async () => {
+    const nav = makeNavStub();
+    const api = makeApiStub();
+    await render(NavReferenceDetailComponent, {
+      componentInputs: { projectKey: 'proj', reference },
+      providers: [
+        { provide: NavigationService, useValue: nav },
+        { provide: ApiClient, useValue: api },
+      ],
+    });
+
+    screen.getByText('Change UID').click();
+    const uidInput = screen.getByDisplayValue('products_home') as HTMLInputElement;
+    uidInput.value = 'new_uid';
+    uidInput.dispatchEvent(new Event('input'));
+    screen.getAllByText('Save')[0].click();
+
+    expect(api.changeUid).toHaveBeenCalledWith('proj', 'ref-uuid', { uid: 'new_uid' });
   });
 
   it('deletes the reference via NavigationService.deleteReference on confirm', async () => {

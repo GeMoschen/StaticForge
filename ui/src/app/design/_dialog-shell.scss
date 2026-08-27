@@ -1,0 +1,90 @@
+// Shared modal-shell rules for the app's centered scrim+panel dialogs
+// (`sf-create-asset-dialog`, `sf-rename-asset-dialog`, and any future
+// sibling). Extracted so every such dialog shares identical positioning,
+// sizing, and chrome instead of duplicating it per component.
+//
+// NOTE: `.dialog` uses `transform`, which establishes a containing block for
+// its fixed-position descendants — never nest another `position: fixed`
+// element inside a `.dialog`; render it as a sibling instead (see
+// `sf-create-asset-dialog.component.html` for the pattern).
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 61;
+  width: min(28rem, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-lg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sf-3) var(--sf-4);
+  border-bottom: 1px solid var(--sf-line);
+  flex-shrink: 0;
+}
+
+.dialog__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}
+
+.dialog__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--sf-slate);
+  cursor: pointer;
+  border-radius: var(--sf-radius-sm);
+  font-size: var(--sf-text-lg);
+  line-height: 1;
+}
+
+.dialog__close:hover {
+  background: var(--sf-paper);
+  color: var(--sf-ink);
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding: var(--sf-4);
+  overflow-y: auto;
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+  margin-top: var(--sf-2);
+}
+
+.error {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-rust);
+}

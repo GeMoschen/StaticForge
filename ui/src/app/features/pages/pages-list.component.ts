@@ -7,7 +7,6 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -15,8 +14,8 @@ import { ToastService } from '../../core/ui/toast.service';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
-import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { FolderDetailComponent } from './folder-detail.component';
 import { FolderNodeComponent } from './folder-node.component';
@@ -44,10 +43,9 @@ type FolderView = components['schemas']['FolderView'];
     FolderNodeComponent,
     PageNavNodeComponent,
     SfButtonComponent,
+    SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
-    SfFieldComponent,
     SfIconComponent,
-    ReactiveFormsModule,
     RouterOutlet,
   ],
   templateUrl: './pages-list.component.html',
@@ -57,7 +55,6 @@ export class PagesListComponent {
   private readonly api = inject(ApiClient);
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
-  private readonly fb = inject(FormBuilder);
   private readonly menu = inject(ContextMenuService);
   protected readonly clipboard = inject(TreeClipboardService);
 
@@ -104,10 +101,10 @@ export class PagesListComponent {
 
   protected readonly newPageOpen = signal(false);
   protected readonly creatingPage = signal(false);
-  protected readonly newPageForm = this.fb.nonNullable.group({
-    displayName: ['', Validators.required],
-    templateUuid: ['', Validators.required],
-  });
+  protected readonly newFolderOpen = signal(false);
+  protected readonly creatingFolder = signal(false);
+  /** Parent folder targeted by the currently open "New subfolder" dialog — captured at open time since context-menu actions (e.g. "New subfolder" on the root) may target a folder other than whatever is currently selected. */
+  private folderParentUuid: string | undefined = undefined;
 
   constructor() {
     effect(() => {
@@ -151,24 +148,38 @@ export class PagesListComponent {
   }
 
   private createFolderUnder(parentUuid: string | undefined): void {
-    const displayName = window.prompt('Folder name');
-    if (!displayName || !displayName.trim()) {
-      return;
-    }
+    this.folderParentUuid = parentUuid;
+    this.newFolderOpen.set(true);
+  }
+
+  protected closeNewFolder(): void {
+    this.newFolderOpen.set(false);
+  }
+
+  protected submitNewFolder(value: CreateAssetFormValue): void {
     const key = this.projectKey();
+    this.creatingFolder.set(true);
     this.api
-      .createFolder(key, { displayName: displayName.trim(), parentFolderUuid: parentUuid, scope: 'PAGES' })
+      .createFolder(key, {
+        displayName: value.displayName,
+        parentFolderUuid: this.folderParentUuid,
+        scope: 'PAGES',
+      })
       .subscribe({
         next: () => {
+          this.creatingFolder.set(false);
+          this.newFolderOpen.set(false);
           this.toast.show('Folder created', 'success');
           this.onTreeChanged();
         },
-        error: () => this.toast.show('Could not create folder — a folder with that name may already exist here.', 'error'),
+        error: () => {
+          this.creatingFolder.set(false);
+          this.toast.show('Could not create folder — a folder with that name may already exist here.', 'error');
+        },
       });
   }
 
   protected openNewPage(): void {
-    this.newPageForm.reset({ displayName: '', templateUuid: '' });
     this.newPageOpen.set(true);
   }
 
@@ -176,17 +187,16 @@ export class PagesListComponent {
     this.newPageOpen.set(false);
   }
 
-  protected submitNewPage(): void {
-    if (this.newPageForm.invalid || this.creatingPage()) {
-      return;
-    }
+  protected submitNewPage(value: CreateAssetFormValue): void {
     const key = this.projectKey();
-    const value = this.newPageForm.getRawValue();
     this.creatingPage.set(true);
     this.api
       .createPage(key, {
-        displayName: value.displayName.trim(),
+        displayName: value.displayName,
         templateUuid: value.templateUuid,
+        // Read live, at submit time — the folder targeted by the dialog is
+        // whichever one is selected right now, not whatever was selected
+        // when the dialog first opened.
         folderUuid: this.selectedFolder() ?? undefined,
       })
       .subscribe({

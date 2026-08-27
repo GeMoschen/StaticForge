@@ -66,32 +66,6 @@
       <sf-button variant="primary" (click)="openNewPage()">New page</sf-button>
     </div>
 
-    @if (newPageOpen()) {
-      <form class="pages__form" [formGroup]="newPageForm" (ngSubmit)="submitNewPage()">
-        <sf-field label="Name">
-          <input class="pages__input" type="text" formControlName="displayName" autocomplete="off" />
-        </sf-field>
-        <sf-field label="Template">
-          <select class="pages__select" formControlName="templateUuid">
-            <option value="" disabled>Select a template</option>
-            @for (tpl of pageTemplates(); track tpl.uuid) {
-              <option [value]="tpl.uuid">{{ tpl.displayName ?? tpl.uid }}</option>
-            }
-          </select>
-        </sf-field>
-        <div class="pages__form-actions">
-          <sf-button variant="ghost" (click)="closeNewPage()">Cancel</sf-button>
-          <sf-button
-            type="submit"
-            variant="primary"
-            [disabled]="newPageForm.invalid || creatingPage()"
-          >
-            {{ creatingPage() ? 'Creating…' : 'Create page' }}
-          </sf-button>
-        </div>
-      </form>
-    }
-
     <div
       class="pages__detail"
       [class.pages__detail--active]="pageOutlet.isActivated || !!selectedFolderNode()"
@@ -119,3 +93,23 @@
     </div>
   </section>
 </div>
+
+<sf-create-asset-dialog
+  kind="FOLDER"
+  scope="PAGES"
+  [open]="newFolderOpen()"
+  [submitting]="creatingFolder()"
+  [projectKey]="projectKey()"
+  (create)="submitNewFolder($event)"
+  (closed)="closeNewFolder()"
+/>
+
+<sf-create-asset-dialog
+  kind="PAGE"
+  [open]="newPageOpen()"
+  [submitting]="creatingPage()"
+  [projectKey]="projectKey()"
+  [templates]="pageTemplates()"
+  (create)="submitNewPage($event)"
+  (closed)="closeNewPage()"
+/>

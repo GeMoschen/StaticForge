@@ -5,7 +5,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTreeComponent } from '../../shared/components/sf-tree.component';
-import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
+import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { NavFolderDetailComponent } from './nav-folder-detail.component';
 import { NavReferenceDetailComponent } from './nav-reference-detail.component';
 import { NavTreeNodeComponent, type NavMoveEvent } from './nav-tree-node.component';
@@ -38,7 +38,7 @@ interface RawReferencePayload {
     SfEmptyStateComponent,
     SfSpinnerComponent,
     SfTreeComponent,
-    SfAssetPickerDialogComponent,
+    SfCreateAssetDialogComponent,
     NavFolderDetailComponent,
     NavReferenceDetailComponent,
     NavTreeNodeComponent,
@@ -61,9 +61,9 @@ export class NavigationComponent {
   readonly referenceDetail = signal<PageReferenceView | null>(null);
   readonly detailLoading = signal(false);
 
-  /** Target folder uuid for a pending "New reference" creation, awaiting a page pick from the shared asset picker. */
-  private pendingReferenceFolderUuid: string | null = null;
-  private pendingReferenceName: string | null = null;
+  readonly newFolderOpen = signal(false);
+  readonly creatingFolder = signal(false);
+  readonly newReferenceOpen = signal(false);
   readonly creatingReference = signal(false);
 
   readonly selectedNode = computed<NavTreeView | null>(() => {
@@ -109,65 +109,68 @@ export class NavigationComponent {
   }
 
   protected newFolder(): void {
+    this.newFolderOpen.set(true);
+  }
+
+  protected closeNewFolder(): void {
+    this.newFolderOpen.set(false);
+  }
+
+  protected submitNewFolder(value: CreateAssetFormValue): void {
     const parentUuid = this.targetFolderUuid();
-    const displayName = window.prompt('Folder name');
-    if (!displayName || !displayName.trim()) {
-      return;
-    }
-    this.nav.createFolder(this.projectKey(), displayName.trim(), parentUuid ?? undefined).subscribe({
+    this.creatingFolder.set(true);
+    this.nav.createFolder(this.projectKey(), value.displayName, parentUuid ?? undefined).subscribe({
       next: () => {
+        this.creatingFolder.set(false);
+        this.newFolderOpen.set(false);
         this.toasts.show('Folder created', 'success');
         this.reload(this.projectKey());
       },
-      error: () => this.toasts.show('Could not create folder — a folder with that name may already exist here.', 'error'),
+      error: () => {
+        this.creatingFolder.set(false);
+        this.toasts.show('Could not create folder — a folder with that name may already exist here.', 'error');
+      },
     });
   }
 
   protected newReference(): void {
-    const parentUuid = this.targetFolderUuid();
-    if (!parentUuid) {
+    if (!this.targetFolderUuid()) {
       return;
     }
-    const displayName = window.prompt('Reference name');
-    if (!displayName || !displayName.trim()) {
+    this.newReferenceOpen.set(true);
+  }
+
+  protected closeNewReference(): void {
+    this.newReferenceOpen.set(false);
+  }
+
+  protected submitNewReference(value: CreateAssetFormValue): void {
+    const folderUuid = this.targetFolderUuid();
+    if (!folderUuid) {
       return;
     }
-    this.pendingReferenceFolderUuid = parentUuid;
-    this.pendingReferenceName = displayName.trim();
     this.creatingReference.set(true);
-  }
-
-  protected cancelCreateReference(): void {
-    this.creatingReference.set(false);
-    this.pendingReferenceFolderUuid = null;
-    this.pendingReferenceName = null;
-  }
-
-  protected onReferenceTargetPicked(picked: AssetPicked): void {
-    const folderUuid = this.pendingReferenceFolderUuid;
-    const displayName = this.pendingReferenceName;
-    this.creatingReference.set(false);
-    this.pendingReferenceFolderUuid = null;
-    this.pendingReferenceName = null;
-    if (!folderUuid || !displayName) {
-      return;
-    }
     this.nav
       .createReference(this.projectKey(), {
-        displayName,
+        displayName: value.displayName,
         folderUuid,
-        targetKind: 'PAGE',
-        targetAssetUuid: picked.uuid,
+        targetKind: value.targetKind ?? 'PAGE',
+        targetAssetUuid: value.targetAssetUuid,
       })
       .subscribe({
         next: (created) => {
+          this.creatingReference.set(false);
+          this.newReferenceOpen.set(false);
           this.toasts.show('Reference created', 'success');
           this.reload(this.projectKey());
           if (created.uuid) {
             this.select(created.uuid);
           }
         },
-        error: () => this.toasts.show('Could not create reference — try again in a moment.', 'error'),
+        error: () => {
+          this.creatingReference.set(false);
+          this.toasts.show('Could not create reference — try again in a moment.', 'error');
+        },
       });
   }
 
@@ -203,6 +206,15 @@ export class NavigationComponent {
   }
 
   protected onReferenceChanged(): void {
+    const uuid = this.selectedUuid();
+    this.reload(this.projectKey());
+    if (uuid) {
+      this.loadDetail(uuid);
+    }
+  }
+
+  /** A tree-node's own context-menu Rename (folder or reference) succeeded — reload the tree, and the open detail drawer if it's showing the renamed node. */
+  protected onTreeNodeRenamed(): void {
     const uuid = this.selectedUuid();
     this.reload(this.projectKey());
     if (uuid) {

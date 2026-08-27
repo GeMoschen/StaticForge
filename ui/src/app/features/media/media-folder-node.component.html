@@ -46,4 +46,26 @@
       }
     </div>
   }
+
+  <sf-create-asset-dialog
+    kind="FOLDER"
+    scope="MEDIA"
+    [open]="newFolderOpen()"
+    [submitting]="creatingFolder()"
+    [projectKey]="projectKey()"
+    (create)="submitNewFolder($event)"
+    (closed)="closeNewFolder()"
+  />
+
+  <sf-rename-asset-dialog
+    [open]="renameOpen()"
+    [projectKey]="projectKey()"
+    [uuid]="node().uuid ?? ''"
+    [uid]="node().uid ?? ''"
+    [displayName]="node().displayName ?? node().uid ?? ''"
+    [submittingName]="renamingName()"
+    (renameDisplayName)="submitRenameDisplayName($event)"
+    (uidChanged)="onRenameUidChanged()"
+    (closed)="closeRename()"
+  />
 </div>

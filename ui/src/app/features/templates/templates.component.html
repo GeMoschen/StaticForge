@@ -44,6 +44,7 @@
         class="templates__row"
         [class.templates__row--active]="item.uuid === selectedUuid()"
         (click)="select(item.uuid)"
+        (contextmenu)="onRowContextMenu($event, item)"
       >
         <span class="templates__row-name">{{ item.displayName ?? item.uid }}</span>
         @if (item.assetType?.toLowerCase() === 'section_template') {
@@ -95,6 +96,12 @@
               </label>
             }
           </div>
+          <sf-uid-rename
+            [projectKey]="projectKey()"
+            [uuid]="d.uuid ?? ''"
+            [uid]="d.uid ?? ''"
+            (uidChanged)="onUidChanged()"
+          />
         </div>
 
         <div class="panel">
@@ -201,3 +208,24 @@
     </footer>
   </div>
 }
+
+<sf-create-asset-dialog
+  [kind]="createDialogKind()"
+  [open]="newTemplateOpen()"
+  [submitting]="creatingTemplate()"
+  [projectKey]="projectKey()"
+  (create)="submitNewTemplate($event)"
+  (closed)="closeNewTemplate()"
+/>
+
+<sf-rename-asset-dialog
+  [open]="renameOpen()"
+  [projectKey]="projectKey()"
+  [uuid]="renameTargetUuid()"
+  [uid]="renameTargetUid()"
+  [displayName]="renameTargetDisplayName()"
+  [submittingName]="renamingName()"
+  (renameDisplayName)="submitRenameDisplayName($event)"
+  (uidChanged)="onRenameUidChanged()"
+  (closed)="closeRename()"
+/>

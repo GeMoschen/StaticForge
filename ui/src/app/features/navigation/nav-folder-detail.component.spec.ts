@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
+import { ApiClient } from '../../core/api/api.client';
 import { NavFolderDetailComponent } from './nav-folder-detail.component';
 import { NavigationService, type NavigationFolderView, type NavTreeView } from './navigation.service';
 
@@ -39,12 +40,23 @@ function makeNavStub(overrides: Partial<Record<keyof NavigationService, unknown>
   };
 }
 
+function makeApiStub(overrides: Partial<Record<keyof ApiClient, unknown>> = {}) {
+  return {
+    changeUid: vi.fn().mockReturnValue(of({ oldUid: 'products', newUid: 'new_uid', affectedTemplates: [] })),
+    ...overrides,
+  };
+}
+
 describe('NavFolderDetailComponent', () => {
   it('renders the folder name, path, and startNode options from its direct children', async () => {
     const nav = makeNavStub();
+    const api = makeApiStub();
     await render(NavFolderDetailComponent, {
       componentInputs: { projectKey: 'proj', folder, children, isRoot: false },
-      providers: [{ provide: NavigationService, useValue: nav }],
+      providers: [
+        { provide: NavigationService, useValue: nav },
+        { provide: ApiClient, useValue: api },
+      ],
     });
 
     expect(screen.getByText('Products')).toBeTruthy();
@@ -55,9 +67,13 @@ describe('NavFolderDetailComponent', () => {
 
   it('renames the folder via NavigationService.renameFolder with the If-Match etag', async () => {
     const nav = makeNavStub();
+    const api = makeApiStub();
     await render(NavFolderDetailComponent, {
       componentInputs: { projectKey: 'proj', folder, children, isRoot: false },
-      providers: [{ provide: NavigationService, useValue: nav }],
+      providers: [
+        { provide: NavigationService, useValue: nav },
+        { provide: ApiClient, useValue: api },
+      ],
     });
 
     screen.getByLabelText('Rename folder').click();
@@ -69,11 +85,35 @@ describe('NavFolderDetailComponent', () => {
     expect(nav.renameFolder).toHaveBeenCalledWith('proj', 'folder-uuid', 'New name', '"rev-3"');
   });
 
-  it('sets startNode via NavigationService.updateFolder when a child is picked', async () => {
+  it('changes the UID via ApiClient.changeUid and emits changed', async () => {
     const nav = makeNavStub();
+    const api = makeApiStub();
     await render(NavFolderDetailComponent, {
       componentInputs: { projectKey: 'proj', folder, children, isRoot: false },
-      providers: [{ provide: NavigationService, useValue: nav }],
+      providers: [
+        { provide: NavigationService, useValue: nav },
+        { provide: ApiClient, useValue: api },
+      ],
+    });
+
+    screen.getByText('Change UID').click();
+    const uidInput = screen.getByDisplayValue('products') as HTMLInputElement;
+    uidInput.value = 'new_uid';
+    uidInput.dispatchEvent(new Event('input'));
+    screen.getByText('Save').click();
+
+    expect(api.changeUid).toHaveBeenCalledWith('proj', 'folder-uuid', { uid: 'new_uid' });
+  });
+
+  it('sets startNode via NavigationService.updateFolder when a child is picked', async () => {
+    const nav = makeNavStub();
+    const api = makeApiStub();
+    await render(NavFolderDetailComponent, {
+      componentInputs: { projectKey: 'proj', folder, children, isRoot: false },
+      providers: [
+        { provide: NavigationService, useValue: nav },
+        { provide: ApiClient, useValue: api },
+      ],
     });
 
     const select = screen.getByLabelText('Entry page') as HTMLSelectElement;

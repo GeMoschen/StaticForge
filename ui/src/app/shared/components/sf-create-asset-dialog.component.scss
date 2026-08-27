@@ -1,0 +1,27 @@
+@use '../../design/forms';
+@use '../../design/dialog-shell';
+
+:host {
+  display: contents;
+}
+
+.dialog__body input,
+.dialog__body select {
+  @include forms.sf-form-control;
+}
+
+.dialog__target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-2);
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-paper);
+}
+
+.dialog__target-label {
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+}

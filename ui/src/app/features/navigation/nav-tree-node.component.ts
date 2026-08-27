@@ -1,6 +1,10 @@
-import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ApiClient } from '../../core/api/api.client';
+import { ToastService } from '../../core/ui/toast.service';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
-import type { NavTreeView } from './navigation.service';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
+import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
+import { NavigationService, type NavTreeView } from './navigation.service';
 
 export interface NavMoveEvent {
   source: string;
@@ -25,21 +29,31 @@ export interface NavMoveEvent {
 @Component({
   selector: 'sf-nav-tree-node',
   standalone: true,
-  imports: [SfIconComponent],
+  imports: [SfIconComponent, SfRenameAssetDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav-tree-node.component.html',
   styleUrl: './nav-tree-node.component.scss',
 })
 export class NavTreeNodeComponent {
+  private readonly api = inject(ApiClient);
+  private readonly nav = inject(NavigationService);
+  private readonly toast = inject(ToastService);
+  private readonly menu = inject(ContextMenuService);
+
   readonly node = input.required<NavTreeView>();
   readonly depth = input<number>(0);
   readonly selectedUuid = input<string | null>(null);
   readonly isRoot = input<boolean>(false);
+  readonly projectKey = input<string>('');
 
   readonly select = output<string>();
   readonly move = output<NavMoveEvent>();
+  /** Emitted after this node was renamed (display name or UID), so the parent reloads. */
+  readonly changed = output<void>();
 
   protected readonly expanded = signal(true);
+  protected readonly renameOpen = signal(false);
+  protected readonly renamingName = signal(false);
 
   protected isFolder(): boolean {
     return this.node().type === 'FOLDER';
@@ -115,5 +129,57 @@ export class NavTreeNodeComponent {
     if (source && target && source !== target) {
       this.move.emit({ source, target });
     }
+  }
+
+  /** The navigation root is never renameable via this menu — its single-root invariant (`M8.1.2`) must hold, so no menu is opened at all rather than opening one with items disabled. */
+  protected onContextMenu(event: MouseEvent): void {
+    if (this.isRoot()) {
+      return;
+    }
+    const uuid = this.node().uuid;
+    if (!uuid) {
+      return;
+    }
+    const items: ContextMenuItem[] = [
+      { label: 'Rename', icon: 'edit', action: () => this.openRename() },
+    ];
+    this.menu.open(event, items);
+  }
+
+  protected openRename(): void {
+    this.renameOpen.set(true);
+  }
+
+  protected closeRename(): void {
+    this.renameOpen.set(false);
+  }
+
+  protected submitRenameDisplayName(displayName: string): void {
+    const uuid = this.node().uuid;
+    const key = this.projectKey();
+    if (!uuid || !key) {
+      return;
+    }
+    this.renamingName.set(true);
+    const onSuccess = (): void => {
+      this.renamingName.set(false);
+      this.renameOpen.set(false);
+      this.toast.show(this.isFolder() ? 'Folder renamed' : 'Reference renamed', 'success');
+      this.changed.emit();
+    };
+    const onError = (): void => {
+      this.renamingName.set(false);
+      this.toast.show('Could not rename — try again in a moment.', 'error');
+    };
+    if (this.isFolder()) {
+      this.nav.renameFolder(key, uuid, displayName).subscribe({ next: onSuccess, error: onError });
+    } else {
+      this.api.renameAsset(key, uuid, { displayName }).subscribe({ next: onSuccess, error: onError });
+    }
+  }
+
+  protected onRenameUidChanged(): void {
+    // sf-uid-rename already toasts "UID changed" itself — just reload.
+    this.changed.emit();
   }
 }

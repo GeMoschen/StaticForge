@@ -21,12 +21,15 @@ import { ToastService } from '../../core/ui/toast.service';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfDropTargetDirective } from '../../shared/directives/sf-drop-target.directive';
 import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
 import { MediaDetailDrawerComponent } from './media-detail-drawer.component';
+import { MediaFolderDetailComponent } from './media-folder-detail.component';
 import { MediaFolderNodeComponent, FolderMoveEvent } from './media-folder-node.component';
 
 type MediaView = components['schemas']['MediaView'];
@@ -48,12 +51,15 @@ const PAGE_SIZE = 40;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     SfButtonComponent,
+    SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
     SfIconComponent,
+    SfRenameAssetDialogComponent,
     SfSpinnerComponent,
     SfDropTargetDirective,
     SfFileSizePipe,
     MediaDetailDrawerComponent,
+    MediaFolderDetailComponent,
     MediaFolderNodeComponent,
   ],
   templateUrl: './media-library.component.html',
@@ -85,6 +91,12 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   readonly selected = signal<string[]>([]);
   readonly selectedMedia = signal<MediaView | null>(null);
+
+  readonly renamingFolder = signal<FolderView | null>(null);
+  readonly renamingFolderMediaCount = signal(0);
+
+  readonly renamingItem = signal<MediaView | null>(null);
+  readonly renamingItemName = signal(false);
 
   readonly uploads = signal<UploadItem[]>([]);
   readonly dragCounter = signal(0);
@@ -294,24 +306,44 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     this.selectFolder(findFolder(this.tree(), uuid));
   }
 
+  readonly newFolderOpen = signal(false);
+  readonly creatingFolder = signal(false);
+  /** Parent folder targeted by the currently open "New folder" dialog — captured at open time since the root context menu always targets the root regardless of the current selection. */
+  private newFolderParentUuid: string | undefined = undefined;
+
   protected newFolder(): void {
     this.createFolderUnder(this.folderUuid() || undefined);
   }
 
   private createFolderUnder(parentUuid: string | undefined): void {
-    const displayName = window.prompt('Folder name');
-    if (!displayName || !displayName.trim()) {
-      return;
-    }
+    this.newFolderParentUuid = parentUuid;
+    this.newFolderOpen.set(true);
+  }
+
+  protected closeNewFolder(): void {
+    this.newFolderOpen.set(false);
+  }
+
+  protected submitNewFolder(value: CreateAssetFormValue): void {
     const key = this.projectKey();
+    this.creatingFolder.set(true);
     this.api
-      .createFolder(key, { displayName: displayName.trim(), parentFolderUuid: parentUuid, scope: 'MEDIA' })
+      .createFolder(key, {
+        displayName: value.displayName,
+        parentFolderUuid: this.newFolderParentUuid,
+        scope: 'MEDIA',
+      })
       .subscribe({
         next: () => {
+          this.creatingFolder.set(false);
+          this.newFolderOpen.set(false);
           this.toasts.show('Folder created', 'success');
           this.reloadFolders();
         },
-        error: () => this.toasts.show('Could not create folder — a folder with that name may already exist here.', 'error'),
+        error: () => {
+          this.creatingFolder.set(false);
+          this.toasts.show('Could not create folder — a folder with that name may already exist here.', 'error');
+        },
       });
   }
 
@@ -408,22 +440,30 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     ]);
   }
 
+  // Opens the `sf-media-folder-detail` overlay drawer instead of a `window.prompt` — folders
+  // here are otherwise only "navigate into" targets (see `onFolderCardClick`/`selectFolder`),
+  // so reusing the "Rename" context-menu action as the entry point is the smaller, more
+  // consistent change versus adding a whole new folder-selection interaction.
   private renameFolder(folder: FolderView): void {
-    const uuid = folder.uuid;
-    if (!uuid) {
+    if (!folder.uuid) {
       return;
     }
-    const displayName = window.prompt('Folder name', folder.displayName ?? '');
-    if (!displayName || !displayName.trim()) {
-      return;
-    }
-    this.api.renameFolder(this.projectKey(), uuid, { displayName: displayName.trim() }).subscribe({
-      next: () => {
-        this.toasts.show('Folder renamed', 'success');
-        this.reloadFolders();
-      },
-      error: () => this.toasts.show('Could not rename folder — try again in a moment.', 'error'),
+    this.renamingFolder.set(folder);
+    this.renamingFolderMediaCount.set(0);
+    const folderPath = folder.path?.trim() || '/';
+    this.api.listMedia(this.projectKey(), { folder: folderPath, page: 0, size: 1 }).subscribe({
+      next: (res) => this.renamingFolderMediaCount.set(res.totalElements ?? 0),
+      error: () => this.renamingFolderMediaCount.set(0),
     });
+  }
+
+  protected closeFolderDetail(): void {
+    this.renamingFolder.set(null);
+  }
+
+  protected onFolderDetailChanged(): void {
+    this.renamingFolder.set(null);
+    this.reloadFolders();
   }
 
   private deleteFolder(folder: FolderView): void {
@@ -479,10 +519,41 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     const label = item.displayName ?? uuid;
     this.menu.open(event, [
       { label: 'Open details', icon: 'info', action: () => this.openDetail(uuid) },
+      { label: 'Rename', icon: 'edit', action: () => this.renamingItem.set(item) },
       { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('MEDIA', uuid, label) },
       { label: '', separator: true },
       { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteOne(uuid, label) },
     ]);
+  }
+
+  protected closeRenameItem(): void {
+    this.renamingItem.set(null);
+  }
+
+  protected submitRenameItemDisplayName(displayName: string): void {
+    const item = this.renamingItem();
+    const uuid = item?.uuid;
+    if (!uuid) {
+      return;
+    }
+    this.renamingItemName.set(true);
+    this.api.renameAsset(this.projectKey(), uuid, { displayName }, item.revision ?? undefined).subscribe({
+      next: () => {
+        this.renamingItemName.set(false);
+        this.renamingItem.set(null);
+        this.toasts.show('Media renamed', 'success');
+        this.reload();
+      },
+      error: () => {
+        this.renamingItemName.set(false);
+        this.toasts.show('Could not rename media — try again in a moment.', 'error');
+      },
+    });
+  }
+
+  protected onRenameItemUidChanged(): void {
+    // sf-uid-rename already toasts "UID changed" itself — just reload.
+    this.reload();
   }
 
   private deleteOne(uuid: string, label: string): void {

@@ -17,8 +17,10 @@
             [depth]="0"
             [selectedUuid]="selectedUuid()"
             [isRoot]="true"
+            [projectKey]="projectKey()"
             (select)="select($event)"
             (move)="onMove($event)"
+            (changed)="onTreeNodeRenamed()"
           />
         </sf-tree>
       } @else {
@@ -61,12 +63,21 @@
   </section>
 </div>
 
-@if (creatingReference()) {
-  <sf-asset-picker-dialog
-    [projectKey]="projectKey()"
-    [allowedTypes]="['PAGE']"
-    initialType="PAGE"
-    (picked)="onReferenceTargetPicked($event)"
-    (closed)="cancelCreateReference()"
-  />
-}
+<sf-create-asset-dialog
+  kind="FOLDER"
+  scope="NAVIGATION"
+  [open]="newFolderOpen()"
+  [submitting]="creatingFolder()"
+  [projectKey]="projectKey()"
+  (create)="submitNewFolder($event)"
+  (closed)="closeNewFolder()"
+/>
+
+<sf-create-asset-dialog
+  kind="PAGE_REFERENCE"
+  [open]="newReferenceOpen()"
+  [submitting]="creatingReference()"
+  [projectKey]="projectKey()"
+  (create)="submitNewReference($event)"
+  (closed)="closeNewReference()"
+/>

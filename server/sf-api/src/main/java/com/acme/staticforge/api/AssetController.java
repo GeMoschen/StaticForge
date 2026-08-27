@@ -5,6 +5,7 @@ import com.acme.staticforge.api.dto.AssetDetailView;
 import com.acme.staticforge.api.dto.AssetHistoryEntry;
 import com.acme.staticforge.api.dto.AssetSummaryView;
 import com.acme.staticforge.api.dto.MoveRequest;
+import com.acme.staticforge.api.dto.RenameAssetRequest;
 import com.acme.staticforge.api.dto.RestoreRequest;
 import com.acme.staticforge.api.dto.UidChangeRequest;
 import com.acme.staticforge.api.dto.UidChangeResult;
@@ -15,6 +16,7 @@ import com.acme.staticforge.asset.AssetSummary;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.UidLiteralReference;
+import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.UsageView;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.project.ProjectService;
@@ -34,6 +36,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -119,6 +122,22 @@ public class AssetController {
                 result.oldUid(),
                 result.newUid(),
                 result.affectedTemplates().stream().map(AssetController::toAffectedTemplate).toList());
+    }
+
+    @PatchMapping("/{uuid}/display-name")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public AssetDetailView renameDisplayName(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestBody RenameAssetRequest body) {
+        AssetVersionView current = assetService.requireCurrent(projectId(projectKey), uuid);
+        AssetVersionView view = assetService.update(
+                uuid,
+                new UpdateAssetCommand(body.displayName(), current.payload()),
+                RevisionHeaders.expectedRevision(ifMatch),
+                ctx(projectKey, "rename display name"));
+        return toDetail(view);
     }
 
     @PostMapping("/{uuid}/move")

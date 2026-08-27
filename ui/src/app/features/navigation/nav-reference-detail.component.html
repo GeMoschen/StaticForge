@@ -1,12 +1,39 @@
 <div class="nav-ref-detail">
   <header class="nav-ref-detail__header">
     <sf-icon name="link" class="nav-ref-detail__icon" />
-    <h2 class="nav-ref-detail__title">{{ reference().displayName ?? reference().uid ?? 'Reference' }}</h2>
+    @if (editingName()) {
+      <input
+        class="nav-ref-detail__name-input"
+        type="text"
+        [value]="nameDraft()"
+        (input)="onNameInput($event)"
+        (keydown.enter)="saveName()"
+        (keydown.escape)="cancelEditName()"
+        autofocus
+      />
+      <sf-button variant="primary" [disabled]="savingName()" (click)="saveName()">Save</sf-button>
+      <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
+    } @else {
+      <h2 class="nav-ref-detail__title">{{ reference().displayName ?? reference().uid ?? 'Reference' }}</h2>
+      <button type="button" class="nav-ref-detail__edit" (click)="startEditName()" aria-label="Rename reference">
+        <sf-icon name="edit" />
+      </button>
+    }
     <span class="nav-ref-detail__spacer"></span>
     <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
   </header>
 
   <div class="nav-ref-detail__body">
+    <section class="nav-ref-detail__section">
+      <h3 class="nav-ref-detail__section-title">Identity</h3>
+      <sf-uid-rename
+        [projectKey]="projectKey()"
+        [uuid]="reference().uuid ?? ''"
+        [uid]="reference().uid ?? ''"
+        (uidChanged)="onUidChanged()"
+      />
+    </section>
+
     <section class="nav-ref-detail__section">
       <h3 class="nav-ref-detail__section-title">Target</h3>
 

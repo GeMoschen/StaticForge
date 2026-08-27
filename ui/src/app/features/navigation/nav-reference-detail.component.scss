@@ -36,6 +36,32 @@
   white-space: nowrap;
 }
 
+.nav-ref-detail__name-input {
+  @include forms.sf-form-control;
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-ref-detail__edit {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-slate);
+  cursor: pointer;
+}
+
+.nav-ref-detail__edit:hover {
+  background: var(--sf-surface);
+  color: var(--sf-signal);
+}
+
 .nav-ref-detail__spacer {
   flex: 1;
 }

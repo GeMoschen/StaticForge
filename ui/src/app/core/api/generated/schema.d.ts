@@ -852,6 +852,22 @@ export interface paths {
         patch: operations["changeUid"];
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/assets/{uuid}/display-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["renameDisplayName"];
+        trace?: never;
+    };
     "/api/v1/status": {
         parameters: {
             query?: never;
@@ -1766,6 +1782,9 @@ export interface components {
             newUid?: string;
             affectedTemplates?: components["schemas"]["AffectedTemplate"][];
         };
+        RenameAssetRequest: {
+            displayName?: string;
+        };
         ProjectSummary: {
             key?: string;
             name?: string;
@@ -1778,6 +1797,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -1787,8 +1808,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
@@ -1799,8 +1818,8 @@ export interface components {
             pageSize?: number;
             /** Format: int32 */
             pageNumber?: number;
-            paged?: boolean;
             unpaged?: boolean;
+            paged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -1814,6 +1833,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -1823,8 +1844,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -1922,6 +1941,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -1931,8 +1952,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         SseEmitter: {
@@ -1965,6 +1984,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -1974,8 +1995,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -3930,6 +3949,35 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["UidChangeResult"];
+                };
+            };
+        };
+    };
+    renameDisplayName: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AssetDetailView"];
                 };
             };
         };

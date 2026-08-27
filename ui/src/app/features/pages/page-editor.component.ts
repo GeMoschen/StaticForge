@@ -20,6 +20,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import {
   BodyDefinition,
   ContentDefinition,
@@ -60,6 +61,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
     SfIconComponent,
     SfSpinnerComponent,
     SfPreviewFrameComponent,
+    SfUidRenameComponent,
   ],
   providers: [PageAutosaveService],
   templateUrl: './page-editor.component.html',
@@ -81,6 +83,10 @@ export class PageEditorComponent {
   readonly focusSection = input<string | undefined>(undefined, { alias: 'section' });
 
   protected readonly page = signal<PageView | null>(null);
+  protected readonly metaOpen = signal(false);
+  protected readonly editingDisplayName = signal(false);
+  protected readonly displayNameDraft = signal('');
+  protected readonly savingDisplayName = signal(false);
   protected readonly contentDefinition = signal<ContentDefinition | null>(null);
   protected readonly fieldsForm = signal<FormGroup | null>(null);
   protected readonly loading = signal(false);
@@ -224,6 +230,65 @@ export class PageEditorComponent {
     }
     const stored = Number(localStorage.getItem(SPLIT_KEY));
     return Number.isFinite(stored) && stored > 0 ? stored : 0.6;
+  }
+
+  // ── Header metadata popover (UID rename + displayName edit) ─────────────
+
+  protected toggleMeta(): void {
+    this.metaOpen.update((v) => !v);
+  }
+
+  protected closeMeta(): void {
+    this.metaOpen.set(false);
+    this.editingDisplayName.set(false);
+  }
+
+  protected startEditDisplayName(): void {
+    this.displayNameDraft.set(this.page()?.displayName ?? '');
+    this.editingDisplayName.set(true);
+  }
+
+  protected cancelEditDisplayName(): void {
+    this.editingDisplayName.set(false);
+  }
+
+  protected onDisplayNameInput(event: Event): void {
+    this.displayNameDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  protected saveDisplayName(): void {
+    const name = this.displayNameDraft().trim();
+    const key = this.projectKey();
+    const uuid = this.uuid();
+    if (!name || !key || !uuid || this.savingDisplayName()) {
+      return;
+    }
+    this.savingDisplayName.set(true);
+    this.api
+      .renameAsset(key, uuid, { displayName: name }, this.autosave.revision() ?? undefined)
+      .subscribe({
+        next: (detail) => {
+          this.savingDisplayName.set(false);
+          this.editingDisplayName.set(false);
+          this.page.update((cur) => (cur ? { ...cur, displayName: detail.displayName ?? name } : cur));
+          if (detail.revision != null) {
+            this.autosave.setRevision(detail.revision);
+          }
+          this.toast.show('Page renamed', 'success');
+          this.selfMutating = true;
+          this.store.notifyPageChanged(uuid);
+        },
+        error: () => {
+          this.savingDisplayName.set(false);
+          this.toast.show('Could not rename page — try again in a moment.', 'error');
+        },
+      });
+  }
+
+  protected onUidChanged(newUid: string): void {
+    this.page.update((cur) => (cur ? { ...cur, uid: newUid } : cur));
+    this.selfMutating = true;
+    this.store.notifyPageChanged(this.uuid());
   }
 
   // ── Loading ────────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@
     (dragstart)="onDragStart($event)"
     (dragover)="onDragOver($event)"
     (drop)="onDrop($event)"
+    (contextmenu)="onContextMenu($event)"
   >
     @if (isFolder()) {
       <button
@@ -50,10 +51,25 @@
           [node]="child"
           [depth]="depth() + 1"
           [selectedUuid]="selectedUuid()"
+          [projectKey]="projectKey()"
           (select)="select.emit($event)"
           (move)="move.emit($event)"
+          (changed)="changed.emit()"
         />
       }
     </div>
   }
+
+  <sf-rename-asset-dialog
+    [open]="renameOpen()"
+    [projectKey]="projectKey()"
+    [uuid]="node().uuid ?? ''"
+    [uid]="node().uid ?? ''"
+    [displayName]="node().displayName ?? node().uid ?? ''"
+    [submittingName]="renamingName()"
+    [isRoot]="isRoot()"
+    (renameDisplayName)="submitRenameDisplayName($event)"
+    (uidChanged)="onRenameUidChanged()"
+    (closed)="closeRename()"
+  />
 </div>

@@ -6,6 +6,7 @@ import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/com
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { etagFor, NavigationService, type PageReferenceView } from './navigation.service';
 
 type FolderView = components['schemas']['FolderView'];
@@ -29,7 +30,13 @@ interface FlatFolderOption {
 @Component({
   selector: 'sf-nav-reference-detail',
   standalone: true,
-  imports: [SfAssetPickerDialogComponent, SfButtonComponent, SfFieldComponent, SfIconComponent],
+  imports: [
+    SfAssetPickerDialogComponent,
+    SfButtonComponent,
+    SfFieldComponent,
+    SfIconComponent,
+    SfUidRenameComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav-reference-detail.component.html',
   styleUrl: './nav-reference-detail.component.scss',
@@ -53,6 +60,10 @@ export class NavReferenceDetailComponent implements OnInit {
   protected readonly pickerOpen = signal(false);
   protected readonly saving = signal(false);
   protected readonly deleting = signal(false);
+
+  protected readonly editingName = signal(false);
+  protected readonly nameDraft = signal('');
+  protected readonly savingName = signal(false);
 
   protected readonly resolvedPath = signal<string | null>(null);
   protected readonly resolvedLoading = signal(false);
@@ -170,6 +181,47 @@ export class NavReferenceDetailComponent implements OnInit {
 
   protected closeDrawer(): void {
     this.closed.emit();
+  }
+
+  protected startEditName(): void {
+    this.nameDraft.set(this.reference().displayName ?? '');
+    this.editingName.set(true);
+  }
+
+  protected cancelEditName(): void {
+    this.editingName.set(false);
+  }
+
+  protected onNameInput(event: Event): void {
+    this.nameDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  protected saveName(): void {
+    const name = this.nameDraft().trim();
+    const uuid = this.reference().uuid;
+    if (!name || !uuid || this.savingName()) {
+      return;
+    }
+    this.savingName.set(true);
+    this.api
+      .renameAsset(this.projectKey(), uuid, { displayName: name }, this.reference().revision ?? undefined)
+      .subscribe({
+        next: () => {
+          this.savingName.set(false);
+          this.editingName.set(false);
+          this.toast.show('Reference renamed', 'success');
+          this.changed.emit();
+        },
+        error: () => {
+          this.savingName.set(false);
+          this.toast.show('Could not rename reference — try again in a moment.', 'error');
+        },
+      });
+  }
+
+  protected onUidChanged(): void {
+    this.toast.show('Reference UID changed', 'success');
+    this.changed.emit();
   }
 
   private loadResolvedPath(): void {

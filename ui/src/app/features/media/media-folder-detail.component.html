@@ -1,0 +1,55 @@
+<div class="scrim" (click)="closeDrawer()"></div>
+
+<aside class="folder-drawer" role="dialog" aria-modal="true" aria-labelledby="media-folder-drawer-title">
+  <header class="folder-drawer__header">
+    <sf-icon name="folder" class="folder-drawer__icon" />
+    @if (editingName()) {
+      <input
+        class="folder-drawer__name-input"
+        type="text"
+        [value]="nameDraft()"
+        (input)="onNameInput($event)"
+        (keydown.enter)="saveName()"
+        (keydown.escape)="cancelEditName()"
+        autofocus
+      />
+      <sf-button variant="primary" [disabled]="savingName()" (click)="saveName()">Save</sf-button>
+      <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
+    } @else {
+      <h2 id="media-folder-drawer-title" class="folder-drawer__title">
+        {{ folder().displayName ?? folder().uid }}
+      </h2>
+      <button type="button" class="folder-drawer__edit" (click)="startEditName()" aria-label="Rename folder">
+        <sf-icon name="edit" />
+      </button>
+    }
+    <span class="folder-drawer__spacer"></span>
+    <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
+  </header>
+
+  <div class="folder-drawer__body">
+    <section class="folder-drawer__section">
+      <h3 class="folder-drawer__section-title">Metadata</h3>
+      <dl class="folder-drawer__meta">
+        <dt>Path</dt>
+        <dd class="folder-drawer__mono">{{ folderPath() }}</dd>
+        <dt>Contains</dt>
+        <dd>{{ mediaCount() }} media item(s), {{ folderCount() }} sub-folder(s)</dd>
+      </dl>
+    </section>
+
+    <section class="folder-drawer__section">
+      <h3 class="folder-drawer__section-title">Identity</h3>
+      <sf-uid-rename
+        [projectKey]="projectKey()"
+        [uuid]="folder().uuid ?? ''"
+        [uid]="folder().uid ?? ''"
+        (uidChanged)="onUidChanged()"
+      />
+    </section>
+  </div>
+
+  <footer class="folder-drawer__footer">
+    <sf-button variant="danger" (click)="requestDelete()">Delete folder</sf-button>
+  </footer>
+</aside>

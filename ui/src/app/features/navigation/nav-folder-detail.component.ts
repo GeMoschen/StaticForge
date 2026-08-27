@@ -3,6 +3,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView } from './navigation.service';
 
 interface StartNodeOption {
@@ -30,7 +31,7 @@ interface StartNodeOption {
 @Component({
   selector: 'sf-nav-folder-detail',
   standalone: true,
-  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent],
+  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav-folder-detail.component.html',
   styleUrl: './nav-folder-detail.component.scss',

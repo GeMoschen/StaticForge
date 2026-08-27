@@ -37,9 +37,20 @@
       <dl class="nav-folder-detail__meta">
         <dt>Path</dt>
         <dd class="nav-folder-detail__mono">{{ folder().folderPath ?? '/' }}</dd>
-        <dt>UID</dt>
-        <dd class="nav-folder-detail__mono">{{ folder().uid }}</dd>
       </dl>
+      @if (isRoot()) {
+        <dl class="nav-folder-detail__meta">
+          <dt>UID</dt>
+          <dd class="nav-folder-detail__mono">{{ folder().uid }}</dd>
+        </dl>
+      } @else {
+        <sf-uid-rename
+          [projectKey]="projectKey()"
+          [uuid]="folder().uuid ?? ''"
+          [uid]="folder().uid ?? ''"
+          (uidChanged)="changed.emit()"
+        />
+      }
     </section>
 
     <section class="nav-folder-detail__section">

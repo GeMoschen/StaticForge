@@ -8,6 +8,7 @@ import { TreeClipboardService } from '../../shared/services/tree-clipboard.servi
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { BodyDefinition, ContentDefinition } from '../forms';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import type { BodiesMap, SectionInstance } from './types';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
@@ -25,7 +26,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
 @Component({
   selector: 'sf-page-nav-node',
   standalone: true,
-  imports: [SfIconComponent],
+  imports: [SfIconComponent, SfRenameAssetDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './page-nav-node.component.html',
   styleUrl: './page-nav-node.component.scss',
@@ -49,6 +50,9 @@ export class PageNavNodeComponent {
   protected readonly loaded = signal(false);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  protected readonly renameOpen = signal(false);
+  protected readonly renamingName = signal(false);
 
   private readonly contentDefinition = signal<ContentDefinition>(EMPTY_DEF);
   private readonly page = signal<PageView | null>(null);
@@ -270,6 +274,7 @@ export class PageNavNodeComponent {
     this.menu.open(event, [
       { label: 'Open', icon: 'open_in_new', action: () => this.openPage() },
       { label: 'Duplicate', icon: 'content_copy', action: () => this.duplicate() },
+      { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
       { label: '', separator: true },
       { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('PAGE', uuid, label) },
       { label: 'Copy', icon: 'file_copy', action: () => this.clipboard.copy('PAGE', uuid, label) },
@@ -290,6 +295,37 @@ export class PageNavNodeComponent {
       },
       error: () => this.toast.show('Could not duplicate page — try again in a moment.', 'error'),
     });
+  }
+
+  protected closeRename(): void {
+    this.renameOpen.set(false);
+  }
+
+  protected submitRenameDisplayName(displayName: string): void {
+    const uuid = this.summary().uuid;
+    if (!uuid) {
+      return;
+    }
+    this.renamingName.set(true);
+    this.api
+      .renameAsset(this.projectKey(), uuid, { displayName }, this.page()?.revision ?? undefined)
+      .subscribe({
+        next: () => {
+          this.renamingName.set(false);
+          this.renameOpen.set(false);
+          this.toast.show('Page renamed', 'success');
+          this.changed.emit();
+        },
+        error: () => {
+          this.renamingName.set(false);
+          this.toast.show('Could not rename page — try again in a moment.', 'error');
+        },
+      });
+  }
+
+  protected onRenameUidChanged(): void {
+    // sf-uid-rename already toasts "UID changed" itself — just reload.
+    this.changed.emit();
   }
 
   private delete(): void {

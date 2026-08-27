@@ -12,6 +12,8 @@ import { ContextMenuItem, ContextMenuService } from '../../shared/services/conte
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 
 type FolderView = components['schemas']['FolderView'];
 
@@ -32,7 +34,7 @@ export interface FolderMoveEvent {
 @Component({
   selector: 'sf-media-folder-node',
   standalone: true,
-  imports: [SfIconComponent],
+  imports: [SfIconComponent, SfCreateAssetDialogComponent, SfRenameAssetDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './media-folder-node.component.html',
   styleUrl: './media-folder-node.component.scss',
@@ -54,6 +56,12 @@ export class MediaFolderNodeComponent {
   readonly changed = output<void>();
 
   protected readonly expanded = signal(true);
+  protected readonly newFolderOpen = signal(false);
+  protected readonly creatingFolder = signal(false);
+  private pendingNewFolderParentUuid: string | null = null;
+
+  protected readonly renameOpen = signal(false);
+  protected readonly renamingName = signal(false);
 
   protected hasChildren(): boolean {
     return (this.node().children ?? []).length > 0;
@@ -123,7 +131,7 @@ export class MediaFolderNodeComponent {
     const clip = this.clipboard.entry();
     const items: ContextMenuItem[] = [
       { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newSubfolder(uuid) },
-      { label: 'Rename', icon: 'edit', action: () => this.rename(uuid) },
+      { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
       { label: '', separator: true },
       {
         label: 'Cut',
@@ -138,33 +146,63 @@ export class MediaFolderNodeComponent {
   }
 
   private newSubfolder(parentUuid: string): void {
-    const displayName = window.prompt('Folder name');
-    if (!displayName || !displayName.trim()) {
+    this.pendingNewFolderParentUuid = parentUuid;
+    this.newFolderOpen.set(true);
+  }
+
+  protected closeNewFolder(): void {
+    this.newFolderOpen.set(false);
+  }
+
+  protected submitNewFolder(value: CreateAssetFormValue): void {
+    const parentUuid = this.pendingNewFolderParentUuid;
+    if (!parentUuid) {
       return;
     }
+    this.creatingFolder.set(true);
     this.api
-      .createFolder(this.projectKey(), { displayName: displayName.trim(), parentFolderUuid: parentUuid, scope: 'MEDIA' })
+      .createFolder(this.projectKey(), { displayName: value.displayName, parentFolderUuid: parentUuid, scope: 'MEDIA' })
       .subscribe({
         next: () => {
+          this.creatingFolder.set(false);
+          this.newFolderOpen.set(false);
           this.toast.show('Folder created', 'success');
           this.changed.emit();
         },
-        error: () => this.toast.show('Could not create folder — a folder with that name may already exist here.', 'error'),
+        error: () => {
+          this.creatingFolder.set(false);
+          this.toast.show('Could not create folder — a folder with that name may already exist here.', 'error');
+        },
       });
   }
 
-  private rename(uuid: string): void {
-    const displayName = window.prompt('Folder name', this.node().displayName ?? '');
-    if (!displayName || !displayName.trim()) {
+  protected closeRename(): void {
+    this.renameOpen.set(false);
+  }
+
+  protected submitRenameDisplayName(displayName: string): void {
+    const uuid = this.node().uuid;
+    if (!uuid) {
       return;
     }
-    this.api.renameFolder(this.projectKey(), uuid, { displayName: displayName.trim() }).subscribe({
+    this.renamingName.set(true);
+    this.api.renameFolder(this.projectKey(), uuid, { displayName }).subscribe({
       next: () => {
+        this.renamingName.set(false);
+        this.renameOpen.set(false);
         this.toast.show('Folder renamed', 'success');
         this.changed.emit();
       },
-      error: () => this.toast.show('Could not rename folder — try again in a moment.', 'error'),
+      error: () => {
+        this.renamingName.set(false);
+        this.toast.show('Could not rename folder — try again in a moment.', 'error');
+      },
     });
+  }
+
+  protected onRenameUidChanged(): void {
+    // sf-uid-rename already toasts "UID changed" itself — just reload.
+    this.changed.emit();
   }
 
   private deleteFolder(uuid: string): void {

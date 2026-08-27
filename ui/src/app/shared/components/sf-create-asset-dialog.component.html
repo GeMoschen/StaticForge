@@ -1,0 +1,88 @@
+@if (open()) {
+  @if (showPicker()) {
+    <!--
+      Rendered as a sibling of `.dialog`, not nested inside it: `.dialog` has
+      `transform`, which establishes a containing block for its fixed-position
+      descendants — nesting this (itself `position: fixed`, sized for a
+      standalone top-level dialog) inside that box clipped/misfilled it. As a
+      sibling it gets the viewport as its containing block again, laid out
+      exactly as it is everywhere else it's used.
+    -->
+    <sf-asset-picker-dialog
+      [projectKey]="projectKey()"
+      [allowedTypes]="['PAGE']"
+      initialType="PAGE"
+      (picked)="onTargetPicked($event)"
+      (closed)="closePicker()"
+    />
+  } @else {
+    <div class="scrim" (click)="cancel()"></div>
+    <div class="dialog" #panel role="dialog" aria-modal="true" [attr.aria-label]="title()">
+      <header class="dialog__header">
+        <h2 class="dialog__title">{{ title() }}</h2>
+        <button type="button" class="dialog__close" aria-label="Close" (click)="cancel()">×</button>
+      </header>
+
+      <form class="dialog__body" [formGroup]="form" (ngSubmit)="submit()">
+        <sf-field label="Name">
+          <input
+            #nameInput
+            type="text"
+            formControlName="displayName"
+            autocomplete="off"
+          />
+          @if (form.controls.displayName.invalid && form.controls.displayName.touched) {
+            <span class="error">A name is required</span>
+          }
+        </sf-field>
+
+        @if (showTemplateField()) {
+          <sf-field label="Template">
+            <select formControlName="templateUuid">
+              <option value="" disabled>Select a template</option>
+              @for (tpl of templates(); track tpl.uuid) {
+                <option [value]="tpl.uuid">{{ tpl.displayName ?? tpl.uid }}</option>
+              }
+            </select>
+            @if (form.controls.templateUuid.invalid && form.controls.templateUuid.touched) {
+              <span class="error">A template is required</span>
+            }
+          </sf-field>
+        }
+
+        @if (showTargetField()) {
+          <sf-field label="Target page">
+            @if (targetLabel()) {
+              <div class="dialog__target">
+                <span class="dialog__target-label">{{ targetLabel() }}</span>
+                <sf-button type="button" variant="ghost" (click)="openPicker()">Change</sf-button>
+              </div>
+            } @else {
+              <sf-button type="button" variant="secondary" (click)="openPicker()">Choose target…</sf-button>
+            }
+            @if (form.controls.targetAssetUuid.invalid && form.controls.targetAssetUuid.touched) {
+              <span class="error">A target page is required</span>
+            }
+          </sf-field>
+        }
+
+        @if (showLabelField()) {
+          <sf-field label="Label" hint="Optional">
+            <input type="text" formControlName="label" autocomplete="off" />
+          </sf-field>
+        }
+
+        <div class="dialog__actions">
+          <sf-button type="button" variant="ghost" [disabled]="submitting()" (click)="cancel()">Cancel</sf-button>
+          <sf-button type="submit" variant="primary" [disabled]="form.invalid || submitting()">
+            @if (submitting()) {
+              <sf-spinner label="Creating…" />
+            } @else {
+              Create
+            }
+          </sf-button>
+        </div>
+      </form>
+    </div>
+  }
+}
