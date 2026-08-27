@@ -35,8 +35,12 @@ public interface TemplateService {
     /** The template's current (open) version, or throws 404. */
     TemplateView get(long projectId, UUID uuid);
 
-    /** Current-version summaries of the given template kind within a project. */
-    Page<AssetSummary> list(long projectId, AssetType kind, Pageable pageable);
+    /**
+     * Current-version summaries of the given template kind within a project. Lazily
+     * self-heals the project's fixed template folders and reparents any pre-M13 template still
+     * sitting at the hidden root (spec M13.1.4) before listing.
+     */
+    Page<AssetSummary> list(long projectId, AssetType kind, Pageable pageable, RevisionContext ctx);
 
     /** Soft-deletes the template via the asset service. */
     void delete(UUID uuid, RevisionContext ctx);

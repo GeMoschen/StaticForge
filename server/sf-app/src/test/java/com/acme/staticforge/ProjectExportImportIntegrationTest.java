@@ -156,7 +156,10 @@ class ProjectExportImportIntegrationTest {
 
         assertThat(result.sourceProjectKey()).isEqualTo(source.project().getKey());
         // media, section template, page template, page, plus the auto-created navigation
-        // root folder every project now carries (spec §17, `M8.1.2`).
+        // root folder every project now carries (spec §17, `M8.1.2`) — the hidden root and
+        // the two fixed, protected "Page Templates" / "Section Templates" folders (spec
+        // M13.1.2) are never counted here, since import resolves all three onto the target's
+        // own existing folders instead of creating duplicates (spec M13.2.2).
         assertThat(result.importedAssetCount()).isEqualTo(5);
         assertThat(result.importedBlobCount()).isEqualTo(1 + sourceVariantCount);
 
@@ -236,7 +239,9 @@ class ProjectExportImportIntegrationTest {
         ImportResult result = exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
 
         // The count of assets created is independent of which branch each one took.
-        assertThat(result.importedAssetCount()).isEqualTo(3); // page template, page, nav root
+        // page template, page, nav root — the two fixed template folders (spec M13.1.2) resolve
+        // onto the source project's own existing copies instead of being created (spec M13.2.2).
+        assertThat(result.importedAssetCount()).isEqualTo(3);
 
         Map<String, UUID> pageTemplatesAfter = uidsByType(source.project().getId(), AssetType.PAGE_TEMPLATE);
         Map<String, UUID> pagesAfter = uidsByType(source.project().getId(), AssetType.PAGE);
@@ -301,7 +306,9 @@ class ProjectExportImportIntegrationTest {
                 java.time.Instant.now(), target.user().getId()));
 
         ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
-        assertThat(result.importedAssetCount()).isEqualTo(3); // page template, page, nav root
+        // page template, page, nav root — the two fixed template folders (spec M13.1.2) resolve
+        // onto the target project's own existing copies instead of being created (spec M13.2.2).
+        assertThat(result.importedAssetCount()).isEqualTo(3);
 
         Map<String, UUID> targetPageTemplates = uidsByType(target.project().getId(), AssetType.PAGE_TEMPLATE);
         UUID importedTemplateUuid = targetPageTemplates.get("landing");
@@ -793,19 +800,15 @@ class ProjectExportImportIntegrationTest {
     // ---- M11.1.2 Template coverage ----
 
     /**
-     * Lone template selection (feature `full-store-coverage`, `M11.1.2`): PAGE_TEMPLATE/
-     * SECTION_TEMPLATE assets are unfoldered in the sense that {@code FolderScope.requiredFor}
-     * returns {@code null} for them and nothing ever places one under an explicit parent folder
-     * — but empirically (verified here, not assumed) {@code AssetServiceImpl.resolveParent}
-     * still resolves a {@code null} {@code parentFolderUuid} to the project's single hidden root
-     * FOLDER asset (the same sentinel {@code ensureRootFolder}/{@code PathService.ROOT_UID}
-     * creates for every project), so a template's {@code AssetVersion.folderId} is that hidden
-     * root's id, not literally {@code null}. Selecting a single template therefore exports
-     * exactly two assets: the template itself, plus that one ancestor root FOLDER — never more
-     * than that one padding folder, and never the whole project.
+     * Lone template selection (feature `full-store-coverage`, `M11.1.2`; folder wiring per
+     * spec M13.1.3): a {@code parentFolderUuid}-less {@code PAGE_TEMPLATE} create now resolves
+     * to the project's fixed "Page Templates" folder rather than the hidden root directly (the
+     * hidden root still exists one level further up, as every project's ultimate ancestor).
+     * Selecting a single template therefore exports exactly three assets: the template itself,
+     * its "Page Templates" folder, and that folder's own hidden-root ancestor.
      */
     @Test
-    void exportSelectionOfALoneTemplateExportsOnlyThatAssetAndTheHiddenRootFolder() {
+    void exportSelectionOfALoneTemplateExportsOnlyThatAssetAndItsAncestorFolders() {
         Fixture source = newFixture("tmpl_lone", "Template Lone Selection");
         TemplateView pageTemplate = templateService.create(
                 new CreateTemplateCommand(
@@ -824,11 +827,11 @@ class ProjectExportImportIntegrationTest {
                 new ExportSelection(Set.of(pageTemplate.uuid()), false, false, Set.of()));
 
         List<ExportedAsset> assets = parseAssets(archive);
-        assertThat(assets).hasSize(2);
+        assertThat(assets).hasSize(3);
         assertThat(assets).extracting(ExportedAsset::uuid).contains(pageTemplate.uuid().toString());
         List<ExportedAsset> folders = assets.stream().filter(a -> "FOLDER".equals(a.type())).toList();
-        assertThat(folders).hasSize(1);
-        assertThat(folders.get(0).uid()).isEqualTo("root");
+        assertThat(folders).hasSize(2);
+        assertThat(folders).extracting(ExportedAsset::uid).containsExactlyInAnyOrder("root", "page_templates");
     }
 
     /**
@@ -1331,11 +1334,354 @@ class ProjectExportImportIntegrationTest {
 
         ImportResult result = exportImportService.importProject(
                 target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
-        assertThat(result.importedAssetCount()).isEqualTo(3); // page template, page, nav root
+        // page template, page, nav root — the two fixed template folders (spec M13.1.2) resolve
+        // onto the target project's own existing copies instead of being created (spec M13.2.2).
+        assertThat(result.importedAssetCount()).isEqualTo(3);
 
         Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
         UUID importedPageUuid = targetPages.get("home");
         assertThat(importedPageUuid).isNotEqualTo(page.uuid());
+    }
+
+    // ---- M13.2.1 Template folder coverage ----
+
+    /**
+     * Template folder selection (feature `template-store-folders`, `M13.2.1`): picking a
+     * subfolder nested a few levels under the fixed "Page Templates" folder pulls in its own
+     * live descendants (further sub-subfolders and templates) plus its ancestor chain up to the
+     * root (which includes the fixed "Page Templates" folder itself), but nothing from a sibling
+     * subtree — mirrors {@code exportSelectionOfAFolderIncludesAncestorsAndDescendantsOnly} and
+     * {@code exportSelectionOfANavigationFolderIncludesAncestorsAndDescendantsOnly} for the new
+     * {@code TEMPLATES} scope.
+     */
+    @Test
+    void exportSelectionOfATemplateFolderIncludesAncestorsAndDescendantsOnly() {
+        Fixture source = newFixture("tmplfld_sel", "Template Folder Selection");
+        UUID pageTemplatesUuid = fixedFolderUuid(source, FolderScope.PAGE_TEMPLATES_UID);
+
+        AssetVersionView marketing = folderService.create(pageTemplatesUuid, "Marketing", null, source.ctx());
+        AssetVersionView campaigns = folderService.create(marketing.uuid(), "Campaigns", null, source.ctx());
+        TemplateView nestedTemplate = createPageTemplate(source, "Spring Landing", campaigns.uuid());
+
+        AssetVersionView sibling = folderService.create(pageTemplatesUuid, "Sibling", null, source.ctx());
+        TemplateView siblingTemplate = createPageTemplate(source, "Other Landing", sibling.uuid());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(marketing.uuid()), false, false, Set.of()));
+
+        Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).contains(
+                marketing.uuid().toString(), campaigns.uuid().toString(), nestedTemplate.uuid().toString(),
+                pageTemplatesUuid.toString());
+        assertThat(uuids).doesNotContain(sibling.uuid().toString(), siblingTemplate.uuid().toString());
+    }
+
+    /**
+     * {@code fullStores={TEMPLATES}} exports every live template and template-folder in the
+     * project (feature `template-store-folders`, `M13.2.1`), including both fixed folders and
+     * everything nested under them, and nothing from the PAGES/MEDIA/NAVIGATION stores — mirrors
+     * {@code fullStoresExportsEveryLiveAssetOfThatScopeAndNothingElse} for the new scope.
+     */
+    @Test
+    void fullStoresTemplatesExportsEveryLiveTemplateAndTemplateFolderAndNothingElse() {
+        Fixture source = newFixture("full_tmpl", "Full Store Templates Selection");
+        UUID pageTemplatesUuid = fixedFolderUuid(source, FolderScope.PAGE_TEMPLATES_UID);
+        UUID sectionTemplatesUuid = fixedFolderUuid(source, FolderScope.SECTION_TEMPLATES_UID);
+        AssetVersionView sub = folderService.create(pageTemplatesUuid, "Sub", null, source.ctx());
+        TemplateView pageTemplate = createPageTemplate(source, "Landing", sub.uuid());
+        TemplateView sectionTemplate = createSectionTemplate(source, "Teaser", null);
+
+        AssetVersionView pagesFolder = folderService.create(null, "Docs", FolderScope.PAGES, source.ctx());
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", pagesFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        byte[] png = solidPng(4, 4, Color.MAGENTA);
+        AssetVersionView media = mediaService.upload(
+                source.project().getId(), null, "pic.png", "image/png", png, source.ctx());
+        AssetVersionView navRoot = navRoot(source);
+        AssetVersionView pageRef = pageReferenceService.create(
+                new CreatePageReferenceCommand(
+                        "A Ref", navRoot.uuid(), PageReferenceTargetKind.PAGE, page.uuid(), null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(), false, false, Set.of(FolderScope.TEMPLATES)));
+
+        Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).contains(
+                pageTemplatesUuid.toString(), sectionTemplatesUuid.toString(), sub.uuid().toString(),
+                pageTemplate.uuid().toString(), sectionTemplate.uuid().toString());
+        assertThat(uuids).doesNotContain(
+                pagesFolder.uuid().toString(), page.uuid().toString(), media.uuid().toString(),
+                navRoot.uuid().toString(), pageRef.uuid().toString());
+    }
+
+    /**
+     * {@code fullStores={TEMPLATES}} unions cleanly with an explicit pick from a different store
+     * (feature `template-store-folders`, `M13.2.1`): combining {@code fullStores={TEMPLATES}}
+     * with an explicit PAGES folder pick produces every TEMPLATES asset plus the picked PAGES
+     * subtree, with no duplicates — mirrors {@code fullStoresCombinesWithAnExplicitPickFromAnotherScope}.
+     */
+    @Test
+    void fullStoresTemplatesCombinesWithAnExplicitPickFromAnotherStore() {
+        Fixture source = newFixture("full_tmpl_union", "Full Store Templates Union Selection");
+        UUID sectionTemplatesUuid = fixedFolderUuid(source, FolderScope.SECTION_TEMPLATES_UID);
+        TemplateView sectionTemplate = createSectionTemplate(source, "Teaser", null);
+
+        AssetVersionView pagesFolder = folderService.create(null, "Docs", FolderScope.PAGES, source.ctx());
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", pagesFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(pagesFolder.uuid()), false, false, Set.of(FolderScope.TEMPLATES)));
+
+        List<ExportedAsset> assets = parseAssets(archive);
+        Set<String> uuids = assets.stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).contains(
+                sectionTemplatesUuid.toString(), sectionTemplate.uuid().toString(),
+                pagesFolder.uuid().toString(), page.uuid().toString());
+        // No duplicates.
+        assertThat(assets).hasSize(uuids.size());
+    }
+
+    /**
+     * A page referencing a template inside a NON-selected template folder still produces the
+     * existing {@code MISSING_TEMPLATE_REFERENCE} conflict on {@code analyzeImport} (feature
+     * `template-store-folders`, `M13.2.1`, mirroring `M11.1.2`'s already-established behavior for
+     * the flat pre-folder case): folders must not accidentally auto-include a referenced
+     * template just because it happens to live in a folder that isn't itself selected.
+     */
+    @Test
+    void pageReferencingTemplateInNonSelectedTemplateFolderStillFlagsMissingTemplateReference() {
+        Fixture source = newFixture("tmplfld_missing", "Template Folder Missing Reference Selection");
+        UUID pageTemplatesUuid = fixedFolderUuid(source, FolderScope.PAGE_TEMPLATES_UID);
+        AssetVersionView nested = folderService.create(pageTemplatesUuid, "Nested", null, source.ctx());
+        TemplateView pageTemplate = createPageTemplate(source, "Landing", nested.uuid());
+
+        ObjectNode pagePayload = MAPPER.createObjectNode();
+        pagePayload.put("templateRef", pageTemplate.uuid().toString());
+        pagePayload.putObject("content");
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(
+                        source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
+
+        Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).doesNotContain(
+                pageTemplate.uuid().toString(), nested.uuid().toString(), pageTemplatesUuid.toString());
+
+        Fixture target = newFixture("tmplfld_missing_tgt", "Template Folder Missing Reference Target");
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
+
+        List<ImportConflict> templateConflicts = report.conflicts().stream()
+                .filter(c -> c.type() == ConflictType.MISSING_TEMPLATE_REFERENCE)
+                .toList();
+        assertThat(templateConflicts).hasSize(1);
+        assertThat(templateConflicts.get(0).severity()).isEqualTo(ConflictSeverity.BLOCKING);
+        assertThat(templateConflicts.get(0).elementUuid()).isEqualTo(page.uuid().toString());
+    }
+
+    // ---- M13.2.2 fixed folder import identity ----
+
+    /**
+     * Exporting a project's whole {@code TEMPLATES} store and importing it BACK into the SAME
+     * project (feature `template-store-folders`, `M13.2.2`) must resolve the archive's two fixed
+     * folders onto the target project's OWN existing fixed folders instead of creating
+     * duplicates: exactly one FOLDER with uid {@code page_templates} and one with uid {@code
+     * section_templates} must exist afterward, with all templates re-imported as fresh assets
+     * (since every uuid in the archive already exists in this project) nested correctly beneath
+     * the existing fixed folders.
+     */
+    @Test
+    void reimportingWholeTemplatesStoreIntoSameProjectResolvesOntoExistingFixedFoldersWithNoDuplicates() {
+        Fixture source = newFixture("fixedfld_same", "Fixed Folder Same Project Reimport");
+        UUID pageTemplatesUuid = fixedFolderUuid(source, FolderScope.PAGE_TEMPLATES_UID);
+        UUID sectionTemplatesUuid = fixedFolderUuid(source, FolderScope.SECTION_TEMPLATES_UID);
+        AssetVersionView sub = folderService.create(pageTemplatesUuid, "Sub", null, source.ctx());
+        TemplateView pageTemplate = createPageTemplate(source, "Landing", sub.uuid());
+        TemplateView sectionTemplate = createSectionTemplate(source, "Teaser", null);
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(), false, false, Set.of(FolderScope.TEMPLATES)));
+
+        exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
+
+        List<Asset> pageTemplateFolders = assetRepository.findAll().stream()
+                .filter(a -> a.getProjectId() == source.project().getId()
+                        && a.getAssetType() == AssetType.FOLDER
+                        && FolderScope.PAGE_TEMPLATES_UID.equals(a.getUid()))
+                .toList();
+        List<Asset> sectionTemplateFolders = assetRepository.findAll().stream()
+                .filter(a -> a.getProjectId() == source.project().getId()
+                        && a.getAssetType() == AssetType.FOLDER
+                        && FolderScope.SECTION_TEMPLATES_UID.equals(a.getUid()))
+                .toList();
+        assertThat(pageTemplateFolders).hasSize(1);
+        assertThat(pageTemplateFolders.get(0).getUuid()).isEqualTo(pageTemplatesUuid);
+        assertThat(sectionTemplateFolders).hasSize(1);
+        assertThat(sectionTemplateFolders.get(0).getUuid()).isEqualTo(sectionTemplatesUuid);
+
+        // Every re-imported template got a fresh uuid (collision path, since the source project
+        // already had every one of the archive's uuids) but still landed under the SAME fixed
+        // folders / their re-created subfolder structure.
+        Map<String, UUID> pageTemplatesAfter = uidsByType(source.project().getId(), AssetType.PAGE_TEMPLATE);
+        Map<String, UUID> sectionTemplatesAfter = uidsByType(source.project().getId(), AssetType.SECTION_TEMPLATE);
+        assertThat(pageTemplatesAfter).hasSize(2); // original + reimported copy
+        assertThat(sectionTemplatesAfter).hasSize(2);
+        UUID reimportedPageTemplateUuid = pageTemplatesAfter.values().stream()
+                .filter(u -> !u.equals(pageTemplate.uuid())).findFirst().orElseThrow();
+        AssetVersionView reimportedPageTemplate =
+                assetService.requireCurrent(source.project().getId(), reimportedPageTemplateUuid);
+        assertThat(reimportedPageTemplate.folderPath()).startsWith(
+                assetService.requireCurrent(source.project().getId(), pageTemplatesUuid).folderPath());
+    }
+
+    /**
+     * Importing that same whole-{@code TEMPLATES}-store archive into a DIFFERENT (fresh) project
+     * (feature `template-store-folders`, `M13.2.2`) also resolves onto THAT project's own fixed
+     * folders, not new ones — the fixed-folder identity resolution is project-local, not
+     * archive-uuid-based.
+     */
+    @Test
+    void importingWholeTemplatesStoreIntoADifferentProjectResolvesOntoThatProjectsOwnFixedFolders() {
+        Fixture source = newFixture("fixedfld_diff_src", "Fixed Folder Different Project Source");
+        UUID sourcePageTemplatesUuid = fixedFolderUuid(source, FolderScope.PAGE_TEMPLATES_UID);
+        TemplateView pageTemplate = createPageTemplate(source, "Landing", null);
+        TemplateView sectionTemplate = createSectionTemplate(source, "Teaser", null);
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(), false, false, Set.of(FolderScope.TEMPLATES)));
+
+        Fixture target = newFixture("fixedfld_diff_tgt", "Fixed Folder Different Project Target");
+        UUID targetPageTemplatesUuid = fixedFolderUuid(target, FolderScope.PAGE_TEMPLATES_UID);
+        UUID targetSectionTemplatesUuid = fixedFolderUuid(target, FolderScope.SECTION_TEMPLATES_UID);
+        assertThat(targetPageTemplatesUuid).isNotEqualTo(sourcePageTemplatesUuid);
+
+        exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+
+        List<Asset> pageTemplateFolders = assetRepository.findAll().stream()
+                .filter(a -> a.getProjectId() == target.project().getId()
+                        && a.getAssetType() == AssetType.FOLDER
+                        && FolderScope.PAGE_TEMPLATES_UID.equals(a.getUid()))
+                .toList();
+        assertThat(pageTemplateFolders).hasSize(1);
+        assertThat(pageTemplateFolders.get(0).getUuid()).isEqualTo(targetPageTemplatesUuid);
+
+        Map<String, UUID> targetPageTemplates = uidsByType(target.project().getId(), AssetType.PAGE_TEMPLATE);
+        Map<String, UUID> targetSectionTemplates = uidsByType(target.project().getId(), AssetType.SECTION_TEMPLATE);
+        assertThat(targetPageTemplates).containsKey("landing");
+        assertThat(targetSectionTemplates).containsKey("teaser");
+        AssetVersionView importedPageTemplate =
+                assetService.requireCurrent(target.project().getId(), targetPageTemplates.get("landing"));
+        assertThat(importedPageTemplate.folderId()).isEqualTo(
+                assetRepository.findByProjectIdAndUuid(target.project().getId(), targetPageTemplatesUuid)
+                        .orElseThrow().getId());
+    }
+
+    /**
+     * The imported fixed folders remain {@code protected: true} after import (feature
+     * `template-store-folders`, `M13.2.2`) even when the archive's own copy of the fixed folder
+     * carries a divergent payload — the target's own payload always wins, since the fixed
+     * folders are resolved (not created/overwritten) on import.
+     */
+    @Test
+    void importedFixedFoldersRemainProtectedEvenWhenArchiveCopyDiffers() {
+        Fixture source = newFixture("fixedfld_protect_src", "Fixed Folder Protected Source");
+        createPageTemplate(source, "Landing", null);
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(), false, false, Set.of(FolderScope.TEMPLATES)));
+
+        // Hypothetically tamper with the archive's own "Page Templates" folder copy to NOT be
+        // protected, simulating a divergent/corrupted source copy — the target's payload must
+        // still win regardless, since the fixed-folder asset itself is never written by import.
+        byte[] tampered = rewriteExportedAssetPayloadField(
+                archive, FolderScope.PAGE_TEMPLATES_UID, "protected", false);
+
+        Fixture target = newFixture("fixedfld_protect_tgt", "Fixed Folder Protected Target");
+        exportImportService.importProject(target.project().getId(), tampered, target.ctx(), ImportOptions.DEFAULT);
+
+        UUID targetPageTemplatesUuid = fixedFolderUuid(target, FolderScope.PAGE_TEMPLATES_UID);
+        AssetVersionView targetFolder = assetService.requireCurrent(target.project().getId(), targetPageTemplatesUuid);
+        assertThat(targetFolder.payload().path("protected").asBoolean()).isTrue();
+    }
+
+    private byte[] rewriteExportedAssetPayloadField(
+            byte[] archiveBytes, String assetUid, String field, boolean value) {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes));
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                java.util.zip.ZipOutputStream zipOut = new java.util.zip.ZipOutputStream(out)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                byte[] bytes = zip.readAllBytes();
+                if ("assets.json".equals(entry.getName())) {
+                    com.fasterxml.jackson.databind.node.ArrayNode assetsArray =
+                            (com.fasterxml.jackson.databind.node.ArrayNode) MAPPER.readTree(bytes).get("assets");
+                    for (JsonNode assetNode : assetsArray) {
+                        if (assetUid.equals(assetNode.path("uid").asText())) {
+                            ((ObjectNode) assetNode.get("payload")).put(field, value);
+                        }
+                    }
+                    ObjectNode rewritten = MAPPER.createObjectNode();
+                    rewritten.put("protocolVersion", MAPPER.readTree(bytes).get("protocolVersion").asInt());
+                    rewritten.set("assets", assetsArray);
+                    bytes = MAPPER.writeValueAsBytes(rewritten);
+                }
+                zipOut.putNextEntry(new ZipEntry(entry.getName()));
+                zipOut.write(bytes);
+                zipOut.closeEntry();
+            }
+            zipOut.finish();
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private UUID fixedFolderUuid(Fixture fixture, String uid) {
+        return assetRepository.findByProjectIdAndAssetTypeAndUid(fixture.project().getId(), AssetType.FOLDER, uid)
+                .orElseThrow()
+                .getUuid();
+    }
+
+    private TemplateView createPageTemplate(Fixture fixture, String name, UUID parentFolderUuid) {
+        return templateService.create(
+                new CreateTemplateCommand(
+                        fixture.project().getId(),
+                        AssetType.PAGE_TEMPLATE,
+                        name,
+                        "content { editor text title { required } }",
+                        Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
+                        null,
+                        false,
+                        null,
+                        parentFolderUuid),
+                fixture.ctx());
+    }
+
+    private TemplateView createSectionTemplate(Fixture fixture, String name, UUID parentFolderUuid) {
+        return templateService.create(
+                new CreateTemplateCommand(
+                        fixture.project().getId(),
+                        AssetType.SECTION_TEMPLATE,
+                        name,
+                        "content { editor text headline { required } }",
+                        Map.of("html", "<h2>$CMS_VALUE(headline)$</h2>"),
+                        null,
+                        false,
+                        null,
+                        parentFolderUuid),
+                fixture.ctx());
     }
 
     private byte[] rewriteAssetsJsonWithoutExplicitField(byte[] archiveBytes) throws Exception {

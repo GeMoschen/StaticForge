@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset;
 
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.common.Slugifier;
 import java.util.Locale;
 import java.util.Set;
@@ -14,7 +15,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class UidGenerator {
 
-    private static final Set<String> RESERVED = Set.of("new", "edit", "index", "api", "preview", "_generated");
+    private static final Set<String> RESERVED = Set.of(
+            "new", "edit", "index", "api", "preview", "_generated",
+            // M13.1.2: the two fixed, auto-provisioned TEMPLATES-scope root folders — no
+            // user-derived uid may ever collide with them.
+            FolderScope.PAGE_TEMPLATES_UID, FolderScope.SECTION_TEMPLATES_UID);
     private static final int PROBE_LIMIT = 10_000;
 
     private final Slugifier slugifier = new Slugifier();

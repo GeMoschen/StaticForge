@@ -38,6 +38,15 @@
       } @else {
         <span class="nav-node__path nav-node__path--broken">unresolved</span>
       }
+    } @else if (node().resolvedPagePath) {
+      <!-- A FOLDER's own `startNode` (M8.1.2) resolves the same way a reference's target does —
+           `NavTreeView.resolvedPagePath` is populated for folders too (`resolveFolderEntry`), but
+           was never surfaced here, so setting a folder's entry page looked like a no-op in the
+           tree even though it saved and resolved correctly. Unlike a reference, a null/absent
+           value here is ambiguous (no `startNode` at all vs. one that's broken), so — matching
+           this component's existing docs on that distinction — only the positive case is shown;
+           a plain grouping folder stays silent rather than being misflagged as "unresolved". -->
+      <span class="nav-node__path">→ {{ node().resolvedPagePath }}</span>
     }
     @if (isRoot()) {
       <span class="nav-node__root-badge">root</span>

@@ -16,6 +16,7 @@ so treat the specs as documentation of the intended flow until that seed lands.
 | 9–12 (required-editor timing, non-member 404, template-IDE 403, keyboard publish) | `m7-journeys.spec.ts` | M7 |
 | structural a11y (landmarks/h1/aria-current) + axe-stub | `a11y.spec.ts` | M7 |
 | navigation tree + URL registry stability/reset | `m8-journeys.spec.ts` | M8 |
+| template folder tree (create/move) + export/import templates tree scope | `m13-journeys.spec.ts` | M13 |
 | unauthenticated → login redirect | `example.spec.ts` | — |
 
 ## Gating
@@ -40,3 +41,8 @@ so treat the specs as documentation of the intended flow until that seed lands.
   environment). The actual proof for `M8.3.1` is `M8NavigationJourneyIntegrationTest`
   (`server/sf-app`), a `@SpringBootTest` that exercises the identical scenario end-to-end via
   real service calls against a real generation pipeline.
+- **`m13-journeys.spec.ts`** documents the intended flow the same way m5/m7/m8 do — it was not
+  run against a live browser (no seeded demo backend, no interactive browser in that task's
+  environment). The actual proof for `M13` is `TemplateFolderIntegrationTest` and
+  `ProjectExportImportIntegrationTest` (`server/sf-app`), `@SpringBootTest`s that exercise the
+  identical scenarios end-to-end via real service calls.

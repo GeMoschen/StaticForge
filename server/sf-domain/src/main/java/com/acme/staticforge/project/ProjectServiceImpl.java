@@ -1,5 +1,6 @@
 package com.acme.staticforge.project;
 
+import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.audit.AuditService;
@@ -43,6 +44,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final FolderService folderService;
+    private final AssetService assetService;
 
     public ProjectServiceImpl(
             ProjectRepository projectRepository,
@@ -52,7 +54,8 @@ public class ProjectServiceImpl implements ProjectService {
             ChannelService channelService,
             AuditService auditService,
             ObjectMapper objectMapper,
-            FolderService folderService) {
+            FolderService folderService,
+            AssetService assetService) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.revisionService = revisionService;
@@ -61,6 +64,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.folderService = folderService;
+        this.assetService = assetService;
     }
 
     @Override
@@ -88,7 +92,13 @@ public class ProjectServiceImpl implements ProjectService {
         // The navigation store is rooted like the Page/Media stores (spec §17, `M8.1.2`):
         // a normal FolderScope.NAVIGATION folder, created here through the same shared
         // FolderService/PathService machinery every other folder uses — no special-casing.
-        folderService.create(null, "Navigation", FolderScope.NAVIGATION, RevisionContext.of(project.getId(), actingUserId, cmd.comment()));
+        RevisionContext creationCtx = RevisionContext.of(project.getId(), actingUserId, cmd.comment());
+        folderService.create(null, "Navigation", FolderScope.NAVIGATION, creationCtx);
+
+        // The template store's top level is fixed to exactly these two protected folders
+        // (spec M13.1.2) — auto-provisioned immediately so template creation never has to
+        // special-case a missing parent.
+        assetService.ensureTemplateFolders(project.getId(), creationCtx);
 
         return project;
     }

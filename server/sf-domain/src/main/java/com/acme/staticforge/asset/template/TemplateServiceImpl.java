@@ -11,6 +11,7 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -85,14 +86,46 @@ public class TemplateServiceImpl implements TemplateService {
     @Transactional
     public TemplateView create(CreateTemplateCommand cmd, RevisionContext ctx) {
         requireKind(cmd.kind());
+        ensureFoldersAndMigrate(cmd.projectId(), ctx);
+        UUID parentFolderUuid = resolveTemplateParentFolder(cmd, ctx);
+
         ContentDefinition definition = compileDefinition(cmd.contentDefinition());
         ObjectNode payload = buildPayload(
                 cmd.projectId(), cmd.kind(), cmd.contentDefinition(), cmd.channelSources(),
                 cmd.category(), cmd.deprecated(), cmd.outputPath(), definition);
 
         AssetVersionView created = assetService.create(
-                new CreateAssetCommand(cmd.projectId(), cmd.kind(), cmd.displayName(), null, payload, null), ctx);
+                new CreateAssetCommand(cmd.projectId(), cmd.kind(), cmd.displayName(), parentFolderUuid, payload, null), ctx);
         return toView(created);
+    }
+
+    /**
+     * Resolves the folder a new template lands in (spec M13.1.3): an explicit {@code
+     * parentFolderUuid} is used as-is (after a defense-in-depth {@code templateKind} check — the
+     * cross-store case is already covered generically by {@code AssetServiceImpl.validateFolderScope}
+     * once {@code FolderScope.requiredFor} maps both template asset types to {@code TEMPLATES});
+     * {@code null} resolves to the project's fixed folder matching {@code cmd.kind()}, lazily
+     * provisioning it via {@link AssetService#ensureTemplateFolders} if needed — so template
+     * creation never has to special-case a missing parent.
+     */
+    private UUID resolveTemplateParentFolder(CreateTemplateCommand cmd, RevisionContext ctx) {
+        UUID parentFolderUuid = cmd.parentFolderUuid();
+        if (parentFolderUuid == null) {
+            return assetService.ensureTemplateFolders(cmd.projectId(), ctx).get(cmd.kind()).uuid();
+        }
+
+        Asset folder = assetRepository.findByProjectIdAndUuid(cmd.projectId(), parentFolderUuid)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Parent folder not found.")));
+        if (folder.getAssetType() == AssetType.FOLDER) {
+            AssetVersion version = requireOpen(folder.getId());
+            AssetType actualKind = FolderScope.templateKindFromPayload(version.getPayload());
+            if (actualKind != null && actualKind != cmd.kind()) {
+                throw new SfException(ProblemFactory.unprocessableEntity(
+                        "This folder is for " + actualKind.name().toLowerCase(Locale.ROOT)
+                                + " templates — " + cmd.kind().name().toLowerCase(Locale.ROOT) + "s can't be placed here."));
+            }
+        }
+        return parentFolderUuid;
     }
 
     @Override
@@ -153,8 +186,9 @@ public class TemplateServiceImpl implements TemplateService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public Page<AssetSummary> list(long projectId, AssetType kind, Pageable pageable) {
+    @Transactional
+    public Page<AssetSummary> list(long projectId, AssetType kind, Pageable pageable, RevisionContext ctx) {
+        ensureFoldersAndMigrate(projectId, ctx);
         return assetService.search(new AssetQuery(projectId, kind, null, null), pageable);
     }
 
@@ -363,12 +397,27 @@ public class TemplateServiceImpl implements TemplateService {
     }
 
     private void insertVersion(AssetVersion current, JsonNode payload, long revisionId, Long changedBy) {
+        insertVersion(current, payload, revisionId, changedBy, current.getFolderId(), current.getFolderPath(), null);
+    }
+
+    /**
+     * {@code asset}, when non-null, is wired directly onto the new row (see {@link
+     * AssetVersion#setAsset}) — required whenever the caller's own transaction might read the
+     * new version back out through a JPQL query joining {@code v.asset} (e.g. {@code
+     * AssetServiceImpl#search}), since the session's identity map would otherwise keep handing
+     * back this very instance with a still-null association.
+     */
+    private void insertVersion(
+            AssetVersion current, JsonNode payload, long revisionId, Long changedBy, Long folderId, String folderPath, Asset asset) {
         AssetVersion next = new AssetVersion(
                 current.getAssetId(), revisionId, current.getDisplayName(), payload, changedBy, Instant.now());
-        next.setFolderId(current.getFolderId());
-        next.setFolderPath(current.getFolderPath());
+        next.setFolderId(folderId);
+        next.setFolderPath(folderPath);
         next.setTemplateAssetId(current.getTemplateAssetId());
         next.setDeleted(current.isDeleted());
+        if (asset != null) {
+            next.setAsset(asset);
+        }
         assetVersionRepository.save(next);
     }
 
@@ -377,6 +426,70 @@ public class TemplateServiceImpl implements TemplateService {
                 asset.getProjectId(),
                 revision.getRevisionId(),
                 AssetChange.create(asset.getUuid().toString(), asset.getAssetType().name(), "UPDATE", List.of("bodies")));
+    }
+
+    private void appendMoveSummary(Asset asset, Revision revision) {
+        revisionService.appendSummary(
+                asset.getProjectId(),
+                revision.getRevisionId(),
+                AssetChange.create(asset.getUuid().toString(), asset.getAssetType().name(), "MOVE", List.of("folder")));
+    }
+
+    // ------------------------------------------------------------------
+    // Reparent pre-M13 templates into the fixed folders (§M13.1.4)
+    // ------------------------------------------------------------------
+
+    /**
+     * Lazily and idempotently reparents every current {@code PAGE_TEMPLATE}/{@code
+     * SECTION_TEMPLATE} not already under a {@code TEMPLATES}-scope folder into this project's
+     * fixed folder matching its kind, in a single allocated revision — a normal {@code MOVE}
+     * revision per template, exactly like {@code FolderServiceImpl.move}. Self-heals on first
+     * relevant access (invoked from {@link #create} and {@link #list}), mirroring {@code
+     * AssetServiceImpl.ensureRootFolder}'s lazy-create-on-first-access pattern. No-op once every
+     * current template is already correctly placed.
+     */
+    private void ensureFoldersAndMigrate(long projectId, RevisionContext ctx) {
+        Map<AssetType, AssetVersionView> folders = assetService.ensureTemplateFolders(projectId, ctx);
+
+        List<AssetVersion> toMove = new ArrayList<>();
+        for (AssetType kind : List.of(AssetType.PAGE_TEMPLATE, AssetType.SECTION_TEMPLATE)) {
+            for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, kind)) {
+                if (!isUnderTemplatesFolder(version)) {
+                    toMove.add(version);
+                }
+            }
+        }
+        if (toMove.isEmpty()) {
+            return;
+        }
+
+        Revision revision = revisionService.allocate(projectId, ChangeType.MOVE, ctx.comment(), ctx.userId());
+        for (AssetVersion version : toMove) {
+            Asset asset = assetRepository.findById(version.getAssetId())
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found.")));
+            AssetVersionView targetFolder = folders.get(asset.getAssetType());
+            Asset targetFolderAsset = assetRepository.findByProjectIdAndUuid(projectId, targetFolder.uuid())
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Fixed template folder not found.")));
+
+            close(version.getAssetId(), revision.getRevisionId());
+            insertVersion(
+                    version, version.getPayload(), revision.getRevisionId(), ctx.userId(),
+                    targetFolderAsset.getId(), targetFolder.folderPath(), asset);
+            appendMoveSummary(asset, revision);
+        }
+    }
+
+    /** True when {@code version} already sits directly in a {@code TEMPLATES}-scope folder. */
+    private boolean isUnderTemplatesFolder(AssetVersion version) {
+        if (version.getFolderId() == null) {
+            return false;
+        }
+        Asset folder = assetRepository.findById(version.getFolderId()).orElse(null);
+        if (folder == null || folder.getAssetType() != AssetType.FOLDER) {
+            return false;
+        }
+        AssetVersion folderVersion = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(folder.getId()).orElse(null);
+        return folderVersion != null && FolderScope.fromPayload(folderVersion.getPayload()) == FolderScope.TEMPLATES;
     }
 
     // ------------------------------------------------------------------
@@ -404,9 +517,14 @@ public class TemplateServiceImpl implements TemplateService {
     }
 
     private TemplateView toView(AssetVersionView view) {
+        UUID folderUuid = view.folderId() == null ? null : folderUuid(view.folderId());
         return new TemplateView(
                 view.uuid(), view.uid(), view.type(), view.displayName(), view.payload(),
-                view.validFromRevision(), view.deleted());
+                view.validFromRevision(), view.deleted(), folderUuid, view.folderPath());
+    }
+
+    private UUID folderUuid(Long folderId) {
+        return assetRepository.findById(folderId).map(Asset::getUuid).orElse(null);
     }
 
     private record EditorRename(String from, String to) {}

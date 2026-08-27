@@ -49,7 +49,9 @@ abstract class AbstractTemplateController {
                 payload.path("category").asText(),
                 payload.path("deprecated").asBoolean(false),
                 payload.get("bodies"),
-                payload.get("outputPath"));
+                payload.get("outputPath"),
+                v.folderUuid(),
+                v.folderPath());
     }
 
     protected static TemplateSummary toSummary(AssetSummary s) {

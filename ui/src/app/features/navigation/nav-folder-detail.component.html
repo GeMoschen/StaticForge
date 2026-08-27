@@ -60,13 +60,21 @@
         hint="What this folder links to when clicked — restricted to this folder's own direct children."
       >
         <select
-          [value]="selectedStartNodeValue()"
           (change)="onStartNodeChange($event)"
           [disabled]="savingStartNode() || startNodeOptions().length === 0"
         >
-          <option value="">— No entry page (grouping only) —</option>
+          <!--
+            `[selected]` on each `<option>`, not `[value]` on the `<select>` itself: a `<select>`'s
+            own `[value]` binding is applied in the same change-detection pass as its `@for`-generated
+            `<option>` children, which can race the browser's option-list registration and leave the
+            select showing no selection even though the bound value is correct (confirmed empirically —
+            `selectedStartNodeValue()` and the persisted `folder().startNode` were both right, but the
+            select's own DOM `.value` stayed empty). Binding `[selected]` per-option applies each
+            option's own selection state to itself, with no such ordering dependency.
+          -->
+          <option value="" [selected]="selectedStartNodeValue() === ''">— No entry page (grouping only) —</option>
           @for (option of startNodeOptions(); track option.value) {
-            <option [value]="option.value">{{ option.label }}</option>
+            <option [value]="option.value" [selected]="option.value === selectedStartNodeValue()">{{ option.label }}</option>
           }
         </select>
       </sf-field>

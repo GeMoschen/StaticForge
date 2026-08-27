@@ -171,4 +171,18 @@ public class AssetVersion {
     public Asset getAsset() {
         return asset;
     }
+
+    /**
+     * Wires the transient {@code asset} association directly. {@code asset} is normally
+     * populated only when Hibernate loads a row from the database (it's an insertable=false,
+     * updatable=false read association); a freshly constructed-and-saved instance otherwise
+     * keeps returning {@code null} from {@link #getAsset()} for the remainder of the same
+     * persistence context/transaction, even after a query that would join-fetch it for a
+     * reloaded row, because the session's identity map returns this very instance. Callers that
+     * insert a new version and might have it observed via {@code getAsset()} later in the same
+     * transaction (e.g. a JPQL query joining through {@code v.asset}) should set this eagerly.
+     */
+    public void setAsset(Asset asset) {
+        this.asset = asset;
+    }
 }

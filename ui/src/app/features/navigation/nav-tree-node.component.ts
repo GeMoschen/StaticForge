@@ -68,7 +68,9 @@ export class NavTreeNodeComponent {
     return uuid != null && this.selectedUuid() === uuid;
   }
 
-  /** Folders show open/closed folder icons; a folder with a `startNode` gets a "linked" badge icon so it's clear it's directly navigable, not just a grouping node. */
+  /** Folders show open/closed folder icons; a folder with a resolved `startNode` is instead
+   * distinguished by the `→ path` label rendered next to its name (see the template) — the same
+   * treatment a `PAGE_REFERENCE` leaf gets for its own resolved target. */
   protected icon(): string {
     if (!this.isFolder()) {
       return 'link';

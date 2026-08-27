@@ -7,7 +7,8 @@ import java.util.UUID;
 /**
  * Projection of a section/page template's current state (spec §12, §13). Combines the
  * identity columns with the {@code payload} carrying the CDL source, the compiled
- * content definition and the per-channel OCTL templates.
+ * content definition and the per-channel OCTL templates. {@code folderUuid}/{@code folderPath}
+ * surface the template's current folder (spec M13.1.3), mirroring {@code PageView}'s shape.
  */
 public record TemplateView(
         UUID uuid,
@@ -16,4 +17,6 @@ public record TemplateView(
         String displayName,
         JsonNode payload,
         long validFromRevision,
-        boolean deleted) {}
+        boolean deleted,
+        UUID folderUuid,
+        String folderPath) {}

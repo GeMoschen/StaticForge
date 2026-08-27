@@ -15,8 +15,10 @@ import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.urlregistry.UrlRegistryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -108,6 +110,44 @@ public class AssetServiceImpl implements AssetService {
                 JsonUtil.parse("{}"),
                 null,
                 ctx);
+    }
+
+    @Override
+    @Transactional
+    public Map<AssetType, AssetVersionView> ensureTemplateFolders(long projectId, RevisionContext ctx) {
+        return Map.of(
+                AssetType.PAGE_TEMPLATE, ensureTemplateFolder(
+                        projectId, FolderScope.PAGE_TEMPLATES_UID, "Page Templates", AssetType.PAGE_TEMPLATE, ctx),
+                AssetType.SECTION_TEMPLATE, ensureTemplateFolder(
+                        projectId, FolderScope.SECTION_TEMPLATES_UID, "Section Templates", AssetType.SECTION_TEMPLATE, ctx));
+    }
+
+    /**
+     * Finds-or-creates one of the two fixed {@code TEMPLATES}-scope root folders by its
+     * well-known uid, mirroring {@link #ensureRootFolder}'s exact lazy pattern. Deliberately
+     * bypasses {@code FolderServiceImpl.create} — that path runs uid derivation instead of using
+     * this fixed uid, and would hit the top-level-{@code TEMPLATES} guard it enforces.
+     */
+    private AssetVersionView ensureTemplateFolder(
+            long projectId, String uid, String displayName, AssetType templateKind, RevisionContext ctx) {
+        Optional<Asset> existing = assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, AssetType.FOLDER, uid);
+        if (existing.isPresent()) {
+            return toView(requireOpen(existing.get().getId()));
+        }
+
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        AssetVersion rootVersion = requireOpen(rootAsset.getId());
+        String folderPath = pathService.childPath(rootVersion.getFolderPath(), uid);
+
+        ObjectNode payload = (ObjectNode) JsonUtil.parse("{}");
+        payload.put("scope", FolderScope.TEMPLATES.name());
+        payload.put("templateKind", templateKind.name());
+        payload.put("protected", true);
+
+        return createInternal(
+                projectId, AssetType.FOLDER, displayName, uid, UUID.randomUUID(),
+                rootAsset.getId(), folderPath, payload, null, ctx);
     }
 
     @Override
@@ -436,6 +476,19 @@ public class AssetServiceImpl implements AssetService {
             throw new SfException(ProblemFactory.unprocessableEntity(
                     "This folder belongs to the " + actual.name().toLowerCase()
                             + " store — " + assetType.name().toLowerCase() + " assets can't be placed here."));
+        }
+
+        // The TEMPLATES scope holds two disjoint subtrees under one FolderScope (spec M13.1.3) —
+        // a PAGE_TEMPLATE and a SECTION_TEMPLATE folder are both `scope=TEMPLATES`, so the check
+        // above alone can't tell them apart. This also covers a generic (non-folder-service) move
+        // of a template asset, not just creation.
+        if (required == FolderScope.TEMPLATES) {
+            AssetType actualKind = FolderScope.templateKindFromPayload(version.getPayload());
+            if (actualKind != null && actualKind != assetType) {
+                throw new SfException(ProblemFactory.unprocessableEntity(
+                        "This folder is for " + actualKind.name().toLowerCase()
+                                + " assets — " + assetType.name().toLowerCase() + "s can't be placed here."));
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.folder;
 
+import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.revision.RevisionContext;
 import java.util.List;
@@ -21,6 +22,16 @@ public interface FolderService {
      * disagrees with the parent's is rejected).
      */
     AssetVersionView create(UUID parentFolderUuid, String displayName, FolderScope scope, RevisionContext ctx);
+
+    /**
+     * Creates a folder with an explicit {@code templateKind} (spec M13.1.2, {@code TEMPLATES}
+     * scope only). A subfolder without an explicit {@code templateKind} inherits its parent's;
+     * an explicit one that disagrees with the parent's is rejected. Creating directly at the
+     * {@code TEMPLATES} scope's top level ({@code parentFolderUuid == null}) is always rejected
+     * — that level is fixed to the two auto-provisioned, protected folders.
+     */
+    AssetVersionView create(
+            UUID parentFolderUuid, String displayName, FolderScope scope, AssetType templateKind, RevisionContext ctx);
 
     /** Renames a folder (display name only — the path is UID-bound and unchanged). */
     AssetVersionView update(UUID uuid, String displayName, long expectedRevision, RevisionContext ctx);

@@ -1,0 +1,56 @@
+:host {
+  display: block;
+}
+
+.template-nav__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-1);
+  padding-top: var(--sf-1);
+  padding-bottom: var(--sf-1);
+  padding-right: var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  cursor: pointer;
+  user-select: none;
+  color: var(--sf-ink);
+}
+
+.template-nav__row:hover {
+  background: var(--sf-surface);
+}
+
+.template-nav__row--active {
+  background: var(--sf-signal-muted, var(--sf-surface));
+  font-weight: 600;
+}
+
+.template-nav__row--active:hover {
+  background: var(--sf-signal-muted, var(--sf-surface));
+}
+
+.template-nav__spacer {
+  flex-shrink: 0;
+  width: 16px;
+}
+
+.template-nav__icon {
+  flex-shrink: 0;
+  font-size: 1.1em;
+  color: var(--sf-signal);
+}
+
+.template-nav__name {
+  font-size: var(--sf-text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-nav__mono {
+  margin-left: auto;
+  padding-left: var(--sf-2);
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+  flex-shrink: 0;
+}

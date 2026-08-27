@@ -2,6 +2,7 @@ package com.acme.staticforge.asset;
 
 import com.acme.staticforge.revision.RevisionContext;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -19,6 +20,14 @@ public interface AssetService {
 
     /** Lazily ensures the project's implicit root folder ({@code uid=root}, {@code path=/}). */
     AssetVersionView ensureRootFolder(long projectId, RevisionContext ctx);
+
+    /**
+     * Lazily and idempotently ensures the project's two fixed, protected {@code TEMPLATES}-scope
+     * root folders ("Page Templates" / "Section Templates", spec M13.1.2) exist directly under
+     * the hidden root, and returns them keyed by the template kind ({@code PAGE_TEMPLATE} /
+     * {@code SECTION_TEMPLATE}) each one holds.
+     */
+    Map<AssetType, AssetVersionView> ensureTemplateFolders(long projectId, RevisionContext ctx);
 
     /** Applies a full state change, closing the current version and opening a new one. Optimistic-concurrency-checked. */
     AssetVersionView update(UUID uuid, UpdateAssetCommand cmd, long expectedRevision, RevisionContext ctx);

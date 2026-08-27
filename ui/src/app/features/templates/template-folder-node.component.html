@@ -1,0 +1,91 @@
+<div
+  class="folder-node"
+  [class.folder-node--selected]="isSelected()"
+  [style.padding-left.px]="depth() * 14"
+>
+  <div
+    class="folder-node__row"
+    [attr.draggable]="isProtected() ? null : true"
+    role="treeitem"
+    tabindex="0"
+    [attr.aria-expanded]="expanded()"
+    [attr.aria-selected]="isSelected()"
+    (click)="onSelect()"
+    (keydown)="onKeydown($event)"
+    (dragstart)="onDragStart($event)"
+    (dragover)="onDragOver($event)"
+    (drop)="onDrop($event)"
+    (dragend)="onDragEnd()"
+    (contextmenu)="onContextMenu($event)"
+  >
+    <button
+      type="button"
+      class="folder-node__toggle"
+      [class.folder-node__toggle--leaf]="!hasChildren()"
+      (click)="toggle($event)"
+      [attr.aria-label]="hasChildren() ? 'Toggle folder' : 'Folder'"
+    >
+      <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
+    </button>
+    <sf-icon class="folder-node__icon" [name]="expanded() && hasChildren() ? 'folder_open' : 'folder'" />
+    <span class="folder-node__name">{{ node().displayName ?? node().uid }}</span>
+    @if (isProtected()) {
+      <sf-icon class="folder-node__protected-icon" name="lock" title="Built-in folder — can't be renamed, moved, or deleted" />
+    }
+  </div>
+
+  @if (expanded() && hasChildren()) {
+    <div class="folder-node__children" role="group">
+      @for (child of node().children ?? []; track child.uuid) {
+        <sf-template-folder-node
+          [node]="child"
+          [depth]="depth() + 1"
+          [selectedUuid]="selectedUuid()"
+          [projectKey]="projectKey()"
+          [templateKind]="templateKind()"
+          [templatesByFolder]="templatesByFolder()"
+          [selectedTemplateUuid]="selectedTemplateUuid()"
+          (select)="select.emit($event)"
+          (move)="move.emit($event)"
+          (selectTemplate)="selectTemplate.emit($event)"
+          (newTemplate)="newTemplate.emit()"
+          (changed)="changed.emit()"
+        />
+      }
+      @for (template of ownTemplates(); track template.uuid) {
+        <sf-template-nav-node
+          [projectKey]="projectKey()"
+          [summary]="template"
+          [depth]="depth() + 1"
+          [templateKind]="templateKind()"
+          [selected]="selectedTemplateUuid() === template.uuid"
+          (select)="selectTemplate.emit($event)"
+          (changed)="changed.emit()"
+        />
+      }
+    </div>
+  }
+
+  <sf-create-asset-dialog
+    kind="FOLDER"
+    [open]="newFolderOpen()"
+    [submitting]="creatingFolder()"
+    [projectKey]="projectKey()"
+    (create)="submitNewFolder($event)"
+    (closed)="closeNewFolder()"
+  />
+
+  @if (!isProtected()) {
+    <sf-rename-asset-dialog
+      [open]="renameOpen()"
+      [projectKey]="projectKey()"
+      [uuid]="node().uuid ?? ''"
+      [uid]="node().uid ?? ''"
+      [displayName]="node().displayName ?? node().uid ?? ''"
+      [submittingName]="renamingName()"
+      (renameDisplayName)="submitRenameDisplayName($event)"
+      (uidChanged)="onRenameUidChanged()"
+      (closed)="closeRename()"
+    />
+  }
+</div>

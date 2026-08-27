@@ -5,6 +5,7 @@ import com.acme.staticforge.api.dto.FolderView;
 import com.acme.staticforge.api.dto.MoveRequest;
 import com.acme.staticforge.api.dto.MoveResultDto;
 import com.acme.staticforge.api.dto.RenameFolderRequest;
+import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
@@ -59,7 +60,11 @@ public class FolderController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<FolderView> create(@PathVariable String projectKey, @RequestBody CreateFolderRequest body) {
         FolderScope scope = body.scope() == null || body.scope().isBlank() ? null : parseScope(body.scope());
-        AssetVersionView view = folderService.create(body.parentFolderUuid(), body.displayName(), scope, ctx(projectKey, "create folder"));
+        AssetType templateKind = body.templateKind() == null || body.templateKind().isBlank()
+                ? null
+                : parseTemplateKind(body.templateKind());
+        AssetVersionView view = folderService.create(
+                body.parentFolderUuid(), body.displayName(), scope, templateKind, ctx(projectKey, "create folder"));
         return ResponseEntity.ok(toView(view));
     }
 
@@ -67,7 +72,19 @@ public class FolderController {
         try {
             return FolderScope.valueOf(scope);
         } catch (IllegalArgumentException e) {
-            throw new SfException(ProblemFactory.badRequest("scope must be PAGES, MEDIA, or NAVIGATION."));
+            throw new SfException(ProblemFactory.badRequest("scope must be PAGES, MEDIA, NAVIGATION, or TEMPLATES."));
+        }
+    }
+
+    private static AssetType parseTemplateKind(String templateKind) {
+        try {
+            AssetType type = AssetType.valueOf(templateKind);
+            if (type != AssetType.PAGE_TEMPLATE && type != AssetType.SECTION_TEMPLATE) {
+                throw new IllegalArgumentException();
+            }
+            return type;
+        } catch (IllegalArgumentException e) {
+            throw new SfException(ProblemFactory.badRequest("templateKind must be PAGE_TEMPLATE or SECTION_TEMPLATE."));
         }
     }
 
@@ -114,12 +131,13 @@ public class FolderController {
 
     private static FolderView toView(FolderNode node) {
         return new FolderView(node.uuid(), node.uid(), node.displayName(), node.path(),
-                node.scope() == null ? null : node.scope().name(),
+                node.scope() == null ? null : node.scope().name(), node.protectedFolder(),
                 node.children().stream().map(FolderController::toView).toList());
     }
 
     private static FolderView toView(AssetVersionView v) {
         FolderScope scope = FolderScope.fromPayload(v.payload());
-        return new FolderView(v.uuid(), v.uid(), v.displayName(), v.folderPath(), scope == null ? null : scope.name(), List.of());
+        return new FolderView(v.uuid(), v.uid(), v.displayName(), v.folderPath(), scope == null ? null : scope.name(),
+                FolderScope.isProtected(v.payload()), List.of());
     }
 }

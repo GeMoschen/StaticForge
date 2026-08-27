@@ -388,6 +388,30 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         IdMaps idMaps = new IdMaps();
         idMaps.put(rootAsset == null ? null : rootAsset.uuid().toLowerCase(), targetRootId, PathService.ROOT_PATH);
 
+        // The two fixed, protected TEMPLATES-scope root folders (spec M13.1.2) get the exact
+        // same resolve-not-create treatment as the hidden root above (feature
+        // template-store-folders, M13.2.2): every project already has its own "Page Templates" /
+        // "Section Templates" folder, so an archive's copy of either must remap onto the
+        // target's existing folder rather than create a second, differently-uid'd duplicate.
+        // ensureTemplateFolders is idempotent find-or-create, so this is safe even for a target
+        // project that (unexpectedly) doesn't have them yet.
+        Map<AssetType, ExportedAsset> fixedTemplateFolderAssets = findFixedTemplateFolders(assets);
+        Set<String> fixedTemplateFolderKeys = new HashSet<>();
+        if (!fixedTemplateFolderAssets.isEmpty()) {
+            Map<AssetType, AssetVersionView> targetFixedFolders = assetService.ensureTemplateFolders(targetProjectId, ctx);
+            for (Map.Entry<AssetType, ExportedAsset> entry : fixedTemplateFolderAssets.entrySet()) {
+                ExportedAsset archiveFolder = entry.getValue();
+                AssetVersionView targetFolder = targetFixedFolders.get(entry.getKey());
+                Long targetFolderId = assetRepository.findByProjectIdAndUuid(targetProjectId, targetFolder.uuid())
+                        .map(Asset::getId)
+                        .orElseThrow(() -> new SfException(ProblemFactory.notFound("Fixed template folder not found.")));
+                String key = archiveFolder.uuid().toLowerCase();
+                remap.put(key, targetFolder.uuid());
+                idMaps.put(key, targetFolderId, targetFolder.folderPath());
+                fixedTemplateFolderKeys.add(key);
+            }
+        }
+
         // Pre-populate idMaps for every skipped asset with the *existing* target asset's real
         // (assetId, folderPath) — not a to-be-created one — so descendants still explicitly
         // imported below resolve their parentFolderUuid against the reused folder correctly.
@@ -414,7 +438,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Instant importedAt = Instant.now();
         int created = 0;
         for (ExportedAsset asset : order(assets, rootAsset)) {
-            if (asset == rootAsset || skipped.contains(asset.uuid().toLowerCase())) {
+            if (asset == rootAsset
+                    || skipped.contains(asset.uuid().toLowerCase())
+                    || fixedTemplateFolderKeys.contains(asset.uuid().toLowerCase())) {
                 continue;
             }
             createImportedAsset(targetProjectId, asset, remap, collided, idMaps, manifest, importedAt,
@@ -705,6 +731,30 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
         }
         return null;
+    }
+
+    /**
+     * Matches archive {@link ExportedAsset}s of type {@code FOLDER} whose {@code uid} is one of
+     * the two well-known {@link FolderScope#PAGE_TEMPLATES_UID}/{@link
+     * FolderScope#SECTION_TEMPLATES_UID} constants (spec M13.1.2), keyed by the {@link AssetType}
+     * each fixed folder holds ({@code PAGE_TEMPLATE}/{@code SECTION_TEMPLATE}) — the same key
+     * shape {@link AssetService#ensureTemplateFolders} returns, so the two maps line up directly.
+     * Analogous to {@link #findRootFolder}, but for the two fixed {@code TEMPLATES}-scope roots
+     * instead of the single hidden project root (feature template-store-folders, M13.2.2).
+     */
+    private static Map<AssetType, ExportedAsset> findFixedTemplateFolders(List<ExportedAsset> assets) {
+        Map<AssetType, ExportedAsset> found = new HashMap<>();
+        for (ExportedAsset asset : assets) {
+            if (!"FOLDER".equals(asset.type())) {
+                continue;
+            }
+            if (FolderScope.PAGE_TEMPLATES_UID.equals(asset.uid())) {
+                found.put(AssetType.PAGE_TEMPLATE, asset);
+            } else if (FolderScope.SECTION_TEMPLATES_UID.equals(asset.uid())) {
+                found.put(AssetType.SECTION_TEMPLATE, asset);
+            }
+        }
+        return found;
     }
 
     private void collectBlobs(JsonNode payload, Map<String, byte[]> blobs) {

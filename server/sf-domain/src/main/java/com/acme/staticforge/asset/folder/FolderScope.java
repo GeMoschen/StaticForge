@@ -12,7 +12,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 public enum FolderScope {
     PAGES,
     MEDIA,
-    NAVIGATION;
+    NAVIGATION,
+    TEMPLATES;
+
+    /**
+     * Well-known {@code uid}s of the two fixed, auto-provisioned, protected top-level folders
+     * of the {@code TEMPLATES} scope (M13.1.2). Reserved in {@link com.acme.staticforge.asset.UidGenerator}
+     * so no user-derived uid can ever collide with them.
+     */
+    public static final String PAGE_TEMPLATES_UID = "page_templates";
+
+    public static final String SECTION_TEMPLATES_UID = "section_templates";
 
     /** The scope an asset of this type must be placed under, or {@code null} if the type isn't scoped to a store. */
     public static FolderScope requiredFor(AssetType type) {
@@ -20,6 +30,7 @@ public enum FolderScope {
             case PAGE -> PAGES;
             case MEDIA -> MEDIA;
             case PAGE_REFERENCE -> NAVIGATION;
+            case PAGE_TEMPLATE, SECTION_TEMPLATE -> TEMPLATES;
             default -> null;
         };
     }
@@ -33,5 +44,29 @@ public enum FolderScope {
                 return null;
             }
         }).orElse(null);
+    }
+
+    /**
+     * Reads the {@code templateKind} field from a folder asset's payload ({@code TEMPLATES}
+     * scope only) — {@code PAGE_TEMPLATE} or {@code SECTION_TEMPLATE} — or {@code null} if
+     * absent/unrecognized.
+     */
+    public static AssetType templateKindFromPayload(JsonNode payload) {
+        return JsonUtil.text(payload, "templateKind").map(text -> {
+            try {
+                return AssetType.valueOf(text);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }).orElse(null);
+    }
+
+    /**
+     * Reads the generic {@code protected} flag from a folder asset's payload (M13.1.1):
+     * {@code true} only for the two fixed {@code TEMPLATES}-scope roots, absent/{@code false}
+     * for every ordinary folder.
+     */
+    public static boolean isProtected(JsonNode payload) {
+        return payload != null && payload.path("protected").asBoolean(false);
     }
 }

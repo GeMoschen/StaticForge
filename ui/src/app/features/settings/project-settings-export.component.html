@@ -32,7 +32,7 @@
               <ng-container
                 *ngTemplateOutlet="
                   folderNode;
-                  context: { $implicit: node, scope: 'PAGE', ancestorChecked: false, depth: 0 }
+                  context: { $implicit: node, scope: 'PAGE', assetType: 'PAGE', ancestorChecked: false, depth: 0 }
                 "
               ></ng-container>
             }
@@ -56,7 +56,7 @@
               <ng-container
                 *ngTemplateOutlet="
                   folderNode;
-                  context: { $implicit: node, scope: 'MEDIA', ancestorChecked: false, depth: 0 }
+                  context: { $implicit: node, scope: 'MEDIA', assetType: 'MEDIA', ancestorChecked: false, depth: 0 }
                 "
               ></ng-container>
             }
@@ -80,75 +80,35 @@
               <ng-container
                 *ngTemplateOutlet="
                   folderNode;
-                  context: { $implicit: node, scope: 'PAGE_REFERENCE', ancestorChecked: false, depth: 0 }
+                  context: { $implicit: node, scope: 'PAGE_REFERENCE', assetType: 'PAGE_REFERENCE', ancestorChecked: false, depth: 0 }
                 "
               ></ng-container>
             }
           </div>
         }
       </section>
-    </div>
 
-    <div class="template-lists">
-      <section class="template-section">
-        <h2 class="tree-section__title">Page templates</h2>
-        <input
-          type="search"
-          class="template-section__search"
-          placeholder="Search page templates…"
-          (input)="onPageTemplateSearchInput($event)"
-        />
-        @if (loadingPageTemplates()) {
-          <sf-spinner label="Loading…" />
-        } @else if (pageTemplateItems().length === 0) {
-          <sf-empty-state title="No page templates" description="No page templates match your search." />
+      <section class="tree-section">
+        <div class="tree-section__header">
+          <h2 class="tree-section__title">Templates</h2>
+          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('TEMPLATES')">
+            <sf-icon [name]="isStoreFull('TEMPLATES') ? 'check_box' : 'check_box_outline_blank'" />
+            Select all templates
+          </button>
+        </div>
+        @if (store.templateFolderTree().length === 0) {
+          <sf-empty-state title="No template folders" description="This project has no template folders yet." />
         } @else {
-          <ul class="template-list">
-            @for (item of pageTemplateItems(); track item.uuid) {
-              <li class="template-list__item">
-                <input
-                  type="checkbox"
-                  [id]="'export-pagetpl-' + item.uuid"
-                  [checked]="templateChecked(item)"
-                  (change)="toggleTemplateItem(item)"
-                />
-                <label [for]="'export-pagetpl-' + item.uuid">
-                  {{ item.displayName ?? item.uid ?? item.uuid }}
-                </label>
-              </li>
+          <div class="tree" role="tree">
+            @for (node of store.templateFolderTree(); track nodeKey(node)) {
+              <ng-container
+                *ngTemplateOutlet="
+                  folderNode;
+                  context: { $implicit: node, scope: 'TEMPLATES', assetType: effectiveAssetType(node, 'TEMPLATES'), ancestorChecked: false, depth: 0 }
+                "
+              ></ng-container>
             }
-          </ul>
-        }
-      </section>
-
-      <section class="template-section">
-        <h2 class="tree-section__title">Section templates</h2>
-        <input
-          type="search"
-          class="template-section__search"
-          placeholder="Search section templates…"
-          (input)="onSectionTemplateSearchInput($event)"
-        />
-        @if (loadingSectionTemplates()) {
-          <sf-spinner label="Loading…" />
-        } @else if (sectionTemplateItems().length === 0) {
-          <sf-empty-state title="No section templates" description="No section templates match your search." />
-        } @else {
-          <ul class="template-list">
-            @for (item of sectionTemplateItems(); track item.uuid) {
-              <li class="template-list__item">
-                <input
-                  type="checkbox"
-                  [id]="'export-sectiontpl-' + item.uuid"
-                  [checked]="templateChecked(item)"
-                  (change)="toggleTemplateItem(item)"
-                />
-                <label [for]="'export-sectiontpl-' + item.uuid">
-                  {{ item.displayName ?? item.uid ?? item.uuid }}
-                </label>
-              </li>
-            }
-          </ul>
+          </div>
         }
       </section>
     </div>
@@ -181,7 +141,7 @@
   </div>
 </div>
 
-<ng-template #folderNode let-node let-scope="scope" let-ancestorChecked="ancestorChecked" let-depth="depth">
+<ng-template #folderNode let-node let-scope="scope" let-assetType="assetType" let-ancestorChecked="ancestorChecked" let-depth="depth">
   <div
     class="tree-row"
     [style.padding-left.px]="depth * 16"
@@ -192,7 +152,7 @@
       type="button"
       class="tree-row__toggle"
       [class.tree-row__toggle--leaf]="(node.children ?? []).length === 0"
-      (click)="toggleExpand(node, scope)"
+      (click)="toggleExpand(node, scope, assetType)"
       [attr.aria-label]="isExpanded(node) ? 'Collapse folder' : 'Expand folder'"
     >
       <sf-icon [name]="isExpanded(node) ? 'expand_more' : 'chevron_right'" />
@@ -226,6 +186,7 @@
           context: {
             $implicit: child,
             scope: scope,
+            assetType: effectiveAssetType(child, scope, assetType),
             ancestorChecked: childAncestorChecked(node, ancestorChecked),
             depth: depth + 1,
           }

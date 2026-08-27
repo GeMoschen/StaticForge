@@ -16,11 +16,17 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
-import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
-import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { ChannelsService } from '../channels/channels.service';
+import { TemplateFolderNodeComponent } from './template-folder-node.component';
+import {
+  PAGE_TEMPLATES_ROOT_UID,
+  SECTION_TEMPLATES_ROOT_UID,
+  type FolderMoveEvent,
+  type TemplateAssetKind,
+  type TemplateFolderSelectEvent,
+} from './types';
 import {
   etagFor,
   TemplatesService,
@@ -31,6 +37,7 @@ import {
 } from './templates.service';
 
 type ChannelView = components['schemas']['ChannelView'];
+type FolderView = components['schemas']['FolderView'];
 
 interface ChannelTemplateValue {
   source?: string;
@@ -48,9 +55,9 @@ const NEW_CONTENT_DEFINITION = '';
     SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
     SfFieldComponent,
-    SfRenameAssetDialogComponent,
     SfSpinnerComponent,
     SfUidRenameComponent,
+    TemplateFolderNodeComponent,
   ],
   templateUrl: './templates.component.html',
   styleUrl: './templates.component.scss',
@@ -62,10 +69,9 @@ export class TemplatesComponent {
   private readonly channelsService = inject(ChannelsService);
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
-  private readonly menu = inject(ContextMenuService);
   private readonly api = inject(ApiClient);
 
-  /** `ProjectContextStore.pageTemplates`/`sectionTemplates` (used by the "new page" template picker and the page editor's "add section" palette) are only loaded once per project — force a refresh whenever a template is created/renamed/deleted here so those stay in sync without an F5. */
+  /** `ProjectContextStore.pageTemplates`/`sectionTemplates` (used by the "new page" template picker and the page editor's "add section" palette) — AND, as of M13.3, `templateFolderTree` — are only loaded once per project — force a refresh whenever a template or folder is created/renamed/moved/deleted here so those stay in sync without an F5. */
   private refreshTemplateStore(): void {
     const key = this.projectKey();
     if (key) {
@@ -73,11 +79,63 @@ export class TemplatesComponent {
     }
   }
 
-  readonly kind = signal<TemplateKind>('section');
+  protected readonly templateFolderTree = this.store.templateFolderTree;
+
+  /** The folder currently selected in the tree — scopes the template list to that folder's
+   * direct contents and is the default target for "New template" (Task M13.3.2). */
+  protected readonly selectedFolder = signal<string | null>(null);
+  /** The inherited kind of `selectedFolder`, carried alongside it by `TemplateFolderSelectEvent`
+   * rather than re-derived by walking the tree (see `types.ts`). */
+  protected readonly selectedFolderKind = signal<TemplateAssetKind | null>(null);
+
+  /**
+   * Kind-toggle removal (M13.3.1 step 5): the old `kind` signal was a standalone toggle the
+   * user flipped independently of anything else. Every place that read it (`reloadList`,
+   * `reloadDetail`, `saveDefinition`, `delete`, the channel CRUD calls, `createDialogKind`)
+   * only ever needed "which of the two template endpoints/kinds is currently relevant" — never
+   * the toggle's on/off state itself — so it traces cleanly onto "whichever kind the current
+   * tree/list selection implies". `kind` is now a *computed* derived from that selection:
+   * a selected template's own `assetType` wins (you're looking straight at it), else the
+   * selected folder's inherited kind, else `PAGE_TEMPLATE` as a sane first-load default. This
+   * removes an entire independent piece of state (and the toggle UI) instead of layering a
+   * second, redundant source of truth beside the tree.
+   */
+  protected readonly activeTemplateKind = computed<TemplateAssetKind>(
+    () => this.selectedTemplateAssetType() ?? this.selectedFolderKind() ?? 'PAGE_TEMPLATE',
+  );
+
+  readonly kind = computed<TemplateKind>(() => (this.activeTemplateKind() === 'SECTION_TEMPLATE' ? 'section' : 'page'));
 
   readonly templates = signal<TemplateSummary[]>([]);
   readonly loading = signal(false);
   readonly selectedUuid = signal<string | null>(null);
+
+  protected readonly selectedTemplateAssetType = computed<TemplateAssetKind | null>(() => {
+    const uuid = this.selectedUuid();
+    if (!uuid) {
+      return null;
+    }
+    const found = this.templates().find((t) => t.uuid === uuid);
+    const assetType = found?.assetType?.toUpperCase();
+    return assetType === 'SECTION_TEMPLATE' || assetType === 'PAGE_TEMPLATE' ? assetType : null;
+  });
+
+  /** Templates grouped by their canonical folder path — threaded down the tree so every
+   * folder node can render its own templates as leaves, sorted after subfolders (mirrors
+   * `PagesListComponent.pagesByFolder`/`FolderNodeComponent.ownPages`). */
+  protected readonly templatesByFolder = computed<Map<string, TemplateSummary[]>>(() => {
+    const map = new Map<string, TemplateSummary[]>();
+    for (const t of this.templates()) {
+      const path = t.folderPath ?? '/';
+      const list = map.get(path);
+      if (list) {
+        list.push(t);
+      } else {
+        map.set(path, [t]);
+      }
+    }
+    return map;
+  });
 
   readonly detail = signal<TemplateDetail | null>(null);
   readonly displayName = signal('');
@@ -105,6 +163,14 @@ export class TemplatesComponent {
   });
 
   constructor() {
+    effect(() => {
+      const key = this.projectKey();
+      if (!key) {
+        return;
+      }
+      this.store.loadFor(key).subscribe();
+    });
+
     effect(
       () => {
         const key = this.projectKey();
@@ -139,25 +205,73 @@ export class TemplatesComponent {
       },
       { allowSignalWrites: true },
     );
-  }
 
-  trackByUuid(index: number, item: TemplateSummary): string {
-    return item.uuid ?? `${index}`;
+    // Once the templates tree loads, default the selection to the "Page Templates" root so the
+    // screen isn't blank on first load — mirrors `reloadList`'s existing "auto-select the first
+    // row" behavior, one level up (auto-select the first *folder*). Also resets the selection if
+    // it ever points at a folder no longer in the tree (e.g. it was just deleted).
+    effect(
+      () => {
+        const tree = this.templateFolderTree();
+        const selected = this.selectedFolder();
+        if (selected !== null && findFolder(tree, selected)) {
+          return;
+        }
+        if (tree.length === 0) {
+          this.selectedFolder.set(null);
+          this.selectedFolderKind.set(null);
+          return;
+        }
+        const root = tree.find((n) => n.uid === PAGE_TEMPLATES_ROOT_UID) ?? tree[0];
+        if (root.uuid) {
+          this.selectedFolder.set(root.uuid);
+          this.selectedFolderKind.set(this.rootKind(root));
+        }
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   isSection(): boolean {
     return this.kind() === 'section';
   }
 
-  switchKind(kind: TemplateKind): void {
-    if (this.kind() === kind) {
+  /** The inherited kind of one of the two fixed roots, by its well-known `uid`. */
+  protected rootKind(node: FolderView): TemplateAssetKind {
+    return node.uid === SECTION_TEMPLATES_ROOT_UID ? 'SECTION_TEMPLATE' : 'PAGE_TEMPLATE';
+  }
+
+  protected selectFolder(event: TemplateFolderSelectEvent): void {
+    this.selectedFolder.set(event.uuid);
+    this.selectedFolderKind.set(event.templateKind);
+    this.selectedUuid.set(null);
+  }
+
+  /** Handles both folder-onto-folder drags on the templates tree — the generic move endpoint
+   * dispatches by asset type; cross-kind drags are already rejected client-side by
+   * `TemplateFolderNodeComponent.onDrop`. */
+  protected moveItemTo(event: FolderMoveEvent): void {
+    if (!event.source || !event.target) {
       return;
     }
-    this.kind.set(kind);
-    this.selectedUuid.set(null);
-    this.detail.set(null);
-    this.templates.set([]);
-    this.reloadList(this.projectKey());
+    this.api.moveAsset(this.projectKey(), event.source, { folderUuid: event.target }).subscribe({
+      next: () => {
+        this.toast.show('Moved', 'success');
+        this.onTreeChanged();
+      },
+      error: () => this.toast.show('Could not move — that may create a cycle.', 'error'),
+    });
+  }
+
+  /** Reloads the folder tree and this kind's template list — used after any folder
+   * create/rename/move/delete, and after a template is moved via cut/paste. */
+  protected onTreeChanged(): void {
+    const key = this.projectKey();
+    if (!key) {
+      return;
+    }
+    this.reloadList(key);
+    this.refreshTemplateStore();
   }
 
   select(uuid?: string): void {
@@ -167,9 +281,7 @@ export class TemplatesComponent {
   readonly newTemplateOpen = signal(false);
   readonly creatingTemplate = signal(false);
 
-  readonly createDialogKind = computed<'PAGE_TEMPLATE' | 'SECTION_TEMPLATE'>(() =>
-    this.isSection() ? 'SECTION_TEMPLATE' : 'PAGE_TEMPLATE',
-  );
+  readonly createDialogKind = computed<TemplateAssetKind>(() => this.activeTemplateKind());
 
   newTemplate(): void {
     this.newTemplateOpen.set(true);
@@ -177,6 +289,19 @@ export class TemplatesComponent {
 
   closeNewTemplate(): void {
     this.newTemplateOpen.set(false);
+  }
+
+  /** Target folder for a newly-created template (M13.3.2 step 1): the selected folder if one
+   * is selected, else the fixed root matching the currently-relevant kind. In practice
+   * `selectedFolder` is only ever null before the tree's first load — the auto-select-root
+   * effect above keeps it pointed at a real folder from then on — but the fallback keeps this
+   * correct even if that changes. */
+  private newTemplateParentUuid(): string | undefined {
+    if (this.selectedFolder()) {
+      return this.selectedFolder() ?? undefined;
+    }
+    const rootUid = this.activeTemplateKind() === 'SECTION_TEMPLATE' ? SECTION_TEMPLATES_ROOT_UID : PAGE_TEMPLATES_ROOT_UID;
+    return this.templateFolderTree().find((n) => n.uid === rootUid)?.uuid;
   }
 
   submitNewTemplate(value: CreateAssetFormValue): void {
@@ -190,6 +315,7 @@ export class TemplatesComponent {
         displayName: value.displayName,
         contentDefinition: NEW_CONTENT_DEFINITION,
         channelSources: {},
+        parentFolderUuid: this.newTemplateParentUuid(),
       })
       .subscribe({
         next: (created) => {
@@ -299,79 +425,6 @@ export class TemplatesComponent {
     }
     this.reloadDetail(key, uuid);
     this.reloadList(key);
-    this.refreshTemplateStore();
-  }
-
-  readonly renameOpen = signal(false);
-  readonly renamingName = signal(false);
-  private renameTarget: TemplateSummary | null = null;
-
-  onRowContextMenu(event: MouseEvent, item: TemplateSummary): void {
-    const items: ContextMenuItem[] = [
-      { label: 'Rename', icon: 'edit', action: () => this.openRename(item) },
-    ];
-    this.menu.open(event, items);
-  }
-
-  openRename(item: TemplateSummary): void {
-    this.renameTarget = item;
-    this.renameOpen.set(true);
-  }
-
-  renameTargetUuid(): string {
-    return this.renameTarget?.uuid ?? '';
-  }
-
-  renameTargetUid(): string {
-    return this.renameTarget?.uid ?? '';
-  }
-
-  renameTargetDisplayName(): string {
-    return this.renameTarget?.displayName ?? this.renameTarget?.uid ?? '';
-  }
-
-  closeRename(): void {
-    this.renameOpen.set(false);
-  }
-
-  submitRenameDisplayName(displayName: string): void {
-    const key = this.projectKey();
-    const uuid = this.renameTarget?.uuid;
-    if (!key || !uuid) {
-      return;
-    }
-    this.renamingName.set(true);
-    this.api.renameAsset(key, uuid, { displayName }).subscribe({
-      next: () => {
-        this.renamingName.set(false);
-        this.renameOpen.set(false);
-        this.toast.show('Template renamed', 'success');
-        this.reloadRenamedTemplate(uuid);
-      },
-      error: () => {
-        this.renamingName.set(false);
-        this.toast.show('Could not rename template — try again in a moment.', 'error');
-      },
-    });
-  }
-
-  onRenameUidChanged(): void {
-    // sf-uid-rename already toasts "UID changed" itself — just reload.
-    const uuid = this.renameTarget?.uuid;
-    if (uuid) {
-      this.reloadRenamedTemplate(uuid);
-    }
-  }
-
-  private reloadRenamedTemplate(uuid: string): void {
-    const key = this.projectKey();
-    if (!key) {
-      return;
-    }
-    this.reloadList(key);
-    if (this.selectedUuid() === uuid) {
-      this.reloadDetail(key, uuid);
-    }
     this.refreshTemplateStore();
   }
 
@@ -611,7 +664,25 @@ export class TemplatesComponent {
       uid: detail.uid,
       assetType: detail.assetType,
       displayName: detail.displayName,
+      // `folderPath` is what `templatesByFolder` groups leaves by for the tree — dropping it
+      // here (as this used to) silently regrouped the just-saved template under `undefined`
+      // (`'/'`), which matches no real folder node, so it vanished from the tree until the
+      // next full reload even though it was never actually moved.
+      folderPath: detail.folderPath,
       revision: detail.revision,
     };
   }
+}
+
+function findFolder(nodes: FolderView[], uuid: string): FolderView | null {
+  for (const node of nodes) {
+    if (node.uuid === uuid) {
+      return node;
+    }
+    const found = findFolder(node.children ?? [], uuid);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }

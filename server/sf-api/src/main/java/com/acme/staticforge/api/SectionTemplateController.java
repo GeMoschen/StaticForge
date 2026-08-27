@@ -46,7 +46,7 @@ public class SectionTemplateController extends AbstractTemplateController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         return templateService
-                .list(projectId(projectKey), AssetType.SECTION_TEMPLATE, PageRequest.of(page, size))
+                .list(projectId(projectKey), AssetType.SECTION_TEMPLATE, PageRequest.of(page, size), ctx(projectKey, "list section templates"))
                 .map(AbstractTemplateController::toSummary);
     }
 
@@ -62,7 +62,8 @@ public class SectionTemplateController extends AbstractTemplateController {
                         body.channelSources(),
                         body.category(),
                         Boolean.TRUE.equals(body.deprecated()),
-                        body.outputPath()),
+                        body.outputPath(),
+                        body.parentFolderUuid()),
                 ctx(projectKey, "create section template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))

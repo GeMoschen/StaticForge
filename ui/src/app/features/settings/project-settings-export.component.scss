@@ -85,56 +85,6 @@
   border-color: var(--sf-slate);
 }
 
-.template-lists {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  gap: var(--sf-3);
-}
-
-.template-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-2);
-  padding: var(--sf-3);
-  background: var(--sf-surface);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-lg);
-  min-width: 0;
-}
-
-.template-section__search {
-  padding: var(--sf-1) var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-sm);
-  font-size: var(--sf-text-sm);
-  background: var(--sf-canvas);
-  color: var(--sf-ink);
-}
-
-.template-list {
-  display: flex;
-  flex-direction: column;
-  max-height: 16rem;
-  overflow: auto;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.template-list__item {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-2);
-  padding: var(--sf-1) var(--sf-2);
-  border-radius: var(--sf-radius-sm);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-}
-
-.template-list__item:hover {
-  background: var(--sf-canvas);
-}
-
 .tree {
   display: flex;
   flex-direction: column;

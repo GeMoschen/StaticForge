@@ -1,7 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -15,19 +13,26 @@ import { ExportSelectionRequest, ImportExportService } from './import-export.ser
 type FolderView = components['schemas']['FolderView'];
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 
-/** The three folder-tree scopes shown in this panel — the `type` value `ApiClient.listAssets` expects for each. */
-type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE';
+/** The four folder-tree scopes shown in this panel. `TEMPLATES` is ONE tree scope — its tree
+ * just happens to have two fixed top-level folders ("Page Templates"/"Section Templates"),
+ * structurally no different from any other scope having multiple top-level folders — so it
+ * needs no special-casing in the tri-state walk below, only in `effectiveAssetType` (§ M13.3.3
+ * step 1), which resolves the right `ApiClient.listAssets` `type` filter per node since a
+ * template folder's two branches hold different leaf asset types. */
+type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE' | 'TEMPLATES';
 /** The `FolderScope`/`ExportSelectionRequest.fullStores` string for each tree scope. */
-type StoreScope = 'PAGES' | 'MEDIA' | 'NAVIGATION';
+type StoreScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'TEMPLATES';
 
 const STORE_SCOPE_FOR: Record<TreeScope, StoreScope> = {
   PAGE: 'PAGES',
   MEDIA: 'MEDIA',
   PAGE_REFERENCE: 'NAVIGATION',
+  TEMPLATES: 'TEMPLATES',
 };
 
-/** The two flat (non-tree) asset types offered as searchable lists (M11.3.1). */
-type TemplateType = 'PAGE_TEMPLATE' | 'SECTION_TEMPLATE';
+/** Well-known `uid` of the "Page Templates" fixed root — the other branch of the templates tree
+ * is "Section Templates". Mirrors `FolderScope.PAGE_TEMPLATES_UID` server-side. */
+const PAGE_TEMPLATES_ROOT_UID = 'page_templates';
 
 /**
  * Tri-state a tree row can render as (M11.3.4 — replaces the old checked/indeterminate pair):
@@ -77,16 +82,6 @@ export class ProjectSettingsExportComponent {
   protected readonly includeChannels = signal(false);
   protected readonly includeGenerationTargets = signal(false);
 
-  // ── Template lists (flat, searchable — M11.3.1) ─────────────────────────
-  protected readonly pageTemplateSearch = signal('');
-  protected readonly sectionTemplateSearch = signal('');
-  protected readonly pageTemplateItems = signal<AssetSummaryView[]>([]);
-  protected readonly sectionTemplateItems = signal<AssetSummaryView[]>([]);
-  protected readonly loadingPageTemplates = signal(false);
-  protected readonly loadingSectionTemplates = signal(false);
-  private readonly pageTemplateSearch$ = new Subject<string>();
-  private readonly sectionTemplateSearch$ = new Subject<string>();
-
   protected readonly exporting = signal(false);
   protected readonly exportError = signal<string | null>(null);
 
@@ -108,30 +103,6 @@ export class ProjectSettingsExportComponent {
         this.store.loadFor(key).subscribe();
       });
     });
-
-    this.pageTemplateSearch$
-      .pipe(debounceTime(250), distinctUntilChanged(), takeUntilDestroyed())
-      .subscribe((q) => this.pageTemplateSearch.set(q));
-    this.sectionTemplateSearch$
-      .pipe(debounceTime(250), distinctUntilChanged(), takeUntilDestroyed())
-      .subscribe((q) => this.sectionTemplateSearch.set(q));
-
-    effect(() => {
-      const key = this.projectKey();
-      const q = this.pageTemplateSearch();
-      if (!key) {
-        return;
-      }
-      untracked(() => this.reloadTemplates('PAGE_TEMPLATE', q));
-    });
-    effect(() => {
-      const key = this.projectKey();
-      const q = this.sectionTemplateSearch();
-      if (!key) {
-        return;
-      }
-      untracked(() => this.reloadTemplates('SECTION_TEMPLATE', q));
-    });
   }
 
   // ── Tree helpers ─────────────────────────────────────────────────────────
@@ -145,7 +116,22 @@ export class ProjectSettingsExportComponent {
     return key !== '' && this.expanded().has(key);
   }
 
-  protected toggleExpand(node: FolderView, scope: TreeScope): void {
+  /** The `ApiClient.listAssets` `type` filter to use when fetching this node's own leaf assets.
+   * Equal to `scope` for every scope except `TEMPLATES`, whose tree has two fixed top-level
+   * folders holding different leaf asset types — resolved once at the root (by the fixed
+   * root's well-known `uid`) and threaded down unchanged, same as `TemplatesComponent` does
+   * for the Templates screen's own tree. */
+  protected effectiveAssetType(node: FolderView, scope: TreeScope, parentAssetType?: string): string {
+    if (scope !== 'TEMPLATES') {
+      return scope;
+    }
+    if (parentAssetType) {
+      return parentAssetType;
+    }
+    return node.uid === PAGE_TEMPLATES_ROOT_UID ? 'PAGE_TEMPLATE' : 'SECTION_TEMPLATE';
+  }
+
+  protected toggleExpand(node: FolderView, scope: TreeScope, assetType: string): void {
     const key = this.nodeKey(node);
     if (!key) {
       return;
@@ -161,18 +147,18 @@ export class ProjectSettingsExportComponent {
       return next;
     });
     if (willExpand && !this.assetsByFolder().has(key) && !this.loadingFolders().has(key)) {
-      this.fetchFolderAssets(node, scope, key);
+      this.fetchFolderAssets(node, assetType, key);
     }
   }
 
-  private fetchFolderAssets(node: FolderView, scope: TreeScope, key: string): void {
+  private fetchFolderAssets(node: FolderView, assetType: string, key: string): void {
     this.loadingFolders.update((set) => {
       const next = new Set(set);
       next.add(key);
       return next;
     });
     this.api
-      .listAssets(this.projectKey(), { type: scope, folder: node.path, page: 0, size: 200 })
+      .listAssets(this.projectKey(), { type: assetType, folder: node.path, page: 0, size: 200 })
       .subscribe({
         next: (res) => {
           this.assetsByFolder.update((map) => {
@@ -339,6 +325,8 @@ export class ProjectSettingsExportComponent {
         return this.store.mediaFolderTree();
       case 'PAGE_REFERENCE':
         return this.store.navigationFolderTree();
+      case 'TEMPLATES':
+        return this.store.templateFolderTree();
     }
   }
 
@@ -418,45 +406,6 @@ export class ProjectSettingsExportComponent {
       next.delete(STORE_SCOPE_FOR[scope]);
       return next;
     });
-  }
-
-  // ── Template lists (M11.3.1) ────────────────────────────────────────────
-
-  protected onPageTemplateSearchInput(event: Event): void {
-    this.pageTemplateSearch$.next((event.target as HTMLInputElement).value);
-  }
-
-  protected onSectionTemplateSearchInput(event: Event): void {
-    this.sectionTemplateSearch$.next((event.target as HTMLInputElement).value);
-  }
-
-  protected templateChecked(item: AssetSummaryView): boolean {
-    return !!item.uuid && this.selected().has(item.uuid);
-  }
-
-  protected toggleTemplateItem(item: AssetSummaryView): void {
-    if (!item.uuid) {
-      return;
-    }
-    this.toggleUuid(item.uuid);
-  }
-
-  private reloadTemplates(type: TemplateType, q: string): void {
-    const loadingSignal = type === 'PAGE_TEMPLATE' ? this.loadingPageTemplates : this.loadingSectionTemplates;
-    const itemsSignal = type === 'PAGE_TEMPLATE' ? this.pageTemplateItems : this.sectionTemplateItems;
-    loadingSignal.set(true);
-    this.api
-      .listAssets(this.projectKey(), { type, q: q.trim() || undefined, page: 0, size: 200 })
-      .subscribe({
-        next: (res) => {
-          itemsSignal.set(res.content ?? []);
-          loadingSignal.set(false);
-        },
-        error: () => {
-          itemsSignal.set([]);
-          loadingSignal.set(false);
-        },
-      });
   }
 
   // ── Toggles ──────────────────────────────────────────────────────────────

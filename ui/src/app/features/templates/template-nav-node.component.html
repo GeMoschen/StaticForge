@@ -1,0 +1,28 @@
+<div
+  class="template-nav__row"
+  [class.template-nav__row--active]="selected()"
+  [style.padding-left.px]="depth() * 14"
+  role="treeitem"
+  tabindex="0"
+  [attr.aria-selected]="selected()"
+  (click)="onSelect()"
+  (keydown)="onKeydown($event)"
+  (contextmenu)="onContextMenu($event)"
+>
+  <span class="template-nav__spacer"></span>
+  <sf-icon class="template-nav__icon" name="description" />
+  <span class="template-nav__name">{{ summary().displayName ?? summary().uid }}</span>
+  <span class="template-nav__mono">{{ summary().uid }}</span>
+</div>
+
+<sf-rename-asset-dialog
+  [open]="renameOpen()"
+  [projectKey]="projectKey()"
+  [uuid]="summary().uuid ?? ''"
+  [uid]="summary().uid ?? ''"
+  [displayName]="summary().displayName ?? summary().uid ?? ''"
+  [submittingName]="renamingName()"
+  (renameDisplayName)="submitRenameDisplayName($event)"
+  (uidChanged)="onRenameUidChanged()"
+  (closed)="closeRename()"
+/>

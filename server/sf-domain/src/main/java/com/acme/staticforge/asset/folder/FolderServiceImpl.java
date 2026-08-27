@@ -71,7 +71,7 @@ public class FolderServiceImpl implements FolderService {
             }
             info.put(asset.getId(), new FolderInfo(
                     asset.getUuid(), asset.getUid(), version.getDisplayName(), version.getFolderPath(),
-                    FolderScope.fromPayload(version.getPayload())));
+                    FolderScope.fromPayload(version.getPayload()), FolderScope.isProtected(version.getPayload())));
             children.put(asset.getId(), new java.util.ArrayList<>());
         }
         List<Long> roots = new java.util.ArrayList<>();
@@ -100,16 +100,30 @@ public class FolderServiceImpl implements FolderService {
         List<FolderNode> childNodes = (depth == 0)
                 ? List.of()
                 : children.get(id).stream().map(cid -> toNode(cid, info, children, depth - 1)).toList();
-        return new FolderNode(f.uuid(), f.uid(), f.displayName(), f.path(), f.scope(), childNodes);
+        return new FolderNode(f.uuid(), f.uid(), f.displayName(), f.path(), f.scope(), f.protectedFolder(), childNodes);
     }
 
-    private record FolderInfo(UUID uuid, String uid, String displayName, String path, FolderScope scope) {}
+    private record FolderInfo(UUID uuid, String uid, String displayName, String path, FolderScope scope, boolean protectedFolder) {}
 
     @Override
     @Transactional
     public AssetVersionView create(UUID parentFolderUuid, String displayName, FolderScope scope, RevisionContext ctx) {
+        return create(parentFolderUuid, displayName, scope, null, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView create(
+            UUID parentFolderUuid, String displayName, FolderScope scope, AssetType templateKind, RevisionContext ctx) {
+        if (parentFolderUuid == null && scope == FolderScope.TEMPLATES) {
+            throw new SfException(ProblemFactory.unprocessableEntity(
+                    "The top level of the template store is fixed to \"Page Templates\" and \"Section Templates\" — "
+                            + "new top-level folders cannot be created there."));
+        }
+
         String parentPath = PathService.ROOT_PATH;
         FolderScope effectiveScope = scope;
+        AssetType effectiveTemplateKind = templateKind;
         if (parentFolderUuid != null) {
             Asset parentAsset = requireFolder(parentFolderUuid, ctx.projectId());
             AssetVersion parentVersion = requireOpen(parentAsset.getId());
@@ -121,6 +135,14 @@ public class FolderServiceImpl implements FolderService {
                 }
                 effectiveScope = parentScope;
             }
+            AssetType parentTemplateKind = FolderScope.templateKindFromPayload(parentVersion.getPayload());
+            if (parentTemplateKind != null) {
+                if (templateKind != null && templateKind != parentTemplateKind) {
+                    throw new SfException(ProblemFactory.unprocessableEntity(
+                            "A subfolder's template kind must match its parent folder's."));
+                }
+                effectiveTemplateKind = parentTemplateKind;
+            }
         }
         if (effectiveScope == null) {
             throw new SfException(ProblemFactory.unprocessableEntity("Folder scope is required."));
@@ -131,6 +153,9 @@ public class FolderServiceImpl implements FolderService {
         }
         ObjectNode payload = (ObjectNode) JsonUtil.parse("{}");
         payload.put("scope", effectiveScope.name());
+        if (effectiveScope == FolderScope.TEMPLATES && effectiveTemplateKind != null) {
+            payload.put("templateKind", effectiveTemplateKind.name());
+        }
         return assetService.create(
                 new CreateAssetCommand(ctx.projectId(), AssetType.FOLDER, displayName, parentFolderUuid, payload, null),
                 ctx);
@@ -141,6 +166,7 @@ public class FolderServiceImpl implements FolderService {
     public AssetVersionView update(UUID uuid, String displayName, long expectedRevision, RevisionContext ctx) {
         Asset folder = requireFolder(uuid, ctx.projectId());
         AssetVersion current = requireOpen(folder.getId());
+        requireNotProtected(current, "renamed");
         return assetService.update(uuid, new UpdateAssetCommand(displayName, current.getPayload()), expectedRevision, ctx);
     }
 
@@ -185,6 +211,7 @@ public class FolderServiceImpl implements FolderService {
     public MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx) {
         Asset folder = requireFolder(folderUuid, ctx.projectId());
         AssetVersion current = requireOpen(folder.getId());
+        requireNotProtected(current, "moved");
         String oldPath = current.getFolderPath();
 
         if (targetParentFolderUuid != null && targetParentFolderUuid.equals(folderUuid)) {
@@ -198,6 +225,16 @@ public class FolderServiceImpl implements FolderService {
             FolderScope ownScope = FolderScope.fromPayload(current.getPayload());
             if (targetScope != null && ownScope != null && targetScope != ownScope) {
                 throw new SfException(ProblemFactory.unprocessableEntity("Cannot move a folder into a different store's folder tree."));
+            }
+
+            // TEMPLATES-scope folders additionally carry a templateKind (M13.1.2) that FolderScope
+            // alone doesn't capture — "Page Templates" and "Section Templates" share one scope but
+            // must stay separate subtrees, mirroring the template-kind guard in `create` above.
+            AssetType targetTemplateKind = FolderScope.templateKindFromPayload(targetVersion.getPayload());
+            AssetType ownTemplateKind = FolderScope.templateKindFromPayload(current.getPayload());
+            if (targetTemplateKind != null && ownTemplateKind != null && targetTemplateKind != ownTemplateKind) {
+                throw new SfException(ProblemFactory.unprocessableEntity(
+                        "A folder's template kind must match its new parent folder's."));
             }
         }
 
@@ -241,6 +278,7 @@ public class FolderServiceImpl implements FolderService {
     public void delete(UUID uuid, boolean cascade, RevisionContext ctx) {
         Asset folder = requireFolder(uuid, ctx.projectId());
         AssetVersion current = requireOpen(folder.getId());
+        requireNotProtected(current, "deleted");
 
         List<AssetVersion> subtree = assetVersionRepository.findCurrentByProject(ctx.projectId()).stream()
                 .filter(v -> pathService.isUnder(v.getFolderPath(), current.getFolderPath()))
@@ -266,6 +304,18 @@ public class FolderServiceImpl implements FolderService {
                     true);
         }
         appendSummary(folder, revision, "DELETE", List.of());
+    }
+
+    /**
+     * Rejects mutating the TARGET folder itself (rename/move/delete) when its own payload
+     * carries {@code protected: true} (M13.1.1). This never blocks creating a child under a
+     * protected folder, nor moving another folder INTO one — only mutating/moving/deleting the
+     * protected folder itself.
+     */
+    private void requireNotProtected(AssetVersion version, String action) {
+        if (FolderScope.isProtected(version.getPayload())) {
+            throw new SfException(ProblemFactory.unprocessableEntity("This folder is protected and cannot be " + action + "."));
+        }
     }
 
     private Asset requireFolder(UUID uuid, long projectId) {

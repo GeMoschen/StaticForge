@@ -1330,6 +1330,9 @@ export interface components {
             deprecated?: boolean;
             bodies?: components["schemas"]["JsonNode"];
             outputPath?: components["schemas"]["JsonNode"];
+            /** Format: uuid */
+            folderUuid?: string;
+            folderPath?: string;
         };
         ChannelTemplateRequest: {
             source?: string;
@@ -1421,6 +1424,7 @@ export interface components {
             displayName?: string;
             path?: string;
             scope?: string;
+            protectedFolder?: boolean;
             children?: components["schemas"]["FolderView"][];
         };
         ChannelUpdateRequest: {
@@ -1498,6 +1502,8 @@ export interface components {
             outputPath?: {
                 [key: string]: string;
             };
+            /** Format: uuid */
+            parentFolderUuid?: string;
         };
         ProjectRestoreRequest: {
             /** Format: int64 */
@@ -1657,6 +1663,7 @@ export interface components {
             /** Format: uuid */
             parentFolderUuid?: string;
             scope?: string;
+            templateKind?: string;
         };
         MoveRequest: {
             /** Format: uuid */
@@ -1797,14 +1804,14 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -1814,12 +1821,12 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
+            paged?: boolean;
+            unpaged?: boolean;
             /** Format: int32 */
             pageSize?: number;
             /** Format: int32 */
             pageNumber?: number;
-            unpaged?: boolean;
-            paged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -1833,14 +1840,14 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -1883,8 +1890,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            add?: boolean;
             remove?: boolean;
+            add?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -1941,14 +1948,14 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -1984,14 +1991,14 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];

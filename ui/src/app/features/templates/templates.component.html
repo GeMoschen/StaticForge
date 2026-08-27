@@ -1,62 +1,38 @@
   <div class="templates">
   <h1 class="sf-sr-only">Templates</h1>
-  <aside class="templates__list">
-    <div class="templates__tabs" role="tablist" aria-label="Template type">
-      <button
-        type="button"
-        role="tab"
-        class="templates__tab"
-        [class.templates__tab--active]="isSection()"
-        (click)="switchKind('section')"
-      >
-        Sections
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="templates__tab"
-        [class.templates__tab--active]="!isSection()"
-        (click)="switchKind('page')"
-      >
-        Pages
-      </button>
+  <aside class="templates__tree">
+    <div class="templates__tree-head">
+      <h2>Templates</h2>
     </div>
-
-    <div class="templates__list-head">
-      <h2>{{ isSection() ? 'Section templates' : 'Page templates' }}</h2>
-      <sf-button (click)="newTemplate()">New</sf-button>
-    </div>
-
     @if (loading()) {
       <sf-spinner label="Loading templates…" />
     }
-
-    @if (!loading() && templates().length === 0) {
-      <sf-empty-state
-        title="No templates"
-        description="Create a template to define reusable content."
-      />
-    }
-
-    @for (item of templates(); track trackByUuid($index, item)) {
-      <button
-        type="button"
-        class="templates__row"
-        [class.templates__row--active]="item.uuid === selectedUuid()"
-        (click)="select(item.uuid)"
-        (contextmenu)="onRowContextMenu($event, item)"
-      >
-        <span class="templates__row-name">{{ item.displayName ?? item.uid }}</span>
-        @if (item.assetType?.toLowerCase() === 'section_template') {
-          <span class="badge badge--section">section</span>
-        } @else {
-          <span class="badge badge--page">page</span>
-        }
-      </button>
-    }
+    <div class="templates__tree-body" role="tree">
+      @for (root of templateFolderTree(); track root.uuid) {
+        <sf-template-folder-node
+          [node]="root"
+          [depth]="0"
+          [selectedUuid]="selectedFolder()"
+          [projectKey]="projectKey()"
+          [templateKind]="rootKind(root)"
+          [templatesByFolder]="templatesByFolder()"
+          [selectedTemplateUuid]="selectedUuid()"
+          (select)="selectFolder($event)"
+          (move)="moveItemTo($event)"
+          (selectTemplate)="select($event)"
+          (newTemplate)="newTemplate()"
+          (changed)="onTreeChanged()"
+        />
+      }
+    </div>
   </aside>
 
   <section class="templates__detail">
+    <div class="templates__toolbar">
+      <span class="templates__toolbar-spacer"></span>
+      <sf-button variant="primary" (click)="newTemplate()">New template</sf-button>
+    </div>
+
     @if (detail(); as d) {
       <div class="detail__scroll">
         <div class="detail__head">
@@ -216,16 +192,4 @@
   [projectKey]="projectKey()"
   (create)="submitNewTemplate($event)"
   (closed)="closeNewTemplate()"
-/>
-
-<sf-rename-asset-dialog
-  [open]="renameOpen()"
-  [projectKey]="projectKey()"
-  [uuid]="renameTargetUuid()"
-  [uid]="renameTargetUid()"
-  [displayName]="renameTargetDisplayName()"
-  [submittingName]="renamingName()"
-  (renameDisplayName)="submitRenameDisplayName($event)"
-  (uidChanged)="onRenameUidChanged()"
-  (closed)="closeRename()"
 />
