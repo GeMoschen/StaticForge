@@ -136,8 +136,17 @@ input[type='number'] {
   flex: 1;
 }
 
-.variants a {
+.link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
   color: var(--sf-signal);
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
 }
 
 .usages {
@@ -175,12 +184,6 @@ input[type='number'] {
 .drawer__footer-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--sf-2);
-}
-
-.identity {
-  display: flex;
-  flex-direction: column;
   gap: var(--sf-2);
 }
 

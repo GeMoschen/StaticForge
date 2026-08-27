@@ -19,7 +19,12 @@ public class UidGenerator {
             "new", "edit", "index", "api", "preview", "_generated",
             // M13.1.2: the two fixed, auto-provisioned TEMPLATES-scope root folders — no
             // user-derived uid may ever collide with them.
-            FolderScope.PAGE_TEMPLATES_UID, FolderScope.SECTION_TEMPLATES_UID);
+            FolderScope.PAGE_TEMPLATES_UID, FolderScope.SECTION_TEMPLATES_UID,
+            // The fixed, auto-provisioned NAVIGATION-scope root and the fixed, auto-provisioned
+            // wrapper root of the TEMPLATES-scope tree — same reservation rationale.
+            FolderScope.NAVIGATION_ROOT_UID, FolderScope.TEMPLATES_ROOT_UID,
+            // The fixed, auto-provisioned PAGES/MEDIA-scope roots — same reservation rationale.
+            FolderScope.PAGES_ROOT_UID, FolderScope.MEDIA_ROOT_UID);
     private static final int PROBE_LIMIT = 10_000;
 
     private final Slugifier slugifier = new Slugifier();

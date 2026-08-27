@@ -142,6 +142,15 @@ public class FolderServiceImpl implements FolderService {
                             "A subfolder's template kind must match its parent folder's."));
                 }
                 effectiveTemplateKind = parentTemplateKind;
+            } else if (parentScope == FolderScope.TEMPLATES) {
+                // The parent is TEMPLATES-scoped but carries no determined kind — the only such
+                // folder is the fixed "All Templates" wrapper root itself (real content only ever
+                // lives under its two kind-determined children). A new folder created directly
+                // under it would be permanently kind-less/orphaned, so reject the same way a
+                // top-level TEMPLATES folder already is above.
+                throw new SfException(ProblemFactory.unprocessableEntity(
+                        "New folders can't be created directly under the templates root — "
+                                + "pick Page Templates or Section Templates first."));
             }
         }
         if (effectiveScope == null) {

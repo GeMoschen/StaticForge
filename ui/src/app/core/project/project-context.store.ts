@@ -10,6 +10,7 @@ import {
   tap,
 } from 'rxjs';
 import type { components } from '../api/generated/schema.d.ts';
+import { sortFolderTree } from '../../shared/tree-sort.util';
 
 type ProjectDetail = components['schemas']['ProjectDetail'];
 type FolderView = components['schemas']['FolderView'];
@@ -106,10 +107,10 @@ export class ProjectContextStore {
     }).pipe(
       tap((res) => {
         this.project.set(res.detail);
-        this.pageFolderTree.set(res.pageFolders ?? []);
-        this.mediaFolderTree.set(res.mediaFolders ?? []);
-        this.navigationFolderTree.set(res.navigationFolders ?? []);
-        this.templateFolderTree.set(res.templateFolders ?? []);
+        this.pageFolderTree.set(sortFolderTree(res.pageFolders ?? []));
+        this.mediaFolderTree.set(sortFolderTree(res.mediaFolders ?? []));
+        this.navigationFolderTree.set(sortFolderTree(res.navigationFolders ?? []));
+        this.templateFolderTree.set(sortFolderTree(res.templateFolders ?? []));
         this.pageTemplates.set(res.pageTemplates.content ?? []);
         this.sectionTemplates.set(res.sectionTemplates.content ?? []);
         this.revisions.set(res.revisions ?? []);

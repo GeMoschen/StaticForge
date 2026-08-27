@@ -102,12 +102,15 @@ class ProjectExportSelectionApiTest {
 
     /**
      * Acceptance criterion M10.1.3 says a channels-only selection with no asset UUIDs
-     * returns a ZIP with "only manifest.json + settings.json, no assets.json entries" —
-     * but {@code ProjectExportImportServiceImpl.exportSelection} (M10.1.1/M10.1.2, already
-     * shipped) unconditionally writes {@code assets.json} (with an empty {@code assets}
-     * array when nothing is selected). This REST-layer task doesn't change that service
-     * behavior, so this test asserts the actual shipped shape: {@code assets.json} IS
-     * present but its {@code assets} list is empty, and {@code settings.json} is present.
+     * returns a ZIP with "only manifest.json + settings.json, no assets.json entries" — and
+     * since {@code M14.1} changed the exporter to write one {@code assets/<uuid>.json} entry
+     * per exported asset instead of a single combined {@code assets.json}, an empty asset
+     * selection now literally produces zero {@code assets/} entries and no {@code
+     * assets.json} entry at all (there is no longer a single file to write "empty"): the
+     * ZIP's own entry list doubles as its own index (spec note, {@code M14} README), so an
+     * empty selection has nothing to index. {@code parseAssets} treats "no asset entries of
+     * either shape" the same way {@code readArchive} now does — as a legitimately empty list,
+     * not an error.
      */
     @Test
     void channelsOnlySelectionWithNoAssetsReturnsEmptyAssetsArrayAndSettings() throws Exception {
@@ -128,7 +131,8 @@ class ProjectExportSelectionApiTest {
 
         byte[] archive = result.getResponse().getContentAsByteArray();
         Set<String> entryNames = zipEntryNames(archive);
-        assertThat(entryNames).contains("manifest.json", "settings.json", "assets.json");
+        assertThat(entryNames).contains("manifest.json", "settings.json");
+        assertThat(entryNames).noneMatch(name -> name.equals("assets.json") || name.startsWith("assets/"));
         assertThat(parseAssets(archive)).isEmpty();
     }
 
@@ -176,16 +180,33 @@ class ProjectExportSelectionApiTest {
         return names;
     }
 
+    /**
+     * Shape-aware (task {@code M14.2.2}): reads either the legacy single {@code assets.json}
+     * entry or one-or-more {@code assets/<uuid>.json} entries ({@code M14.1}+, the shape every
+     * current exporter writes), mirroring {@code
+     * ProjectExportImportServiceImpl#readArchive}'s own two-accumulator/per-file-wins logic.
+     * Zero asset entries of either shape is a legitimately empty archive (e.g. a channels-only
+     * selection), not an error.
+     */
     private List<ExportedAsset> parseAssets(byte[] archiveBytes) throws Exception {
+        List<ExportedAsset> legacyAssets = null;
+        List<ExportedAsset> perFileAssets = null;
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes))) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
-                if ("assets.json".equals(entry.getName())) {
-                    return MAPPER.readValue(zip.readAllBytes(), ExportArchive.class).assets();
+                String name = entry.getName();
+                if ("assets.json".equals(name)) {
+                    legacyAssets =
+                            new java.util.ArrayList<>(MAPPER.readValue(zip.readAllBytes(), ExportArchive.class).assets());
+                } else if (name.startsWith("assets/")) {
+                    if (perFileAssets == null) {
+                        perFileAssets = new java.util.ArrayList<>();
+                    }
+                    perFileAssets.add(MAPPER.readValue(zip.readAllBytes(), ExportedAsset.class));
                 }
             }
         }
-        throw new IllegalStateException("assets.json entry not found in archive");
+        return perFileAssets != null ? perFileAssets : legacyAssets != null ? legacyAssets : List.of();
     }
 
     private Fixture newFixture(String key) {

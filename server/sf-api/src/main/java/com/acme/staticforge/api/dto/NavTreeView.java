@@ -19,4 +19,5 @@ public record NavTreeView(
         String label,
         UUID resolvedPageUuid,
         String resolvedPagePath,
+        boolean protectedFolder,
         List<NavTreeView> children) {}

@@ -82,6 +82,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     private static final String MANIFEST_ENTRY = "manifest.json";
     private static final String ASSETS_ENTRY = "assets.json";
+    private static final String ASSETS_PREFIX = "assets/";
     private static final String SETTINGS_ENTRY = "settings.json";
     private static final String BLOBS_PREFIX = "blobs/";
     private static final String ROOT_UID = "root";
@@ -239,7 +240,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (ZipOutputStream zip = new ZipOutputStream(out)) {
                 writeJson(zip, MANIFEST_ENTRY, manifest);
-                writeJson(zip, ASSETS_ENTRY, new ExportArchive(PROTOCOL_VERSION, assets));
+                for (ExportedAsset asset : assets) {
+                    writeJson(zip, ASSETS_PREFIX + asset.uuid() + ".json", asset);
+                }
                 if (selection.includeChannels() || selection.includeGenerationTargets()) {
                     writeJson(zip, SETTINGS_ENTRY, buildExportedSettings(projectId, selection));
                 }
@@ -396,7 +399,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // ensureTemplateFolders is idempotent find-or-create, so this is safe even for a target
         // project that (unexpectedly) doesn't have them yet.
         Map<AssetType, ExportedAsset> fixedTemplateFolderAssets = findFixedTemplateFolders(assets);
-        Set<String> fixedTemplateFolderKeys = new HashSet<>();
+        Set<String> fixedFolderKeys = new HashSet<>();
         if (!fixedTemplateFolderAssets.isEmpty()) {
             Map<AssetType, AssetVersionView> targetFixedFolders = assetService.ensureTemplateFolders(targetProjectId, ctx);
             for (Map.Entry<AssetType, ExportedAsset> entry : fixedTemplateFolderAssets.entrySet()) {
@@ -408,9 +411,30 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 String key = archiveFolder.uuid().toLowerCase();
                 remap.put(key, targetFolder.uuid());
                 idMaps.put(key, targetFolderId, targetFolder.folderPath());
-                fixedTemplateFolderKeys.add(key);
+                fixedFolderKeys.add(key);
             }
         }
+
+        // The fixed, protected "All Navigation", "All Templates", "All Pages" and "All Media"
+        // wrapper roots (generalized from M13.1.2's two-fixed-folder pattern) get the exact same
+        // resolve-not-create treatment: every project already has its own copy, so an archive's
+        // copy must remap onto the target's existing folder rather than create a duplicate.
+        fixedFolderKeys.addAll(resolveFixedFolder(
+                findFixedFolderByUid(assets, FolderScope.NAVIGATION_ROOT_UID),
+                assetService.ensureNavigationRootFolder(targetProjectId, ctx),
+                targetProjectId, remap, idMaps));
+        fixedFolderKeys.addAll(resolveFixedFolder(
+                findFixedFolderByUid(assets, FolderScope.TEMPLATES_ROOT_UID),
+                assetService.ensureTemplatesRootFolder(targetProjectId, ctx),
+                targetProjectId, remap, idMaps));
+        fixedFolderKeys.addAll(resolveFixedFolder(
+                findFixedFolderByUid(assets, FolderScope.PAGES_ROOT_UID),
+                assetService.ensurePagesRootFolder(targetProjectId, ctx),
+                targetProjectId, remap, idMaps));
+        fixedFolderKeys.addAll(resolveFixedFolder(
+                findFixedFolderByUid(assets, FolderScope.MEDIA_ROOT_UID),
+                assetService.ensureMediaRootFolder(targetProjectId, ctx),
+                targetProjectId, remap, idMaps));
 
         // Pre-populate idMaps for every skipped asset with the *existing* target asset's real
         // (assetId, folderPath) — not a to-be-created one — so descendants still explicitly
@@ -440,7 +464,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         for (ExportedAsset asset : order(assets, rootAsset)) {
             if (asset == rootAsset
                     || skipped.contains(asset.uuid().toLowerCase())
-                    || fixedTemplateFolderKeys.contains(asset.uuid().toLowerCase())) {
+                    || fixedFolderKeys.contains(asset.uuid().toLowerCase())) {
                 continue;
             }
             createImportedAsset(targetProjectId, asset, remap, collided, idMaps, manifest, importedAt,
@@ -757,6 +781,40 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         return found;
     }
 
+    /** Matches an archive {@link ExportedAsset} of type {@code FOLDER} by well-known uid — the
+     * single-root analogue of {@link #findFixedTemplateFolders} (used for {@code
+     * FolderScope#NAVIGATION_ROOT_UID}/{@code TEMPLATES_ROOT_UID}, which have exactly one fixed
+     * folder each rather than two keyed by kind). */
+    private static ExportedAsset findFixedFolderByUid(List<ExportedAsset> assets, String uid) {
+        for (ExportedAsset asset : assets) {
+            if ("FOLDER".equals(asset.type()) && uid.equals(asset.uid())) {
+                return asset;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolve-not-create for a single fixed, protected root folder: if the archive contains one
+     * (by well-known uid), remap its uuid onto the target's own already-ensured copy and
+     * pre-populate {@code idMaps} so descendants resolve their parent correctly. Returns the
+     * archive key to exclude from the generic create loop (empty if the archive had none).
+     */
+    private Set<String> resolveFixedFolder(
+            ExportedAsset archiveFolder, AssetVersionView targetFolder, long targetProjectId,
+            Map<String, UUID> remap, IdMaps idMaps) {
+        if (archiveFolder == null) {
+            return Set.of();
+        }
+        Long targetFolderId = assetRepository.findByProjectIdAndUuid(targetProjectId, targetFolder.uuid())
+                .map(Asset::getId)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Fixed root folder not found.")));
+        String key = archiveFolder.uuid().toLowerCase();
+        remap.put(key, targetFolder.uuid());
+        idMaps.put(key, targetFolderId, targetFolder.folderPath());
+        return Set.of(key);
+    }
+
     private void collectBlobs(JsonNode payload, Map<String, byte[]> blobs) {
         if (payload == null) {
             return;
@@ -847,7 +905,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     private ArchiveContent readArchive(byte[] zipBytes) {
         ExportManifest manifest = null;
-        List<ExportedAsset> assets = null;
+        List<ExportedAsset> legacyAssets = null;
+        List<ExportedAsset> perFileAssets = null;
         ExportedSettings settings = null;
         Map<String, byte[]> blobs = new HashMap<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
@@ -857,7 +916,13 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 if (MANIFEST_ENTRY.equals(name)) {
                     manifest = objectMapper.readValue(zip.readAllBytes(), ExportManifest.class);
                 } else if (ASSETS_ENTRY.equals(name)) {
-                    assets = new ArrayList<>(objectMapper.readValue(zip.readAllBytes(), ExportArchive.class).assets());
+                    legacyAssets =
+                            new ArrayList<>(objectMapper.readValue(zip.readAllBytes(), ExportArchive.class).assets());
+                } else if (name.startsWith(ASSETS_PREFIX)) {
+                    if (perFileAssets == null) {
+                        perFileAssets = new ArrayList<>();
+                    }
+                    perFileAssets.add(objectMapper.readValue(zip.readAllBytes(), ExportedAsset.class));
                 } else if (SETTINGS_ENTRY.equals(name)) {
                     settings = objectMapper.readValue(zip.readAllBytes(), ExportedSettings.class);
                 } else if (name.startsWith(BLOBS_PREFIX)) {
@@ -868,8 +933,22 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             throw new SfException(
                     ProblemFactory.badRequest("Invalid export archive: " + e.getMessage()), e.getMessage(), e);
         }
-        if (manifest == null || assets == null) {
-            throw new SfException(ProblemFactory.badRequest("Export archive is missing a manifest or assets document."));
+        // Two independent accumulators over the same one pass: legacyAssets (single assets.json,
+        // M10-M13, protocolVersion <= 2) and perFileAssets (assets/<uuid>.json, M14.1+). An archive
+        // is written by exactly one exporter version, so only one of these is ever non-empty for
+        // any real archive — the per-file branch wins if both are somehow populated, since that
+        // shape is what every current and future exporter writes (no dedicated error path needed
+        // for a shape no real writer produces). Neither accumulator ending up populated is not
+        // itself an error: a legitimate selection can have zero assets (e.g. a channels-only
+        // export, ExportSelection with an empty assetUuids set and includeChannels true) — under
+        // the per-file shape that means literally zero assets/ entries, which is indistinguishable
+        // from "this shape wasn't used", so it's treated as an empty asset list rather than
+        // rejected. Only a missing manifest.json (structurally required by every version) is a
+        // real corruption signal.
+        List<ExportedAsset> assets = perFileAssets != null ? perFileAssets
+                : legacyAssets != null ? legacyAssets : new ArrayList<>();
+        if (manifest == null) {
+            throw new SfException(ProblemFactory.badRequest("Export archive is missing a manifest document."));
         }
         assets.sort(Comparator.comparing(ExportedAsset::uuid));
         return new ArchiveContent(manifest, assets, blobs, settings);

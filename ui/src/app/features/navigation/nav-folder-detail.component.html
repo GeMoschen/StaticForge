@@ -15,7 +15,7 @@
       <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
     } @else {
       <h2 class="nav-folder-detail__title">{{ folder().displayName ?? folder().uid }}</h2>
-      @if (!isRoot()) {
+      @if (!isProtected()) {
         <button type="button" class="nav-folder-detail__edit" (click)="startEditName()" aria-label="Rename folder">
           <sf-icon name="edit" />
         </button>
@@ -26,19 +26,13 @@
   </header>
 
   <div class="nav-folder-detail__body">
-    @if (isRoot()) {
-      <p class="nav-folder-detail__hint">
-        This is the project's navigation root — it can't be renamed, moved, or deleted.
-      </p>
-    }
-
     <section class="nav-folder-detail__section">
       <h3 class="nav-folder-detail__section-title">Metadata</h3>
       <dl class="nav-folder-detail__meta">
         <dt>Path</dt>
         <dd class="nav-folder-detail__mono">{{ folder().folderPath ?? '/' }}</dd>
       </dl>
-      @if (isRoot()) {
+      @if (isProtected()) {
         <dl class="nav-folder-detail__meta">
           <dt>UID</dt>
           <dd class="nav-folder-detail__mono">{{ folder().uid }}</dd>
@@ -85,7 +79,7 @@
   </div>
 
   <footer class="nav-folder-detail__footer">
-    @if (!isRoot()) {
+    @if (!isProtected()) {
       <sf-button variant="danger" [disabled]="deleting()" (click)="requestDelete()">Delete folder</sf-button>
     }
   </footer>

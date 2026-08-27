@@ -5,23 +5,25 @@ import { ApiClient } from '../../core/api/api.client';
 import { NavigationComponent } from './navigation.component';
 import { NavigationService, type NavTreeView } from './navigation.service';
 
-const tree: NavTreeView = {
-  uuid: 'root-uuid',
-  type: 'FOLDER',
-  uid: 'root',
-  displayName: 'Navigation',
-  children: [
-    {
-      uuid: 'ref-uuid',
-      type: 'PAGE_REFERENCE',
-      uid: 'about',
-      displayName: 'About',
-      resolvedPageUuid: 'page-uuid',
-      resolvedPagePath: '/about/',
-      children: [],
-    },
-  ],
-};
+const tree: NavTreeView[] = [
+  {
+    uuid: 'main-uuid',
+    type: 'FOLDER',
+    uid: 'main',
+    displayName: 'Main Menu',
+    children: [
+      {
+        uuid: 'ref-uuid',
+        type: 'PAGE_REFERENCE',
+        uid: 'about',
+        displayName: 'About',
+        resolvedPageUuid: 'page-uuid',
+        resolvedPagePath: '/about/',
+        children: [],
+      },
+    ],
+  },
+];
 
 describe('NavigationComponent', () => {
   it('renders the full navigation folder structure from GET .../navigation/tree', async () => {
@@ -36,7 +38,7 @@ describe('NavigationComponent', () => {
     });
 
     expect(nav.tree).toHaveBeenCalledWith('proj');
-    await waitFor(() => expect(screen.getByText('Navigation')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Main Menu')).toBeTruthy());
     expect(screen.getByText('About')).toBeTruthy();
   });
 

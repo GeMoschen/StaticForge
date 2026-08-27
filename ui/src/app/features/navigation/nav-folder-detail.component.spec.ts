@@ -52,7 +52,7 @@ describe('NavFolderDetailComponent', () => {
     const nav = makeNavStub();
     const api = makeApiStub();
     await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children, isRoot: false },
+      componentInputs: { projectKey: 'proj', folder, children },
       providers: [
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
@@ -69,7 +69,7 @@ describe('NavFolderDetailComponent', () => {
     const nav = makeNavStub();
     const api = makeApiStub();
     await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children, isRoot: false },
+      componentInputs: { projectKey: 'proj', folder, children },
       providers: [
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
@@ -89,7 +89,7 @@ describe('NavFolderDetailComponent', () => {
     const nav = makeNavStub();
     const api = makeApiStub();
     await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children, isRoot: false },
+      componentInputs: { projectKey: 'proj', folder, children },
       providers: [
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
@@ -109,7 +109,7 @@ describe('NavFolderDetailComponent', () => {
     const nav = makeNavStub();
     const api = makeApiStub();
     await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children, isRoot: false },
+      componentInputs: { projectKey: 'proj', folder, children },
       providers: [
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
@@ -128,14 +128,18 @@ describe('NavFolderDetailComponent', () => {
     );
   });
 
-  it('disables rename and delete for the root folder', async () => {
+  it('always shows rename and delete — no distinguished root folder any more', async () => {
     const nav = makeNavStub();
+    const api = makeApiStub();
     await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children, isRoot: true },
-      providers: [{ provide: NavigationService, useValue: nav }],
+      componentInputs: { projectKey: 'proj', folder, children },
+      providers: [
+        { provide: NavigationService, useValue: nav },
+        { provide: ApiClient, useValue: api },
+      ],
     });
 
-    expect(screen.queryByLabelText('Rename folder')).toBeFalsy();
-    expect(screen.queryByText('Delete folder')).toBeFalsy();
+    expect(screen.queryByLabelText('Rename folder')).toBeTruthy();
+    expect(screen.queryByText('Delete folder')).toBeTruthy();
   });
 });

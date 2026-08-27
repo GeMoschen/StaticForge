@@ -8,6 +8,7 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { forkJoin } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -19,10 +20,12 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ChannelsService } from '../channels/channels.service';
+import { sortByDisplayName } from '../../shared/tree-sort.util';
 import { TemplateFolderNodeComponent } from './template-folder-node.component';
 import {
   PAGE_TEMPLATES_ROOT_UID,
   SECTION_TEMPLATES_ROOT_UID,
+  TEMPLATES_ROOT_UID,
   type FolderMoveEvent,
   type TemplateAssetKind,
   type TemplateFolderSelectEvent,
@@ -80,6 +83,12 @@ export class TemplatesComponent {
   }
 
   protected readonly templateFolderTree = this.store.templateFolderTree;
+  /** The store's real top-level folders ("Page Templates"/"Section Templates") — the fixed "All
+   * Templates" wrapper root (`templateFolderTree()`'s sole top-level entry) is unwrapped here so
+   * it's never rendered as its own row, matching Pages/Media's tree visualization. Every other
+   * consumer above still walks the raw `templateFolderTree()` (uuid/uid lookups, the
+   * ambiguous-root check, etc.) — this is a display-only unwrap. */
+  protected readonly topLevelFolders = computed<FolderView[]>(() => this.templateFolderTree()[0]?.children ?? []);
 
   /** The folder currently selected in the tree — scopes the template list to that folder's
    * direct contents and is the default target for "New template" (Task M13.3.2). */
@@ -133,6 +142,9 @@ export class TemplatesComponent {
       } else {
         map.set(path, [t]);
       }
+    }
+    for (const [path, list] of map) {
+      map.set(path, sortByDisplayName(list));
     }
     return map;
   });
@@ -222,7 +234,10 @@ export class TemplatesComponent {
           this.selectedFolderKind.set(null);
           return;
         }
-        const root = tree.find((n) => n.uid === PAGE_TEMPLATES_ROOT_UID) ?? tree[0];
+        // PAGE_TEMPLATES_ROOT_UID is no longer necessarily top-level — it now nests one level
+        // inside the fixed "All Templates" wrapper root (M13.1.2, generalized) — so this needs
+        // a recursive lookup, not a flat top-level `.find`.
+        const root = findFolderByUid(tree, PAGE_TEMPLATES_ROOT_UID) ?? tree[0];
         if (root.uuid) {
           this.selectedFolder.set(root.uuid);
           this.selectedFolderKind.set(this.rootKind(root));
@@ -292,16 +307,19 @@ export class TemplatesComponent {
   }
 
   /** Target folder for a newly-created template (M13.3.2 step 1): the selected folder if one
-   * is selected, else the fixed root matching the currently-relevant kind. In practice
-   * `selectedFolder` is only ever null before the tree's first load — the auto-select-root
-   * effect above keeps it pointed at a real folder from then on — but the fallback keeps this
-   * correct even if that changes. */
+   * is selected and it isn't the ambiguous "All Templates" wrapper root (which has no kind of
+   * its own — content can never live directly under it), else the fixed root matching the
+   * currently-relevant kind. In practice `selectedFolder` is only ever null before the tree's
+   * first load — the auto-select-root effect above keeps it pointed at a real folder from then
+   * on — but the fallback keeps this correct even if that changes. */
   private newTemplateParentUuid(): string | undefined {
-    if (this.selectedFolder()) {
-      return this.selectedFolder() ?? undefined;
+    const selected = this.selectedFolder();
+    const selectedNode = selected ? findFolder(this.templateFolderTree(), selected) : null;
+    if (selectedNode && selectedNode.uid !== TEMPLATES_ROOT_UID) {
+      return selected ?? undefined;
     }
     const rootUid = this.activeTemplateKind() === 'SECTION_TEMPLATE' ? SECTION_TEMPLATES_ROOT_UID : PAGE_TEMPLATES_ROOT_UID;
-    return this.templateFolderTree().find((n) => n.uid === rootUid)?.uuid;
+    return findFolderByUid(this.templateFolderTree(), rootUid)?.uuid;
   }
 
   submitNewTemplate(value: CreateAssetFormValue): void {
@@ -600,11 +618,23 @@ export class TemplatesComponent {
     return revision != null ? etagFor(revision) : undefined;
   }
 
+  /** Fetches BOTH template kinds and merges them into one list, always — deliberately not
+   * scoped to `this.kind()`. This tree has two fixed roots ("Page Templates"/"Section
+   * Templates") shown at once, exactly like any other store's tree can have multiple top-level
+   * folders shown at once; scoping the fetch to "whichever kind is currently selected" (the old
+   * behavior) meant selecting something under one root silently emptied the other root's
+   * branch in the tree until you selected something back under it — a "switching" UI the other
+   * stores don't have and this one shouldn't either. `this.kind()` still exists and is still
+   * correct to use for *per-item* operations (create/save/delete/channel calls scoped to
+   * whichever one template is selected), just never again for "what to fetch". */
   private reloadList(key: string): void {
     this.loading.set(true);
-    this.service.list(this.kind(), key).subscribe({
-      next: (res) => {
-        const list = res.content ?? [];
+    forkJoin({
+      page: this.service.list('page', key),
+      section: this.service.list('section', key),
+    }).subscribe({
+      next: ({ page, section }) => {
+        const list = [...(page.content ?? []), ...(section.content ?? [])];
         this.templates.set(list);
         this.loading.set(false);
         const current = this.selectedUuid();
@@ -680,6 +710,22 @@ function findFolder(nodes: FolderView[], uuid: string): FolderView | null {
       return node;
     }
     const found = findFolder(node.children ?? [], uuid);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/** Same shape as `findFolder`, but matches on the well-known `uid` string instead of `uuid` —
+ * needed since the fixed kind-roots are no longer necessarily top-level array items (they now
+ * nest one level inside the fixed "All Templates" wrapper root). */
+function findFolderByUid(nodes: FolderView[], uid: string): FolderView | null {
+  for (const node of nodes) {
+    if (node.uid === uid) {
+      return node;
+    }
+    const found = findFolderByUid(node.children ?? [], uid);
     if (found) {
       return found;
     }

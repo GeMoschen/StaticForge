@@ -42,7 +42,7 @@
           [depth]="depth() + 1"
           [selectedUuid]="selectedUuid()"
           [projectKey]="projectKey()"
-          [templateKind]="templateKind()"
+          [templateKind]="childTemplateKind(child)"
           [templatesByFolder]="templatesByFolder()"
           [selectedTemplateUuid]="selectedTemplateUuid()"
           (select)="select.emit($event)"

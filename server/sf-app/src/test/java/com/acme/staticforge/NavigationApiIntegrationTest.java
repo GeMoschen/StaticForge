@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
-import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.page.CreatePageCommand;
@@ -28,7 +27,6 @@ import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -107,12 +105,13 @@ class NavigationApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pageUuid").value(page.uuid().toString()));
 
-        // tree exposes the resolved startNode
+        // tree exposes the resolved startNode — the sole top-level entry is the fixed "All
+        // Navigation" root; navRoot(fx)'s own folder (and its startNode) is one level inside it.
         mvc.perform(get("/api/v1/projects/" + fx.project().getKey() + "/navigation/tree")
                         .header("Authorization", "Bearer " + fx.viewerToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.resolvedPageUuid").value(page.uuid().toString()))
-                .andExpect(jsonPath("$.children[0].uuid").value(refUuid.toString()));
+                .andExpect(jsonPath("$[0].children[0].resolvedPageUuid").value(page.uuid().toString()))
+                .andExpect(jsonPath("$[0].children[0].children[0].uuid").value(refUuid.toString()));
 
         // rename via PATCH .../references/{uuid}
         String updateBody = """
@@ -198,10 +197,10 @@ class NavigationApiIntegrationTest {
                 .andExpect(status().isPreconditionFailed());
     }
 
+    /** A fresh top-level `NAVIGATION` folder — nothing is pre-provisioned any more, so each test
+     * that needs one creates its own. */
     private AssetVersionView navRoot(Fixture fx) {
-        List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
-        FolderNode root = tree.get(0);
-        return assetService.requireCurrent(fx.project().getId(), root.uuid());
+        return folderService.create(null, "Nav Root " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
     }
 
     private AssetVersionView createPage(Fixture fx, String name) {

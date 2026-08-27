@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
-import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.navigation.CreatePageReferenceCommand;
@@ -27,7 +26,6 @@ import com.acme.staticforge.urlregistry.UrlRegistryRepository;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -200,10 +198,10 @@ class UrlRegistryRepositoryTest {
         return new UrlRegistryEntry(projectId, channelKey, pageRefUuid, area, url, Instant.now(), 1L, false);
     }
 
+    /** A fresh top-level `NAVIGATION` folder — nothing is pre-provisioned any more, so each test
+     * that needs one creates its own. */
     private AssetVersionView navRoot(Fixture fx) {
-        List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
-        FolderNode root = tree.get(0);
-        return assetService.requireCurrent(fx.project().getId(), root.uuid());
+        return folderService.create(null, "Nav Root " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
     }
 
     private AssetVersionView createPage(Fixture fx, String name) {

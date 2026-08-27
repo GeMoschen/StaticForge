@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
+import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTreeComponent } from '../../shared/components/sf-tree.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
@@ -10,9 +12,11 @@ import { NavFolderDetailComponent } from './nav-folder-detail.component';
 import { NavReferenceDetailComponent } from './nav-reference-detail.component';
 import { NavTreeNodeComponent, type NavMoveEvent } from './nav-tree-node.component';
 import { NavigationService, type NavigationFolderView, type NavTreeView, type PageReferenceView } from './navigation.service';
+import { sortNavTree } from '../../shared/tree-sort.util';
 
 interface RawFolderPayload {
   scope?: string;
+  protected?: boolean;
   startNode?: { kind?: string; assetUuid?: string } | null;
 }
 
@@ -23,11 +27,13 @@ interface RawReferencePayload {
 
 /**
  * Navigation store — the same "tree + detail drawer" shape used by the
- * pages/media stores. Renders `GET .../navigation/tree` (folders +
- * `PageReference` leaves), and opens a folder- or reference-shaped drawer on
- * selection. The single eager navigation root (`M8.1.2`) is shown as the
- * top-level tree node with rename/delete disabled, matching how the media
- * store's "All media" root restricts itself to "new subfolder" only.
+ * pages/media stores. Renders `GET .../navigation/tree` (always exactly one
+ * top-level entry: the fixed, protected "All Navigation" wrapper root, spec
+ * M13.1.2-style, generalized), and opens a folder- or reference-shaped
+ * drawer on selection. The wrapper is unwrapped for display (`topLevelNodes`)
+ * — its own "All navigation" affordance (the `navigation__clear` button)
+ * replaces it, exactly matching Pages/Media's tree visualization — rather
+ * than rendering the wrapper a second time as an ordinary folder row.
  */
 @Component({
   selector: 'sf-navigation',
@@ -36,6 +42,7 @@ interface RawReferencePayload {
   imports: [
     SfButtonComponent,
     SfEmptyStateComponent,
+    SfIconComponent,
     SfSpinnerComponent,
     SfTreeComponent,
     SfCreateAssetDialogComponent,
@@ -52,9 +59,10 @@ export class NavigationComponent {
   private readonly nav = inject(NavigationService);
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
+  private readonly menu = inject(ContextMenuService);
 
   readonly loading = signal(false);
-  readonly root = signal<NavTreeView | null>(null);
+  readonly forest = signal<NavTreeView[]>([]);
   readonly selectedUuid = signal<string | null>(null);
 
   readonly folderDetail = signal<NavigationFolderView | null>(null);
@@ -68,26 +76,22 @@ export class NavigationComponent {
 
   readonly selectedNode = computed<NavTreeView | null>(() => {
     const uuid = this.selectedUuid();
-    const root = this.root();
-    if (!uuid || !root) {
+    if (!uuid) {
       return null;
     }
-    return findNode(root, uuid);
+    return findNode(this.forest(), uuid);
   });
 
-  readonly isRootSelected = computed(() => {
-    const root = this.root();
-    const uuid = this.selectedUuid();
-    return root != null && uuid != null && root.uuid === uuid;
-  });
+  /** The store's real top-level entries — the fixed "All Navigation" wrapper root's children
+   * (see the class doc). */
+  readonly topLevelNodes = computed<NavTreeView[]>(() => this.forest()[0]?.children ?? []);
 
-  /** The folder currently targeted by "New folder"/"New reference" — the selected folder, or the root if nothing (folder-shaped) is selected. */
-  readonly targetFolderUuid = computed<string | null>(() => {
+  /** The folder currently targeted by "New folder"/"New reference" — the selected folder, or
+   * `undefined` (the project root — matches Pages' `selectedFolder() ?? undefined`) if nothing
+   * folder-shaped is selected. */
+  readonly targetFolderUuid = computed<string | undefined>(() => {
     const node = this.selectedNode();
-    if (node && node.type === 'FOLDER' && node.uuid) {
-      return node.uuid;
-    }
-    return this.root()?.uuid ?? null;
+    return node && node.type === 'FOLDER' && node.uuid ? node.uuid : undefined;
   });
 
   constructor() {
@@ -119,7 +123,7 @@ export class NavigationComponent {
   protected submitNewFolder(value: CreateAssetFormValue): void {
     const parentUuid = this.targetFolderUuid();
     this.creatingFolder.set(true);
-    this.nav.createFolder(this.projectKey(), value.displayName, parentUuid ?? undefined).subscribe({
+    this.nav.createFolder(this.projectKey(), value.displayName, parentUuid).subscribe({
       next: () => {
         this.creatingFolder.set(false);
         this.newFolderOpen.set(false);
@@ -134,9 +138,6 @@ export class NavigationComponent {
   }
 
   protected newReference(): void {
-    if (!this.targetFolderUuid()) {
-      return;
-    }
     this.newReferenceOpen.set(true);
   }
 
@@ -146,9 +147,6 @@ export class NavigationComponent {
 
   protected submitNewReference(value: CreateAssetFormValue): void {
     const folderUuid = this.targetFolderUuid();
-    if (!folderUuid) {
-      return;
-    }
     this.creatingReference.set(true);
     this.nav
       .createReference(this.projectKey(), {
@@ -175,12 +173,8 @@ export class NavigationComponent {
   }
 
   protected onMove(event: NavMoveEvent): void {
-    const root = this.root();
-    if (!root) {
-      return;
-    }
-    const source = findNode(root, event.source);
-    if (!source || source.uuid === root.uuid) {
+    const source = findNode(this.forest(), event.source);
+    if (!source) {
       return;
     }
     const key = this.projectKey();
@@ -232,6 +226,47 @@ export class NavigationComponent {
     this.reload(this.projectKey());
   }
 
+  /** Drop target for the "All navigation" root button — moves the dragged node to the project's
+   * navigation root (mirrors `PagesListComponent.onRootDragOver`). */
+  protected onRootDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
+  }
+
+  protected onRootDrop(event: DragEvent): void {
+    event.preventDefault();
+    const source = event.dataTransfer?.getData('text/plain');
+    if (!source) {
+      return;
+    }
+    const node = findNode(this.forest(), source);
+    if (!node) {
+      return;
+    }
+    const key = this.projectKey();
+    const request$ = node.type === 'FOLDER'
+      ? this.nav.moveFolder(key, source, undefined)
+      : this.nav.moveReference(key, source, undefined);
+    request$.subscribe({
+      next: () => {
+        this.toasts.show('Moved to root', 'success');
+        this.reload(key);
+      },
+      error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
+    });
+  }
+
+  /** "All navigation" is the store's root — it can't be renamed, moved, or deleted, but you can
+   * create a folder/reference directly in it (mirrors `PagesListComponent.onRootContextMenu`). */
+  protected onRootContextMenu(event: MouseEvent): void {
+    this.closeDetail();
+    const items: ContextMenuItem[] = [
+      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newFolder() },
+      { label: 'New reference', icon: 'link', action: () => this.newReference() },
+    ];
+    this.menu.open(event, items);
+  }
+
   private reload(key: string): void {
     if (!key) {
       return;
@@ -239,7 +274,7 @@ export class NavigationComponent {
     this.loading.set(true);
     this.nav.tree(key).subscribe({
       next: (tree) => {
-        this.root.set(tree);
+        this.forest.set(sortNavTree(tree));
         this.loading.set(false);
       },
       error: () => {
@@ -263,6 +298,7 @@ export class NavigationComponent {
             displayName: detail.displayName,
             revision: detail.revision,
             folderPath: detail.folderPath,
+            protectedFolder: payload.protected === true,
             startNode:
               startNode && startNode.kind && startNode.assetUuid
                 ? { kind: startNode.kind, assetUuid: startNode.assetUuid }
@@ -292,12 +328,12 @@ export class NavigationComponent {
   }
 }
 
-function findNode(node: NavTreeView, uuid: string): NavTreeView | null {
-  if (node.uuid === uuid) {
-    return node;
-  }
-  for (const child of node.children ?? []) {
-    const found = findNode(child, uuid);
+function findNode(nodes: NavTreeView[], uuid: string): NavTreeView | null {
+  for (const node of nodes) {
+    if (node.uuid === uuid) {
+      return node;
+    }
+    const found = findNode(node.children ?? [], uuid);
     if (found) {
       return found;
     }

@@ -149,6 +149,23 @@
   cursor: pointer;
 }
 
+.tree-row__root-badge {
+  flex-shrink: 0;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tree-row__mono {
+  margin-left: auto;
+  padding-left: var(--sf-2);
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+  flex-shrink: 0;
+}
+
 .options {
   display: flex;
   flex-direction: column;

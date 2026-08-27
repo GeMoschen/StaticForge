@@ -16,7 +16,14 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { TemplateNavNodeComponent } from './template-nav-node.component';
-import type { FolderMoveEvent, TemplateAssetKind, TemplateFolderSelectEvent } from './types';
+import {
+  PAGE_TEMPLATES_ROOT_UID,
+  SECTION_TEMPLATES_ROOT_UID,
+  TEMPLATES_ROOT_UID,
+  type FolderMoveEvent,
+  type TemplateAssetKind,
+  type TemplateFolderSelectEvent,
+} from './types';
 
 type FolderView = components['schemas']['FolderView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
@@ -81,6 +88,23 @@ export class TemplateFolderNodeComponent {
   protected readonly renamingName = signal(false);
 
   protected readonly isProtected = computed<boolean>(() => this.node().protectedFolder === true);
+  /** True only for the fixed "All Templates" wrapper root — it has no determined kind of its
+   * own (its two children each do), so content can never be created directly under it. */
+  protected readonly isAmbiguousRoot = computed<boolean>(() => this.node().uid === TEMPLATES_ROOT_UID);
+
+  /** The kind a given CHILD of this node should use — re-derived per-child rather than blindly
+   * inherited, since the wrapper root's two children (`page_templates`/`section_templates`)
+   * fork into different kinds; every other descendant simply inherits `this.templateKind()`
+   * unchanged, exactly as before. */
+  protected childTemplateKind(child: FolderView): TemplateAssetKind {
+    if (child.uid === SECTION_TEMPLATES_ROOT_UID) {
+      return 'SECTION_TEMPLATE';
+    }
+    if (child.uid === PAGE_TEMPLATES_ROOT_UID) {
+      return 'PAGE_TEMPLATE';
+    }
+    return this.templateKind();
+  }
 
   protected ownTemplates(): TemplateSummary[] {
     return this.templatesByFolder().get(this.node().path ?? '') ?? [];
@@ -164,17 +188,20 @@ export class TemplateFolderNodeComponent {
     if (!uuid) {
       return;
     }
-    const items: ContextMenuItem[] = [
-      {
-        label: 'New template here',
-        icon: 'note_add',
-        action: () => {
-          this.select.emit({ uuid, templateKind: this.templateKind() });
-          this.newTemplate.emit();
+    const items: ContextMenuItem[] = [];
+    if (!this.isAmbiguousRoot()) {
+      items.push(
+        {
+          label: 'New template here',
+          icon: 'note_add',
+          action: () => {
+            this.select.emit({ uuid, templateKind: this.templateKind() });
+            this.newTemplate.emit();
+          },
         },
-      },
-      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newSubfolder(uuid) },
-    ];
+        { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newSubfolder(uuid) },
+      );
+    }
     if (!this.isProtected()) {
       const clip = this.clipboard.entry();
       items.push(
@@ -190,6 +217,9 @@ export class TemplateFolderNodeComponent {
         { label: '', separator: true },
         { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(uuid) },
       );
+    }
+    if (items.length === 0) {
+      return;
     }
     this.menu.open(event, items);
   }

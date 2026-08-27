@@ -75,7 +75,10 @@ public class AssetServiceImpl implements AssetService {
         String uid = uidGenerator.deriveUid(displayName, cmd.projectId(), cmd.type());
 
         validateFolderScope(cmd.projectId(), cmd.parentFolderUuid(), cmd.type());
-        FolderRef parent = resolveParent(cmd.parentFolderUuid(), cmd.projectId(), ctx);
+        FolderScope scopeHint = cmd.type() == AssetType.FOLDER
+                ? FolderScope.fromPayload(cmd.initialPayload())
+                : FolderScope.requiredFor(cmd.type());
+        FolderRef parent = resolveParent(cmd.parentFolderUuid(), cmd.projectId(), ctx, scopeHint);
         String folderPath;
         if (cmd.type() == AssetType.FOLDER) {
             folderPath = pathService.childPath(parent.path(), uid);
@@ -115,39 +118,85 @@ public class AssetServiceImpl implements AssetService {
     @Override
     @Transactional
     public Map<AssetType, AssetVersionView> ensureTemplateFolders(long projectId, RevisionContext ctx) {
+        AssetVersionView templatesRoot = ensureTemplatesRootFolder(projectId, ctx);
+        Asset templatesRootAsset = assetRepository.findByProjectIdAndUuid(projectId, templatesRoot.uuid()).orElseThrow();
         return Map.of(
-                AssetType.PAGE_TEMPLATE, ensureTemplateFolder(
-                        projectId, FolderScope.PAGE_TEMPLATES_UID, "Page Templates", AssetType.PAGE_TEMPLATE, ctx),
-                AssetType.SECTION_TEMPLATE, ensureTemplateFolder(
-                        projectId, FolderScope.SECTION_TEMPLATES_UID, "Section Templates", AssetType.SECTION_TEMPLATE, ctx));
+                AssetType.PAGE_TEMPLATE, ensureFixedFolder(
+                        projectId, templatesRootAsset.getId(), templatesRoot.folderPath(),
+                        FolderScope.PAGE_TEMPLATES_UID, "Page Templates",
+                        FolderScope.TEMPLATES, AssetType.PAGE_TEMPLATE, ctx),
+                AssetType.SECTION_TEMPLATE, ensureFixedFolder(
+                        projectId, templatesRootAsset.getId(), templatesRoot.folderPath(),
+                        FolderScope.SECTION_TEMPLATES_UID, "Section Templates",
+                        FolderScope.TEMPLATES, AssetType.SECTION_TEMPLATE, ctx));
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView ensureNavigationRootFolder(long projectId, RevisionContext ctx) {
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        return ensureFixedFolder(
+                projectId, rootAsset.getId(), root.folderPath(),
+                FolderScope.NAVIGATION_ROOT_UID, "All Navigation", FolderScope.NAVIGATION, null, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView ensureTemplatesRootFolder(long projectId, RevisionContext ctx) {
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        return ensureFixedFolder(
+                projectId, rootAsset.getId(), root.folderPath(),
+                FolderScope.TEMPLATES_ROOT_UID, "All Templates", FolderScope.TEMPLATES, null, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView ensurePagesRootFolder(long projectId, RevisionContext ctx) {
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        return ensureFixedFolder(
+                projectId, rootAsset.getId(), root.folderPath(),
+                FolderScope.PAGES_ROOT_UID, "All Pages", FolderScope.PAGES, null, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView ensureMediaRootFolder(long projectId, RevisionContext ctx) {
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        return ensureFixedFolder(
+                projectId, rootAsset.getId(), root.folderPath(),
+                FolderScope.MEDIA_ROOT_UID, "All Media", FolderScope.MEDIA, null, ctx);
     }
 
     /**
-     * Finds-or-creates one of the two fixed {@code TEMPLATES}-scope root folders by its
-     * well-known uid, mirroring {@link #ensureRootFolder}'s exact lazy pattern. Deliberately
-     * bypasses {@code FolderServiceImpl.create} — that path runs uid derivation instead of using
-     * this fixed uid, and would hit the top-level-{@code TEMPLATES} guard it enforces.
+     * Finds-or-creates a fixed, protected root folder by its well-known uid under a given
+     * parent, mirroring {@link #ensureRootFolder}'s exact lazy pattern. Deliberately bypasses
+     * {@code FolderServiceImpl.create} — that path runs uid derivation instead of using this
+     * fixed uid, and (for a top-level call) would hit the guards it enforces.
      */
-    private AssetVersionView ensureTemplateFolder(
-            long projectId, String uid, String displayName, AssetType templateKind, RevisionContext ctx) {
+    private AssetVersionView ensureFixedFolder(
+            long projectId, Long parentAssetId, String parentPath, String uid, String displayName,
+            FolderScope scope, AssetType templateKind, RevisionContext ctx) {
         Optional<Asset> existing = assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, AssetType.FOLDER, uid);
         if (existing.isPresent()) {
             return toView(requireOpen(existing.get().getId()));
         }
 
-        AssetVersionView root = ensureRootFolder(projectId, ctx);
-        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
-        AssetVersion rootVersion = requireOpen(rootAsset.getId());
-        String folderPath = pathService.childPath(rootVersion.getFolderPath(), uid);
+        String folderPath = pathService.childPath(parentPath, uid);
 
         ObjectNode payload = (ObjectNode) JsonUtil.parse("{}");
-        payload.put("scope", FolderScope.TEMPLATES.name());
-        payload.put("templateKind", templateKind.name());
+        payload.put("scope", scope.name());
+        if (templateKind != null) {
+            payload.put("templateKind", templateKind.name());
+        }
         payload.put("protected", true);
 
         return createInternal(
                 projectId, AssetType.FOLDER, displayName, uid, UUID.randomUUID(),
-                rootAsset.getId(), folderPath, payload, null, ctx);
+                parentAssetId, folderPath, payload, null, ctx);
     }
 
     @Override
@@ -371,7 +420,8 @@ public class AssetServiceImpl implements AssetService {
         }
 
         validateFolderScope(asset.getProjectId(), newParentFolderUuid, asset.getAssetType());
-        FolderRef parent = resolveParent(newParentFolderUuid, asset.getProjectId(), ctx);
+        FolderRef parent = resolveParent(
+                newParentFolderUuid, asset.getProjectId(), ctx, FolderScope.requiredFor(asset.getAssetType()));
         Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.MOVE, ctx.comment(), ctx.userId());
         AssetVersion current = requireOpen(asset.getId());
 
@@ -492,11 +542,31 @@ public class AssetServiceImpl implements AssetService {
         }
     }
 
-    private FolderRef resolveParent(UUID parentFolderUuid, long projectId, RevisionContext ctx) {
+    /**
+     * Resolves the parent folder to create/move an asset into. When {@code parentFolderUuid} is
+     * {@code null} ("put this at the top"), {@code scopeHint} decides which fixed root that
+     * means: {@code NAVIGATION}/{@code PAGES}/{@code MEDIA} each resolve into their own fixed,
+     * protected wrapper root ({@link #ensureNavigationRootFolder}/{@link #ensurePagesRootFolder}/
+     * {@link #ensureMediaRootFolder} — every top-level folder/loose leaf of that store nests
+     * under it, so no asset of a scoped store ever sits directly under the project's shared
+     * hidden root); anything else (an unscoped {@code FOLDER}) falls back to the shared hidden
+     * root itself, unchanged. TEMPLATES leaf creation never reaches this branch at all — it's
+     * pre-resolved by {@code TemplateServiceImpl} — so this is inert for Templates.
+     */
+    private FolderRef resolveParent(UUID parentFolderUuid, long projectId, RevisionContext ctx, FolderScope scopeHint) {
         if (parentFolderUuid == null) {
-            AssetVersionView root = ensureRootFolder(projectId, ctx);
+            AssetVersionView root;
+            if (scopeHint == FolderScope.NAVIGATION) {
+                root = ensureNavigationRootFolder(projectId, ctx);
+            } else if (scopeHint == FolderScope.PAGES) {
+                root = ensurePagesRootFolder(projectId, ctx);
+            } else if (scopeHint == FolderScope.MEDIA) {
+                root = ensureMediaRootFolder(projectId, ctx);
+            } else {
+                root = ensureRootFolder(projectId, ctx);
+            }
             Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
-            return new FolderRef(rootAsset.getId(), PathService.ROOT_PATH);
+            return new FolderRef(rootAsset.getId(), root.folderPath());
         }
         Asset folder = assetRepository.findByProjectIdAndUuid(projectId, parentFolderUuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Parent folder not found.")));

@@ -7,7 +7,6 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
-import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.folder.StartNode;
@@ -308,10 +307,10 @@ class M8NavigationJourneyIntegrationTest {
         return pageService.create(new CreatePageCommand(displayName, folderUuid, pageTemplate.uuid()), fx.ctx());
     }
 
+    /** A fresh top-level `NAVIGATION` folder — nothing is pre-provisioned any more, so each test
+     * that needs one creates its own. */
     private AssetVersionView navRootFolder(Fixture fx) {
-        List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
-        FolderNode root = tree.get(0);
-        return assetService.requireCurrent(fx.project().getId(), root.uuid());
+        return folderService.create(null, "Nav Root " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
     }
 
     private Fixture newFixture() {

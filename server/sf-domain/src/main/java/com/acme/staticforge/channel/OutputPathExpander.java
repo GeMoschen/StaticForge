@@ -1,5 +1,6 @@
 package com.acme.staticforge.channel;
 
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -118,7 +119,14 @@ public final class OutputPathExpander {
                 .replace("{day}", date.day);
     }
 
-    /** {@code /products/} → {@code products/}; {@code /} → {@code ""}. Trailing slash preserved. */
+    /** The fixed, protected {@code PAGES}-scope wrapper folder every page now lives under
+     * (mirrors {@code NAVIGATION}/{@code TEMPLATES}'s own fixed roots) — invisible to output
+     * URLs exactly like the project's hidden root itself, so introducing it never changes a
+     * single existing page's generated path. */
+    private static final String PAGES_ROOT_SEGMENT = FolderScope.PAGES_ROOT_UID + "/";
+
+    /** {@code /products/} → {@code products/}; {@code /} → {@code ""}; the leading, invisible
+     * {@code pages_root/} wrapper segment is stripped the same way. Trailing slash preserved. */
     private static String relativeFolder(String folderPath) {
         if (folderPath == null || folderPath.isBlank() || "/".equals(folderPath)) {
             return "";
@@ -126,6 +134,9 @@ public final class OutputPathExpander {
         String path = folderPath.replace('\\', '/');
         while (path.startsWith("/")) {
             path = path.substring(1);
+        }
+        if (path.startsWith(PAGES_ROOT_SEGMENT)) {
+            path = path.substring(PAGES_ROOT_SEGMENT.length());
         }
         if (path.isEmpty()) {
             return "";

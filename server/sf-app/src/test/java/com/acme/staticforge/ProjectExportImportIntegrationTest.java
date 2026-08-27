@@ -13,7 +13,6 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.CreateAssetCommand;
-import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.media.BlobRepository;
@@ -34,6 +33,7 @@ import com.acme.staticforge.exportimport.ConflictReport;
 import com.acme.staticforge.exportimport.ConflictSeverity;
 import com.acme.staticforge.exportimport.ConflictType;
 import com.acme.staticforge.exportimport.ExportArchive;
+import com.acme.staticforge.exportimport.ExportManifest;
 import com.acme.staticforge.exportimport.ExportSelection;
 import com.acme.staticforge.exportimport.ExportedAsset;
 import com.acme.staticforge.exportimport.ExportedSettings;
@@ -53,11 +53,14 @@ import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,7 +89,7 @@ import org.springframework.test.context.ActiveProfiles;
 class ProjectExportImportIntegrationTest {
 
     private static final AtomicInteger SEQ = new AtomicInteger();
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
 
     @Autowired UserService userService;
     @Autowired ProjectService projectService;
@@ -155,12 +158,11 @@ class ProjectExportImportIntegrationTest {
         ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
 
         assertThat(result.sourceProjectKey()).isEqualTo(source.project().getKey());
-        // media, section template, page template, page, plus the auto-created navigation
-        // root folder every project now carries (spec §17, `M8.1.2`) — the hidden root and
-        // the two fixed, protected "Page Templates" / "Section Templates" folders (spec
-        // M13.1.2) are never counted here, since import resolves all three onto the target's
-        // own existing folders instead of creating duplicates (spec M13.2.2).
-        assertThat(result.importedAssetCount()).isEqualTo(5);
+        // media, section template, page template, page — the hidden root and the two fixed,
+        // protected "Page Templates" / "Section Templates" folders (spec M13.1.2) are never
+        // counted here, since import resolves all three onto the target's own existing
+        // folders instead of creating duplicates (spec M13.2.2).
+        assertThat(result.importedAssetCount()).isEqualTo(4);
         assertThat(result.importedBlobCount()).isEqualTo(1 + sourceVariantCount);
 
         Map<String, UUID> targetMedia = uidsByType(target.project().getId(), AssetType.MEDIA);
@@ -239,9 +241,9 @@ class ProjectExportImportIntegrationTest {
         ImportResult result = exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
 
         // The count of assets created is independent of which branch each one took.
-        // page template, page, nav root — the two fixed template folders (spec M13.1.2) resolve
-        // onto the source project's own existing copies instead of being created (spec M13.2.2).
-        assertThat(result.importedAssetCount()).isEqualTo(3);
+        // page template, page — the two fixed template folders (spec M13.1.2) resolve onto the
+        // source project's own existing copies instead of being created (spec M13.2.2).
+        assertThat(result.importedAssetCount()).isEqualTo(2);
 
         Map<String, UUID> pageTemplatesAfter = uidsByType(source.project().getId(), AssetType.PAGE_TEMPLATE);
         Map<String, UUID> pagesAfter = uidsByType(source.project().getId(), AssetType.PAGE);
@@ -306,9 +308,9 @@ class ProjectExportImportIntegrationTest {
                 java.time.Instant.now(), target.user().getId()));
 
         ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
-        // page template, page, nav root — the two fixed template folders (spec M13.1.2) resolve
-        // onto the target project's own existing copies instead of being created (spec M13.2.2).
-        assertThat(result.importedAssetCount()).isEqualTo(3);
+        // page template, page — the two fixed template folders (spec M13.1.2) resolve onto the
+        // target project's own existing copies instead of being created (spec M13.2.2).
+        assertThat(result.importedAssetCount()).isEqualTo(2);
 
         Map<String, UUID> targetPageTemplates = uidsByType(target.project().getId(), AssetType.PAGE_TEMPLATE);
         UUID importedTemplateUuid = targetPageTemplates.get("landing");
@@ -827,11 +829,12 @@ class ProjectExportImportIntegrationTest {
                 new ExportSelection(Set.of(pageTemplate.uuid()), false, false, Set.of()));
 
         List<ExportedAsset> assets = parseAssets(archive);
-        assertThat(assets).hasSize(3);
+        assertThat(assets).hasSize(4);
         assertThat(assets).extracting(ExportedAsset::uuid).contains(pageTemplate.uuid().toString());
         List<ExportedAsset> folders = assets.stream().filter(a -> "FOLDER".equals(a.type())).toList();
-        assertThat(folders).hasSize(2);
-        assertThat(folders).extracting(ExportedAsset::uid).containsExactlyInAnyOrder("root", "page_templates");
+        assertThat(folders).hasSize(3);
+        assertThat(folders).extracting(ExportedAsset::uid)
+                .containsExactlyInAnyOrder("root", "templates_root", "page_templates");
     }
 
     /**
@@ -962,10 +965,14 @@ class ProjectExportImportIntegrationTest {
                 new ExportSelection(Set.of(), false, false, Set.of(FolderScope.PAGES)));
 
         Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
-        assertThat(uuids).contains(pagesFolder.uuid().toString(), page.uuid().toString());
+        // pageRefTarget is a live PAGE sitting directly at the project's hidden root (no
+        // PAGES-scope folder wraps it — see PathService.ROOT_UID's Context in
+        // 003-store-root-selection.md) — still "every live PAGES asset" per this task's
+        // acceptance criteria, so fullStores={PAGES} must pick it up exactly like pagesFolder/page.
+        assertThat(uuids).contains(
+                pagesFolder.uuid().toString(), page.uuid().toString(), pageRefTarget.uuid().toString());
         assertThat(uuids).doesNotContain(
-                media.uuid().toString(), navRoot.uuid().toString(), pageRef.uuid().toString(),
-                pageRefTarget.uuid().toString());
+                media.uuid().toString(), navRoot.uuid().toString(), pageRef.uuid().toString());
     }
 
     /**
@@ -1334,9 +1341,9 @@ class ProjectExportImportIntegrationTest {
 
         ImportResult result = exportImportService.importProject(
                 target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
-        // page template, page, nav root — the two fixed template folders (spec M13.1.2) resolve
-        // onto the target project's own existing copies instead of being created (spec M13.2.2).
-        assertThat(result.importedAssetCount()).isEqualTo(3);
+        // page template, page — the two fixed template folders (spec M13.1.2) resolve onto the
+        // target project's own existing copies instead of being created (spec M13.2.2).
+        assertThat(result.importedAssetCount()).isEqualTo(2);
 
         Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
         UUID importedPageUuid = targetPages.get("home");
@@ -1616,6 +1623,287 @@ class ProjectExportImportIntegrationTest {
         assertThat(targetFolder.payload().path("protected").asBoolean()).isTrue();
     }
 
+    // ---- M14.1 per-asset archive format ----
+
+    /**
+     * Entry-count shape (task {@code M14.1.1}/{@code M14.1.2}): exporting a fixture project
+     * with a known number of live assets produces exactly that many {@code assets/<uuid>.json}
+     * entries and zero {@code assets.json} entry — asserted on the archive's raw ZIP entry
+     * names (via {@link #zipEntryNames}), not on reparsed content, since {@code parseAssets}
+     * still only understands the pre-M14 single-file shape at this point in the epic.
+     */
+    @Test
+    void exportProducesOnePerAssetEntryAndNoCombinedAssetsJsonEntry() {
+        Fixture source = newFixture("m141_count", "M14.1 Per Asset Entry Count");
+        AssetVersionView folder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Docs", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", folder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+
+        // Every currently-live asset — not just "Docs"/"Home" — is expected in the archive:
+        // exportProject means "everything", and a fresh project already auto-carries its own
+        // hidden root, navigation root and the two fixed template-store folders (spec M8.1.2,
+        // M13.1.2) before this fixture's own two assets are added. Read the live count directly
+        // from the same snapshot exportSelection itself reads from, rather than hand-counting.
+        int expectedLiveAssetCount = assetVersionRepository.findCurrentSnapshot(source.project().getId()).size();
+
+        byte[] archive = exportImportService.exportProject(source.project().getId());
+        Set<String> entries = zipEntryNames(archive);
+
+        Set<String> assetEntries =
+                entries.stream().filter(name -> name.startsWith("assets/")).collect(Collectors.toSet());
+        assertThat(assetEntries).hasSize(expectedLiveAssetCount);
+        assertThat(assetEntries).allSatisfy(name -> assertThat(name).endsWith(".json"));
+        assertThat(entries).doesNotContain("assets.json");
+    }
+
+    /**
+     * Field-for-field content (task {@code M14.1.2}): one specific asset's own {@code
+     * assets/<uuid>.json} entry, read directly via {@code ZipInputStream} +
+     * {@code objectMapper.readValue(bytes, ExportedAsset.class)} (never via {@code
+     * parseAssets}), deserializes to an {@link ExportedAsset} matching every field a freshly
+     * created asset is known to hold — including {@code explicit}/{@code isExplicit()}
+     * provenance for both the explicitly-picked leaf and its implicitly-included ancestor
+     * folder, mirroring {@code deepLeafPickIsExplicitAndItsAncestorFoldersAreNot}.
+     */
+    @Test
+    void perAssetEntryDeserializesToExpectedExportedAssetFields() {
+        Fixture source = newFixture("m141_fields", "M14.1 Per Asset Entry Fields");
+        AssetVersionView topFolder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Top", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        ObjectNode payload = MAPPER.createObjectNode();
+        payload.putObject("content").put("headline", "Hello");
+        AssetVersionView leafPage = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Leaf", topFolder.uuid(),
+                        payload, null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(leafPage.uuid()), false, false, Set.of()));
+
+        ExportedAsset leafEntry = readAssetEntry(archive, leafPage.uuid());
+        assertThat(leafEntry.uuid()).isEqualTo(leafPage.uuid().toString());
+        assertThat(leafEntry.type()).isEqualTo("PAGE");
+        assertThat(leafEntry.uid()).isEqualTo(leafPage.uid());
+        assertThat(leafEntry.displayName()).isEqualTo("Leaf");
+        assertThat(leafEntry.parentFolderUuid()).isEqualTo(topFolder.uuid().toString());
+        assertThat(leafEntry.folderPath()).isEqualTo(leafPage.folderPath());
+        assertThat(leafEntry.templateUuid()).isNull();
+        assertThat(leafEntry.payload().path("content").path("headline").asText()).isEqualTo("Hello");
+        assertThat(leafEntry.mimeType()).isNull();
+        assertThat(leafEntry.sizeBytes()).isNull();
+        assertThat(leafEntry.isExplicit()).isTrue();
+
+        ExportedAsset ancestorEntry = readAssetEntry(archive, topFolder.uuid());
+        assertThat(ancestorEntry.uuid()).isEqualTo(topFolder.uuid().toString());
+        assertThat(ancestorEntry.type()).isEqualTo("FOLDER");
+        assertThat(ancestorEntry.displayName()).isEqualTo("Top");
+        assertThat(ancestorEntry.isExplicit()).isFalse();
+    }
+
+    /**
+     * {@code manifest.json}'s {@code protocolVersion} reads {@code 3} after this change (task
+     * {@code M14.1.1}) — the structural shape change from one combined {@code assets.json} to
+     * many {@code assets/<uuid>.json} entries is a protocol bump, not an additive field.
+     */
+    @Test
+    void manifestReportsProtocolVersionThree() {
+        Fixture source = newFixture("m141_manifest", "M14.1 Manifest Protocol Version");
+        byte[] archive = exportImportService.exportProject(source.project().getId());
+
+        ExportManifest manifest = parseManifest(archive);
+        assertThat(manifest.protocolVersion()).isEqualTo(3);
+    }
+
+    /**
+     * {@code settings.json} and every {@code blobs/<sha256>} entry are unaffected by the
+     * per-asset archive layout change (task {@code M14.1.2}) — reuses the same
+     * settings-export (feature `selective-export`, `M10.1.2`) and media-blob-export
+     * (feature `cross-project-import-identity`, `M9.3`) fixtures/assertions already
+     * established elsewhere in this file rather than inventing a new fixture shape.
+     */
+    @Test
+    void settingsAndBlobEntriesAreUnaffectedByThePerAssetAssetLayout() {
+        Fixture source = newFixture("m141_settings", "M14.1 Settings And Blobs Unaffected");
+        channelService.create(source.project().getId(),
+                new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
+                source.user().getId(), null);
+        generationTargetRepository.save(new GenerationTarget(
+                source.project().getId(), "Local Filesystem", TargetType.FILESYSTEM, MAPPER.createObjectNode(), true));
+        byte[] png = solidPng(4, 4, Color.ORANGE);
+        AssetVersionView media = mediaService.upload(
+                source.project().getId(), null, "pic.png", "image/png", png, source.ctx());
+        String sha = media.payload().path("blobSha256").asText();
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(media.uuid()), true, true, Set.of()));
+
+        Set<String> entries = zipEntryNames(archive);
+        assertThat(entries).contains("settings.json", "blobs/" + sha);
+
+        ExportedSettings settings = parseSettings(archive);
+        assertThat(settings.channels().stream().anyMatch(c -> "markdown".equals(c.key()))).isTrue();
+        assertThat(settings.targets().stream().anyMatch(t -> "Local Filesystem".equals(t.name()))).isTrue();
+
+        byte[] blobBytes = readBlobEntry(archive, sha);
+        assertThat(blobBytes).isNotEmpty();
+    }
+
+    // ---- M14.2 backward-compatible import ----
+
+    /**
+     * The highest-value test in this epic (task {@code M14.2.2}, mirroring the "prove it,
+     * don't assume it" bar {@code M9.3.2}/{@code M11.2.1} already held their own backward-compat
+     * claims to): a hand-repacked pre-{@code M14} archive — the same source project's own
+     * exported asset data, collapsed from {@code M14.1}'s per-file {@code assets/<uuid>.json}
+     * shape back into the legacy single {@code assets.json} entry ({@code
+     * ExportArchive(2, assets)}, {@link #repackAsLegacyAssetsJson}) — imports with results
+     * identical to importing that same source project's normally-exported (per-file) archive
+     * into a separate fresh target project: same asset/blob counts, same folder structure, same
+     * {@code explicit} provenance, same {@code origin} provenance recorded on import. Proves
+     * {@code readArchive}'s two shape branches ({@code M14.2.1}) are genuinely equivalent, not
+     * just that neither one throws.
+     */
+    @Test
+    void legacyRepackedArchiveImportsIdenticallyToPerFileArchive() throws Exception {
+        Fixture source = newFixture("m142_legacy", "M14.2 Legacy Archive Source");
+
+        AssetVersionView folder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Docs", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+
+        byte[] png = solidPng(64, 64, Color.BLUE);
+        AssetVersionView media = mediaService.upload(
+                source.project().getId(), null, "photo.png", "image/png", png, source.ctx());
+
+        TemplateView pageTemplate = createPageTemplate(source, "Landing", null);
+        ObjectNode pagePayload = MAPPER.createObjectNode();
+        pagePayload.put("templateRef", pageTemplate.uuid().toString());
+        ObjectNode content = pagePayload.putObject("content");
+        ObjectNode hero = content.putObject("heroImage");
+        hero.put("type", "MEDIA_REF");
+        hero.put("uuid", media.uuid().toString());
+        assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", folder.uuid(),
+                        pagePayload, pageTemplate.uuid()),
+                source.ctx());
+
+        byte[] perFileArchive = exportImportService.exportProject(source.project().getId());
+        assertThat(zipEntryNames(perFileArchive)).doesNotContain("assets.json");
+
+        byte[] legacyArchive = repackAsLegacyAssetsJson(perFileArchive);
+        Set<String> legacyEntries = zipEntryNames(legacyArchive);
+        assertThat(legacyEntries).contains("assets.json");
+        assertThat(legacyEntries).noneMatch(name -> name.startsWith("assets/"));
+        // Every non-asset entry (manifest.json, blobs/*) passes through byte-for-byte unchanged.
+        assertThat(legacyEntries)
+                .containsAll(zipEntryNames(perFileArchive).stream()
+                        .filter(name -> !name.startsWith("assets/"))
+                        .collect(Collectors.toSet()));
+
+        assertThat(parseAssets(legacyArchive)).allSatisfy(a -> assertThat(a.isExplicit()).isTrue());
+
+        Fixture perFileTarget = newFixture("m142_legacy_pf", "M14.2 Per-File Target");
+        Fixture legacyTarget = newFixture("m142_legacy_lg", "M14.2 Legacy Target");
+
+        ImportResult perFileResult = exportImportService.importProject(
+                perFileTarget.project().getId(), perFileArchive, perFileTarget.ctx(), ImportOptions.DEFAULT);
+        ImportResult legacyResult = exportImportService.importProject(
+                legacyTarget.project().getId(), legacyArchive, legacyTarget.ctx(), ImportOptions.DEFAULT);
+
+        assertThat(legacyResult.sourceProjectKey()).isEqualTo(perFileResult.sourceProjectKey());
+        assertThat(legacyResult.importedAssetCount()).isEqualTo(perFileResult.importedAssetCount());
+        assertThat(legacyResult.importedBlobCount()).isEqualTo(perFileResult.importedBlobCount());
+
+        for (AssetType type : List.of(AssetType.FOLDER, AssetType.PAGE, AssetType.MEDIA, AssetType.PAGE_TEMPLATE)) {
+            assertThat(uidsByType(legacyTarget.project().getId(), type).keySet())
+                    .as("uids of type %s", type)
+                    .isEqualTo(uidsByType(perFileTarget.project().getId(), type).keySet());
+        }
+
+        UUID perFilePageUuid = uidsByType(perFileTarget.project().getId(), AssetType.PAGE).get("home");
+        UUID legacyPageUuid = uidsByType(legacyTarget.project().getId(), AssetType.PAGE).get("home");
+        // Same source UUID preservation in both (neither fresh target project has seen it before).
+        assertThat(legacyPageUuid).isEqualTo(perFilePageUuid);
+
+        AssetVersionView perFilePage = assetService.requireCurrent(perFileTarget.project().getId(), perFilePageUuid);
+        AssetVersionView legacyPage = assetService.requireCurrent(legacyTarget.project().getId(), legacyPageUuid);
+        // Same folder structure.
+        assertThat(legacyPage.folderPath()).isEqualTo(perFilePage.folderPath());
+        // Same cross-reference resolution (heroImage/templateRef remapped identically).
+        assertThat(legacyPage.payload().path("templateRef").asText())
+                .isEqualTo(perFilePage.payload().path("templateRef").asText());
+        assertThat(legacyPage.payload().path("content").path("heroImage").path("uuid").asText())
+                .isEqualTo(perFilePage.payload().path("content").path("heroImage").path("uuid").asText());
+        // Same origin provenance (import bulk-revision machinery, spec §6.1/§7.2).
+        assertThat(legacyPage.payload().path("origin").path("from").asText())
+                .isEqualTo(perFilePage.payload().path("origin").path("from").asText());
+        assertThat(legacyPage.payload().path("origin").path("sourceProjectKey").asText())
+                .isEqualTo(perFilePage.payload().path("origin").path("sourceProjectKey").asText());
+        assertThat(legacyPage.payload().path("origin").path("sourceUuid").isMissingNode())
+                .as("no collision occurred in either fresh target project")
+                .isTrue();
+
+        UUID perFileMediaUuid = uidsByType(perFileTarget.project().getId(), AssetType.MEDIA).get("photo_png");
+        UUID legacyMediaUuid = uidsByType(legacyTarget.project().getId(), AssetType.MEDIA).get("photo_png");
+        assertThat(legacyMediaUuid).isEqualTo(perFileMediaUuid);
+        AssetVersionView perFileMedia = assetService.requireCurrent(perFileTarget.project().getId(), perFileMediaUuid);
+        AssetVersionView legacyMedia = assetService.requireCurrent(legacyTarget.project().getId(), legacyMediaUuid);
+        assertThat(legacyMedia.payload().path("blobSha256").asText())
+                .isEqualTo(perFileMedia.payload().path("blobSha256").asText());
+    }
+
+    private ExportedAsset readAssetEntry(byte[] archiveBytes, UUID assetUuid) {
+        String entryName = "assets/" + assetUuid + ".json";
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (entryName.equals(entry.getName())) {
+                    return MAPPER.readValue(zip.readAllBytes(), ExportedAsset.class);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        throw new IllegalStateException(entryName + " entry not found in archive");
+    }
+
+    private ExportManifest parseManifest(byte[] archiveBytes) {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if ("manifest.json".equals(entry.getName())) {
+                    return MAPPER.readValue(zip.readAllBytes(), ExportManifest.class);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        throw new IllegalStateException("manifest.json entry not found in archive");
+    }
+
+    private byte[] readBlobEntry(byte[] archiveBytes, String sha256) {
+        String entryName = "blobs/" + sha256;
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (entryName.equals(entry.getName())) {
+                    return zip.readAllBytes();
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        throw new IllegalStateException(entryName + " entry not found in archive");
+    }
+
     private byte[] rewriteExportedAssetPayloadField(
             byte[] archiveBytes, String assetUid, String field, boolean value) {
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes));
@@ -1684,6 +1972,19 @@ class ProjectExportImportIntegrationTest {
                 fixture.ctx());
     }
 
+    /**
+     * Strips the {@code explicit} field from every asset entry, simulating a pre-{@code M11}
+     * archive that predates the field entirely (feature {@code selection-provenance}, {@code
+     * M11.2.1}). Handles both archive shapes so it keeps working regardless of which one the
+     * source archive it's given actually is: a legacy single {@code assets.json} (rewritten
+     * in place, same as before {@code M14}), or one or more {@code assets/<uuid>.json} entries
+     * ({@code M14.1}+, the shape every current exporter writes — {@code exportProject} calls
+     * in this file now always produce this shape, so this branch is the one that actually runs
+     * today). Deliberately NOT converted to the legacy single-file shape: that's a different
+     * concern ({@code M14.2.2}'s own {@link #repackAsLegacyAssetsJson}, dedicated to proving
+     * shape backward-compatibility) from this helper's job of testing the {@code explicit}
+     * field's own backward compatibility.
+     */
     private byte[] rewriteAssetsJsonWithoutExplicitField(byte[] archiveBytes) throws Exception {
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes));
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -1691,7 +1992,8 @@ class ProjectExportImportIntegrationTest {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 byte[] bytes = zip.readAllBytes();
-                if ("assets.json".equals(entry.getName())) {
+                String name = entry.getName();
+                if ("assets.json".equals(name)) {
                     com.fasterxml.jackson.databind.node.ArrayNode assetsArray =
                             (com.fasterxml.jackson.databind.node.ArrayNode)
                                     MAPPER.readTree(bytes).get("assets");
@@ -1702,8 +2004,12 @@ class ProjectExportImportIntegrationTest {
                     rewritten.put("protocolVersion", MAPPER.readTree(bytes).get("protocolVersion").asInt());
                     rewritten.set("assets", assetsArray);
                     bytes = MAPPER.writeValueAsBytes(rewritten);
+                } else if (name.startsWith("assets/")) {
+                    ObjectNode assetNode = (ObjectNode) MAPPER.readTree(bytes);
+                    assetNode.remove("explicit");
+                    bytes = MAPPER.writeValueAsBytes(assetNode);
                 }
-                zipOut.putNextEntry(new ZipEntry(entry.getName()));
+                zipOut.putNextEntry(new ZipEntry(name));
                 zipOut.write(bytes);
                 zipOut.closeEntry();
             }
@@ -1712,10 +2018,46 @@ class ProjectExportImportIntegrationTest {
         }
     }
 
+    /**
+     * Legacy-shape repack (task {@code M14.2.2}): collapses a freshly-exported archive's
+     * {@code assets/<uuid>.json} entries back into a single {@code assets.json} entry holding
+     * {@code ExportArchive(2, assets)} — protocol version 2, the last version that ever wrote
+     * this shape — passing every other entry ({@code manifest.json}, {@code settings.json},
+     * {@code blobs/*}) through byte-for-byte unchanged. Mirrors {@link
+     * #rewriteAssetsJsonWithoutExplicitField}'s read-loop/rewrite-on-match/{@code
+     * ZipOutputStream} pass-through structure, narrowly scoped to reversing exactly what {@code
+     * M14.1.1} changed (per-file to single array) — not a generic protocol-version converter.
+     */
+    private byte[] repackAsLegacyAssetsJson(byte[] archiveBytes) throws Exception {
+        List<ExportedAsset> collected = new ArrayList<>();
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes));
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                java.util.zip.ZipOutputStream zipOut = new java.util.zip.ZipOutputStream(out)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                String name = entry.getName();
+                byte[] bytes = zip.readAllBytes();
+                if (name.startsWith("assets/")) {
+                    collected.add(MAPPER.readValue(bytes, ExportedAsset.class));
+                    continue;
+                }
+                zipOut.putNextEntry(new ZipEntry(name));
+                zipOut.write(bytes);
+                zipOut.closeEntry();
+            }
+            collected.sort(Comparator.comparing(ExportedAsset::uuid));
+            zipOut.putNextEntry(new ZipEntry("assets.json"));
+            zipOut.write(MAPPER.writeValueAsBytes(new ExportArchive(2, collected)));
+            zipOut.closeEntry();
+            zipOut.finish();
+            return out.toByteArray();
+        }
+    }
+
+    /** A fresh top-level `NAVIGATION` folder — nothing is pre-provisioned any more, so each test
+     * that needs one creates its own. */
     private AssetVersionView navRoot(Fixture fx) {
-        List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
-        FolderNode root = tree.get(0);
-        return assetService.requireCurrent(fx.project().getId(), root.uuid());
+        return folderService.create(null, "Nav Root " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
     }
 
     private Set<UUID> rootFolderUuid(Fixture fixture) {
@@ -1752,18 +2094,41 @@ class ProjectExportImportIntegrationTest {
         throw new IllegalStateException("settings.json entry not found in archive");
     }
 
+    /**
+     * Shape-aware test helper (task {@code M14.2.2}): reads either archive shape {@code
+     * readArchive} itself now accepts — a single legacy {@code assets.json} entry
+     * (pre-{@code M14}, {@code protocolVersion <= 2}), or one or more {@code
+     * assets/<uuid>.json} entries ({@code M14.1}+, the shape every current exporter actually
+     * writes) — into the same {@code List<ExportedAsset>} shape, mirroring {@code
+     * ProjectExportImportServiceImpl#readArchive}'s own two-accumulator/per-file-wins logic so
+     * every existing call site keeps exercising real, current export behavior.
+     */
     private List<ExportedAsset> parseAssets(byte[] archiveBytes) {
+        List<ExportedAsset> legacyAssets = null;
+        List<ExportedAsset> perFileAssets = null;
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes))) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
-                if ("assets.json".equals(entry.getName())) {
-                    return MAPPER.readValue(zip.readAllBytes(), ExportArchive.class).assets();
+                String name = entry.getName();
+                if ("assets.json".equals(name)) {
+                    legacyAssets =
+                            new ArrayList<>(MAPPER.readValue(zip.readAllBytes(), ExportArchive.class).assets());
+                } else if (name.startsWith("assets/")) {
+                    if (perFileAssets == null) {
+                        perFileAssets = new ArrayList<>();
+                    }
+                    perFileAssets.add(MAPPER.readValue(zip.readAllBytes(), ExportedAsset.class));
                 }
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        throw new IllegalStateException("assets.json entry not found in archive");
+        // Zero asset entries of either shape is a legitimately empty archive (e.g. a
+        // channels-only selection), not an error — mirrors readArchive's own tolerance.
+        List<ExportedAsset> assets =
+                perFileAssets != null ? perFileAssets : legacyAssets != null ? legacyAssets : new ArrayList<>();
+        assets.sort(Comparator.comparing(ExportedAsset::uuid));
+        return assets;
     }
 
     private static ObjectNode renderSection(UUID sectionTemplateUuid) {

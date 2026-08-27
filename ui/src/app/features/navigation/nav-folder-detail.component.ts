@@ -19,14 +19,11 @@ interface StartNodeOption {
  * server-side validation — the options are derived from the already-loaded
  * tree data rather than a separate fetch), and delete.
  *
- * The navigation root (`isRoot`) is shown here like any other folder but
- * rename and delete are disabled: it is the project's single eager
- * navigation root (auto-created by `M8.1.2`), and every later task
- * (`M8.1.3`–`M8.1.6`) assumes exactly one exists — renaming it is harmless
- * but not useful, and deleting it would break that assumption outright.
- * This mirrors how the media store's "All media" root restricts its own
- * folder actions to "new subfolder" only (see `media-library.component.ts`'s
- * `onRootContextMenu`).
+ * The fixed, protected "All Navigation" root folder (`folder().protectedFolder`)
+ * is shown here like any other folder, but rename/UID-change/delete are
+ * hidden — it's the project's one shared navigation root and must never be
+ * renamed, re-uid'd, or deleted. The entry-page picker stays fully
+ * available for it though — that's the whole point of a real root asset.
  */
 @Component({
   selector: 'sf-nav-folder-detail',
@@ -41,7 +38,6 @@ export class NavFolderDetailComponent {
   readonly folder = input.required<NavigationFolderView>();
   /** This folder's direct children in the tree — the only valid `startNode` targets. */
   readonly children = input<NavTreeView[]>([]);
-  readonly isRoot = input<boolean>(false);
 
   readonly closed = output<void>();
   readonly changed = output<void>();
@@ -55,6 +51,8 @@ export class NavFolderDetailComponent {
   protected readonly editingName = signal(false);
   protected readonly savingStartNode = signal(false);
   protected readonly deleting = signal(false);
+
+  protected readonly isProtected = computed<boolean>(() => this.folder().protectedFolder === true);
 
   protected readonly startNodeOptions = computed<StartNodeOption[]>(() =>
     this.children()
@@ -91,7 +89,7 @@ export class NavFolderDetailComponent {
   protected saveName(): void {
     const name = this.nameDraft().trim();
     const uuid = this.folder().uuid;
-    if (!name || !uuid || this.savingName() || this.isRoot()) {
+    if (!name || !uuid || this.savingName() || this.isProtected()) {
       return;
     }
     this.savingName.set(true);
@@ -132,7 +130,7 @@ export class NavFolderDetailComponent {
 
   protected requestDelete(): void {
     const uuid = this.folder().uuid;
-    if (!uuid || this.isRoot()) {
+    if (!uuid || this.isProtected()) {
       return;
     }
     const name = this.folder().displayName ?? this.folder().uid ?? 'this folder';

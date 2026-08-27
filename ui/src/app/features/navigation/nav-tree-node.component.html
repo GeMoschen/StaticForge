@@ -5,7 +5,7 @@
 >
   <div
     class="nav-node__row"
-    [attr.draggable]="!isRoot()"
+    [attr.draggable]="isProtected() ? null : true"
     role="treeitem"
     tabindex="0"
     [attr.aria-expanded]="isFolder() ? expanded() : null"
@@ -48,8 +48,8 @@
            a plain grouping folder stays silent rather than being misflagged as "unresolved". -->
       <span class="nav-node__path">→ {{ node().resolvedPagePath }}</span>
     }
-    @if (isRoot()) {
-      <span class="nav-node__root-badge">root</span>
+    @if (isProtected()) {
+      <sf-icon class="nav-node__protected-icon" name="lock" title="Built-in folder — can't be renamed, moved, or deleted" />
     }
   </div>
 
@@ -69,16 +69,17 @@
     </div>
   }
 
-  <sf-rename-asset-dialog
-    [open]="renameOpen()"
-    [projectKey]="projectKey()"
-    [uuid]="node().uuid ?? ''"
-    [uid]="node().uid ?? ''"
-    [displayName]="node().displayName ?? node().uid ?? ''"
-    [submittingName]="renamingName()"
-    [isRoot]="isRoot()"
-    (renameDisplayName)="submitRenameDisplayName($event)"
-    (uidChanged)="onRenameUidChanged()"
-    (closed)="closeRename()"
-  />
+  @if (!isProtected()) {
+    <sf-rename-asset-dialog
+      [open]="renameOpen()"
+      [projectKey]="projectKey()"
+      [uuid]="node().uuid ?? ''"
+      [uid]="node().uid ?? ''"
+      [displayName]="node().displayName ?? node().uid ?? ''"
+      [submittingName]="renamingName()"
+      (renameDisplayName)="submitRenameDisplayName($event)"
+      (uidChanged)="onRenameUidChanged()"
+      (closed)="closeRename()"
+    />
+  }
 </div>

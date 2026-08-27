@@ -30,13 +30,6 @@ import { SfUidRenameComponent } from './sf-uid-rename.component';
  *    owns its own API call; `uidChanged` just re-emits its output once it
  *    has already completed successfully, so the caller can refresh/toast as
  *    it would after any other `sf-uid-rename` usage in this codebase.
- *
- * When `isRoot()` is true, renders only a read-only explanatory block and a
- * Close button — no editable controls, no Save buttons, nothing that could
- * reach `renameDisplayName` or the embedded `sf-uid-rename`. None of this
- * agent's call sites can reach root today (Pages/Media root folders are
- * structurally unreachable), but Navigation's root folder can, so this guard
- * is implemented per the shared contract.
  */
 @Component({
   selector: 'sf-rename-asset-dialog',
@@ -53,7 +46,6 @@ export class SfRenameAssetDialogComponent {
   readonly uid = input.required<string>();
   readonly displayName = input.required<string>();
   readonly submittingName = input(false);
-  readonly isRoot = input(false);
 
   readonly renameDisplayName = output<string>();
   readonly uidChanged = output<string>();
@@ -79,9 +71,7 @@ export class SfRenameAssetDialogComponent {
           untracked(() => {
             this.draft.set(name);
             this.touched.set(false);
-            if (!this.isRoot()) {
-              this.focusNameField();
-            }
+            this.focusNameField();
           });
         }
       },

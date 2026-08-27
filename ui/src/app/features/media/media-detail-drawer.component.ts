@@ -1,12 +1,15 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   input,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import {
   FormControl,
@@ -20,7 +23,6 @@ import { DialogService } from '../../core/ui/dialog.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 
 type MediaView = components['schemas']['MediaView'];
 type MediaMetadataRequest = components['schemas']['MediaMetadataRequest'];
@@ -35,12 +37,11 @@ type UsageDto = components['schemas']['UsageDto'];
     ReactiveFormsModule,
     SfFieldComponent,
     SfButtonComponent,
-    SfUidRenameComponent,
   ],
   templateUrl: './media-detail-drawer.component.html',
   styleUrl: './media-detail-drawer.component.scss',
 })
-export class MediaDetailDrawerComponent implements OnInit {
+export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   readonly projectKey = input.required<string>();
   readonly media = input.required<MediaView>();
 
@@ -77,6 +78,24 @@ export class MediaDetailDrawerComponent implements OnInit {
     () => this.media()?.variants ?? [],
   );
 
+  /** Object URL for the fetched preview binary — `mediaBinaryUrl()` alone 401s when used as a
+   * plain `<img src>`/`<a href>` (see `loadPreview`), so the preview image is fetched through
+   * `HttpClient` (auth interceptor attached) and rendered from a local blob URL instead. */
+  private readonly previewObjectUrl = signal<string | null>(null);
+  private lastPreviewUuid: string | null = null;
+
+  constructor() {
+    effect(() => {
+      const uuid = this.media()?.uuid;
+      const key = this.projectKey();
+      if (!uuid || !key || uuid === this.lastPreviewUuid) {
+        return;
+      }
+      this.lastPreviewUuid = uuid;
+      untracked(() => this.loadPreview(key, uuid));
+    });
+  }
+
   ngOnInit(): void {
     const media = this.media();
     this.revision.set(media.revision ?? null);
@@ -90,12 +109,49 @@ export class MediaDetailDrawerComponent implements OnInit {
     this.loadUsages();
   }
 
-  previewUrl(): string {
-    return this.api.mediaBinaryUrl(this.projectKey(), this.media()?.uuid ?? '');
+  ngOnDestroy(): void {
+    const url = this.previewObjectUrl();
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
   }
 
-  downloadUrl(variant?: string): string {
-    return this.api.mediaBinaryUrl(this.projectKey(), this.media()?.uuid ?? '', variant);
+  previewUrl(): string {
+    return this.previewObjectUrl() ?? '';
+  }
+
+  /** Fetches a variant's binary through `HttpClient` (see `loadPreview`) and triggers a
+   * client-side download from a short-lived blob URL — a plain `<a href download>` pointed at
+   * `mediaBinaryUrl()` would 401 the same way the old `<img src>` preview did. */
+  downloadVariant(variantName?: string): void {
+    const uuid = this.media()?.uuid;
+    if (!uuid) {
+      return;
+    }
+    this.api.mediaBinaryBlob(this.projectKey(), uuid, variantName).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = variantName ?? this.media()?.fileName ?? this.media()?.uid ?? 'download';
+        anchor.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.toasts.show('Could not download — try again in a moment.', 'error'),
+    });
+  }
+
+  private loadPreview(projectKey: string, uuid: string): void {
+    const previous = this.previewObjectUrl();
+    this.api.mediaBinaryBlob(projectKey, uuid).subscribe({
+      next: (blob) => {
+        this.previewObjectUrl.set(URL.createObjectURL(blob));
+        if (previous) {
+          URL.revokeObjectURL(previous);
+        }
+      },
+      error: () => this.previewObjectUrl.set(null),
+    });
   }
 
   focalPosition(): string | null {
@@ -222,11 +278,6 @@ export class MediaDetailDrawerComponent implements OnInit {
         this.toasts.show('Could not delete media — it may still be referenced by a page or template.', 'error');
       },
     });
-  }
-
-  onUidChanged(newUid: string): void {
-    const current = this.media();
-    this.updated.emit({ ...current, uid: newUid });
   }
 
   private loadUsages(): void {

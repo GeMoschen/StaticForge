@@ -20,6 +20,7 @@ public record NavTreeNode(
         String displayName,
         String label,
         UUID resolvedPageUuid,
+        boolean protectedFolder,
         List<NavTreeNode> children) {
 
     public NavTreeNode {

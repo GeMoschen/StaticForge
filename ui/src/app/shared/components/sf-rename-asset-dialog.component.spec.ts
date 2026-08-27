@@ -65,25 +65,6 @@ describe('SfRenameAssetDialogComponent', () => {
     expect(screen.getByText('A name is required')).toBeTruthy();
   });
 
-  it('renders no editable controls or Save/UID sections when isRoot is true', async () => {
-    await render(SfRenameAssetDialogComponent, {
-      componentInputs: {
-        open: true,
-        projectKey: 'proj',
-        uuid: 'root-uuid',
-        uid: 'root',
-        displayName: 'Root',
-        isRoot: true,
-      },
-      providers: [{ provide: ApiClient, useValue: apiStub() }],
-    });
-
-    expect(screen.queryByLabelText('Display name')).toBeFalsy();
-    expect(screen.queryByText('Save')).toBeFalsy();
-    expect(screen.queryByText('UID')).toBeFalsy();
-    expect(screen.getByText('Close')).toBeTruthy();
-  });
-
   it('closes on Escape', async () => {
     const closed = vi.fn();
     await render(SfRenameAssetDialogComponent, {

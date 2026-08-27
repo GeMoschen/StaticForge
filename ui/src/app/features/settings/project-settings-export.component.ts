@@ -1,9 +1,11 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { forkJoin } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { sortByDisplayName } from '../../shared/tree-sort.util';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -16,9 +18,7 @@ type AssetSummaryView = components['schemas']['AssetSummaryView'];
 /** The four folder-tree scopes shown in this panel. `TEMPLATES` is ONE tree scope — its tree
  * just happens to have two fixed top-level folders ("Page Templates"/"Section Templates"),
  * structurally no different from any other scope having multiple top-level folders — so it
- * needs no special-casing in the tri-state walk below, only in `effectiveAssetType` (§ M13.3.3
- * step 1), which resolves the right `ApiClient.listAssets` `type` filter per node since a
- * template folder's two branches hold different leaf asset types. */
+ * needs no special-casing anywhere below. */
 type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE' | 'TEMPLATES';
 /** The `FolderScope`/`ExportSelectionRequest.fullStores` string for each tree scope. */
 type StoreScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'TEMPLATES';
@@ -30,9 +30,17 @@ const STORE_SCOPE_FOR: Record<TreeScope, StoreScope> = {
   TEMPLATES: 'TEMPLATES',
 };
 
-/** Well-known `uid` of the "Page Templates" fixed root — the other branch of the templates tree
- * is "Section Templates". Mirrors `FolderScope.PAGE_TEMPLATES_UID` server-side. */
-const PAGE_TEMPLATES_ROOT_UID = 'page_templates';
+/** The `ApiClient.listAssets` `type` filter(s) backing each tree scope — `TEMPLATES` needs two
+ * calls since its tree holds both `PAGE_TEMPLATE` and `SECTION_TEMPLATE` leaves. */
+const ASSET_TYPES_FOR: Record<TreeScope, string[]> = {
+  PAGE: ['PAGE'],
+  MEDIA: ['MEDIA'],
+  PAGE_REFERENCE: ['PAGE_REFERENCE'],
+  TEMPLATES: ['PAGE_TEMPLATE', 'SECTION_TEMPLATE'],
+};
+
+/** Bucket key used for items with no folder — i.e. living directly at the store's hidden root. */
+const ROOT_PATH = '/';
 
 /**
  * Tri-state a tree row can render as (M11.3.4 — replaces the old checked/indeterminate pair):
@@ -76,8 +84,43 @@ export class ProjectSettingsExportComponent {
   /** Stores picked wholesale via "Select all <store>" (M11.3.2) — a pure component-level flag, independent of tree loading. */
   protected readonly fullStores = signal<Set<StoreScope>>(new Set());
   protected readonly expanded = signal<Set<string>>(new Set());
-  protected readonly assetsByFolder = signal<Map<string, AssetSummaryView[]>>(new Map());
-  protected readonly loadingFolders = signal<Set<string>>(new Set());
+  /** Scopes whose synthetic root row (§ `rootSection`/`isRootExpanded`) is currently collapsed —
+   * absence means expanded, matching every other node's own default-expanded-until-toggled
+   * behavior (`sf-nav-tree-node`'s `expanded` signal starts `true`) without needing to pre-seed
+   * all four scopes into a "these are expanded" set up front. */
+  protected readonly collapsedRoots = signal<Set<TreeScope>>(new Set());
+  /** Every asset of each scope, fetched once per project (unfiltered — omitting `folder` returns
+   * everything of that type, see `AssetServiceImpl.folderPattern`), then bucketed client-side by
+   * *exact* `folderPath` equality in `assetsByFolderPath`. Eager and flat rather than the old
+   * lazy per-folder fetch, which relied on the generic `/assets?folder=` endpoint's LIKE-prefix
+   * match — that match includes descendants too, so a nested subfolder's items were double-counted
+   * under every ancestor folder as well as their real parent. Fetching once per scope and bucketing
+   * by exact equality (the same pattern `pagesByFolder`/`templatesByFolder` already use) fixes that,
+   * and as a side effect gives root-level items (bucketed under `ROOT_PATH`) somewhere to live at
+   * all, which the old per-*folder-node* fetch had no way to represent. */
+  protected readonly assetsByScope = signal<Map<TreeScope, AssetSummaryView[]>>(new Map());
+  protected readonly loadingAssets = signal(false);
+
+  protected readonly assetsByFolderPath = computed(() => {
+    const result = new Map<TreeScope, Map<string, AssetSummaryView[]>>();
+    for (const [scope, assets] of this.assetsByScope()) {
+      const byPath = new Map<string, AssetSummaryView[]>();
+      for (const asset of assets) {
+        const path = asset.folderPath ?? ROOT_PATH;
+        const list = byPath.get(path);
+        if (list) {
+          list.push(asset);
+        } else {
+          byPath.set(path, [asset]);
+        }
+      }
+      for (const [path, list] of byPath) {
+        byPath.set(path, sortByDisplayName(list));
+      }
+      result.set(scope, byPath);
+    }
+    return result;
+  });
 
   protected readonly includeChannels = signal(false);
   protected readonly includeGenerationTargets = signal(false);
@@ -101,7 +144,34 @@ export class ProjectSettingsExportComponent {
       }
       untracked(() => {
         this.store.loadFor(key).subscribe();
+        this.loadAllAssets(key);
       });
+    });
+  }
+
+  private loadAllAssets(key: string): void {
+    this.loadingAssets.set(true);
+    const scopes: TreeScope[] = ['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'TEMPLATES'];
+    forkJoin(
+      scopes.map((scope) =>
+        forkJoin(
+          ASSET_TYPES_FOR[scope].map((type) =>
+            this.api.listAssets(key, { type, page: 0, size: 10000 }),
+          ),
+        ),
+      ),
+    ).subscribe({
+      next: (pagesByScope) => {
+        const next = new Map<TreeScope, AssetSummaryView[]>();
+        scopes.forEach((scope, i) => {
+          next.set(scope, pagesByScope[i].flatMap((page) => page.content ?? []));
+        });
+        this.assetsByScope.set(next);
+        this.loadingAssets.set(false);
+      },
+      error: () => {
+        this.loadingAssets.set(false);
+      },
     });
   }
 
@@ -116,101 +186,50 @@ export class ProjectSettingsExportComponent {
     return key !== '' && this.expanded().has(key);
   }
 
-  /** The `ApiClient.listAssets` `type` filter to use when fetching this node's own leaf assets.
-   * Equal to `scope` for every scope except `TEMPLATES`, whose tree has two fixed top-level
-   * folders holding different leaf asset types — resolved once at the root (by the fixed
-   * root's well-known `uid`) and threaded down unchanged, same as `TemplatesComponent` does
-   * for the Templates screen's own tree. */
-  protected effectiveAssetType(node: FolderView, scope: TreeScope, parentAssetType?: string): string {
-    if (scope !== 'TEMPLATES') {
-      return scope;
-    }
-    if (parentAssetType) {
-      return parentAssetType;
-    }
-    return node.uid === PAGE_TEMPLATES_ROOT_UID ? 'PAGE_TEMPLATE' : 'SECTION_TEMPLATE';
-  }
-
-  protected toggleExpand(node: FolderView, scope: TreeScope, assetType: string): void {
+  protected toggleExpand(node: FolderView): void {
     const key = this.nodeKey(node);
     if (!key) {
       return;
     }
-    const willExpand = !this.expanded().has(key);
     this.expanded.update((set) => {
       const next = new Set(set);
-      if (willExpand) {
-        next.add(key);
-      } else {
+      if (next.has(key)) {
         next.delete(key);
+      } else {
+        next.add(key);
       }
       return next;
     });
-    if (willExpand && !this.assetsByFolder().has(key) && !this.loadingFolders().has(key)) {
-      this.fetchFolderAssets(node, assetType, key);
-    }
   }
 
-  private fetchFolderAssets(node: FolderView, assetType: string, key: string): void {
-    this.loadingFolders.update((set) => {
-      const next = new Set(set);
-      next.add(key);
-      return next;
-    });
-    this.api
-      .listAssets(this.projectKey(), { type: assetType, folder: node.path, page: 0, size: 200 })
-      .subscribe({
-        next: (res) => {
-          this.assetsByFolder.update((map) => {
-            const next = new Map(map);
-            next.set(key, res.content ?? []);
-            return next;
-          });
-          this.loadingFolders.update((set) => {
-            const next = new Set(set);
-            next.delete(key);
-            return next;
-          });
-        },
-        error: () => {
-          this.loadingFolders.update((set) => {
-            const next = new Set(set);
-            next.delete(key);
-            return next;
-          });
-        },
-      });
-  }
-
-  /** All uuids "beneath" this node — its own leaf assets (if fetched) plus every descendant sub-folder and their own fetched leaf assets, recursively. Drives the folder's tri-state indicator. */
-  private collectDescendantUuids(node: FolderView): string[] {
-    const key = this.nodeKey(node);
-    const result: string[] = key ? [...this.assetsByFolder().get(key) ?? []].map((a) => a.uuid).filter((u): u is string => !!u) : [];
+  /** All uuids "beneath" this node — its own leaf assets plus every descendant sub-folder and their own leaf assets, recursively. Drives the folder's tri-state indicator. */
+  private collectDescendantUuids(node: FolderView, scope: TreeScope): string[] {
+    const result: string[] = this.folderAssets(node, scope).map((a) => a.uuid).filter((u): u is string => !!u);
     for (const child of node.children ?? []) {
       const childKey = this.nodeKey(child);
       if (childKey) {
         result.push(childKey);
       }
-      result.push(...this.collectDescendantUuids(child));
+      result.push(...this.collectDescendantUuids(child, scope));
     }
     return result;
   }
 
   /** True if this node is covered by a direct pick — its own uuid is selected, an ancestor folder pick covers it, or every one of its descendants is individually selected. Drives both the tri-state's `explicit` branch and whether a folder-level pick should disable its children (independent of `fullStores`, which is checked separately so it never disables anything — see `folderState`). */
-  private nodeIsExplicitFolderPick(node: FolderView, ancestorFolderChecked: boolean): boolean {
+  private nodeIsExplicitFolderPick(node: FolderView, scope: TreeScope, ancestorFolderChecked: boolean): boolean {
     const key = this.nodeKey(node);
     if (ancestorFolderChecked || (key !== '' && this.selected().has(key))) {
       return true;
     }
-    const descendants = this.collectDescendantUuids(node);
+    const descendants = this.collectDescendantUuids(node, scope);
     return descendants.length > 0 && descendants.every((u) => this.selected().has(u));
   }
 
   protected folderState(node: FolderView, scope: TreeScope, ancestorFolderChecked: boolean): CheckState {
-    if (this.fullStores().has(STORE_SCOPE_FOR[scope]) || this.nodeIsExplicitFolderPick(node, ancestorFolderChecked)) {
+    if (this.fullStores().has(STORE_SCOPE_FOR[scope]) || this.nodeIsExplicitFolderPick(node, scope, ancestorFolderChecked)) {
       return 'explicit';
     }
-    const descendants = this.collectDescendantUuids(node);
+    const descendants = this.collectDescendantUuids(node, scope);
     if (descendants.length === 0) {
       return 'unchecked';
     }
@@ -219,8 +238,8 @@ export class ProjectSettingsExportComponent {
   }
 
   /** The `ancestorChecked` context to pass down to this node's children — deliberately NOT `fullStores`-aware, so a store-level full-select never disables individual rows (they must stay clickable to drive the "uncheck one item" policy in `toggleFolder`/`toggleAsset`). */
-  protected childAncestorChecked(node: FolderView, ancestorFolderChecked: boolean): boolean {
-    return this.nodeIsExplicitFolderPick(node, ancestorFolderChecked);
+  protected childAncestorChecked(node: FolderView, scope: TreeScope, ancestorFolderChecked: boolean): boolean {
+    return this.nodeIsExplicitFolderPick(node, scope, ancestorFolderChecked);
   }
 
   protected assetChecked(asset: AssetSummaryView, scope: TreeScope, ancestorChecked: boolean): boolean {
@@ -275,12 +294,88 @@ export class ProjectSettingsExportComponent {
     });
   }
 
-  protected folderAssets(node: FolderView): AssetSummaryView[] {
-    return this.assetsByFolder().get(this.nodeKey(node)) ?? [];
+  /** This node's own leaf assets, bucketed by *exact* `folderPath` equality — never includes a
+   * descendant subfolder's items (that was the old per-folder LIKE-prefix-fetch bug). */
+  protected folderAssets(node: FolderView, scope: TreeScope): AssetSummaryView[] {
+    const path = node.path ?? '';
+    return this.assetsByFolderPath().get(scope)?.get(path) ?? [];
   }
 
-  protected isFolderLoading(node: FolderView): boolean {
-    return this.loadingFolders().has(this.nodeKey(node));
+  /** Leaf assets living directly in this scope's fixed wrapper root ("All Pages"/"All Media"/
+   * "All Navigation"/"All Templates" — see `storeRoot`), rendered under the synthetic root row
+   * after its top-level folders (§ `rootSection`), since the old tree had nowhere at all to
+   * represent (or select) a root-level item. Keyed by the wrapper's own canonical path, not the
+   * bare project root — every store's content nests one level under its wrapper now. */
+  protected rootAssets(scope: TreeScope): AssetSummaryView[] {
+    return this.assetsByFolderPath().get(scope)?.get(this.storeRoot(scope)?.path ?? ROOT_PATH) ?? [];
+  }
+
+  /** The scope's fixed, protected wrapper root — always the tree's sole top-level entry (mirrors
+   * `NAVIGATION`/`TEMPLATES`'s own fixed roots, now generalized to `PAGES`/`MEDIA` too). Never
+   * rendered as its own row here — the synthetic root row (§ `rootSection`) already covers that
+   * exact concept, so showing the real wrapper folder underneath it would just be a duplicate
+   * "root" row; `topLevelFolders` unwraps it for display. */
+  private storeRoot(scope: TreeScope): FolderView | null {
+    return this.treeFor(scope)[0] ?? null;
+  }
+
+  /** The store's real top-level folders — the wrapper root's children (see `storeRoot`). */
+  protected topLevelFolders(scope: TreeScope): FolderView[] {
+    return this.storeRoot(scope)?.children ?? [];
+  }
+
+  protected isLoadingAssets(): boolean {
+    return this.loadingAssets();
+  }
+
+  /** Whether this scope's synthetic root row — the single container node standing in for the
+   * store's hidden root, mirroring `sf-nav-tree-node`'s `isRoot` row in the Navigation screen's
+   * own tree — is expanded. Every top-level folder and root-level leaf asset renders beneath it,
+   * rather than as a bare forest with no common ancestor to select/expand as a unit. */
+  protected isRootExpanded(scope: TreeScope): boolean {
+    return !this.collapsedRoots().has(scope);
+  }
+
+  protected toggleRootExpand(scope: TreeScope): void {
+    this.collapsedRoots.update((set) => {
+      const next = new Set(set);
+      if (next.has(scope)) {
+        next.delete(scope);
+      } else {
+        next.add(scope);
+      }
+      return next;
+    });
+  }
+
+  /** Whether this node has no expand-worthy content at all — no subfolders and no leaf assets. */
+  protected isLeafOnly(node: FolderView, scope: TreeScope): boolean {
+    return (node.children ?? []).length === 0 && this.folderAssets(node, scope).length === 0;
+  }
+
+  /** Mirrors the store trees' own `expanded && hasChildren ? 'folder_open' : 'folder'` icon rule
+   * (`sf-folder-node`/`sf-media-folder-node`/`sf-nav-tree-node`/`sf-template-folder-node`) — this
+   * panel's tree is read-only/selection-only, but should look identical otherwise. */
+  protected folderIcon(node: FolderView, scope: TreeScope): string {
+    const hasContent = (node.children ?? []).length > 0 || this.folderAssets(node, scope).length > 0;
+    return this.isExpanded(node) && hasContent ? 'folder_open' : 'folder';
+  }
+
+  /** Per-type leaf icon, matching each store's own leaf row exactly where one exists
+   * (`sf-page-nav-node`/`sf-template-nav-node` use `description`; `sf-nav-tree-node` uses `link`
+   * for a `PAGE_REFERENCE`). Media has no tree-leaf equivalent in its own store (media items are
+   * grid cards there, not tree rows), so `perm_media` — already used for the Media nav icon
+   * elsewhere in this app — is the closest consistent choice rather than reusing a type this
+   * scope was never given a tree leaf for. */
+  protected leafIcon(scope: TreeScope): string {
+    switch (scope) {
+      case 'PAGE_REFERENCE':
+        return 'link';
+      case 'MEDIA':
+        return 'perm_media';
+      default:
+        return 'description';
+    }
   }
 
   // ── Whole-store selection (M11.3.2) ─────────────────────────────────────
@@ -302,7 +397,7 @@ export class ProjectSettingsExportComponent {
     // Activating a store-level full-select supersedes any individual picks already made in
     // that store — clear them from `selected` first so a store's uuids are never simultaneously
     // present in `fullStores` (as a scope) AND duplicated into `assetUuids`.
-    const treeUuids = this.collectAllUuidsInTree(this.treeFor(scope));
+    const treeUuids = this.collectAllUuidsInTree(scope);
     this.selected.update((set) => {
       const next = new Set(set);
       for (const uuid of treeUuids) {
@@ -317,7 +412,7 @@ export class ProjectSettingsExportComponent {
     });
   }
 
-  private treeFor(scope: TreeScope): FolderView[] {
+  protected treeFor(scope: TreeScope): FolderView[] {
     switch (scope) {
       case 'PAGE':
         return this.store.pageFolderTree();
@@ -330,16 +425,21 @@ export class ProjectSettingsExportComponent {
     }
   }
 
-  /** Every folder uuid in the tree (always fully loaded, depth 10) plus every already-fetched leaf asset uuid — used to purge stale individual picks when a store-level full-select is turned on. */
-  private collectAllUuidsInTree(nodes: FolderView[]): string[] {
+  /** Every folder uuid in the tree plus every leaf asset uuid in the scope (including root-level
+   * ones) — used to purge stale individual picks when a store-level full-select is turned on. */
+  private collectAllUuidsInTree(scope: TreeScope): string[] {
     const result: string[] = [];
-    const assetsMap = this.assetsByFolder();
+    for (const asset of this.rootAssets(scope)) {
+      if (asset.uuid) {
+        result.push(asset.uuid);
+      }
+    }
     const walk = (list: FolderView[]) => {
       for (const node of list) {
         const key = this.nodeKey(node);
         if (key) {
           result.push(key);
-          for (const asset of assetsMap.get(key) ?? []) {
+          for (const asset of this.folderAssets(node, scope)) {
             if (asset.uuid) {
               result.push(asset.uuid);
             }
@@ -348,23 +448,29 @@ export class ProjectSettingsExportComponent {
         walk(node.children ?? []);
       }
     };
-    walk(nodes);
+    walk(this.topLevelFolders(scope));
     return result;
   }
 
   /**
    * Builds the explicit per-node uuid set equivalent to "everything in this store except
    * `excludeKey`": every sibling folder not on the path to the excluded node gets its own uuid
-   * (its subtree cascades server-side); folders on the path get their non-excluded loaded leaf
-   * assets added directly and are walked into recursively instead of being added wholesale.
+   * (its subtree cascades server-side); folders on the path get their non-excluded leaf assets
+   * added directly and are walked into recursively instead of being added wholesale. Root-level
+   * assets (no folder) are added directly, same as any other leaf not on the excluded path.
    */
-  private collectStoreSelectionExcluding(nodes: FolderView[], excludeKey: string): Set<string> {
+  private collectStoreSelectionExcluding(scope: TreeScope, excludeKey: string): Set<string> {
     const additions = new Set<string>();
+    for (const asset of this.rootAssets(scope)) {
+      if (asset.uuid && asset.uuid !== excludeKey) {
+        additions.add(asset.uuid);
+      }
+    }
     const containsExcluded = (node: FolderView): boolean => {
       if (this.nodeKey(node) === excludeKey) {
         return true;
       }
-      if (this.folderAssets(node).some((a) => a.uuid === excludeKey)) {
+      if (this.folderAssets(node, scope).some((a) => a.uuid === excludeKey)) {
         return true;
       }
       return (node.children ?? []).some((child) => containsExcluded(child));
@@ -376,7 +482,7 @@ export class ProjectSettingsExportComponent {
           continue; // the excluded node itself contributes nothing
         }
         if (containsExcluded(node)) {
-          for (const asset of this.folderAssets(node)) {
+          for (const asset of this.folderAssets(node, scope)) {
             if (asset.uuid && asset.uuid !== excludeKey) {
               additions.add(asset.uuid);
             }
@@ -387,12 +493,12 @@ export class ProjectSettingsExportComponent {
         }
       }
     };
-    walk(nodes);
+    walk(this.topLevelFolders(scope));
     return additions;
   }
 
   private explodeFullStoreExcluding(scope: TreeScope, excludeKey: string): void {
-    const additions = this.collectStoreSelectionExcluding(this.treeFor(scope), excludeKey);
+    const additions = this.collectStoreSelectionExcluding(scope, excludeKey);
     this.selected.update((set) => {
       const next = new Set(set);
       for (const uuid of additions) {

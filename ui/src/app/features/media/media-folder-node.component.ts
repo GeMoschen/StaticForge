@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   input,
   output,
@@ -14,8 +15,10 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
+import { MediaNavNodeComponent } from './media-nav-node.component';
 
 type FolderView = components['schemas']['FolderView'];
+type MediaSummaryView = components['schemas']['MediaSummaryView'];
 
 /** Folder drag-and-drop move event (source moved into target). */
 export interface FolderMoveEvent {
@@ -27,14 +30,21 @@ export interface FolderMoveEvent {
  * Recursive folder-tree node for the media library sidebar. Modeled on
  * `sf-folder-node` (pages) — same project-wide folder tree/endpoints, expand
  * /collapse, native drag-move (folders or media items dropped onto a
- * folder), and a right-click menu — but without embedding any page-specific
- * children; media items themselves are rendered in the library's grid, not
- * as tree leaves.
+ * folder), and a right-click menu — and, like Pages, renders this folder's
+ * own media items as `sf-media-nav-node` tree leaves (via `mediaByFolder`),
+ * always after its sub-folders, so folders sort first (mirrors
+ * `FolderNodeComponent.ownPages`/`pagesByFolder`). Media items are still
+ * also shown in the library's grid — the tree and the grid are two views
+ * onto the same content, not a replacement for either.
+ *
+ * The fixed, protected "All Media" root folder (`node().protectedFolder`) renders with no
+ * rename/cut/delete/drag affordance — mirrors `sf-nav-tree-node`'s treatment of its own fixed
+ * "All Navigation" root — new subfolders can still be created inside it.
  */
 @Component({
   selector: 'sf-media-folder-node',
   standalone: true,
-  imports: [SfIconComponent, SfCreateAssetDialogComponent, SfRenameAssetDialogComponent],
+  imports: [SfIconComponent, SfCreateAssetDialogComponent, SfRenameAssetDialogComponent, MediaNavNodeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './media-folder-node.component.html',
   styleUrl: './media-folder-node.component.scss',
@@ -49,9 +59,17 @@ export class MediaFolderNodeComponent {
   readonly depth = input<number>(0);
   readonly selectedUuid = input<string | null>(null);
   readonly projectKey = input<string>('');
+  /** Media items grouped by their canonical folder path — threaded down unchanged so every
+   * recursive level can pick out its own leaves without a second query (mirrors
+   * `FolderNodeComponent.pagesByFolder`). */
+  readonly mediaByFolder = input<ReadonlyMap<string, MediaSummaryView[]>>(new Map());
+  /** The media item currently open in the detail drawer, for leaf highlighting. */
+  readonly selectedMediaUuid = input<string | null>(null);
 
   readonly select = output<string>();
   readonly move = output<FolderMoveEvent>();
+  /** A media leaf (anywhere in this subtree) was clicked — bubbles up to open its detail drawer. */
+  readonly selectMedia = output<string>();
   /** Emitted after this folder (or something inside it) was created/renamed/moved/deleted, so the parent reloads. */
   readonly changed = output<void>();
 
@@ -63,8 +81,16 @@ export class MediaFolderNodeComponent {
   protected readonly renameOpen = signal(false);
   protected readonly renamingName = signal(false);
 
+  protected readonly isProtected = computed<boolean>(() => this.node().protectedFolder === true);
+
+  /** This folder's own media items, bucketed by *exact* `folderPath` equality — never includes a
+   * descendant subfolder's items (mirrors `FolderNodeComponent.ownPages`). */
+  protected ownMedia(): MediaSummaryView[] {
+    return this.mediaByFolder().get(this.node().path ?? '') ?? [];
+  }
+
   protected hasChildren(): boolean {
-    return (this.node().children ?? []).length > 0;
+    return (this.node().children ?? []).length > 0 || this.ownMedia().length > 0;
   }
 
   protected isSelected(): boolean {
@@ -96,7 +122,8 @@ export class MediaFolderNodeComponent {
 
   protected onDragStart(event: DragEvent): void {
     const uuid = this.node().uuid;
-    if (uuid == null) {
+    if (uuid == null || this.isProtected()) {
+      event.preventDefault();
       return;
     }
     event.dataTransfer?.setData('text/plain', uuid);
@@ -129,19 +156,26 @@ export class MediaFolderNodeComponent {
       return;
     }
     const clip = this.clipboard.entry();
+    const protectedFolder = this.isProtected();
     const items: ContextMenuItem[] = [
       { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newSubfolder(uuid) },
-      { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
-      { label: '', separator: true },
-      {
+    ];
+    if (!protectedFolder) {
+      items.push({ label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) });
+    }
+    items.push({ label: '', separator: true });
+    if (!protectedFolder) {
+      items.push({
         label: 'Cut',
         icon: 'content_cut',
         action: () => this.clipboard.cut('FOLDER', uuid, this.node().displayName ?? this.node().uid ?? 'folder'),
-      },
-      { label: 'Paste', icon: 'content_paste', disabled: !clip, action: () => this.paste(uuid) },
-      { label: '', separator: true },
-      { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(uuid) },
-    ];
+      });
+    }
+    items.push({ label: 'Paste', icon: 'content_paste', disabled: !clip, action: () => this.paste(uuid) });
+    if (!protectedFolder) {
+      items.push({ label: '', separator: true });
+      items.push({ label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(uuid) });
+    }
     this.menu.open(event, items);
   }
 

@@ -1,8 +1,6 @@
 package com.acme.staticforge.project;
 
 import com.acme.staticforge.asset.AssetService;
-import com.acme.staticforge.asset.folder.FolderScope;
-import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
@@ -43,7 +41,6 @@ public class ProjectServiceImpl implements ProjectService {
     private final ChannelService channelService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
-    private final FolderService folderService;
     private final AssetService assetService;
 
     public ProjectServiceImpl(
@@ -54,7 +51,6 @@ public class ProjectServiceImpl implements ProjectService {
             ChannelService channelService,
             AuditService auditService,
             ObjectMapper objectMapper,
-            FolderService folderService,
             AssetService assetService) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -63,7 +59,6 @@ public class ProjectServiceImpl implements ProjectService {
         this.channelService = channelService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
-        this.folderService = folderService;
         this.assetService = assetService;
     }
 
@@ -89,16 +84,25 @@ public class ProjectServiceImpl implements ProjectService {
 
         channelService.ensureDefaultChannels(project.getId(), actingUserId);
 
-        // The navigation store is rooted like the Page/Media stores (spec §17, `M8.1.2`):
-        // a normal FolderScope.NAVIGATION folder, created here through the same shared
-        // FolderService/PathService machinery every other folder uses — no special-casing.
         RevisionContext creationCtx = RevisionContext.of(project.getId(), actingUserId, cmd.comment());
-        folderService.create(null, "Navigation", FolderScope.NAVIGATION, creationCtx);
 
-        // The template store's top level is fixed to exactly these two protected folders
-        // (spec M13.1.2) — auto-provisioned immediately so template creation never has to
+        // The template store's top level is fixed to exactly these two protected folders,
+        // themselves nested under a fixed "All Templates" wrapper root (spec M13.1.2, later
+        // generalized) — auto-provisioned immediately so template creation never has to
         // special-case a missing parent.
         assetService.ensureTemplateFolders(project.getId(), creationCtx);
+
+        // The navigation store's top level is a single fixed, protected "All Navigation" root —
+        // every top-level nav folder/reference nests under it, and it's the one place a
+        // project-wide navigation entry point can be set.
+        assetService.ensureNavigationRootFolder(project.getId(), creationCtx);
+
+        // The pages/media stores each get the same fixed, protected wrapper root treatment as
+        // navigation ("All Pages" / "All Media") — every top-level folder or loose leaf of that
+        // store nests under it, so no page/media asset is ever a direct, ambiguous child of the
+        // project's shared hidden root.
+        assetService.ensurePagesRootFolder(project.getId(), creationCtx);
+        assetService.ensureMediaRootFolder(project.getId(), creationCtx);
 
         return project;
     }

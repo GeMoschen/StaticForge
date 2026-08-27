@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -22,9 +22,10 @@ export interface NavMoveEvent {
  *
  * Supports expand/collapse, selection, and native HTML5 drag-move (drag any
  * node onto a folder node to move it there — mirrors `sf-folder-node`'s
- * convention in the pages store). The navigation root (`isRoot`) is never a
- * drag source: moving/deleting the single eager root would break the
- * single-root assumption the whole navigation store relies on (`M8.1.2`).
+ * convention in the pages store). The fixed, protected "All Navigation" root
+ * folder (`node().protectedFolder`) renders with no rename/drag affordance —
+ * mirrors `sf-template-folder-node`'s treatment of its own two fixed roots —
+ * everything nested beneath it gets the full toolset.
  */
 @Component({
   selector: 'sf-nav-tree-node',
@@ -43,7 +44,6 @@ export class NavTreeNodeComponent {
   readonly node = input.required<NavTreeView>();
   readonly depth = input<number>(0);
   readonly selectedUuid = input<string | null>(null);
-  readonly isRoot = input<boolean>(false);
   readonly projectKey = input<string>('');
 
   readonly select = output<string>();
@@ -54,6 +54,8 @@ export class NavTreeNodeComponent {
   protected readonly expanded = signal(true);
   protected readonly renameOpen = signal(false);
   protected readonly renamingName = signal(false);
+
+  protected readonly isProtected = computed<boolean>(() => this.node().protectedFolder === true);
 
   protected isFolder(): boolean {
     return this.node().type === 'FOLDER';
@@ -103,7 +105,7 @@ export class NavTreeNodeComponent {
 
   protected onDragStart(event: DragEvent): void {
     const uuid = this.node().uuid;
-    if (uuid == null || this.isRoot()) {
+    if (uuid == null || this.isProtected()) {
       event.preventDefault();
       return;
     }
@@ -133,13 +135,9 @@ export class NavTreeNodeComponent {
     }
   }
 
-  /** The navigation root is never renameable via this menu — its single-root invariant (`M8.1.2`) must hold, so no menu is opened at all rather than opening one with items disabled. */
   protected onContextMenu(event: MouseEvent): void {
-    if (this.isRoot()) {
-      return;
-    }
     const uuid = this.node().uuid;
-    if (!uuid) {
+    if (!uuid || this.isProtected()) {
       return;
     }
     const items: ContextMenuItem[] = [

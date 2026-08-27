@@ -440,6 +440,17 @@ export class ApiClient {
     return `${BASE}/projects/${projectKey}/media/${uuid}/binary${query}`;
   }
 
+  /** Fetches a media binary (or named variant) through `HttpClient`, so the app's Bearer session
+   * (attached by the auth interceptor) rides along — unlike a plain `<img src>`/`<a href>`
+   * pointed at `mediaBinaryUrl()`, which the browser fetches directly with no auth header and
+   * gets a 401 from the `/binary` route's `VIEWER`-gated `@PreAuthorize` (mirrors
+   * `mediaThumbnailBlob`, which already solves this same problem for grid thumbnails). */
+  mediaBinaryBlob(projectKey: string, uuid: string, variant?: string): Observable<Blob> {
+    return this.http.get(this.mediaBinaryUrl(projectKey, uuid, variant), {
+      responseType: 'blob',
+    });
+  }
+
   mediaThumbnailUrl(projectKey: string, uuid: string): string {
     return `${BASE}/projects/${projectKey}/media/${uuid}/thumbnail`;
   }

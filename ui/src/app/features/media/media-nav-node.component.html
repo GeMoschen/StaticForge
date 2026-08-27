@@ -1,18 +1,20 @@
-<div class="template-nav__indent" [style.padding-left.px]="depth() * 14">
+<div class="media-nav__indent" [style.padding-left.px]="depth() * 14">
   <div
-    class="template-nav__row"
-    [class.template-nav__row--active]="selected()"
+    class="media-nav__row"
+    [class.media-nav__row--active]="selected()"
     role="treeitem"
     tabindex="0"
+    draggable="true"
     [attr.aria-selected]="selected()"
     (click)="onSelect()"
     (keydown)="onKeydown($event)"
+    (dragstart)="onDragStart($event)"
     (contextmenu)="onContextMenu($event)"
   >
-    <span class="template-nav__spacer"></span>
-    <sf-icon class="template-nav__icon" name="description" />
-    <span class="template-nav__name">{{ summary().displayName ?? summary().uid }}</span>
-    <span class="template-nav__mono">{{ summary().uid }}</span>
+    <span class="media-nav__spacer"></span>
+    <sf-icon class="media-nav__icon" [name]="mediaIcon()" />
+    <span class="media-nav__name">{{ summary().displayName ?? summary().uid }}</span>
+    <span class="media-nav__mono">{{ summary().uid }}</span>
   </div>
 </div>
 

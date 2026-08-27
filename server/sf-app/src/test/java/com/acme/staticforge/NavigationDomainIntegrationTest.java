@@ -3,7 +3,6 @@ package com.acme.staticforge;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.folder.FolderNode;
@@ -36,8 +35,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Navigation domain model tests (spec §17, `M8.1.2`): the auto-created navigation root
- * folder, {@code PageReference} target validation, and folder {@code startNode} validation.
+ * Navigation domain model tests (spec §17, `M8.1.2`): top-level `NAVIGATION` folder creation,
+ * {@code PageReference} target validation, and folder {@code startNode} validation.
  * Resolution/rendering (`M8.1.3`+) is explicitly out of scope here.
  */
 @SpringBootTest
@@ -48,21 +47,37 @@ class NavigationDomainIntegrationTest {
 
     @Autowired UserService userService;
     @Autowired ProjectService projectService;
-    @Autowired AssetService assetService;
     @Autowired FolderService folderService;
     @Autowired PageService pageService;
     @Autowired PageReferenceService pageReferenceService;
     @Autowired TemplateService templateService;
 
     @Test
-    void navigationRootFolderIsAutoCreatedOnProjectCreate() {
+    void navigationStoreProvisionsExactlyTheFixedRootOnProjectCreate() {
         Fixture fx = newFixture();
 
         List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, -1, fx.ctx());
 
         assertThat(tree).hasSize(1);
-        assertThat(tree.get(0).displayName()).isEqualTo("Navigation");
-        assertThat(tree.get(0).scope()).isEqualTo(FolderScope.NAVIGATION);
+        assertThat(tree.get(0).uid()).isEqualTo(FolderScope.NAVIGATION_ROOT_UID);
+        assertThat(tree.get(0).protectedFolder()).isTrue();
+        assertThat(tree.get(0).children()).isEmpty();
+    }
+
+    @Test
+    void topLevelNavigationFolderNestsUnderTheFixedRoot() {
+        Fixture fx = newFixture();
+
+        AssetVersionView created = folderService.create(null, "Main Menu", FolderScope.NAVIGATION, fx.ctx());
+
+        List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, -1, fx.ctx());
+        assertThat(tree).hasSize(1);
+        FolderNode root = tree.get(0);
+        assertThat(root.uid()).isEqualTo(FolderScope.NAVIGATION_ROOT_UID);
+        assertThat(root.children()).hasSize(1);
+        assertThat(root.children().get(0).uuid()).isEqualTo(created.uuid());
+        assertThat(root.children().get(0).displayName()).isEqualTo("Main Menu");
+        assertThat(root.children().get(0).scope()).isEqualTo(FolderScope.NAVIGATION);
     }
 
     @Test
@@ -177,10 +192,10 @@ class NavigationDomainIntegrationTest {
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(422));
     }
 
+    /** A fresh top-level `NAVIGATION` folder for a test to nest its own content under — nothing
+     * is pre-provisioned any more, so each test that needs one creates its own. */
     private AssetVersionView navRoot(Fixture fx) {
-        List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
-        FolderNode root = tree.get(0);
-        return assetService.requireCurrent(fx.project().getId(), root.uuid());
+        return folderService.create(null, "Nav Root " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
     }
 
     private AssetVersionView createPage(Fixture fx, String name) {

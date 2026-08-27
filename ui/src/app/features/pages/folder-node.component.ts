@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   input,
   output,
@@ -28,6 +29,10 @@ type AssetSummaryView = components['schemas']['AssetSummaryView'];
  * renders this folder's own pages (from `pagesByFolder`, keyed by the
  * folder's canonical path) as navigable `sf-page-nav-node` leaves — always
  * after its sub-folders, so folders sort first.
+ *
+ * The fixed, protected "All Pages" root folder (`node().protectedFolder`) renders with no
+ * rename/cut/delete/drag affordance — mirrors `sf-nav-tree-node`'s treatment of its own fixed
+ * "All Navigation" root — new pages/subfolders can still be created inside it.
  */
 @Component({
   selector: 'sf-folder-node',
@@ -63,6 +68,8 @@ export class FolderNodeComponent {
 
   protected readonly renameOpen = signal(false);
   protected readonly renamingName = signal(false);
+
+  protected readonly isProtected = computed<boolean>(() => this.node().protectedFolder === true);
 
   protected ownPages(): AssetSummaryView[] {
     return this.pagesByFolder().get(this.node().path ?? '') ?? [];
@@ -101,7 +108,8 @@ export class FolderNodeComponent {
 
   protected onDragStart(event: DragEvent): void {
     const uuid = this.node().uuid;
-    if (uuid == null) {
+    if (uuid == null || this.isProtected()) {
+      event.preventDefault();
       return;
     }
     event.dataTransfer?.setData('text/plain', uuid);
@@ -133,6 +141,7 @@ export class FolderNodeComponent {
       return;
     }
     const clip = this.clipboard.entry();
+    const protectedFolder = this.isProtected();
     const items: ContextMenuItem[] = [
       {
         label: 'New page here',
@@ -143,17 +152,23 @@ export class FolderNodeComponent {
         },
       },
       { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newSubfolder(uuid) },
-      { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
-      { label: '', separator: true },
-      {
+    ];
+    if (!protectedFolder) {
+      items.push({ label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) });
+    }
+    items.push({ label: '', separator: true });
+    if (!protectedFolder) {
+      items.push({
         label: 'Cut',
         icon: 'content_cut',
         action: () => this.clipboard.cut('FOLDER', uuid, this.node().displayName ?? this.node().uid ?? 'folder'),
-      },
-      { label: 'Paste', icon: 'content_paste', disabled: !clip, action: () => this.paste(uuid) },
-      { label: '', separator: true },
-      { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(uuid) },
-    ];
+      });
+    }
+    items.push({ label: 'Paste', icon: 'content_paste', disabled: !clip, action: () => this.paste(uuid) });
+    if (!protectedFolder) {
+      items.push({ label: '', separator: true });
+      items.push({ label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(uuid) });
+    }
     this.menu.open(event, items);
   }
 

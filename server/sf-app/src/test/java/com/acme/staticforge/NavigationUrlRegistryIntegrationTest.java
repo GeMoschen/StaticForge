@@ -7,7 +7,6 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
-import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.navigation.CreatePageReferenceCommand;
@@ -99,9 +98,10 @@ class NavigationUrlRegistryIntegrationTest {
     @Test
     void generatedUrlIsStableAcrossTwoGenerationRunsWithAnInterveningPageRename() throws Exception {
         Fixture fx = newFixture();
+        AssetVersionView navRoot = navRoot(fx);
         AssetVersionView targetPage = createTargetPage(fx, "Original Title");
-        AssetVersionView pageRef = createNavRef(fx, targetPage, "Original Title Link");
-        createHomePage(fx);
+        AssetVersionView pageRef = createNavRef(fx, navRoot, targetPage, "Original Title Link");
+        createHomePage(fx, navRoot);
         GenerationTarget target = createTarget(fx);
 
         long runId1 = runGenerationToSuccess(fx, target);
@@ -126,9 +126,10 @@ class NavigationUrlRegistryIntegrationTest {
     @Test
     void previewAndGeneratedAreasAreResolvedAndCachedIndependently() throws Exception {
         Fixture fx = newFixture();
+        AssetVersionView navRoot = navRoot(fx);
         AssetVersionView targetPage = createTargetPage(fx, "About Us");
-        AssetVersionView pageRef = createNavRef(fx, targetPage, "About Us Link");
-        AssetVersionView homePage = createHomePage(fx);
+        AssetVersionView pageRef = createNavRef(fx, navRoot, targetPage, "About Us Link");
+        AssetVersionView homePage = createHomePage(fx, navRoot);
         GenerationTarget target = createTarget(fx);
 
         long runId = runGenerationToSuccess(fx, target);
@@ -216,8 +217,7 @@ class NavigationUrlRegistryIntegrationTest {
      * yet resolve it — a pre-existing gap in {@code TemplateServiceImpl}, out of this task's
      * scope) so the fixture can use a real {@code $CMS_NAVIGATION} source.
      */
-    private AssetVersionView createHomePage(Fixture fx) {
-        AssetVersionView navRoot = navRoot(fx);
+    private AssetVersionView createHomePage(Fixture fx, AssetVersionView navRoot) {
         ObjectNode payload = mapper.createObjectNode();
         payload.with("channelTemplates").with("html").put("source", "$CMS_NAVIGATION(nav:" + navRoot.uid() + ")$");
         payload.with("outputPath").put("html", "index.html");
@@ -245,17 +245,16 @@ class NavigationUrlRegistryIntegrationTest {
         return pageService.create(new CreatePageCommand(displayName, null, pageTemplate.uuid()), fx.ctx());
     }
 
-    private AssetVersionView createNavRef(Fixture fx, AssetVersionView targetPage, String label) {
-        AssetVersionView navRoot = navRoot(fx);
+    private AssetVersionView createNavRef(Fixture fx, AssetVersionView navRoot, AssetVersionView targetPage, String label) {
         return pageReferenceService.create(
                 new CreatePageReferenceCommand(label, navRoot.uuid(), PageReferenceTargetKind.PAGE, targetPage.uuid(), null),
                 fx.ctx());
     }
 
+    /** A fresh top-level `NAVIGATION` folder — nothing is pre-provisioned any more, so each test
+     * that needs one creates its own. */
     private AssetVersionView navRoot(Fixture fx) {
-        List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
-        FolderNode root = tree.get(0);
-        return assetService.requireCurrent(fx.project().getId(), root.uuid());
+        return folderService.create(null, "Nav Root " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
     }
 
     private Fixture newFixture() {

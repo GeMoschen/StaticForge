@@ -22,6 +22,7 @@ import { FolderNodeComponent } from './folder-node.component';
 import { PageNavNodeComponent } from './page-nav-node.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { FolderMoveEvent } from './types';
+import { sortByDisplayName } from '../../shared/tree-sort.util';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
@@ -63,6 +64,14 @@ export class PagesListComponent {
   protected readonly tree = this.store.pageFolderTree;
   protected readonly pageTemplates = computed<TemplateSummary[]>(() => this.store.pageTemplates());
 
+  /** The project's fixed, protected "All Pages" wrapper root (mirrors `NAVIGATION`'s own fixed
+   * root) — always the tree's sole top-level entry now, but this screen already has its own
+   * "All pages" affordance (the `pages__clear` button below), so it's unwrapped here rather than
+   * rendered a second time as an ordinary folder row. */
+  protected readonly pagesRoot = computed<FolderView | null>(() => this.tree()[0] ?? null);
+  /** The store's real top-level folders — the wrapper root's children. */
+  protected readonly topLevelFolders = computed<FolderView[]>(() => this.pagesRoot()?.children ?? []);
+
   protected readonly selectedFolder = signal<string | null>(null);
   protected readonly search = signal('');
   protected readonly pages = signal<AssetSummaryView[]>([]);
@@ -79,6 +88,9 @@ export class PagesListComponent {
       } else {
         map.set(path, [page]);
       }
+    }
+    for (const [path, list] of map) {
+      map.set(path, sortByDisplayName(list));
     }
     return map;
   });
@@ -97,7 +109,11 @@ export class PagesListComponent {
     () => (this.selectedFolderNode()?.children ?? []).length,
   );
 
-  protected readonly rootPages = computed<AssetSummaryView[]>(() => this.pagesByFolder().get('/') ?? []);
+  /** Pages living directly in the "All Pages" wrapper root, keyed by its own canonical path
+   * (no longer the bare project root path — see `pagesRoot`). */
+  protected readonly rootPages = computed<AssetSummaryView[]>(
+    () => this.pagesByFolder().get(this.pagesRoot()?.path ?? '/') ?? [],
+  );
 
   protected readonly newPageOpen = signal(false);
   protected readonly creatingPage = signal(false);

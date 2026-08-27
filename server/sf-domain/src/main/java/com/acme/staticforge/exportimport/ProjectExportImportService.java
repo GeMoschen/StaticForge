@@ -11,7 +11,7 @@ import com.acme.staticforge.revision.RevisionContext;
 public interface ProjectExportImportService {
 
     /** The archive protocol version written and accepted by this implementation. */
-    int PROTOCOL_VERSION = 2;
+    int PROTOCOL_VERSION = 3;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP

@@ -31,8 +31,11 @@ import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
 import { MediaDetailDrawerComponent } from './media-detail-drawer.component';
 import { MediaFolderDetailComponent } from './media-folder-detail.component';
 import { MediaFolderNodeComponent, FolderMoveEvent } from './media-folder-node.component';
+import { MediaNavNodeComponent } from './media-nav-node.component';
+import { sortByDisplayName } from '../../shared/tree-sort.util';
 
 type MediaView = components['schemas']['MediaView'];
+type MediaSummaryView = components['schemas']['MediaSummaryView'];
 type FolderView = components['schemas']['FolderView'];
 
 interface UploadItem {
@@ -61,6 +64,7 @@ const PAGE_SIZE = 40;
     MediaDetailDrawerComponent,
     MediaFolderDetailComponent,
     MediaFolderNodeComponent,
+    MediaNavNodeComponent,
   ],
   templateUrl: './media-library.component.html',
   styleUrl: './media-library.component.scss',
@@ -111,19 +115,66 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   protected readonly tree = this.project.mediaFolderTree;
 
-  /** The selected folder's direct subfolders (root when nothing is selected) — the content grid shows these, then this folder's own media, never descendants. */
+  /** The project's fixed, protected "All Media" wrapper root (mirrors `NAVIGATION`'s own fixed
+   * root) — always the tree's sole top-level entry now, but this screen already has its own
+   * "All media" affordance (the `library__clear` button), so it's unwrapped here rather than
+   * rendered a second time as an ordinary folder row. */
+  protected readonly mediaRoot = computed<FolderView | null>(() => this.tree()[0] ?? null);
+  /** The store's real top-level folders — the wrapper root's children. */
+  protected readonly topLevelFolders = computed<FolderView[]>(() => this.mediaRoot()?.children ?? []);
+
+  /** Media items living directly in the "All Media" wrapper root, rendered as tree leaves
+   * alongside `topLevelFolders` (mirrors `PagesListComponent.rootPages`). */
+  protected readonly rootMedia = computed<MediaSummaryView[]>(
+    () => this.mediaByFolder().get(this.mediaRoot()?.path ?? '/') ?? [],
+  );
+
+  /** The selected folder's direct subfolders (top-level store folders when nothing is
+   * selected) — the content grid shows these, then this folder's own media, never descendants. */
   protected readonly currentFolderChildren = computed<FolderView[]>(() => {
     const uuid = this.folderUuid();
     if (!uuid) {
-      return this.tree();
+      return this.topLevelFolders();
     }
     return findFolder(this.tree(), uuid)?.children ?? [];
   });
 
+  /** Every media item in the project, fetched once (unfiltered — no `folder`/`q`/`mimeType`),
+   * independent of the grid's own paginated/filtered `items()` — feeds the sidebar tree's leaf
+   * rows (mirrors `PagesListComponent.pages`/`pagesByFolder`), so the tree shows every item
+   * regardless of the grid's current folder/search/type filter. */
+  protected readonly allMedia = signal<MediaSummaryView[]>([]);
+
+  /** `allMedia` grouped by canonical folder path, for the tree (mirrors
+   * `PagesListComponent.pagesByFolder`/`FolderNodeComponent.ownPages`). */
+  protected readonly mediaByFolder = computed<Map<string, MediaSummaryView[]>>(() => {
+    const map = new Map<string, MediaSummaryView[]>();
+    for (const item of this.allMedia()) {
+      const path = item.folderPath ?? '/';
+      const list = map.get(path);
+      if (list) {
+        list.push(item);
+      } else {
+        map.set(path, [item]);
+      }
+    }
+    for (const [path, list] of map) {
+      map.set(path, sortByDisplayName(list));
+    }
+    return map;
+  });
+
+  /** The uuid of whichever media item's detail drawer is currently open, for tree-leaf
+   * highlighting. */
+  protected readonly selectedMediaUuid = computed<string | null>(() => this.selectedMedia()?.uuid ?? null);
+
   constructor() {
     effect(() => {
       const key = this.projectKey();
-      untracked(() => this.reload());
+      untracked(() => {
+        this.reload();
+        this.loadAllMedia(key);
+      });
     });
 
     this.search$
@@ -233,6 +284,31 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     this.selectedMedia.set(item);
   }
 
+  /** A tree leaf (`sf-media-nav-node`) was clicked — opens its detail drawer even when the item
+   * isn't in the grid's current folder/search/type filter, by switching to its own folder and
+   * clearing any active filter first (mirrors `openDetail`, but sourced from `allMedia` — the
+   * unfiltered project-wide list — instead of the grid's own `items()`). */
+  protected onSelectMediaLeaf(uuid: string): void {
+    const existing = this.items().find((i) => i.uuid === uuid);
+    if (existing) {
+      this.selectedMedia.set(existing);
+      return;
+    }
+    const summary = this.allMedia().find((i) => i.uuid === uuid);
+    if (!summary) {
+      return;
+    }
+    const folderNode = findFolderByPath(this.tree(), summary.folderPath ?? '');
+    this.folderPath.set(folderNode?.path ?? summary.folderPath ?? '');
+    this.folderUuid.set(folderNode?.uuid ?? '');
+    this.search.set('');
+    this.mimeFilter.set('');
+    this.reload(() => {
+      const found = this.items().find((i) => i.uuid === uuid);
+      this.selectedMedia.set(found ?? null);
+    });
+  }
+
   closeDetail(): void {
     this.selectedMedia.set(null);
   }
@@ -246,6 +322,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   onDeleted(uuid: string): void {
     this.items.update((list) => list.filter((i) => i.uuid !== uuid));
+    this.allMedia.update((list) => list.filter((i) => i.uuid !== uuid));
     this.totalElements.update((t) => Math.max(0, t - 1));
     this.selected.set([]);
     this.selectedMedia.set(null);
@@ -269,6 +346,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
       this.api.deleteAsset(key, uuid).subscribe({
         next: () => {
           this.items.update((list) => list.filter((i) => i.uuid !== uuid));
+          this.allMedia.update((list) => list.filter((i) => i.uuid !== uuid));
           this.totalElements.update((t) => Math.max(0, t - 1));
           remaining -= 1;
           if (remaining === 0) {
@@ -350,6 +428,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   protected reloadFolders(): void {
     this.project.loadFor(this.projectKey(), true).subscribe();
     this.reload();
+    this.loadAllMedia(this.projectKey());
   }
 
   protected moveItemTo(event: FolderMoveEvent): void {
@@ -543,6 +622,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
         this.renamingItem.set(null);
         this.toasts.show('Media renamed', 'success');
         this.reload();
+        this.loadAllMedia(this.projectKey());
       },
       error: () => {
         this.renamingItemName.set(false);
@@ -554,6 +634,15 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   protected onRenameItemUidChanged(): void {
     // sf-uid-rename already toasts "UID changed" itself — just reload.
     this.reload();
+    this.loadAllMedia(this.projectKey());
+  }
+
+  /** A tree leaf's own rename/delete succeeded — refresh both the grid and the tree's leaf
+   * bucket (mirrors `reloadFolders`, but without a folder-tree refetch since only the leaf
+   * itself changed). */
+  protected onMediaLeafChanged(): void {
+    this.reload();
+    this.loadAllMedia(this.projectKey());
   }
 
   private deleteOne(uuid: string, label: string): void {
@@ -632,6 +721,13 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
       ...list.filter((i) => i.uuid !== media.uuid),
     ]);
     this.totalElements.update((t) => t + 1);
+    // `MediaView` (the upload response) has no `folderPath` of its own — it was uploaded to
+    // whichever folder is currently selected, so that's its folder now.
+    const folderPath = this.folderPath() || this.mediaRoot()?.path;
+    this.allMedia.update((list) => [
+      { ...media, folderPath },
+      ...list.filter((i) => i.uuid !== media.uuid),
+    ]);
   }
 
   private query(page: number): {
@@ -643,8 +739,10 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   } {
     const q = this.search().trim();
     const mime = this.mimeFilter().trim();
-    // Root has no folderPath of its own — "/" matches only items placed directly at the project root, never nested ones (see `recursive`, default false).
-    const folder = this.folderPath().trim() || '/';
+    // "All media" (nothing selected) means the fixed "All Media" wrapper root's own path now,
+    // not the bare project root — every media asset nests under it (see `mediaRoot`) — matches
+    // only items placed directly there, never nested ones (see `recursive`, default false).
+    const folder = this.folderPath().trim() || this.mediaRoot()?.path || '/';
     return {
       page,
       size: PAGE_SIZE,
@@ -654,7 +752,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     };
   }
 
-  private reload(): void {
+  private reload(onLoaded?: () => void): void {
     this.loading.set(true);
     this.selected.set([]);
     this.api.listMedia(this.projectKey(), this.query(0)).subscribe({
@@ -663,8 +761,21 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
         this.page.set(res.number ?? 0);
         this.totalElements.set(res.totalElements ?? 0);
         this.loading.set(false);
+        onLoaded?.();
       },
       error: () => this.loading.set(false),
+    });
+  }
+
+  /** Every media item in the project, unfiltered — feeds `allMedia`/`mediaByFolder` (the
+   * sidebar tree's leaf rows), independent of the grid's own folder/search/type filter. */
+  private loadAllMedia(key: string): void {
+    if (!key) {
+      return;
+    }
+    this.api.listMedia(key, { page: 0, size: 10000 }).subscribe({
+      next: (res) => this.allMedia.set(res.content ?? []),
+      error: () => this.allMedia.set([]),
     });
   }
 
@@ -700,6 +811,19 @@ function findFolder(nodes: FolderView[], uuid: string): FolderView | null {
       return node;
     }
     const found = findFolder(node.children ?? [], uuid);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function findFolderByPath(nodes: FolderView[], path: string): FolderView | null {
+  for (const node of nodes) {
+    if (node.path === path) {
+      return node;
+    }
+    const found = findFolderByPath(node.children ?? [], path);
     if (found) {
       return found;
     }

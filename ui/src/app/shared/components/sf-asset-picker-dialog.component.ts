@@ -82,7 +82,10 @@ export class SfAssetPickerDialogComponent {
   protected readonly loading = signal(false);
 
   protected readonly hasFolders = computed(() => this.type() === 'PAGE' || this.type() === 'MEDIA');
-  protected readonly tree = computed<FolderView[]>(() => {
+  /** Raw scope tree — for PAGE/MEDIA this is always a single-entry array holding the fixed,
+   * protected "All Pages"/"All Media" wrapper root (mirrors NAVIGATION/TEMPLATES' own fixed
+   * roots); unwrapped by `tree` below since this dialog already has its own "All" root button. */
+  private readonly rawTree = computed<FolderView[]>(() => {
     if (this.type() === 'PAGE') {
       return this.store.pageFolderTree();
     }
@@ -91,6 +94,8 @@ export class SfAssetPickerDialogComponent {
     }
     return [];
   });
+  /** The store's real top-level folders — the wrapper root's children. */
+  protected readonly tree = computed<FolderView[]>(() => this.rawTree()[0]?.children ?? []);
 
   constructor() {
     effect(

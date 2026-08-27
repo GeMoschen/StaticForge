@@ -23,11 +23,40 @@ public interface AssetService {
 
     /**
      * Lazily and idempotently ensures the project's two fixed, protected {@code TEMPLATES}-scope
-     * root folders ("Page Templates" / "Section Templates", spec M13.1.2) exist directly under
-     * the hidden root, and returns them keyed by the template kind ({@code PAGE_TEMPLATE} /
-     * {@code SECTION_TEMPLATE}) each one holds.
+     * root folders ("Page Templates" / "Section Templates", spec M13.1.2) exist under
+     * {@link #ensureTemplatesRootFolder}, and returns them keyed by the template kind
+     * ({@code PAGE_TEMPLATE} / {@code SECTION_TEMPLATE}) each one holds.
      */
     Map<AssetType, AssetVersionView> ensureTemplateFolders(long projectId, RevisionContext ctx);
+
+    /**
+     * Lazily and idempotently ensures the project's fixed, protected {@code NAVIGATION}-scope
+     * root folder ("All Navigation") exists directly under the hidden root — every top-level
+     * navigation folder/reference nests under it, and it's the one place a project-wide
+     * navigation entry point ({@code startNode}) can be set.
+     */
+    AssetVersionView ensureNavigationRootFolder(long projectId, RevisionContext ctx);
+
+    /**
+     * Lazily and idempotently ensures the project's fixed, protected {@code TEMPLATES}-scope
+     * wrapper root folder ("All Templates") exists directly under the hidden root — the real
+     * parent of both fixed kind-roots {@link #ensureTemplateFolders} provisions.
+     */
+    AssetVersionView ensureTemplatesRootFolder(long projectId, RevisionContext ctx);
+
+    /**
+     * Lazily and idempotently ensures the project's fixed, protected {@code PAGES}-scope root
+     * folder ("All Pages") exists directly under the hidden root — every top-level page
+     * folder/loose page nests under it, mirroring {@link #ensureNavigationRootFolder}.
+     */
+    AssetVersionView ensurePagesRootFolder(long projectId, RevisionContext ctx);
+
+    /**
+     * Lazily and idempotently ensures the project's fixed, protected {@code MEDIA}-scope root
+     * folder ("All Media") exists directly under the hidden root — every top-level media
+     * folder/loose media asset nests under it, mirroring {@link #ensureNavigationRootFolder}.
+     */
+    AssetVersionView ensureMediaRootFolder(long projectId, RevisionContext ctx);
 
     /** Applies a full state change, closing the current version and opening a new one. Optimistic-concurrency-checked. */
     AssetVersionView update(UUID uuid, UpdateAssetCommand cmd, long expectedRevision, RevisionContext ctx);

@@ -1766,6 +1766,7 @@ export interface components {
             /** Format: int64 */
             revision?: number;
             folderPath?: string;
+            protectedFolder?: boolean;
             startNode?: components["schemas"]["NavigationStartNodeView"];
         };
         NavigationStartNodeView: {
@@ -1800,10 +1801,10 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -1821,12 +1822,12 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
-            unpaged?: boolean;
             /** Format: int32 */
             pageSize?: number;
             /** Format: int32 */
             pageNumber?: number;
+            paged?: boolean;
+            unpaged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -1836,10 +1837,10 @@ export interface components {
             ignoreCase?: boolean;
         };
         PageTemplateSummary: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -1890,8 +1891,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            remove?: boolean;
             add?: boolean;
+            remove?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -1924,6 +1925,7 @@ export interface components {
             /** Format: uuid */
             resolvedPageUuid?: string;
             resolvedPagePath?: string;
+            protectedFolder?: boolean;
             children?: components["schemas"]["NavTreeView"][];
         };
         PageReferenceResolveView: {
@@ -1944,10 +1946,10 @@ export interface components {
             revision?: number;
         };
         PageMediaSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -1987,10 +1989,10 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -4209,7 +4211,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["NavTreeView"];
+                    "*/*": components["schemas"]["NavTreeView"][];
                 };
             };
         };

@@ -2,29 +2,41 @@
   <aside class="navigation__tree">
     <div class="navigation__toolbar">
       <sf-button variant="secondary" (click)="newFolder()">New subfolder</sf-button>
-      <sf-button variant="secondary" [disabled]="!targetFolderUuid()" (click)="newReference()">
-        New reference
-      </sf-button>
+      <sf-button variant="secondary" (click)="newReference()">New reference</sf-button>
     </div>
+
+    <button
+      type="button"
+      class="navigation__clear"
+      [class.navigation__clear--active]="!selectedUuid()"
+      (click)="closeDetail()"
+      (dragover)="onRootDragOver($event)"
+      (drop)="onRootDrop($event)"
+      (contextmenu)="onRootContextMenu($event)"
+    >
+      <sf-icon name="home" />
+      All navigation
+    </button>
 
     @if (loading()) {
       <sf-spinner label="Loading navigation…" />
     } @else {
-      @if (root(); as tree) {
-        <sf-tree>
-          <sf-nav-tree-node
-            [node]="tree"
-            [depth]="0"
-            [selectedUuid]="selectedUuid()"
-            [isRoot]="true"
-            [projectKey]="projectKey()"
-            (select)="select($event)"
-            (move)="onMove($event)"
-            (changed)="onTreeNodeRenamed()"
-          />
-        </sf-tree>
+      @if (topLevelNodes().length === 0) {
+        <sf-empty-state title="No navigation yet" description="Create a folder or reference to get started." />
       } @else {
-        <sf-empty-state title="No navigation tree" description="Something went wrong loading the navigation root." />
+        <sf-tree>
+          @for (node of topLevelNodes(); track node.uuid) {
+            <sf-nav-tree-node
+              [node]="node"
+              [depth]="0"
+              [selectedUuid]="selectedUuid()"
+              [projectKey]="projectKey()"
+              (select)="select($event)"
+              (move)="onMove($event)"
+              (changed)="onTreeNodeRenamed()"
+            />
+          }
+        </sf-tree>
       }
     }
   </aside>
@@ -38,7 +50,6 @@
           [projectKey]="projectKey()"
           [folder]="folder"
           [children]="selectedNode()?.children ?? []"
-          [isRoot]="isRootSelected()"
           (closed)="closeDetail()"
           (changed)="onFolderChanged()"
           (deleted)="onFolderDeleted()"

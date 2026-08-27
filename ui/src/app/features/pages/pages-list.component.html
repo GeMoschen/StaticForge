@@ -22,13 +22,13 @@
     </button>
 
     <div class="pages__tree-body">
-      @if (!loading() && tree().length === 0 && pages().length === 0) {
+      @if (!loading() && topLevelFolders().length === 0 && pages().length === 0) {
         <sf-empty-state
           title="No pages"
           description="Create a page to see it listed here."
         />
       } @else {
-        @for (folder of tree(); track folder.uuid) {
+        @for (folder of topLevelFolders(); track folder.uuid) {
           <sf-folder-node
             [node]="folder"
             [depth]="0"

@@ -29,6 +29,7 @@ import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -81,19 +82,23 @@ public class NavigationController {
         this.securitySupport = securitySupport;
     }
 
-    /** The full, resolved navigation tree rooted at the project's single navigation-root folder. */
+    /**
+     * The fully-resolved navigation forest, `nav:` reference-resolved by {@link
+     * NavigationService#tree}. Always exactly one top-level entry today: the fixed, protected
+     * "All Navigation" root folder (spec M13.1.2-style, generalized) — real content nests inside
+     * it, one level down.
+     */
     @GetMapping("/tree")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public NavTreeView tree(@PathVariable String projectKey, @RequestParam(required = false) Integer depth) {
+    public List<NavTreeView> tree(@PathVariable String projectKey, @RequestParam(required = false) Integer depth) {
         int d = depth == null ? -1 : depth;
         long projectId = projectId(projectKey);
-        UUID rootUuid = navigationRootUuid(projectKey);
         List<Diagnostic> diagnostics = new ArrayList<>();
-        NavTreeNode root = navigationService.tree(projectId, rootUuid, d, navigationLookup, diagnostics);
-        if (root == null) {
-            throw new SfException(ProblemFactory.notFound("Navigation root folder not found."));
-        }
-        return toView(projectId(projectKey), root);
+        return topLevelNavigationUuids(projectKey).stream()
+                .map(uuid -> navigationService.tree(projectId, uuid, d, navigationLookup, diagnostics))
+                .filter(Objects::nonNull)
+                .map(node -> toView(projectId, node))
+                .toList();
     }
 
     private NavTreeView toView(long projectId, NavTreeNode node) {
@@ -102,7 +107,8 @@ public class NavigationController {
                 : assetService.requireCurrent(projectId, node.resolvedPageUuid()).folderPath();
         return new NavTreeView(
                 node.assetUuid(), node.type().name(), node.uid(), node.displayName(), node.label(),
-                node.resolvedPageUuid(), path, node.children().stream().map(c -> toView(projectId, c)).toList());
+                node.resolvedPageUuid(), path, node.protectedFolder(),
+                node.children().stream().map(c -> toView(projectId, c)).toList());
     }
 
     /** Renames a navigation folder and/or sets (or clears) its {@code startNode}. */
@@ -182,12 +188,16 @@ public class NavigationController {
         return new PageReferenceResolveView(page.uuid(), page.folderPath());
     }
 
-    private UUID navigationRootUuid(String projectKey) {
-        List<FolderNode> tree = folderService.tree(projectId(projectKey), FolderScope.NAVIGATION, 0, ctx(projectKey, null));
-        if (tree.isEmpty()) {
-            throw new SfException(ProblemFactory.notFound("Navigation root folder not found."));
-        }
-        return tree.get(0).uuid();
+    /**
+     * Every top-level `NAVIGATION` item's uuid — today, always exactly the fixed "All
+     * Navigation" root folder (every top-level nav folder/reference nests under it, so nothing
+     * else is ever a direct child of the hidden project root for this scope).
+     */
+    private List<UUID> topLevelNavigationUuids(String projectKey) {
+        return folderService.tree(projectId(projectKey), FolderScope.NAVIGATION, 0, ctx(projectKey, null))
+                .stream()
+                .map(FolderNode::uuid)
+                .toList();
     }
 
     private static StartNode readStartNode(JsonNode node) {
@@ -223,7 +233,9 @@ public class NavigationController {
         StartNode startNode = StartNode.fromPayload(v.payload());
         NavigationStartNodeView startNodeView =
                 startNode == null ? null : new NavigationStartNodeView(startNode.kind().name(), startNode.assetUuid());
-        return new NavigationFolderView(v.uuid(), v.uid(), v.displayName(), v.validFromRevision(), v.folderPath(), startNodeView);
+        return new NavigationFolderView(
+                v.uuid(), v.uid(), v.displayName(), v.validFromRevision(), v.folderPath(),
+                FolderScope.isProtected(v.payload()), startNodeView);
     }
 
     private static PageReferenceView toReferenceView(AssetVersionView v) {

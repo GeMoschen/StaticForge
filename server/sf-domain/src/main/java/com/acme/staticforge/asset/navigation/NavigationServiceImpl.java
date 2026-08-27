@@ -1,6 +1,7 @@
 package com.acme.staticforge.asset.navigation;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.folder.StartNode;
 import com.acme.staticforge.asset.folder.StartNodeKind;
@@ -178,7 +179,9 @@ public class NavigationServiceImpl implements NavigationService {
                     .toList();
         }
 
-        return new NavTreeNode(asset.uuid(), asset.type(), asset.uid(), asset.displayName(), label(projectId, asset, lookup), resolvedPageUuid, children);
+        return new NavTreeNode(
+                asset.uuid(), asset.type(), asset.uid(), asset.displayName(), label(projectId, asset, lookup),
+                resolvedPageUuid, FolderScope.isProtected(asset.payload()), children);
     }
 
     private String label(long projectId, NavigationAsset asset, NavigationLookup lookup) {

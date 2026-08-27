@@ -24,6 +24,24 @@ public enum FolderScope {
 
     public static final String SECTION_TEMPLATES_UID = "section_templates";
 
+    /** Well-known {@code uid} of the fixed, auto-provisioned, protected {@code NAVIGATION}-scope
+     * root folder — every top-level navigation folder/reference nests under it. */
+    public static final String NAVIGATION_ROOT_UID = "navigation_root";
+
+    /** Well-known {@code uid} of the fixed, auto-provisioned, protected {@code TEMPLATES}-scope
+     * root folder — the real parent of both {@link #PAGE_TEMPLATES_UID}/{@link #SECTION_TEMPLATES_UID}. */
+    public static final String TEMPLATES_ROOT_UID = "templates_root";
+
+    /** Well-known {@code uid} of the fixed, auto-provisioned, protected {@code PAGES}-scope
+     * root folder — every top-level page folder/loose page nests under it, mirroring {@link
+     * #NAVIGATION_ROOT_UID}. */
+    public static final String PAGES_ROOT_UID = "pages_root";
+
+    /** Well-known {@code uid} of the fixed, auto-provisioned, protected {@code MEDIA}-scope
+     * root folder — every top-level media folder/loose media asset nests under it, mirroring
+     * {@link #NAVIGATION_ROOT_UID}. */
+    public static final String MEDIA_ROOT_UID = "media_root";
+
     /** The scope an asset of this type must be placed under, or {@code null} if the type isn't scoped to a store. */
     public static FolderScope requiredFor(AssetType type) {
         return switch (type) {

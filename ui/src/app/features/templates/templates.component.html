@@ -8,7 +8,7 @@
       <sf-spinner label="Loading templates…" />
     }
     <div class="templates__tree-body" role="tree">
-      @for (root of templateFolderTree(); track root.uuid) {
+      @for (root of topLevelFolders(); track root.uuid) {
         <sf-template-folder-node
           [node]="root"
           [depth]="0"

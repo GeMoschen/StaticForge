@@ -22,3 +22,8 @@ export interface TemplateFolderSelectEvent {
  * `FolderScope.PAGE_TEMPLATES_UID`/`SECTION_TEMPLATES_UID` server-side). */
 export const PAGE_TEMPLATES_ROOT_UID = 'page_templates';
 export const SECTION_TEMPLATES_ROOT_UID = 'section_templates';
+
+/** Well-known `uid` of the fixed, protected "All Templates" wrapper root — the real parent of
+ * both fixed kind-roots above (mirrors `FolderScope.TEMPLATES_ROOT_UID` server-side). It has no
+ * determined kind of its own — content can never live directly under it. */
+export const TEMPLATES_ROOT_UID = 'templates_root';

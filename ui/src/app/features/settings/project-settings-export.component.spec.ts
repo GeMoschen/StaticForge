@@ -6,21 +6,35 @@ import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ProjectSettingsExportComponent } from './project-settings-export.component';
 import { ImportExportService } from './import-export.service';
 
+// `pageFolderTree` always has exactly one top-level entry now — the fixed, protected "All
+// Pages" wrapper root (mirrors NAVIGATION/TEMPLATES' own fixed roots) — unwrapped by the
+// component for display (`topLevelFolders`), so "Root"/"Child" below are the real top-level
+// tree the tests actually interact with.
 const pageTree = [
   {
-    uuid: 'folder-root',
-    uid: 'root',
-    displayName: 'Root',
-    path: '/',
+    uuid: 'folder-wrapper',
+    uid: 'pages_root',
+    displayName: 'All Pages',
+    path: '/pages_root/',
     scope: 'PAGES',
+    protectedFolder: true,
     children: [
       {
-        uuid: 'folder-child',
-        uid: 'child',
-        displayName: 'Child',
-        path: '/child',
+        uuid: 'folder-root',
+        uid: 'root',
+        displayName: 'Root',
+        path: '/pages_root/root/',
         scope: 'PAGES',
-        children: [],
+        children: [
+          {
+            uuid: 'folder-child',
+            uid: 'child',
+            displayName: 'Child',
+            path: '/pages_root/root/child/',
+            scope: 'PAGES',
+            children: [],
+          },
+        ],
       },
     ],
   },

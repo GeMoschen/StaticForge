@@ -5,7 +5,7 @@
 >
   <div
     class="folder-node__row"
-    draggable="true"
+    [attr.draggable]="isProtected() ? null : true"
     role="treeitem"
     tabindex="0"
     [attr.aria-expanded]="expanded()"
@@ -29,6 +29,9 @@
     </button>
     <sf-icon class="folder-node__icon" [name]="expanded() && hasChildren() ? 'folder_open' : 'folder'" />
     <span class="folder-node__name">{{ node().displayName ?? node().uid }}</span>
+    @if (isProtected()) {
+      <sf-icon class="folder-node__protected-icon" name="lock" title="Built-in folder — can't be renamed, moved, or deleted" />
+    }
   </div>
 
   @if (expanded() && hasChildren()) {
@@ -39,8 +42,21 @@
           [depth]="depth() + 1"
           [selectedUuid]="selectedUuid()"
           [projectKey]="projectKey()"
+          [mediaByFolder]="mediaByFolder()"
+          [selectedMediaUuid]="selectedMediaUuid()"
           (select)="select.emit($event)"
           (move)="move.emit($event)"
+          (selectMedia)="selectMedia.emit($event)"
+          (changed)="changed.emit()"
+        />
+      }
+      @for (media of ownMedia(); track media.uuid) {
+        <sf-media-nav-node
+          [projectKey]="projectKey()"
+          [summary]="media"
+          [depth]="depth() + 1"
+          [selected]="selectedMediaUuid() === media.uuid"
+          (select)="selectMedia.emit($event)"
           (changed)="changed.emit()"
         />
       }

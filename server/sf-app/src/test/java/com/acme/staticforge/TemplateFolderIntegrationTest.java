@@ -146,10 +146,11 @@ class TemplateFolderIntegrationTest {
         mvc.perform(get("/api/v1/projects/" + fx.project().getKey() + "/folders")
                         .header("Authorization", "Bearer " + fx.token())
                         .param("scope", "TEMPLATES")
-                        .param("depth", "0"))
+                        .param("depth", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].protectedFolder").value(true))
-                .andExpect(jsonPath("$[1].protectedFolder").value(true));
+                .andExpect(jsonPath("$[0].children[0].protectedFolder").value(true))
+                .andExpect(jsonPath("$[0].children[1].protectedFolder").value(true));
     }
 
     // ------------------------------------------------------------------
@@ -160,12 +161,16 @@ class TemplateFolderIntegrationTest {
     void newProjectHasBothFixedFoldersProtectedWithCorrectTemplateKind() {
         Fixture fx = newFixture();
 
-        List<FolderNode> roots = folderService.tree(fx.project().getId(), FolderScope.TEMPLATES, 0, fx.ctx());
-        assertThat(roots).hasSize(2);
-        assertThat(roots).allMatch(FolderNode::protectedFolder);
+        List<FolderNode> roots = folderService.tree(fx.project().getId(), FolderScope.TEMPLATES, -1, fx.ctx());
+        assertThat(roots).hasSize(1);
+        FolderNode wrapper = roots.get(0);
+        assertThat(wrapper.uid()).isEqualTo(FolderScope.TEMPLATES_ROOT_UID);
+        assertThat(wrapper.protectedFolder()).isTrue();
+        assertThat(wrapper.children()).hasSize(2);
+        assertThat(wrapper.children()).allMatch(FolderNode::protectedFolder);
 
-        FolderNode pageFolder = roots.stream().filter(n -> n.uid().equals(FolderScope.PAGE_TEMPLATES_UID)).findFirst().orElseThrow();
-        FolderNode sectionFolder = roots.stream().filter(n -> n.uid().equals(FolderScope.SECTION_TEMPLATES_UID)).findFirst().orElseThrow();
+        FolderNode pageFolder = wrapper.children().stream().filter(n -> n.uid().equals(FolderScope.PAGE_TEMPLATES_UID)).findFirst().orElseThrow();
+        FolderNode sectionFolder = wrapper.children().stream().filter(n -> n.uid().equals(FolderScope.SECTION_TEMPLATES_UID)).findFirst().orElseThrow();
 
         assertThat(assetService.requireCurrent(fx.project().getId(), pageFolder.uuid()).payload().path("templateKind").asText())
                 .isEqualTo("PAGE_TEMPLATE");
@@ -174,13 +179,14 @@ class TemplateFolderIntegrationTest {
     }
 
     @Test
-    void templatesTreeAtDepthZeroAlwaysReturnsExactlyTheFixedTwo() {
+    void templatesTreeAtDepthZeroAlwaysReturnsExactlyTheFixedWrapperWithNoChildrenExpanded() {
         Fixture fx = newFixture();
         folderService.create(fixedFolderUuid(fx, FolderScope.PAGE_TEMPLATES_UID), "Nested", null, fx.ctx());
 
         List<FolderNode> roots = folderService.tree(fx.project().getId(), FolderScope.TEMPLATES, 0, fx.ctx());
-        assertThat(roots).hasSize(2);
-        assertThat(roots).allMatch(n -> n.children().isEmpty());
+        assertThat(roots).hasSize(1);
+        assertThat(roots.get(0).uid()).isEqualTo(FolderScope.TEMPLATES_ROOT_UID);
+        assertThat(roots.get(0).children()).isEmpty();
     }
 
     @Test
@@ -210,7 +216,9 @@ class TemplateFolderIntegrationTest {
 
         assertThat(first.get(AssetType.PAGE_TEMPLATE).uuid()).isEqualTo(second.get(AssetType.PAGE_TEMPLATE).uuid());
         assertThat(first.get(AssetType.SECTION_TEMPLATE).uuid()).isEqualTo(second.get(AssetType.SECTION_TEMPLATE).uuid());
-        assertThat(folderService.tree(fx.project().getId(), FolderScope.TEMPLATES, 0, fx.ctx())).hasSize(2);
+        List<FolderNode> roots = folderService.tree(fx.project().getId(), FolderScope.TEMPLATES, -1, fx.ctx());
+        assertThat(roots).hasSize(1);
+        assertThat(roots.get(0).children()).hasSize(2);
     }
 
     // ------------------------------------------------------------------

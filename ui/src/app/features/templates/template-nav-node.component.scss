@@ -2,6 +2,15 @@
   display: block;
 }
 
+/* Carries the depth indent (mirrors `sf-template-folder-node`'s outer `.folder-node` wrapper)
+   so the background-painted `.template-nav__row` inside it starts at the indented position
+   instead of stretching back under the indent to the tree's left edge — a plain `padding-left`
+   on the row itself doesn't move the row's own box, only its content, so its background would
+   otherwise span the full parent width regardless of depth. */
+.template-nav__indent {
+  display: block;
+}
+
 .template-nav__row {
   display: flex;
   align-items: center;

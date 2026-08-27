@@ -63,7 +63,7 @@
             <li>
               <span>{{ variant.name }}</span>
               <span class="meta">{{ variant.width ?? 0 }}px · {{ variant.format }}</span>
-              <a [href]="downloadUrl(variant.name)" download>Download</a>
+              <button type="button" class="link-button" (click)="downloadVariant(variant.name)">Download</button>
             </li>
           }
         </ul>
@@ -91,15 +91,6 @@
       }
     </section>
 
-    <section class="section identity">
-      <h3 class="section__title">Identity</h3>
-      <sf-uid-rename
-        [projectKey]="projectKey()"
-        [uuid]="media().uuid ?? ''"
-        [uid]="media().uid ?? ''"
-        (uidChanged)="onUidChanged($event)"
-      />
-    </section>
   </div>
 
   <footer class="drawer__footer">

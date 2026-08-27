@@ -8,11 +8,11 @@ import { NavTreeNodeComponent } from './nav-tree-node.component';
 import { NavigationService, type NavTreeView } from './navigation.service';
 
 const tree: NavTreeView = {
-  uuid: 'root-uuid',
+  uuid: 'main-uuid',
   type: 'FOLDER',
-  uid: 'root',
-  displayName: 'Navigation',
-  label: 'Navigation',
+  uid: 'main',
+  displayName: 'Main Menu',
+  label: 'Main Menu',
   children: [
     {
       uuid: 'folder-uuid',
@@ -47,10 +47,10 @@ const tree: NavTreeView = {
 describe('NavTreeNodeComponent', () => {
   it('renders the full navigation folder structure with folder and PageReference leaves', async () => {
     await render(NavTreeNodeComponent, {
-      componentInputs: { node: tree, isRoot: true },
+      componentInputs: { node: tree },
     });
 
-    expect(screen.getByText('Navigation')).toBeTruthy();
+    expect(screen.getByText('Main Menu')).toBeTruthy();
     expect(screen.getByText('Products')).toBeTruthy();
     expect(screen.getByText('Products Home')).toBeTruthy();
     expect(screen.getByText('About')).toBeTruthy();
@@ -59,7 +59,7 @@ describe('NavTreeNodeComponent', () => {
 
   it('shows "unresolved" for a PageReference with no resolved path', async () => {
     await render(NavTreeNodeComponent, {
-      componentInputs: { node: tree, isRoot: true },
+      componentInputs: { node: tree },
     });
 
     expect(screen.getByText('unresolved')).toBeTruthy();
@@ -68,7 +68,7 @@ describe('NavTreeNodeComponent', () => {
   it('emits select with the clicked node uuid', async () => {
     const onSelect = vi.fn();
     await render(NavTreeNodeComponent, {
-      componentInputs: { node: tree, isRoot: true },
+      componentInputs: { node: tree },
       on: { select: onSelect },
     });
 
@@ -77,28 +77,11 @@ describe('NavTreeNodeComponent', () => {
     expect(onSelect).toHaveBeenCalledWith('folder-uuid');
   });
 
-  it('does not open a context menu on the root node (root cannot be renamed)', async () => {
-    const nav = { renameFolder: vi.fn() };
-    const api = { renameAsset: vi.fn() };
-    await render(NavTreeNodeComponent, {
-      componentInputs: { node: tree, isRoot: true, projectKey: 'proj' },
-      providers: [
-        { provide: NavigationService, useValue: nav },
-        { provide: ApiClient, useValue: api },
-      ],
-    });
-    const menu = TestBed.inject(ContextMenuService);
-
-    screen.getByText('Navigation').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-
-    expect(menu.state()).toBeNull();
-  });
-
-  it('opens a context menu with a single Rename item on a non-root folder node', async () => {
+  it('opens a context menu with a single Rename item on any folder node, including the top-level one', async () => {
     const nav = { renameFolder: vi.fn().mockReturnValue(of({})) };
     const api = { renameAsset: vi.fn() };
     await render(NavTreeNodeComponent, {
-      componentInputs: { node: tree, isRoot: true, projectKey: 'proj' },
+      componentInputs: { node: tree, projectKey: 'proj' },
       providers: [
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
@@ -106,7 +89,7 @@ describe('NavTreeNodeComponent', () => {
     });
     const menu = TestBed.inject(ContextMenuService);
 
-    screen.getByText('Products').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    screen.getByText('Main Menu').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 
     const state = menu.state();
     expect(state).not.toBeNull();

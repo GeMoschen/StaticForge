@@ -37,9 +37,10 @@ export function etagFor(revision: number): string {
 export class NavigationService {
   private readonly http = inject(HttpClient);
 
-  /** The full resolved navigation tree, rooted at the project's single navigation-root folder. */
-  tree(projectKey: string, depth?: number): Observable<NavTreeView> {
-    return this.http.get<NavTreeView>(`${BASE}/projects/${projectKey}/navigation/tree`, {
+  /** The full resolved navigation forest — one entry per top-level folder or unfoldered
+   * reference, with no distinguished root node (matches Pages/Media/Templates). */
+  tree(projectKey: string, depth?: number): Observable<NavTreeView[]> {
+    return this.http.get<NavTreeView[]>(`${BASE}/projects/${projectKey}/navigation/tree`, {
       withCredentials: true,
       params: depth != null ? { depth } : undefined,
     });

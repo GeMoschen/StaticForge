@@ -63,8 +63,8 @@ class NavigationHtmlGoldenTest {
     /** A grouping-only node (null {@code href}) never renders as a link, even when it has no children. */
     @Test
     void groupingOnlyLeafRendersAsSpanNotAnchor() {
-        NavTreeNode leaf = new NavTreeNode(UUID.randomUUID(), AssetType.FOLDER, "empty", "Empty", "Empty", null, List.of());
-        NavTreeNode root = new NavTreeNode(UUID.randomUUID(), AssetType.FOLDER, "root", "Root", "Root", null, List.of(leaf));
+        NavTreeNode leaf = new NavTreeNode(UUID.randomUUID(), AssetType.FOLDER, "empty", "Empty", "Empty", null, false, List.of());
+        NavTreeNode root = new NavTreeNode(UUID.randomUUID(), AssetType.FOLDER, "root", "Root", "Root", null, false, List.of(leaf));
 
         JsonNode json = NavigationTreeJson.toJson(root, null, node -> "/page/" + node.resolvedPageUuid() + "/");
         String html = NavigationHtmlRenderer.renderRoot(json);
@@ -88,7 +88,7 @@ class NavigationHtmlGoldenTest {
         for (JsonNode child : json.path("children")) {
             children.add(readTree(child));
         }
-        return new NavTreeNode(assetUuid, type, uid, displayName, label, resolvedPageUuid, children);
+        return new NavTreeNode(assetUuid, type, uid, displayName, label, resolvedPageUuid, false, children);
     }
 
     private static String textOrNull(JsonNode node, String field) {

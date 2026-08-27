@@ -8,6 +8,7 @@ import {
   ImportResultView,
   extractConflicts,
 } from './import-export.service';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
@@ -48,6 +49,7 @@ export class ProjectSettingsImportComponent {
 
   private readonly api = inject(ImportExportService);
   private readonly toasts = inject(ToastService);
+  private readonly store = inject(ProjectContextStore);
 
   protected readonly dragCounter = signal(0);
   protected readonly dragActive = computed(() => this.dragCounter() > 0);
@@ -188,6 +190,12 @@ export class ProjectSettingsImportComponent {
         this.result.set(result);
         this.file.set(null);
         this.report.set(null);
+        // A committed import can create folders (and move/rename existing ones) that
+        // `ProjectContextStore`'s folder trees — loaded once per project and otherwise only
+        // refreshed by each store screen's own CRUD actions — have no other way to learn about,
+        // so without this every Pages/Media/Navigation/Templates tree keeps showing pre-import
+        // folder structure until a full page reload re-fetches the store from scratch.
+        this.store.loadFor(this.projectKey(), true).subscribe();
         this.toasts.show(
           `Imported ${result.importedAssetCount ?? 0} asset(s), ${result.importedBlobCount ?? 0} blob(s)`,
           'success',

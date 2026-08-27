@@ -69,12 +69,14 @@ class ProjectApiIntegrationTests {
         assertThat(project.getId()).isNotNull();
         assertThat(project.getKey()).isEqualTo("demo");
 
-        // Revision 1 is the project's own CREATE; four more follow in the same call: the
-        // implicit hidden root folder and the auto-created navigation root folder (spec §17,
-        // `M8.1.2` — the navigation store is rooted like the Page/Media stores), plus the two
-        // fixed, protected "Page Templates" / "Section Templates" folders (spec M13.1.2).
+        // Revision 1 is the project's own CREATE; seven more follow in the same call: the
+        // implicit hidden root folder, the fixed "All Templates" wrapper root, the two fixed
+        // "Page Templates" / "Section Templates" folders nested inside it (spec M13.1.2,
+        // generalized), and the fixed "All Navigation" / "All Pages" / "All Media" roots — every
+        // store (Pages, Media, Navigation, Templates) now provisions its own fixed wrapper root
+        // upfront, the same treatment across the board.
         List<Revision> revisions = revisionRepository.findByProjectIdOrderByRevisionIdDesc(project.getId());
-        assertThat(revisions).hasSize(5);
+        assertThat(revisions).hasSize(8);
         Revision projectCreateRevision = revisions.stream()
                 .filter(r -> r.getRevisionId() == 1L)
                 .findFirst()

@@ -65,15 +65,28 @@
     </button>
 
     <div class="library__tree-body">
-      @for (folder of tree(); track folder.uuid) {
+      @for (folder of topLevelFolders(); track folder.uuid) {
         <sf-media-folder-node
           [node]="folder"
           [depth]="0"
           [selectedUuid]="folderUuid()"
           [projectKey]="projectKey()"
+          [mediaByFolder]="mediaByFolder()"
+          [selectedMediaUuid]="selectedMediaUuid()"
           (select)="onFolderSelected($event)"
           (move)="moveItemTo($event)"
+          (selectMedia)="onSelectMediaLeaf($event)"
           (changed)="reloadFolders()"
+        />
+      }
+      @for (media of rootMedia(); track media.uuid) {
+        <sf-media-nav-node
+          [projectKey]="projectKey()"
+          [summary]="media"
+          [depth]="0"
+          [selected]="selectedMediaUuid() === media.uuid"
+          (select)="onSelectMediaLeaf($event)"
+          (changed)="onMediaLeafChanged()"
         />
       }
     </div>

@@ -363,12 +363,18 @@ public class PageRenderService {
      * Href resolution swap point for `M8.2.3`: a {@code PAGE_REFERENCE} node's href is keyed on
      * the reference's own uuid ({@code node.assetUuid()}, exactly the {@code pageReferenceUuid}
      * {@link UrlRegistryService#resolve} expects) and resolved through the {@code PREVIEW} area of
-     * the URL registry. A {@code FOLDER} entry-point node (its {@code resolvedPageUuid} comes from
-     * walking a {@code startNode} chain, not from a {@code PageReference} the folder itself owns)
-     * has no {@code PageReference} identity to key a registry lookup on, so it keeps resolving
-     * directly through the same {@link UrlResolver} a {@code $CMS_REF(page:...)$} would use
-     * (share-token URL when rewriting, raw uuid otherwise) — unchanged pre-`M8.2.3` behavior for
-     * that node kind.
+     * the URL registry — but only when {@code rewriteLinks} is {@code false} (a caller inspecting
+     * the registry's stable, published-style URL rather than rendering something a browser will
+     * actually click). When {@code rewriteLinks} is {@code true} (every iframe/srcdoc preview
+     * route — see {@link #urlResolver}'s javadoc), the registry's raw output-relative path (e.g.
+     * {@code "about/index.html"}) is not a route the preview app serves, so it must go through the
+     * same signed-share-token {@link UrlResolver} every other in-preview page link uses, exactly
+     * like a {@code FOLDER} entry-point node already does — otherwise nav links render but cannot
+     * be clicked to navigate inside the preview. A {@code FOLDER} entry-point node (its {@code
+     * resolvedPageUuid} comes from walking a {@code startNode} chain, not from a {@code
+     * PageReference} the folder itself owns) has no {@code PageReference} identity to key a
+     * registry lookup on regardless, so it always resolves directly through the {@link
+     * UrlResolver} — unchanged pre-`M8.2.3` behavior for that node kind.
      */
     private String navHref(
             NavTreeNode node, long projectId, String projectKey, String channel, boolean rewriteLinks, String baseUrl) {
@@ -376,7 +382,7 @@ public class PageRenderService {
         if (resolvedPageUuid == null) {
             return "";
         }
-        if (node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
+        if (!rewriteLinks && node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
             RevisionContext ctx = RevisionContext.of(projectId, null, "preview");
             return urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.PREVIEW, ctx);
         }
