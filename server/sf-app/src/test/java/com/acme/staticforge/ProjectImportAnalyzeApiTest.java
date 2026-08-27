@@ -86,7 +86,7 @@ class ProjectImportAnalyzeApiTest {
                         source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
                 source.ctx());
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false));
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
 
         Fixture target = newFixture("an_tmpl_tgt");
         long countBefore = assetCount(target);
@@ -123,7 +123,7 @@ class ProjectImportAnalyzeApiTest {
                         source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
                 source.ctx());
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false));
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
 
         Fixture target = newFixture("an_409_tgt");
         long countBefore = assetCount(target);
@@ -145,7 +145,7 @@ class ProjectImportAnalyzeApiTest {
                 new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
                 source.user().getId(), null);
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(), true, false));
+                source.project().getId(), new ExportSelection(Set.of(), true, false, Set.of()));
 
         Fixture target = newFixture("an_warn_tgt");
         channelService.create(target.project().getId(),

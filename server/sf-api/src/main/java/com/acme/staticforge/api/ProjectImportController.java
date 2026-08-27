@@ -6,6 +6,7 @@ import com.acme.staticforge.api.dto.ImportResultView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.exportimport.ConflictReport;
+import com.acme.staticforge.exportimport.ImportOptions;
 import com.acme.staticforge.exportimport.ImportResult;
 import com.acme.staticforge.exportimport.ProjectExportImportService;
 import com.acme.staticforge.project.ProjectService;
@@ -47,10 +48,13 @@ public class ProjectImportController {
     @PostMapping("/import")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
     public ImportResultView importArchive(
-            @PathVariable String projectKey, @RequestParam("file") MultipartFile file) {
+            @PathVariable String projectKey,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(defaultValue = "false") boolean skipExistingImplicit) {
         long projectId = projectService.requireByKey(projectKey).getId();
         RevisionContext ctx = RevisionContext.of(projectId, securitySupport.currentUserId(), "import project");
-        ImportResult result = exportImportService.importProject(projectId, bytes(file), ctx);
+        ImportResult result = exportImportService.importProject(
+                projectId, bytes(file), ctx, new ImportOptions(skipExistingImplicit));
         return new ImportResultView(
                 result.sourceProjectKey(), result.importedAssetCount(), result.importedBlobCount());
     }
@@ -58,16 +62,20 @@ public class ProjectImportController {
     @PostMapping("/import/analyze")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
     public ConflictReportView analyzeImport(
-            @PathVariable String projectKey, @RequestParam("file") MultipartFile file) {
+            @PathVariable String projectKey,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(defaultValue = "false") boolean skipExistingImplicit) {
         long projectId = projectService.requireByKey(projectKey).getId();
-        ConflictReport report = exportImportService.analyzeImport(projectId, bytes(file));
+        ConflictReport report = exportImportService.analyzeImport(
+                projectId, bytes(file), new ImportOptions(skipExistingImplicit));
         return toView(report);
     }
 
     private static ConflictReportView toView(ConflictReport report) {
         List<ImportConflictView> conflicts = report.conflicts().stream()
                 .map(c -> new ImportConflictView(
-                        c.severity().name(), c.type().name(), c.elementUuid(), c.elementLabel(), c.detail()))
+                        c.severity().name(), c.type().name(), c.elementUuid(), c.elementLabel(), c.detail(),
+                        c.explicit()))
                 .toList();
         return new ConflictReportView(conflicts, report.hasBlocking());
     }

@@ -166,3 +166,22 @@
   color: var(--sf-amber);
   font-weight: 600;
 }
+
+.badge--explicit {
+  background: color-mix(in srgb, var(--sf-signal) 14%, transparent);
+  color: var(--sf-signal);
+}
+
+.badge--implicit {
+  background: color-mix(in srgb, var(--sf-slate) 14%, transparent);
+  color: var(--sf-slate);
+}
+
+.import__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+  cursor: pointer;
+}

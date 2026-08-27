@@ -2,8 +2,9 @@
   <header class="export__header">
     <h1 class="export__title">Export</h1>
     <p class="export__subtitle">
-      Pick the pages and media to include — checking a folder includes its full current
-      subtree — plus any output channels or generation targets, then download a ZIP.
+      Pick the pages, media, navigation entries and/or templates to include — checking a folder
+      includes its full current subtree, and "Select all" grabs an entire store without needing
+      to expand it — plus any output channels or generation targets, then download a ZIP.
     </p>
   </header>
 
@@ -16,7 +17,13 @@
   } @else {
     <div class="trees">
       <section class="tree-section">
-        <h2 class="tree-section__title">Pages</h2>
+        <div class="tree-section__header">
+          <h2 class="tree-section__title">Pages</h2>
+          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('PAGE')">
+            <sf-icon [name]="isStoreFull('PAGE') ? 'check_box' : 'check_box_outline_blank'" />
+            Select all pages
+          </button>
+        </div>
         @if (store.pageFolderTree().length === 0) {
           <sf-empty-state title="No page folders" description="This project has no page folders yet." />
         } @else {
@@ -34,7 +41,13 @@
       </section>
 
       <section class="tree-section">
-        <h2 class="tree-section__title">Media</h2>
+        <div class="tree-section__header">
+          <h2 class="tree-section__title">Media</h2>
+          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('MEDIA')">
+            <sf-icon [name]="isStoreFull('MEDIA') ? 'check_box' : 'check_box_outline_blank'" />
+            Select all media
+          </button>
+        </div>
         @if (store.mediaFolderTree().length === 0) {
           <sf-empty-state title="No media folders" description="This project has no media folders yet." />
         } @else {
@@ -48,6 +61,94 @@
               ></ng-container>
             }
           </div>
+        }
+      </section>
+
+      <section class="tree-section">
+        <div class="tree-section__header">
+          <h2 class="tree-section__title">Navigation</h2>
+          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('PAGE_REFERENCE')">
+            <sf-icon [name]="isStoreFull('PAGE_REFERENCE') ? 'check_box' : 'check_box_outline_blank'" />
+            Select all navigation
+          </button>
+        </div>
+        @if (store.navigationFolderTree().length === 0) {
+          <sf-empty-state title="No navigation folders" description="This project has no navigation folders yet." />
+        } @else {
+          <div class="tree" role="tree">
+            @for (node of store.navigationFolderTree(); track nodeKey(node)) {
+              <ng-container
+                *ngTemplateOutlet="
+                  folderNode;
+                  context: { $implicit: node, scope: 'PAGE_REFERENCE', ancestorChecked: false, depth: 0 }
+                "
+              ></ng-container>
+            }
+          </div>
+        }
+      </section>
+    </div>
+
+    <div class="template-lists">
+      <section class="template-section">
+        <h2 class="tree-section__title">Page templates</h2>
+        <input
+          type="search"
+          class="template-section__search"
+          placeholder="Search page templates…"
+          (input)="onPageTemplateSearchInput($event)"
+        />
+        @if (loadingPageTemplates()) {
+          <sf-spinner label="Loading…" />
+        } @else if (pageTemplateItems().length === 0) {
+          <sf-empty-state title="No page templates" description="No page templates match your search." />
+        } @else {
+          <ul class="template-list">
+            @for (item of pageTemplateItems(); track item.uuid) {
+              <li class="template-list__item">
+                <input
+                  type="checkbox"
+                  [id]="'export-pagetpl-' + item.uuid"
+                  [checked]="templateChecked(item)"
+                  (change)="toggleTemplateItem(item)"
+                />
+                <label [for]="'export-pagetpl-' + item.uuid">
+                  {{ item.displayName ?? item.uid ?? item.uuid }}
+                </label>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section class="template-section">
+        <h2 class="tree-section__title">Section templates</h2>
+        <input
+          type="search"
+          class="template-section__search"
+          placeholder="Search section templates…"
+          (input)="onSectionTemplateSearchInput($event)"
+        />
+        @if (loadingSectionTemplates()) {
+          <sf-spinner label="Loading…" />
+        } @else if (sectionTemplateItems().length === 0) {
+          <sf-empty-state title="No section templates" description="No section templates match your search." />
+        } @else {
+          <ul class="template-list">
+            @for (item of sectionTemplateItems(); track item.uuid) {
+              <li class="template-list__item">
+                <input
+                  type="checkbox"
+                  [id]="'export-sectiontpl-' + item.uuid"
+                  [checked]="templateChecked(item)"
+                  (change)="toggleTemplateItem(item)"
+                />
+                <label [for]="'export-sectiontpl-' + item.uuid">
+                  {{ item.displayName ?? item.uid ?? item.uuid }}
+                </label>
+              </li>
+            }
+          </ul>
         }
       </section>
     </div>
@@ -81,7 +182,12 @@
 </div>
 
 <ng-template #folderNode let-node let-scope="scope" let-ancestorChecked="ancestorChecked" let-depth="depth">
-  <div class="tree-row" [style.padding-left.px]="depth * 16" role="treeitem">
+  <div
+    class="tree-row"
+    [style.padding-left.px]="depth * 16"
+    role="treeitem"
+    [class.tree-row--implicit]="folderState(node, scope, ancestorChecked) === 'implicit'"
+  >
     <button
       type="button"
       class="tree-row__toggle"
@@ -95,15 +201,21 @@
       type="checkbox"
       class="tree-row__checkbox"
       [id]="'export-node-' + nodeKey(node)"
-      [checked]="folderState(node, ancestorChecked).checked"
-      [indeterminate]="folderState(node, ancestorChecked).indeterminate"
+      [checked]="folderState(node, scope, ancestorChecked) === 'explicit'"
       [disabled]="ancestorChecked"
-      (change)="toggleFolder(node, ancestorChecked)"
+      (change)="toggleFolder(node, scope, ancestorChecked)"
     />
     <sf-icon class="tree-row__icon" name="folder" />
     <label class="tree-row__name" [for]="'export-node-' + nodeKey(node)">
       {{ node.displayName ?? node.uid ?? node.path }}
     </label>
+    @if (folderState(node, scope, ancestorChecked) === 'implicit') {
+      <sf-icon
+        class="tree-row__implicit-icon"
+        name="subdirectory_arrow_right"
+        title="Included automatically — contains a selected item"
+      />
+    }
   </div>
 
   @if (isExpanded(node)) {
@@ -114,7 +226,7 @@
           context: {
             $implicit: child,
             scope: scope,
-            ancestorChecked: folderState(node, ancestorChecked).checked,
+            ancestorChecked: childAncestorChecked(node, ancestorChecked),
             depth: depth + 1,
           }
         "
@@ -131,9 +243,9 @@
             type="checkbox"
             class="tree-row__checkbox"
             [id]="'export-asset-' + asset.uuid"
-            [checked]="assetChecked(asset, folderState(node, ancestorChecked).checked)"
-            [disabled]="folderState(node, ancestorChecked).checked"
-            (change)="toggleAsset(asset, folderState(node, ancestorChecked).checked)"
+            [checked]="assetChecked(asset, scope, childAncestorChecked(node, ancestorChecked))"
+            [disabled]="childAncestorChecked(node, ancestorChecked)"
+            (change)="toggleAsset(asset, scope, childAncestorChecked(node, ancestorChecked))"
           />
           <sf-icon class="tree-row__icon" name="description" />
           <label class="tree-row__name" [for]="'export-asset-' + asset.uuid">

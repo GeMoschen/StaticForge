@@ -28,6 +28,8 @@ export class ProjectContextStore {
   readonly pageFolderTree = signal<FolderView[]>([]);
   /** The media library's folders. Entirely separate from `pageFolderTree`. */
   readonly mediaFolderTree = signal<FolderView[]>([]);
+  /** The navigation tree's folders (`PAGE_REFERENCE` leaves). Entirely separate from the other two. */
+  readonly navigationFolderTree = signal<FolderView[]>([]);
   readonly pageTemplates = signal<TemplateSummary[]>([]);
   readonly sectionTemplates = signal<TemplateSummary[]>([]);
   readonly revisions = signal<RevisionView[]>([]);
@@ -84,6 +86,9 @@ export class ProjectContextStore {
       mediaFolders: this.http.get<FolderView[]>(
         `/api/v1/projects/${projectKey}/folders?scope=MEDIA&depth=10`,
       ),
+      navigationFolders: this.http.get<FolderView[]>(
+        `/api/v1/projects/${projectKey}/folders?scope=NAVIGATION&depth=10`,
+      ),
       pageTemplates: this.http.get<PageTemplateSummary>(
         `/api/v1/projects/${projectKey}/page-templates`,
       ),
@@ -98,6 +103,7 @@ export class ProjectContextStore {
         this.project.set(res.detail);
         this.pageFolderTree.set(res.pageFolders ?? []);
         this.mediaFolderTree.set(res.mediaFolders ?? []);
+        this.navigationFolderTree.set(res.navigationFolders ?? []);
         this.pageTemplates.set(res.pageTemplates.content ?? []);
         this.sectionTemplates.set(res.sectionTemplates.content ?? []);
         this.revisions.set(res.revisions ?? []);
@@ -126,6 +132,7 @@ export class ProjectContextStore {
     this.channels.set(['html']);
     this.pageFolderTree.set([]);
     this.mediaFolderTree.set([]);
+    this.navigationFolderTree.set([]);
     this.pageTemplates.set([]);
     this.sectionTemplates.set([]);
     this.revisions.set([]);

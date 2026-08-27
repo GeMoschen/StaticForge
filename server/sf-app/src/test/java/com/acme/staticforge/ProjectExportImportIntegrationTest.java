@@ -11,10 +11,17 @@ import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetSummary;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.CreateAssetCommand;
+import com.acme.staticforge.asset.folder.FolderNode;
+import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.MediaBinary;
 import com.acme.staticforge.asset.media.MediaService;
+import com.acme.staticforge.asset.navigation.CreatePageReferenceCommand;
+import com.acme.staticforge.asset.navigation.PageReferenceService;
+import com.acme.staticforge.asset.navigation.PageReferenceTargetKind;
 import com.acme.staticforge.asset.template.CreateTemplateCommand;
 import com.acme.staticforge.asset.template.TemplateService;
 import com.acme.staticforge.asset.template.TemplateView;
@@ -31,6 +38,7 @@ import com.acme.staticforge.exportimport.ExportSelection;
 import com.acme.staticforge.exportimport.ExportedAsset;
 import com.acme.staticforge.exportimport.ExportedSettings;
 import com.acme.staticforge.exportimport.ImportConflict;
+import com.acme.staticforge.exportimport.ImportOptions;
 import com.acme.staticforge.exportimport.ImportResult;
 import com.acme.staticforge.exportimport.ProjectExportImportService;
 import com.acme.staticforge.generate.GenerationTarget;
@@ -91,6 +99,9 @@ class ProjectExportImportIntegrationTest {
     @Autowired ChannelService channelService;
     @Autowired OutputChannelRepository outputChannelRepository;
     @Autowired GenerationTargetRepository generationTargetRepository;
+    @Autowired FolderService folderService;
+    @Autowired PageReferenceService pageReferenceService;
+    @Autowired com.acme.staticforge.asset.AssetVersionRepository assetVersionRepository;
 
     @Test
     void roundTripPreservesAssetsAndMediaRemapsUuidsAndAddsProvenance() {
@@ -141,7 +152,7 @@ class ProjectExportImportIntegrationTest {
         assertThat(archive).isNotEmpty();
 
         Fixture target = newFixture("exp_tgt", "Export Target");
-        ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx());
+        ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
 
         assertThat(result.sourceProjectKey()).isEqualTo(source.project().getKey());
         // media, section template, page template, page, plus the auto-created navigation
@@ -222,7 +233,7 @@ class ProjectExportImportIntegrationTest {
                 source.ctx());
 
         byte[] archive = exportImportService.exportProject(source.project().getId());
-        ImportResult result = exportImportService.importProject(source.project().getId(), archive, source.ctx());
+        ImportResult result = exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
 
         // The count of assets created is independent of which branch each one took.
         assertThat(result.importedAssetCount()).isEqualTo(3); // page template, page, nav root
@@ -289,7 +300,7 @@ class ProjectExportImportIntegrationTest {
                 page.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-collision",
                 java.time.Instant.now(), target.user().getId()));
 
-        ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx());
+        ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
         assertThat(result.importedAssetCount()).isEqualTo(3); // page template, page, nav root
 
         Map<String, UUID> targetPageTemplates = uidsByType(target.project().getId(), AssetType.PAGE_TEMPLATE);
@@ -329,7 +340,7 @@ class ProjectExportImportIntegrationTest {
         Set<UUID> allUuids = wholeProjectAssets.stream().map(a -> UUID.fromString(a.uuid())).collect(Collectors.toSet());
 
         byte[] everythingSelected = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(allUuids, true, true));
+                source.project().getId(), new ExportSelection(allUuids, true, true, Set.of()));
         List<ExportedAsset> everythingSelectedAssets = parseAssets(everythingSelected);
 
         assertThat(everythingSelectedAssets).containsExactlyInAnyOrderElementsOf(wholeProjectAssets);
@@ -368,7 +379,7 @@ class ProjectExportImportIntegrationTest {
                 source.ctx());
 
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(subFolder.uuid()), false, false));
+                source.project().getId(), new ExportSelection(Set.of(subFolder.uuid()), false, false, Set.of()));
 
         Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
         assertThat(uuids).contains(subFolder.uuid().toString(), pageInSub.uuid().toString(), topFolder.uuid().toString());
@@ -409,7 +420,7 @@ class ProjectExportImportIntegrationTest {
                 source.ctx());
 
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false));
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
 
         Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
         assertThat(uuids).contains(page.uuid().toString(), folder.uuid().toString());
@@ -426,11 +437,11 @@ class ProjectExportImportIntegrationTest {
         Fixture source = newFixture("exp_empty", "Export Empty Selection");
 
         assertThatThrownBy(() -> exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(null, false, false)))
+                source.project().getId(), new ExportSelection(null, false, false, Set.of())))
                 .isInstanceOf(SfException.class);
 
         assertThatThrownBy(() -> exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(), false, false)))
+                source.project().getId(), new ExportSelection(Set.of(), false, false, Set.of())))
                 .isInstanceOf(SfException.class);
     }
 
@@ -450,7 +461,7 @@ class ProjectExportImportIntegrationTest {
                 source.project().getId(), "Local Filesystem", TargetType.FILESYSTEM, MAPPER.createObjectNode(), true));
 
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(rootFolderUuid(source), false, false));
+                source.project().getId(), new ExportSelection(rootFolderUuid(source), false, false, Set.of()));
 
         assertThat(zipEntryNames(archive)).doesNotContain("settings.json");
     }
@@ -472,7 +483,7 @@ class ProjectExportImportIntegrationTest {
                 source.project().getId(), "S3 Target", TargetType.S3, config, false));
 
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(rootFolderUuid(source), false, true));
+                source.project().getId(), new ExportSelection(rootFolderUuid(source), false, true, Set.of()));
 
         ExportedSettings settings = parseSettings(archive);
         assertThat(settings.targets()).hasSize(1);
@@ -498,7 +509,7 @@ class ProjectExportImportIntegrationTest {
                 source.project().getId(), "Local Filesystem", TargetType.FILESYSTEM, MAPPER.createObjectNode(), true));
 
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(rootFolderUuid(source), true, true));
+                source.project().getId(), new ExportSelection(rootFolderUuid(source), true, true, Set.of()));
 
         // Target project already has a colliding "markdown" channel with a different name —
         // it must survive the import unchanged.
@@ -507,7 +518,7 @@ class ProjectExportImportIntegrationTest {
                 new CreateChannelRequest("markdown", "Pre-existing Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
                 collidingTarget.user().getId(), null);
 
-        assertThatCode(() -> exportImportService.importProject(collidingTarget.project().getId(), archive, collidingTarget.ctx()))
+        assertThatCode(() -> exportImportService.importProject(collidingTarget.project().getId(), archive, collidingTarget.ctx(), ImportOptions.DEFAULT))
                 .doesNotThrowAnyException();
 
         OutputChannel unchanged = outputChannelRepository
@@ -517,7 +528,7 @@ class ProjectExportImportIntegrationTest {
 
         // Target project with no colliding keys actually gets the channel/target created.
         Fixture freshTarget = newFixture("exp_set_imp_fresh", "Export Settings Import Fresh Target");
-        exportImportService.importProject(freshTarget.project().getId(), archive, freshTarget.ctx());
+        exportImportService.importProject(freshTarget.project().getId(), archive, freshTarget.ctx(), ImportOptions.DEFAULT);
 
         assertThat(outputChannelRepository.findByProjectIdAndKey(freshTarget.project().getId(), "markdown"))
                 .isPresent();
@@ -556,10 +567,10 @@ class ProjectExportImportIntegrationTest {
                 source.ctx());
 
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false));
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
 
         Fixture target = newFixture("conf_tmpl_tgt", "Conflict Missing Template Target");
-        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive);
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
 
         List<ImportConflict> templateConflicts = report.conflicts().stream()
                 .filter(c -> c.type() == ConflictType.MISSING_TEMPLATE_REFERENCE)
@@ -586,7 +597,7 @@ class ProjectExportImportIntegrationTest {
         byte[] archive = exportImportService.exportProject(source.project().getId());
         List<ExportedAsset> assets = parseAssets(archive);
 
-        ConflictReport report = exportImportService.analyzeImport(source.project().getId(), archive);
+        ConflictReport report = exportImportService.analyzeImport(source.project().getId(), archive, ImportOptions.DEFAULT);
         List<ImportConflict> duplicateConflicts = report.conflicts().stream()
                 .filter(c -> c.type() == ConflictType.DUPLICATE_UUID)
                 .toList();
@@ -609,7 +620,7 @@ class ProjectExportImportIntegrationTest {
         byte[] archive = exportImportService.exportProject(source.project().getId());
 
         Fixture target = newFixture("conf_nodup_tgt", "Conflict No Duplicate Target");
-        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive);
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
 
         assertThat(report.conflicts().stream().filter(c -> c.type() == ConflictType.DUPLICATE_UUID)).isEmpty();
     }
@@ -641,14 +652,14 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
                 source.ctx());
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false));
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
 
         Fixture target = newFixture("conf_nowrite_tgt", "Conflict No Write Target");
         long countBefore = assetService.search(
                         new AssetQuery(target.project().getId(), null, null, null), PageRequest.of(0, 200))
                 .getTotalElements();
 
-        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive);
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
         assertThat(report.hasBlocking()).isTrue();
 
         long countAfter = assetService.search(
@@ -685,14 +696,14 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
                 source.ctx());
         byte[] archive = exportImportService.exportSelection(
-                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false));
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
 
         Fixture target = newFixture("conf_refuse_tgt", "Conflict Refuse Target");
         long countBefore = assetService.search(
                         new AssetQuery(target.project().getId(), null, null, null), PageRequest.of(0, 200))
                 .getTotalElements();
 
-        assertThatThrownBy(() -> exportImportService.importProject(target.project().getId(), archive, target.ctx()))
+        assertThatThrownBy(() -> exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT))
                 .isInstanceOf(SfException.class)
                 .satisfies(e -> assertThat(((SfException) e).getStatus()).isEqualTo(409));
 
@@ -700,6 +711,665 @@ class ProjectExportImportIntegrationTest {
                         new AssetQuery(target.project().getId(), null, null, null), PageRequest.of(0, 200))
                 .getTotalElements();
         assertThat(countAfter).isEqualTo(countBefore);
+    }
+
+    // ---- M11.1.1 Navigation coverage ----
+
+    /**
+     * Navigation folder selection (feature `full-store-coverage`, `M11.1.1`): a NAVIGATION-scope
+     * folder tree behaves exactly like the PAGES-store folder-selection test above — picking a
+     * subfolder pulls in its own live descendants (here, a {@code PAGE_REFERENCE}) plus its
+     * ancestor chain up to the root, but nothing from a sibling folder's subtree.
+     */
+    @Test
+    void exportSelectionOfANavigationFolderIncludesAncestorsAndDescendantsOnly() {
+        Fixture source = newFixture("nav_folder", "Navigation Folder Selection");
+        AssetVersionView navRoot = navRoot(source);
+        AssetVersionView topFolder = folderService.create(navRoot.uuid(), "Top", null, source.ctx());
+        AssetVersionView subFolder = folderService.create(topFolder.uuid(), "Sub", null, source.ctx());
+        AssetVersionView targetPage = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Target Page", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        AssetVersionView refInSub = pageReferenceService.create(
+                new CreatePageReferenceCommand(
+                        "Sub Ref", subFolder.uuid(), PageReferenceTargetKind.PAGE, targetPage.uuid(), null),
+                source.ctx());
+        AssetVersionView siblingFolder = folderService.create(topFolder.uuid(), "Sibling", null, source.ctx());
+        AssetVersionView refInSibling = pageReferenceService.create(
+                new CreatePageReferenceCommand(
+                        "Sibling Ref", siblingFolder.uuid(), PageReferenceTargetKind.PAGE, targetPage.uuid(), null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(subFolder.uuid()), false, false, Set.of()));
+
+        Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).contains(
+                subFolder.uuid().toString(), refInSub.uuid().toString(),
+                topFolder.uuid().toString(), navRoot.uuid().toString());
+        assertThat(uuids).doesNotContain(siblingFolder.uuid().toString(), refInSibling.uuid().toString());
+    }
+
+    /**
+     * Lone {@code PAGE_REFERENCE} selection + round-trip (feature `full-store-coverage`,
+     * `M11.1.1`): selecting a single reference (not its target page) exports the reference and
+     * its ancestor folder chain but not the target page. On import, {@code UuidRemapper.remap}
+     * leaves any textual value that isn't a key of the remap map untouched (verified directly
+     * in {@code ExportImportLogicTest#remapLeavesUnknownValuesUntouched}) — since the target
+     * page's UUID was never part of the archive, the imported reference's {@code
+     * target.assetUuid} must still read the original, now-foreign, source page UUID unchanged.
+     */
+    @Test
+    void exportOfALonePageReferenceRoundTripsUnresolvedTargetUuidUnchanged() {
+        Fixture source = newFixture("nav_ref", "Navigation Lone Reference");
+        AssetVersionView targetPage = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Target Page", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        AssetVersionView navRoot = navRoot(source);
+        AssetVersionView pageRef = pageReferenceService.create(
+                new CreatePageReferenceCommand(
+                        "Lone Ref", navRoot.uuid(), PageReferenceTargetKind.PAGE, targetPage.uuid(), null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(pageRef.uuid()), false, false, Set.of()));
+
+        Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).contains(pageRef.uuid().toString());
+        assertThat(uuids).doesNotContain(targetPage.uuid().toString());
+
+        Fixture target = newFixture("nav_ref_tgt", "Navigation Lone Reference Target");
+        exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+
+        Map<String, UUID> targetRefs = uidsByType(target.project().getId(), AssetType.PAGE_REFERENCE);
+        UUID importedRefUuid = targetRefs.values().stream().findFirst().orElseThrow();
+        AssetVersionView importedRef = assetService.requireCurrent(target.project().getId(), importedRefUuid);
+        assertThat(importedRef.payload().path("target").path("assetUuid").asText())
+                .isEqualTo(targetPage.uuid().toString());
+    }
+
+    // ---- M11.1.2 Template coverage ----
+
+    /**
+     * Lone template selection (feature `full-store-coverage`, `M11.1.2`): PAGE_TEMPLATE/
+     * SECTION_TEMPLATE assets are unfoldered in the sense that {@code FolderScope.requiredFor}
+     * returns {@code null} for them and nothing ever places one under an explicit parent folder
+     * — but empirically (verified here, not assumed) {@code AssetServiceImpl.resolveParent}
+     * still resolves a {@code null} {@code parentFolderUuid} to the project's single hidden root
+     * FOLDER asset (the same sentinel {@code ensureRootFolder}/{@code PathService.ROOT_UID}
+     * creates for every project), so a template's {@code AssetVersion.folderId} is that hidden
+     * root's id, not literally {@code null}. Selecting a single template therefore exports
+     * exactly two assets: the template itself, plus that one ancestor root FOLDER — never more
+     * than that one padding folder, and never the whole project.
+     */
+    @Test
+    void exportSelectionOfALoneTemplateExportsOnlyThatAssetAndTheHiddenRootFolder() {
+        Fixture source = newFixture("tmpl_lone", "Template Lone Selection");
+        TemplateView pageTemplate = templateService.create(
+                new CreateTemplateCommand(
+                        source.project().getId(),
+                        AssetType.PAGE_TEMPLATE,
+                        "Landing",
+                        "content { editor text title { required } }",
+                        Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
+                        null,
+                        false,
+                        null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(pageTemplate.uuid()), false, false, Set.of()));
+
+        List<ExportedAsset> assets = parseAssets(archive);
+        assertThat(assets).hasSize(2);
+        assertThat(assets).extracting(ExportedAsset::uuid).contains(pageTemplate.uuid().toString());
+        List<ExportedAsset> folders = assets.stream().filter(a -> "FOLDER".equals(a.type())).toList();
+        assertThat(folders).hasSize(1);
+        assertThat(folders.get(0).uid()).isEqualTo("root");
+    }
+
+    /**
+     * Template + referencing page selection and import remap (feature `full-store-coverage`,
+     * `M11.1.2`): exporting a PAGE_TEMPLATE together with a PAGE that references it via {@code
+     * templateAssetId} must export both, and importing into a fresh project must remap the
+     * page's template reference to the newly-imported template's UUID.
+     */
+    @Test
+    void exportOfTemplateAndReferencingPageRemapsTemplateReferenceOnImport() {
+        Fixture source = newFixture("tmpl_page", "Template Plus Page Selection");
+        TemplateView pageTemplate = templateService.create(
+                new CreateTemplateCommand(
+                        source.project().getId(),
+                        AssetType.PAGE_TEMPLATE,
+                        "Landing",
+                        "content { editor text title { required } }",
+                        Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
+                        null,
+                        false,
+                        null),
+                source.ctx());
+        ObjectNode pagePayload = MAPPER.createObjectNode();
+        pagePayload.put("templateRef", pageTemplate.uuid().toString());
+        pagePayload.putObject("content");
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(
+                        source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(pageTemplate.uuid(), page.uuid()), false, false, Set.of()));
+
+        Fixture target = newFixture("tmpl_page_tgt", "Template Plus Page Target");
+        exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+
+        Map<String, UUID> targetPageTemplates = uidsByType(target.project().getId(), AssetType.PAGE_TEMPLATE);
+        Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
+        UUID importedTemplateUuid = targetPageTemplates.get("landing");
+        UUID importedPageUuid = targetPages.get("home");
+
+        AssetVersionView importedPage = assetService.requireCurrent(target.project().getId(), importedPageUuid);
+        assertThat(importedPage.payload().path("templateRef").asText()).isEqualTo(importedTemplateUuid.toString());
+
+        Asset importedPageAsset = assetRepository.findByProjectIdAndUuid(target.project().getId(), importedPageUuid)
+                .orElseThrow();
+        AssetVersion persistedVersion = assetVersionRepository
+                .findByAssetIdAndValidToRevisionIsNull(importedPageAsset.getId())
+                .orElseThrow();
+        assertThat(persistedVersion.getTemplateAssetId()).isEqualTo(
+                assetRepository.findByProjectIdAndUuid(target.project().getId(), importedTemplateUuid)
+                        .orElseThrow()
+                        .getId());
+    }
+
+    /**
+     * Page-without-template conflict detection (feature `full-store-coverage`, `M11.1.2`):
+     * selecting only the PAGE (not its template) and analyzing against a fresh target project
+     * still produces the pre-existing MISSING_TEMPLATE_REFERENCE conflict — templates aren't
+     * special-cased out of `M10.2`'s conflict detection.
+     */
+    @Test
+    void selectingOnlyThePageWithoutItsTemplateStillFlagsMissingTemplateReference() {
+        Fixture source = newFixture("tmpl_missing", "Template Missing Reference Selection");
+        TemplateView pageTemplate = templateService.create(
+                new CreateTemplateCommand(
+                        source.project().getId(),
+                        AssetType.PAGE_TEMPLATE,
+                        "Landing",
+                        "content { editor text title { required } }",
+                        Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
+                        null,
+                        false,
+                        null),
+                source.ctx());
+        ObjectNode pagePayload = MAPPER.createObjectNode();
+        pagePayload.put("templateRef", pageTemplate.uuid().toString());
+        pagePayload.putObject("content");
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(
+                        source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
+
+        Fixture target = newFixture("tmpl_missing_tgt", "Template Missing Reference Target");
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
+
+        List<ImportConflict> templateConflicts = report.conflicts().stream()
+                .filter(c -> c.type() == ConflictType.MISSING_TEMPLATE_REFERENCE)
+                .toList();
+        assertThat(templateConflicts).hasSize(1);
+        assertThat(templateConflicts.get(0).severity()).isEqualTo(ConflictSeverity.BLOCKING);
+    }
+
+    // ---- M11.1.3 fullStores ----
+
+    /**
+     * {@code fullStores} selects every live asset of a scope (feature `full-store-export`,
+     * `M11.1.3`): {@code fullStores={PAGES}} with empty {@code assetUuids} exports every live
+     * PAGES asset, and nothing from MEDIA/NAVIGATION.
+     */
+    @Test
+    void fullStoresExportsEveryLiveAssetOfThatScopeAndNothingElse() {
+        Fixture source = newFixture("full_pages", "Full Store Pages Selection");
+        AssetVersionView pagesFolder = folderService.create(null, "Docs", FolderScope.PAGES, source.ctx());
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", pagesFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        byte[] png = solidPng(4, 4, Color.BLUE);
+        AssetVersionView media = mediaService.upload(
+                source.project().getId(), null, "pic.png", "image/png", png, source.ctx());
+        AssetVersionView navRoot = navRoot(source);
+        AssetVersionView pageRefTarget = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Ref Target", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        AssetVersionView pageRef = pageReferenceService.create(
+                new CreatePageReferenceCommand(
+                        "A Ref", navRoot.uuid(), PageReferenceTargetKind.PAGE, pageRefTarget.uuid(), null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(), false, false, Set.of(FolderScope.PAGES)));
+
+        Set<String> uuids = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).contains(pagesFolder.uuid().toString(), page.uuid().toString());
+        assertThat(uuids).doesNotContain(
+                media.uuid().toString(), navRoot.uuid().toString(), pageRef.uuid().toString(),
+                pageRefTarget.uuid().toString());
+    }
+
+    /**
+     * {@code fullStores} unions cleanly with an explicit pick from a different scope (feature
+     * `full-store-export`, `M11.1.3`): combining {@code fullStores={PAGES}} with an explicit
+     * MEDIA pick produces every PAGES asset plus the picked MEDIA asset, with no duplicates.
+     */
+    @Test
+    void fullStoresCombinesWithAnExplicitPickFromAnotherScope() {
+        Fixture source = newFixture("full_union", "Full Store Union Selection");
+        AssetVersionView pagesFolder = folderService.create(null, "Docs", FolderScope.PAGES, source.ctx());
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", pagesFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        byte[] png = solidPng(4, 4, Color.GREEN);
+        AssetVersionView media = mediaService.upload(
+                source.project().getId(), null, "pic.png", "image/png", png, source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(media.uuid()), false, false, Set.of(FolderScope.PAGES)));
+
+        List<ExportedAsset> assets = parseAssets(archive);
+        Set<String> uuids = assets.stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(uuids).contains(pagesFolder.uuid().toString(), page.uuid().toString(), media.uuid().toString());
+        // No duplicates: parseAssets returns a plain list, deserialized from assets.json which is
+        // itself keyed on a Set<Long> membership check on the export side — a duplicate would show
+        // up as a size mismatch against the deduplicated uuid set.
+        assertThat(assets).hasSize(uuids.size());
+    }
+
+    /**
+     * Empty-selection rejection still fires with {@code fullStores} also empty/null (feature
+     * `full-store-export`, `M11.1.3`): extends {@code exportSelectionRejectsAnEmptySelection}.
+     */
+    @Test
+    void exportSelectionRejectsAnEmptySelectionEvenWithFullStoresEmptyOrNull() {
+        Fixture source = newFixture("full_empty", "Full Store Empty Selection");
+
+        assertThatThrownBy(() -> exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(null, false, false, null)))
+                .isInstanceOf(SfException.class);
+
+        assertThatThrownBy(() -> exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(), false, false, Set.of())))
+                .isInstanceOf(SfException.class);
+    }
+
+    // ---- M11.2.1 explicit provenance ----
+
+    /**
+     * Explicit vs. ancestor-only provenance (feature `selection-provenance`, `M11.2.1`): a deep
+     * leaf pick must be recorded {@code explicit=true} while every ancestor folder pulled in only
+     * to keep the {@code parentFolderUuid} chain intact must be recorded {@code explicit=false}.
+     */
+    @Test
+    void deepLeafPickIsExplicitAndItsAncestorFoldersAreNot() {
+        Fixture source = newFixture("prov_leaf", "Provenance Leaf Selection");
+        AssetVersionView topFolder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Top", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        AssetVersionView subFolder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Sub", topFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        AssetVersionView leafPage = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Leaf", subFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(leafPage.uuid()), false, false, Set.of()));
+
+        Map<String, ExportedAsset> byUuid = parseAssets(archive).stream()
+                .collect(Collectors.toMap(ExportedAsset::uuid, a -> a));
+        assertThat(byUuid.get(leafPage.uuid().toString()).isExplicit()).isTrue();
+        assertThat(byUuid.get(subFolder.uuid().toString()).isExplicit()).isFalse();
+        assertThat(byUuid.get(topFolder.uuid().toString()).isExplicit()).isFalse();
+    }
+
+    /**
+     * {@code exportProject} marks everything explicit (feature `selection-provenance`,
+     * `M11.2.1`): its "everything" selection already includes every current asset UUID among
+     * the picks, so nothing can land in the ancestors-only set — this should fall out for free,
+     * verified empirically here.
+     */
+    @Test
+    void exportProjectMarksEveryAssetExplicit() {
+        Fixture source = newFixture("prov_all", "Provenance Export Project");
+        AssetVersionView folder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Docs", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", folder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+
+        byte[] archive = exportImportService.exportProject(source.project().getId());
+
+        assertThat(parseAssets(archive)).allSatisfy(a -> assertThat(a.isExplicit()).isTrue());
+    }
+
+    /**
+     * {@code fullStores} picks are explicit (feature `selection-provenance`, `M11.2.1`): a
+     * top-level folder pulled in via {@code fullStores} is unioned into the picks argument
+     * before {@code resolveIncludedAssetIds} runs, so it must be recorded {@code explicit=true},
+     * not treated as an ancestor.
+     */
+    @Test
+    void fullStoresPickedTopLevelFolderIsExplicit() {
+        Fixture source = newFixture("prov_full", "Provenance Full Store Selection");
+        AssetVersionView pagesFolder = folderService.create(null, "Docs", FolderScope.PAGES, source.ctx());
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(), false, false, Set.of(FolderScope.PAGES)));
+
+        Map<String, ExportedAsset> byUuid = parseAssets(archive).stream()
+                .collect(Collectors.toMap(ExportedAsset::uuid, a -> a));
+        assertThat(byUuid.get(pagesFolder.uuid().toString()).isExplicit()).isTrue();
+    }
+
+    /**
+     * Pre-M11 archive backward compatibility (feature `selection-provenance`, `M11.2.1`): an
+     * {@code assets.json} with no {@code explicit} key at all (simulated here by hand-building
+     * one, since {@code ExportedAsset} has no {@code @JsonCreator} and relies on default Jackson
+     * record binding) must still import without error, with {@link ExportedAsset#isExplicit()}
+     * reading {@code true} for every such asset — this matters most for `M11.2.2`'s
+     * {@code skipExistingImplicit}, which must never treat a pre-M11 archive's assets as
+     * implicit.
+     */
+    @Test
+    void preM11ArchiveWithNoExplicitKeyImportsWithEveryAssetTreatedAsExplicit() throws Exception {
+        Fixture source = newFixture("prov_legacy", "Provenance Legacy Archive Source");
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        byte[] archive = exportImportService.exportProject(source.project().getId());
+
+        byte[] legacyArchive = rewriteAssetsJsonWithoutExplicitField(archive);
+
+        List<ExportedAsset> reparsed = parseAssets(legacyArchive);
+        assertThat(reparsed).isNotEmpty();
+        assertThat(reparsed).allSatisfy(a -> {
+            assertThat(a.explicit()).isNull();
+            assertThat(a.isExplicit()).isTrue();
+        });
+
+        Fixture target = newFixture("prov_legacy_tgt", "Provenance Legacy Archive Target");
+        assertThatCode(() -> exportImportService.importProject(
+                        target.project().getId(), legacyArchive, target.ctx(), ImportOptions.DEFAULT))
+                .doesNotThrowAnyException();
+        assertThat(uidsByType(target.project().getId(), AssetType.PAGE)).containsKey(page.uid());
+    }
+
+    // ---- M11.2.2 skipExistingImplicit ----
+
+    /**
+     * {@code skipExistingImplicit=true} reuses an already-existing implicit ancestor folder
+     * (feature `selection-provenance`, `M11.2.2`): importing an archive whose implicit ancestor
+     * folder already exists (same UUID) in the target project creates zero duplicate folders and
+     * correctly parents the explicit descendant under the existing folder.
+     */
+    @Test
+    void skipExistingImplicitReusesAnAlreadyExistingImplicitFolderAndParentsDescendantsUnderIt() {
+        Fixture source = newFixture("skip_on_src", "Skip Existing Implicit On Source");
+        AssetVersionView topFolder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Top", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        AssetVersionView leafPage = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Leaf", topFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(leafPage.uuid()), false, false, Set.of()));
+
+        Fixture target = newFixture("skip_on_tgt", "Skip Existing Implicit On Target");
+        // Force the archive's implicit ancestor folder to already exist (same uuid) in the
+        // target project — mirrors how other tests in this file force a collision via direct
+        // repository access, but here (unlike the plain collision tests) the skip path actually
+        // reads the existing asset's current version to recover its real folderPath, so a
+        // matching AssetVersion row is required too (asset_version.valid_from_revision has no FK
+        // to the revision table, so an arbitrary revision id is fine for this direct insert).
+        Asset preExistingTop = assetRepository.save(new Asset(
+                topFolder.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-top",
+                java.time.Instant.now(), target.user().getId()));
+        AssetVersion preExistingTopVersion = new AssetVersion(
+                preExistingTop.getId(), 0L, "Pre-existing Top", MAPPER.createObjectNode(),
+                target.user().getId(), java.time.Instant.now());
+        preExistingTopVersion.setFolderPath("/pre-existing-top/");
+        assetVersionRepository.save(preExistingTopVersion);
+        long folderCountBefore = assetService.search(
+                        new AssetQuery(target.project().getId(), AssetType.FOLDER, null, null), PageRequest.of(0, 200))
+                .getTotalElements();
+
+        ImportResult result = exportImportService.importProject(
+                target.project().getId(), archive, target.ctx(), new ImportOptions(true));
+
+        long folderCountAfter = assetService.search(
+                        new AssetQuery(target.project().getId(), AssetType.FOLDER, null, null), PageRequest.of(0, 200))
+                .getTotalElements();
+        assertThat(folderCountAfter).isEqualTo(folderCountBefore);
+        assertThat(result.importedAssetCount()).isEqualTo(1); // only the explicit leaf page
+
+        Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
+        UUID importedPageUuid = targetPages.get("leaf");
+        AssetVersionView importedPage = assetService.requireCurrent(target.project().getId(), importedPageUuid);
+        Asset importedPageAsset = assetRepository.findByProjectIdAndUuid(target.project().getId(), importedPageUuid)
+                .orElseThrow();
+        AssetVersion importedPageVersion = assetVersionRepository
+                .findByAssetIdAndValidToRevisionIsNull(importedPageAsset.getId())
+                .orElseThrow();
+        Asset existingTopFolder = assetRepository.findByProjectIdAndUuid(target.project().getId(), topFolder.uuid())
+                .orElseThrow();
+        assertThat(importedPageVersion.getFolderId()).isEqualTo(existingTopFolder.getId());
+    }
+
+    /**
+     * {@code skipExistingImplicit=false} (the default) behaves exactly as pre-M11 code (feature
+     * `selection-provenance`, `M11.2.2`): the same archive/collision setup as the test above, but
+     * with the option off, still mints a fresh UUID for the colliding implicit folder.
+     */
+    @Test
+    void skipExistingImplicitOffMintsFreshUuidJustLikePreM11Behavior() {
+        Fixture source = newFixture("skip_off_src", "Skip Existing Implicit Off Source");
+        AssetVersionView topFolder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Top", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        AssetVersionView leafPage = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Leaf", topFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(leafPage.uuid()), false, false, Set.of()));
+
+        Fixture target = newFixture("skip_off_tgt", "Skip Existing Implicit Off Target");
+        assetRepository.save(new Asset(
+                topFolder.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-top",
+                java.time.Instant.now(), target.user().getId()));
+
+        ImportResult result = exportImportService.importProject(
+                target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+
+        // Both the (freshly-UUID'd) implicit folder and the explicit leaf page get created.
+        assertThat(result.importedAssetCount()).isEqualTo(2);
+        Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
+        UUID importedPageUuid = targetPages.get("leaf");
+        AssetVersionView importedPage = assetService.requireCurrent(target.project().getId(), importedPageUuid);
+        JsonNode origin = importedPage.payload().path("origin");
+        // The page itself didn't collide, so its own uuid was preserved and it carries no
+        // sourceUuid re-keying marker — but its *parent folder* did collide and was re-keyed.
+        assertThat(origin.path("sourceUuid").isMissingNode()).isTrue();
+    }
+
+    /**
+     * An explicit asset is never eligible for the skip path (feature `selection-provenance`,
+     * `M11.2.2`): even with {@code skipExistingImplicit=true}, a collision on an asset the
+     * caller explicitly picked must still mint a fresh UUID exactly as before.
+     */
+    @Test
+    void skipExistingImplicitNeverSkipsAnExplicitlyPickedCollidingAsset() {
+        Fixture source = newFixture("skip_explicit_src", "Skip Existing Implicit Explicit Source");
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Home", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(page.uuid()), false, false, Set.of()));
+
+        Fixture target = newFixture("skip_explicit_tgt", "Skip Existing Implicit Explicit Target");
+        assetRepository.save(new Asset(
+                page.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-collision",
+                java.time.Instant.now(), target.user().getId()));
+
+        ImportResult result = exportImportService.importProject(
+                target.project().getId(), archive, target.ctx(), new ImportOptions(true));
+
+        assertThat(result.importedAssetCount()).isEqualTo(1);
+        Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
+        UUID importedPageUuid = targetPages.get("home");
+        assertThat(importedPageUuid).isNotEqualTo(page.uuid()); // still remapped, not reused/skipped
+        AssetVersionView importedPage = assetService.requireCurrent(target.project().getId(), importedPageUuid);
+        assertThat(importedPage.payload().path("origin").path("sourceUuid").asText())
+                .isEqualTo(page.uuid().toString());
+    }
+
+    /**
+     * {@code analyzeImport} conflict visibility follows {@code skipExistingImplicit} (feature
+     * `selection-provenance`, `M11.2.2`): with the option ON, the DUPLICATE_UUID conflict for the
+     * implicit colliding asset is no longer reported; with the option OFF, it is reported exactly
+     * as before.
+     */
+    @Test
+    void analyzeImportHidesDuplicateUuidForImplicitAssetOnlyWhenSkipExistingImplicitIsOn() {
+        Fixture source = newFixture("skip_analyze_src", "Skip Existing Implicit Analyze Source");
+        AssetVersionView topFolder = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Top", null,
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        AssetVersionView leafPage = assetService.create(
+                new CreateAssetCommand(source.project().getId(), AssetType.PAGE, "Leaf", topFolder.uuid(),
+                        MAPPER.createObjectNode(), null),
+                source.ctx());
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(leafPage.uuid()), false, false, Set.of()));
+
+        Fixture target = newFixture("skip_analyze_tgt", "Skip Existing Implicit Analyze Target");
+        assetRepository.save(new Asset(
+                topFolder.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-top",
+                java.time.Instant.now(), target.user().getId()));
+
+        ConflictReport reportOn = exportImportService.analyzeImport(
+                target.project().getId(), archive, new ImportOptions(true));
+        assertThat(reportOn.conflicts().stream()
+                .filter(c -> c.type() == ConflictType.DUPLICATE_UUID
+                        && topFolder.uuid().toString().equals(c.elementUuid())))
+                .isEmpty();
+
+        ConflictReport reportOff = exportImportService.analyzeImport(
+                target.project().getId(), archive, ImportOptions.DEFAULT);
+        assertThat(reportOff.conflicts().stream()
+                .filter(c -> c.type() == ConflictType.DUPLICATE_UUID
+                        && topFolder.uuid().toString().equals(c.elementUuid())))
+                .hasSize(1);
+    }
+
+    /**
+     * Regression: {@code ImportOptions.DEFAULT} matches pre-M11 behavior byte-for-byte for the
+     * pre-existing collision tests already in this file (feature `selection-provenance`,
+     * `M11.2.2`) — re-runs {@code partialCollisionPreservesSomeAssetsAndRemapsOthersWithReferencesStillResolving}'s
+     * scenario explicitly through {@code ImportOptions.DEFAULT} and checks the same outcomes.
+     */
+    @Test
+    void importOptionsDefaultMatchesPreM11BehaviorForExistingCollisionScenario() {
+        Fixture source = newFixture("skip_regress_src", "Skip Existing Implicit Regression Source");
+        TemplateView pageTemplate = templateService.create(
+                new CreateTemplateCommand(
+                        source.project().getId(),
+                        AssetType.PAGE_TEMPLATE,
+                        "Landing",
+                        "content { editor text title { required } }",
+                        Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
+                        null,
+                        false,
+                        null),
+                source.ctx());
+        ObjectNode pagePayload = MAPPER.createObjectNode();
+        pagePayload.put("templateRef", pageTemplate.uuid().toString());
+        pagePayload.putObject("content");
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(
+                        source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
+                source.ctx());
+        byte[] archive = exportImportService.exportProject(source.project().getId());
+
+        Fixture target = newFixture("skip_regress_tgt", "Skip Existing Implicit Regression Target");
+        assetRepository.save(new Asset(
+                page.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-collision",
+                java.time.Instant.now(), target.user().getId()));
+
+        ImportResult result = exportImportService.importProject(
+                target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+        assertThat(result.importedAssetCount()).isEqualTo(3); // page template, page, nav root
+
+        Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
+        UUID importedPageUuid = targetPages.get("home");
+        assertThat(importedPageUuid).isNotEqualTo(page.uuid());
+    }
+
+    private byte[] rewriteAssetsJsonWithoutExplicitField(byte[] archiveBytes) throws Exception {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes));
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                java.util.zip.ZipOutputStream zipOut = new java.util.zip.ZipOutputStream(out)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                byte[] bytes = zip.readAllBytes();
+                if ("assets.json".equals(entry.getName())) {
+                    com.fasterxml.jackson.databind.node.ArrayNode assetsArray =
+                            (com.fasterxml.jackson.databind.node.ArrayNode)
+                                    MAPPER.readTree(bytes).get("assets");
+                    for (JsonNode assetNode : assetsArray) {
+                        ((ObjectNode) assetNode).remove("explicit");
+                    }
+                    ObjectNode rewritten = MAPPER.createObjectNode();
+                    rewritten.put("protocolVersion", MAPPER.readTree(bytes).get("protocolVersion").asInt());
+                    rewritten.set("assets", assetsArray);
+                    bytes = MAPPER.writeValueAsBytes(rewritten);
+                }
+                zipOut.putNextEntry(new ZipEntry(entry.getName()));
+                zipOut.write(bytes);
+                zipOut.closeEntry();
+            }
+            zipOut.finish();
+            return out.toByteArray();
+        }
+    }
+
+    private AssetVersionView navRoot(Fixture fx) {
+        List<FolderNode> tree = folderService.tree(fx.project().getId(), FolderScope.NAVIGATION, 0, fx.ctx());
+        FolderNode root = tree.get(0);
+        return assetService.requireCurrent(fx.project().getId(), root.uuid());
     }
 
     private Set<UUID> rootFolderUuid(Fixture fixture) {

@@ -33,6 +33,7 @@ function makeStoreStub(overrides: Partial<Record<string, unknown>> = {}) {
     error: vi.fn().mockReturnValue(null),
     pageFolderTree: vi.fn().mockReturnValue(pageTree),
     mediaFolderTree: vi.fn().mockReturnValue([]),
+    navigationFolderTree: vi.fn().mockReturnValue([]),
     ...overrides,
   };
 }
@@ -162,6 +163,7 @@ describe('ProjectSettingsExportComponent', () => {
         assetUuids: ['folder-root'],
         includeChannels: false,
         includeGenerationTargets: false,
+        fullStores: [],
       }),
     );
     await waitFor(() => expect(createObjectURLSpy).toHaveBeenCalled());
@@ -171,6 +173,67 @@ describe('ProjectSettingsExportComponent', () => {
     createObjectURLSpy.mockRestore();
     revokeObjectURLSpy.mockRestore();
     clickSpy.mockRestore();
+  });
+
+  it('selecting "whole store" exports fullStores without requiring the tree to be expanded', async () => {
+    const store = makeStoreStub();
+    const api = makeApiStub();
+    const importExport = makeImportExportStub();
+    await render(ProjectSettingsExportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: ProjectContextStore, useValue: store },
+        { provide: ApiClient, useValue: api },
+        { provide: ImportExportService, useValue: importExport },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText('Root')).toBeTruthy());
+
+    screen.getByText('Select all pages').click();
+
+    const exportButton = screen.getByRole('button', { name: /Export/ }) as HTMLButtonElement;
+    await waitFor(() => expect(exportButton.disabled).toBe(false));
+    exportButton.click();
+
+    await waitFor(() =>
+      expect(importExport.exportSelection).toHaveBeenCalledWith('proj', {
+        assetUuids: [],
+        includeChannels: false,
+        includeGenerationTargets: false,
+        fullStores: ['PAGES'],
+      }),
+    );
+  });
+
+  it('unchecking one item while its store is fully-selected keeps everything else selected', async () => {
+    const store = makeStoreStub();
+    const api = makeApiStub();
+    await render(ProjectSettingsExportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: ProjectContextStore, useValue: store },
+        { provide: ApiClient, useValue: api },
+        { provide: ImportExportService, useValue: makeImportExportStub() },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText('Root')).toBeTruthy());
+
+    screen.getByText('Select all pages').click();
+    await waitFor(() => {
+      const rootCheckbox = document.getElementById('export-node-folder-root') as HTMLInputElement;
+      expect(rootCheckbox.checked).toBe(true);
+    });
+
+    const rootCheckbox = document.getElementById('export-node-folder-root') as HTMLInputElement;
+    rootCheckbox.click();
+
+    // The single root was the only top-level node, so excluding it from the exploded
+    // full-store pick leaves nothing selected — "Select all pages" is no longer active and
+    // the uncheck "won".
+    await waitFor(() => {
+      const rootAfter = document.getElementById('export-node-folder-root') as HTMLInputElement;
+      expect(rootAfter.checked).toBe(false);
+    });
   });
 
   it('shows an inline error when the export request fails', async () => {

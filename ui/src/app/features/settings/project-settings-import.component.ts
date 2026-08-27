@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import {
   ConflictReportView,
   ImportConflictView,
@@ -23,7 +25,7 @@ const CONFLICT_ICONS: Record<string, string> = {
 };
 
 /**
- * Project settings tab: "Import" half of `M10`'s selective export/import feature —
+ * Project settings tab: "Import" half of `M10`/`M11`'s selective export/import feature —
  * pick a `.zip` archive, analyze it for conflicts, then let the user cancel or commit.
  * Same standalone/OnPush/signals shape as `project-settings-url-registry.component`.
  */
@@ -55,6 +57,10 @@ export class ProjectSettingsImportComponent {
   protected readonly report = signal<ConflictReportView | null>(null);
   protected readonly pickError = signal<string | null>(null);
 
+  /** "Skip ancestor folders that already exist" (M11.3.3) — re-analyzes live on toggle, debounced against rapid clicking, so the Blocking/Warnings split always reflects the current toggle state before commit. */
+  protected readonly skipExistingImplicit = signal(false);
+  private readonly skipExistingImplicit$ = new Subject<boolean>();
+
   protected readonly committing = signal(false);
   protected readonly commitError = signal<string | null>(null);
   protected readonly result = signal<ImportResultView | null>(null);
@@ -71,6 +77,26 @@ export class ProjectSettingsImportComponent {
   protected readonly noConflicts = computed(
     () => this.blocking().length === 0 && this.warnings().length === 0,
   );
+
+  constructor() {
+    this.skipExistingImplicit$
+      .pipe(debounceTime(250), distinctUntilChanged(), takeUntilDestroyed())
+      .subscribe((value) => {
+        this.skipExistingImplicit.set(value);
+      });
+
+    // Re-run analysis whenever the toggle settles on a new value, as long as a file is loaded —
+    // keeps the displayed Blocking/Warnings split in sync with the option that will actually be
+    // sent to `commitImport()`.
+    effect(() => {
+      const skip = this.skipExistingImplicit();
+      const file = this.file();
+      if (!file) {
+        return;
+      }
+      untracked(() => this.analyze(file, skip));
+    });
+  }
 
   protected iconFor(type: string | undefined): string {
     return CONFLICT_ICONS[type ?? ''] ?? 'info';
@@ -103,6 +129,10 @@ export class ProjectSettingsImportComponent {
     this.pickFile(event.dataTransfer.files?.[0] ?? null);
   }
 
+  protected onToggleSkipExistingImplicit(event: Event): void {
+    this.skipExistingImplicit$.next((event.target as HTMLInputElement).checked);
+  }
+
   private pickFile(file: File | null): void {
     if (!file) {
       return;
@@ -114,14 +144,15 @@ export class ProjectSettingsImportComponent {
     this.pickError.set(null);
     this.result.set(null);
     this.commitError.set(null);
+    // Setting `file` here triggers the constructor's analyze-on-change effect below — no
+    // direct `analyze()` call needed.
     this.file.set(file);
-    this.analyze(file);
   }
 
-  private analyze(file: File): void {
+  private analyze(file: File, skipExistingImplicit: boolean): void {
     this.analyzing.set(true);
     this.report.set(null);
-    this.api.analyzeImport(this.projectKey(), file).subscribe({
+    this.api.analyzeImport(this.projectKey(), file, skipExistingImplicit).subscribe({
       next: (report) => {
         this.analyzing.set(false);
         this.report.set(report);
@@ -151,7 +182,7 @@ export class ProjectSettingsImportComponent {
     }
     this.committing.set(true);
     this.commitError.set(null);
-    this.api.commitImport(this.projectKey(), file).subscribe({
+    this.api.commitImport(this.projectKey(), file, this.skipExistingImplicit()).subscribe({
       next: (result) => {
         this.committing.set(false);
         this.result.set(result);

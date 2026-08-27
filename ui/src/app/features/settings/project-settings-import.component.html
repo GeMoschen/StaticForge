@@ -48,6 +48,15 @@
       <span class="archive-bar__name">{{ file()?.name }}</span>
     </div>
 
+    <label class="import__toggle">
+      <input
+        type="checkbox"
+        [checked]="skipExistingImplicit()"
+        (change)="onToggleSkipExistingImplicit($event)"
+      />
+      Skip ancestor folders that already exist
+    </label>
+
     @if (analyzing()) {
       <sf-spinner label="Checking archive…" />
     } @else if (report()) {
@@ -73,6 +82,9 @@
                 <li class="conflict-item">
                   <sf-icon [name]="iconFor(c.type)" />
                   <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+                  <span class="badge" [class.badge--implicit]="c.explicit === false" [class.badge--explicit]="c.explicit !== false">
+                    {{ c.explicit === false ? 'implicit' : 'explicit' }}
+                  </span>
                   <span class="conflict-item__detail">{{ c.detail }}</span>
                 </li>
               }
@@ -91,6 +103,9 @@
                 <li class="conflict-item">
                   <sf-icon [name]="iconFor(c.type)" />
                   <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+                  <span class="badge" [class.badge--implicit]="c.explicit === false" [class.badge--explicit]="c.explicit !== false">
+                    {{ c.explicit === false ? 'implicit' : 'explicit' }}
+                  </span>
                   <span class="conflict-item__detail">{{ c.detail }}</span>
                 </li>
               }

@@ -38,9 +38,11 @@ public interface ProjectExportImportService {
      * preserves its source UUID unless that UUID already exists in the target project, in which
      * case a fresh UUIDv7 is minted instead (feature `cross-project-import-identity`, `M9.3.1`);
      * every asset gets {@code payload.origin} provenance, remapped references and a UID that is
-     * re-derived to stay unique within the target project.
+     * re-derived to stay unique within the target project. {@code options.skipExistingImplicit()}
+     * (feature `selection-provenance`, `M11.2.2`) changes only how a {@code DUPLICATE_UUID}
+     * collision on a non-explicit (ancestor-only) asset is resolved — see {@link ImportOptions}.
      */
-    ImportResult importProject(long targetProjectId, byte[] zipBytes, RevisionContext ctx);
+    ImportResult importProject(long targetProjectId, byte[] zipBytes, RevisionContext ctx, ImportOptions options);
 
     /**
      * Read-only analysis pass: parses the archive and checks it against {@code
@@ -51,5 +53,5 @@ public interface ProjectExportImportService {
      * conflict detection and refuses to proceed past a {@link ConflictSeverity#BLOCKING}
      * conflict regardless of whether the caller analyzed first.
      */
-    ConflictReport analyzeImport(long targetProjectId, byte[] zipBytes);
+    ConflictReport analyzeImport(long targetProjectId, byte[] zipBytes, ImportOptions options);
 }

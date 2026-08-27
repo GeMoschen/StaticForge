@@ -8,6 +8,9 @@ import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.UidGenerator;
+import com.acme.staticforge.asset.folder.FolderNode;
+import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.media.Blob;
 import com.acme.staticforge.asset.media.BlobRepository;
@@ -109,6 +112,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final AssetService assetService;
     private final UidGenerator uidGenerator;
     private final PathService pathService;
+    private final FolderService folderService;
     private final RevisionService revisionService;
     private final BlobStore blobStore;
     private final BlobRepository blobRepository;
@@ -123,6 +127,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             AssetService assetService,
             UidGenerator uidGenerator,
             PathService pathService,
+            FolderService folderService,
             RevisionService revisionService,
             BlobStore blobStore,
             BlobRepository blobRepository,
@@ -135,6 +140,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         this.assetService = assetService;
         this.uidGenerator = uidGenerator;
         this.pathService = pathService;
+        this.folderService = folderService;
         this.revisionService = revisionService;
         this.blobStore = blobStore;
         this.blobRepository = blobRepository;
@@ -153,12 +159,14 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Set<UUID> allUuids = versions.stream()
                 .map(version -> version.getAsset().getUuid())
                 .collect(Collectors.toSet());
-        return exportSelection(projectId, new ExportSelection(allUuids, true, true));
+        return exportSelection(projectId, new ExportSelection(allUuids, true, true, Set.of()));
     }
 
     @Override
     public byte[] exportSelection(long projectId, ExportSelection selection) {
+        Set<FolderScope> fullStores = selection.fullStores() == null ? Set.of() : selection.fullStores();
         if ((selection.assetUuids() == null || selection.assetUuids().isEmpty())
+                && fullStores.isEmpty()
                 && !selection.includeChannels()
                 && !selection.includeGenerationTargets()) {
             throw new SfException(
@@ -176,12 +184,33 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             versionByAssetId.put(version.getAssetId(), version);
         }
 
-        Set<Long> includedIds = resolveIncludedAssetIds(versions, versionByAssetId, selection.assetUuids());
+        // fullStores (feature full-store-export, M11.1.3): a one-click "everything currently
+        // live in this store" pick, additive to the caller's explicit assetUuids — union each
+        // scope's current top-level folder UUIDs into the same picks set passed to
+        // resolveIncludedAssetIds, so the existing folder-subtree-expansion path (a picked
+        // FOLDER already pulls in its whole live subtree) does the rest with no separate
+        // expansion mechanism.
+        Set<UUID> picks = new HashSet<>();
+        if (selection.assetUuids() != null) {
+            picks.addAll(selection.assetUuids());
+        }
+        if (!fullStores.isEmpty()) {
+            RevisionContext readCtx = RevisionContext.of(projectId, null, "full-store export selection");
+            for (FolderScope scope : fullStores) {
+                for (FolderNode topLevelFolder : folderService.tree(projectId, scope, 0, readCtx)) {
+                    picks.add(topLevelFolder.uuid());
+                }
+            }
+        }
+
+        IncludedIds includedIds = resolveIncludedAssetIds(versions, versionByAssetId, picks);
+        Set<Long> explicitIds = includedIds.explicit();
+        Set<Long> ancestorIds = includedIds.ancestors();
 
         List<ExportedAsset> assets = new ArrayList<>();
         Map<String, byte[]> blobs = new TreeMap<>();
         for (AssetVersion version : versions) {
-            if (!includedIds.contains(version.getAssetId())) {
+            if (!explicitIds.contains(version.getAssetId()) && !ancestorIds.contains(version.getAssetId())) {
                 continue;
             }
             Asset asset = version.getAsset();
@@ -195,7 +224,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     version.getTemplateAssetId() == null ? null : uuidByAssetId.get(version.getTemplateAssetId()),
                     version.getPayload(),
                     version.getMimeType(),
-                    version.getSizeBytes()));
+                    version.getSizeBytes(),
+                    !ancestorIds.contains(version.getAssetId())));
             if (asset.getAssetType() == AssetType.MEDIA) {
                 collectBlobs(version.getPayload(), blobs);
             }
@@ -235,7 +265,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
      * ProjectExportImportService#exportSelection}), and every ancestor folder of an
      * included asset is always added too, up to the project root.
      */
-    private Set<Long> resolveIncludedAssetIds(
+    private IncludedIds resolveIncludedAssetIds(
             List<AssetVersion> versions, Map<Long, AssetVersion> versionByAssetId, Set<UUID> assetUuids) {
         Set<Long> included = new HashSet<>();
         if (assetUuids != null) {
@@ -270,9 +300,19 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 folderId = folderVersion == null ? null : folderVersion.getFolderId();
             }
         }
-        included.addAll(ancestors);
-        return included;
+        return new IncludedIds(included, ancestors);
     }
+
+    /**
+     * Split result of {@link #resolveIncludedAssetIds}: {@code explicit} is exactly the
+     * pre-ancestor-merge {@code included} set (the caller's direct picks — individual
+     * non-folder assets, a picked folder's live subtree, and/or a {@code fullStores} scope's
+     * top-level folders, which were already unioned into the picks argument before this
+     * method runs), and {@code ancestors} is every additional ancestor folder pulled in only
+     * to keep the archive's {@code parentFolderUuid} chain intact. Named distinctly from
+     * {@link IdMaps} to avoid confusion between the export-side and import-side helpers.
+     */
+    private record IncludedIds(Set<Long> explicit, Set<Long> ancestors) {}
 
     // ------------------------------------------------------------------
     // Import
@@ -280,7 +320,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     @Override
     @Transactional
-    public ImportResult importProject(long targetProjectId, byte[] zipBytes, RevisionContext ctx) {
+    public ImportResult importProject(long targetProjectId, byte[] zipBytes, RevisionContext ctx, ImportOptions options) {
         ArchiveContent content = readArchive(zipBytes);
         ExportManifest manifest = content.manifest();
 
@@ -292,7 +332,13 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // importProject (mint a fresh UUIDv7 instead of the colliding source UUID — feature
         // cross-project-import-identity, M9.3.1, see the remap/collided map below), so reporting
         // it as BLOCKING in analyzeImport's UI-facing report does not mean commit must refuse it.
-        ConflictReport report = detectConflicts(targetProjectId, content);
+        ConflictReport report = detectConflicts(targetProjectId, content, options);
+        // NOTE: this filter is unconditional and independent of ImportOptions.skipExistingImplicit
+        // (feature selection-provenance, M11.2.2). skipExistingImplicit only changes which
+        // DUPLICATE_UUID conflicts detectConflicts *reports* (report-visibility filtering, above);
+        // it must never be folded into this "does not abort a commit" filter, since DUPLICATE_UUID
+        // always has a safe automatic resolution here (mint-fresh-UUID, or — when the flag and
+        // asset provenance allow — reuse-existing) regardless of whether it was reported.
         List<ImportConflict> hardBlocking = report.conflicts().stream()
                 .filter(c -> c.severity() == ConflictSeverity.BLOCKING && c.type() != ConflictType.DUPLICATE_UUID)
                 .toList();
@@ -306,13 +352,23 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // Preserve each asset's source UUID by default (feature cross-project-import-identity,
         // M9.3.1) — a fresh UUIDv7 is only minted when the source UUID already exists in the
         // *target* project, which is now a real, per-asset possibility rather than an impossible
-        // case, since M9.1 loosened asset.uuid uniqueness to (project_id, uuid).
+        // case, since M9.1 loosened asset.uuid uniqueness to (project_id, uuid). A third branch
+        // (feature selection-provenance, M11.2.2): when skipExistingImplicit is on and the
+        // colliding asset was only implicitly included (an ancestor folder, never an explicit
+        // pick — asset.isExplicit() is false), reuse the existing target asset instead of
+        // minting a duplicate; such assets are recorded in `skipped` and never passed to
+        // createImportedAsset below.
         Map<String, UUID> remap = new HashMap<>();
         Set<String> collided = new HashSet<>();
+        Set<String> skipped = new HashSet<>();
         for (ExportedAsset asset : assets) {
             String key = asset.uuid().toLowerCase();
             UUID sourceUuid = UUID.fromString(asset.uuid());
-            if (assetRepository.findByProjectIdAndUuid(targetProjectId, sourceUuid).isPresent()) {
+            java.util.Optional<Asset> existing = assetRepository.findByProjectIdAndUuid(targetProjectId, sourceUuid);
+            if (existing.isPresent() && options.skipExistingImplicit() && !asset.isExplicit()) {
+                remap.put(key, sourceUuid);
+                skipped.add(key);
+            } else if (existing.isPresent()) {
                 remap.put(key, UuidV7.generate());
                 collided.add(key);
             } else {
@@ -332,6 +388,22 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         IdMaps idMaps = new IdMaps();
         idMaps.put(rootAsset == null ? null : rootAsset.uuid().toLowerCase(), targetRootId, PathService.ROOT_PATH);
 
+        // Pre-populate idMaps for every skipped asset with the *existing* target asset's real
+        // (assetId, folderPath) — not a to-be-created one — so descendants still explicitly
+        // imported below resolve their parentFolderUuid against the reused folder correctly.
+        for (ExportedAsset asset : assets) {
+            String key = asset.uuid().toLowerCase();
+            if (!skipped.contains(key)) {
+                continue;
+            }
+            Asset existingAsset = assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(asset.uuid()))
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Existing asset not found.")));
+            AssetVersion existingVersion = assetVersionRepository
+                    .findByAssetIdAndValidToRevisionIsNull(existingAsset.getId())
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Existing asset has no current version.")));
+            idMaps.put(key, existingAsset.getId(), existingVersion.getFolderPath());
+        }
+
         Set<String> importedShas = new HashSet<>();
         for (ExportedAsset asset : assets) {
             if ("MEDIA".equals(asset.type())) {
@@ -342,7 +414,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Instant importedAt = Instant.now();
         int created = 0;
         for (ExportedAsset asset : order(assets, rootAsset)) {
-            if (asset == rootAsset) {
+            if (asset == rootAsset || skipped.contains(asset.uuid().toLowerCase())) {
                 continue;
             }
             createImportedAsset(targetProjectId, asset, remap, collided, idMaps, manifest, importedAt,
@@ -359,9 +431,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     @Override
     @Transactional(readOnly = true)
-    public ConflictReport analyzeImport(long targetProjectId, byte[] zipBytes) {
+    public ConflictReport analyzeImport(long targetProjectId, byte[] zipBytes, ImportOptions options) {
         ArchiveContent content = readArchive(zipBytes);
-        return detectConflicts(targetProjectId, content);
+        return detectConflicts(targetProjectId, content, options);
     }
 
     /**
@@ -369,7 +441,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
      * {@link #importProject} (which re-runs this unconditionally right before it starts
      * writing, so the two paths can never drift apart). Performs no writes.
      */
-    private ConflictReport detectConflicts(long targetProjectId, ArchiveContent content) {
+    private ConflictReport detectConflicts(long targetProjectId, ArchiveContent content, ImportOptions options) {
         ExportManifest manifest = content.manifest();
         if (manifest.protocolVersion() > PROTOCOL_VERSION) {
             // Protocol mismatch short-circuits: no point reporting template/folder issues in an
@@ -392,11 +464,22 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             String label = asset.displayName() != null ? asset.displayName() : asset.uid();
 
             if (assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(asset.uuid())).isPresent()) {
-                conflicts.add(ImportConflict.of(
-                        ConflictType.DUPLICATE_UUID,
-                        asset.uuid(),
-                        label,
-                        "An asset with this UUID already exists in the target project."));
+                // Report-visibility filtering only (feature selection-provenance, M11.2.2),
+                // applied as its own distinct step: skipExistingImplicit hides a DUPLICATE_UUID
+                // conflict from this report when the colliding asset was never one of the
+                // caller's explicit picks (asset.isExplicit() is false). This is entirely
+                // separate from — and must never be merged with — importProject's unconditional
+                // hardBlocking filter, which excludes ALL DUPLICATE_UUID conflicts from what can
+                // abort a commit regardless of this option or of report visibility.
+                boolean suppressed = options.skipExistingImplicit() && !asset.isExplicit();
+                if (!suppressed) {
+                    conflicts.add(ImportConflict.of(
+                            ConflictType.DUPLICATE_UUID,
+                            asset.uuid(),
+                            label,
+                            "An asset with this UUID already exists in the target project.",
+                            asset.isExplicit()));
+                }
             }
 
             String templateUuid = asset.templateUuid();
@@ -413,7 +496,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                             asset.uuid(),
                             label,
                             "References template " + templateUuid
-                                    + ", which is not in this archive and does not exist in the target project."));
+                                    + ", which is not in this archive and does not exist in the target project.",
+                            asset.isExplicit()));
                 }
             }
 
@@ -423,7 +507,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                         ConflictType.MISSING_PARENT_FOLDER,
                         asset.uuid(),
                         label,
-                        "Parent folder " + parentFolderUuid + " is not present in this archive."));
+                        "Parent folder " + parentFolderUuid + " is not present in this archive.",
+                        asset.isExplicit()));
             }
         }
 

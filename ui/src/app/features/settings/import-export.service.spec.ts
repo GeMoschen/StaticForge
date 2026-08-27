@@ -55,6 +55,7 @@ describe('ImportExportService', () => {
     expect(req.request.withCredentials).toBe(true);
     expect(req.request.body instanceof FormData).toBe(true);
     expect((req.request.body as FormData).get('file')).toBe(file);
+    expect((req.request.body as FormData).get('skipExistingImplicit')).toBe('false');
 
     const report: ConflictReportView = {
       hasBlocking: true,
@@ -63,6 +64,16 @@ describe('ImportExportService', () => {
     req.flush(report);
 
     expect(result).toEqual(report);
+  });
+
+  it('analyzeImport appends skipExistingImplicit=true when passed', () => {
+    const file = new File(['content'], 'export.zip', { type: 'application/zip' });
+
+    service.analyzeImport('proj1', file, true).subscribe();
+
+    const req = httpMock.expectOne('/api/v1/projects/proj1/import/analyze');
+    expect((req.request.body as FormData).get('skipExistingImplicit')).toBe('true');
+    req.flush({ conflicts: [], hasBlocking: false });
   });
 
   it('commitImport posts multipart form data and returns the import result', () => {
@@ -76,6 +87,7 @@ describe('ImportExportService', () => {
     expect(req.request.withCredentials).toBe(true);
     expect(req.request.body instanceof FormData).toBe(true);
     expect((req.request.body as FormData).get('file')).toBe(file);
+    expect((req.request.body as FormData).get('skipExistingImplicit')).toBe('false');
 
     const importResult: ImportResultView = {
       sourceProjectKey: 'src1',

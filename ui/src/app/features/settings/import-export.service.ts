@@ -28,9 +28,14 @@ export class ImportExportService {
     });
   }
 
-  analyzeImport(projectKey: string, file: File): Observable<ConflictReportView> {
+  analyzeImport(
+    projectKey: string,
+    file: File,
+    skipExistingImplicit = false,
+  ): Observable<ConflictReportView> {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('skipExistingImplicit', String(skipExistingImplicit));
     return this.http.post<ConflictReportView>(
       `${BASE}/projects/${projectKey}/import/analyze`,
       formData,
@@ -38,9 +43,14 @@ export class ImportExportService {
     );
   }
 
-  commitImport(projectKey: string, file: File): Observable<ImportResultView> {
+  commitImport(
+    projectKey: string,
+    file: File,
+    skipExistingImplicit = false,
+  ): Observable<ImportResultView> {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('skipExistingImplicit', String(skipExistingImplicit));
     return this.http.post<ImportResultView>(`${BASE}/projects/${projectKey}/import`, formData, {
       withCredentials: true,
     });

@@ -1,6 +1,7 @@
 package com.acme.staticforge.api;
 
 import com.acme.staticforge.api.dto.ExportSelectionRequest;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.exportimport.ExportSelection;
@@ -52,8 +53,10 @@ public class ProjectExportController {
             @PathVariable String projectKey, @RequestBody ExportSelectionRequest body) {
         long projectId = projectService.requireByKey(projectKey).getId();
         Set<UUID> assetUuids = parseUuids(body.assetUuids());
+        Set<FolderScope> fullStores = parseFullStores(body.fullStores());
         byte[] archive = exportImportService.exportSelection(
-                projectId, new ExportSelection(assetUuids, body.includeChannels(), body.includeGenerationTargets()));
+                projectId, new ExportSelection(
+                        assetUuids, body.includeChannels(), body.includeGenerationTargets(), fullStores));
         return zipResponse(projectKey, archive);
     }
 
@@ -70,6 +73,21 @@ public class ProjectExportController {
             }
         }
         return uuids;
+    }
+
+    private static Set<FolderScope> parseFullStores(Set<String> rawScopes) {
+        if (rawScopes == null) {
+            return null;
+        }
+        Set<FolderScope> scopes = new HashSet<>();
+        for (String raw : rawScopes) {
+            try {
+                scopes.add(FolderScope.valueOf(raw));
+            } catch (IllegalArgumentException e) {
+                throw new SfException(ProblemFactory.badRequest("Invalid store scope in fullStores: " + raw));
+            }
+        }
+        return scopes;
     }
 
     private static ResponseEntity<byte[]> zipResponse(String projectKey, byte[] archive) {

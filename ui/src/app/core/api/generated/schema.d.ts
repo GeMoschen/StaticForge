@@ -1596,6 +1596,7 @@ export interface components {
             elementUuid?: string;
             elementLabel?: string;
             detail?: string;
+            explicit?: boolean;
         };
         GenerationRequestDto: {
             /** @enum {string} */
@@ -1655,6 +1656,7 @@ export interface components {
             assetUuids?: string[];
             includeChannels?: boolean;
             includeGenerationTargets?: boolean;
+            fullStores?: string[];
         };
         ChannelCreateRequest: {
             key?: string;
@@ -1776,8 +1778,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -1787,6 +1787,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
@@ -1794,9 +1796,9 @@ export interface components {
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
             /** Format: int32 */
-            pageNumber?: number;
-            /** Format: int32 */
             pageSize?: number;
+            /** Format: int32 */
+            pageNumber?: number;
             paged?: boolean;
             unpaged?: boolean;
         };
@@ -1812,8 +1814,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -1823,6 +1823,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -1920,8 +1922,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -1931,6 +1931,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         SseEmitter: {
@@ -1963,8 +1965,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -1974,6 +1974,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -3228,7 +3230,9 @@ export interface operations {
     };
     importArchive: {
         parameters: {
-            query?: never;
+            query?: {
+                skipExistingImplicit?: boolean;
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -3257,7 +3261,9 @@ export interface operations {
     };
     analyzeImport: {
         parameters: {
-            query?: never;
+            query?: {
+                skipExistingImplicit?: boolean;
+            };
             header?: never;
             path: {
                 projectKey: string;

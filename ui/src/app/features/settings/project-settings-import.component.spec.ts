@@ -74,7 +74,7 @@ describe('ProjectSettingsImportComponent', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     selectFile(input, zipFile());
 
-    expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File));
+    expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), false);
     await waitFor(() => expect(screen.getByText('Blocking issues')).toBeTruthy());
     expect(screen.getByText('Warnings')).toBeTruthy();
 
@@ -136,11 +136,51 @@ describe('ProjectSettingsImportComponent', () => {
 
     screen.getByText('Import').click();
 
-    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File));
+    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false);
     await waitFor(() => expect(screen.getByText(/Imported 5 asset/)).toBeTruthy());
     // Panel resets back toward its initial state — ready for another import.
     expect(screen.getByText('Choose file…')).toBeTruthy();
     expect(screen.queryByText('No conflicts found')).toBeNull();
+  });
+
+  it('re-analyzes live with skipExistingImplicit when the toggle changes, and passes it through to commit', async () => {
+    vi.useFakeTimers();
+    const conflictWithProvenance: ConflictReportView = {
+      hasBlocking: false,
+      conflicts: [
+        {
+          severity: 'WARNING',
+          type: 'MISSING_PARENT_FOLDER',
+          elementUuid: 'a-9',
+          elementLabel: 'Implicit folder',
+          detail: 'Ancestor folder already exists.',
+          explicit: false,
+        },
+      ],
+    };
+    const api = makeApiStub({
+      analyzeImport: vi.fn().mockReturnValue(of(conflictWithProvenance)),
+      commitImport: vi.fn().mockReturnValue(of(importResult)),
+    });
+    await render(ProjectSettingsImportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [{ provide: ImportExportService, useValue: api }],
+    });
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    selectFile(input, zipFile());
+    await waitFor(() => expect(screen.getByText('implicit')).toBeTruthy());
+    expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), false);
+
+    const toggle = screen.getByText('Skip ancestor folders that already exist').closest('label')!.querySelector('input')!;
+    (toggle as HTMLInputElement).click();
+    await vi.advanceTimersByTimeAsync(300);
+
+    await waitFor(() => expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), true));
+
+    screen.getByText('Import').click();
+    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), true);
+    vi.useRealTimers();
   });
 
   it('shows a distinct message rather than a generic error on a 409-on-commit', async () => {
