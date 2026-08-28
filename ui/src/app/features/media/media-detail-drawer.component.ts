@@ -23,6 +23,7 @@ import { DialogService } from '../../core/ui/dialog.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 type MediaView = components['schemas']['MediaView'];
 type MediaMetadataRequest = components['schemas']['MediaMetadataRequest'];
@@ -52,6 +53,9 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
   protected readonly dialog = inject(DialogService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   protected readonly DELETE_TOKEN = 'DELETE';
 
@@ -170,7 +174,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
 
   save(): void {
     const uuid = this.media()?.uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     if (this.form.invalid) {
@@ -212,7 +216,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     const uuid = this.media()?.uuid;
-    if (!file || !uuid) {
+    if (!file || !uuid || this.readOnly()) {
       return;
     }
     this.replacing.set(true);
@@ -230,7 +234,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
 
   confirmDelete(): void {
     const uuid = this.media()?.uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const referenced = this.usages().length > 0;
@@ -261,7 +265,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
 
   performDelete(): void {
     const uuid = this.media()?.uuid;
-    if (!uuid || !this.canConfirmDelete() || this.deleting()) {
+    if (!uuid || !this.canConfirmDelete() || this.deleting() || this.readOnly()) {
       return;
     }
     this.deleting.set(true);

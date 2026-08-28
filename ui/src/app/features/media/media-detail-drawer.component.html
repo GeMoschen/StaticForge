@@ -25,6 +25,12 @@
       </div>
     }
 
+    @if (readOnly()) {
+      <div class="banner banner--warning">
+        Viewing a past revision — exit time travel to make changes.
+      </div>
+    }
+
     <form [formGroup]="form">
       <sf-field label="Alt text" hint="Required before publishing">
         <input type="text" formControlName="altText" placeholder="Descriptive alt text" />
@@ -50,7 +56,7 @@
         </sf-field>
       </div>
 
-      <sf-button variant="primary" [disabled]="saving()" (click)="save()">
+      <sf-button variant="primary" [disabled]="saving() || readOnly()" (click)="save()">
         Save metadata
       </sf-button>
     </form>
@@ -95,10 +101,10 @@
 
   <footer class="drawer__footer">
     <sf-field label="Replace binary">
-      <input type="file" (change)="onReplaceFile($event)" />
+      <input type="file" [disabled]="readOnly()" (change)="onReplaceFile($event)" />
     </sf-field>
     <div class="drawer__footer-actions">
-      <sf-button variant="danger" [disabled]="deleting()" (click)="confirmDelete()">
+      <sf-button variant="danger" [disabled]="deleting() || readOnly()" (click)="confirmDelete()">
         Delete
       </sf-button>
     </div>

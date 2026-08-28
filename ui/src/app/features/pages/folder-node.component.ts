@@ -16,6 +16,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { PageNavNodeComponent } from './page-nav-node.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import type { FolderMoveEvent } from './types';
 
 type FolderView = components['schemas']['FolderView'];
@@ -47,6 +48,9 @@ export class FolderNodeComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly node = input.required<FolderView>();
   readonly depth = input<number>(0);
@@ -108,7 +112,7 @@ export class FolderNodeComponent {
 
   protected onDragStart(event: DragEvent): void {
     const uuid = this.node().uuid;
-    if (uuid == null || this.isProtected()) {
+    if (uuid == null || this.isProtected() || this.readOnly()) {
       event.preventDefault();
       return;
     }
@@ -126,7 +130,7 @@ export class FolderNodeComponent {
     event.preventDefault();
     const source = event.dataTransfer?.getData('text/plain');
     const target = this.node().uuid;
-    if (source && target && source !== target) {
+    if (source && target && source !== target && !this.readOnly()) {
       this.move.emit({ source, target });
     }
   }
@@ -137,7 +141,7 @@ export class FolderNodeComponent {
 
   protected onContextMenu(event: MouseEvent): void {
     const uuid = this.node().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const clip = this.clipboard.entry();
@@ -183,7 +187,7 @@ export class FolderNodeComponent {
 
   protected submitNewFolder(value: CreateAssetFormValue): void {
     const parentUuid = this.pendingNewFolderParentUuid;
-    if (!parentUuid) {
+    if (!parentUuid || this.readOnly()) {
       return;
     }
     this.creatingFolder.set(true);
@@ -209,7 +213,7 @@ export class FolderNodeComponent {
 
   protected submitRenameDisplayName(displayName: string): void {
     const uuid = this.node().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     this.renamingName.set(true);
@@ -233,6 +237,9 @@ export class FolderNodeComponent {
   }
 
   private deleteFolder(uuid: string): void {
+    if (this.readOnly()) {
+      return;
+    }
     const name = this.node().displayName ?? this.node().uid ?? 'this folder';
     if (!window.confirm(`Delete "${name}" and everything inside it? This cannot be undone.`)) {
       return;
@@ -247,6 +254,9 @@ export class FolderNodeComponent {
   }
 
   private paste(targetUuid: string): void {
+    if (this.readOnly()) {
+      return;
+    }
     const entry = this.clipboard.entry();
     if (!entry) {
       return;

@@ -13,6 +13,7 @@ import { NavReferenceDetailComponent } from './nav-reference-detail.component';
 import { NavTreeNodeComponent, type NavMoveEvent } from './nav-tree-node.component';
 import { NavigationService, type NavigationFolderView, type NavTreeView, type PageReferenceView } from './navigation.service';
 import { sortNavTree } from '../../shared/tree-sort.util';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 interface RawFolderPayload {
   scope?: string;
@@ -60,6 +61,9 @@ export class NavigationComponent {
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly loading = signal(false);
   readonly forest = signal<NavTreeView[]>([]);
@@ -113,6 +117,9 @@ export class NavigationComponent {
   }
 
   protected newFolder(): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.newFolderOpen.set(true);
   }
 
@@ -121,6 +128,9 @@ export class NavigationComponent {
   }
 
   protected submitNewFolder(value: CreateAssetFormValue): void {
+    if (this.readOnly()) {
+      return;
+    }
     const parentUuid = this.targetFolderUuid();
     this.creatingFolder.set(true);
     this.nav.createFolder(this.projectKey(), value.displayName, parentUuid).subscribe({
@@ -138,6 +148,9 @@ export class NavigationComponent {
   }
 
   protected newReference(): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.newReferenceOpen.set(true);
   }
 
@@ -146,6 +159,9 @@ export class NavigationComponent {
   }
 
   protected submitNewReference(value: CreateAssetFormValue): void {
+    if (this.readOnly()) {
+      return;
+    }
     const folderUuid = this.targetFolderUuid();
     this.creatingReference.set(true);
     this.nav
@@ -173,6 +189,9 @@ export class NavigationComponent {
   }
 
   protected onMove(event: NavMoveEvent): void {
+    if (this.readOnly()) {
+      return;
+    }
     const source = findNode(this.forest(), event.source);
     if (!source) {
       return;
@@ -236,7 +255,7 @@ export class NavigationComponent {
   protected onRootDrop(event: DragEvent): void {
     event.preventDefault();
     const source = event.dataTransfer?.getData('text/plain');
-    if (!source) {
+    if (!source || this.readOnly()) {
       return;
     }
     const node = findNode(this.forest(), source);
@@ -259,6 +278,9 @@ export class NavigationComponent {
   /** "All navigation" is the store's root — it can't be renamed, moved, or deleted, but you can
    * create a folder/reference directly in it (mirrors `PagesListComponent.onRootContextMenu`). */
   protected onRootContextMenu(event: MouseEvent): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.closeDetail();
     const items: ContextMenuItem[] = [
       { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newFolder() },

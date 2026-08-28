@@ -9,6 +9,7 @@ import {
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
+import { TimeTravelStore } from '../../features/revisions/time-travel.store';
 
 type AffectedTemplate = components['schemas']['AffectedTemplate'];
 
@@ -33,6 +34,12 @@ export class SfUidRenameComponent {
 
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  /** Shared UID-rename affordance used from every editor surface (pages, templates,
+   * navigation, media) — gating it here once covers all of them without threading a
+   * `readOnly` input through each parent. */
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   protected readonly editing = signal(false);
   protected readonly saving = signal(false);
@@ -43,6 +50,9 @@ export class SfUidRenameComponent {
   private static readonly UID_PATTERN = /^[a-z0-9_]+$/;
 
   protected startEdit(): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.draft.set(this.uid());
     this.error.set(null);
     this.editing.set(true);
@@ -60,7 +70,7 @@ export class SfUidRenameComponent {
   }
 
   protected submit(): void {
-    if (this.saving()) {
+    if (this.saving() || this.readOnly()) {
       return;
     }
     const next = this.draft().trim();

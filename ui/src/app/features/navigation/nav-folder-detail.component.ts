@@ -4,6 +4,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView } from './navigation.service';
 
 interface StartNodeOption {
@@ -45,6 +46,9 @@ export class NavFolderDetailComponent {
 
   private readonly nav = inject(NavigationService);
   private readonly toast = inject(ToastService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   protected readonly savingName = signal(false);
   protected readonly nameDraft = signal('');
@@ -89,7 +93,7 @@ export class NavFolderDetailComponent {
   protected saveName(): void {
     const name = this.nameDraft().trim();
     const uuid = this.folder().uuid;
-    if (!name || !uuid || this.savingName() || this.isProtected()) {
+    if (!name || !uuid || this.savingName() || this.isProtected() || this.readOnly()) {
       return;
     }
     this.savingName.set(true);
@@ -110,7 +114,7 @@ export class NavFolderDetailComponent {
   protected onStartNodeChange(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
     const uuid = this.folder().uuid;
-    if (!uuid || this.savingStartNode()) {
+    if (!uuid || this.savingStartNode() || this.readOnly()) {
       return;
     }
     this.savingStartNode.set(true);
@@ -130,7 +134,7 @@ export class NavFolderDetailComponent {
 
   protected requestDelete(): void {
     const uuid = this.folder().uuid;
-    if (!uuid || this.isProtected()) {
+    if (!uuid || this.isProtected() || this.readOnly()) {
       return;
     }
     const name = this.folder().displayName ?? this.folder().uid ?? 'this folder';

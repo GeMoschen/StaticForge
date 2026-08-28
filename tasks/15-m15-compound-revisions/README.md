@@ -78,7 +78,7 @@ trustworthy, complete concept in the UI.
       exactly one valid version per revision per touched asset, reproducible reads,
       correct restore, no lost updates) hold under compound (multi-asset) revisions, not
       only the single-asset case they cover today.
-- [ ] **Viewing a revision puts the entire app in read-only mode, not just the page
+- [x] **Viewing a revision puts the entire app in read-only mode, not just the page
       editor.** Today only `page-editor.component.ts` checks `TimeTravelStore.isTimeTravel`
       and disables itself; every other editor surface (templates, channel templates,
       media, navigation, project settings, channel CRUD) stays fully writable while the

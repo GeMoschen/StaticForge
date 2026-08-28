@@ -18,6 +18,7 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTableComponent } from '../../shared/components/sf-table.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ChannelsService } from './channels.service';
 
 type ChannelView = components['schemas']['ChannelView'];
@@ -64,6 +65,9 @@ export class ChannelsComponent {
   private readonly api = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
   private readonly fb = inject(FormBuilder);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly escapingOptions: readonly string[] = ESCAPING_OPTIONS;
   readonly isProtected = isProtected;
@@ -114,6 +118,9 @@ export class ChannelsComponent {
   }
 
   openCreate(): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.editing.set(null);
     this.error.set(null);
     this.blocked.set(null);
@@ -130,6 +137,9 @@ export class ChannelsComponent {
   }
 
   openEdit(channel: ChannelView): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.editing.set(channel);
     this.error.set(null);
     this.blocked.set(null);
@@ -153,7 +163,7 @@ export class ChannelsComponent {
   }
 
   submit(): void {
-    if (this.form.invalid || this.submitting()) {
+    if (this.form.invalid || this.submitting() || this.readOnly()) {
       return;
     }
     const editing = this.editing();
@@ -200,6 +210,9 @@ export class ChannelsComponent {
   }
 
   toggleEnabled(channel: ChannelView): void {
+    if (this.readOnly()) {
+      return;
+    }
     const key = this.projectKey();
     const action = channel.enabled ? 'disable' : 'enable';
     const call = channel.enabled
@@ -215,6 +228,9 @@ export class ChannelsComponent {
   }
 
   requestDelete(channel: ChannelView): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.blocked.set(null);
     this.api.deletePreview(this.projectKey(), channel.key ?? '').subscribe({
       next: (preview) => {
@@ -231,7 +247,7 @@ export class ChannelsComponent {
 
   confirmDeleteAction(): void {
     const confirm = this.confirmDelete();
-    if (!confirm || this.submitting()) {
+    if (!confirm || this.submitting() || this.readOnly()) {
       return;
     }
     this.performDelete(confirm.channel);

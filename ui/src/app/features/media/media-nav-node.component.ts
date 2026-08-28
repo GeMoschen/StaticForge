@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
-import { ContextMenuService } from '../../shared/services/context-menu.service';
+import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -30,6 +31,9 @@ export class MediaNavNodeComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly projectKey = input.required<string>();
   readonly summary = input.required<MediaSummaryView>();
@@ -74,7 +78,8 @@ export class MediaNavNodeComponent {
 
   protected onDragStart(event: DragEvent): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
+      event.preventDefault();
       return;
     }
     event.dataTransfer?.setData('text/plain', uuid);
@@ -87,14 +92,19 @@ export class MediaNavNodeComponent {
       return;
     }
     const label = this.summary().displayName ?? this.summary().uid ?? 'media';
-    this.menu.open(event, [
+    const items: ContextMenuItem[] = [
       { label: 'Open', icon: 'open_in_new', action: () => this.onSelect() },
-      { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
-      { label: '', separator: true },
-      { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('MEDIA', uuid, label) },
-      { label: '', separator: true },
-      { label: 'Delete', icon: 'delete', danger: true, action: () => this.delete() },
-    ]);
+    ];
+    if (!this.readOnly()) {
+      items.push(
+        { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
+        { label: '', separator: true },
+        { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('MEDIA', uuid, label) },
+        { label: '', separator: true },
+        { label: 'Delete', icon: 'delete', danger: true, action: () => this.delete() },
+      );
+    }
+    this.menu.open(event, items);
   }
 
   protected closeRename(): void {
@@ -104,7 +114,7 @@ export class MediaNavNodeComponent {
   protected submitRenameDisplayName(displayName: string): void {
     const key = this.projectKey();
     const uuid = this.summary().uuid;
-    if (!key || !uuid) {
+    if (!key || !uuid || this.readOnly()) {
       return;
     }
     this.renamingName.set(true);
@@ -131,7 +141,7 @@ export class MediaNavNodeComponent {
 
   private delete(): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const name = this.summary().displayName ?? this.summary().uid ?? 'this media item';

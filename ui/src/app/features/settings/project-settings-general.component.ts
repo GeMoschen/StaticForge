@@ -6,6 +6,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 /** General project settings: display name and description. */
 @Component({
@@ -23,6 +24,9 @@ export class ProjectSettingsGeneralComponent implements OnInit {
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
@@ -46,7 +50,7 @@ export class ProjectSettingsGeneralComponent implements OnInit {
   }
 
   protected save(): void {
-    if (this.form.invalid || this.saving()) {
+    if (this.form.invalid || this.saving() || this.readOnly()) {
       return;
     }
     const key = this.projectKey();

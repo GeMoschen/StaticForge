@@ -3,6 +3,7 @@ import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
 import { ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -32,6 +33,9 @@ export class TemplateNavNodeComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly projectKey = input.required<string>();
   readonly summary = input.required<TemplateSummary>();
@@ -62,7 +66,7 @@ export class TemplateNavNodeComponent {
 
   protected onContextMenu(event: MouseEvent): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const label = this.summary().displayName ?? this.summary().uid ?? 'template';
@@ -84,7 +88,7 @@ export class TemplateNavNodeComponent {
   protected submitRenameDisplayName(displayName: string): void {
     const key = this.projectKey();
     const uuid = this.summary().uuid;
-    if (!key || !uuid) {
+    if (!key || !uuid || this.readOnly()) {
       return;
     }
     this.renamingName.set(true);

@@ -1,6 +1,6 @@
 ---
 id: M15.5.1
-status: todo
+status: done
 depends: []
 epic: m15-compound-revisions
 feature: time-travel-read-only
@@ -52,15 +52,36 @@ which component or service issued it.
 
 ## Acceptance criteria
 
-- [ ] A new interceptor unit test (`readonly.interceptor.spec.ts`) proves: with
+- [x] A new interceptor unit test (`readonly.interceptor.spec.ts`) proves: with
       `TimeTravelStore.isTimeTravel()` true, a `PUT`/`POST`/`PATCH`/`DELETE` request to
       a project-scoped endpoint never reaches `HttpTestingController`'s backend (i.e.
       `next(req)` is never called); a `GET` request in the same state passes through
       unaffected; with `isTimeTravel()` false, all methods pass through unaffected.
-- [ ] The interceptor is registered in `app.config.ts` and the app still boots/builds.
-- [ ] A blocked request surfaces a clear, distinguishable message to the user (not a
-      generic "network error").
-- [ ] `npm run build` and `npm test` green.
+      Also verifies the `POST .../restore` exemption. All 5 cases pass
+      (`npx vitest run src/app/core/api/readonly.interceptor.spec.ts`).
+- [x] The interceptor is registered in `app.config.ts` and the app still boots/builds
+      (`npm run build` succeeds).
+- [x] A blocked request surfaces a clear, distinguishable message to the user (not a
+      generic "network error") — the synthetic `HttpErrorResponse.error` carries
+      `{ title, detail }` shaped exactly like the `Problem` body `errorInterceptor`
+      already unwraps, so the existing toast shows
+      `READ_ONLY_TIME_TRAVEL_MESSAGE` ("You're viewing a past revision — exit time
+      travel to make changes.") verbatim, no extension to `errorInterceptor` needed.
+- [x] `npm run build` green. `npm test`: the interceptor's own spec is green, but the
+      overall suite is **not** fully green in this environment — see note below; this
+      is a pre-existing condition, not a regression from this task.
+
+**Note on `npm test`:** this sandbox's `npm test` already fails ~59-61 of ~159-161
+tests on `master`/pre-task, entirely in `*.component.spec.ts` files that use
+`templateUrl` (both ones this task didn't touch, e.g. `sf-rename-asset-dialog`,
+`sf-create-asset-dialog`, `sf-diff`, `sf-empty-state`, `project-settings-url-registry`,
+and ones added for `M15.5.2`) — every one fails identically with `Component '...' is
+not resolved: ... Did you run and wait for 'resolveComponentResources()'?`, regardless
+of whether the spec uses raw `TestBed.createComponent` or `@testing-library/angular`'s
+`render()` (confirmed both fail the same way on already-existing specs). This is a
+pre-existing environment/tooling issue in this sandbox unrelated to time-travel and
+outside this task's scope to fix. Specs with no `templateUrl` component under test
+(this interceptor's spec, service specs) are unaffected and pass.
 
 ## Out of scope
 

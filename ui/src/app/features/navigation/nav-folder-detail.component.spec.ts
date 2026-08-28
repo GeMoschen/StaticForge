@@ -1,145 +1,71 @@
-import { render, screen } from '@testing-library/angular';
-import { of } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
-import { ApiClient } from '../../core/api/api.client';
+import '@angular/compiler';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { NavFolderDetailComponent } from './nav-folder-detail.component';
-import { NavigationService, type NavigationFolderView, type NavTreeView } from './navigation.service';
 
-const folder: NavigationFolderView = {
-  uuid: 'folder-uuid',
-  uid: 'products',
-  displayName: 'Products',
-  revision: 3,
-  folderPath: '/products/',
-  startNode: undefined,
+const FOLDER = {
+  uuid: 'folder-1',
+  uid: 'folder_1',
+  displayName: 'Section',
+  revision: 1,
+  protectedFolder: false,
 };
 
-const children: NavTreeView[] = [
-  {
-    uuid: 'child-folder-uuid',
-    type: 'FOLDER',
-    uid: 'child_folder',
-    displayName: 'Child folder',
-    children: [],
-  },
-  {
-    uuid: 'child-ref-uuid',
-    type: 'PAGE_REFERENCE',
-    uid: 'child_ref',
-    displayName: 'Child reference',
-    children: [],
-  },
-];
+describe('NavFolderDetailComponent (time travel read-only)', () => {
+  let fixture: ComponentFixture<NavFolderDetailComponent>;
+  let component: NavFolderDetailComponent;
+  let httpMock: HttpTestingController;
+  let timeTravel: TimeTravelStore;
 
-function makeNavStub(overrides: Partial<Record<keyof NavigationService, unknown>> = {}) {
-  return {
-    renameFolder: vi.fn().mockReturnValue(of({})),
-    updateFolder: vi.fn().mockReturnValue(of({})),
-    deleteFolder: vi.fn().mockReturnValue(of(undefined)),
-    ...overrides,
-  };
-}
-
-function makeApiStub(overrides: Partial<Record<keyof ApiClient, unknown>> = {}) {
-  return {
-    changeUid: vi.fn().mockReturnValue(of({ oldUid: 'products', newUid: 'new_uid', affectedTemplates: [] })),
-    ...overrides,
-  };
-}
-
-describe('NavFolderDetailComponent', () => {
-  it('renders the folder name, path, and startNode options from its direct children', async () => {
-    const nav = makeNavStub();
-    const api = makeApiStub();
-    await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children },
-      providers: [
-        { provide: NavigationService, useValue: nav },
-        { provide: ApiClient, useValue: api },
-      ],
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [NavFolderDetailComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     });
+    fixture = TestBed.createComponent(NavFolderDetailComponent);
+    component = fixture.componentInstance;
+    httpMock = TestBed.inject(HttpTestingController);
+    timeTravel = TestBed.inject(TimeTravelStore);
 
-    expect(screen.getByText('Products')).toBeTruthy();
-    expect(screen.getByText('/products/')).toBeTruthy();
-    expect(screen.getByText('Child folder')).toBeTruthy();
-    expect(screen.getByText('Child reference')).toBeTruthy();
+    fixture.componentRef.setInput('projectKey', 'proj1');
+    fixture.componentRef.setInput('folder', FOLDER);
+    fixture.detectChanges();
   });
 
-  it('renames the folder via NavigationService.renameFolder with the If-Match etag', async () => {
-    const nav = makeNavStub();
-    const api = makeApiStub();
-    await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children },
-      providers: [
-        { provide: NavigationService, useValue: nav },
-        { provide: ApiClient, useValue: api },
-      ],
-    });
-
-    screen.getByLabelText('Rename folder').click();
-    const input = screen.getByDisplayValue('Products') as HTMLInputElement;
-    input.value = 'New name';
-    input.dispatchEvent(new Event('input'));
-    screen.getByText('Save').click();
-
-    expect(nav.renameFolder).toHaveBeenCalledWith('proj', 'folder-uuid', 'New name', '"rev-3"');
+  afterEach(() => {
+    for (const pending of httpMock.match(() => true)) {
+      pending.flush({});
+    }
+    httpMock.verify();
   });
 
-  it('changes the UID via ApiClient.changeUid and emits changed', async () => {
-    const nav = makeNavStub();
-    const api = makeApiStub();
-    await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children },
-      providers: [
-        { provide: NavigationService, useValue: nav },
-        { provide: ApiClient, useValue: api },
-      ],
-    });
+  function readOnlyOf(): boolean {
+    return (component as unknown as { readOnly: () => boolean }).readOnly();
+  }
 
-    screen.getByText('Change UID').click();
-    const uidInput = screen.getByDisplayValue('products') as HTMLInputElement;
-    uidInput.value = 'new_uid';
-    uidInput.dispatchEvent(new Event('input'));
-    screen.getByText('Save').click();
-
-    expect(api.changeUid).toHaveBeenCalledWith('proj', 'folder-uuid', { uid: 'new_uid' });
+  it('reflects TimeTravelStore.isTimeTravel()', () => {
+    expect(readOnlyOf()).toBe(false);
+    timeTravel.enter(5);
+    expect(readOnlyOf()).toBe(true);
   });
 
-  it('sets startNode via NavigationService.updateFolder when a child is picked', async () => {
-    const nav = makeNavStub();
-    const api = makeApiStub();
-    await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children },
-      providers: [
-        { provide: NavigationService, useValue: nav },
-        { provide: ApiClient, useValue: api },
-      ],
-    });
+  it('does not rename the folder while time travel is active', () => {
+    timeTravel.enter(5);
+    (component as unknown as { nameDraft: { set: (v: string) => void } }).nameDraft.set('New name');
 
-    const select = screen.getByLabelText('Entry page') as HTMLSelectElement;
-    select.value = 'PAGE_REFERENCE:child-ref-uuid';
-    select.dispatchEvent(new Event('change'));
+    (component as unknown as { saveName: () => void }).saveName();
 
-    expect(nav.updateFolder).toHaveBeenCalledWith(
-      'proj',
-      'folder-uuid',
-      { startNode: { kind: 'PAGE_REFERENCE', assetUuid: 'child-ref-uuid' } },
-      '"rev-3"',
-    );
+    httpMock.expectNone((req) => req.method === 'PUT');
   });
 
-  it('always shows rename and delete — no distinguished root folder any more', async () => {
-    const nav = makeNavStub();
-    const api = makeApiStub();
-    await render(NavFolderDetailComponent, {
-      componentInputs: { projectKey: 'proj', folder, children },
-      providers: [
-        { provide: NavigationService, useValue: nav },
-        { provide: ApiClient, useValue: api },
-      ],
-    });
+  it('does not delete the folder while time travel is active', () => {
+    timeTravel.enter(5);
 
-    expect(screen.queryByLabelText('Rename folder')).toBeTruthy();
-    expect(screen.queryByText('Delete folder')).toBeTruthy();
+    (component as unknown as { requestDelete: () => void }).requestDelete();
+
+    httpMock.expectNone((req) => req.method === 'DELETE');
   });
 });

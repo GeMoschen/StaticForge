@@ -7,7 +7,7 @@
         Markdown.
       </p>
     </div>
-    <sf-button variant="primary" (click)="openCreate()">New channel</sf-button>
+    <sf-button variant="primary" [disabled]="readOnly()" (click)="openCreate()">New channel</sf-button>
   </header>
 
   @if (formOpen()) {
@@ -64,7 +64,7 @@
         <sf-button
           type="submit"
           variant="primary"
-          [disabled]="form.invalid || submitting()"
+          [disabled]="form.invalid || submitting() || readOnly()"
         >
           {{ submitting() ? 'Saving…' : editing() ? 'Save changes' : 'Create channel' }}
         </sf-button>
@@ -132,15 +132,16 @@
                 </span>
               </td>
               <td class="table__actions">
-                <sf-button variant="ghost" (click)="openEdit(channel)">Edit</sf-button>
+                <sf-button variant="ghost" [disabled]="readOnly()" (click)="openEdit(channel)">Edit</sf-button>
                 <sf-button
                   [variant]="channel.enabled ? 'secondary' : 'primary'"
+                  [disabled]="readOnly()"
                   (click)="toggleEnabled(channel)"
                 >
                   {{ channel.enabled ? 'Disable' : 'Enable' }}
                 </sf-button>
                 @if (!isProtected(channel)) {
-                  <sf-button variant="danger" (click)="requestDelete(channel)">
+                  <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete(channel)">
                     Delete
                   </sf-button>
                 }
@@ -173,7 +174,7 @@
     </div>
     <footer class="dialog__footer">
       <sf-button variant="ghost" (click)="confirmDelete.set(null)">Cancel</sf-button>
-      <sf-button variant="danger" [disabled]="submitting()" (click)="confirmDeleteAction()">
+      <sf-button variant="danger" [disabled]="submitting() || readOnly()" (click)="confirmDeleteAction()">
         Delete
       </sf-button>
     </footer>

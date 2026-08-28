@@ -5,6 +5,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { NavigationService, type NavTreeView } from './navigation.service';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 export interface NavMoveEvent {
   source: string;
@@ -40,6 +41,9 @@ export class NavTreeNodeComponent {
   private readonly nav = inject(NavigationService);
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly node = input.required<NavTreeView>();
   readonly depth = input<number>(0);
@@ -105,7 +109,7 @@ export class NavTreeNodeComponent {
 
   protected onDragStart(event: DragEvent): void {
     const uuid = this.node().uuid;
-    if (uuid == null || this.isProtected()) {
+    if (uuid == null || this.isProtected() || this.readOnly()) {
       event.preventDefault();
       return;
     }
@@ -130,14 +134,14 @@ export class NavTreeNodeComponent {
     event.stopPropagation();
     const source = event.dataTransfer?.getData('text/plain');
     const target = this.node().uuid;
-    if (source && target && source !== target) {
+    if (source && target && source !== target && !this.readOnly()) {
       this.move.emit({ source, target });
     }
   }
 
   protected onContextMenu(event: MouseEvent): void {
     const uuid = this.node().uuid;
-    if (!uuid || this.isProtected()) {
+    if (!uuid || this.isProtected() || this.readOnly()) {
       return;
     }
     const items: ContextMenuItem[] = [
@@ -157,7 +161,7 @@ export class NavTreeNodeComponent {
   protected submitRenameDisplayName(displayName: string): void {
     const uuid = this.node().uuid;
     const key = this.projectKey();
-    if (!uuid || !key) {
+    if (!uuid || !key || this.readOnly()) {
       return;
     }
     this.renamingName.set(true);

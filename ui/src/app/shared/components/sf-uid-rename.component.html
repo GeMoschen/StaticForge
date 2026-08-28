@@ -2,7 +2,13 @@
   @if (!editing()) {
     <div class="uid-rename__row">
       <code class="uid-rename__value">{{ uid() }}</code>
-      <button class="uid-rename__edit" type="button" (click)="startEdit()">
+      <button
+        class="uid-rename__edit"
+        type="button"
+        [disabled]="readOnly()"
+        [title]="readOnly() ? 'Viewing a past revision — exit time travel to make changes' : ''"
+        (click)="startEdit()"
+      >
         Change UID
       </button>
     </div>
@@ -28,7 +34,7 @@
         <button
           class="uid-rename__btn uid-rename__btn--primary"
           type="button"
-          [disabled]="saving()"
+          [disabled]="saving() || readOnly()"
           (click)="submit()"
         >
           {{ saving() ? 'Saving…' : 'Save' }}

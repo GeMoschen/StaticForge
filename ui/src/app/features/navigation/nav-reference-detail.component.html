@@ -11,11 +11,11 @@
         (keydown.escape)="cancelEditName()"
         autofocus
       />
-      <sf-button variant="primary" [disabled]="savingName()" (click)="saveName()">Save</sf-button>
+      <sf-button variant="primary" [disabled]="savingName() || readOnly()" (click)="saveName()">Save</sf-button>
       <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
     } @else {
       <h2 class="nav-ref-detail__title">{{ reference().displayName ?? reference().uid ?? 'Reference' }}</h2>
-      <button type="button" class="nav-ref-detail__edit" (click)="startEditName()" aria-label="Rename reference">
+      <button type="button" class="nav-ref-detail__edit" [disabled]="readOnly()" (click)="startEditName()" aria-label="Rename reference">
         <sf-icon name="edit" />
       </button>
     }
@@ -68,7 +68,7 @@
         <input type="text" [value]="labelDraft()" (input)="onLabelInput($event)" placeholder="Optional label" />
       </sf-field>
 
-      <sf-button variant="primary" [disabled]="saving() || !targetUuid() || !dirty()" (click)="save()">
+      <sf-button variant="primary" [disabled]="saving() || !targetUuid() || !dirty() || readOnly()" (click)="save()">
         Save
       </sf-button>
     </section>
@@ -88,7 +88,7 @@
   </div>
 
   <footer class="nav-ref-detail__footer">
-    <sf-button variant="danger" [disabled]="deleting()" (click)="requestDelete()">Delete reference</sf-button>
+    <sf-button variant="danger" [disabled]="deleting() || readOnly()" (click)="requestDelete()">Delete reference</sf-button>
   </footer>
 </div>
 

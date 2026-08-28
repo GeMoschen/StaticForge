@@ -10,6 +10,7 @@ import {
 } from './import-export.service';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -50,6 +51,9 @@ export class ProjectSettingsImportComponent {
   private readonly api = inject(ImportExportService);
   private readonly toasts = inject(ToastService);
   private readonly store = inject(ProjectContextStore);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   protected readonly dragCounter = signal(0);
   protected readonly dragActive = computed(() => this.dragCounter() > 0);
@@ -136,7 +140,7 @@ export class ProjectSettingsImportComponent {
   }
 
   private pickFile(file: File | null): void {
-    if (!file) {
+    if (!file || this.readOnly()) {
       return;
     }
     if (!file.name.toLowerCase().endsWith('.zip')) {
@@ -179,7 +183,7 @@ export class ProjectSettingsImportComponent {
 
   commit(): void {
     const file = this.file();
-    if (!file || this.hasBlocking() || this.committing()) {
+    if (!file || this.hasBlocking() || this.committing() || this.readOnly()) {
       return;
     }
     this.committing.set(true);
