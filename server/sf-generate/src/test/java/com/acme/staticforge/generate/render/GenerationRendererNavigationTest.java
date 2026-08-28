@@ -108,6 +108,32 @@ class GenerationRendererNavigationTest {
     }
 
     @Test
+    void navReferenceToNonNavigationScopedFolderDoesNotResolve() {
+        SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:root)$");
+        // Mirrors the real shared hidden project root (PathService#ROOT_UID = "root"): a plain
+        // FOLDER with uid "root" and no "scope" payload field at all — the same folder every
+        // other store's root (Templates/Pages/Media/Navigation) nests under. A folder's uid is
+        // unique per (project, FOLDER) only, not per store, so without scope-filtering a
+        // "nav:root" reference would resolve straight to this folder and render its (unrelated)
+        // children as if they were a navigation tree.
+        SnapshotAsset sharedRoot = folder(NAV_ROOT, "root", "/", "{}");
+        SnapshotAsset templatesRoot = folder(PRODUCTS_FOLDER, "templates_root", "/templates/", "{\"scope\":\"TEMPLATES\"}");
+        SnapshotAsset homePage = page(HOME_PAGE, "home", "/", PAGE_TEMPLATE);
+
+        Snapshot snapshot = snapshot(template, sharedRoot, templatesRoot, homePage);
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+
+        RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
+        String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+        // The reference fails to resolve (degrades to empty, like any other unresolvable
+        // $CMS_NAVIGATION reference) rather than rendering another store's contents.
+        assertThat(html).isEmpty();
+        assertThat(file.dependencies()).doesNotContain(NAV_ROOT);
+    }
+
+    @Test
     void startNodeCycleTruncatesAndSurfacesSfGen0410() {
         SnapshotAsset template = pageTemplate(CYCLIC_TEMPLATE, "$CMS_NAVIGATION(nav:cyclic)$");
         SnapshotAsset cyclicRoot = folder(

@@ -65,10 +65,18 @@ trustworthy, complete concept in the UI.
 - [x] `ProjectRestoreService.restoreTo`'s existing bug — it allocates one `RESTORE`
       revision but never calls `appendSummary`, so a project rollback's `summary.assets`
       is always empty today — is fixed as part of unifying it onto the shared mechanism.
-- [ ] Every existing **single**-asset mutation (one page save, one media upload, one
+- [x] Every existing **single**-asset mutation (one page save, one media upload, one
       folder move, one UID change, …) still produces exactly one revision touching
       exactly one asset, byte-for-byte equivalent to today's behavior — this is a
-      capability *addition*, not a change to the common case.
+      capability *addition*, not a change to the common case. Verified by inspection:
+      `AssetServiceImpl.update/softDelete/restore/changeUid/move`,
+      `FolderServiceImpl.move/delete`, and every `ProjectServiceImpl` method except
+      `create` still call the unchanged `revisionService.allocate(...)` directly, never
+      `allocateOrJoin`/`beginBatch` — only the genuinely multi-asset orchestrations
+      (`AssetServiceImpl.createInternal`, `TemplateServiceImpl`'s two cascades,
+      `ProjectServiceImpl.create`) were switched onto the batch mechanism. Confirmed
+      further by the full existing test suite passing with zero assertion changes at
+      any single-asset call site.
 - [x] Revision spine, history list/filtering, structural diff, asset restore,
       project-wide rollback, `If-Match`/409 optimistic concurrency, the conflict drawer,
       usages, and time travel all correctly represent and operate on a revision that
@@ -98,9 +106,21 @@ trustworthy, complete concept in the UI.
       control on every surface visibly disables itself, the same way the page editor
       already does — a user can look, but not touch, anywhere in the app, until they
       explicitly return to "now."
-- [ ] `./gradlew build` (incl. `RevisionInvariantsTest`, `ConcurrentWritersTest`,
+- [~] `./gradlew build` (incl. `RevisionInvariantsTest`, `ConcurrentWritersTest`,
       `AssetRevisionIntegrationTests`, `RevisionFilterIntegrationTest`,
       `UidChangeWarningIntegrationTest`) and `ui` `npm run build` + `npm test` are green.
+      `./gradlew build` — green (verified twice, full suite, all modules). `ui npm run
+      build` — green. `ui npm test` — **not** green, but this is a pre-existing,
+      environment-wide condition confirmed unrelated to this milestone: every
+      `templateUrl`-based component spec in the repo (including specs this milestone
+      never touched) fails identically with a `resolveComponentResources()` error,
+      traced to a `@analogjs/vite-plugin-angular`/pinned-`vite@5.4.21` incompatibility
+      in this sandbox — independently reproduced on an unmodified `master` checkout
+      (`git stash`) both before and after this milestone's frontend work landed, with
+      an unchanged failure signature (~60 of ~160 tests, growing only in raw count as
+      this milestone added more `templateUrl` specs, never in kind). Non-`templateUrl`
+      specs (pure logic, services, the new `readonly.interceptor.spec.ts`) pass. Fixing
+      the underlying tooling issue is out of scope for this milestone.
 
 ## Features (dependency order)
 

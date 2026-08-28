@@ -34,13 +34,16 @@ public interface ProjectExportImportService {
     byte[] exportSelection(long projectId, ExportSelection selection);
 
     /**
-     * Recreates the exported project's assets inside {@code targetProjectId}. Each asset
-     * preserves its source UUID unless that UUID already exists in the target project, in which
-     * case a fresh UUIDv7 is minted instead (feature `cross-project-import-identity`, `M9.3.1`);
-     * every asset gets {@code payload.origin} provenance, remapped references and a UID that is
-     * re-derived to stay unique within the target project. {@code options.skipExistingImplicit()}
-     * (feature `selection-provenance`, `M11.2.2`) changes only how a {@code DUPLICATE_UUID}
-     * collision on a non-explicit (ancestor-only) asset is resolved — see {@link ImportOptions}.
+     * Recreates the exported project's assets inside {@code targetProjectId}. Every asset keeps
+     * its source UUID (feature `cross-project-import-identity`, `M9.3.1`) — an asset whose UUID
+     * doesn't yet exist in the target is created; one whose UUID already exists there as the
+     * *same* {@code AssetType} is overwritten with a new version of the archive's content (the
+     * import always wins); one that already exists as a *different* type is a
+     * {@code DUPLICATE_UUID_TYPE_MISMATCH} conflict that blocks the whole import. Every created
+     * or overwritten asset gets {@code payload.origin} provenance and remapped references.
+     * {@code options.skipExistingImplicit()} (feature `selection-provenance`, `M11.2.2`) changes
+     * only how a same-type collision on a non-explicit (ancestor-only) asset is resolved — see
+     * {@link ImportOptions}.
      */
     ImportResult importProject(long targetProjectId, byte[] zipBytes, RevisionContext ctx, ImportOptions options);
 

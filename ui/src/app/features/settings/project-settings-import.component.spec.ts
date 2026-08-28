@@ -42,10 +42,10 @@ const blockingReport: ConflictReportView = {
   conflicts: [
     {
       severity: 'BLOCKING',
-      type: 'DUPLICATE_UUID',
+      type: 'DUPLICATE_UUID_TYPE_MISMATCH',
       elementUuid: 'a-1',
       elementLabel: 'Home page',
-      detail: 'An element with this UUID already exists.',
+      detail: 'An element with this UUID already exists as a different type.',
     },
     {
       severity: 'WARNING',
@@ -60,6 +60,7 @@ const blockingReport: ConflictReportView = {
 const importResult: ImportResultView = {
   sourceProjectKey: 'other-proj',
   importedAssetCount: 5,
+  updatedAssetCount: 1,
   importedBlobCount: 2,
 };
 
@@ -187,7 +188,7 @@ describe('ProjectSettingsImportComponent', () => {
     const freshConflicts = [
       {
         severity: 'BLOCKING' as const,
-        type: 'DUPLICATE_UUID' as const,
+        type: 'DUPLICATE_UUID_TYPE_MISMATCH' as const,
         elementUuid: 'a-3',
         elementLabel: 'New conflict',
         detail: 'Appeared since analysis.',

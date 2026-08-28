@@ -79,10 +79,11 @@ import org.springframework.test.context.ActiveProfiles;
 /**
  * Project export → import round-trip (spec §26.5, §6.1, feature `cross-project-import-identity`,
  * `M9.3`). Verifies that assets, media and templates survive an export/import cycle, that
- * imported assets preserve their source UUID by default (minting a fresh UUIDv7 only when that
- * UUID already exists in the target project), that {@code payload.origin} provenance is always
- * recorded (plus {@code origin.sourceUuid} specifically on the collision path), and that UUID
- * references are remapped consistently onto the imported assets in every branch.
+ * imported assets always preserve their source UUID — a same-type collision overwrites the
+ * existing target asset in place (the import always wins) rather than minting a substitute
+ * UUID, while a different-type collision blocks the whole import — that {@code payload.origin}
+ * provenance is always recorded (plus {@code origin.overwrite} specifically on the overwrite
+ * path), and that UUID references remain resolvable in every branch.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -209,13 +210,14 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
-     * Collision branch (feature cross-project-import-identity, M9.3.1): re-importing an archive
-     * back into its own source project means every one of its UUIDs already exists there, so
-     * every imported asset must get a fresh UUIDv7 (today's pre-M9.3.1 behavior, unchanged for
-     * this specific case) and internal references must remap consistently onto the new UUIDs.
+     * Overwrite branch: re-importing an archive back into its own source project means every
+     * one of its UUIDs already exists there, as the exact same type — a same-type collision
+     * the import always wins on, overwriting the existing asset's content in place rather than
+     * minting a substitute UUID (the old, pre-M15.x behavior). No asset is duplicated and every
+     * reference remains trivially resolvable, since no UUID ever changes.
      */
     @Test
-    void reimportingIntoTheSourceProjectMintsFreshUuidsAndRemapsReferences() {
+    void reimportingIntoTheSourceProjectOverwritesExistingAssetsInPlace() {
         Fixture source = newFixture("exp_re", "Reimport Source");
 
         TemplateView pageTemplate = templateService.create(
@@ -240,43 +242,33 @@ class ProjectExportImportIntegrationTest {
         byte[] archive = exportImportService.exportProject(source.project().getId());
         ImportResult result = exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
 
-        // The count of assets created is independent of which branch each one took.
-        // page template, page — the two fixed template folders (spec M13.1.2) resolve onto the
-        // source project's own existing copies instead of being created (spec M13.2.2).
-        assertThat(result.importedAssetCount()).isEqualTo(2);
+        // Nothing is newly created — page template and page are both overwritten in place; the
+        // two fixed template folders (spec M13.1.2) resolve onto the project's own existing
+        // copies as before, never created either way.
+        assertThat(result.importedAssetCount()).isEqualTo(0);
+        assertThat(result.updatedAssetCount()).isEqualTo(2);
 
         Map<String, UUID> pageTemplatesAfter = uidsByType(source.project().getId(), AssetType.PAGE_TEMPLATE);
         Map<String, UUID> pagesAfter = uidsByType(source.project().getId(), AssetType.PAGE);
-        // uidGenerator re-derives a fresh, non-colliding uid for the re-imported copies, so both
-        // the original and the reimported asset now coexist under different uids.
-        UUID reimportedTemplateUuid = pageTemplatesAfter.values().stream()
-                .filter(uuid -> !uuid.equals(pageTemplate.uuid()))
-                .findFirst()
-                .orElseThrow();
-        UUID reimportedPageUuid =
-                pagesAfter.values().stream().filter(uuid -> !uuid.equals(page.uuid())).findFirst().orElseThrow();
+        // No duplicate was created under a fresh uuid — exactly the original asset, overwritten.
+        assertThat(pageTemplatesAfter).hasSize(1).containsValue(pageTemplate.uuid());
+        assertThat(pagesAfter).hasSize(1).containsValue(page.uuid());
 
-        assertThat(reimportedPageUuid).isNotEqualTo(page.uuid());
-        assertThat(reimportedPageUuid.version()).isEqualTo(7);
-        assertThat(reimportedTemplateUuid).isNotEqualTo(pageTemplate.uuid());
-        assertThat(reimportedTemplateUuid.version()).isEqualTo(7);
-
-        AssetVersionView reimportedPage = assetService.requireCurrent(source.project().getId(), reimportedPageUuid);
-        JsonNode origin = reimportedPage.payload().path("origin");
-        assertThat(origin.path("sourceUuid").asText()).isEqualTo(page.uuid().toString());
-        // The reimported page's templateRef must point at the reimported template's NEW uuid,
-        // not the original — the collision path still remaps references consistently.
-        assertThat(reimportedPage.payload().path("templateRef").asText()).isEqualTo(reimportedTemplateUuid.toString());
+        AssetVersionView overwrittenPage = assetService.requireCurrent(source.project().getId(), page.uuid());
+        assertThat(overwrittenPage.validFromRevision()).isGreaterThan(page.validFromRevision());
+        JsonNode origin = overwrittenPage.payload().path("origin");
+        assertThat(origin.path("overwrite").asBoolean()).isTrue();
+        // References remain resolvable trivially — the template's uuid never changed.
+        assertThat(overwrittenPage.payload().path("templateRef").asText()).isEqualTo(pageTemplate.uuid().toString());
     }
 
     /**
-     * Partial collision (feature cross-project-import-identity, M9.3.1, the hazard called out in
-     * that task's notes): when only SOME of an archive's UUIDs already exist in the target
-     * project, each asset is handled independently — a preserved-UUID asset and a
-     * remapped-UUID asset must still resolve correctly against each other afterward.
+     * Partial collision: when only SOME of an archive's UUIDs already exist in the target
+     * project, each asset is handled independently — a freshly-created asset and an
+     * overwritten-in-place asset must still resolve correctly against each other afterward.
      */
     @Test
-    void partialCollisionPreservesSomeAssetsAndRemapsOthersWithReferencesStillResolving() {
+    void partialCollisionOverwritesOnlyTheCollidingAssetAndCreatesTheOther() {
         Fixture source = newFixture("exp_pc_src", "Partial Collision Source");
         TemplateView pageTemplate = templateService.create(
                 new CreateTemplateCommand(
@@ -300,32 +292,33 @@ class ProjectExportImportIntegrationTest {
 
         Fixture target = newFixture("exp_pc_tgt", "Partial Collision Target");
         // Force only the PAGE's uuid to already exist in the target project (direct repository
-        // access, mirroring how M9.2.2's cross-project-collision test forces a collision) — the
-        // template's uuid is left free, so it takes the preserve branch while the page takes the
-        // collision branch.
+        // access, mirroring how M9.2.2's cross-project-collision test forces a collision), as the
+        // SAME type (PAGE) the archive declares — a same-type collision overwrites, it doesn't
+        // block. The template's uuid is left free, so it takes the create branch while the page
+        // takes the overwrite branch.
         assetRepository.save(new Asset(
-                page.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-collision",
+                page.uuid(), target.project().getId(), AssetType.PAGE, "pre-existing-collision",
                 java.time.Instant.now(), target.user().getId()));
 
         ImportResult result = exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
-        // page template, page — the two fixed template folders (spec M13.1.2) resolve onto the
-        // target project's own existing copies instead of being created (spec M13.2.2).
-        assertThat(result.importedAssetCount()).isEqualTo(2);
+        // page template created new; page overwritten in place. The two fixed template folders
+        // (spec M13.1.2) resolve onto the target project's own existing copies as always.
+        assertThat(result.importedAssetCount()).isEqualTo(1);
+        assertThat(result.updatedAssetCount()).isEqualTo(1);
 
         Map<String, UUID> targetPageTemplates = uidsByType(target.project().getId(), AssetType.PAGE_TEMPLATE);
         UUID importedTemplateUuid = targetPageTemplates.get("landing");
         assertThat(importedTemplateUuid).isEqualTo(pageTemplate.uuid()); // preserved: no collision
 
-        Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
-        UUID importedPageUuid = targetPages.get("home");
-        assertThat(importedPageUuid).isNotEqualTo(page.uuid()); // remapped: collided with the forced pre-existing row
-
-        AssetVersionView importedPage = assetService.requireCurrent(target.project().getId(), importedPageUuid);
-        assertThat(importedPage.payload().path("origin").path("sourceUuid").asText())
-                .isEqualTo(page.uuid().toString());
-        // Cross-reference resolution: the remapped page's templateRef must still point at the
+        // The page keeps its original uuid — overwritten in place, not remapped — and its uid is
+        // untouched by the import (Asset.uid is identity, changed only via explicit rename), so
+        // it's still "pre-existing-collision" here, not re-derived from the archive's "home".
+        AssetVersionView overwrittenPage = assetService.requireCurrent(target.project().getId(), page.uuid());
+        assertThat(overwrittenPage.uid()).isEqualTo("pre-existing-collision");
+        assertThat(overwrittenPage.payload().path("origin").path("overwrite").asBoolean()).isTrue();
+        // Cross-reference resolution: the overwritten page's templateRef must still point at the
         // preserved template's (unchanged) uuid.
-        assertThat(importedPage.payload().path("templateRef").asText()).isEqualTo(importedTemplateUuid.toString());
+        assertThat(overwrittenPage.payload().path("templateRef").asText()).isEqualTo(importedTemplateUuid.toString());
     }
 
     /**
@@ -591,9 +584,10 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
-     * Same-project re-import (feature `import-conflicts`, `M10.2.2`): every asset in an
-     * archive analyzed against its own source project must surface as DUPLICATE_UUID,
-     * since every one of those UUIDs already exists there.
+     * Same-project re-import: every asset in an archive analyzed against its own source project
+     * must surface as DUPLICATE_UUID, since every one of those UUIDs already exists there as the
+     * same type — but this is a warning, not a blocking conflict, since the import always wins
+     * by overwriting rather than being refused.
      */
     @Test
     void analyzeImportFlagsDuplicateUuidForEveryAssetWhenReimportedIntoSourceProject() {
@@ -611,7 +605,9 @@ class ProjectExportImportIntegrationTest {
                 .filter(c -> c.type() == ConflictType.DUPLICATE_UUID)
                 .toList();
         assertThat(duplicateConflicts).hasSize(assets.size());
-        assertThat(report.hasBlocking()).isTrue();
+        assertThat(duplicateConflicts).allSatisfy(
+                c -> assertThat(c.severity()).isEqualTo(ConflictSeverity.WARNING));
+        assertThat(report.hasBlocking()).isFalse();
     }
 
     /**
@@ -1196,12 +1192,12 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
-     * {@code skipExistingImplicit=false} (the default) behaves exactly as pre-M11 code (feature
-     * `selection-provenance`, `M11.2.2`): the same archive/collision setup as the test above, but
-     * with the option off, still mints a fresh UUID for the colliding implicit folder.
+     * {@code skipExistingImplicit=false} (the default): the same archive/collision setup as the
+     * test above, but with the option off, the colliding implicit folder is overwritten in place
+     * (the import always wins) rather than being reused untouched.
      */
     @Test
-    void skipExistingImplicitOffMintsFreshUuidJustLikePreM11Behavior() {
+    void skipExistingImplicitOffOverwritesTheCollidingImplicitFolder() {
         Fixture source = newFixture("skip_off_src", "Skip Existing Implicit Off Source");
         AssetVersionView topFolder = assetService.create(
                 new CreateAssetCommand(source.project().getId(), AssetType.FOLDER, "Top", null,
@@ -1222,21 +1218,29 @@ class ProjectExportImportIntegrationTest {
         ImportResult result = exportImportService.importProject(
                 target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
 
-        // Both the (freshly-UUID'd) implicit folder and the explicit leaf page get created.
-        assertThat(result.importedAssetCount()).isEqualTo(2);
+        // The implicit folder is overwritten in place (not created); the explicit leaf page is
+        // created new.
+        assertThat(result.importedAssetCount()).isEqualTo(1);
+        assertThat(result.updatedAssetCount()).isEqualTo(1);
         Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
         UUID importedPageUuid = targetPages.get("leaf");
         AssetVersionView importedPage = assetService.requireCurrent(target.project().getId(), importedPageUuid);
         JsonNode origin = importedPage.payload().path("origin");
-        // The page itself didn't collide, so its own uuid was preserved and it carries no
-        // sourceUuid re-keying marker — but its *parent folder* did collide and was re-keyed.
-        assertThat(origin.path("sourceUuid").isMissingNode()).isTrue();
+        // The page itself didn't collide, so it carries no overwrite marker — but its *parent
+        // folder* did collide and was overwritten, keeping the original uuid.
+        assertThat(origin.path("overwrite").isMissingNode()).isTrue();
+        Asset overwrittenFolder =
+                assetRepository.findByProjectIdAndUuid(target.project().getId(), topFolder.uuid()).orElseThrow();
+        AssetVersionView overwrittenFolderVersion =
+                assetService.requireCurrent(target.project().getId(), overwrittenFolder.getUuid());
+        assertThat(overwrittenFolderVersion.payload().path("origin").path("overwrite").asBoolean()).isTrue();
     }
 
     /**
      * An explicit asset is never eligible for the skip path (feature `selection-provenance`,
      * `M11.2.2`): even with {@code skipExistingImplicit=true}, a collision on an asset the
-     * caller explicitly picked must still mint a fresh UUID exactly as before.
+     * caller explicitly picked must still be overwritten in place exactly as it would be with
+     * the option off — "skip" only ever applies to implicit (ancestor-only) collisions.
      */
     @Test
     void skipExistingImplicitNeverSkipsAnExplicitlyPickedCollidingAsset() {
@@ -1250,19 +1254,16 @@ class ProjectExportImportIntegrationTest {
 
         Fixture target = newFixture("skip_explicit_tgt", "Skip Existing Implicit Explicit Target");
         assetRepository.save(new Asset(
-                page.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-collision",
+                page.uuid(), target.project().getId(), AssetType.PAGE, "pre-existing-collision",
                 java.time.Instant.now(), target.user().getId()));
 
         ImportResult result = exportImportService.importProject(
                 target.project().getId(), archive, target.ctx(), new ImportOptions(true));
 
-        assertThat(result.importedAssetCount()).isEqualTo(1);
-        Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
-        UUID importedPageUuid = targetPages.get("home");
-        assertThat(importedPageUuid).isNotEqualTo(page.uuid()); // still remapped, not reused/skipped
-        AssetVersionView importedPage = assetService.requireCurrent(target.project().getId(), importedPageUuid);
-        assertThat(importedPage.payload().path("origin").path("sourceUuid").asText())
-                .isEqualTo(page.uuid().toString());
+        assertThat(result.importedAssetCount()).isEqualTo(0);
+        assertThat(result.updatedAssetCount()).isEqualTo(1);
+        AssetVersionView overwrittenPage = assetService.requireCurrent(target.project().getId(), page.uuid());
+        assertThat(overwrittenPage.payload().path("origin").path("overwrite").asBoolean()).isTrue();
     }
 
     /**
@@ -1306,13 +1307,13 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
-     * Regression: {@code ImportOptions.DEFAULT} matches pre-M11 behavior byte-for-byte for the
-     * pre-existing collision tests already in this file (feature `selection-provenance`,
-     * `M11.2.2`) — re-runs {@code partialCollisionPreservesSomeAssetsAndRemapsOthersWithReferencesStillResolving}'s
-     * scenario explicitly through {@code ImportOptions.DEFAULT} and checks the same outcomes.
+     * Regression: {@code ImportOptions.DEFAULT} (i.e. {@code skipExistingImplicit=false}) still
+     * overwrites — never skips — a same-type collision, explicit or not — re-runs {@code
+     * partialCollisionOverwritesOnlyTheCollidingAssetAndCreatesTheOther}'s scenario explicitly
+     * through {@code ImportOptions.DEFAULT} and checks the same outcome.
      */
     @Test
-    void importOptionsDefaultMatchesPreM11BehaviorForExistingCollisionScenario() {
+    void importOptionsDefaultOverwritesExistingCollisionScenario() {
         Fixture source = newFixture("skip_regress_src", "Skip Existing Implicit Regression Source");
         TemplateView pageTemplate = templateService.create(
                 new CreateTemplateCommand(
@@ -1336,18 +1337,19 @@ class ProjectExportImportIntegrationTest {
 
         Fixture target = newFixture("skip_regress_tgt", "Skip Existing Implicit Regression Target");
         assetRepository.save(new Asset(
-                page.uuid(), target.project().getId(), AssetType.FOLDER, "pre-existing-collision",
+                page.uuid(), target.project().getId(), AssetType.PAGE, "pre-existing-collision",
                 java.time.Instant.now(), target.user().getId()));
 
         ImportResult result = exportImportService.importProject(
                 target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
-        // page template, page — the two fixed template folders (spec M13.1.2) resolve onto the
-        // target project's own existing copies instead of being created (spec M13.2.2).
-        assertThat(result.importedAssetCount()).isEqualTo(2);
+        // page template created new; the colliding page overwritten in place. The two fixed
+        // template folders (spec M13.1.2) resolve onto the target project's own existing copies
+        // as always.
+        assertThat(result.importedAssetCount()).isEqualTo(1);
+        assertThat(result.updatedAssetCount()).isEqualTo(1);
 
-        Map<String, UUID> targetPages = uidsByType(target.project().getId(), AssetType.PAGE);
-        UUID importedPageUuid = targetPages.get("home");
-        assertThat(importedPageUuid).isNotEqualTo(page.uuid());
+        AssetVersionView overwrittenPage = assetService.requireCurrent(target.project().getId(), page.uuid());
+        assertThat(overwrittenPage.payload().path("origin").path("overwrite").asBoolean()).isTrue();
     }
 
     // ---- M13.2.1 Template folder coverage ----
@@ -1503,9 +1505,9 @@ class ProjectExportImportIntegrationTest {
      * project (feature `template-store-folders`, `M13.2.2`) must resolve the archive's two fixed
      * folders onto the target project's OWN existing fixed folders instead of creating
      * duplicates: exactly one FOLDER with uid {@code page_templates} and one with uid {@code
-     * section_templates} must exist afterward, with all templates re-imported as fresh assets
-     * (since every uuid in the archive already exists in this project) nested correctly beneath
-     * the existing fixed folders.
+     * section_templates} must exist afterward, with every template overwritten in place (since
+     * every uuid in the archive already exists in this project, as the same type) still nested
+     * correctly beneath the existing fixed folders.
      */
     @Test
     void reimportingWholeTemplatesStoreIntoSameProjectResolvesOntoExistingFixedFoldersWithNoDuplicates() {
@@ -1537,18 +1539,17 @@ class ProjectExportImportIntegrationTest {
         assertThat(sectionTemplateFolders).hasSize(1);
         assertThat(sectionTemplateFolders.get(0).getUuid()).isEqualTo(sectionTemplatesUuid);
 
-        // Every re-imported template got a fresh uuid (collision path, since the source project
-        // already had every one of the archive's uuids) but still landed under the SAME fixed
-        // folders / their re-created subfolder structure.
+        // Every re-imported template collided with itself (same uuid, same project) and was
+        // overwritten in place — no duplicate was created, and each still lives under the SAME
+        // fixed folder / subfolder structure it started in.
         Map<String, UUID> pageTemplatesAfter = uidsByType(source.project().getId(), AssetType.PAGE_TEMPLATE);
         Map<String, UUID> sectionTemplatesAfter = uidsByType(source.project().getId(), AssetType.SECTION_TEMPLATE);
-        assertThat(pageTemplatesAfter).hasSize(2); // original + reimported copy
-        assertThat(sectionTemplatesAfter).hasSize(2);
-        UUID reimportedPageTemplateUuid = pageTemplatesAfter.values().stream()
-                .filter(u -> !u.equals(pageTemplate.uuid())).findFirst().orElseThrow();
-        AssetVersionView reimportedPageTemplate =
-                assetService.requireCurrent(source.project().getId(), reimportedPageTemplateUuid);
-        assertThat(reimportedPageTemplate.folderPath()).startsWith(
+        assertThat(pageTemplatesAfter).hasSize(1).containsValue(pageTemplate.uuid());
+        assertThat(sectionTemplatesAfter).hasSize(1).containsValue(sectionTemplate.uuid());
+        AssetVersionView overwrittenPageTemplate =
+                assetService.requireCurrent(source.project().getId(), pageTemplate.uuid());
+        assertThat(overwrittenPageTemplate.payload().path("origin").path("overwrite").asBoolean()).isTrue();
+        assertThat(overwrittenPageTemplate.folderPath()).startsWith(
                 assetService.requireCurrent(source.project().getId(), pageTemplatesUuid).folderPath());
     }
 

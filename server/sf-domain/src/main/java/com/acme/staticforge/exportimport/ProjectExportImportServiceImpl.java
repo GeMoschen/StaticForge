@@ -48,6 +48,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -328,22 +329,15 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         ExportManifest manifest = content.manifest();
 
         // Re-run the exact same conflict detection analyzeImport uses, unconditionally — a
-        // caller that skipped straight past a blocking analyzeImport report (or never called
-        // it at all) must still be refused here, before any write happens. DUPLICATE_UUID is
-        // deliberately excluded from the set that actually aborts the commit: unlike the other
-        // BLOCKING types, it already has an established, safe automatic resolution right here in
-        // importProject (mint a fresh UUIDv7 instead of the colliding source UUID — feature
-        // cross-project-import-identity, M9.3.1, see the remap/collided map below), so reporting
-        // it as BLOCKING in analyzeImport's UI-facing report does not mean commit must refuse it.
+        // caller that skipped straight past a blocking analyzeImport report (or never called it
+        // at all) must still be refused here, before any write happens. A same-type
+        // DUPLICATE_UUID is never in this set (its severity is WARNING, not BLOCKING — the import
+        // always wins by overwriting, see the remap/overwritten map below); a
+        // DUPLICATE_UUID_TYPE_MISMATCH always is, since there is no safe automatic resolution for
+        // it.
         ConflictReport report = detectConflicts(targetProjectId, content, options);
-        // NOTE: this filter is unconditional and independent of ImportOptions.skipExistingImplicit
-        // (feature selection-provenance, M11.2.2). skipExistingImplicit only changes which
-        // DUPLICATE_UUID conflicts detectConflicts *reports* (report-visibility filtering, above);
-        // it must never be folded into this "does not abort a commit" filter, since DUPLICATE_UUID
-        // always has a safe automatic resolution here (mint-fresh-UUID, or — when the flag and
-        // asset provenance allow — reuse-existing) regardless of whether it was reported.
         List<ImportConflict> hardBlocking = report.conflicts().stream()
-                .filter(c -> c.severity() == ConflictSeverity.BLOCKING && c.type() != ConflictType.DUPLICATE_UUID)
+                .filter(c -> c.severity() == ConflictSeverity.BLOCKING)
                 .toList();
         assertNoBlockingConflicts(new ConflictReport(hardBlocking));
 
@@ -352,30 +346,29 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Revision revision = revisionService.allocate(
                 targetProjectId, ChangeType.IMPORT, ctx.comment(), ctx.userId());
 
-        // Preserve each asset's source UUID by default (feature cross-project-import-identity,
-        // M9.3.1) — a fresh UUIDv7 is only minted when the source UUID already exists in the
-        // *target* project, which is now a real, per-asset possibility rather than an impossible
-        // case, since M9.1 loosened asset.uuid uniqueness to (project_id, uuid). A third branch
-        // (feature selection-provenance, M11.2.2): when skipExistingImplicit is on and the
-        // colliding asset was only implicitly included (an ancestor folder, never an explicit
-        // pick — asset.isExplicit() is false), reuse the existing target asset instead of
-        // minting a duplicate; such assets are recorded in `skipped` and never passed to
-        // createImportedAsset below.
+        // Every asset keeps its source UUID (feature cross-project-import-identity, M9.3.1) —
+        // this service never mints a substitute identity for a colliding asset, since doing so
+        // would sever the cross-project identity M9 exists to preserve. Three outcomes per asset:
+        // (1) no collision — a brand-new asset is created under its source UUID; (2) a same-type
+        // collision that was only implicitly included (an ancestor folder, never an explicit pick
+        // — asset.isExplicit() is false) and skipExistingImplicit is on (feature
+        // selection-provenance, M11.2.2) — the existing target asset is left untouched and reused
+        // as-is, recorded in `skipped`; (3) any other same-type collision — the import always
+        // wins: the existing asset's content is overwritten with a new version, recorded in
+        // `overwritten`. A type-mismatched collision never reaches this loop at all — it was
+        // already refused above by assertNoBlockingConflicts.
         Map<String, UUID> remap = new HashMap<>();
-        Set<String> collided = new HashSet<>();
+        Set<String> overwritten = new HashSet<>();
         Set<String> skipped = new HashSet<>();
         for (ExportedAsset asset : assets) {
             String key = asset.uuid().toLowerCase();
             UUID sourceUuid = UUID.fromString(asset.uuid());
-            java.util.Optional<Asset> existing = assetRepository.findByProjectIdAndUuid(targetProjectId, sourceUuid);
+            Optional<Asset> existing = assetRepository.findByProjectIdAndUuid(targetProjectId, sourceUuid);
+            remap.put(key, sourceUuid);
             if (existing.isPresent() && options.skipExistingImplicit() && !asset.isExplicit()) {
-                remap.put(key, sourceUuid);
                 skipped.add(key);
             } else if (existing.isPresent()) {
-                remap.put(key, UuidV7.generate());
-                collided.add(key);
-            } else {
-                remap.put(key, sourceUuid);
+                overwritten.add(key);
             }
         }
 
@@ -461,22 +454,26 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
         Instant importedAt = Instant.now();
         int created = 0;
+        int updated = 0;
         for (ExportedAsset asset : order(assets, rootAsset)) {
-            if (asset == rootAsset
-                    || skipped.contains(asset.uuid().toLowerCase())
-                    || fixedFolderKeys.contains(asset.uuid().toLowerCase())) {
+            String key = asset.uuid().toLowerCase();
+            if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key)) {
                 continue;
             }
-            createImportedAsset(targetProjectId, asset, remap, collided, idMaps, manifest, importedAt,
+            createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest, importedAt,
                     revision.getRevisionId(), ctx);
-            created++;
+            if (overwritten.contains(key)) {
+                updated++;
+            } else {
+                created++;
+            }
         }
 
         if (content.settings() != null) {
             importSettings(targetProjectId, content.settings());
         }
 
-        return new ImportResult(manifest.sourceProjectKey(), created, importedShas.size());
+        return new ImportResult(manifest.sourceProjectKey(), created, updated, importedShas.size());
     }
 
     @Override
@@ -513,21 +510,33 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         for (ExportedAsset asset : assets) {
             String label = asset.displayName() != null ? asset.displayName() : asset.uid();
 
-            if (assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(asset.uuid())).isPresent()) {
-                // Report-visibility filtering only (feature selection-provenance, M11.2.2),
-                // applied as its own distinct step: skipExistingImplicit hides a DUPLICATE_UUID
-                // conflict from this report when the colliding asset was never one of the
-                // caller's explicit picks (asset.isExplicit() is false). This is entirely
-                // separate from — and must never be merged with — importProject's unconditional
-                // hardBlocking filter, which excludes ALL DUPLICATE_UUID conflicts from what can
-                // abort a commit regardless of this option or of report visibility.
+            Optional<Asset> existingAsset =
+                    assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(asset.uuid()));
+            if (existingAsset.isPresent() && existingAsset.get().getAssetType() != AssetType.valueOf(asset.type())) {
+                // Type mismatch is always reported and always blocking, regardless of
+                // skipExistingImplicit — it can never be resolved by overwriting or skipping,
+                // and silently importing a different-typed asset under an existing UUID would
+                // corrupt the target project's identity model.
+                conflicts.add(ImportConflict.of(
+                        ConflictType.DUPLICATE_UUID_TYPE_MISMATCH,
+                        asset.uuid(),
+                        label,
+                        "An asset with this UUID already exists in the target project as a different type ("
+                                + existingAsset.get().getAssetType() + " vs. " + asset.type() + ").",
+                        asset.isExplicit()));
+            } else if (existingAsset.isPresent()) {
+                // Report-visibility filtering only (feature selection-provenance, M11.2.2):
+                // skipExistingImplicit hides a DUPLICATE_UUID conflict from this report when the
+                // colliding asset was never one of the caller's explicit picks (asset.isExplicit()
+                // is false) — such assets are skipped on import, never overwritten, so there is
+                // nothing here worth warning about.
                 boolean suppressed = options.skipExistingImplicit() && !asset.isExplicit();
                 if (!suppressed) {
                     conflicts.add(ImportConflict.of(
                             ConflictType.DUPLICATE_UUID,
                             asset.uuid(),
                             label,
-                            "An asset with this UUID already exists in the target project.",
+                            "An asset with this UUID already exists in the target project and will be overwritten by the import.",
                             asset.isExplicit()));
                 }
             }
@@ -652,12 +661,40 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         }
     }
 
+    /**
+     * Writes one imported asset — either a brand-new {@link Asset} row (the common case), or,
+     * for a same-type {@code uuid} collision ({@code overwritten}), a new {@link AssetVersion}
+     * on the *existing* asset row: the import always wins, replacing the target's current
+     * content rather than duplicating the archive's copy under a freshly-minted UUID. Either
+     * way {@code uid} is never re-derived from the archive on overwrite — {@code Asset.uid} is
+     * identity, changed only through the explicit rename flow, never as a side effect of import.
+     */
     private void createImportedAsset(
-            long projectId, ExportedAsset asset, Map<String, UUID> remap, Set<String> collided, IdMaps idMaps,
+            long projectId, ExportedAsset asset, Map<String, UUID> remap, Set<String> overwritten, IdMaps idMaps,
             ExportManifest manifest, Instant importedAt, long revision, RevisionContext ctx) {
         AssetType type = AssetType.valueOf(asset.type());
         UUID uuid = remap.get(asset.uuid().toLowerCase());
-        String uid = uidGenerator.deriveUid(asset.displayName(), projectId, type);
+        boolean overwrite = overwritten.contains(asset.uuid().toLowerCase());
+
+        long assetId;
+        String uid;
+        String changeAction;
+        if (overwrite) {
+            Asset existing = assetRepository.findByProjectIdAndUuid(projectId, uuid)
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Existing asset not found for overwrite.")));
+            assetId = existing.getId();
+            uid = existing.getUid();
+            changeAction = "UPDATE";
+            assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(assetId).ifPresent(current -> {
+                current.setValidToRevision(revision);
+                assetVersionRepository.save(current);
+            });
+        } else {
+            uid = uidGenerator.deriveUid(asset.displayName(), projectId, type);
+            Asset saved = assetRepository.save(new Asset(uuid, projectId, type, uid, importedAt, ctx.userId()));
+            assetId = saved.getId();
+            changeAction = "CREATE";
+        }
 
         Long parentFolderId = idMaps.idOf(asset.parentFolderUuid());
         String parentPath = idMaps.pathOf(asset.parentFolderUuid());
@@ -672,17 +709,16 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         origin.put("from", "import");
         origin.put("sourceProjectKey", manifest.sourceProjectKey());
         origin.put("importedAt", importedAt.toString());
-        if (collided.contains(asset.uuid().toLowerCase())) {
+        if (overwrite) {
             // Debugging/audit metadata only (§6.1) — the DB-level (project_id, uuid) existence
-            // check above is what actually drove the collision path, this just lets a human
-            // inspecting the asset's history see it was re-keyed on import.
-            origin.put("sourceUuid", asset.uuid());
+            // check above is what actually drove the overwrite path, this just lets a human
+            // inspecting the asset's history see this version replaced pre-existing content.
+            origin.put("overwrite", true);
         }
 
-        Asset saved = assetRepository.save(new Asset(uuid, projectId, type, uid, importedAt, ctx.userId()));
-        idMaps.put(asset.uuid().toLowerCase(), saved.getId(), folderPath);
+        idMaps.put(asset.uuid().toLowerCase(), assetId, folderPath);
 
-        AssetVersion version = new AssetVersion(saved.getId(), revision, asset.displayName(), payload, ctx.userId(), importedAt);
+        AssetVersion version = new AssetVersion(assetId, revision, asset.displayName(), payload, ctx.userId(), importedAt);
         version.setFolderId(parentFolderId);
         version.setFolderPath(folderPath);
         version.setTemplateAssetId(templateAssetId);
@@ -693,7 +729,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         assetVersionRepository.save(version);
 
         revisionService.appendSummary(projectId, revision,
-                new AssetChange(uuid.toString(), type.name(), uid, "CREATE", List.of(), false));
+                new AssetChange(uuid.toString(), type.name(), uid, changeAction, List.of(), false));
     }
 
     private void importBlobs(JsonNode payload, Map<String, byte[]> archiveBlobs, Set<String> importedShas) {

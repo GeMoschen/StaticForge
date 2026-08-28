@@ -5,6 +5,7 @@ import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
@@ -108,31 +109,7 @@ public class PageRenderService {
      */
     public String renderPage(
             long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl) {
-        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, null);
-    }
-
-    /**
-     * Renders an unsaved (live) page payload that is never persisted (spec §19.1).
-     *
-     * @param unsavedPayload the payload carrying {@code content} and {@code bodies}
-     * @param pageTemplateUuid the page template to render against
-     * @param channel the channel key
-     * @param rewriteLinks whether {@code $CMS_REF} targets are rewritten to preview URLs
-     */
-    public String renderLive(
-            long projectId, JsonNode unsavedPayload, UUID pageTemplateUuid, String channel, boolean rewriteLinks) {
-        return renderLive(projectId, unsavedPayload, pageTemplateUuid, channel, rewriteLinks, null);
-    }
-
-    /** {@code renderLive} variant taking an explicit API base for link rewriting. */
-    public String renderLive(
-            long projectId,
-            JsonNode unsavedPayload,
-            UUID pageTemplateUuid,
-            String channel,
-            boolean rewriteLinks,
-            String baseUrl) {
-        return doRender(projectId, pageTemplateUuid, unsavedPayload, channel, rewriteLinks, baseUrl);
+        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl);
     }
 
     /**
@@ -152,19 +129,11 @@ public class PageRenderService {
     // ------------------------------------------------------------------
 
     private String doRender(
-            long projectId,
-            UUID pageUuid,
-            Long revision,
-            String channel,
-            boolean rewriteLinks,
-            String baseUrl,
-            JsonNode livePayload) {
+            long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl) {
         String projectKey = projectKeyOf(projectId);
 
         PageView page;
-        if (livePayload != null) {
-            page = PageView.fromLivePayload(pageUuid, livePayload);
-        } else if (revision == null) {
+        if (revision == null) {
             page = PageView.from(assetService.requireCurrent(projectId, pageUuid));
         } else {
             AssetVersionView view = assetService
@@ -172,18 +141,6 @@ public class PageRenderService {
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found at revision " + revision + ".")));
             page = PageView.from(view);
         }
-        return renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
-    }
-
-    private String doRender(
-            long projectId,
-            UUID pageTemplateUuid,
-            JsonNode unsavedPayload,
-            String channel,
-            boolean rewriteLinks,
-            String baseUrl) {
-        String projectKey = projectKeyOf(projectId);
-        PageView page = PageView.fromLivePayload(pageTemplateUuid, unsavedPayload);
         return renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
     }
 
@@ -467,8 +424,21 @@ public class PageRenderService {
             if (type == null) {
                 return Optional.empty();
             }
-            return assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
+            Optional<UUID> resolved =
+                    assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
+            if (resolved.isPresent() && "nav".equals(assetType) && !isNavigationFolder(projectId, resolved.get())) {
+                // Same rationale as GenerationRenderer#isNavigationFolder: a folder's uid is
+                // unique per (project, FOLDER), not per store, so "root" is the shared hidden
+                // folder that parents every store (Templates/Pages/Media/Navigation alike), not
+                // the Navigation store's own root — reject anything not actually NAVIGATION-scoped.
+                return Optional.empty();
+            }
+            return resolved;
         };
+    }
+
+    private boolean isNavigationFolder(long projectId, UUID folderUuid) {
+        return FolderScope.fromPayload(assetService.requireCurrent(projectId, folderUuid).payload()) == FolderScope.NAVIGATION;
     }
 
     /**
@@ -575,13 +545,6 @@ public class PageRenderService {
                     view.folderPath() == null ? "" : view.folderPath(),
                     String.valueOf(view.validFromRevision()),
                     templateRef.isBlank() ? null : UUID.fromString(templateRef),
-                    payload == null ? null : payload.get("content"),
-                    payload == null ? null : payload.get("bodies"));
-        }
-
-        static PageView fromLivePayload(UUID pageTemplateUuid, JsonNode payload) {
-            return new PageView(
-                    null, "", "", "", "", pageTemplateUuid,
                     payload == null ? null : payload.get("content"),
                     payload == null ? null : payload.get("bodies"));
         }

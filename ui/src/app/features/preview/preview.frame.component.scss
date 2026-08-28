@@ -38,15 +38,6 @@
   color: var(--sf-surface);
 }
 
-.preview-toolbar__toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-1);
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-  cursor: pointer;
-}
-
 .preview-stage {
   flex: 1;
   min-height: 0;

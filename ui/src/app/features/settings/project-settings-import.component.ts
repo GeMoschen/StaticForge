@@ -21,6 +21,7 @@ import { SfDropTargetDirective } from '../../shared/directives/sf-drop-target.di
 const CONFLICT_ICONS: Record<string, string> = {
   PROTOCOL_VERSION_MISMATCH: 'warning',
   DUPLICATE_UUID: 'content_copy',
+  DUPLICATE_UUID_TYPE_MISMATCH: 'report',
   MISSING_TEMPLATE_REFERENCE: 'link_off',
   MISSING_PARENT_FOLDER: 'folder_off',
   SETTINGS_KEY_COLLISION: 'settings',
@@ -200,8 +201,11 @@ export class ProjectSettingsImportComponent {
         // so without this every Pages/Media/Navigation/Templates tree keeps showing pre-import
         // folder structure until a full page reload re-fetches the store from scratch.
         this.store.loadFor(this.projectKey(), true).subscribe();
+        const updated = result.updatedAssetCount ?? 0;
         this.toasts.show(
-          `Imported ${result.importedAssetCount ?? 0} asset(s), ${result.importedBlobCount ?? 0} blob(s)`,
+          `Imported ${result.importedAssetCount ?? 0} asset(s)`
+            + (updated > 0 ? `, overwrote ${updated}` : '')
+            + `, ${result.importedBlobCount ?? 0} blob(s)`,
           'success',
         );
       },

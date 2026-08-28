@@ -93,14 +93,6 @@ export class PageEditorComponent {
   protected readonly error = signal<string | null>(null);
   protected readonly paletteBody = signal<BodyDefinition | null>(null);
 
-  protected readonly liveTemplateUuid = computed(
-    () => this.page()?.template?.uuid ?? '',
-  );
-  protected readonly liveContent = signal<Record<string, unknown>>({});
-  protected readonly liveBodies = computed<Record<string, unknown>>(
-    () => (this.page()?.bodies ?? {}) as unknown as Record<string, unknown>,
-  );
-
   private readonly sectionDefs = signal<Record<string, ContentDefinition>>({});
   private readonly sectionUids = signal<Record<string, string>>({});
   protected readonly drag = signal<{ body: string; index: number } | null>(null);
@@ -369,9 +361,6 @@ export class PageEditorComponent {
       form.disable();
     }
     this.fieldsForm.set(form);
-    this.liveContent.set(
-      this.fb.valueOf(def, this.fieldsForm() ?? undefined),
-    );
     if (!this.readOnly()) {
       this.wireFields();
     }
@@ -383,9 +372,6 @@ export class PageEditorComponent {
     if (form) {
       this.fieldsSub = form.valueChanges.subscribe(() => {
         this.autosave.markDirty();
-        this.liveContent.set(
-          this.fb.valueOf(this.contentDefinition() ?? EMPTY_DEF, form),
-        );
       });
     }
   }

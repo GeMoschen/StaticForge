@@ -172,10 +172,8 @@
       <div class="page-editor__preview" [style.flex]="previewFlex()">
         <sf-preview-frame
           [projectKey]="projectKey()"
-          [templateUuid]="liveTemplateUuid()"
-          [content]="liveContent()"
-          [bodies]="liveBodies()"
           [pageUuid]="uuid()"
+          [revision]="autosave.revision()"
           (sectionClick)="onPreviewSectionClick($event)"
         />
       </div>

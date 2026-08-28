@@ -1393,8 +1393,7 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 
 | Mode | Description | Path |
 |---|---|---|
-| **Live preview** | Renders the page from unsaved editor state; used in the split-view editor | `POST /projects/{p}/preview/page` |
-| **Saved preview** | Renders the current stored revision | `GET /projects/{p}/preview/pages/{uuid}` |
+| **Page preview** | Renders the page's current stored revision; used in the split-view editor, refreshed after each autosave | `GET /projects/{p}/preview/pages/{uuid}` |
 | **Revision preview** | Renders any past revision | `GET …?revision=1841` |
 | **Section preview** | Renders one section instance in isolation with sample surroundings | `POST /projects/{p}/preview/section` |
 | **Channel preview** | Any of the above in a non-default channel; non-HTML channels render as syntax-highlighted text | `?channel=markdown` |
@@ -1405,7 +1404,7 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 - Preview output is served from a dedicated, sandboxed route: `Content-Security-Policy: sandbox allow-scripts allow-same-origin`, `X-Frame-Options` allowing only the app origin, and a per-request nonce.
 - `$CMS_REF` targets are rewritten to preview URLs (`/api/v1/projects/{p}/preview/pages/{uuid}`) so navigation inside the preview iframe stays inside the CMS. A "preview link rewriting" toggle lets developers inspect raw output paths.
 - Media references resolve to the live media endpoint, so unpublished images appear immediately.
-- Live preview is debounced (400 ms) and cancellable; the request carries the *unsaved* payload so nothing is persisted.
+- The client never sends rendered data (content, bodies, or meta) to preview a page — only the page's `uuid` and, optionally, a `revision` to pin to. The server resolves everything else from the database, the same way it would for generation, so there is exactly one source of truth for what a page currently contains. In the split-view editor this means the preview pane reflects the page's state as of its last autosave, not literally-unsaved keystrokes; it is debounced (400 ms) and refetches whenever autosave completes.
 
 ### 19.3 In-app affordances
 
@@ -2282,7 +2281,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 
 ### 25.6 Critical E2E journeys
 
-1. Log in → pick project → open page → change headline → see live preview update → save → revision appears in the spine.
+1. Log in → pick project → open page → change headline → autosave fires → preview updates to match → revision appears in the spine.
 2. Create a page from a template, add two sections, reorder, publish, verify output file content.
 3. Upload an image, set alt text and focal point, reference it in a section, generate, verify `srcset` and variant files.
 4. Create a `markdown` channel, copy the HTML template, adjust, generate both channels, verify two files.
@@ -2314,7 +2313,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 |---|---|---|
 | Page load (editor, 20 sections) | 300 ms | 800 ms |
 | Content save (one revision) | 40 ms | 120 ms |
-| Live preview render | 120 ms | 400 ms |
+| Page preview render | 120 ms | 400 ms |
 | Asset list (50 rows) | 60 ms | 180 ms |
 | Media upload (5 MB, excl. transfer) | 300 ms | 900 ms |
 | Full generation | see §18.6 | |

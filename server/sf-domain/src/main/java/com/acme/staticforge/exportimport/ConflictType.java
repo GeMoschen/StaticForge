@@ -18,13 +18,24 @@ public enum ConflictType {
 
     /**
      * An {@code ExportedAsset.uuid} that already exists as an asset in the *target*
-     * project. Per M9's per-project unique constraint this is a real collision the
-     * importer cannot resolve by silently minting a new UUID — doing so would sever the
-     * cross-project identity M9 exists to preserve. Common when re-importing into the
-     * same project an element was exported from; importing the same UUID into a
-     * *different* project that doesn't already have it is not a conflict at all.
+     * project, as the *same* {@code AssetType}. Not a hard conflict: the import always
+     * wins for a same-UUID/same-type collision — the existing asset's content is
+     * overwritten with a new version rather than the archive's copy being re-keyed onto
+     * a freshly-minted UUID (the old, pre-M15.x behavior), so cross-project identity is
+     * preserved for the common case of re-importing into the project an element was
+     * exported from. Surfaced as a warning purely so the UI can tell the operator which
+     * assets will be overwritten before they commit.
      */
-    DUPLICATE_UUID(ConflictSeverity.BLOCKING),
+    DUPLICATE_UUID(ConflictSeverity.WARNING),
+
+    /**
+     * An {@code ExportedAsset.uuid} that already exists as an asset in the *target*
+     * project, but as a *different* {@code AssetType} than the archive declares. Unlike
+     * a same-type {@link #DUPLICATE_UUID}, this can never be resolved by overwriting
+     * (asset type is fixed for the lifetime of an asset — overwriting would mean
+     * silently changing what kind of thing a UUID identifies) — genuinely blocking.
+     */
+    DUPLICATE_UUID_TYPE_MISMATCH(ConflictSeverity.BLOCKING),
 
     /**
      * An {@code ExportedAsset.templateUuid} that resolves to neither another asset in the

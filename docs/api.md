@@ -124,10 +124,10 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 
 | Method | Path |
 |---|---|
-| `POST` | `/projects/{projectKey}/preview/page` |
-| `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`) |
+| `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data |
 | `POST` | `/projects/{projectKey}/preview/section` |
-| `POST` | `/projects/{projectKey}/preview/share` / `/preview/pages/{uuid}/share` |
+| `GET` | `/projects/{projectKey}/preview/pages/{uuid}/share` (issue a share link) |
+| `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token) |
 
 ## 13. System
 

@@ -17,3 +17,6 @@ sf:
 logging:
   level:
     com.acme.staticforge: DEBUG
+
+server:
+    port: 8081

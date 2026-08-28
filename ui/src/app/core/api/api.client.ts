@@ -463,18 +463,6 @@ export class ApiClient {
 
   // ── Preview ─────────────────────────────────────────────────────────────
 
-  previewPage(
-    projectKey: string,
-    body: S['PreviewPageRequest'],
-    channel?: string,
-  ): Observable<string> {
-    return this.http.post(`${BASE}/projects/${projectKey}/preview/page`, body, {
-      withCredentials: true,
-      params: this.params({ channel }),
-      responseType: 'text',
-    });
-  }
-
   previewSavedPage(
     projectKey: string,
     uuid: string,

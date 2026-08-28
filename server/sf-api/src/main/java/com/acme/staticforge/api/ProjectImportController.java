@@ -56,7 +56,7 @@ public class ProjectImportController {
         ImportResult result = exportImportService.importProject(
                 projectId, bytes(file), ctx, new ImportOptions(skipExistingImplicit));
         return new ImportResultView(
-                result.sourceProjectKey(), result.importedAssetCount(), result.importedBlobCount());
+                result.sourceProjectKey(), result.importedAssetCount(), result.updatedAssetCount(), result.importedBlobCount());
     }
 
     @PostMapping("/import/analyze")

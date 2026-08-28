@@ -18,14 +18,6 @@
     </button>
 
     @if (pageUuid()) {
-      <label class="preview-toolbar__toggle">
-        <input
-          type="checkbox"
-          [checked]="savedMode()"
-          (change)="onSavedToggle($event)"
-        />
-        Saved
-      </label>
       <button type="button" class="preview-toolbar__button" (click)="share()">
         Share
       </button>

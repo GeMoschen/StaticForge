@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate.render;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
@@ -228,8 +229,23 @@ final class GenerationRenderer {
             if (byUid == null) {
                 return Optional.empty();
             }
-            return Optional.ofNullable(byUid.get(uid));
+            UUID resolved = byUid.get(uid);
+            if (resolved != null && "nav".equals(assetType) && !isNavigationFolder(resolved)) {
+                // A folder's uid is unique per (project, FOLDER), not per store — "root" is the
+                // uid of the single shared hidden folder that parents every store (Templates/
+                // Pages/Media/Navigation alike, see PathService#ROOT_UID), so a bare FOLDER-type
+                // uid lookup for a "nav:" reference can resolve outside the Navigation store
+                // entirely. Reject anything that isn't actually NAVIGATION-scoped rather than
+                // silently rendering an unrelated store's subtree as if it were navigation.
+                return Optional.empty();
+            }
+            return Optional.ofNullable(resolved);
         };
+    }
+
+    private boolean isNavigationFolder(UUID uuid) {
+        SnapshotAsset asset = snapshot.assetByUuid(uuid);
+        return asset != null && FolderScope.fromPayload(asset.payload()) == FolderScope.NAVIGATION;
     }
 
     /**

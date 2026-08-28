@@ -12,9 +12,6 @@ import {
   viewChild,
 } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
-import type { components } from '../../core/api/generated/schema.d.ts';
-
-type S = components['schemas'];
 
 type ViewportPreset = 'mobile' | 'tablet' | 'desktop' | 'full';
 
@@ -69,9 +66,13 @@ const HIGHLIGHT_SCRIPT = `<script>
 </script>`;
 
 /**
- * Live preview frame for the split-view page editor. Renders a live (unsaved)
- * or saved page preview inside a sandboxed iframe, with a viewport switcher,
- * section-click forwarding, and a share-link helper.
+ * Preview frame for the split-view page editor. Renders a sandboxed iframe preview of
+ * the page by identity only — {@link pageUuid} and optionally {@link revision} — never
+ * by shipping rendered data from the client: the server resolves content/bodies/meta
+ * from the database (spec §19.1), so this component's job is purely "which page, which
+ * revision, refresh when either changes." Always shows the current stored state (bounded
+ * by the editor's own autosave debounce), never an unsaved/in-memory draft. Also offers a
+ * viewport switcher, section-click forwarding, and a share-link helper.
  */
 @Component({
   selector: 'sf-preview-frame',
@@ -85,10 +86,9 @@ export class SfPreviewFrameComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
 
   readonly projectKey = input.required<string>();
-  readonly templateUuid = input.required<string>();
-  readonly content = input<Record<string, unknown>>({});
-  readonly bodies = input<Record<string, unknown>>({});
-  readonly pageUuid = input<string | null>(null);
+  readonly pageUuid = input.required<string>();
+  /** Pins the preview to a specific revision; omitted/null renders the current one. */
+  readonly revision = input<number | null>(null);
 
   readonly sectionClick = output<string>();
 
@@ -96,7 +96,6 @@ export class SfPreviewFrameComponent implements OnDestroy {
 
   protected readonly html = signal('');
   protected readonly viewport = signal<ViewportPreset>('desktop');
-  protected readonly savedMode = signal(false);
   protected readonly shareUrl = signal<string | null>(null);
 
   private readonly frameRef = viewChild<ElementRef<HTMLIFrameElement>>('frame');
@@ -119,12 +118,8 @@ export class SfPreviewFrameComponent implements OnDestroy {
 
     effect(() => {
       this.projectKey();
-      this.templateUuid();
-      const saved = this.savedMode();
-      if (!saved) {
-        this.content();
-        this.bodies();
-      }
+      this.pageUuid();
+      this.revision();
       this.scheduleDebounced();
     });
   }
@@ -144,10 +139,6 @@ export class SfPreviewFrameComponent implements OnDestroy {
     const el = this.frameRef()?.nativeElement;
     const win = el?.contentWindow;
     win?.postMessage({ type: 'sf-focus-section', instanceId }, '*');
-  }
-
-  protected onSavedToggle(event: Event): void {
-    this.savedMode.set((event.target as HTMLInputElement).checked);
   }
 
   protected refreshManually(): void {
@@ -199,30 +190,11 @@ export class SfPreviewFrameComponent implements OnDestroy {
 
   private fetch(): void {
     const key = this.projectKey();
-    if (!key) {
+    const uuid = this.pageUuid();
+    if (!key || !uuid) {
       return;
     }
-    if (this.savedMode()) {
-      const uuid = this.pageUuid();
-      if (!uuid) {
-        return;
-      }
-      this.api.previewSavedPage(key, uuid, undefined, CHANNEL).subscribe({
-        next: (html) => this.html.set(html),
-        error: () => this.html.set(''),
-      });
-      return;
-    }
-    const templateUuid = this.templateUuid();
-    if (!templateUuid) {
-      return;
-    }
-    const body: S['PreviewPageRequest'] = {
-      templateUuid,
-      content: this.content() as unknown as S['JsonNode'],
-      bodies: this.bodies() as unknown as S['JsonNode'],
-    };
-    this.api.previewPage(key, body, CHANNEL).subscribe({
+    this.api.previewSavedPage(key, uuid, this.revision() ?? undefined, CHANNEL).subscribe({
       next: (html) => this.html.set(html),
       error: () => this.html.set(''),
     });

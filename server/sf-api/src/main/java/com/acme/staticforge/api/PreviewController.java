@@ -1,13 +1,10 @@
 package com.acme.staticforge.api;
 
-import com.acme.staticforge.api.dto.PreviewPageRequest;
 import com.acme.staticforge.api.dto.PreviewSectionRequest;
 import com.acme.staticforge.api.dto.PreviewShareLink;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
 import com.acme.staticforge.project.ProjectService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -38,38 +35,22 @@ public class PreviewController {
     private final ProjectService projectService;
     private final PageRenderService pageRenderService;
     private final PreviewTokenService previewTokenService;
-    private final ObjectMapper objectMapper;
 
     private static final SecureRandom NONCE = new SecureRandom();
 
     public PreviewController(
-            ProjectService projectService,
-            PageRenderService pageRenderService,
-            PreviewTokenService previewTokenService,
-            ObjectMapper objectMapper) {
+            ProjectService projectService, PageRenderService pageRenderService, PreviewTokenService previewTokenService) {
         this.projectService = projectService;
         this.pageRenderService = pageRenderService;
         this.previewTokenService = previewTokenService;
-        this.objectMapper = objectMapper;
     }
 
-    /** Live (unsaved, never persisted) page preview (spec §19.1). */
-    @PostMapping("/page")
-    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public ResponseEntity<String> previewPage(
-            @PathVariable String projectKey,
-            @RequestParam(defaultValue = "html") String channel,
-            @RequestBody PreviewPageRequest body,
-            HttpServletRequest request) {
-        ObjectNode payload = objectMapper.createObjectNode();
-        payload.set("content", body.content());
-        payload.set("bodies", body.bodies());
-        String output = pageRenderService.renderLive(
-                projectId(projectKey), payload, body.templateUuid(), channel, true, apiBase(request));
-        return respond(output, channel);
-    }
-
-    /** Saved page preview at the current revision, or {@code ?revision=R} for a past revision (spec §19.1). */
+    /**
+     * Page preview by identity (spec §19.1): renders the page's current stored revision,
+     * or {@code ?revision=R} for a past one. Content/bodies/meta are always resolved from
+     * the database via {@code uuid} — the client never sends rendered data, only which
+     * page (and optionally which revision) to render.
+     */
     @GetMapping("/pages/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<String> previewPage(
