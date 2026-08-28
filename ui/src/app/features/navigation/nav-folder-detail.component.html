@@ -11,12 +11,12 @@
         (keydown.escape)="cancelEditName()"
         autofocus
       />
-      <sf-button variant="primary" [disabled]="savingName()" (click)="saveName()">Save</sf-button>
+      <sf-button variant="primary" [disabled]="savingName() || readOnly()" (click)="saveName()">Save</sf-button>
       <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
     } @else {
       <h2 class="nav-folder-detail__title">{{ folder().displayName ?? folder().uid }}</h2>
       @if (!isProtected()) {
-        <button type="button" class="nav-folder-detail__edit" (click)="startEditName()" aria-label="Rename folder">
+        <button type="button" class="nav-folder-detail__edit" [disabled]="readOnly()" (click)="startEditName()" aria-label="Rename folder">
           <sf-icon name="edit" />
         </button>
       }
@@ -55,7 +55,7 @@
       >
         <select
           (change)="onStartNodeChange($event)"
-          [disabled]="savingStartNode() || startNodeOptions().length === 0"
+          [disabled]="savingStartNode() || startNodeOptions().length === 0 || readOnly()"
         >
           <!--
             `[selected]` on each `<option>`, not `[value]` on the `<select>` itself: a `<select>`'s
@@ -80,7 +80,7 @@
 
   <footer class="nav-folder-detail__footer">
     @if (!isProtected()) {
-      <sf-button variant="danger" [disabled]="deleting()" (click)="requestDelete()">Delete folder</sf-button>
+      <sf-button variant="danger" [disabled]="deleting() || readOnly()" (click)="requestDelete()">Delete folder</sf-button>
     }
   </footer>
 </div>

@@ -3,7 +3,7 @@
   <aside class="pages__tree">
     <div class="pages__tree-head">
       <h2>Pages</h2>
-      <button type="button" class="pages__icon-btn" title="New folder" (click)="newFolder()">
+      <button type="button" class="pages__icon-btn" title="New folder" [disabled]="readOnly()" (click)="newFolder()">
         +
       </button>
     </div>
@@ -63,7 +63,7 @@
         (input)="onSearch($event)"
       />
       <span class="pages__toolbar-spacer"></span>
-      <sf-button variant="primary" (click)="openNewPage()">New page</sf-button>
+      <sf-button variant="primary" [disabled]="readOnly()" (click)="openNewPage()">New page</sf-button>
     </div>
 
     <div

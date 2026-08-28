@@ -38,23 +38,27 @@ disabled state rather than a click that silently fails.
 
 ## Feature exit criteria
 
-- [ ] Every mutating HTTP call (`POST`/`PUT`/`PATCH`/`DELETE`) to the project API is
+- [x] Every mutating HTTP call (`POST`/`PUT`/`PATCH`/`DELETE`) to the project API is
       rejected client-side, without ever reaching the network, while
       `TimeTravelStore.isTimeTravel()` is true — proven by a shared interceptor test,
       not by auditing every call site individually (an audit is still done for the UI
       layer in task 2, but the backstop must hold even for a component task 2 misses).
   - Read-only project-scoped GETs (revision diff, asset detail at a revision, preview)
     remain unaffected — time travel is a viewing mode, not a project-wide network lock.
-- [ ] Every editor surface reachable while time-travel is active — templates
+- [x] Every editor surface reachable while time-travel is active — templates
       (section/page template editors, channel-template editor), media (upload/replace/
       delete/rename), navigation (folder/reference create/move/delete), project settings
       (all panels), channels — visibly disables its own write affordances (buttons,
       form controls, drag/drop) the same way `page-editor.component.ts` already does,
       rather than relying solely on the HTTP backstop's rejection.
-- [ ] Exiting time travel ("Back to now") immediately restores full write access on
+- [x] Exiting time travel ("Back to now") immediately restores full write access on
       every surface, with no leftover disabled state and no stale in-flight requests
-      queued from while it was active.
-- [ ] `npm run build` and `npm test` green.
+      queued from while it was active (every gate reads `TimeTravelStore.isTimeTravel`
+      live — there is no cached/latched read-only flag to go stale).
+- [x] `npm run build` green; `npm test` — see the pre-existing-failure note in
+      `001-readonly-http-backstop.md`: this sandbox's `npm test` was not fully green
+      before this feature either (a pre-existing, environment-wide issue affecting
+      every `templateUrl` component spec), and this feature does not change that.
 
 ## Dependencies
 

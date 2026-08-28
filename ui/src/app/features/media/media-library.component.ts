@@ -33,6 +33,7 @@ import { MediaFolderDetailComponent } from './media-folder-detail.component';
 import { MediaFolderNodeComponent, FolderMoveEvent } from './media-folder-node.component';
 import { MediaNavNodeComponent } from './media-nav-node.component';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 type MediaView = components['schemas']['MediaView'];
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
@@ -77,6 +78,9 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   protected readonly clipboard = inject(TreeClipboardService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   private readonly search$ = new Subject<string>();
   private uploadSeq = 0;
@@ -330,7 +334,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   deleteSelection(): void {
     const uuids = this.selected();
-    if (uuids.length === 0) {
+    if (uuids.length === 0 || this.readOnly()) {
       return;
     }
     this.toasts.show(`Deleting ${uuids.length} media item(s)`, 'warning');
@@ -394,6 +398,9 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   }
 
   private createFolderUnder(parentUuid: string | undefined): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.newFolderParentUuid = parentUuid;
     this.newFolderOpen.set(true);
   }
@@ -432,7 +439,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   }
 
   protected moveItemTo(event: FolderMoveEvent): void {
-    if (!event.source || !event.target) {
+    if (!event.source || !event.target || this.readOnly()) {
       return;
     }
     this.api.moveAsset(this.projectKey(), event.source, { folderUuid: event.target }).subscribe({
@@ -452,7 +459,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   protected onRootDrop(event: DragEvent): void {
     event.preventDefault();
     const source = event.dataTransfer?.getData('text/plain');
-    if (!source) {
+    if (!source || this.readOnly()) {
       return;
     }
     this.api.moveAsset(this.projectKey(), source, {}).subscribe({
@@ -466,6 +473,9 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   /** "All media" is the project's media root — its only folder action is creating a subfolder there (it can't be renamed, deleted, cut, or pasted into). */
   protected onRootContextMenu(event: MouseEvent): void {
+    if (this.readOnly()) {
+      return;
+    }
     const items: ContextMenuItem[] = [
       { label: 'New subfolder', icon: 'create_new_folder', action: () => this.createFolderUnder(undefined) },
     ];
@@ -500,7 +510,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   protected onFolderCardContextMenu(folder: FolderView, event: MouseEvent): void {
     const uuid = folder.uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const clip = this.clipboard.entry();
@@ -524,7 +534,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   // so reusing the "Rename" context-menu action as the entry point is the smaller, more
   // consistent change versus adding a whole new folder-selection interaction.
   private renameFolder(folder: FolderView): void {
-    if (!folder.uuid) {
+    if (!folder.uuid || this.readOnly()) {
       return;
     }
     this.renamingFolder.set(folder);
@@ -547,7 +557,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
   private deleteFolder(folder: FolderView): void {
     const uuid = folder.uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const name = folder.displayName ?? folder.uid ?? 'this folder';
@@ -568,6 +578,9 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   }
 
   private pasteInto(targetUuid: string): void {
+    if (this.readOnly()) {
+      return;
+    }
     const entry = this.clipboard.entry();
     if (!entry || entry.mode !== 'cut') {
       return;
@@ -596,13 +609,18 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const label = item.displayName ?? uuid;
-    this.menu.open(event, [
+    const items: ContextMenuItem[] = [
       { label: 'Open details', icon: 'info', action: () => this.openDetail(uuid) },
-      { label: 'Rename', icon: 'edit', action: () => this.renamingItem.set(item) },
-      { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('MEDIA', uuid, label) },
-      { label: '', separator: true },
-      { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteOne(uuid, label) },
-    ]);
+    ];
+    if (!this.readOnly()) {
+      items.push(
+        { label: 'Rename', icon: 'edit', action: () => this.renamingItem.set(item) },
+        { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('MEDIA', uuid, label) },
+        { label: '', separator: true },
+        { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteOne(uuid, label) },
+      );
+    }
+    this.menu.open(event, items);
   }
 
   protected closeRenameItem(): void {
@@ -612,7 +630,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   protected submitRenameItemDisplayName(displayName: string): void {
     const item = this.renamingItem();
     const uuid = item?.uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     this.renamingItemName.set(true);
@@ -646,6 +664,9 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   }
 
   private deleteOne(uuid: string, label: string): void {
+    if (this.readOnly()) {
+      return;
+    }
     if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) {
       return;
     }
@@ -684,6 +705,9 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   }
 
   private uploadFiles(files: File[]): void {
+    if (this.readOnly()) {
+      return;
+    }
     const key = this.projectKey();
     for (const file of files) {
       const id = ++this.uploadSeq;

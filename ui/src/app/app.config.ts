@@ -9,6 +9,7 @@ import { jwtInterceptor } from './core/auth/jwt.interceptor';
 import { refreshInterceptor } from './core/auth/refresh.interceptor';
 import { errorInterceptor } from './core/api/error.interceptor';
 import { etagInterceptor } from './core/api/etag.interceptor';
+import { readonlyInterceptor } from './core/api/readonly.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -19,6 +20,12 @@ export const appConfig: ApplicationConfig = {
         jwtInterceptor,
         refreshInterceptor,
         errorInterceptor,
+        // Downstream of errorInterceptor so a blocked (time-travel) request still gets
+        // routed through the existing global error-toast handling: functional
+        // interceptors run request-side in array order and response-side in reverse, so
+        // errorInterceptor's catchError only observes errors thrown by interceptors
+        // registered after it.
+        readonlyInterceptor,
         etagInterceptor,
       ]),
     ),

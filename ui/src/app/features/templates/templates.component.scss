@@ -43,6 +43,11 @@
   flex: 1;
 }
 
+.templates__toolbar-readonly {
+  font-size: var(--sf-text-sm);
+  color: var(--sf-amber-700, #92400e);
+}
+
 .channels__tab {
   padding: var(--sf-1) var(--sf-2);
   border: 1px solid var(--sf-line);

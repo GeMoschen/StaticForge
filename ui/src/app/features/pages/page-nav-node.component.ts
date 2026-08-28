@@ -3,12 +3,13 @@ import { Router } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
-import { ContextMenuService } from '../../shared/services/context-menu.service';
+import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { BodyDefinition, ContentDefinition } from '../forms';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import type { BodiesMap, SectionInstance } from './types';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
@@ -38,6 +39,9 @@ export class PageNavNodeComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly projectKey = input.required<string>();
   readonly summary = input.required<AssetSummaryView>();
@@ -103,7 +107,8 @@ export class PageNavNodeComponent {
 
   protected onSectionDragStart(bodyName: string, section: SectionInstance, event: DragEvent): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
+      event.preventDefault();
       return;
     }
     const payload = { pageUuid: uuid, bodyName, instanceId: section.instanceId, templateRef: section.templateRef };
@@ -122,7 +127,7 @@ export class PageNavNodeComponent {
 
   /** Drop a section (dragged from anywhere in the tree) directly onto this body row — moves it here without opening the editor. */
   protected onBodyDrop(body: BodyDefinition, event: DragEvent): void {
-    if (!event.dataTransfer?.types.includes('application/x-sf-section')) {
+    if (!event.dataTransfer?.types.includes('application/x-sf-section') || this.readOnly()) {
       return;
     }
     event.preventDefault();
@@ -189,7 +194,8 @@ export class PageNavNodeComponent {
 
   protected onPageDragStart(event: DragEvent): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
+      event.preventDefault();
       return;
     }
     event.dataTransfer?.setData('text/plain', uuid);
@@ -203,29 +209,34 @@ export class PageNavNodeComponent {
     }
     const list = this.sectionsFor(bodyName);
     const index = list.findIndex((s) => s.instanceId === section.instanceId);
-    this.menu.open(event, [
+    const items: ContextMenuItem[] = [
       { label: 'Open', icon: 'open_in_new', action: () => this.openSection(section.instanceId, event) },
-      { label: '', separator: true },
-      {
-        label: 'Move up',
-        icon: 'arrow_upward',
-        disabled: index <= 0,
-        action: () => this.reorderSection(bodyName, list, index, index - 1),
-      },
-      {
-        label: 'Move down',
-        icon: 'arrow_downward',
-        disabled: index < 0 || index >= list.length - 1,
-        action: () => this.reorderSection(bodyName, list, index, index + 1),
-      },
-      { label: '', separator: true },
-      { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteSection(bodyName, section) },
-    ]);
+    ];
+    if (!this.readOnly()) {
+      items.push(
+        { label: '', separator: true },
+        {
+          label: 'Move up',
+          icon: 'arrow_upward',
+          disabled: index <= 0,
+          action: () => this.reorderSection(bodyName, list, index, index - 1),
+        },
+        {
+          label: 'Move down',
+          icon: 'arrow_downward',
+          disabled: index < 0 || index >= list.length - 1,
+          action: () => this.reorderSection(bodyName, list, index, index + 1),
+        },
+        { label: '', separator: true },
+        { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteSection(bodyName, section) },
+      );
+    }
+    this.menu.open(event, items);
   }
 
   private reorderSection(bodyName: string, list: SectionInstance[], from: number, to: number): void {
     const uuid = this.summary().uuid;
-    if (!uuid || from < 0 || to < 0 || to >= list.length) {
+    if (!uuid || from < 0 || to < 0 || to >= list.length || this.readOnly()) {
       return;
     }
     const instanceIds = list.map((s) => s.instanceId);
@@ -245,7 +256,7 @@ export class PageNavNodeComponent {
 
   private deleteSection(bodyName: string, section: SectionInstance): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const label = this.sectionTitle(section.templateRef);
@@ -271,21 +282,26 @@ export class PageNavNodeComponent {
       return;
     }
     const label = this.summary().displayName ?? this.summary().uid ?? 'page';
-    this.menu.open(event, [
+    const items: ContextMenuItem[] = [
       { label: 'Open', icon: 'open_in_new', action: () => this.openPage() },
-      { label: 'Duplicate', icon: 'content_copy', action: () => this.duplicate() },
-      { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
-      { label: '', separator: true },
-      { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('PAGE', uuid, label) },
-      { label: 'Copy', icon: 'file_copy', action: () => this.clipboard.copy('PAGE', uuid, label) },
-      { label: '', separator: true },
-      { label: 'Delete', icon: 'delete', danger: true, action: () => this.delete() },
-    ]);
+    ];
+    if (!this.readOnly()) {
+      items.push(
+        { label: 'Duplicate', icon: 'content_copy', action: () => this.duplicate() },
+        { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
+        { label: '', separator: true },
+        { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('PAGE', uuid, label) },
+        { label: 'Copy', icon: 'file_copy', action: () => this.clipboard.copy('PAGE', uuid, label) },
+        { label: '', separator: true },
+        { label: 'Delete', icon: 'delete', danger: true, action: () => this.delete() },
+      );
+    }
+    this.menu.open(event, items);
   }
 
   private duplicate(): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     this.api.duplicatePage(this.projectKey(), uuid).subscribe({
@@ -303,7 +319,7 @@ export class PageNavNodeComponent {
 
   protected submitRenameDisplayName(displayName: string): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     this.renamingName.set(true);
@@ -330,7 +346,7 @@ export class PageNavNodeComponent {
 
   private delete(): void {
     const uuid = this.summary().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const name = this.summary().displayName ?? this.summary().uid ?? 'this page';

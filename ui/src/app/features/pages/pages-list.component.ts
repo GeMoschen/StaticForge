@@ -23,6 +23,7 @@ import { PageNavNodeComponent } from './page-nav-node.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { FolderMoveEvent } from './types';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
@@ -58,6 +59,9 @@ export class PagesListComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   protected readonly clipboard = inject(TreeClipboardService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly projectKey = input.required<string>();
 
@@ -164,6 +168,9 @@ export class PagesListComponent {
   }
 
   private createFolderUnder(parentUuid: string | undefined): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.folderParentUuid = parentUuid;
     this.newFolderOpen.set(true);
   }
@@ -173,6 +180,9 @@ export class PagesListComponent {
   }
 
   protected submitNewFolder(value: CreateAssetFormValue): void {
+    if (this.readOnly()) {
+      return;
+    }
     const key = this.projectKey();
     this.creatingFolder.set(true);
     this.api
@@ -196,6 +206,9 @@ export class PagesListComponent {
   }
 
   protected openNewPage(): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.newPageOpen.set(true);
   }
 
@@ -204,6 +217,9 @@ export class PagesListComponent {
   }
 
   protected submitNewPage(value: CreateAssetFormValue): void {
+    if (this.readOnly()) {
+      return;
+    }
     const key = this.projectKey();
     this.creatingPage.set(true);
     this.api
@@ -240,7 +256,7 @@ export class PagesListComponent {
 
   /** Handles both folder-onto-folder and page-onto-folder drags — the generic move endpoint dispatches by asset type. */
   protected moveItemTo(event: FolderMoveEvent): void {
-    if (!event.source || !event.target) {
+    if (!event.source || !event.target || this.readOnly()) {
       return;
     }
     this.api.moveAsset(this.projectKey(), event.source, { folderUuid: event.target }).subscribe({
@@ -261,7 +277,7 @@ export class PagesListComponent {
   protected onRootDrop(event: DragEvent): void {
     event.preventDefault();
     const source = event.dataTransfer?.getData('text/plain');
-    if (!source) {
+    if (!source || this.readOnly()) {
       return;
     }
     this.api.moveAsset(this.projectKey(), source, {}).subscribe({
@@ -275,6 +291,9 @@ export class PagesListComponent {
 
   /** "All pages" is the project's page root — it can't be renamed, deleted, cut, or pasted into, but you can create pages/subfolders directly in it. */
   protected onRootContextMenu(event: MouseEvent): void {
+    if (this.readOnly()) {
+      return;
+    }
     const items: ContextMenuItem[] = [
       {
         label: 'New page',

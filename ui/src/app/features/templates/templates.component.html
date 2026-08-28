@@ -29,8 +29,11 @@
 
   <section class="templates__detail">
     <div class="templates__toolbar">
+      @if (readOnly()) {
+        <span class="templates__toolbar-readonly">Viewing a past revision — read-only</span>
+      }
       <span class="templates__toolbar-spacer"></span>
-      <sf-button variant="primary" (click)="newTemplate()">New template</sf-button>
+      <sf-button variant="primary" [disabled]="readOnly()" (click)="newTemplate()">New template</sf-button>
     </div>
 
     @if (detail(); as d) {
@@ -41,7 +44,7 @@
             <div class="detail__meta">{{ d.uid ?? '' }} · rev {{ d.revision ?? '' }}</div>
           </div>
           <div class="actions">
-            <sf-button variant="danger" (click)="requestDelete()">Delete</sf-button>
+            <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete()">Delete</sf-button>
           </div>
         </div>
 
@@ -93,7 +96,7 @@
           </sf-field>
           <div class="actions">
             <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>
-            <sf-button variant="primary" [disabled]="saving()" (click)="saveDefinition()">
+            <sf-button variant="primary" [disabled]="saving() || readOnly()" (click)="saveDefinition()">
               Save template
             </sf-button>
           </div>
@@ -132,12 +135,12 @@
               <div class="actions">
                 <sf-button
                   variant="primary"
-                  [disabled]="channelSaving()"
+                  [disabled]="channelSaving() || readOnly()"
                   (click)="saveChannel()"
                 >
                   Save channel
                 </sf-button>
-                <sf-button variant="ghost" [disabled]="channelSaving()" (click)="deleteChannel()">
+                <sf-button variant="ghost" [disabled]="channelSaving() || readOnly()" (click)="deleteChannel()">
                   Remove channel
                 </sf-button>
               </div>
@@ -151,6 +154,7 @@
               <select
                 class="channels__select"
                 aria-label="Add channel"
+                [disabled]="readOnly()"
                 (change)="onAddChannel($event)"
                 [value]="''"
               >

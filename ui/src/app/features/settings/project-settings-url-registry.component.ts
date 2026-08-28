@@ -17,6 +17,7 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTableComponent } from '../../shared/components/sf-table.component';
 import { UrlArea, UrlRegistryEntryView, UrlRegistryService } from './url-registry.service';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 const PAGE_SIZE = 20;
 
@@ -53,6 +54,9 @@ export class ProjectSettingsUrlRegistryComponent {
   private readonly channelsApi = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
   protected readonly dialog = inject(DialogService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   protected readonly entries = signal<UrlRegistryEntryView[]>([]);
   protected readonly loading = signal(false);
@@ -147,6 +151,9 @@ export class ProjectSettingsUrlRegistryComponent {
   // ── Inline override edit ────────────────────────────────────────────────
 
   startEdit(entry: UrlRegistryEntryView): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.editingId.set(entry.id ?? null);
     this.editUrl.set(entry.url ?? '');
   }
@@ -163,7 +170,7 @@ export class ProjectSettingsUrlRegistryComponent {
   saveEdit(entry: UrlRegistryEntryView): void {
     const id = entry.id;
     const url = this.editUrl().trim();
-    if (id == null || !url || this.saving()) {
+    if (id == null || !url || this.saving() || this.readOnly()) {
       return;
     }
     this.saving.set(true);
@@ -185,6 +192,9 @@ export class ProjectSettingsUrlRegistryComponent {
   // ── Reset (destructive — always confirmed) ──────────────────────────────
 
   requestResetEntry(entry: UrlRegistryEntryView): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.pendingReset.set({ kind: 'entry', entry });
     this.dialog.open({
       title: 'Reset this URL',
@@ -197,7 +207,7 @@ export class ProjectSettingsUrlRegistryComponent {
 
   requestResetChannel(): void {
     const channelKey = this.filterChannel();
-    if (!channelKey) {
+    if (!channelKey || this.readOnly()) {
       return;
     }
     this.pendingReset.set({ kind: 'channel', channelKey });
@@ -212,7 +222,7 @@ export class ProjectSettingsUrlRegistryComponent {
 
   requestResetArea(): void {
     const area = this.filterArea();
-    if (!area) {
+    if (!area || this.readOnly()) {
       return;
     }
     this.pendingReset.set({ kind: 'area', area });
@@ -226,6 +236,9 @@ export class ProjectSettingsUrlRegistryComponent {
   }
 
   requestResetAll(): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.pendingReset.set({ kind: 'project' });
     this.dialog.open({
       title: 'Reset all URLs',
@@ -244,7 +257,7 @@ export class ProjectSettingsUrlRegistryComponent {
 
   confirmReset(): void {
     const scope = this.pendingReset();
-    if (!scope || this.resetting()) {
+    if (!scope || this.resetting() || this.readOnly()) {
       return;
     }
     const req =

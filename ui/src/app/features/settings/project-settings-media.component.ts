@@ -5,6 +5,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 /**
  * Per-project override of which media MIME types are accepted on upload — one pattern per
@@ -26,6 +27,9 @@ export class ProjectSettingsMediaComponent implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
@@ -53,7 +57,7 @@ export class ProjectSettingsMediaComponent implements OnInit {
   }
 
   protected save(): void {
-    if (this.saving()) {
+    if (this.saving() || this.readOnly()) {
       return;
     }
     const key = this.projectKey();

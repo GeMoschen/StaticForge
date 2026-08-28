@@ -21,6 +21,7 @@ import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ChannelsService } from '../channels/channels.service';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { TemplateFolderNodeComponent } from './template-folder-node.component';
 import {
   PAGE_TEMPLATES_ROOT_UID,
@@ -73,6 +74,9 @@ export class TemplatesComponent {
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
   private readonly api = inject(ApiClient);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   /** `ProjectContextStore.pageTemplates`/`sectionTemplates` (used by the "new page" template picker and the page editor's "add section" palette) — AND, as of M13.3, `templateFolderTree` — are only loaded once per project — force a refresh whenever a template or folder is created/renamed/moved/deleted here so those stay in sync without an F5. */
   private refreshTemplateStore(): void {
@@ -266,7 +270,7 @@ export class TemplatesComponent {
    * dispatches by asset type; cross-kind drags are already rejected client-side by
    * `TemplateFolderNodeComponent.onDrop`. */
   protected moveItemTo(event: FolderMoveEvent): void {
-    if (!event.source || !event.target) {
+    if (!event.source || !event.target || this.readOnly()) {
       return;
     }
     this.api.moveAsset(this.projectKey(), event.source, { folderUuid: event.target }).subscribe({
@@ -299,6 +303,9 @@ export class TemplatesComponent {
   readonly createDialogKind = computed<TemplateAssetKind>(() => this.activeTemplateKind());
 
   newTemplate(): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.newTemplateOpen.set(true);
   }
 
@@ -324,7 +331,7 @@ export class TemplatesComponent {
 
   submitNewTemplate(value: CreateAssetFormValue): void {
     const key = this.projectKey();
-    if (!key) {
+    if (!key || this.readOnly()) {
       return;
     }
     this.creatingTemplate.set(true);
@@ -392,7 +399,7 @@ export class TemplatesComponent {
     const key = this.projectKey();
     const uuid = this.selectedUuid();
     const detail = this.detail();
-    if (!key || !uuid || !detail) {
+    if (!key || !uuid || !detail || this.readOnly()) {
       return;
     }
     this.saving.set(true);
@@ -474,7 +481,7 @@ export class TemplatesComponent {
     const key = this.projectKey();
     const uuid = this.selectedUuid();
     const detail = this.detail();
-    if (!key || !uuid || !detail || !channelKey) {
+    if (!key || !uuid || !detail || !channelKey || this.readOnly()) {
       return;
     }
     this.channelSaving.set(true);
@@ -499,7 +506,7 @@ export class TemplatesComponent {
     const uuid = this.selectedUuid();
     const detail = this.detail();
     const channel = this.selectedChannel();
-    if (!key || !uuid || !detail || !channel) {
+    if (!key || !uuid || !detail || !channel || this.readOnly()) {
       return;
     }
     this.channelSaving.set(true);
@@ -530,7 +537,7 @@ export class TemplatesComponent {
     const uuid = this.selectedUuid();
     const detail = this.detail();
     const channel = this.selectedChannel();
-    if (!key || !uuid || !detail || !channel) {
+    if (!key || !uuid || !detail || !channel || this.readOnly()) {
       return;
     }
     this.channelSaving.set(true);
@@ -552,6 +559,9 @@ export class TemplatesComponent {
   }
 
   requestDelete(): void {
+    if (this.readOnly()) {
+      return;
+    }
     this.confirmDelete.set(true);
   }
 
@@ -562,7 +572,7 @@ export class TemplatesComponent {
   confirmDeleteAction(): void {
     const key = this.projectKey();
     const uuid = this.selectedUuid();
-    if (!key || !uuid) {
+    if (!key || !uuid || this.readOnly()) {
       return;
     }
     this.service.delete(this.kind(), key, uuid).subscribe({

@@ -5,7 +5,7 @@
 >
   <div
     class="nav-node__row"
-    [attr.draggable]="isProtected() ? null : true"
+    [attr.draggable]="isProtected() || readOnly() ? null : true"
     role="treeitem"
     tabindex="0"
     [attr.aria-expanded]="isFolder() ? expanded() : null"

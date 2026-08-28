@@ -19,12 +19,13 @@
     >
       <sf-icon name="upload_file" size="2.5rem" />
       <p class="dropzone__label">Drag a `.zip` archive here, or</p>
-      <sf-button variant="secondary" (click)="fileInput.click()">Choose file…</sf-button>
+      <sf-button variant="secondary" [disabled]="readOnly()" (click)="fileInput.click()">Choose file…</sf-button>
       <input
         #fileInput
         type="file"
         accept=".zip"
         hidden
+        [disabled]="readOnly()"
         (change)="onFileInput($event)"
       />
     </div>
@@ -116,7 +117,7 @@
 
       <div class="import__actions">
         <sf-button variant="ghost" (click)="cancel()">Cancel</sf-button>
-        <sf-button variant="primary" [disabled]="hasBlocking() || committing()" (click)="commit()">
+        <sf-button variant="primary" [disabled]="hasBlocking() || committing() || readOnly()" (click)="commit()">
           {{ committing() ? 'Importing…' : 'Import' }}
         </sf-button>
       </div>

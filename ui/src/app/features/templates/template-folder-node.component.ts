@@ -11,6 +11,7 @@ import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
@@ -59,6 +60,9 @@ export class TemplateFolderNodeComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly node = input.required<FolderView>();
   readonly depth = input<number>(0);
@@ -143,7 +147,7 @@ export class TemplateFolderNodeComponent {
   }
 
   protected onDragStart(event: DragEvent): void {
-    if (this.isProtected()) {
+    if (this.isProtected() || this.readOnly()) {
       // Guards against a stale `draggable` attribute — the template also unsets it.
       event.preventDefault();
       return;
@@ -169,7 +173,7 @@ export class TemplateFolderNodeComponent {
     const source = event.dataTransfer?.getData('text/plain');
     const sourceKind = event.dataTransfer?.getData(KIND_TRANSFER_KEY);
     const target = this.node().uuid;
-    if (!source || !target || source === target) {
+    if (!source || !target || source === target || this.readOnly()) {
       return;
     }
     if (sourceKind && sourceKind !== this.templateKind()) {
@@ -185,7 +189,7 @@ export class TemplateFolderNodeComponent {
 
   protected onContextMenu(event: MouseEvent): void {
     const uuid = this.node().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const items: ContextMenuItem[] = [];
@@ -245,7 +249,7 @@ export class TemplateFolderNodeComponent {
 
   protected submitNewFolder(value: CreateAssetFormValue): void {
     const parentUuid = this.pendingNewFolderParentUuid;
-    if (!parentUuid) {
+    if (!parentUuid || this.readOnly()) {
       return;
     }
     this.creatingFolder.set(true);
@@ -271,7 +275,7 @@ export class TemplateFolderNodeComponent {
 
   protected submitRenameDisplayName(displayName: string): void {
     const uuid = this.node().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     this.renamingName.set(true);
@@ -295,6 +299,9 @@ export class TemplateFolderNodeComponent {
   }
 
   private deleteFolder(uuid: string): void {
+    if (this.readOnly()) {
+      return;
+    }
     const name = this.node().displayName ?? this.node().uid ?? 'this folder';
     if (!window.confirm(`Delete "${name}" and everything inside it? This cannot be undone.`)) {
       return;
@@ -309,6 +316,9 @@ export class TemplateFolderNodeComponent {
   }
 
   private paste(targetUuid: string): void {
+    if (this.readOnly()) {
+      return;
+    }
     const entry = this.clipboard.entry();
     if (!entry || !this.canPaste(entry)) {
       this.toast.show('Nothing compatible to paste here.', 'error');

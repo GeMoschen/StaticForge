@@ -7,6 +7,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { etagFor, NavigationService, type PageReferenceView } from './navigation.service';
 
 type FolderView = components['schemas']['FolderView'];
@@ -52,6 +53,9 @@ export class NavReferenceDetailComponent implements OnInit {
   private readonly nav = inject(NavigationService);
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   protected readonly targetKind = signal<TargetKind>('PAGE');
   protected readonly targetUuid = signal<string>('');
@@ -127,7 +131,7 @@ export class NavReferenceDetailComponent implements OnInit {
 
   protected save(): void {
     const uuid = this.reference().uuid;
-    if (!uuid || !this.targetUuid() || this.saving()) {
+    if (!uuid || !this.targetUuid() || this.saving() || this.readOnly()) {
       return;
     }
     this.saving.set(true);
@@ -158,7 +162,7 @@ export class NavReferenceDetailComponent implements OnInit {
 
   protected requestDelete(): void {
     const uuid = this.reference().uuid;
-    if (!uuid || this.deleting()) {
+    if (!uuid || this.deleting() || this.readOnly()) {
       return;
     }
     const name = this.reference().displayName ?? this.reference().uid ?? 'this reference';
@@ -199,7 +203,7 @@ export class NavReferenceDetailComponent implements OnInit {
   protected saveName(): void {
     const name = this.nameDraft().trim();
     const uuid = this.reference().uuid;
-    if (!name || !uuid || this.savingName()) {
+    if (!name || !uuid || this.savingName() || this.readOnly()) {
       return;
     }
     this.savingName.set(true);

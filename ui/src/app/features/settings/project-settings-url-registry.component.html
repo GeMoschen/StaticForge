@@ -31,15 +31,15 @@
     <div class="filters__actions">
       <sf-button
         variant="secondary"
-        [disabled]="!filterChannel()"
+        [disabled]="!filterChannel() || readOnly()"
         (click)="requestResetChannel()"
       >
         Reset channel
       </sf-button>
-      <sf-button variant="secondary" [disabled]="!filterArea()" (click)="requestResetArea()">
+      <sf-button variant="secondary" [disabled]="!filterArea() || readOnly()" (click)="requestResetArea()">
         Reset area
       </sf-button>
-      <sf-button variant="danger" (click)="requestResetAll()">Reset all</sf-button>
+      <sf-button variant="danger" [disabled]="readOnly()" (click)="requestResetAll()">Reset all</sf-button>
     </div>
   </div>
 
@@ -99,14 +99,14 @@
                   <sf-button variant="ghost" (click)="cancelEdit()">Cancel</sf-button>
                   <sf-button
                     variant="primary"
-                    [disabled]="saving() || !editUrl().trim()"
+                    [disabled]="saving() || !editUrl().trim() || readOnly()"
                     (click)="saveEdit(entry)"
                   >
                     {{ saving() ? 'Saving…' : 'Save' }}
                   </sf-button>
                 } @else {
-                  <sf-button variant="ghost" (click)="startEdit(entry)">Override</sf-button>
-                  <sf-button variant="danger" (click)="requestResetEntry(entry)">Reset</sf-button>
+                  <sf-button variant="ghost" [disabled]="readOnly()" (click)="startEdit(entry)">Override</sf-button>
+                  <sf-button variant="danger" [disabled]="readOnly()" (click)="requestResetEntry(entry)">Reset</sf-button>
                 }
               </td>
             </tr>
@@ -138,7 +138,7 @@
     </div>
     <footer class="dialog__footer">
       <sf-button variant="ghost" (click)="cancelReset()">{{ d.cancelLabel ?? 'Cancel' }}</sf-button>
-      <sf-button variant="danger" [disabled]="resetting()" (click)="confirmReset()">
+      <sf-button variant="danger" [disabled]="resetting() || readOnly()" (click)="confirmReset()">
         {{ resetting() ? 'Resetting…' : (d.confirmLabel ?? 'Reset') }}
       </sf-button>
     </footer>

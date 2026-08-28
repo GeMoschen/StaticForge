@@ -5,6 +5,7 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 
 type FolderView = components['schemas']['FolderView'];
 
@@ -27,6 +28,9 @@ type FolderView = components['schemas']['FolderView'];
 export class MediaFolderDetailComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly timeTravel = inject(TimeTravelStore);
+
+  protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly projectKey = input.required<string>();
   readonly folder = input.required<FolderView>();
@@ -62,7 +66,7 @@ export class MediaFolderDetailComponent {
   protected saveName(): void {
     const name = this.nameDraft().trim();
     const uuid = this.folder().uuid;
-    if (!name || !uuid || this.savingName()) {
+    if (!name || !uuid || this.savingName() || this.readOnly()) {
       return;
     }
     this.savingName.set(true);
@@ -87,7 +91,7 @@ export class MediaFolderDetailComponent {
 
   protected requestDelete(): void {
     const uuid = this.folder().uuid;
-    if (!uuid) {
+    if (!uuid || this.readOnly()) {
       return;
     }
     const name = this.folder().displayName ?? this.folder().uid ?? 'this folder';

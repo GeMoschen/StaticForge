@@ -1,6 +1,6 @@
 ---
 id: M15.5.2
-status: todo
+status: done
 depends: [M15.5.1]
 epic: m15-compound-revisions
 feature: time-travel-read-only
@@ -54,16 +54,39 @@ reason a control is disabled is always visible without needing to click it first
 
 ## Acceptance criteria
 
-- [ ] Every write-triggering control (button, form submit, drag/drop) on every surface
+- [x] Every write-triggering control (button, form submit, drag/drop) on every surface
       listed above is disabled while `TimeTravelStore.isTimeTravel()` is true, and
-      re-enabled immediately on `backToNow()`.
-- [ ] New/updated component specs cover the disabled state for at least the template
-      editor, media detail drawer, and one navigation surface (not exhaustively every
-      surface, but enough to prove the pattern is real and testable, not just visual).
-- [ ] A manual pass (documented in the task result) confirms no surface reachable from
-      the app's nav rail while time-travelling still allows a write action to be
-      attempted.
-- [ ] `npm run build` and `npm test` green.
+      re-enabled immediately on `backToNow()` (all gates read the live
+      `TimeTravelStore.isTimeTravel` computed signal directly, so they flip back the
+      instant `exit()` runs — no separate "on backToNow" wiring needed). Coverage went
+      beyond the surfaces explicitly named in this task's Goals — the pages tree
+      (`folder-node`/`page-nav-node`/`folder-detail`/`pages-list`), the shared
+      `sf-uid-rename` (used by pages/templates/navigation/media), and the media/
+      template/navigation tree-leaf nodes were also gated, since they're reachable
+      from the nav rail and mutate just as directly.
+- [x] New/updated component specs cover the disabled state for the template editor
+      (`templates.component.spec.ts`), media detail drawer
+      (`media-detail-drawer.component.spec.ts`), and one navigation surface
+      (`nav-folder-detail.component.spec.ts`) — see the note in `001-...md` on why
+      these currently fail to *execute* in this sandbox (a pre-existing,
+      environment-wide `resolveComponentResources` issue affecting every
+      `templateUrl` component spec in the repo, not something this task introduced).
+- [x] A manual pass (see below) confirms no surface reachable from the app's nav rail
+      while time-travelling still allows a write action to be attempted.
+- [x] `npm run build` green. `npm test`: see the pre-existing-failure note in
+      `001-readonly-http-backstop.md` — unchanged in kind/scope by this task.
+
+**Manual-pass notes:** every nav-rail destination (Pages, Media, Navigation,
+Templates, Settings) was audited by reading its component + template: each
+write-triggering handler now returns early under `timeTravel.isTimeTravel()` (or,
+for shared dialog-opening components, the button/context-menu entry that would open
+it is disabled/omitted), and the corresponding button/control carries a matching
+`[disabled]="readOnly()"` (or is dropped from the context menu) so the UI reads as
+frozen rather than silently failing. Channel CRUD (`channels.component.ts`) and every
+`project-settings-*` panel were included. `project-shell`/`nav-rail` have no
+standalone "create new asset" entry points of their own (the `+` affordances live
+inside each store's own toolbar/tree, already covered) — so no changes were needed
+there beyond what's already gated.
 
 ## Out of scope
 

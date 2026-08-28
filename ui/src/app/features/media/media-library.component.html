@@ -46,7 +46,7 @@
   <aside class="library__sidebar">
     <div class="library__sidebar-head">
       <h2>Folders</h2>
-      <button type="button" class="library__icon-btn" title="New folder" (click)="newFolder()">
+      <button type="button" class="library__icon-btn" title="New folder" [disabled]="readOnly()" (click)="newFolder()">
         +
       </button>
     </div>
@@ -116,19 +116,24 @@
       </select>
 
       @if (selected().length > 0) {
-        <sf-button variant="danger" (click)="deleteSelection()">
+        <sf-button variant="danger" [disabled]="readOnly()" (click)="deleteSelection()">
           Delete ({{ selected().length }})
         </sf-button>
       }
 
       <span class="toolbar__spacer"></span>
 
-      <sf-button variant="secondary" (click)="fileInput.click()">Upload</sf-button>
+      @if (readOnly()) {
+        <span class="toolbar__readonly">Viewing a past revision — read-only</span>
+      }
+
+      <sf-button variant="secondary" [disabled]="readOnly()" (click)="fileInput.click()">Upload</sf-button>
       <input
         #fileInput
         class="visually-hidden"
         type="file"
         multiple
+        [disabled]="readOnly()"
         (change)="onFileInput($event)"
       />
     </div>
