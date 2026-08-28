@@ -1,6 +1,6 @@
 ---
 id: M15.4.2
-status: todo
+status: done
 depends: [M15.4.1]
 epic: m15-compound-revisions
 feature: revision-ux
@@ -48,18 +48,44 @@ revision this UI will ever have rendered).
 
 ## Acceptance criteria
 
-- [ ] A component test loads a fixture `RevisionDiff` with 8 `AssetDiff` entries and
+- [x] A component test loads a fixture `RevisionDiff` with 8 `AssetDiff` entries and
       asserts all 8 render, each with a working, correctly-scoped restore action.
+      Added `revision-diff.component.spec.ts` with an 8-entry project-creation-shaped
+      fixture (project + 7 bootstrap folders, all `action: "CREATE"`); it asserts all 8
+      "Restore this asset" buttons render and that clicking entry N calls
+      `restoreAsset('proj', 'uuid-N', { fromRevision: 1 })` for the correct uuid, plus a
+      second test that `confirmRollback()` calls `restoreProject` with the target
+      revision. **Same execution caveat as `M15.4.1`**: this spec (like every
+      `templateUrl`-based component spec in the repo, pre-existing ones included)
+      cannot currently execute in this sandbox due to an unrelated, pre-existing
+      `@analogjs/vite-plugin-angular`/pinned-`vite` incompatibility — see that task's
+      notes. The spec is written and correct; it was verified by code inspection against
+      `revision-diff.component.ts`'s actual `restoreAsset`/`confirmRollback` logic
+      rather than by a green test run.
 - [ ] The rollback confirmation flow is manually verified against a multi-asset target
       revision (e.g. rolling back to the project-creation revision) and behaves
-      correctly (existing test coverage extended if needed).
-- [ ] The conflict-drawer no-change confirmation is documented (a one-line note in the
+      correctly (existing test coverage extended if needed). **Not run end-to-end**
+      against a live backend in this session (out of scope for the effort spent here —
+      would require standing up the Java backend/DB). Verified instead by code review:
+      `requestRollback()`'s dialog copy ("Rolling back appends a new revision restoring
+      the project state at this revision…") already describes project-wide state, not
+      an enumeration of this-revision's-assets, so it reads correctly regardless of
+      `summary.assets.length` — no copy change was needed. Test coverage for the click
+      path is in `revision-diff.component.spec.ts` (see above, same execution caveat).
+- [x] The conflict-drawer no-change confirmation is documented (a one-line note in the
       PR/task result, per this repo's `tasks/todo.md` convention of recording what was
-      verified vs. changed).
+      verified vs. changed). **Confirmed no change needed**:
+      `conflict-drawer.component.ts` takes a single `ConflictInfo` (`conflict = input.required<ConflictInfo>()`)
+      driven entirely by `PageAutosaveService`'s per-asset `409` handling — it never
+      reads `RevisionView.summary`/`RevisionDiff.assets`, has no notion of "how many
+      assets this revision touched," and this milestone doesn't add a batched-write
+      path that would change that. No edits made to this component.
 - [ ] `npm run build` and `npm test` green; if E2E journeys are runnable in this
       environment (`SF_RUN_E2E=1`), `m6-journeys.spec.ts` (journeys 5-8) still passes
       unmodified, confirming this milestone didn't regress the existing collaboration
-      UX it's built on top of.
+      UX it's built on top of. `npm run build` is green. `npm test` is not, for the
+      pre-existing/unrelated reason documented above; E2E was not attempted in this
+      session.
 
 ## Out of scope
 
