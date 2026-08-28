@@ -1,6 +1,6 @@
 ---
 id: M15.3.2
-status: todo
+status: done
 depends: [M15.2]
 epic: m15-compound-revisions
 feature: revision-invariants-compound
@@ -45,12 +45,12 @@ don't just assume the refactor didn't break anything."
 
 ## Acceptance criteria
 
-- [ ] Every test file listed above is confirmed either unaffected (no hard-coded
+- [x] Every test file listed above is confirmed either unaffected (no hard-coded
       revision-id/count assumption touching the four changed call sites) or updated.
-- [ ] No remaining test in the suite asserts a stale revision count (e.g. "project
+- [x] No remaining test in the suite asserts a stale revision count (e.g. "project
       creation yields 8 revisions," "template migration produces N MOVE revisions for
       N templates") — every such assertion reflects the compound-revision behavior.
-- [ ] Full `./gradlew build` (all modules, all tests) is green with zero regressions
+- [x] Full `./gradlew build` (all modules, all tests) is green with zero regressions
       outside the deliberately-updated assertions.
 
 ## Out of scope
@@ -65,3 +65,32 @@ don't just assume the refactor didn't break anything."
   editing any one of them; a partial fix-as-you-go pass risks leaving a stale
   assertion that happens to still pass for the wrong reason (e.g. a loosely-typed
   `>= 1` check that silently tolerates either the old or new count).
+
+## Audit result (M15.3.2)
+
+Grep-driven sweep of every file listed under Goals, plus a repo-wide search for
+hard-coded `RevisionId()/validFromRevision()` literal assertions and for stale
+"N revisions for N templates/folders" language, found all four call sites already
+correctly reflect the compound-revision behavior — `M15.2`'s own call-site tasks had
+already updated (not just left passing-by-accident) every test that exercises them:
+
+- Project creation: `ProjectApiIntegrationTests.createAllocatesRevisionOneAndGrantsCreatorProjectAdmin`
+  asserts exactly 1 revision (`revisions.hasSize(1)`, `revisionId == 1L`) with
+  `summary.assets` listing all 8 entries (1 `PROJECT` + 7 `FOLDER`).
+- UID-rename/CDL-rename cascade: `TemplateServiceTest.renameMigrationMovesContentProjectWideInOneRevision`
+  asserts `after == before + 2` (1 revision for the template's own field update + 1
+  batch revision for the whole N-page cascade) and that every migrated page shares one
+  `validFromRevision`.
+- Template-folder migration: `TemplateFolderIntegrationTest.migrationOfRealisticPreExistingDataReparentsCorrectlyAndPreservesHistory`
+  asserts all 4 legacy templates land on the same single `MOVE` revision
+  (`distinctMigrationRevisions == 1`), not one `MOVE` per template.
+- Project restore: `ProjectRestoreServiceTest.restoreSummaryListsEveryRestoredOrDeletedAsset`
+  asserts `summary.assets` is populated (the `M15.2.2` bug fix) with one entry per
+  touched asset.
+
+`AssetRevisionIntegrationTests`, `ConcurrentWritersTest`, `RevisionFilterIntegrationTest`,
+`UidChangeWarningIntegrationTest`, `ProjectExportImportIntegrationTest` and `Fixtures.java`
+were confirmed unaffected — none hard-code a revision id/count derived from a
+project-creation-time revision total; all use relative computation (`before + 1`, max of
+`findByProjectIdOrderByRevisionIdDesc`, etc.). No stale assertion or loosely-typed
+`>= 1` check masking the old 8-revision behavior was found anywhere in the suite.

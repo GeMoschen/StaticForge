@@ -28,13 +28,13 @@ introduce (project creation's revision count, `ProjectRestoreService`'s summary)
 
 ## Feature exit criteria
 
-- [ ] `RevisionInvariantsTest`'s jqwik model includes a "batch of N asset operations,
+- [x] `RevisionInvariantsTest`'s jqwik model includes a "batch of N asset operations,
       one revision" generated action alongside the existing single-asset actions, and
       all five invariants hold across property runs that include it.
-- [ ] `AssetRevisionIntegrationTests`, `ConcurrentWritersTest`, and
+- [x] `AssetRevisionIntegrationTests`, `ConcurrentWritersTest`, and
       `RevisionFilterIntegrationTest` are audited for any assumption of exactly-one-
       asset-per-revision and updated or explicitly confirmed unaffected.
-- [ ] `./gradlew build` green, including the 16-virtual-thread concurrency harness.
+- [x] `./gradlew build` green, including the 16-virtual-thread concurrency harness.
 
 ## Dependencies
 

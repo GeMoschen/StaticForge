@@ -1,6 +1,6 @@
 ---
 id: M15.3.1
-status: todo
+status: done
 depends: [M15.2]
 epic: m15-compound-revisions
 feature: revision-invariants-compound
@@ -48,16 +48,16 @@ path is currently untested by the property suite.
 
 ## Acceptance criteria
 
-- [ ] The jqwik property run (same iteration count/seed policy as today) passes with
+- [x] The jqwik property run (same iteration count/seed policy as today) passes with
       the new batch action included in the generated action set.
-- [ ] All five invariants have at least one explicit assertion path that only the batch
+- [x] All five invariants have at least one explicit assertion path that only the batch
       action can exercise (i.e., removing the batch action from the generator would make
       that assertion untested) — not just "the existing checks happen to also run after
       a batch action."
-- [ ] The concurrency harness (16 virtual threads) includes at least one scenario mixing
+- [x] The concurrency harness (16 virtual threads) includes at least one scenario mixing
       concurrent batches and single-asset writes against overlapping assets, asserting
       the expected `409`/serialization behavior.
-- [ ] `./gradlew :server:sf-app:test --tests RevisionInvariantsTest` green.
+- [x] `./gradlew :server:sf-app:test --tests RevisionInvariantsTest` green.
 
 ## Out of scope
 
