@@ -74,7 +74,7 @@ trustworthy, complete concept in the UI.
       usages, and time travel all correctly represent and operate on a revision that
       touched N>1 assets — proven by (updated) UI tests/E2E journeys, not only by the
       API already returning `summary.assets`/`RevisionDiff.assets` as lists.
-- [ ] `RevisionInvariantsTest`'s property-based invariants (§25.5: gapless revisions,
+- [x] `RevisionInvariantsTest`'s property-based invariants (§25.5: gapless revisions,
       exactly one valid version per revision per touched asset, reproducible reads,
       correct restore, no lost updates) hold under compound (multi-asset) revisions, not
       only the single-asset case they cover today.
