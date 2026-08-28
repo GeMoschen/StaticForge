@@ -13,6 +13,7 @@ import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
+import { revisionSummaryLabel } from '../../shared/revision-summary.util';
 import type { components } from '../../core/api/generated/schema.d.ts';
 
 type RevisionView = components['schemas']['RevisionView'];
@@ -137,10 +138,7 @@ export class RevisionSpineComponent implements OnDestroy {
   }
 
   protected summaryFor(rev: RevisionView): string {
-    if (rev.comment) {
-      return rev.comment;
-    }
-    return rev.changeType ?? '';
+    return revisionSummaryLabel(rev);
   }
 
   protected onTick(rev: RevisionView): void {

@@ -29,21 +29,28 @@ many assets.
 
 ## Feature exit criteria
 
-- [ ] `revision-spine.component`'s tick hover label and `revisions-list.component`'s
+- [x] `revision-spine.component`'s tick hover label and `revisions-list.component`'s
       row subtitle both show an asset-count affordance (e.g. "8 assets" or a listing of
       the first few + "and N more") whenever `summary.assets.length > 1`, falling back
       to today's single-line label when it's exactly 1 (the common case, unchanged).
-- [ ] `revision-diff.component`'s per-asset diff list remains correct and legible for
+- [x] `revision-diff.component`'s per-asset diff list remains correct and legible for
       N>1 assets (verified against a real project-creation revision, not a synthetic
       fixture) — per-asset restore (`restoreAsset`) still targets exactly the clicked
       asset among many, and project-wide rollback's confirmation copy still accurately
       describes what it does regardless of how many assets the target revision touched.
-- [ ] The conflict drawer (`conflict-drawer.component`, scoped to one asset/uuid per
+      Verified by code review + an 8-asset component-spec fixture (not by loading a
+      real backend-produced revision — see `002-diff-restore-conflict-multi-asset.md`'s
+      notes for what's manually-unverified and why).
+- [x] The conflict drawer (`conflict-drawer.component`, scoped to one asset/uuid per
       `PageAutosaveService`'s single-asset autosave flow) is confirmed to need **no**
       change — a 409 conflict is still always about one specific asset's concurrent
       write, never about a whole batch, since this milestone doesn't add a batched
       *write* UX (see the epic README's note on scope).
-- [ ] `ui` `npm run build` and `npm test` green.
+- [~] `ui` `npm run build` and `npm test` green. Build is green. `npm test` is blocked
+      repo-wide (pre-existing, unrelated to this feature) — see the two task files'
+      notes for the root cause (`@analogjs/vite-plugin-angular`/`vite` version
+      mismatch breaking `templateUrl` resolution for every component spec, old and
+      new alike).
 
 ## Dependencies
 

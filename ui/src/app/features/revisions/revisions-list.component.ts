@@ -13,6 +13,7 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { revisionSummaryLabel } from '../../shared/revision-summary.util';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { RevisionsService } from './revisions.service';
 
@@ -142,6 +143,6 @@ export class RevisionsListComponent {
   }
 
   protected summaryFor(rev: RevisionView): string {
-    return rev.comment ?? rev.changeType ?? '';
+    return revisionSummaryLabel(rev);
   }
 }
