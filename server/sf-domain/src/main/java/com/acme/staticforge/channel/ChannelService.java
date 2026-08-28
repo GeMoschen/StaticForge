@@ -1,5 +1,6 @@
 package com.acme.staticforge.channel;
 
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.render.Escaping;
 import java.util.List;
 
@@ -19,11 +20,11 @@ public interface ChannelService {
      * key (409), allocates a revision and appends a summary. When {@code copyFrom} is non-blank,
      * each template's {@code copyFrom} channel OCTL is cloned into the new key in one revision.
      */
-    OutputChannel create(long projectId, CreateChannelRequest req, Long actingUserId, String comment);
+    OutputChannel create(CreateChannelRequest req, RevisionContext ctx);
 
-    OutputChannel update(long projectId, String key, UpdateChannelRequest req, Long actingUserId);
+    OutputChannel update(String key, UpdateChannelRequest req, RevisionContext ctx);
 
-    OutputChannel setEnabled(long projectId, String key, boolean enabled, Long actingUserId);
+    OutputChannel setEnabled(String key, boolean enabled, RevisionContext ctx);
 
     /** The templates still carrying a channel template for {@code key} (UI preview). */
     DeletePreview previewDelete(long projectId, String key);
@@ -33,7 +34,7 @@ public interface ChannelService {
      * blocked (409 {@code SF-CH-0201}, affected templates in the {@code blockedBy} extension)
      * when templates still carry a channel template for the key.
      */
-    void delete(long projectId, String key, Long actingUserId, String comment);
+    void delete(String key, RevisionContext ctx);
 
     /** Maps the channel's {@code default_escaping} to an {@link Escaping} (default HTML). */
     Escaping defaultEscaping(long projectId, String channelKey);
@@ -42,12 +43,14 @@ public interface ChannelService {
      * Seeds {@code newChannelKey} channel templates from {@code sourceChannelKey} for every page
      * and section template in the project whose payload carries the source key, in one revision.
      */
-    void seedFrom(long projectId, String newChannelKey, String sourceChannelKey, Long actingUserId);
+    void seedFrom(String newChannelKey, String sourceChannelKey, RevisionContext ctx);
 
     /**
-     * Creates the default {@code html} channel when absent. Deliberately allocates NO revision:
-     * it runs inside {@link com.acme.staticforge.project.ProjectService#create}, which already
-     * allocated the project's creating revision.
+     * Creates the default {@code html} channel when absent. Takes a {@link RevisionContext} like
+     * every other mutating channel method so it can be folded into a caller's open batch, but
+     * still allocates NO revision of its own today: channel bootstrap isn't revision-tracked, and
+     * {@link com.acme.staticforge.project.ProjectService#create} already covers project creation
+     * with its own (batch) revision.
      */
-    void ensureDefaultChannels(long projectId, Long actingUserId);
+    void ensureDefaultChannels(RevisionContext ctx);
 }

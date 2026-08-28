@@ -140,16 +140,16 @@ class ProjectImportAnalyzeApiTest {
     @Test
     void commitImportWithOnlyWarningConflictSucceedsAsBefore() throws Exception {
         Fixture source = newFixture("an_warn_src");
-        channelService.create(source.project().getId(),
+        channelService.create(
                 new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
-                source.user().getId(), null);
+                source.ctx());
         byte[] archive = exportImportService.exportSelection(
                 source.project().getId(), new ExportSelection(Set.of(), true, false, Set.of()));
 
         Fixture target = newFixture("an_warn_tgt");
-        channelService.create(target.project().getId(),
+        channelService.create(
                 new CreateChannelRequest("markdown", "Pre-existing Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
-                target.user().getId(), null);
+                target.ctx());
 
         mvc.perform(multipart("/api/v1/projects/" + target.project().getKey() + "/import")
                         .file(new MockMultipartFile("file", "archive.zip", "application/zip", archive))

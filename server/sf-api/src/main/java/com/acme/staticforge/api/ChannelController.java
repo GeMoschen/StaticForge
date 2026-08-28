@@ -10,6 +10,7 @@ import com.acme.staticforge.channel.DeletePreview;
 import com.acme.staticforge.channel.OutputChannel;
 import com.acme.staticforge.channel.UpdateChannelRequest;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -55,12 +56,10 @@ public class ChannelController {
     public ResponseEntity<ChannelView> create(
             @PathVariable String projectKey, @RequestBody ChannelCreateRequest body) {
         OutputChannel channel = channelService.create(
-                projectId(projectKey),
                 new CreateChannelRequest(
                         body.key(), body.name(), body.fileExtension(), body.mimeType(), body.defaultEscaping(),
                         body.enabled(), body.isDefault(), body.position(), body.settings(), body.copyFrom()),
-                securitySupport.currentUserId(),
-                null);
+                RevisionContext.of(projectId(projectKey), securitySupport.currentUserId(), null));
         return ResponseEntity.status(HttpStatus.CREATED).body(toView(channel));
     }
 
@@ -69,12 +68,11 @@ public class ChannelController {
     public ChannelView update(
             @PathVariable String projectKey, @PathVariable String key, @RequestBody ChannelUpdateRequest body) {
         OutputChannel channel = channelService.update(
-                projectId(projectKey),
                 key,
                 new UpdateChannelRequest(
                         body.name(), body.fileExtension(), null, body.defaultEscaping(), body.enabled(),
                         body.isDefault(), body.position(), body.settings()),
-                securitySupport.currentUserId());
+                RevisionContext.of(projectId(projectKey), securitySupport.currentUserId(), null));
         return toView(channel);
     }
 
@@ -90,20 +88,22 @@ public class ChannelController {
     @DeleteMapping("/{key}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
     public ResponseEntity<Void> delete(@PathVariable String projectKey, @PathVariable String key) {
-        channelService.delete(projectId(projectKey), key, securitySupport.currentUserId(), null);
+        channelService.delete(key, RevisionContext.of(projectId(projectKey), securitySupport.currentUserId(), null));
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{key}/enable")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public ChannelView enable(@PathVariable String projectKey, @PathVariable String key) {
-        return toView(channelService.setEnabled(projectId(projectKey), key, true, securitySupport.currentUserId()));
+        return toView(channelService.setEnabled(
+                key, true, RevisionContext.of(projectId(projectKey), securitySupport.currentUserId(), null)));
     }
 
     @PostMapping("/{key}/disable")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public ChannelView disable(@PathVariable String projectKey, @PathVariable String key) {
-        return toView(channelService.setEnabled(projectId(projectKey), key, false, securitySupport.currentUserId()));
+        return toView(channelService.setEnabled(
+                key, false, RevisionContext.of(projectId(projectKey), securitySupport.currentUserId(), null)));
     }
 
     private long projectId(String key) {

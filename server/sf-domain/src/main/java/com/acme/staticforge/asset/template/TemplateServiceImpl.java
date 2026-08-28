@@ -333,8 +333,13 @@ public class TemplateServiceImpl implements TemplateService {
             return;
         }
 
-        Revision revision = revisionService.allocate(ctx.projectId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        // One editor rename can affect several pages at once — open a single batch for the
+        // whole cascade (spec §7.1) rather than one revision per page, on the shared
+        // beginBatch/allocateOrJoin mechanism (M15.1) instead of a bespoke inline duplicate.
+        Revision batch = revisionService.beginBatch(ctx.projectId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
         for (AffectedPage page : affected) {
+            Revision revision = revisionService.allocateOrJoin(batchCtx, ChangeType.UPDATE);
             close(page.version().getAssetId(), revision.getRevisionId());
             insertVersion(page.version(), page.payload(), revision.getRevisionId(), ctx.userId());
             Asset asset = assetRepository.findById(page.version().getAssetId())
@@ -442,8 +447,8 @@ public class TemplateServiceImpl implements TemplateService {
     /**
      * Lazily and idempotently reparents every current {@code PAGE_TEMPLATE}/{@code
      * SECTION_TEMPLATE} not already under a {@code TEMPLATES}-scope folder into this project's
-     * fixed folder matching its kind, in a single allocated revision — a normal {@code MOVE}
-     * revision per template, exactly like {@code FolderServiceImpl.move}. Self-heals on first
+     * fixed folder matching its kind, all in one compound {@code MOVE} batch revision (spec
+     * §7.1) — one revision for the whole migration run, not one per template. Self-heals on first
      * relevant access (invoked from {@link #create} and {@link #list}), mirroring {@code
      * AssetServiceImpl.ensureRootFolder}'s lazy-create-on-first-access pattern. No-op once every
      * current template is already correctly placed.
@@ -463,7 +468,11 @@ public class TemplateServiceImpl implements TemplateService {
             return;
         }
 
-        Revision revision = revisionService.allocate(projectId, ChangeType.MOVE, ctx.comment(), ctx.userId());
+        // "Migrate every pre-M13 template into its fixed folder" is one logical maintenance
+        // operation — open a single batch for the whole run rather than one revision per
+        // template, on the shared beginBatch/allocateOrJoin mechanism (M15.1).
+        Revision batch = revisionService.beginBatch(projectId, ChangeType.MOVE, ctx.comment(), ctx.userId());
+        RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
         for (AssetVersion version : toMove) {
             Asset asset = assetRepository.findById(version.getAssetId())
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found.")));
@@ -471,6 +480,7 @@ public class TemplateServiceImpl implements TemplateService {
             Asset targetFolderAsset = assetRepository.findByProjectIdAndUuid(projectId, targetFolder.uuid())
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Fixed template folder not found.")));
 
+            Revision revision = revisionService.allocateOrJoin(batchCtx, ChangeType.MOVE);
             close(version.getAssetId(), revision.getRevisionId());
             insertVersion(
                     version, version.getPayload(), revision.getRevisionId(), ctx.userId(),

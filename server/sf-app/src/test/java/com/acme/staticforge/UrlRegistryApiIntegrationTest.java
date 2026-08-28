@@ -322,10 +322,12 @@ class UrlRegistryApiIntegrationTest {
         Project project = projectService.create(new CreateProjectRequest("urlregapip_" + n, "UrlRegApi Project " + n, null, null), admin.getId());
 
         AppUser viewer = userService.create("urlregapi-viewer-" + n, "urlregapi-viewer-" + n + "@example.com", "UrlRegApi Viewer " + n, "secret-password");
-        projectService.setMemberRole(project.getKey(), viewer.getId(), ProjectRole.VIEWER, admin.getId(), "test");
+        projectService.setMemberRole(project.getKey(), viewer.getId(), ProjectRole.VIEWER,
+                RevisionContext.of(project.getId(), admin.getId(), "test"));
 
         AppUser developer = userService.create("urlregapi-dev-" + n, "urlregapi-dev-" + n + "@example.com", "UrlRegApi Dev " + n, "secret-password");
-        projectService.setMemberRole(project.getKey(), developer.getId(), ProjectRole.DEVELOPER, admin.getId(), "test");
+        projectService.setMemberRole(project.getKey(), developer.getId(), ProjectRole.DEVELOPER,
+                RevisionContext.of(project.getId(), admin.getId(), "test"));
 
         return new Fixture(project, admin, viewer, developer);
     }

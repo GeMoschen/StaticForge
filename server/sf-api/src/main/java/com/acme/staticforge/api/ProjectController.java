@@ -12,6 +12,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectMember;
 import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.AuthenticatedUser;
 import com.acme.staticforge.security.SecuritySupport;
 import com.acme.staticforge.user.AppUser;
@@ -92,16 +93,14 @@ public class ProjectController {
     @PutMapping("/{key}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ROLE_EXPR + ".PROJECT_ADMIN)")
     public ProjectDetail update(@PathVariable("key") String projectKey, @Valid @RequestBody ProjectUpdateRequest body) {
-        Long actingUserId = securitySupport.currentUserId();
         return toDetail(projectService.update(
-                projectKey, body.name(), body.description(), body.allowedMimeTypes(), actingUserId, null));
+                projectKey, body.name(), body.description(), body.allowedMimeTypes(), ctx(projectKey, null)));
     }
 
     @PostMapping("/{key}/archive")
     @PreAuthorize("hasAuthority('SYS_INSTANCE_ADMIN')")
     public ResponseEntity<Void> archive(@PathVariable("key") String projectKey) {
-        Long actingUserId = securitySupport.currentUserId();
-        projectService.archive(projectKey, actingUserId, null);
+        projectService.archive(projectKey, ctx(projectKey, null));
         return ResponseEntity.noContent().build();
     }
 
@@ -119,8 +118,7 @@ public class ProjectController {
             @Valid @RequestBody SetMemberRoleRequest body) {
         userService.requireById(userId);
         ProjectRole role = parseRole(body.role());
-        Long actingUserId = securitySupport.currentUserId();
-        projectService.setMemberRole(projectKey, userId, role, actingUserId, null);
+        projectService.setMemberRole(projectKey, userId, role, ctx(projectKey, null));
         ProjectMember member = projectService.members(projectKey).stream()
                 .filter(m -> m.getUserId().equals(userId))
                 .findFirst()
@@ -132,9 +130,13 @@ public class ProjectController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ROLE_EXPR + ".PROJECT_ADMIN)")
     public ResponseEntity<Void> removeMember(
             @PathVariable("key") String projectKey, @PathVariable("userId") Long userId) {
-        Long actingUserId = securitySupport.currentUserId();
-        projectService.removeMember(projectKey, userId, actingUserId, null);
+        projectService.removeMember(projectKey, userId, ctx(projectKey, null));
         return ResponseEntity.noContent().build();
+    }
+
+    /** Builds the {@link RevisionContext} for a by-key project mutation (resolves the numeric project id). */
+    private RevisionContext ctx(String projectKey, String comment) {
+        return RevisionContext.of(projectService.requireByKey(projectKey).getId(), securitySupport.currentUserId(), comment);
     }
 
     private ProjectMemberView toMemberView(ProjectMember member) {

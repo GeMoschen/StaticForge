@@ -70,11 +70,9 @@ class ChannelServiceTest {
         Fixture fx = newFixture();
 
         assertThatThrownBy(() -> channelService.create(
-                        fx.project().getId(),
                         new CreateChannelRequest("html", "HTML", "html", "text/html", "HTML",
                                 true, true, 0, null, null),
-                        fx.user().getId(),
-                        null))
+                        fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
     }
 
@@ -83,7 +81,7 @@ class ChannelServiceTest {
         Fixture fx = newFixture();
 
         assertThatThrownBy(() ->
-                        channelService.delete(fx.project().getId(), "html", fx.user().getId(), null))
+                        channelService.delete("html", fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> {
                     assertThat(ex.getStatus()).isEqualTo(422);
                     assertThat(ex.getProblem().getExtensions().get("code")).isEqualTo("SF-CH-0101");
@@ -94,11 +92,9 @@ class ChannelServiceTest {
     void deletingUsedChannelIsBlockedAndListsTemplates() {
         Fixture fx = newFixture();
         channelService.create(
-                fx.project().getId(),
                 new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN",
                         true, false, 1, null, null),
-                fx.user().getId(),
-                null);
+                fx.ctx());
 
         TemplateView template = templateService.create(
                 new CreateTemplateCommand(
@@ -118,7 +114,7 @@ class ChannelServiceTest {
                 .contains(template.uid());
 
         assertThatThrownBy(() ->
-                        channelService.delete(fx.project().getId(), "markdown", fx.user().getId(), null))
+                        channelService.delete("markdown", fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> {
                     assertThat(ex.getStatus()).isEqualTo(409);
                     assertThat(ex.getProblem().getExtensions().get("code")).isEqualTo("SF-CH-0201");
@@ -143,11 +139,9 @@ class ChannelServiceTest {
                 fx.ctx());
 
         OutputChannel markdown = channelService.create(
-                fx.project().getId(),
                 new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN",
                         true, false, 1, null, "html"),
-                fx.user().getId(),
-                null);
+                fx.ctx());
 
         assertThat(markdown.getKey()).isEqualTo("markdown");
 
@@ -161,11 +155,9 @@ class ChannelServiceTest {
     void defaultEscapingMapsStoredName() {
         Fixture fx = newFixture();
         channelService.create(
-                fx.project().getId(),
                 new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN",
                         true, false, 1, null, null),
-                fx.user().getId(),
-                null);
+                fx.ctx());
 
         assertThat(channelService.defaultEscaping(fx.project().getId(), "markdown")).isEqualTo(Escaping.MARKDOWN);
         assertThat(channelService.defaultEscaping(fx.project().getId(), "html")).isEqualTo(Escaping.HTML);

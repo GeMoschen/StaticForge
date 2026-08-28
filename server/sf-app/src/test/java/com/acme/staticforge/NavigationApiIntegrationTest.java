@@ -224,7 +224,8 @@ class NavigationApiIntegrationTest {
         Project project = projectService.create(new CreateProjectRequest("navapip_" + n, "Nav Api Project " + n, null, null), admin.getId());
 
         AppUser viewer = userService.create("navapi-viewer-" + n, "navapi-viewer-" + n + "@example.com", "Nav Api Viewer " + n, "secret-password");
-        projectService.setMemberRole(project.getKey(), viewer.getId(), ProjectRole.VIEWER, admin.getId(), "test");
+        projectService.setMemberRole(project.getKey(), viewer.getId(), ProjectRole.VIEWER,
+                RevisionContext.of(project.getId(), admin.getId(), "test"));
 
         return new Fixture(project, admin, viewer);
     }

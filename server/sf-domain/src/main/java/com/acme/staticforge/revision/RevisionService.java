@@ -14,6 +14,26 @@ public interface RevisionService {
     /** Allocates a new revision id, records the {@link Revision} row, and returns it. */
     Revision allocate(long projectId, ChangeType type, String comment, Long userId);
 
+    /**
+     * Allocates a new revision id exactly like {@link #allocate}, named to signal that the
+     * caller intends it to be reused across several subsequent nested service calls (spec
+     * §7.1's compound-revision case) rather than closed after a single change. Callers build
+     * a {@link RevisionContext#joining} around the returned {@link Revision} and thread it
+     * into every nested call so those calls' {@link #allocateOrJoin} joins this same batch.
+     */
+    Revision beginBatch(long projectId, ChangeType type, String comment, Long userId);
+
+    /**
+     * Returns {@code ctx.openRevision()} unchanged when the context already carries an
+     * open batch revision; otherwise allocates a fresh one exactly like {@link #allocate}.
+     * The {@code type} parameter is deliberately ignored when joining an existing batch —
+     * the batch's own {@link ChangeType}, fixed once at {@link #beginBatch} time, is
+     * authoritative for the whole container, so a caller joining an open {@code CREATE}
+     * batch with what would locally have been a {@code MOVE} does not get a second,
+     * conflicting change type.
+     */
+    Revision allocateOrJoin(RevisionContext ctx, ChangeType type);
+
     /** Appends a touched-asset entry to the revision's denormalized summary. */
     void appendSummary(long projectId, long revisionId, AssetChange change);
 

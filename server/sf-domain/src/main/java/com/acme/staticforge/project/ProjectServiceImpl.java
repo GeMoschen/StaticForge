@@ -76,15 +76,33 @@ public class ProjectServiceImpl implements ProjectService {
         project = projectRepository.save(project);
 
         counterRepository.initialize(project.getId());
-        revisionService.allocate(project.getId(), ChangeType.CREATE, cmd.comment(), actingUserId);
+
+        // Project creation is one user-facing action that bootstraps several assets (the
+        // project itself, plus every fixed template/navigation/pages/media root folder below)
+        // — open one batch revision up front and thread it through every nested call so they
+        // all join it via allocateOrJoin instead of each allocating its own (spec §7.1).
+        Revision batch = revisionService.beginBatch(project.getId(), ChangeType.CREATE, cmd.comment(), actingUserId);
+        RevisionContext creationCtx = RevisionContext.joining(batch, actingUserId, cmd.comment());
+
+        // The project itself isn't an Asset, but its creation is still the batch's first
+        // logical entry — reuse AssetChange's uuid/type/uid/action shape (a synthetic
+        // "project-<id>" uuid, type "PROJECT") so every reader of summary.assets only ever
+        // has to understand one entry shape per revision.
+        revisionService.appendSummary(
+                project.getId(),
+                batch.getRevisionId(),
+                AssetChange.create("project-" + project.getId(), "PROJECT", "CREATE", List.of()));
 
         ProjectMember member = new ProjectMember(project.getId(), actingUserId, ProjectRole.PROJECT_ADMIN, Instant.now());
         member.setGrantedBy(actingUserId);
         projectMemberRepository.save(member);
 
-        channelService.ensureDefaultChannels(project.getId(), actingUserId);
-
-        RevisionContext creationCtx = RevisionContext.of(project.getId(), actingUserId, cmd.comment());
+        // Channel bootstrap deliberately stays revision-untracked (see
+        // ChannelService#ensureDefaultChannels) even though it now takes the batch-carrying
+        // ctx: the default html channel isn't an Asset and isn't part of the epic's "8 -> 1
+        // revision" proof case (summary.assets is specified as the project + its 7 bootstrap
+        // folders), so joining it into the batch would just be unused plumbing today.
+        channelService.ensureDefaultChannels(creationCtx);
 
         // The template store's top level is fixed to exactly these two protected folders,
         // themselves nested under a fixed "All Templates" wrapper root (spec M13.1.2, later
@@ -128,13 +146,13 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public Project update(String key, String name, String description, List<String> allowedMimeTypes, Long actingUserId, String comment) {
+    public Project update(String key, String name, String description, List<String> allowedMimeTypes, RevisionContext ctx) {
         Project project = requireByKey(key);
         project.setName(name);
         project.setDescription(description);
         project.setAllowedMimeTypes(joinMimeTypes(allowedMimeTypes));
         projectRepository.save(project);
-        revisionService.allocate(project.getId(), ChangeType.UPDATE, comment, actingUserId);
+        revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
         return project;
     }
 
@@ -151,11 +169,11 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public void archive(String key, Long actingUserId, String comment) {
+    public void archive(String key, RevisionContext ctx) {
         Project project = requireByKey(key);
         project.setArchived(true);
         projectRepository.save(project);
-        revisionService.allocate(project.getId(), ChangeType.UPDATE, comment, actingUserId);
+        revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
     }
 
     @Override
@@ -167,39 +185,39 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public void setMemberRole(String key, Long userId, ProjectRole role, Long actingUserId, String comment) {
+    public void setMemberRole(String key, Long userId, ProjectRole role, RevisionContext ctx) {
         Project project = requireByKey(key);
 
         ProjectMember member = projectMemberRepository
                 .findByProjectIdAndUserId(project.getId(), userId)
                 .orElseGet(() -> new ProjectMember(project.getId(), userId, role, Instant.now()));
         member.setRole(role);
-        member.setGrantedBy(actingUserId);
+        member.setGrantedBy(ctx.userId());
         projectMemberRepository.save(member);
 
-        Revision revision = revisionService.allocate(project.getId(), ChangeType.UPDATE, comment, actingUserId);
+        Revision revision = revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
         revisionService.appendSummary(
                 project.getId(),
                 revision.getRevisionId(),
                 AssetChange.create(memberUuid(userId), MEMBER_ASSET_TYPE, "UPDATE", List.of("role")));
 
         auditService.record(
-                project.getId(), actingUserId, "MEMBER_ROLE_SET", "member:" + userId, memberDetail(userId, role.name()));
+                project.getId(), ctx.userId(), "MEMBER_ROLE_SET", "member:" + userId, memberDetail(userId, role.name()));
     }
 
     @Override
     @Transactional
-    public void removeMember(String key, Long userId, Long actingUserId, String comment) {
+    public void removeMember(String key, Long userId, RevisionContext ctx) {
         Project project = requireByKey(key);
         projectMemberRepository.deleteByProjectIdAndUserId(project.getId(), userId);
 
-        Revision revision = revisionService.allocate(project.getId(), ChangeType.UPDATE, comment, actingUserId);
+        Revision revision = revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
         revisionService.appendSummary(
                 project.getId(),
                 revision.getRevisionId(),
                 AssetChange.create(memberUuid(userId), MEMBER_ASSET_TYPE, "DELETE", List.of()));
 
-        auditService.record(project.getId(), actingUserId, "MEMBER_REMOVED", "member:" + userId, memberDetail(userId, null));
+        auditService.record(project.getId(), ctx.userId(), "MEMBER_REMOVED", "member:" + userId, memberDetail(userId, null));
     }
 
     @Override

@@ -13,6 +13,7 @@ import com.acme.staticforge.revision.AssetChange;
 import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionAware;
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.render.Escaping;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -73,7 +74,8 @@ public class ChannelServiceImpl implements ChannelService {
 
     @Override
     @Transactional
-    public OutputChannel create(long projectId, CreateChannelRequest req, Long actingUserId, String comment) {
+    public OutputChannel create(CreateChannelRequest req, RevisionContext ctx) {
+        long projectId = ctx.projectId();
         String key = validateKey(req.key());
         if (channelRepository.existsByProjectIdAndKey(projectId, key)) {
             throw new SfException(ProblemFactory.conflict("A channel with this key already exists."));
@@ -91,24 +93,25 @@ public class ChannelServiceImpl implements ChannelService {
                 req.position() == null ? 0 : req.position(),
                 req.settings()));
 
-        Revision revision = revisionService.allocate(projectId, ChangeType.CREATE, comment, actingUserId);
+        Revision revision = revisionService.allocate(projectId, ChangeType.CREATE, ctx.comment(), ctx.userId());
         revisionService.appendSummary(
                 projectId,
                 revision.getRevisionId(),
                 AssetChange.create(channelUuid(key), CHANNEL_ASSET_TYPE, "CREATE", List.of("key", "name")));
 
-        auditService.record(projectId, actingUserId, "CHANNEL_CREATE", "channel:" + key, channelDetail(key, req.name()));
+        auditService.record(projectId, ctx.userId(), "CHANNEL_CREATE", "channel:" + key, channelDetail(key, req.name()));
 
         String copyFrom = req.copyFrom();
         if (copyFrom != null && !copyFrom.isBlank()) {
-            seedFrom(projectId, key, copyFrom, actingUserId);
+            seedFrom(key, copyFrom, ctx);
         }
         return channel;
     }
 
     @Override
     @Transactional
-    public OutputChannel update(long projectId, String key, UpdateChannelRequest req, Long actingUserId) {
+    public OutputChannel update(String key, UpdateChannelRequest req, RevisionContext ctx) {
+        long projectId = ctx.projectId();
         OutputChannel channel = requireChannel(projectId, key);
         channel.setName(defaultString(req.name(), key));
         channel.setFileExtension(req.fileExtension());
@@ -120,19 +123,20 @@ public class ChannelServiceImpl implements ChannelService {
         channel.setSettings(req.settings());
         channel = channelRepository.save(channel);
 
-        revisionService.allocate(projectId, ChangeType.UPDATE, null, actingUserId);
-        auditService.record(projectId, actingUserId, "CHANNEL_UPDATE", "channel:" + key, channelDetail(key, channel.getName()));
+        revisionService.allocate(projectId, ChangeType.UPDATE, null, ctx.userId());
+        auditService.record(projectId, ctx.userId(), "CHANNEL_UPDATE", "channel:" + key, channelDetail(key, channel.getName()));
         return channel;
     }
 
     @Override
     @Transactional
-    public OutputChannel setEnabled(long projectId, String key, boolean enabled, Long actingUserId) {
+    public OutputChannel setEnabled(String key, boolean enabled, RevisionContext ctx) {
+        long projectId = ctx.projectId();
         OutputChannel channel = requireChannel(projectId, key);
         if (channel.isEnabled() != enabled) {
             channel.setEnabled(enabled);
             channel = channelRepository.save(channel);
-            revisionService.allocate(projectId, ChangeType.UPDATE, null, actingUserId);
+            revisionService.allocate(projectId, ChangeType.UPDATE, null, ctx.userId());
         }
         return channel;
     }
@@ -145,7 +149,8 @@ public class ChannelServiceImpl implements ChannelService {
 
     @Override
     @Transactional
-    public void delete(long projectId, String key, Long actingUserId, String comment) {
+    public void delete(String key, RevisionContext ctx) {
+        long projectId = ctx.projectId();
         OutputChannel channel = requireChannel(projectId, key);
         if (HTML_KEY.equals(key)) {
             throw new SfException(ProblemFactory.other(
@@ -156,8 +161,8 @@ public class ChannelServiceImpl implements ChannelService {
             throw blockedError(affected);
         }
         channelRepository.delete(channel);
-        revisionService.allocate(projectId, ChangeType.DELETE, comment, actingUserId);
-        auditService.record(projectId, actingUserId, "CHANNEL_DELETE", "channel:" + key, channelDetail(key, channel.getName()));
+        revisionService.allocate(projectId, ChangeType.DELETE, ctx.comment(), ctx.userId());
+        auditService.record(projectId, ctx.userId(), "CHANNEL_DELETE", "channel:" + key, channelDetail(key, channel.getName()));
     }
 
     @Override
@@ -172,7 +177,8 @@ public class ChannelServiceImpl implements ChannelService {
 
     @Override
     @Transactional
-    public void seedFrom(long projectId, String newChannelKey, String sourceChannelKey, Long actingUserId) {
+    public void seedFrom(String newChannelKey, String sourceChannelKey, RevisionContext ctx) {
+        long projectId = ctx.projectId();
         List<SeedTarget> targets = new ArrayList<>();
         for (AssetType type : List.of(AssetType.PAGE_TEMPLATE, AssetType.SECTION_TEMPLATE)) {
             for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, type)) {
@@ -188,7 +194,7 @@ public class ChannelServiceImpl implements ChannelService {
         }
 
         Revision revision = revisionService.allocate(
-                projectId, ChangeType.UPDATE, "copy channel " + sourceChannelKey + " to " + newChannelKey, actingUserId);
+                projectId, ChangeType.UPDATE, "copy channel " + sourceChannelKey + " to " + newChannelKey, ctx.userId());
 
         for (SeedTarget target : targets) {
             AssetVersion current = target.version();
@@ -196,7 +202,7 @@ public class ChannelServiceImpl implements ChannelService {
             payload.withObject("channelTemplates").set(newChannelKey, target.source().deepCopy());
 
             close(current.getAssetId(), revision.getRevisionId());
-            insertVersion(current, payload, revision.getRevisionId(), actingUserId);
+            insertVersion(current, payload, revision.getRevisionId(), ctx.userId());
 
             Asset asset = assetRepository.findById(current.getAssetId())
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found.")));
@@ -206,7 +212,8 @@ public class ChannelServiceImpl implements ChannelService {
 
     @Override
     @Transactional
-    public void ensureDefaultChannels(long projectId, Long actingUserId) {
+    public void ensureDefaultChannels(RevisionContext ctx) {
+        long projectId = ctx.projectId();
         if (channelRepository.findByProjectIdAndKey(projectId, HTML_KEY).isPresent()) {
             return;
         }

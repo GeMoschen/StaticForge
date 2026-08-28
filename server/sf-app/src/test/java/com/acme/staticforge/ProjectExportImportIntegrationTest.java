@@ -463,9 +463,9 @@ class ProjectExportImportIntegrationTest {
     @Test
     void exportWithBothSettingsFlagsOffOmitsSettingsEntry() {
         Fixture source = newFixture("exp_set_off", "Export Settings Off");
-        channelService.create(source.project().getId(),
+        channelService.create(
                 new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
-                source.user().getId(), null);
+                source.ctx());
         generationTargetRepository.save(new GenerationTarget(
                 source.project().getId(), "Local Filesystem", TargetType.FILESYSTEM, MAPPER.createObjectNode(), true));
 
@@ -511,9 +511,9 @@ class ProjectExportImportIntegrationTest {
     @Test
     void importSkipsCollidingChannelsAndTargetsWithoutErrorAndCreatesNonColliding() {
         Fixture source = newFixture("exp_set_imp_src", "Export Settings Import Source");
-        channelService.create(source.project().getId(),
+        channelService.create(
                 new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
-                source.user().getId(), null);
+                source.ctx());
         generationTargetRepository.save(new GenerationTarget(
                 source.project().getId(), "Local Filesystem", TargetType.FILESYSTEM, MAPPER.createObjectNode(), true));
 
@@ -523,9 +523,9 @@ class ProjectExportImportIntegrationTest {
         // Target project already has a colliding "markdown" channel with a different name —
         // it must survive the import unchanged.
         Fixture collidingTarget = newFixture("exp_set_imp_coll", "Export Settings Import Colliding Target");
-        channelService.create(collidingTarget.project().getId(),
+        channelService.create(
                 new CreateChannelRequest("markdown", "Pre-existing Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
-                collidingTarget.user().getId(), null);
+                collidingTarget.ctx());
 
         assertThatCode(() -> exportImportService.importProject(collidingTarget.project().getId(), archive, collidingTarget.ctx(), ImportOptions.DEFAULT))
                 .doesNotThrowAnyException();
@@ -1731,9 +1731,9 @@ class ProjectExportImportIntegrationTest {
     @Test
     void settingsAndBlobEntriesAreUnaffectedByThePerAssetAssetLayout() {
         Fixture source = newFixture("m141_settings", "M14.1 Settings And Blobs Unaffected");
-        channelService.create(source.project().getId(),
+        channelService.create(
                 new CreateChannelRequest("markdown", "Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null),
-                source.user().getId(), null);
+                source.ctx());
         generationTargetRepository.save(new GenerationTarget(
                 source.project().getId(), "Local Filesystem", TargetType.FILESYSTEM, MAPPER.createObjectNode(), true));
         byte[] png = solidPng(4, 4, Color.ORANGE);

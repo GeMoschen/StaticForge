@@ -1,5 +1,6 @@
 package com.acme.staticforge.project;
 
+import com.acme.staticforge.revision.RevisionContext;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,17 +27,17 @@ public interface ProjectService {
     List<Project> listAll();
 
     /** {@code allowedMimeTypes} is always fully replaced; an empty/null list clears the override back to the instance-wide default. */
-    Project update(String key, String name, String description, List<String> allowedMimeTypes, Long actingUserId, String comment);
+    Project update(String key, String name, String description, List<String> allowedMimeTypes, RevisionContext ctx);
 
-    void archive(String key, Long actingUserId, String comment);
+    void archive(String key, RevisionContext ctx);
 
     List<ProjectMember> members(String key);
 
     /** Upserts a membership and records an {@code UPDATE} revision + summary entry. */
-    void setMemberRole(String key, Long userId, ProjectRole role, Long actingUserId, String comment);
+    void setMemberRole(String key, Long userId, ProjectRole role, RevisionContext ctx);
 
     /** Removes a membership and records an {@code UPDATE} revision + summary entry. */
-    void removeMember(String key, Long userId, Long actingUserId, String comment);
+    void removeMember(String key, Long userId, RevisionContext ctx);
 
     List<ProjectMember> membershipsOf(Long userId);
 }

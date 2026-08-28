@@ -447,7 +447,7 @@ public class AssetServiceImpl implements AssetService {
         Asset asset = new Asset(uuid, projectId, type, uid, Instant.now(), ctx.userId());
         asset = assetRepository.save(asset);
 
-        Revision revision = revisionService.allocate(projectId, ChangeType.CREATE, ctx.comment(), ctx.userId());
+        Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.CREATE);
         AssetVersion version = insertVersion(
                 asset.getId(), revision.getRevisionId(), displayName, payload, ctx.userId(), Instant.now(),
                 folderId, folderPath, templateAssetId, false);

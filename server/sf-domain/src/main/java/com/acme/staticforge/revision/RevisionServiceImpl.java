@@ -59,6 +59,21 @@ public class RevisionServiceImpl implements RevisionService {
 
     @Override
     @Transactional
+    public Revision beginBatch(long projectId, ChangeType type, String comment, Long userId) {
+        return allocate(projectId, type, comment, userId);
+    }
+
+    @Override
+    @Transactional
+    public Revision allocateOrJoin(RevisionContext ctx, ChangeType type) {
+        if (ctx.openRevision() != null) {
+            return ctx.openRevision();
+        }
+        return allocate(ctx.projectId(), type, ctx.comment(), ctx.userId());
+    }
+
+    @Override
+    @Transactional
     public void appendSummary(long projectId, long revisionId, AssetChange change) {
         Revision revision = revisionRepository
                 .findByProjectIdAndRevisionId(projectId, revisionId)

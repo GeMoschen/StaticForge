@@ -69,20 +69,24 @@ class ProjectApiIntegrationTests {
         assertThat(project.getId()).isNotNull();
         assertThat(project.getKey()).isEqualTo("demo");
 
-        // Revision 1 is the project's own CREATE; seven more follow in the same call: the
-        // implicit hidden root folder, the fixed "All Templates" wrapper root, the two fixed
-        // "Page Templates" / "Section Templates" folders nested inside it (spec M13.1.2,
-        // generalized), and the fixed "All Navigation" / "All Pages" / "All Media" roots — every
-        // store (Pages, Media, Navigation, Templates) now provisions its own fixed wrapper root
-        // upfront, the same treatment across the board.
+        // Project creation is one user-facing action that bootstraps the project itself plus
+        // seven fixed folders: the implicit hidden root, the fixed "All Templates" wrapper root,
+        // the two fixed "Page Templates" / "Section Templates" folders nested inside it (spec
+        // M13.1.2, generalized), and the fixed "All Navigation" / "All Pages" / "All Media"
+        // roots — every store (Pages, Media, Navigation, Templates) provisions its own fixed
+        // wrapper root upfront. M15 folds all 8 creations into exactly one compound revision
+        // instead of fragmenting them across 8.
         List<Revision> revisions = revisionRepository.findByProjectIdOrderByRevisionIdDesc(project.getId());
-        assertThat(revisions).hasSize(8);
-        Revision projectCreateRevision = revisions.stream()
-                .filter(r -> r.getRevisionId() == 1L)
-                .findFirst()
-                .orElseThrow();
+        assertThat(revisions).hasSize(1);
+        Revision projectCreateRevision = revisions.get(0);
+        assertThat(projectCreateRevision.getRevisionId()).isEqualTo(1L);
         assertThat(projectCreateRevision.getChangeType()).isEqualTo(ChangeType.CREATE);
-        assertThat(revisions).allSatisfy(r -> assertThat(r.getChangeType()).isEqualTo(ChangeType.CREATE));
+
+        List<String> touchedTypes = new java.util.ArrayList<>();
+        projectCreateRevision.getSummary().get("assets").forEach(entry -> touchedTypes.add(entry.get("type").asText()));
+        assertThat(touchedTypes).hasSize(8);
+        assertThat(touchedTypes).containsOnlyOnce("PROJECT");
+        assertThat(touchedTypes.stream().filter("FOLDER"::equals).count()).isEqualTo(7);
 
         Optional<ProjectMember> member =
                 projectMemberRepository.findByProjectIdAndUserId(project.getId(), admin.getId());
