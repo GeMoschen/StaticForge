@@ -112,7 +112,11 @@ test('journey 6: concurrent edit conflict shows the per-field resolver', async (
 test('journey 7: time travel to a past revision and restore an asset', async ({ page }) => {
   test.skip(!process.env['SF_RUN_E2E'], 'requires seeded demo backend (SF_RUN_E2E=1)');
   await login(page);
-  await page.goto(`/p/${PROJECT_KEY}/revisions`);
+  // `RevisionsListComponent` is mounted under the project settings shell
+  // (`app.routes.ts`'s `p/:projectKey/settings/revisions`), not a top-level
+  // `p/:projectKey/revisions` route — the latter doesn't match any route and falls
+  // through to the `**` → `''` redirect, silently landing back on the dashboard.
+  await page.goto(`/p/${PROJECT_KEY}/settings/revisions`);
   await expect(page.locator('sf-revisions-list')).toBeVisible();
 
   // The revision spine is sorted newest-first, so the last dot is a past revision.

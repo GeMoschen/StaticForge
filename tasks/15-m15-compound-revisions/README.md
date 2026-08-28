@@ -69,11 +69,21 @@ trustworthy, complete concept in the UI.
       folder move, one UID change, …) still produces exactly one revision touching
       exactly one asset, byte-for-byte equivalent to today's behavior — this is a
       capability *addition*, not a change to the common case.
-- [ ] Revision spine, history list/filtering, structural diff, asset restore,
+- [x] Revision spine, history list/filtering, structural diff, asset restore,
       project-wide rollback, `If-Match`/409 optimistic concurrency, the conflict drawer,
       usages, and time travel all correctly represent and operate on a revision that
       touched N>1 assets — proven by (updated) UI tests/E2E journeys, not only by the
-      API already returning `summary.assets`/`RevisionDiff.assets` as lists.
+      API already returning `summary.assets`/`RevisionDiff.assets` as lists. — Unit-level:
+      `revision-summary.util.spec.ts`, `revisions-list.component.spec.ts`,
+      `revision-spine.component.spec.ts`, `revision-diff.component.spec.ts` (renders all
+      8 assets of a project-creation-shaped revision with correctly-scoped restore
+      actions). Browser-level: `ui/e2e/m15-journeys.spec.ts` (`M15.6.1`) exercises the
+      real project-creation flow end-to-end through spine/history/diff; collects
+      cleanly but — like every journey since `M5` — wasn't run against a live backend
+      here (no seeded demo user; see `tasks/15-m15-compound-revisions/06-e2e-verification/001-project-setup-one-revision-journey.md`).
+      `m6-journeys.spec.ts` journeys 5-8 (time travel, restore, conflict drawer, usages)
+      were regression-read-through-verified against this milestone's changes
+      (`006/002-collaboration-journey-regression.md`), same execution caveat.
 - [x] `RevisionInvariantsTest`'s property-based invariants (§25.5: gapless revisions,
       exactly one valid version per revision per touched asset, reproducible reads,
       correct restore, no lost updates) hold under compound (multi-asset) revisions, not

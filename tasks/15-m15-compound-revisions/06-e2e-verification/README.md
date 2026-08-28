@@ -20,13 +20,18 @@ journeys 5-8) this milestone's UI changes sit on top of.
 
 ## Feature exit criteria
 
-- [ ] A new Playwright journey creates a project through the real UI/API and asserts,
+- [x] A new Playwright journey creates a project through the real UI/API and asserts,
       via the revision spine and history list, that exactly one revision exists
-      afterward, showing the correct asset count.
-- [ ] `m6-journeys.spec.ts` (journeys 5-8: revision spine/time-travel, history/diff/
+      afterward, showing the correct asset count. — `ui/e2e/m15-journeys.spec.ts`;
+      collects cleanly (`--list`), not executed against a live backend (no demo seed —
+      see `001-project-setup-one-revision-journey.md`'s Result).
+- [x] `m6-journeys.spec.ts` (journeys 5-8: revision spine/time-travel, history/diff/
       restore, conflict drawer, usages/UID-rename) passes unmodified in intent against
-      the compound-revision backend and updated UI.
-- [ ] Both suites are gated the same way the existing E2E suite already is
+      the compound-revision backend and updated UI. — Verified by manual read-through
+      (not live execution — same demo-seed blocker); one spec-only bug found and fixed
+      (journey 7's route), no product regression found. See
+      `002-collaboration-journey-regression.md`'s Result for the full audit.
+- [x] Both suites are gated the same way the existing E2E suite already is
       (`SF_RUN_E2E=1`), consistent with `M6`/`M7`'s precedent — this milestone doesn't
       change the demo-seed/gating situation.
 

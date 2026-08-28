@@ -17,6 +17,7 @@ so treat the specs as documentation of the intended flow until that seed lands.
 | structural a11y (landmarks/h1/aria-current) + axe-stub | `a11y.spec.ts` | M7 |
 | navigation tree + URL registry stability/reset | `m8-journeys.spec.ts` | M8 |
 | template folder tree (create/move) + export/import templates tree scope | `m13-journeys.spec.ts` | M13 |
+| project setup is exactly one revision (8-asset affordance + diff) | `m15-journeys.spec.ts` | M15 |
 | unauthenticated → login redirect | `example.spec.ts` | — |
 
 ## Gating
@@ -46,3 +47,14 @@ so treat the specs as documentation of the intended flow until that seed lands.
   environment). The actual proof for `M13` is `TemplateFolderIntegrationTest` and
   `ProjectExportImportIntegrationTest` (`server/sf-app`), `@SpringBootTest`s that exercise the
   identical scenarios end-to-end via real service calls.
+- **`m15-journeys.spec.ts`** documents the intended flow the same way m5/m7/m8/m13 do — it was
+  not run against a live browser (`db/changelog/data/demo-project.xml` is still the M1
+  placeholder changeset, so there's no seeded demo user to log in as, and no interactive
+  browser in this task's environment either). The actual proof for `M15`'s "project creation
+  is one revision" promise is `ProjectApiIntegrationTests.createAllocatesRevisionOneAndGrantsCreatorProjectAdmin`
+  (`server/sf-app`), a `@SpringBootTest` that exercises the identical scenario end-to-end via
+  real service calls. A regression pass over `m6-journeys.spec.ts` (journeys 5-8) against this
+  milestone's changes found and fixed one pre-existing, unrelated spec bug: journey 7 navigated
+  to `/p/:key/revisions`, which doesn't match any route (`RevisionsListComponent` is mounted at
+  `/p/:key/settings/revisions`) and silently redirects to the dashboard via the `**` fallback —
+  fixed to the correct path.
