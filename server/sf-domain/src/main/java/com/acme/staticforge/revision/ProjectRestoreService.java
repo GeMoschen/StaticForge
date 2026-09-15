@@ -49,8 +49,10 @@ public class ProjectRestoreService {
         Revision bulk = revisionService.allocate(projectId, ChangeType.RESTORE, comment, userId);
         long newRevision = bulk.getRevisionId();
 
+        // Open versions including tombstones: a soft-deleted asset's tombstone must be closed when
+        // the asset is restored, or the asset would end up with two open versions.
         Map<Long, AssetVersion> current = new HashMap<>();
-        for (AssetVersion v : assetVersionRepository.findCurrentByProject(projectId)) {
+        for (AssetVersion v : assetVersionRepository.findOpenByProject(projectId)) {
             current.put(v.getAssetId(), v);
         }
         Map<Long, AssetVersion> target = new HashMap<>();
@@ -73,15 +75,19 @@ public class ProjectRestoreService {
         java.util.List<AssetVersion> writtenVersions = new java.util.ArrayList<>();
         for (Long assetId : all) {
             AssetVersion cur = current.get(assetId);
+            AssetVersion tgt = target.get(assetId);
+            boolean targetLive = tgt != null && !tgt.isDeleted();
+            if (!targetLive && (cur == null || cur.isDeleted())) {
+                continue; // already deleted now and absent or deleted at the target: nothing to restore
+            }
             if (cur != null) {
                 cur.setValidToRevision(newRevision);
                 assetVersionRepository.save(cur);
             }
 
-            AssetVersion tgt = target.get(assetId);
             AssetVersion written;
             String action;
-            if (tgt != null && !tgt.isDeleted()) {
+            if (targetLive) {
                 AssetVersion restored = new AssetVersion(
                         assetId, newRevision, tgt.getDisplayName(), tgt.getPayload(), userId, now);
                 restored.setFolderId(tgt.getFolderId());

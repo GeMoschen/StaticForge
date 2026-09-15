@@ -2,6 +2,7 @@ package com.acme.staticforge;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
@@ -43,6 +44,7 @@ class ProjectRestoreServiceTest {
     @Autowired AssetService assetService;
     @Autowired ProjectRestoreService projectRestoreService;
     @Autowired AssetVersionRepository assetVersionRepository;
+    @Autowired AssetRepository assetRepository;
 
     @Test
     void restoreSummaryListsEveryRestoredOrDeletedAsset() {
@@ -89,6 +91,47 @@ class ProjectRestoreServiceTest {
         assertThat(sawRestore).isTrue();
         assertThat(sawDelete).isTrue();
         assertThat(keep).isNotNull();
+    }
+
+    @Test
+    void restoringASoftDeletedAssetClosesItsTombstone() {
+        Fixture fx = newFixture();
+
+        AssetVersionView folder = folderService.create(null, "Revived", FolderScope.PAGES, fx.ctx());
+        long toRevision = folder.validFromRevision();
+        assetService.softDelete(folder.uuid(), false, fx.ctx());
+
+        projectRestoreService.restoreTo(fx.project().getId(), toRevision, fx.user().getId(), "rollback");
+
+        List<AssetVersion> open = openVersions(fx, folder.uuid());
+        assertThat(open).hasSize(1);
+        assertThat(open.get(0).isDeleted()).isFalse();
+    }
+
+    @Test
+    void assetDeletedNowAndAtTargetIsLeftUntouched() {
+        Fixture fx = newFixture();
+
+        AssetVersionView folder = folderService.create(null, "Gone", FolderScope.PAGES, fx.ctx());
+        assetService.softDelete(folder.uuid(), false, fx.ctx());
+        long toRevision = folderService.create(null, "Later", FolderScope.PAGES, fx.ctx()).validFromRevision();
+        assetService.softDelete(
+                folderService.create(null, "Diverge", FolderScope.PAGES, fx.ctx()).uuid(), false, fx.ctx());
+        long tombstoneId = openVersions(fx, folder.uuid()).get(0).getId();
+
+        Revision restore = projectRestoreService.restoreTo(fx.project().getId(), toRevision, fx.user().getId(), "rollback");
+
+        List<AssetVersion> open = openVersions(fx, folder.uuid());
+        assertThat(open).extracting(AssetVersion::getId).containsExactly(tombstoneId);
+        assertThat(restore.getSummary().get("assets"))
+                .noneMatch(entry -> folder.uuid().toString().equals(entry.get("uuid").asText()));
+    }
+
+    private List<AssetVersion> openVersions(Fixture fx, java.util.UUID uuid) {
+        long assetId = assetRepository.findByProjectIdAndUuid(fx.project().getId(), uuid).orElseThrow().getId();
+        return assetVersionRepository.findOpenByProject(fx.project().getId()).stream()
+                .filter(v -> v.getAssetId() == assetId)
+                .toList();
     }
 
     private static java.util.Set<Long> distinctAssetIds(List<AssetVersion> versions) {

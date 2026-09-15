@@ -58,6 +58,14 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             """)
     List<AssetVersion> findCurrentByProjectAndType(@Param("projectId") Long projectId, @Param("type") AssetType type);
 
+    /** Every open version in a project, soft-deleted tombstones included. */
+    @Query("""
+            SELECT v FROM AssetVersion v
+            WHERE v.asset.projectId = :projectId
+              AND v.validToRevision IS NULL
+            """)
+    List<AssetVersion> findOpenByProject(@Param("projectId") Long projectId);
+
     /** Every version (deleted included) valid at revision {@code R} across a project. */
     @Query("""
             SELECT v FROM AssetVersion v
