@@ -3,6 +3,7 @@ package com.acme.staticforge;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.staticforge.asset.Asset;
+import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
@@ -11,6 +12,8 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.reference.ReferenceEdge;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.AssetChange;
@@ -51,6 +54,11 @@ import org.springframework.context.ConfigurableApplicationContext;
  * M15.2}) — alongside the pre-existing {@link SingleOp} single-asset updates, so the five
  * invariants are re-verified against a world where a revision can touch N>1 assets, not
  * only exactly one.
+ *
+ * <p>{@code M16.3.3} makes the addressed assets pages whose generated payloads reference a
+ * random subset of two media assets, and adds the reference invariant: for every revision
+ * {@code R} and page, the {@code asset_reference} edges valid at {@code R} equal the edges
+ * extracted from the version valid at {@code R} (none for a deleted version).
  */
 class RevisionInvariantsTest {
 
@@ -63,16 +71,23 @@ class RevisionInvariantsTest {
     @Property(tries = 25)
     void randomMutationSequencesAreRevisionSafe(@ForAll("ops") List<Op> ops) {
         CtxHolder h = context();
-        ObjectNode payload = h.mapper.createObjectNode().put("seed", "x");
-
         AppUser actor = h.fixtures.user("u-" + suffix());
         Project project = h.fixtures.project("p-" + suffix(), actor);
+
+        List<UUID> media = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            media.add(h.assets.create(
+                            new CreateAssetCommand(
+                                    project.getId(), AssetType.MEDIA, "m" + i, null, h.mapper.createObjectNode(), null),
+                            RevisionContext.of(project.getId(), actor.getId(), "create"))
+                    .uuid());
+        }
 
         List<UUID> uuids = new ArrayList<>();
         for (int i = 0; i < ASSET_COUNT; i++) {
             AssetVersionView created = h.assets.create(
                     new CreateAssetCommand(
-                            project.getId(), AssetType.FOLDER, "f" + i, null, h.mapper.createObjectNode(), null),
+                            project.getId(), AssetType.PAGE, "f" + i, null, h.mapper.createObjectNode(), null),
                     RevisionContext.of(project.getId(), actor.getId(), "create"));
             uuids.add(created.uuid());
         }
@@ -83,11 +98,11 @@ class RevisionInvariantsTest {
                 long expected = h.assets.requireCurrent(project.getId(), uuid).validFromRevision();
                 h.assets.update(
                         uuid,
-                        new UpdateAssetCommand(single.name(), payload.deepCopy()),
+                        new UpdateAssetCommand(single.name(), payloadFor(h, single.name(), media)),
                         expected,
                         RevisionContext.of(project.getId(), actor.getId(), "update"));
             } else if (op instanceof BatchOp batchOp) {
-                applyBatch(h, project, actor, uuids, batchOp);
+                applyBatch(h, project, actor, uuids, media, batchOp);
             }
         }
 
@@ -111,7 +126,46 @@ class RevisionInvariantsTest {
                         .count();
                 assertThat(count).as("at most one version valid at r=%s", r).isBetween(0L, 1L);
             }
+
+            // Invariant 6 (references follow versions): edges valid at r == edges extracted from
+            // the version valid at r.
+            List<com.acme.staticforge.asset.AssetReference> rows = h.referenceRepository.findByFromAssetId(asset.getId());
+            for (long r = 1; r <= n; r++) {
+                final long rr = r;
+                Set<ReferenceEdge> expected = versions.stream()
+                        .filter(v -> v.getValidFromRevision() <= rr
+                                && (v.getValidToRevision() == null || v.getValidToRevision() > rr))
+                        .findFirst()
+                        .filter(v -> !v.isDeleted())
+                        .map(v -> h.materializer.extract(project.getId(), AssetType.PAGE, v.getPayload()))
+                        .orElse(Set.of());
+                Set<ReferenceEdge> actual = new HashSet<>();
+                rows.stream()
+                        .filter(e -> e.getValidFromRevision() <= rr
+                                && (e.getValidToRevision() == null || e.getValidToRevision() > rr))
+                        .forEach(e -> assertThat(actual.add(ReferenceEdge.of(e)))
+                                .as("no duplicate edge valid at r=%s", rr)
+                                .isTrue());
+                assertThat(actual).as("edges valid at r=%s", r).isEqualTo(expected);
+            }
         }
+    }
+
+    /**
+     * A page payload referencing a name-derived subset of the two media assets: none, either, or
+     * both (at two paths), so random op sequences add, move and remove edges.
+     */
+    private static ObjectNode payloadFor(CtxHolder h, String name, List<UUID> media) {
+        ObjectNode payload = h.mapper.createObjectNode().put("name", name);
+        ObjectNode content = payload.putObject("content");
+        int bits = name.chars().sum() % 4;
+        if ((bits & 1) != 0) {
+            content.putObject("hero").put("type", "MEDIA_REF").put("uuid", media.get(0).toString());
+        }
+        if ((bits & 2) != 0) {
+            content.putArray("gallery").addObject().put("type", "MEDIA_REF").put("uuid", media.get(name.length() % 2).toString());
+        }
+        return payload;
     }
 
     /**
@@ -126,7 +180,8 @@ class RevisionInvariantsTest {
      * writer; that guarantee is instead proven for the mechanism itself by {@code
      * ConcurrentWritersTest#concurrentBatchesAndSingleWritersProduceNoLostUpdates}.
      */
-    private void applyBatch(CtxHolder h, Project project, AppUser actor, List<UUID> uuids, BatchOp batchOp) {
+    private void applyBatch(
+            CtxHolder h, Project project, AppUser actor, List<UUID> uuids, List<UUID> media, BatchOp batchOp) {
         long beforeRevisionCount = h.revisionRepository
                 .findByProjectIdOrderByRevisionIdDesc(project.getId())
                 .size();
@@ -159,14 +214,15 @@ class RevisionInvariantsTest {
             current.setValidToRevision(joined.getRevisionId());
             h.versionRepository.save(current);
 
-            ObjectNode payload = h.mapper.createObjectNode().put("batchName", item.name());
+            ObjectNode payload = payloadFor(h, item.name(), media);
             AssetVersion next = new AssetVersion(
                     asset.getId(), joined.getRevisionId(), item.name(), payload, actor.getId(), Instant.now());
             next.setFolderId(current.getFolderId());
             next.setFolderPath(current.getFolderPath());
             next.setTemplateAssetId(current.getTemplateAssetId());
             next.setDeleted(current.isDeleted());
-            h.versionRepository.save(next);
+            // Like every real version writer, sync the reference rows in the same revision (M16.3.1).
+            h.materializer.materialize(asset, h.versionRepository.save(next));
 
             h.revisionService.appendSummary(
                     project.getId(),
@@ -262,6 +318,8 @@ class RevisionInvariantsTest {
                     ctx.getBean(AssetVersionRepository.class),
                     ctx.getBean(RevisionRepository.class),
                     ctx.getBean(RevisionService.class),
+                    ctx.getBean(AssetReferenceRepository.class),
+                    ctx.getBean(ReferenceMaterializer.class),
                     new Fixtures(
                             ctx.getBean(UserService.class),
                             ctx.getBean(ProjectService.class),
@@ -278,6 +336,8 @@ class RevisionInvariantsTest {
         final AssetVersionRepository versionRepository;
         final RevisionRepository revisionRepository;
         final RevisionService revisionService;
+        final AssetReferenceRepository referenceRepository;
+        final ReferenceMaterializer materializer;
         final Fixtures fixtures;
         final ObjectMapper mapper;
 
@@ -288,6 +348,8 @@ class RevisionInvariantsTest {
                 AssetVersionRepository versionRepository,
                 RevisionRepository revisionRepository,
                 RevisionService revisionService,
+                AssetReferenceRepository referenceRepository,
+                ReferenceMaterializer materializer,
                 Fixtures fixtures,
                 ObjectMapper mapper) {
             this.ctx = ctx;
@@ -296,6 +358,8 @@ class RevisionInvariantsTest {
             this.versionRepository = versionRepository;
             this.revisionRepository = revisionRepository;
             this.revisionService = revisionService;
+            this.referenceRepository = referenceRepository;
+            this.materializer = materializer;
             this.fixtures = fixtures;
             this.mapper = mapper;
         }

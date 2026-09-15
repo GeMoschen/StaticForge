@@ -47,7 +47,7 @@ class ReferenceMaterializerTest {
         materializer = new ReferenceMaterializer(
                 references,
                 assets,
-                new ContentReferenceService(references, assets),
+                new ContentReferenceService(),
                 new ProjectReferenceResolver(assets, mock(AssetVersionRepository.class)));
         List<Asset> targets = List.of(
                 asset(pageTemplate, 11L), asset(sectionTemplate, 12L), asset(media, 13L), asset(page, 14L));

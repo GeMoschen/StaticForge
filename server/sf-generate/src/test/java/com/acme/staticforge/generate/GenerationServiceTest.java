@@ -10,8 +10,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.acme.staticforge.asset.AssetReferenceRepository;
-import com.acme.staticforge.asset.content.ContentReferenceService;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.render.RenderPipeline;
@@ -45,8 +43,6 @@ class GenerationServiceTest {
     private AssetCopyStage assetsStage;
     private PostProcessStage postStage;
     private TargetWriterSelector writers;
-    private ContentReferenceService contentRefs;
-    private AssetReferenceRepository assetRefs;
 
     private GenerationService service;
 
@@ -61,10 +57,8 @@ class GenerationServiceTest {
         assetsStage = mock(AssetCopyStage.class);
         postStage = mock(PostProcessStage.class);
         writers = mock(TargetWriterSelector.class);
-        contentRefs = mock(ContentReferenceService.class);
-        assetRefs = mock(AssetReferenceRepository.class);
         service = new GenerationService(runs, targets, projects, snapshots, planner, renderer, assetsStage, postStage,
-                writers, contentRefs, assetRefs, new ObjectMapper(), new SimpleMeterRegistry());
+                writers, new ObjectMapper(), new SimpleMeterRegistry());
 
         Project project = project(1L);
         when(projects.requireByKey("p")).thenReturn(project);

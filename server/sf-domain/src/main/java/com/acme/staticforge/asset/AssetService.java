@@ -76,8 +76,11 @@ public interface AssetService {
     /** Current-version summaries filtered by project/type/folder and a display-name substring. */
     Page<AssetSummary> search(AssetQuery query, Pageable pageable);
 
-    /** Inbound {@link AssetReference}s, resolved to the referring asset's identity. */
+    /** Current inbound {@link AssetReference}s (open edges), resolved to the referring asset's identity. */
     List<UsageView> usages(long projectId, UUID uuid);
+
+    /** Inbound {@link AssetReference}s valid at {@code revision} (time travel), resolved like {@link #usages}. */
+    List<UsageView> usagesAt(long projectId, UUID uuid, long revision);
 
     /** All versions of the asset, newest first. */
     List<AssetVersionView> history(long projectId, UUID uuid);

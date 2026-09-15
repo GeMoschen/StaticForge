@@ -2,12 +2,12 @@ package com.acme.staticforge.generate.plan;
 
 import com.acme.staticforge.asset.AssetReference;
 import com.acme.staticforge.asset.AssetReferenceRepository;
+import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,9 +24,8 @@ import org.springframework.stereotype.Service;
 /**
  * Build planner (spec §18.3): turns a snapshot into an ordered {@link BuildPlan}. A FULL build
  * covers every page × each enabled channel; an INCREMENTAL build (mode {@code INCREMENTAL} with
- * a {@code lastSuccessfulRevision}) expands the set of assets changed since that revision
- * transitively over {@code asset_reference} reverse edges plus page→template/section edges, and
- * only renders the affected pages.
+ * a {@code lastSuccessfulRevision}) expands the set of assets changed since that revision over the
+ * revision-valid reverse edges of {@code asset_reference}, and only renders the affected pages.
  */
 @Service
 public class BuildPlanner {
@@ -57,7 +56,7 @@ public class BuildPlanner {
         Set<UUID> pageUuids;
         if (incremental) {
             changedAssets = changedAssets(snapshot, lastSuccessfulRevision);
-            pageUuids = affectedPages(snapshot, changedAssets);
+            pageUuids = affectedPages(snapshot, changedAssets, lastSuccessfulRevision);
         } else {
             pageUuids = new LinkedHashSet<>(snapshot.pages().stream().map(SnapshotAsset::uuid).toList());
         }
@@ -99,26 +98,41 @@ public class BuildPlanner {
     }
 
     /**
-     * Expands changed assets transitively to the set of affected pages. Reverse edges come from
-     * {@code asset_reference}; page→page-template and page→section-template edges come from the
-     * page payload, since both are structural (not materialized as reference rows).
+     * Expands changed assets to the affected pages over the reverse edges of {@code asset_reference}
+     * (spec §5.4, §18.2), loaded once per plan as an in-memory reverse index. Page → page-template
+     * and page → section-template edges are {@code TEMPLATE} rows, so the index is the single source
+     * of structural and content dependencies.
+     *
+     * <p>The index holds the edges valid at the snapshot revision plus those valid at
+     * {@code lastSuccessfulRevision}, so an edge that closed since still counts. That second set is
+     * a safety net: an edge only closes when its {@code from} asset gets a new version, which already
+     * puts that asset into {@code changedAssets}.
+     *
+     * <p>The walk passes through non-page assets (media → template → pages, section template → page
+     * template → pages) and from a <em>changed</em> page to the assets referencing it, but stops at a
+     * page that was merely reached: a page's output depends on what it references, not on who
+     * references it.
+     *
+     * <p>Render-time-only dependencies are not covered by persisted rows. A template's
+     * {@code $CMS_NAVIGATION(nav:…)$} or {@code $CMS_FOR(x : nav:…)$} renders the folder's whole
+     * subtree, but only the folder itself is an edge target, so a changed page reference deep in that
+     * subtree does not reach the template. Expanding that is {@code M22.1.1}'s job (§18.2 navigation
+     * rule); do not bring back generation-time reference inserts to cover it.
      */
-    private Set<UUID> affectedPages(Snapshot snapshot, Set<UUID> changedAssets) {
-        Map<UUID, List<UUID>> pagesByTemplate = new HashMap<>();
-        Map<UUID, List<UUID>> pagesBySection = new HashMap<>();
-        indexPages(snapshot, pagesByTemplate, pagesBySection);
+    private Set<UUID> affectedPages(Snapshot snapshot, Set<UUID> changedAssets, long lastSuccessfulRevision) {
+        Map<Long, Set<Long>> referrers = new HashMap<>();
+        indexReferrers(referrers, references.findValidAtByProject(snapshot.projectId(), snapshot.revision()));
+        indexReferrers(referrers, references.findValidAtByProject(snapshot.projectId(), lastSuccessfulRevision));
 
-        Map<UUID, Long> uuidToId = new HashMap<>();
-        snapshot.byUuid().values().forEach(a -> uuidToId.put(a.uuid(), a.assetId()));
-
-        Deque<Long> frontier = new ArrayDeque<>();
+        Set<Long> changedIds = new HashSet<>();
         for (UUID changed : changedAssets) {
-            Long id = uuidToId.get(changed);
-            if (id != null) {
-                frontier.add(id);
+            SnapshotAsset asset = snapshot.assetByUuid(changed);
+            if (asset != null) {
+                changedIds.add(asset.assetId());
             }
         }
 
+        Deque<Long> frontier = new ArrayDeque<>(changedIds);
         Set<UUID> affected = new LinkedHashSet<>();
         Set<Long> visited = new HashSet<>();
         while (!frontier.isEmpty()) {
@@ -127,17 +141,15 @@ public class BuildPlanner {
                 continue;
             }
             SnapshotAsset asset = snapshot.assetById(id);
-            if (asset != null) {
-                switch (asset.type()) {
-                    case PAGE -> affected.add(asset.uuid());
-                    case PAGE_TEMPLATE -> affected.addAll(pagesByTemplate.getOrDefault(asset.uuid(), List.of()));
-                    case SECTION_TEMPLATE -> affected.addAll(pagesBySection.getOrDefault(asset.uuid(), List.of()));
-                    default -> { /* media/folder: propagate via references */ }
+            boolean page = asset != null && asset.type() == AssetType.PAGE;
+            if (page) {
+                affected.add(asset.uuid());
+                if (!changedIds.contains(id)) {
+                    continue;
                 }
             }
-            for (AssetReference ref : references.findByToAssetId(id)) {
-                long fromId = ref.getFromAssetId();
-                if (fromId != id && !visited.contains(fromId)) {
+            for (long fromId : referrers.getOrDefault(id, Set.of())) {
+                if (!visited.contains(fromId)) {
                     frontier.add(fromId);
                 }
             }
@@ -145,35 +157,12 @@ public class BuildPlanner {
         return affected;
     }
 
-    /** Indexes page → template and page → section-template edges for the incremental expansion. */
-    private static void indexPages(
-            Snapshot snapshot, Map<UUID, List<UUID>> pagesByTemplate, Map<UUID, List<UUID>> pagesBySection) {
-        for (SnapshotAsset page : snapshot.pages()) {
-            JsonNode payload = page.payload();
-            if (payload == null) {
-                continue;
-            }
-            UUID pageTemplate = parseUuid(payload.path("templateRef").asText());
-            if (pageTemplate != null) {
-                pagesByTemplate.computeIfAbsent(pageTemplate, k -> new ArrayList<>()).add(page.uuid());
-            }
-            JsonNode bodies = payload.get("bodies");
-            if (bodies != null && bodies.isObject()) {
-                bodies.fields().forEachRemaining(entry -> {
-                    JsonNode sections = entry.getValue();
-                    if (sections.isArray()) {
-                        for (JsonNode section : sections) {
-                            UUID sectionUuid = parseUuid(section.path("templateRef").asText());
-                            if (sectionUuid != null) {
-                                pagesBySection.computeIfAbsent(sectionUuid, k -> new ArrayList<>()).add(page.uuid());
-                            }
-                        }
-                    }
-                });
-            }
+    /** Adds {@code to → from} entries for each edge to the reverse index. */
+    private static void indexReferrers(Map<Long, Set<Long>> referrers, List<AssetReference> edges) {
+        for (AssetReference edge : edges) {
+            referrers.computeIfAbsent(edge.getToAssetId(), k -> new HashSet<>()).add(edge.getFromAssetId());
         }
     }
-
     private static boolean inScope(SnapshotAsset page, String scopeFolderPath, Set<UUID> scopeAssetUuids) {
         if (scopeAssetUuids != null && scopeAssetUuids.contains(page.uuid())) {
             return true;
@@ -184,17 +173,6 @@ public class BuildPlanner {
         String folder = page.folderPath() == null ? "" : page.folderPath();
         String prefix = scopeFolderPath.endsWith("/") ? scopeFolderPath : scopeFolderPath + "/";
         return folder.equals(scopeFolderPath) || folder.startsWith(prefix);
-    }
-
-    private static UUID parseUuid(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 
     private static <T> List<T> sorted(Set<T> values) {

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M16.3.3: asset_reference rows now follow version intervals and are written on save
+         (ReferenceMaterializer), and readers query "edges valid at revision R" / open edges.
+         Plain column index + DELETE are portable, so no PostgreSQL/H2 split is needed here. -->
+    <changeSet id="015-references-to-open-index" author="sf">
+        <comment>Composite index for incoming open / valid-at-revision edge lookups (spec §5.4).</comment>
+        <createIndex tableName="asset_reference" indexName="idx_ref_to_valid_to">
+            <column name="to_asset_id"/>
+            <column name="valid_to_revision"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Rows written before M16.3.3 came from generation runs: never closed, duplicated per run,
+         and stamped with the snapshot revision instead of the version's. They cannot be repaired
+         in SQL, so they are dropped here; ReferenceBackfillRunner then replays edge extraction over
+         every asset_version row on the next startup (it runs whenever the table is empty while
+         asset versions exist). There is no production data (M15 precedent). -->
+    <changeSet id="015-references-drop-generation-rows" author="sf">
+        <comment>Delete legacy generation-written reference rows; rebuilt from asset_version at startup.</comment>
+        <delete tableName="asset_reference"/>
+    </changeSet>
+
+</databaseChangeLog>

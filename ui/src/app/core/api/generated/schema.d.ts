@@ -4481,7 +4481,9 @@ export interface operations {
     };
     usages: {
         parameters: {
-            query?: never;
+            query?: {
+                revision?: number;
+            };
             header?: never;
             path: {
                 projectKey: string;
