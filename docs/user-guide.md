@@ -22,6 +22,8 @@ Templates are owned by **template developers** (see the [template-developer guid
 2. Create a page: choose a template, a display name, and a folder. The UID (shown in mono) is derived from the name automatically.
 3. Open the page editor — a split view: page fields on the left, live preview on the right.
 4. Fill the template's editors. Save is ambient: the header shows `Saved 12:04` with a revision link. There is no blocking save spinner (§24.6).
+   - A half-filled page always saves: an empty required field, too few list items or text that is too long doesn't stop the save. These are checked when you publish instead. A page with such a problem isn't published; the generation log lists it under `SF-GEN-0120` with the field paths, and the other pages are still published.
+   - A save is rejected only when a value has the wrong shape for its field (for example text in a number field, a value that isn't one of the field's options, or a section whose template isn't allowed in that body). Nothing is stored, and the error lists each offending field path.
 5. Preview updates live as you type (debounced), and the viewport switcher (mobile / tablet / desktop) resizes the preview.
 
 ### Sections
@@ -35,11 +37,23 @@ Templates are owned by **template developers** (see the [template-developer guid
 1. Open **Media**. Drop files anywhere to upload (or use the multi-file drop).
 2. Set alt text, caption, copyright, and focal point in the detail drawer.
 3. Reference media from a `media` or `link` editor using the picker.
-4. The drawer shows **usages** ("where is this used?") before you delete anything.
+4. The drawer shows **usages** ("where is this used?") before you delete anything. Usages are current as soon as a page or template is saved; you don't need to run a generation. Once you remove the media from every page that used it (or delete those pages), it can be deleted without forcing.
 
 ### Generate & publish
 
 First, in **Settings → Targets**, create at least one target (the first one becomes the default). Each target writes into its own folder, `{projectKey}/{output folder}` under the server's output root (`{projectKey}/target-{id}` when the folder is left empty); two targets of a project may not share or nest folders (an imported target whose folder is invalid or clashes is imported without it and uses its default folder; the import analysis warns about this). Set **Base URL** for correct sitemap and absolute links.
+
+In **Channels**, each channel's form sets how its output files and links are named:
+
+| Field | Default | Meaning |
+|---|---|---|
+| **File extension** | derived from the key (`md` for `markdown`) | 1–10 lowercase letters or digits, without the dot |
+| **URL strategy** | `RELATIVE` | `RELATIVE`: pages are files (`about.html`). `PRETTY`: with a trailing slash, pages are folders (`about/index.html`) |
+| **Trailing slash** | off | Only available with `PRETTY`; links to pages end in `/` (`about/`) |
+| **Index page UID** | `index` | The page with this UID becomes its folder's index page |
+| **Index file name** | `index.` + extension | File name of a folder's index page, also used for pretty folder URLs; letters, digits, `.`, `-`, `_`, up to 64 |
+
+An invalid value is rejected with the field named. Changing the extension or URL settings moves every page of the channel: the next generation rebuilds all pages even in incremental mode, and generated URL registry entries are recomputed (manual overrides are kept).
 
 1. Open **Generate**, pick full or incremental mode, channels, and a target, then start.
 2. A live log shows per-stage progress, error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5).
