@@ -4,6 +4,7 @@ import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.HashMap;
@@ -28,16 +29,19 @@ public class ProjectRestoreService {
     private final AssetVersionRepository assetVersionRepository;
     private final AssetRepository assetRepository;
     private final ObjectMapper objectMapper;
+    private final ReferenceMaterializer referenceMaterializer;
 
     public ProjectRestoreService(
             RevisionService revisionService,
             AssetVersionRepository assetVersionRepository,
             AssetRepository assetRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ReferenceMaterializer referenceMaterializer) {
         this.revisionService = revisionService;
         this.assetVersionRepository = assetVersionRepository;
         this.assetRepository = assetRepository;
         this.objectMapper = objectMapper;
+        this.referenceMaterializer = referenceMaterializer;
     }
 
     @Transactional
@@ -66,6 +70,7 @@ public class ProjectRestoreService {
         }
 
         Instant now = Instant.now();
+        java.util.List<AssetVersion> writtenVersions = new java.util.ArrayList<>();
         for (Long assetId : all) {
             AssetVersion cur = current.get(assetId);
             if (cur != null) {
@@ -74,6 +79,7 @@ public class ProjectRestoreService {
             }
 
             AssetVersion tgt = target.get(assetId);
+            AssetVersion written;
             String action;
             if (tgt != null && !tgt.isDeleted()) {
                 AssetVersion restored = new AssetVersion(
@@ -83,7 +89,7 @@ public class ProjectRestoreService {
                 restored.setTemplateAssetId(tgt.getTemplateAssetId());
                 restored.setMimeType(tgt.getMimeType());
                 restored.setSizeBytes(tgt.getSizeBytes());
-                assetVersionRepository.save(restored);
+                written = assetVersionRepository.save(restored);
                 action = "RESTORE";
             } else {
                 // payload is NOT NULL on asset_version — a deleted tombstone still carries the
@@ -94,18 +100,27 @@ public class ProjectRestoreService {
                         assetId, newRevision, source != null ? source.getDisplayName() : "",
                         source != null ? source.getPayload() : objectMapper.createObjectNode(), userId, now);
                 deleted.setDeleted(true);
-                assetVersionRepository.save(deleted);
+                written = assetVersionRepository.save(deleted);
                 action = "DELETE";
             }
 
             Asset asset = assets.get(assetId);
             if (asset != null) {
+                written.setAsset(asset);
+                writtenVersions.add(written);
                 revisionService.appendSummary(
                         projectId,
                         newRevision,
                         new AssetChange(
                                 asset.getUuid().toString(), asset.getAssetType().name(), asset.getUid(), action, null, false));
             }
+        }
+
+        // Re-opens the edge set derived from each restored payload, or closes it for a tombstone,
+        // in the bulk revision (§5.4) — after every version is written, so edges that resolve
+        // against another asset's current state see the restored project, not a half-written one.
+        for (AssetVersion written : writtenVersions) {
+            referenceMaterializer.materialize(written.getAsset(), written);
         }
         return bulk;
     }

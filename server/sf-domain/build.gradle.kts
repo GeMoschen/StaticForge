@@ -19,5 +19,6 @@ dependencies {
     implementation(libs.metadata.extractor)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.archunit)
     testRuntimeOnly(libs.h2)
 }

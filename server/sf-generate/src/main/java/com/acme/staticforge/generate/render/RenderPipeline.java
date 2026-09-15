@@ -51,8 +51,8 @@ import org.springframework.stereotype.Service;
  * The render pipeline (spec §18.2 RENDER): VALIDATE all needed templates, detect output-path
  * collisions, hold back pages with incomplete content ({@code SF-GEN-0120}), then render every
  * remaining plan entry in parallel over virtual threads bounded by
- * {@link GenerationProperties#getParallelism}. Exposes the last run's page → dependency map for
- * the orchestrator to persist into {@code asset_reference}.
+ * {@link GenerationProperties#getParallelism}. Reference edges are maintained on save
+ * ({@code ReferenceMaterializer}), not derived from render dependencies.
  */
 @Service
 public class RenderPipeline {
@@ -67,8 +67,6 @@ public class RenderPipeline {
     private final MeterRegistry meterRegistry;
     private final UrlRegistryService urlRegistryService;
     private final CompiledTemplateCache compiledTemplates;
-
-    private volatile Map<UUID, Set<UUID>> dependenciesByPage = Map.of();
 
     public RenderPipeline(
             GenerationProperties properties,
@@ -215,18 +213,11 @@ public class RenderPipeline {
                         plan.changedAssets());
         RenderBatch batch = renderParallel(renderer, publishable, snapshot);
 
-        this.dependenciesByPage = Map.copyOf(batch.dependencies);
-
         List<RenderedFile> files = new ArrayList<>(batch.files);
         files.sort(Comparator.comparing(RenderedFile::outputPath));
         return new RenderOutcome(
                 List.copyOf(files), List.copyOf(batch.errors), List.copyOf(batch.warnings), List.copyOf(incomplete.values()));
 
-    }
-
-    /** The page UUID → referenced asset UUID map from the most recent {@link #execute}. */
-    public Map<UUID, Set<UUID>> dependenciesByPage() {
-        return dependenciesByPage;
     }
 
     // ------------------------------------------------------------------
@@ -241,7 +232,6 @@ public class RenderPipeline {
         List<RenderedFile> files = new ArrayList<>(entries.size());
         List<Diagnostic> errors = new ArrayList<>();
         List<Diagnostic> warnings = new ArrayList<>();
-        Map<UUID, Set<UUID>> dependencies = new HashMap<>();
 
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             Semaphore semaphore = new Semaphore(parallelism);
@@ -287,16 +277,13 @@ public class RenderPipeline {
 
                 if (task.file != null) {
                     files.add(task.file);
-                    if (!task.file.dependencies().isEmpty()) {
-                        dependencies.put(entry.pageUuid(), task.file.dependencies());
-                    }
                 }
                 errors.addAll(task.errors);
                 warnings.addAll(task.warnings);
             }
         }
 
-        return new RenderBatch(files, errors, warnings, dependencies);
+        return new RenderBatch(files, errors, warnings);
     }
 
     private RenderTask renderEntry(GenerationRenderer renderer, Snapshot snapshot, PlanEntry entry) {
@@ -380,6 +367,5 @@ public class RenderPipeline {
     private record RenderBatch(
             List<RenderedFile> files,
             List<Diagnostic> errors,
-            List<Diagnostic> warnings,
-            Map<UUID, Set<UUID>> dependencies) {}
+            List<Diagnostic> warnings) {}
 }

@@ -7,6 +7,7 @@ palantirJavaFormat = "2.50.0"
 jqwik = "1.9.1"
 tika = "2.9.2"
 metadataExtractor = "2.19.0"
+archunit = "1.3.0"
 
 [libraries]
 # Spring (versions managed by the Spring Boot BOM in root build)
@@ -22,6 +23,7 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
 spring-security-crypto = { module = "org.springframework.security:spring-security-crypto" }
 jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
+archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 tika-core = { module = "org.apache.tika:tika-core", version.ref = "tika" }
 metadata-extractor = { module = "com.drewnoakes:metadata-extractor", version.ref = "metadataExtractor" }
 # Caffeine (version managed by the Spring Boot BOM) — in-process caches (§21.5)

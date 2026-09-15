@@ -2,6 +2,7 @@ package com.acme.staticforge.asset;
 
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
@@ -47,6 +48,7 @@ public class AssetServiceImpl implements AssetService {
     private final RevisionService revisionService;
     private final PathService pathService;
     private final UrlRegistryRepository urlRegistryRepository;
+    private final ReferenceMaterializer referenceMaterializer;
 
     public AssetServiceImpl(
             AssetRepository assetRepository,
@@ -56,7 +58,8 @@ public class AssetServiceImpl implements AssetService {
             UidGenerator uidGenerator,
             RevisionService revisionService,
             PathService pathService,
-            UrlRegistryRepository urlRegistryRepository) {
+            UrlRegistryRepository urlRegistryRepository,
+            ReferenceMaterializer referenceMaterializer) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetReferenceRepository = assetReferenceRepository;
@@ -65,6 +68,7 @@ public class AssetServiceImpl implements AssetService {
         this.revisionService = revisionService;
         this.pathService = pathService;
         this.urlRegistryRepository = urlRegistryRepository;
+        this.referenceMaterializer = referenceMaterializer;
     }
 
     @Override
@@ -210,7 +214,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 validatedDisplayName(cmd.displayName()),
                 cmd.payload(),
@@ -229,7 +233,7 @@ public class AssetServiceImpl implements AssetService {
     public void softDelete(UUID uuid, boolean force, RevisionContext ctx) {
         Asset asset = require(ctx.projectId(), uuid);
 
-        if (!force && !assetReferenceRepository.findByToAssetId(asset.getId()).isEmpty()) {
+        if (!force && isReferencedByLiveAssets(asset)) {
             throw new SfException(ProblemFactory.other(
                     409, "SF-DOM-0120", "Conflict", "Asset is still referenced by other assets."));
         }
@@ -243,7 +247,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 current.getDisplayName(),
                 current.getPayload(),
@@ -278,7 +282,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 source.getDisplayName(),
                 source.getPayload(),
@@ -329,17 +333,27 @@ public class AssetServiceImpl implements AssetService {
     @Transactional(readOnly = true)
     public List<UsageView> usages(long projectId, UUID uuid) {
         Asset asset = require(projectId, uuid);
-        return assetReferenceRepository.findByToAssetId(asset.getId()).stream()
-                .filter(ref -> ref.getValidToRevision() == null)
+        return toUsages(assetReferenceRepository.findIncomingOpen(asset.getId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UsageView> usagesAt(long projectId, UUID uuid, long revision) {
+        Asset asset = require(projectId, uuid);
+        return toUsages(assetReferenceRepository.findIncomingValidAt(asset.getId(), revision));
+    }
+
+    private List<UsageView> toUsages(List<AssetReference> refs) {
+        Map<Long, Asset> fromAssets = new java.util.HashMap<>();
+        assetRepository.findAllById(refs.stream().map(AssetReference::getFromAssetId).distinct().toList())
+                .forEach(from -> fromAssets.put(from.getId(), from));
+        return refs.stream()
+                .filter(ref -> fromAssets.containsKey(ref.getFromAssetId()))
                 .map(ref -> {
-                    Asset from = assetRepository.findById(ref.getFromAssetId()).orElse(null);
-                    if (from == null) {
-                        return null;
-                    }
+                    Asset from = fromAssets.get(ref.getFromAssetId());
                     return new UsageView(
                             from.getUuid(), from.getUid(), from.getAssetType(), ref.getKind(), ref.getSourcePath());
                 })
-                .filter(java.util.Objects::nonNull)
                 .toList();
     }
 
@@ -427,7 +441,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 current.getDisplayName(),
                 current.getPayload(),
@@ -449,10 +463,25 @@ public class AssetServiceImpl implements AssetService {
 
         Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.CREATE);
         AssetVersion version = insertVersion(
-                asset.getId(), revision.getRevisionId(), displayName, payload, ctx.userId(), Instant.now(),
+                asset, revision.getRevisionId(), displayName, payload, ctx.userId(), Instant.now(),
                 folderId, folderPath, templateAssetId, false);
         appendSummary(asset, revision, "CREATE", List.of());
         return toView(version);
+    }
+
+    /**
+     * The delete guard (spec §5.4): only <em>open</em> incoming edges from another asset whose
+     * current version is not deleted block deletion. Closed edges (a page that dropped the
+     * reference) and self-references never do.
+     */
+    private boolean isReferencedByLiveAssets(Asset asset) {
+        return assetReferenceRepository.findIncomingOpen(asset.getId()).stream()
+                .map(AssetReference::getFromAssetId)
+                .filter(fromAssetId -> !fromAssetId.equals(asset.getId()))
+                .distinct()
+                .anyMatch(fromAssetId -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(fromAssetId)
+                        .map(version -> !version.isDeleted())
+                        .orElse(false));
     }
 
     private void close(Long assetId, long revisionId) {
@@ -462,15 +491,18 @@ public class AssetServiceImpl implements AssetService {
         });
     }
 
+    /** Inserts the new version and, in the same revision, syncs its outgoing reference rows (§5.4). */
     private AssetVersion insertVersion(
-            Long assetId, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
+            Asset asset, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
             Long folderId, String folderPath, Long templateAssetId, boolean deleted) {
-        AssetVersion version = new AssetVersion(assetId, revisionId, displayName, payload, changedBy, changedAt);
+        AssetVersion version = new AssetVersion(asset.getId(), revisionId, displayName, payload, changedBy, changedAt);
         version.setFolderId(folderId);
         version.setFolderPath(folderPath);
         version.setTemplateAssetId(templateAssetId);
         version.setDeleted(deleted);
-        return assetVersionRepository.save(version);
+        AssetVersion saved = assetVersionRepository.save(version);
+        referenceMaterializer.materialize(asset, saved);
+        return saved;
     }
 
     private void appendSummary(Asset asset, Revision revision, String action, List<String> fields) {

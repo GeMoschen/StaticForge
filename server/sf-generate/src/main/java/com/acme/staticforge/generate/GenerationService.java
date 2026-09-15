@@ -1,10 +1,6 @@
 package com.acme.staticforge.generate;
 
-import com.acme.staticforge.asset.AssetReference;
-import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetType;
-import com.acme.staticforge.asset.ReferenceKind;
-import com.acme.staticforge.asset.content.ContentReferenceService;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -38,7 +34,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -94,8 +89,6 @@ public class GenerationService {
     private final AssetCopyStage assetCopyStage;
     private final PostProcessStage postProcessStage;
     private final TargetWriterSelector targetWriterSelector;
-    private final ContentReferenceService contentReferenceService;
-    private final AssetReferenceRepository assetReferenceRepository;
     private final ObjectMapper mapper;
     private final MeterRegistry meterRegistry;
 
@@ -115,8 +108,6 @@ public class GenerationService {
             AssetCopyStage assetCopyStage,
             PostProcessStage postProcessStage,
             TargetWriterSelector targetWriterSelector,
-            ContentReferenceService contentReferenceService,
-            AssetReferenceRepository assetReferenceRepository,
             ObjectMapper mapper,
             MeterRegistry meterRegistry) {
         this.runs = runs;
@@ -129,8 +120,6 @@ public class GenerationService {
         this.assetCopyStage = assetCopyStage;
         this.postProcessStage = postProcessStage;
         this.targetWriterSelector = targetWriterSelector;
-        this.contentReferenceService = contentReferenceService;
-        this.assetReferenceRepository = assetReferenceRepository;
         this.mapper = mapper;
         this.meterRegistry = meterRegistry;
     }
@@ -326,8 +315,6 @@ public class GenerationService {
                     projectId, projectKey, baseUrl(target), channels, sitePages(snapshot, plan, channels));
             allFiles = postProcessStage.apply(ctx, allFiles);
 
-            materializeReferences(snapshot, plan, outcome);
-
             emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, outcome.warnings().size(), null);
             TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
             writer.stage(runId, allFiles);
@@ -419,39 +406,6 @@ public class GenerationService {
             }
         }
         return media;
-    }
-
-    /** Materializes content refs and OCTL/media dependency refs into {@code asset_reference}. */
-    private void materializeReferences(Snapshot snapshot, BuildPlan plan, RenderOutcome outcome) {
-        Map<UUID, Set<UUID>> depsByPage = renderPipeline.dependenciesByPage();
-        Set<String> seen = new HashSet<>();
-        for (PlanEntry entry : plan.entries()) {
-            SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
-            if (page == null) {
-                continue;
-            }
-            Long pageAssetId = page.assetId();
-            if (page.payload() != null) {
-                contentReferenceService.materialize(
-                        snapshot.projectId(), pageAssetId, snapshot.revision(), page.payload());
-            }
-            Set<UUID> deps = depsByPage.get(entry.pageUuid());
-            if (deps == null) {
-                continue;
-            }
-            for (UUID depUuid : deps) {
-                SnapshotAsset dep = snapshot.assetByUuid(depUuid);
-                if (dep == null) {
-                    continue;
-                }
-                ReferenceKind kind = dep.type() == AssetType.MEDIA ? ReferenceKind.MEDIA_REF : ReferenceKind.OCTL_REF;
-                String key = pageAssetId + "|" + dep.assetId() + "|" + kind.name();
-                if (seen.add(key)) {
-                    assetReferenceRepository.save(new AssetReference(
-                            pageAssetId, snapshot.revision(), dep.assetId(), kind, ""));
-                }
-            }
-        }
     }
 
     private static List<SitePage> sitePages(Snapshot snapshot, BuildPlan plan, List<String> channels) {

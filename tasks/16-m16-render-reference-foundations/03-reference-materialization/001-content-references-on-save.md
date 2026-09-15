@@ -1,6 +1,6 @@
 ---
 id: M16.3.1
-status: todo
+status: done
 depends: []
 epic: m16-render-reference-foundations
 feature: reference-materialization
@@ -56,20 +56,20 @@ and body section → section-template (`bodies.*[].templateRef`) edges are not w
 
 ## Acceptance criteria
 
-- [ ] Page save with a media value → one open `MEDIA_REF` row. Saving it again with the media removed
+- [x] Page save with a media value → one open `MEDIA_REF` row. Saving it again with the media removed
       → that row is closed at the new revision and no open row remains.
-- [ ] Page create → open `TEMPLATE` row to its page template. Adding a section → `TEMPLATE` row to
+- [x] Page create → open `TEMPLATE` row to its page template. Adding a section → `TEMPLATE` row to
       the section template (`source_path` `bodies.<name>[i].templateRef`). Catalog card → `CONTENT_REF`
       as today.
-- [ ] Soft delete closes all outgoing rows. Asset restore (`AssetServiceImpl.restore`) and project
+- [x] Soft delete closes all outgoing rows. Asset restore (`AssetServiceImpl.restore`) and project
       restore (`ProjectRestoreService`) re-open the edge set derived from the restored payload.
-- [ ] Import (`ProjectExportImportServiceImpl`) writes edges for every imported asset in the import's
+- [x] Import (`ProjectExportImportServiceImpl`) writes edges for every imported asset in the import's
       revision.
-- [ ] A compound revision (`M15` project creation, template rename cascade) that rewrites N page
+- [x] A compound revision (`M15` project creation, template rename cascade) that rewrites N page
       payloads writes N edge sets in that one revision.
-- [ ] `ContentReferenceServiceTest` is adapted to the pure `extract` + persisting split. The guard
+- [x] `ContentReferenceServiceTest` is adapted to the pure `extract` + persisting split. The guard
       test is in place.
-- [ ] `./gradlew :server:sf-domain:test` green; `RevisionInvariantsTest` green.
+- [x] `./gradlew :server:sf-domain:test` green; `RevisionInvariantsTest` green.
 
 ## Out of scope
 
@@ -87,3 +87,42 @@ and body section → section-template (`bodies.*[].templateRef`) edges are not w
   separate concern.
 - Until `M16.3.3` lands, generation still inserts its own rows alongside these. That is harmless for
   correctness (readers over-approximate) but adds duplicates. Land `M16.3.3` soon after.
+
+### Implementation notes
+
+- `asset/reference/ReferenceMaterializer` (`@RevisionAware`) with `replaceOutgoing(...)`,
+  `closeOutgoing(...)`, a convenience `materialize(Asset, AssetVersion)` (deleted version → close)
+  and a no-write `extract(projectId, type, payload)` returning resolved `ReferenceEdge`s. Edges per
+  type: `PAGE` → `TEMPLATE` (`templateRef`, `bodies.<name>[i].templateRef`) + content refs rooted at
+  `content` / `bodies.<name>[i].content`; `PAGE_REFERENCE` → `NAV` (`target`); `MEDIA`/`FOLDER` →
+  none; templates → none yet (M16.3.2). The `switch` is exhaustive over `AssetType`, so a new type
+  must decide its edges.
+- **Per-edge diff instead of close-all/insert-all** (the documented optimization): unchanged edges
+  keep their open row, removed edges are closed (or deleted when opened in the same revision),
+  new edges are inserted — and an edge closed earlier in the *same* revision is re-opened instead
+  of duplicated. Folder moves and other payload-neutral writes therefore write no reference rows.
+- **`NAV` added** to `ReferenceKind` for `PAGE_REFERENCE` → target edges (`M22` can say "navigation
+  changed" without re-deriving). `CONTENT_REF` stays for content links and catalog cards.
+- `ContentReferenceService` split into a pure `extract(content, rootPath)` (new `ExtractedReference`
+  record) and the persisting `materialize` wrapper (still used by generation until M16.3.3). Target
+  UUIDs are resolved with one `AssetRepository.findByProjectIdAndUuidIn` per asset write (no N+1).
+- Wired into every version writer: `AssetServiceImpl` (create/update/softDelete/restore/move via its
+  `insertVersion`), `FolderServiceImpl` (subtree move/delete), `TemplateServiceImpl` (editor-rename
+  cascade, template folder migration), `ChannelServiceImpl.seedFrom` (not listed in Context but writes
+  template versions), `ProjectExportImportServiceImpl` and `ProjectRestoreService`. Import and project
+  restore materialize in a second pass after all versions are written, so edges resolve against the
+  finished project state.
+- Guard: `ReferenceMaterializationGuardTest` (ArchUnit 1.3.0, new `libs.archunit` test dependency of
+  sf-domain) — any class calling `save*` on `AssetVersionRepository`/`MediaVersionRepository` must
+  depend on `ReferenceMaterializer`. Allow-list: `MediaServiceImpl` (only sets mime/size columns on the
+  version `AssetService.create` just wrote). Verified it fails (5 violations) when pointed at a class
+  the writers don't use.
+- Tests: `ReferenceMaterializerTest`, `ContentReferenceServiceTest` (extract cases),
+  `ReferenceMaterializationIntegrationTest` (sf-app: media add/remove, page/section/catalog edges, NAV,
+  soft delete + asset restore + project restore, import revision, editor-rename cascade writing both
+  pages' edge sets in the one batch revision). `sf-domain`, `sf-generate`, `sf-api`, `sf-app` test
+  suites green (incl. `RevisionInvariantsTest`, `ConcurrentWritersTest`).
+- Observed, not changed: `ProjectRestoreService.restoreTo` reads "current" via
+  `findCurrentByProject`, which excludes deleted rows, so an asset whose open version is a tombstone
+  is not closed before the restored row is inserted. Out of scope here; the integration test restores
+  a payload edit rather than a delete for that reason.

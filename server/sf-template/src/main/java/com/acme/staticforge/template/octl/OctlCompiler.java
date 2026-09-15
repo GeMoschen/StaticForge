@@ -67,7 +67,8 @@ public final class OctlCompiler {
         ctx.emitDeclaredNeverUsed();
 
         String hash = sha256(channel + '\u0000' + text);
-        CompiledTemplate template = new CompiledTemplate(channel, hash, parsed.nodes(), refMap);
+        CompiledTemplate template = new CompiledTemplate(
+                channel, hash, parsed.nodes(), refMap, ReferenceUseCollector.collect(parsed.nodes()));
         return new OctlResult(template, diagnostics);
     }
 

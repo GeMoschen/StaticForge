@@ -86,8 +86,15 @@ public class AssetController {
 
     @GetMapping("/{uuid}/usages")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public List<UsageDto> usages(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        return assetService.usages(projectId(projectKey), uuid).stream().map(AssetController::toUsage).toList();
+    public List<UsageDto> usages(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestParam(required = false) Long revision) {
+        long projectId = projectId(projectKey);
+        List<UsageView> usages = revision == null
+                ? assetService.usages(projectId, uuid)
+                : assetService.usagesAt(projectId, uuid, revision);
+        return usages.stream().map(AssetController::toUsage).toList();
     }
 
     @GetMapping("/{uuid}/history")
