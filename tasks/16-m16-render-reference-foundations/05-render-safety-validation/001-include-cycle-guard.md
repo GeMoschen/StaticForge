@@ -1,6 +1,6 @@
 ---
 id: M16.5.1
-status: todo
+status: done
 depends: []
 epic: m16-render-reference-foundations
 feature: render-safety-validation
@@ -44,14 +44,14 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Generation test: section template A includes B, and B includes A. The page fails with
+- [x] Generation test: section template A includes B, and B includes A. The page fails with
       `SF-TPL-0135` in the run diagnostics, the other pages render, and no `StackOverflowError` occurs.
-- [ ] The same case in preview returns a problem with `SF-TPL-0135`, not a 500.
-- [ ] A catalog card whose section template contains a catalog that selects the same template
+- [x] The same case in preview returns a problem with `SF-TPL-0135`, not a 500.
+- [x] A catalog card whose section template contains a catalog that selects the same template
       → `SF-TPL-0135`.
-- [ ] A 33-level non-cyclic include chain → `SF-TPL-0130`.
-- [ ] A loop-iteration test spanning nested includes hits `SF-TPL-0131` at the aggregate limit.
-- [ ] Constants exist and the guide table is updated. `./gradlew :server:sf-template:test :server:sf-generate:test` green.
+- [x] A 33-level non-cyclic include chain → `SF-TPL-0130`.
+- [x] A loop-iteration test spanning nested includes hits `SF-TPL-0131` at the aggregate limit.
+- [x] Constants exist and the guide table is updated. `./gradlew :server:sf-template:test :server:sf-generate:test` green.
 
 ## Out of scope
 
@@ -64,3 +64,30 @@ area: backend
   run on the same thread. Document that it must never be shared across `RenderPipeline` entries.
 - Aggregating the time budget across nesting may make large pages that pass today fail. Run the
   5,000-page benchmark fixture before and after, and compare.
+
+### Implementation notes
+
+- `RenderBudget` (sf-template) holds the nesting stack (template UUID + label), aggregate loop count, aggregate
+  output chars and the deadline. Pipelines guard every nested render with `budget.withTemplate(uuid, uid, render)`
+  (push/check/pop in `finally`) and pass the budget via `RenderContext.Builder.budget`; `OctlRenderer.render` uses the
+  context's budget or a fresh one. The single funnels are `GenerationRenderer.render`/`renderSection` and
+  `PageRenderService.renderPage`/`renderSectionTemplate`, so includes, body sections and catalog cards are all covered.
+- The page template is the first stack entry; `SF-TPL-0130` fires when a 33rd level would be pushed *below* it (same
+  "32 nested includes" allowance as before, now also counting body sections and catalog cards). The cycle check runs
+  before the depth check. Message: `Include cycle: a → b → a` (chain from the first occurrence).
+- `OctlRenderer` no longer keeps `includeDepth`; resolver output is appended via `State.appendResolved`, which charges
+  only output the nested renders did not already charge, so nested output is counted once.
+- Behavior tightening (accepted): loop iterations, output size and the 5 s time budget now apply to the whole page.
+  The same template included twice side by side is not a cycle.
+- Preview: `PageRenderService` public entry points translate `RenderLimitException` into a `422` problem with the
+  diagnostic's code/message (was an unhandled exception → 500 / `StackOverflowError`).
+- Generation: a limit fails that file (outcome `errors`) and other pages still render; as before for every
+  `RenderLimitException`, a non-empty error list makes `GenerationService` mark the run `FAILED` with those diagnostics.
+- Tests: `RenderBudgetTest` (sf-template, 7), `RenderPipelineRenderLimitsTest` (sf-generate, 4: cycle, catalog
+  self-cycle, 32 vs 33 levels, aggregate loops), `PreviewRenderLimitsIntegrationTest` (sf-app: page + section preview).
+- **Deviation — save-time self-include hint not implemented.** Template save has no warning channel (existing
+  warnings such as `SF-TPL-0310` are discarded on save; only errors reach the client), and the template save paths are
+  being reworked by `M16.3.2` (OCTL reference rows on save), which computes exactly the outgoing include edges a
+  self-edge check needs. The runtime `SF-TPL-0135` guard is authoritative; the hint belongs with `M16.3.2`.
+- Benchmark not re-run: `GenerationBenchmark`'s fixture has no sections/includes (one flat page template), so the
+  aggregated budget cannot change its per-page limits; timings on this shared machine would be noise anyway.

@@ -12,6 +12,10 @@ import java.util.Map;
  * read-only access, an optional {@link UrlResolver} for {@code $CMS_REF}, and an optional
  * {@link AssetValueResolver} for cross-asset values. Built via
  * {@link Builder} and immutable once built; never shared across concurrent renders.
+ *
+ * <p>The optional {@link RenderBudget} is the one mutable part: it is deliberately shared by a
+ * top-level render's context and every nested context its resolvers build (same thread), so
+ * guard rails apply to the whole page. It must never be shared across pipeline entries.
  */
 public final class RenderContext {
 
@@ -23,6 +27,7 @@ public final class RenderContext {
     private final UrlResolver urlResolver;
     private final BlockResolver blockResolver;
     private final AssetValueResolver assetValueResolver;
+    private final RenderBudget budget;
 
     private RenderContext(
             String channelKey,
@@ -32,7 +37,8 @@ public final class RenderContext {
             JsonNode pageValues,
             UrlResolver urlResolver,
             BlockResolver blockResolver,
-            AssetValueResolver assetValueResolver) {
+            AssetValueResolver assetValueResolver,
+            RenderBudget budget) {
         this.channelKey = channelKey;
         this.escaping = escaping;
         this.values = values;
@@ -41,6 +47,7 @@ public final class RenderContext {
         this.urlResolver = urlResolver;
         this.blockResolver = blockResolver;
         this.assetValueResolver = assetValueResolver;
+        this.budget = budget;
     }
 
     /** A fluent builder for {@link RenderContext}. */
@@ -88,6 +95,11 @@ public final class RenderContext {
         return assetValueResolver;
     }
 
+    /** The render budget shared with nested renders, or {@code null} for a standalone render with its own budget. */
+    public RenderBudget budget() {
+        return budget;
+    }
+
     /** Fluent builder for {@link RenderContext}. */
     public static final class Builder {
         private String channel = "html";
@@ -98,6 +110,7 @@ public final class RenderContext {
         private UrlResolver urlResolver;
         private BlockResolver blockResolver;
         private AssetValueResolver assetValueResolver;
+        private RenderBudget budget;
 
         /** Sets the channel key (for example {@code "markdown"}). */
         public Builder channel(String key) {
@@ -147,9 +160,15 @@ public final class RenderContext {
             return this;
         }
 
+        /** Sets the budget of the enclosing top-level render, so this (nested) render counts against it. */
+        public Builder budget(RenderBudget renderBudget) {
+            this.budget = renderBudget;
+            return this;
+        }
+
         /** Builds an immutable {@link RenderContext}. */
         public RenderContext build() {
-            return new RenderContext(channel, escaping, values, Map.copyOf(meta), pageValues, urlResolver, blockResolver, assetValueResolver);
+            return new RenderContext(channel, escaping, values, Map.copyOf(meta), pageValues, urlResolver, blockResolver, assetValueResolver, budget);
         }
     }
 }

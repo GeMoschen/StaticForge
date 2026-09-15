@@ -28,6 +28,7 @@ import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.acme.staticforge.template.render.BlockResolver;
 import com.acme.staticforge.template.render.Escaping;
 import com.acme.staticforge.template.render.OctlRenderer;
+import com.acme.staticforge.template.render.RenderBudget;
 import com.acme.staticforge.template.render.RenderContext;
 import com.acme.staticforge.template.render.RenderLimitException;
 import com.acme.staticforge.template.render.RenderResult;
@@ -143,8 +144,10 @@ final class GenerationRenderer {
         Set<UUID> deps = new LinkedHashSet<>();
         List<Diagnostic> warnings = new ArrayList<>();
 
+        // One budget for the page and every section/include/catalog card rendered inside it.
+        RenderBudget budget = new RenderBudget();
         UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath());
-        BlockResolver blocks = blockResolver(content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), deps, warnings);
+        BlockResolver blocks = blockResolver(content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), deps, warnings, budget);
 
         RenderContext context = RenderContext.builder()
                 .channel(entry.channel())
@@ -160,9 +163,10 @@ final class GenerationRenderer {
                 .meta("projectKey", TextNode.valueOf(projectKey))
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
+                .budget(budget)
                 .build();
 
-        RenderResult result = renderer.render(compiled, context);
+        RenderResult result = budget.withTemplate(template.uuid(), template.uid(), () -> renderer.render(compiled, context));
         deps.addAll(result.dependencies());
         warnings.addAll(result.warnings());
 
@@ -388,7 +392,8 @@ final class GenerationRenderer {
             UUID activePageUuid,
             String pagePath,
             Set<UUID> deps,
-            List<Diagnostic> warnings) {
+            List<Diagnostic> warnings,
+            RenderBudget budget) {
         return new BlockResolver() {
             @Override
             public String renderBody(String bodyName) {
@@ -398,7 +403,7 @@ final class GenerationRenderer {
                 }
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
-                    out.append(renderSectionInstance(pageContent, section, channel, activePageUuid, pagePath, deps, warnings));
+                    out.append(renderSectionInstance(pageContent, section, channel, activePageUuid, pagePath, deps, warnings, budget));
                 }
                 return out.toString();
             }
@@ -410,7 +415,7 @@ final class GenerationRenderer {
                 }
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
-                    out.append(renderSectionInstance(pageContent, card, channel, activePageUuid, pagePath, deps, warnings));
+                    out.append(renderSectionInstance(pageContent, card, channel, activePageUuid, pagePath, deps, warnings, budget));
                 }
                 return out.toString();
             }
@@ -421,7 +426,7 @@ final class GenerationRenderer {
                 if (uuid == null) {
                     return "";
                 }
-                return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, deps, warnings);
+                return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, deps, warnings, budget);
             }
 
             @Override
@@ -540,7 +545,8 @@ final class GenerationRenderer {
             UUID activePageUuid,
             String pagePath,
             Set<UUID> deps,
-            List<Diagnostic> warnings) {
+            List<Diagnostic> warnings,
+            RenderBudget budget) {
         String templateRef = section.path("templateRef").asText();
         if (templateRef.isBlank()) {
             return "";
@@ -553,7 +559,7 @@ final class GenerationRenderer {
         }
         JsonNode values = section.path("content");
         String instanceId = section.path("instanceId").asText();
-        return renderSection(sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, deps, warnings);
+        return renderSection(sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, deps, warnings, budget);
     }
 
     private String renderSection(
@@ -565,7 +571,8 @@ final class GenerationRenderer {
             String pagePath,
             String instanceId,
             Set<UUID> deps,
-            List<Diagnostic> warnings) {
+            List<Diagnostic> warnings,
+            RenderBudget budget) {
         SnapshotAsset template = snapshot.assetByUuid(sectionUuid);
         if (template == null) {
             return "";
@@ -583,12 +590,14 @@ final class GenerationRenderer {
                 .meta("uid", TextNode.valueOf(emptyIfNull(template.uid())))
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
                 .urlResolver(urlResolver(channel, pagePath))
-                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, deps, warnings));
+                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, deps, warnings, budget))
+                .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
         }
 
-        RenderResult result = renderer.render(compiled, builder.build());
+        RenderContext context = builder.build();
+        RenderResult result = budget.withTemplate(sectionUuid, template.uid(), () -> renderer.render(compiled, context));
         deps.addAll(result.dependencies());
         warnings.addAll(result.warnings());
         return result.output();

@@ -19,6 +19,7 @@ import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.content.ContentDefinition;
+import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
@@ -26,7 +27,9 @@ import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.acme.staticforge.template.render.BlockResolver;
 import com.acme.staticforge.template.render.Escaping;
 import com.acme.staticforge.template.render.OctlRenderer;
+import com.acme.staticforge.template.render.RenderBudget;
 import com.acme.staticforge.template.render.RenderContext;
+import com.acme.staticforge.template.render.RenderLimitException;
 import com.acme.staticforge.template.render.Renderer;
 import com.acme.staticforge.template.render.UrlResolver;
 import com.acme.staticforge.urlregistry.UrlArea;
@@ -40,6 +43,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /**
@@ -120,8 +124,9 @@ public class PageRenderService {
      * @param channel the channel key
      */
     public String renderSection(long projectId, UUID sectionTemplateUuid, JsonNode sampleContent, String channel) {
-        return renderSectionTemplate(
-                projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, channel, false, null);
+        return withRenderLimitsAsProblem(() -> renderSectionTemplate(
+                projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, channel, false, null,
+                new RenderBudget()));
     }
 
     // ------------------------------------------------------------------
@@ -141,7 +146,23 @@ public class PageRenderService {
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found at revision " + revision + ".")));
             page = PageView.from(view);
         }
-        return renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
+        return withRenderLimitsAsProblem(() -> renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl));
+    }
+
+    /**
+     * A render limit ({@code SF-TPL-0130}–{@code 0135}, e.g. an include cycle) fails the preview
+     * with a {@code 422} problem carrying the diagnostic code — the preview counterpart of
+     * generation failing just the affected file — instead of surfacing as a 500.
+     */
+    private static String withRenderLimitsAsProblem(Supplier<String> render) {
+        try {
+            return render.get();
+        } catch (RenderLimitException e) {
+            Diagnostic diagnostic = e.diagnostic();
+            throw new SfException(diagnostic == null
+                    ? ProblemFactory.unprocessableEntity(e.getMessage())
+                    : ProblemFactory.other(422, diagnostic.code(), "Render Limit Exceeded", diagnostic.message()));
+        }
     }
 
     // ------------------------------------------------------------------
@@ -156,8 +177,10 @@ public class PageRenderService {
             return ""; // missing channel template degrades gracefully to an empty body
         }
 
+        // One budget for the page and every section/include/catalog card rendered inside it.
+        RenderBudget budget = new RenderBudget();
         UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl);
-        BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
+        BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl, budget);
 
         RenderContext context = RenderContext.builder()
                 .channel(channel)
@@ -173,9 +196,11 @@ public class PageRenderService {
                 .meta("projectKey", TextNode.valueOf(emptyIfNull(projectKey)))
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
+                .budget(budget)
                 .build();
 
-        return renderer.render(compiled, context).output();
+        return budget.withTemplate(page.pageTemplateUuid(), pageTemplate.uid(), () -> renderer.render(compiled, context))
+                .output();
     }
 
     private CompiledTemplate compilePageChannel(JsonNode templatePayload, String channel, long projectId) {
@@ -203,7 +228,13 @@ public class PageRenderService {
     // ------------------------------------------------------------------
 
     private BlockResolver blockResolver(
-            long projectId, String projectKey, PageView page, String channel, boolean rewriteLinks, String baseUrl) {
+            long projectId,
+            String projectKey,
+            PageView page,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl,
+            RenderBudget budget) {
         return new BlockResolver() {
             @Override
             public String renderBody(String bodyName) {
@@ -214,7 +245,7 @@ public class PageRenderService {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
                     out.append(renderSectionInstance(
-                            projectId, projectKey, page.content(), section, channel, rewriteLinks, baseUrl));
+                            projectId, projectKey, page.content(), section, channel, rewriteLinks, baseUrl, budget));
                 }
                 return out.toString();
             }
@@ -227,7 +258,7 @@ public class PageRenderService {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
                     out.append(renderSectionInstance(
-                            projectId, projectKey, page.content(), card, channel, rewriteLinks, baseUrl));
+                            projectId, projectKey, page.content(), card, channel, rewriteLinks, baseUrl, budget));
                 }
                 return out.toString();
             }
@@ -239,7 +270,8 @@ public class PageRenderService {
                     return "";
                 }
                 return renderSectionTemplate(
-                        projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, channel, rewriteLinks, baseUrl);
+                        projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, channel, rewriteLinks, baseUrl,
+                        budget);
             }
 
             @Override
@@ -366,7 +398,8 @@ public class PageRenderService {
             JsonNode section,
             String channel,
             boolean rewriteLinks,
-            String baseUrl) {
+            String baseUrl,
+            RenderBudget budget) {
         String templateRef = section.path("templateRef").asText();
         if (templateRef.isBlank()) {
             return "";
@@ -376,7 +409,7 @@ public class PageRenderService {
         String instanceId = section.path("instanceId").asText();
         return renderSectionTemplate(
                 projectId, projectKey, sectionTemplateUuid, null, instanceId,
-                content, pageContent, channel, rewriteLinks, baseUrl);
+                content, pageContent, channel, rewriteLinks, baseUrl, budget);
     }
 
     private String renderSectionTemplate(
@@ -389,7 +422,8 @@ public class PageRenderService {
             JsonNode pageValues,
             String channel,
             boolean rewriteLinks,
-            String baseUrl) {
+            String baseUrl,
+            RenderBudget budget) {
         AssetVersionView template = assetService.requireCurrent(projectId, sectionTemplateUuid);
         CompiledTemplate compiled = compileChannel(template.payload(), channel, projectId);
         if (compiled == null) {
@@ -407,11 +441,13 @@ public class PageRenderService {
                 .meta("uuid", TextNode.valueOf(sectionTemplateUuid.toString()))
                 .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl))
                 .blockResolver(blockResolver(
-                        projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl));
+                        projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl, budget))
+                .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
         }
-        return renderer.render(compiled, builder.build()).output();
+        RenderContext context = builder.build();
+        return budget.withTemplate(sectionTemplateUuid, uid, () -> renderer.render(compiled, context)).output();
     }
 
     // ------------------------------------------------------------------

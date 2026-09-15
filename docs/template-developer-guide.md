@@ -131,11 +131,18 @@ Cross-asset values walk the target's *root value object* exactly like a local va
 | `SF-TPL-0110` | error | unresolvable asset reference |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
 | `SF-TPL-0134` | error | `$CMS_NAVIGATION_RECURSE(name)$` references a variable not bound by an enclosing `$CMS_NAVIGATION(...) as name$` |
+| `SF-TPL-0130` | error (render) | include depth exceeded: more than 32 nested section/include/catalog-card levels below the page template |
+| `SF-TPL-0131` | error (render) | loop iteration limit (100,000) exceeded |
+| `SF-TPL-0132` | error (render) | output size limit (32 MB) exceeded |
+| `SF-TPL-0133` | error (render) | render time budget (5 s) exceeded |
+| `SF-TPL-0135` | error (render) | include cycle: a template is rendered inside itself (`a → b → a`), via `$CMS_INCLUDE`, a body section or a catalog card |
 | `SF-TPL-0111` | warning | cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
 | `SF-TPL-0112` | warning | render time: a cross-asset value's target is missing or soft-deleted (renders empty) |
 | `SF-TPL-0201` | warning | body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | editor declared but never used in any channel template |
+
+The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected file in generation and return a `422` problem in preview. They apply to the **whole page render**: loop iterations, output size and time are counted across the page template and every section, include and catalog card rendered inside it, not per nested template.
 
 ### 3.2 CDL (`SF-CDL-*`) — `template.diagnostic.DiagnosticCodes`
 
