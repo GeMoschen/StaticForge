@@ -1,8 +1,7 @@
 package com.acme.staticforge.generate.render;
 
 import com.acme.staticforge.asset.AssetType;
-import com.acme.staticforge.asset.template.CompiledChannel;
-import com.acme.staticforge.asset.template.TemplateCompileMemo;
+import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
@@ -11,6 +10,8 @@ import com.acme.staticforge.asset.navigation.NavigationLookup;
 import com.acme.staticforge.asset.navigation.NavigationService;
 import com.acme.staticforge.asset.navigation.NavigationServiceImpl;
 import com.acme.staticforge.asset.navigation.NavigationTreeJson;
+import com.acme.staticforge.asset.template.CompiledChannel;
+import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
@@ -70,6 +71,7 @@ final class GenerationRenderer {
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<AssetType, Map<String, UUID>> uidIndex;
     private final TemplateCompileMemo compiledTemplates;
+    private final SnapshotAssetValueResolver assetValues;
 
     private final Renderer renderer = new OctlRenderer();
 
@@ -126,6 +128,7 @@ final class GenerationRenderer {
         this.urlRegistryService = urlRegistryService;
         this.generationUserId = generationUserId;
         this.compiledTemplates = compiledTemplates;
+        this.assetValues = new SnapshotAssetValueResolver(snapshot);
     }
 
     /** Renders one plan entry; produces empty bytes (with no deps) when the template has no channel source. */
@@ -180,6 +183,7 @@ final class GenerationRenderer {
                 .meta("projectKey", TextNode.valueOf(projectKey))
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
+                .assetValueResolver(assetValues)
                 .budget(budget)
                 .build();
 
@@ -255,7 +259,7 @@ final class GenerationRenderer {
 
     private ReferenceResolver referenceResolver() {
         return (assetType, uid) -> {
-            AssetType type = assetTypeForRef(assetType);
+            AssetType type = AssetReferencePrefixes.assetTypeForRef(assetType);
             if (type == null) {
                 return Optional.empty();
             }
@@ -279,23 +283,6 @@ final class GenerationRenderer {
     private boolean isNavigationFolder(UUID uuid) {
         SnapshotAsset asset = snapshot.assetByUuid(uuid);
         return asset != null && FolderScope.fromPayload(asset.payload()) == FolderScope.NAVIGATION;
-    }
-
-    /**
-     * {@code assetType:uid} accessor kind -> {@link AssetType}. Every kind but {@code nav} maps
-     * 1:1 onto an {@link AssetType} enum name; {@code nav:<uid>} (`M8.1.4`) is special-cased since
-     * a navigation folder is still just {@link AssetType#FOLDER} under the hood (`M8.1.2` — plain
-     * folders, no dedicated navigation-folder asset type).
-     */
-    private static AssetType assetTypeForRef(String assetType) {
-        if ("nav".equals(assetType)) {
-            return AssetType.FOLDER;
-        }
-        try {
-            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return null;
-        }
     }
 
     /** @param pagePath output path of the page being rendered; generated links are relative to it */
@@ -617,6 +604,7 @@ final class GenerationRenderer {
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
                 .urlResolver(urlResolver(channel, pagePath))
                 .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, deps, warnings, budget))
+                .assetValueResolver(assetValues)
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));

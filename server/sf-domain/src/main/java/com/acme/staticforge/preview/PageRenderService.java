@@ -5,14 +5,15 @@ import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
-import com.acme.staticforge.asset.template.CompiledTemplateCache;
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
 import com.acme.staticforge.asset.navigation.NavigationService;
 import com.acme.staticforge.asset.navigation.NavigationTreeJson;
+import com.acme.staticforge.asset.template.CompiledTemplateCache;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.Project;
@@ -21,6 +22,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.ReferenceResolver;
+import com.acme.staticforge.template.render.AssetValueResolver;
 import com.acme.staticforge.template.render.BlockResolver;
 import com.acme.staticforge.template.render.Escaping;
 import com.acme.staticforge.template.render.OctlRenderer;
@@ -36,7 +38,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -186,6 +187,7 @@ public class PageRenderService {
         RenderBudget budget = new RenderBudget();
         UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl);
         BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision, budget);
+        AssetValueResolver assetValues = assetValues(projectId, revision);
 
         RenderContext context = RenderContext.builder()
                 .channel(channel)
@@ -201,6 +203,7 @@ public class PageRenderService {
                 .meta("projectKey", TextNode.valueOf(emptyIfNull(projectKey)))
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
+                .assetValueResolver(assetValues)
                 .budget(budget)
                 .build();
 
@@ -468,6 +471,7 @@ public class PageRenderService {
                 .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl))
                 .blockResolver(blockResolver(
                         projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl, revision, budget))
+                .assetValueResolver(assetValues(projectId, revision))
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
@@ -480,9 +484,14 @@ public class PageRenderService {
     // Resolvers
     // ------------------------------------------------------------------
 
+    /** Cross-asset values at the preview's revision (current when {@code revision} is {@code null}). */
+    private AssetValueResolver assetValues(long projectId, Long revision) {
+        return new LiveAssetValueResolver(assetService, assetRepository, projectId, revision);
+    }
+
     private ReferenceResolver referenceResolver(long projectId) {
         return (assetType, uid) -> {
-            AssetType type = assetTypeForRef(assetType);
+            AssetType type = AssetReferencePrefixes.assetTypeForRef(assetType);
             if (type == null) {
                 return Optional.empty();
             }
@@ -501,23 +510,6 @@ public class PageRenderService {
 
     private boolean isNavigationFolder(long projectId, UUID folderUuid) {
         return FolderScope.fromPayload(assetService.requireCurrent(projectId, folderUuid).payload()) == FolderScope.NAVIGATION;
-    }
-
-    /**
-     * {@code assetType:uid} accessor kind -> {@link AssetType}. Every kind but {@code nav} maps
-     * 1:1 onto an {@link AssetType} enum name; {@code nav:<uid>} (`M8.1.4`) is special-cased since
-     * a navigation folder is still just {@link AssetType#FOLDER} under the hood (`M8.1.2` — plain
-     * folders, no dedicated navigation-folder asset type).
-     */
-    private static AssetType assetTypeForRef(String assetType) {
-        if ("nav".equals(assetType)) {
-            return AssetType.FOLDER;
-        }
-        try {
-            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return null;
-        }
     }
 
     private UUID resolveSectionTemplateByUid(long projectId, String uid) {
