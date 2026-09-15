@@ -10,6 +10,7 @@ import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.template.CreateTemplateCommand;
 import com.acme.staticforge.asset.template.TemplateService;
 import com.acme.staticforge.asset.template.TemplateView;
+import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
@@ -113,7 +114,7 @@ class CrossAssetValueIntegrationTest {
 
         // --- Soft-deleted target: empty render with a warning. A run pinned to a revision snapshots
         // deleted versions too, so page:b still resolves and its value degrades (§16.4); an unpinned
-        // run's current snapshot omits deleted assets, where the reference is SF-TPL-0110 as before.
+        // run is pinned to the head revision and behaves the same (see the next test).
         assetService.softDelete(pageB.uuid(), true, ctx);
         assertThat(preview(projectId, pageA.uuid(), null)).isEqualTo("A[]");
         long deletedAt = assetService.requireCurrent(projectId, pageB.uuid()).validFromRevision();
@@ -121,6 +122,72 @@ class CrossAssetValueIntegrationTest {
         assertThat(afterDelete.getStatus()).as("diagnostics: %s", afterDelete.getDiagnostics()).isEqualTo(RunStatus.PARTIAL);
         assertThat(afterDelete.getDiagnostics().toString()).contains(DiagnosticCodes.OCTL_MISSING_VALUE_TARGET);
         assertThat(outputOfA(project, target, afterDelete)).contains("A[]");
+    }
+
+    /**
+     * `M16.6.1`: a run without a revision pin sees soft-deleted assets exactly like a run pinned to the
+     * head revision. A value, {@code $CMS_REF} and {@code $CMS_INCLUDE} to deleted targets render empty
+     * with warnings ({@code SF-TPL-0112}, {@code SF-GEN-0220}) instead of failing VALIDATE with
+     * {@code SF-TPL-0110}; deleting a referenced page rebuilds its referrer incrementally, and the
+     * deleted page itself is never published.
+     */
+    @Test
+    void unpinnedRunsTreatSoftDeletedTargetsLikeAPinnedRun() throws Exception {
+        AppUser user = userService.create("cross-deleted", "cross-deleted@example.com", "Cross Deleted", "secret-password");
+        Project project = projectService.create(
+                new CreateProjectRequest("crossdeleted", "Cross Deleted", null, "deleted targets"), user.getId());
+        long projectId = project.getId();
+        RevisionContext ctx = RevisionContext.of(projectId, user.getId(), "deleted targets");
+
+        TemplateView plain = templateService.create(
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Plain", "",
+                        Map.of("html", "B-page"), null, false, null, null),
+                ctx);
+        AssetVersionView pageB = page(projectId, ctx, "Page B", plain.uuid(), "Kept headline");
+        TemplateView box = templateService.create(
+                new CreateTemplateCommand(projectId, AssetType.SECTION_TEMPLATE, "Box", "",
+                        Map.of("html", "box"), null, false, null, null),
+                ctx);
+        TemplateView reader = templateService.create(
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Reader", "",
+                        Map.of("html", "A[$CMS_VALUE(page:" + pageB.uid() + ".headline)$|$CMS_REF(page:" + pageB.uid()
+                                + ")$|$CMS_INCLUDE(section_template:" + box.uid() + ")$]"),
+                        null, false, null, null),
+                ctx);
+        page(projectId, ctx, "Page A", reader.uuid(), "unused");
+        GenerationTarget target = targetRepository.save(new GenerationTarget(
+                projectId, "default", TargetType.FILESYSTEM, mapper.createObjectNode(), true));
+
+        GenerationRun full = run(project, target, GenerationMode.FULL, null, user);
+        assertThat(full.getStatus()).as("diagnostics: %s", full.getDiagnostics()).isEqualTo(RunStatus.SUCCESS);
+        assertThat(outputOfA(project, target, full)).isEqualTo("A[Kept headline|page_b.html|box]");
+
+        assetService.softDelete(pageB.uuid(), true, ctx);
+        assetService.softDelete(box.uuid(), true, ctx);
+
+        GenerationRun incremental = run(project, target, GenerationMode.INCREMENTAL, null, user);
+        assertThat(incremental.getStatus()).as("diagnostics: %s", incremental.getDiagnostics()).isEqualTo(RunStatus.PARTIAL);
+        assertThat(incremental.getRevisionId())
+                .isEqualTo(assetService.requireCurrent(projectId, box.uuid()).validFromRevision());
+        assertThat(outputOfA(project, target, incremental)).isEqualTo("A[||]");
+        String diagnostics = incremental.getDiagnostics().toString();
+        assertThat(incremental.getDiagnostics().path("errors")).isEmpty();
+        assertThat(diagnostics)
+                .contains(DiagnosticCodes.OCTL_MISSING_VALUE_TARGET)
+                .contains(GenerationDiagnosticCodes.GEN_DELETED_REFERENCE)
+                .contains("Reference to deleted page '" + pageB.uid() + "'")
+                .contains("Reference to deleted section_template '" + box.uid() + "'");
+
+        GenerationRun fullAfterDelete = run(project, target, GenerationMode.FULL, null, user);
+        assertThat(fullAfterDelete.getStatus()).isEqualTo(RunStatus.PARTIAL);
+        assertThat(outputOfA(project, target, fullAfterDelete)).isEqualTo("A[||]");
+        Path buildDir = TargetLocations.resolve(outputRoot, project.getKey(), target)
+                .resolve("builds").resolve(String.valueOf(fullAfterDelete.getId()));
+        try (var files = Files.walk(buildDir)) {
+            assertThat(files.filter(Files::isRegularFile).map(CrossAssetValueIntegrationTest::read).flatMap(Optional::stream))
+                    .as("the deleted page is not published")
+                    .noneMatch(content -> content.equals("B-page"));
+        }
     }
 
     private AssetVersionView page(long projectId, RevisionContext ctx, String name, UUID templateUuid, String headline) {

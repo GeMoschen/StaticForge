@@ -32,11 +32,14 @@ first, so their new placeholders and settings go through one resolver.
 
 ## Feature exit criteria
 
-- [ ] A typed `ChannelOutputSettings` value (parsed and validated from `OutputChannel.settings` +
+- [x] A typed `ChannelOutputSettings` value (parsed and validated from `OutputChannel.settings` +
       `fileExtension`) is the only input for index handling, trailing slash, URL strategy and extension.
-- [ ] Generation, the URL registry (generated and preview areas) and preview all use it. No hardcoded
+      *Proof:* `ChannelOutputSettings` + `ChannelOutputSettingsIntegrationTest`.
+- [x] Generation, the URL registry (generated and preview areas) and preview all use it. No hardcoded
       strategy tuple is left (grep proves it).
-- [ ] The channels UI can edit the settings, with validation.
+      *Proof:* `ChannelOutputSettingsIntegrationTest`; grep finds no `"DEFAULT"` strategy literal.
+- [x] The channels UI can edit the settings, with validation.
+      *Proof:* journey 3 edits urlStrategy/trailingSlash/indexUid in the channels form against a live backend; server-side validation `SF-API-0400` with `fieldErrors`.
 
 ## Dependencies
 

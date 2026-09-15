@@ -28,13 +28,16 @@ SPI rather than adding their own lookup paths.
 
 ## Feature exit criteria
 
-- [ ] `RenderContext` carries an optional `AssetValueResolver`. `OctlRenderer.resolve` uses it for
+- [x] `RenderContext` carries an optional `AssetValueResolver`. `OctlRenderer.resolve` uses it for
       asset-reference accessors and still records the dependency.
-- [ ] Generation and preview both provide implementations. `$CMS_VALUE(page:uid.editor)$`,
+      *Proof:* `CrossAssetValueRenderTest`, dependency asserted.
+- [x] Generation and preview both provide implementations. `$CMS_VALUE(page:uid.editor)$`,
       `$CMS_VALUE(media:uid.altText)$`, `$CMS_IF(page:uid.flag)$` and `$CMS_FOR(x : page:uid.links)$`
       render real data, covered by golden tests.
-- [ ] Without a resolver (e.g. `GoldenFileRenderTest`'s null context), behavior is unchanged: empty
+      *Proof:* golden `render/value-cross-asset/` (page value, `media:logo.altText`, `$CMS_IF`, `$CMS_FOR`), `GenerationRendererCrossAssetValueTest`, `CrossAssetValueIntegrationTest`, journey 1.
+- [x] Without a resolver (e.g. `GoldenFileRenderTest`'s null context), behavior is unchanged: empty
       output, dependency recorded.
+      *Proof:* `GoldenFileRenderTest` cases without `references.json`, `CrossAssetValueRenderTest`.
 
 ## Dependencies
 

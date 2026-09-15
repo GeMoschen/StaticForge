@@ -64,7 +64,8 @@ public class BuildPlanner {
         List<PlanEntry> entries = new ArrayList<>();
         for (UUID pageUuid : sorted(pageUuids)) {
             SnapshotAsset page = snapshot.assetByUuid(pageUuid);
-            if (page == null) {
+            if (page == null || page.deleted()) {
+                // A deleted page is still walked for its referrers (they must drop their links) but never published.
                 continue;
             }
             boolean inScope = inScope(page, scopeFolderPath, scopeAssetUuids);

@@ -86,10 +86,22 @@ helper `assetTypeForRef` is duplicated in `GenerationRenderer`, `PageRenderServi
 - Soft-deleted target: preview resolves the reference through the (persisting) `Asset` row and renders empty (the
   `SF-TPL-0112` warning is produced but preview discards render warnings, as before). Generation renders empty with
   `SF-TPL-0112` (run `PARTIAL`) whenever the snapshot contains the deleted version — i.e. runs pinned to a revision
-  (`findSnapshot` includes deleted versions). **Hazard, unchanged here:** an unpinned run's current snapshot
+  (`findSnapshot` includes deleted versions). ~~**Hazard, unchanged here:** an unpinned run's current snapshot
   (`findCurrentSnapshot`) omits deleted assets, so a *page* template referencing a deleted asset still fails VALIDATE
-  with `SF-TPL-0110`, exactly like `$CMS_REF`/`$CMS_INCLUDE` today. Unifying that policy belongs with the
-  revision-aware reference work (`M16.3.3`), not with value rendering.
+  with `SF-TPL-0110`, exactly like `$CMS_REF`/`$CMS_INCLUDE` today.~~ **Fixed in `M16.6.1`:** `SnapshotService` pins
+  an unpinned run to the project's head revision (`RevisionRepository.findHeadRevisionId`, previously the max
+  `validFromRevision` of the live versions, which also ignored tombstone/channel revisions) and loads it with the same
+  `findSnapshot` query, deleted versions included. Consumers audited: `Snapshot.pages()`, `SnapshotNavigationLookup`
+  and the section-template lookup already skipped deleted assets; now also `BuildPlanner.plan` (a deleted page is still
+  walked for its referrers but never planned), `AssetCopyStage` (deleted media are not copied),
+  `GenerationRenderer.templateOf`/`OutputPathResolver.templateOf` (a deleted page template counts as missing, as
+  before), and the uid index prefers a live asset over a deleted one sharing the uid. `$CMS_REF` to a deleted
+  page/media/folder, `$CMS_INCLUDE` of a deleted section template and body/catalog sections of a deleted template
+  render empty with the spec §16.4 warning **`SF-GEN-0220`** (`GenerationDiagnosticCodes.GEN_DELETED_REFERENCE`, once per
+  target per page); values keep `SF-TPL-0112`. Test: `CrossAssetValueIntegrationTest.unpinnedRunsTreatSoftDeletedTargetsLikeAPinnedRun`
+  (unpinned INCREMENTAL after deleting page B and an included section template: A rebuilt as `A[||]`, run `PARTIAL`
+  with both warnings and no errors, revision = head; a FULL run does not publish B). Verified failing with the old
+  `findCurrentSnapshot` path.
 - BuildPlanner: the incremental rebuild is proven on observable behaviour only (A's output in the INCREMENTAL run's
   build dir carries B's new headline), independent of how reference rows are written.
 - Tests: `AssetValueProjectionTest` (sf-domain, 4), `GenerationRendererCrossAssetValueTest` (sf-generate, 2: page +

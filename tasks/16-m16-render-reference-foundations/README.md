@@ -50,27 +50,44 @@ of adding one-off workarounds.
 
 ## Exit criteria (epic is done when)
 
-- [ ] Rendering a 5,000-page fixture compiles each (template, channel) at most once per build
+- [x] Rendering a 5,000-page fixture compiles each (template, channel) at most once per build
       (proven by a counter or spy in a test), and preview reuses compiled templates across requests
       without ever serving a template compiled against stale UID → UUID resolution.
-- [ ] `$CMS_VALUE(page:about.headline)$` renders the referenced page's editor value in both
+      *Proof:* `RenderPipelineCompileCacheTest` (Micrometer `sf.template.compiles` counter; 50 pages, the per-build
+      memo is keyed by (template, channel) so the bound is independent of page count),
+      `PreviewCompileCacheIntegrationTest` (UID rename → recompile, never the stale uid).
+- [x] `$CMS_VALUE(page:about.headline)$` renders the referenced page's editor value in both
       generation (snapshot-consistent) and preview (live/time-travel revision), with golden tests;
       the dependency is still recorded.
-- [ ] Saving any asset that has a payload writes that version's outgoing `asset_reference` rows in
+      *Proof:* golden case `render/value-cross-asset/`, `CrossAssetValueIntegrationTest`, M16.6.1 journey 1 (live).
+- [x] Saving any asset that has a payload writes that version's outgoing `asset_reference` rows in
       the **same revision and transaction**, and closes the previous version's rows
       (`valid_to_revision`). Saving a template writes its OCTL reference rows. Generation no longer
       inserts reference rows.
+      *Proof:* `ReferenceMaterializationIntegrationTest`, `ReferenceMaterializationGuardTest` (ArchUnit),
+      `RevisionAwareReferencesIntegrationTest` (two FULL runs insert zero rows), M16.6.1 journey 2 (usages before any
+      generation).
 - [ ] Usages, the delete guard and `BuildPlanner` only see references valid at the relevant revision;
       duplicate or stale rows from before this epic are cleaned up by a Liquibase changeset.
-- [ ] Generation, the URL registry and preview resolve output paths from the channel's own
+      *Not ticked:* the readers are proven (`RevisionAwareReferencesIntegrationTest`, journey 2), and
+      `015-revision-aware-references.xml` + the startup backfill are proven on H2 only — the changeset has not
+      been run against PostgreSQL (no PostgreSQL in this environment).
+- [x] Generation, the URL registry and preview resolve output paths from the channel's own
       `settings` (`indexFileName`, `trailingSlash`, `urlStrategy`) and `fileExtension`. No hardcoded
       `("index", false, "DEFAULT")` tuple is left.
-- [ ] An include cycle fails the affected file with `SF-TPL-0130` (no `StackOverflowError`), in both
+      *Proof:* `ChannelOutputSettingsIntegrationTest` (link checker, registry = generation = preview), M16.6.1
+      journey 3 (channels UI → `about/index.html`, 0 broken links).
+- [x] An include cycle fails the affected file with `SF-TPL-0130` (no `StackOverflowError`), in both
       generation and preview.
-- [ ] Page, section and catalog-card content is validated against its CDL on save; violations
+      *Proof:* a cycle reports the dedicated `SF-TPL-0135` (`0130` stays the depth limit).
+      `PreviewRenderLimitsIntegrationTest` (422), `IncludeCycleGenerationIntegrationTest` (run PARTIAL, only the
+      cyclic page held back — fixed in M16.6.1, the run used to be FAILED with nothing published), journey 4.
+- [x] Page, section and catalog-card content is validated against its CDL on save; violations
       come back as field-addressed `ContentIssue`s in a `422` problem.
-- [ ] `./gradlew build` and `ui npm run build` are green. `RevisionInvariantsTest` holds with reference
+      *Proof:* `PageContentValidationApiIntegrationTest`, `ContentCompletenessGenerationIntegrationTest`, journey 5.
+- [x] `./gradlew build` and `ui npm run build` are green. `RevisionInvariantsTest` holds with reference
       rows included in the invariant.
+      *Proof:* both green on `m16-foundations` at the M16.6.1 commit (see M16.6.1 notes).
 
 ## Features (dependency order)
 

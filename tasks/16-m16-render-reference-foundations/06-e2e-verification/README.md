@@ -22,10 +22,13 @@ this epic changed documented behavior:
 
 ## Feature exit criteria
 
-- [ ] A Playwright journey covers cross-asset values, usages after save, a delete guard with a stale
+- [x] A Playwright journey covers cross-asset values, usages after save, a delete guard with a stale
       reference, PRETTY channel URLs, an include-cycle diagnostic and required-field publish blocking.
+      *Proof:* `ui/e2e/m16-journeys.spec.ts`, 5/5 passed against a live dev backend (M16.6.1).
 - [ ] The docs and spec reflect the new behavior, and every new diagnostic code is catalogued.
-- [ ] The 5,000-page benchmark shows no regression (full build < 5 min, incremental < 10 s, §2.1 G5).
+      *Not ticked:* the docs/spec sync is on the docs agent's branch and not merged into `m16-foundations` yet.
+- [x] The 5,000-page benchmark shows no regression (full build < 5 min, incremental < 10 s, §2.1 G5).
+      *Proof:* M16.6.1 notes — 5,000 pages, median full 10.5 s / incremental 1.05 s on m16 vs 8.8 s / 0.38 s on master; both far inside G5.
 
 ## Dependencies
 

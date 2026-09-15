@@ -127,7 +127,8 @@ public final class OutputPathResolver {
             return null;
         }
         try {
-            return snapshot.assetByUuid(UUID.fromString(ref));
+            SnapshotAsset template = snapshot.assetByUuid(UUID.fromString(ref));
+            return template == null || template.deleted() ? null : template;
         } catch (IllegalArgumentException e) {
             return null;
         }

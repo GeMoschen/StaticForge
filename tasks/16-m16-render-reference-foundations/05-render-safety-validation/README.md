@@ -31,12 +31,15 @@ Close two gaps that later epics would otherwise build on without knowing:
 
 ## Feature exit criteria
 
-- [ ] An include cycle or excessive nesting fails only the affected file with `SF-TPL-0130`, in both
+- [x] An include cycle or excessive nesting fails only the affected file with `SF-TPL-0130`, in both
       generation and preview. The render limit codes are constants.
-- [ ] Page, section and catalog-card saves reject **structurally** invalid content (422 with
+      *Proof:* `RenderPipelineRenderLimitsTest`, `IncludeCycleGenerationIntegrationTest` (run PARTIAL, other pages published — fixed in M16.6.1), `PreviewRenderLimitsIntegrationTest`, journey 4; codes in `DiagnosticCodes` (cycle = `SF-TPL-0135`).
+- [x] Page, section and catalog-card saves reject **structurally** invalid content (422 with
       field-addressed issues). Completeness errors (`required`, `min`) never block a save but block
       publish of the affected page, listed in the generation report, per §10.5.
-- [ ] The body `allow` list is enforced on section add and move.
+      *Proof:* `PageContentValidationApiIntegrationTest`, `ContentCompletenessGenerationIntegrationTest`, journey 5.
+- [x] The body `allow` list is enforced on section add and move.
+      *Proof:* `PageContentValidationApiIntegrationTest` (add + same/cross-page move).
 
 ## Dependencies
 

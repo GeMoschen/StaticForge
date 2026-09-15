@@ -81,8 +81,21 @@ area: backend
   The same template included twice side by side is not a cycle.
 - Preview: `PageRenderService` public entry points translate `RenderLimitException` into a `422` problem with the
   diagnostic's code/message (was an unhandled exception → 500 / `StackOverflowError`).
-- Generation: a limit fails that file (outcome `errors`) and other pages still render; as before for every
-  `RenderLimitException`, a non-empty error list makes `GenerationService` mark the run `FAILED` with those diagnostics.
+- Generation: a limit fails that file and other pages still render. ~~As before for every `RenderLimitException`, a
+  non-empty error list makes `GenerationService` mark the run `FAILED` with those diagnostics.~~ **Changed in
+  `M16.6.1`** (found by journey 4: the run was FAILED and *nothing* was published, which contradicted "fails only the
+  affected file"): `RenderPipeline.renderEntry` now reports a `RenderLimitException` in `RenderOutcome.pageErrors`
+  (the channel the `SF-GEN-0120` held-back pages use), so the run is `PARTIAL`, every other page is published, and the
+  message names the page: `Page 'cyclic' (html): Include cycle: a → b → a` (run diagnostics group messages per code, so
+  the page identity must be in the message). Per error class:
+  - page-scoped (held back, run `PARTIAL`): `SF-TPL-0130`–`0135` render limits, `SF-GEN-0205` per-page render
+    timeout, `SF-GEN-0203` oversized file — deterministic, authoring-caused and local to one page;
+  - run-level (run `FAILED`, nothing published): VALIDATE compile errors of needed templates, `SF-GEN-0110` output
+    path collisions, `SF-GEN-0204` unexpected render exception and `SF-GEN-0206` interrupted/failed render task —
+    these signal a broken build or a defect rather than one page's content.
+  Tests: `RenderPipelineRenderLimitsTest` (now asserts `pageErrors` + page-named messages, plus
+  `oversizedFileHoldsBackOnlyThatPageWith0203`), `IncludeCycleGenerationIntegrationTest` (sf-app: run `PARTIAL`, one
+  `SF-TPL-0135` message naming the cyclic page, only the healthy page in the build directory).
 - Tests: `RenderBudgetTest` (sf-template, 7), `RenderPipelineRenderLimitsTest` (sf-generate, 4: cycle, catalog
   self-cycle, 32 vs 33 levels, aggregate loops), `PreviewRenderLimitsIntegrationTest` (sf-app: page + section preview).
 - **Deviation — save-time self-include hint not implemented.** Template save has no warning channel (existing

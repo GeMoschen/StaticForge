@@ -9,7 +9,8 @@ import java.util.List;
  * ERROR-severity findings from VALIDATE (run-aborting when non-empty, in which case
  * {@code files} is empty); {@code warnings} carries tolerated render-time findings;
  * {@code pageErrors} carries ERROR findings that kept individual pages from being published
- * without aborting the run (e.g. {@code SF-GEN-0120} incomplete content, spec §10.5), which makes
+ * without aborting the run ({@code SF-GEN-0120} incomplete content, spec §10.5, and render limits
+ * such as an include cycle, {@code SF-TPL-0130}–{@code 0135}), which makes
  * the run PARTIAL. Files are sorted deterministically by {@code outputPath}.
  */
 public record RenderOutcome(

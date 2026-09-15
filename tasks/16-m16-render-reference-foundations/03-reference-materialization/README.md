@@ -42,15 +42,21 @@ of each **asset version**") and the §18.2 incremental rule ("reverse edges defi
 
 ## Feature exit criteria
 
-- [ ] One `ReferenceMaterializer` is called from every code path that inserts an `AssetVersion` with
+- [x] One `ReferenceMaterializer` is called from every code path that inserts an `AssetVersion` with
       a payload: create, update, restore, move/rename when the payload changes, import and project
       restore. A test or ArchUnit rule guards against a new write path skipping it.
-- [ ] Reference rows follow version intervals: at most one open edge set per asset, and closed rows
+      *Proof:* `ReferenceMaterializationGuardTest` (ArchUnit), `ReferenceMaterializationIntegrationTest`.
+- [x] Reference rows follow version intervals: at most one open edge set per asset, and closed rows
       carry `valid_to_revision`.
+      *Proof:* `ReferenceMaterializerTest`, `RevisionInvariantsTest`.
 - [ ] Usages, the delete guard and `BuildPlanner` query edges valid at a revision. Generation no
       longer writes rows. Legacy duplicate rows are cleaned up.
-- [ ] `RevisionInvariantsTest` extends its invariants to reference rows: for every revision and
+      *Not ticked:* readers and "no generation inserts" are proven (`RevisionAwareReferencesIntegrationTest`,
+      journey 2), but the cleanup changeset `015-references-drop-generation-rows` + backfill are proven on H2 only
+      (no PostgreSQL in this environment).
+- [x] `RevisionInvariantsTest` extends its invariants to reference rows: for every revision and
       asset, the edges valid at R equal the edges derived from the payload valid at R.
+      *Proof:* `RevisionInvariantsTest` (edges valid at R == extract(payload at R)).
 
 ## Dependencies
 

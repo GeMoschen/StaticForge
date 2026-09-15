@@ -39,7 +39,7 @@ public class AssetCopyStage {
 
         for (UUID uuid : referencedMediaUuids == null ? Set.<UUID>of() : referencedMediaUuids) {
             SnapshotAsset media = snapshot.assetByUuid(uuid);
-            if (media == null || media.type() != AssetType.MEDIA) {
+            if (media == null || media.deleted() || media.type() != AssetType.MEDIA) {
                 continue;
             }
             JsonNode payload = media.payload();

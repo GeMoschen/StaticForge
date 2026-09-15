@@ -12,6 +12,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
+import { previewErrorDocument, previewProblem } from './preview-error';
 
 type ViewportPreset = 'mobile' | 'tablet' | 'desktop' | 'full';
 
@@ -196,7 +197,8 @@ export class SfPreviewFrameComponent implements OnDestroy {
     }
     this.api.previewSavedPage(key, uuid, this.revision() ?? undefined, CHANNEL).subscribe({
       next: (html) => this.html.set(html),
-      error: () => this.html.set(''),
+      // Show why the page can't render (e.g. 422 SF-TPL-0135 include cycle) instead of a blank frame.
+      error: (err: unknown) => this.html.set(previewErrorDocument(previewProblem(err))),
     });
   }
 

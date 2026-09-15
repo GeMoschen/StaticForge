@@ -51,7 +51,9 @@ import org.springframework.stereotype.Service;
  * The render pipeline (spec §18.2 RENDER): VALIDATE all needed templates, detect output-path
  * collisions, hold back pages with incomplete content ({@code SF-GEN-0120}), then render every
  * remaining plan entry in parallel over virtual threads bounded by
- * {@link GenerationProperties#getParallelism}. Reference edges are maintained on save
+ * {@link GenerationProperties#getParallelism}. A page that hits a render limit
+ * ({@code SF-TPL-0130}–{@code 0135}, e.g. an include cycle) is held back the same way: it is reported
+ * in {@link RenderOutcome#pageErrors()} and the rest of the plan still publishes. Reference edges are maintained on save
  * ({@code ReferenceMaterializer}), not derived from render dependencies.
  */
 @Service
@@ -215,8 +217,10 @@ public class RenderPipeline {
 
         List<RenderedFile> files = new ArrayList<>(batch.files);
         files.sort(Comparator.comparing(RenderedFile::outputPath));
+        List<Diagnostic> pageErrors = new ArrayList<>(incomplete.values());
+        pageErrors.addAll(batch.pageErrors);
         return new RenderOutcome(
-                List.copyOf(files), List.copyOf(batch.errors), List.copyOf(batch.warnings), List.copyOf(incomplete.values()));
+                List.copyOf(files), List.copyOf(batch.errors), List.copyOf(batch.warnings), List.copyOf(pageErrors));
 
     }
 
@@ -232,6 +236,7 @@ public class RenderPipeline {
         List<RenderedFile> files = new ArrayList<>(entries.size());
         List<Diagnostic> errors = new ArrayList<>();
         List<Diagnostic> warnings = new ArrayList<>();
+        List<Diagnostic> pageErrors = new ArrayList<>();
 
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             Semaphore semaphore = new Semaphore(parallelism);
@@ -253,8 +258,9 @@ public class RenderPipeline {
                 try {
                     task = futures.get(i).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
                 } catch (TimeoutException e) {
+                    // Page-scoped like the in-render time budget (SF-TPL-0133): only this page is held back.
                     futures.get(i).cancel(true);
-                    errors.add(Diagnostic.error(
+                    pageErrors.add(Diagnostic.error(
                             "SF-GEN-0205",
                             "Render timed out for page '" + entry.pageUuid() + "' (" + entry.channel() + ").",
                             0,
@@ -280,10 +286,11 @@ public class RenderPipeline {
                 }
                 errors.addAll(task.errors);
                 warnings.addAll(task.warnings);
+                pageErrors.addAll(task.pageErrors);
             }
         }
 
-        return new RenderBatch(files, errors, warnings);
+        return new RenderBatch(files, errors, warnings, pageErrors);
     }
 
     private RenderTask renderEntry(GenerationRenderer renderer, Snapshot snapshot, PlanEntry entry) {
@@ -294,13 +301,10 @@ public class RenderPipeline {
         try {
             file = renderer.render(entry);
         } catch (RenderLimitException e) {
+            // A render limit (include cycle/depth, loop, output, time budget) is an authoring error
+            // local to this page: the file is held back and named in the report, the rest publishes.
             sample.stop(timer);
-            Diagnostic diagnostic = e.diagnostic();
-            if (diagnostic == null) {
-                diagnostic = Diagnostic.error(
-                        "SF-GEN-0204", "Render limit exceeded for '" + entry.outputPath() + "'.", 0, 0);
-            }
-            return new RenderTask(null, List.of(diagnostic), List.of());
+            return RenderTask.pageError(renderLimitDiagnostic(snapshot, entry, e.diagnostic()));
         } catch (RuntimeException e) {
             sample.stop(timer);
             return new RenderTask(
@@ -315,19 +319,31 @@ public class RenderPipeline {
         }
         sample.stop(timer);
         if (file.bytes().length > properties.getMaxFileSize().toBytes()) {
-            return new RenderTask(
-                    null,
-                    List.of(Diagnostic.error(
-                            "SF-GEN-0203",
-                            "Rendered file exceeds max file size: '" + entry.outputPath() + "'.",
-                            0,
-                            0)),
-                    List.of());
+            return RenderTask.pageError(Diagnostic.error(
+                    "SF-GEN-0203",
+                    "Rendered file exceeds max file size: '" + entry.outputPath() + "'.",
+                    0,
+                    0));
         }
         if (isMissingChannelSkip(file)) {
             return new RenderTask(null, List.of(), file.diagnostics());
         }
         return new RenderTask(file, List.of(), file.diagnostics());
+    }
+
+    /**
+     * The page-scoped report entry for a render limit: the limit's own code and position, with a
+     * message naming the page and channel it held back (the run diagnostics group messages by code,
+     * so the page identity has to be part of the message).
+     */
+    private static Diagnostic renderLimitDiagnostic(Snapshot snapshot, PlanEntry entry, Diagnostic limit) {
+        SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
+        String pageName = page != null && page.uid() != null ? page.uid() : entry.pageUuid().toString();
+        String prefix = "Page '" + pageName + "' (" + entry.channel() + "): ";
+        if (limit == null) {
+            return Diagnostic.error("SF-GEN-0204", prefix + "render limit exceeded for '" + entry.outputPath() + "'.", 0, 0);
+        }
+        return new Diagnostic(limit.severity(), limit.code(), prefix + limit.message(), limit.line(), limit.column());
     }
 
     /** A zero-output file whose only findings are SF-GEN-0210 skips emitting (spec §15.4). */
@@ -362,10 +378,28 @@ public class RenderPipeline {
         return template.uid() != null ? template.uid() : template.uuid().toString();
     }
 
-    private record RenderTask(RenderedFile file, List<Diagnostic> errors, List<Diagnostic> warnings) {}
+    /**
+     * One entry's result. {@code pageErrors} only hold this page back (run PARTIAL): render limits
+     * ({@code SF-TPL-0130}–{@code 0135}), the per-page render timeout ({@code SF-GEN-0205}) and an
+     * oversized file ({@code SF-GEN-0203}) — deterministic, authoring-caused and local to the page.
+     * {@code errors} abort the run: an unexpected render exception ({@code SF-GEN-0204}) or an
+     * interrupted/failed task ({@code SF-GEN-0206}) signals a defect, not content, so nothing is published.
+     */
+    private record RenderTask(
+            RenderedFile file, List<Diagnostic> errors, List<Diagnostic> warnings, List<Diagnostic> pageErrors) {
+
+        RenderTask(RenderedFile file, List<Diagnostic> errors, List<Diagnostic> warnings) {
+            this(file, errors, warnings, List.of());
+        }
+
+        static RenderTask pageError(Diagnostic diagnostic) {
+            return new RenderTask(null, List.of(), List.of(), List.of(diagnostic));
+        }
+    }
 
     private record RenderBatch(
             List<RenderedFile> files,
             List<Diagnostic> errors,
-            List<Diagnostic> warnings) {}
+            List<Diagnostic> warnings,
+            List<Diagnostic> pageErrors) {}
 }

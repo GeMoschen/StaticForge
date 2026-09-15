@@ -28,11 +28,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.util.unit.DataSize;
 
 /**
  * `M16.5.1`: render guard rails span the nested section/include/catalog renders of one page in
- * generation. A limit hit fails only that page's file (reported in the outcome's errors, which
- * become the run diagnostics); every other page in the plan still renders.
+ * generation. A limit hit fails only that page's file: it is reported in the outcome's
+ * {@code pageErrors} (run PARTIAL, message naming the page) rather than as a run-aborting error,
+ * and every other page in the plan still renders (`M16.6.1`).
  */
 class RenderPipelineRenderLimitsTest {
 
@@ -40,6 +42,7 @@ class RenderPipelineRenderLimitsTest {
 
     private final List<SnapshotAsset> assets = new ArrayList<>();
     private final List<PlanEntry> entries = new ArrayList<>();
+    private final GenerationProperties properties = new GenerationProperties();
 
     @Test
     void includeCycleFailsOnlyTheAffectedPageWith0135() {
@@ -52,9 +55,10 @@ class RenderPipelineRenderLimitsTest {
 
         RenderOutcome outcome = execute();
 
-        assertThat(outcome.errors()).singleElement().satisfies(error -> {
+        assertThat(outcome.errors()).isEmpty();
+        assertThat(outcome.pageErrors()).singleElement().satisfies(error -> {
             assertThat(error.code()).isEqualTo(DiagnosticCodes.OCTL_INCLUDE_CYCLE);
-            assertThat(error.message()).isEqualTo("Include cycle: a → b → a");
+            assertThat(error.message()).isEqualTo("Page 'broken' (html): Include cycle: a → b → a");
         });
         assertThat(outcome.files()).extracting(RenderedFile::outputPath).containsExactly("ok.html");
         assertThat(text(outcome.files().get(0))).isEqualTo("<p>fine</p>");
@@ -73,8 +77,9 @@ class RenderPipelineRenderLimitsTest {
 
         RenderOutcome outcome = execute();
 
-        assertThat(outcome.errors()).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.OCTL_INCLUDE_CYCLE);
-        assertThat(outcome.errors().get(0).message()).isEqualTo("Include cycle: card → card");
+        assertThat(outcome.errors()).isEmpty();
+        assertThat(outcome.pageErrors()).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.OCTL_INCLUDE_CYCLE);
+        assertThat(outcome.pageErrors().get(0).message()).isEqualTo("Page 'cards' (html): Include cycle: card → card");
         assertThat(outcome.files()).isEmpty();
     }
 
@@ -89,7 +94,9 @@ class RenderPipelineRenderLimitsTest {
 
         RenderOutcome outcome = execute();
 
-        assertThat(outcome.errors()).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.OCTL_INCLUDE_DEPTH);
+        assertThat(outcome.errors()).isEmpty();
+        assertThat(outcome.pageErrors()).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.OCTL_INCLUDE_DEPTH);
+        assertThat(outcome.pageErrors().get(0).message()).startsWith("Page 'deep_page' (html): ");
         assertThat(outcome.files()).extracting(RenderedFile::outputPath).containsExactly("shallow_page.html");
         assertThat(text(outcome.files().get(0))).startsWith("[s0][s1]").endsWith("[s31]");
     }
@@ -114,8 +121,25 @@ class RenderPipelineRenderLimitsTest {
 
         RenderOutcome outcome = execute();
 
-        assertThat(outcome.errors()).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.OCTL_LOOP_LIMIT);
+        assertThat(outcome.errors()).isEmpty();
+        assertThat(outcome.pageErrors()).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.OCTL_LOOP_LIMIT);
         assertThat(outcome.files()).extracting(RenderedFile::outputPath).containsExactly("once_page.html");
+    }
+
+    @Test
+    void oversizedFileHoldsBackOnlyThatPageWith0203() {
+        UUID small = pageTemplate("small", "", "<p>ok</p>");
+        UUID large = pageTemplate("large", "", "<p>" + "x".repeat(200) + "</p>");
+        page("small_page", small, MAPPER.createObjectNode());
+        page("large_page", large, MAPPER.createObjectNode());
+        properties.setMaxFileSize(DataSize.ofBytes(100));
+
+        RenderOutcome outcome = execute();
+
+        assertThat(outcome.errors()).isEmpty();
+        assertThat(outcome.pageErrors()).extracting(Diagnostic::code).containsExactly("SF-GEN-0203");
+        assertThat(outcome.pageErrors().get(0).message()).contains("large_page.html");
+        assertThat(outcome.files()).extracting(RenderedFile::outputPath).containsExactly("small_page.html");
     }
 
     // ------------------------------------------------------------------
@@ -131,7 +155,7 @@ class RenderPipelineRenderLimitsTest {
         }
         Snapshot snapshot = new Snapshot(1L, 1L, byUuid, byId);
         RenderPipeline pipeline = new RenderPipeline(
-                new GenerationProperties(), mock(ProjectRepository.class), null, new SimpleMeterRegistry(), null,
+                properties, mock(ProjectRepository.class), null, new SimpleMeterRegistry(), null,
                 new CompiledTemplateCache(new SimpleMeterRegistry(), 2000, Duration.ofMinutes(30)));
         return pipeline.execute(
                 snapshot,

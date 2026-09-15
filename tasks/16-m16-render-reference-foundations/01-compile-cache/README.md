@@ -24,12 +24,15 @@ the template source. A key built from the source alone would serve stale referen
 
 ## Feature exit criteria
 
-- [ ] One shared cache component is used by generation and preview. Neither calls `OctlCompiler`
+- [x] One shared cache component is used by generation and preview. Neither calls `OctlCompiler`
       or `CdlCompiler` directly for rendering anymore.
-- [ ] Within one generation run, each (template, channel) compiles at most once. Across preview
+      *Proof:* `CompiledTemplateCache` used by `GenerationRenderer`/`RenderPipeline` and `PageRenderService`; grep finds no `OctlCompiler`/`CdlCompiler` call in `sf-generate` main or `preview`.
+- [x] Within one generation run, each (template, channel) compiles at most once. Across preview
       requests, a compiled template is reused until the template or any reference it resolved changes.
-- [ ] Every correctness case has a test: UID rename of a referenced asset, template edit, channel
+      *Proof:* `RenderPipelineCompileCacheTest`, `PreviewCompileCacheIntegrationTest`.
+- [x] Every correctness case has a test: UID rename of a referenced asset, template edit, channel
       source edit, and time-travel preview at an older revision.
+      *Proof:* `PreviewCompileCacheIntegrationTest` (UID rename, template/channel edit, time travel), `CompiledTemplateCacheTest`.
 
 ## Dependencies
 

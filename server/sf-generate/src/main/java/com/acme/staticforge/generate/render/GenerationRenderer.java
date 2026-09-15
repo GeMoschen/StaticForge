@@ -166,7 +166,7 @@ final class GenerationRenderer {
 
         // One budget for the page and every section/include/catalog card rendered inside it.
         RenderBudget budget = new RenderBudget();
-        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath());
+        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath(), warnings);
         BlockResolver blocks = blockResolver(content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), deps, warnings, budget);
 
         RenderContext context = RenderContext.builder()
@@ -213,7 +213,7 @@ final class GenerationRenderer {
         return errors;
     }
 
-    /** The page template for a page, or {@code null} when missing/unresolvable. */
+    /** The page template for a page, or {@code null} when missing, soft-deleted or unresolvable. */
     static SnapshotAsset templateOf(Snapshot snapshot, SnapshotAsset page) {
         JsonNode payload = page.payload();
         if (payload == null) {
@@ -224,7 +224,8 @@ final class GenerationRenderer {
             return null;
         }
         try {
-            return snapshot.assetByUuid(UUID.fromString(ref));
+            SnapshotAsset template = snapshot.assetByUuid(UUID.fromString(ref));
+            return template == null || template.deleted() ? null : template;
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -282,13 +283,17 @@ final class GenerationRenderer {
 
     private boolean isNavigationFolder(UUID uuid) {
         SnapshotAsset asset = snapshot.assetByUuid(uuid);
-        return asset != null && FolderScope.fromPayload(asset.payload()) == FolderScope.NAVIGATION;
+        return asset != null && !asset.deleted() && FolderScope.fromPayload(asset.payload()) == FolderScope.NAVIGATION;
     }
 
     /** @param pagePath output path of the page being rendered; generated links are relative to it */
-    private UrlResolver urlResolver(String channel, String pagePath) {
+    private UrlResolver urlResolver(String channel, String pagePath, List<Diagnostic> warnings) {
         return (kind, uid, uuid, args) -> {
             if (uuid == null) {
+                return "";
+            }
+            if (isDeleted(uuid)) {
+                warnDeletedReference(warnings, kind, uid);
                 return "";
             }
             return switch (kind) {
@@ -590,6 +595,10 @@ final class GenerationRenderer {
         if (template == null) {
             return "";
         }
+        if (template.deleted()) {
+            warnDeletedReference(warnings, "section_template", template.uid());
+            return "";
+        }
         CompiledTemplate compiled = compileChannel(template, channel);
         if (compiled == null) {
             return "";
@@ -602,7 +611,7 @@ final class GenerationRenderer {
                 .pageValues(pageValues != null ? pageValues : mapper.createObjectNode())
                 .meta("uid", TextNode.valueOf(emptyIfNull(template.uid())))
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
-                .urlResolver(urlResolver(channel, pagePath))
+                .urlResolver(urlResolver(channel, pagePath, warnings))
                 .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, deps, warnings, budget))
                 .assetValueResolver(assetValues)
                 .budget(budget);
@@ -629,15 +638,45 @@ final class GenerationRenderer {
         return byUid == null ? null : byUid.get(uid);
     }
 
+    /**
+     * {@code type -> uid -> uuid} over the snapshot. Soft-deleted assets are indexed too, so a reference
+     * to a deleted target resolves (and renders empty with a warning, spec §16.4) instead of failing
+     * compilation as unknown; a live asset always wins a uid it shares with a deleted one.
+     */
     private static Map<AssetType, Map<String, UUID>> indexUids(Snapshot snapshot) {
         Map<AssetType, Map<String, UUID>> index = new java.util.HashMap<>();
         for (SnapshotAsset asset : snapshot.byUuid().values()) {
             if (asset.uid() == null) {
                 continue;
             }
-            index.computeIfAbsent(asset.type(), t -> new java.util.HashMap<>()).put(asset.uid(), asset.uuid());
+            Map<String, UUID> byUid = index.computeIfAbsent(asset.type(), t -> new java.util.HashMap<>());
+            if (asset.deleted()) {
+                byUid.putIfAbsent(asset.uid(), asset.uuid());
+            } else {
+                UUID previous = byUid.get(asset.uid());
+                if (previous == null || snapshot.assetByUuid(previous).deleted()) {
+                    byUid.put(asset.uid(), asset.uuid());
+                }
+            }
         }
         return index;
+    }
+
+    private boolean isDeleted(UUID uuid) {
+        SnapshotAsset asset = snapshot.assetByUuid(uuid);
+        return asset != null && asset.deleted();
+    }
+
+    /** One {@code SF-GEN-0220} per deleted target per page (the same reference may render many times). */
+    private static void warnDeletedReference(List<Diagnostic> warnings, String kind, String uid) {
+        Diagnostic warning = Diagnostic.warning(
+                GenerationDiagnosticCodes.GEN_DELETED_REFERENCE,
+                "Reference to deleted " + kind + " '" + emptyIfNull(uid) + "' renders empty.",
+                0,
+                0);
+        if (!warnings.contains(warning)) {
+            warnings.add(warning);
+        }
     }
 
     /** Variant {@code format} ("jpeg") → file extension ("jpg"); mirrors the ASSETS copy stage. */

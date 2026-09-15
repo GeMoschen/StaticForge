@@ -16,4 +16,11 @@ public final class GenerationDiagnosticCodes {
      * a count or length out of bounds; spec §10.5): the page is not published, other pages are.
      */
     public static final String GEN_CONTENT_INCOMPLETE = "SF-GEN-0120";
+
+    /**
+     * {@code $CMS_REF}, {@code $CMS_INCLUDE} or a body/catalog section resolves to a soft-deleted asset
+     * (spec §16.4): tolerated build warning, the reference renders empty. Values read from a deleted
+     * target report {@code SF-TPL-0112} instead.
+     */
+    public static final String GEN_DELETED_REFERENCE = "SF-GEN-0220";
 }
