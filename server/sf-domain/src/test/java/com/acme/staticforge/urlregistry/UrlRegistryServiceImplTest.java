@@ -21,14 +21,12 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * {@link UrlRegistryServiceImpl} tests against mock collaborators (`M8.2.2`) — focuses on logic
- * that doesn't need a live database: the concurrent first-{@code resolve} catch-and-reread race
- * path, and the {@link ResetScope} dispatch to the correct repository delete method. Full
+ * that doesn't need a live database: first-{@code resolve} insert-if-absent-then-reread, and the {@link ResetScope} dispatch to the correct repository delete method. Full
  * read-through-cache/override/reset-then-recompute behavior against real assets/navigation is
- * covered by {@code UrlRegistryServiceIntegrationTest} (sf-app).
+ * covered by {@code UrlRegistryServiceIntegrationTest} (sf-app), including a real concurrent race.
  */
 class UrlRegistryServiceImplTest {
 
@@ -58,16 +56,20 @@ class UrlRegistryServiceImplTest {
     }
 
     @Test
-    void concurrentFirstResolveRereadsInsteadOfThrowingOnAUniqueConstraintRace() {
+    void firstResolveInsertsIfAbsentAndReturnsTheRowReadBack() {
         RevisionContext ctx = RevisionContext.of(PROJECT_ID, 1L, null);
+        // The read-back returns whichever row won — here a concurrent caller's, with a different URL.
         when(repository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(PROJECT_ID, "html", PAGE_REF, UrlArea.GENERATED))
                 .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(entry("products/hammer.html")));
-        when(repository.save(any(UrlRegistryEntry.class))).thenThrow(new DataIntegrityViolationException("duplicate"));
+                .thenReturn(Optional.of(entry("winner/hammer.html")));
+        when(repository.insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), anyLong())).thenReturn(0);
 
         String url = service.resolve(PAGE_REF, "html", UrlArea.GENERATED, ctx);
 
-        assertThat(url).isEqualTo("products/hammer.html");
+        assertThat(url).isEqualTo("winner/hammer.html");
+        verify(repository).insertIfAbsent(
+                eq(PROJECT_ID), eq("html"), eq(PAGE_REF), eq("GENERATED"), eq("products/hammer.html"), any(), eq(0L));
+        verify(repository, never()).save(any());
         verify(repository, times(2))
                 .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(PROJECT_ID, "html", PAGE_REF, UrlArea.GENERATED);
     }
@@ -82,7 +84,7 @@ class UrlRegistryServiceImplTest {
 
         assertThat(url).isEqualTo("cached/url.html");
         verify(navigationService, never()).resolve(anyLong(), any(), any());
-        verify(repository, never()).save(any());
+        verify(repository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), anyLong());
     }
 
     @Test

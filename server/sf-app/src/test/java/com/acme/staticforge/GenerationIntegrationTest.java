@@ -1,11 +1,16 @@
 package com.acme.staticforge;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
+import com.acme.staticforge.asset.template.CreateTemplateCommand;
+import com.acme.staticforge.asset.template.TemplateService;
+import com.acme.staticforge.asset.template.TemplateView;
+import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
@@ -13,6 +18,7 @@ import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.RunStatus;
+import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
@@ -26,6 +32,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -55,6 +62,7 @@ class GenerationIntegrationTest {
     @Autowired AssetService assetService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired TemplateService templateService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -90,11 +98,13 @@ class GenerationIntegrationTest {
                 user.getId());
         long runId = run.getId();
 
-        GenerationRun finished = awaitTerminal(runId);
+        GenerationRun finished = awaitTerminal(project.getKey(), runId);
         assertThat(finished.getStatus()).isEqualTo(RunStatus.SUCCESS);
         assertThat(finished.getFilesWritten()).isPositive();
 
-        Path buildDir = outputRoot.resolve("builds").resolve(String.valueOf(runId));
+        Path targetDir = TargetLocations.resolve(outputRoot, project.getKey(), target);
+        assertThat(targetDir).isEqualTo(outputRoot.toAbsolutePath().normalize().resolve("genproj").resolve("target-" + target.getId()));
+        Path buildDir = targetDir.resolve("builds").resolve(String.valueOf(runId));
         assertThat(Files.isDirectory(buildDir)).isTrue();
         List<Path> files;
         try (var stream = Files.walk(buildDir)) {
@@ -105,13 +115,61 @@ class GenerationIntegrationTest {
         assertThat(files.stream().anyMatch(p -> p.getFileName().toString().equals("sitemap.xml"))).isTrue();
         assertThat(files.stream().anyMatch(p -> p.getFileName().toString().equals("robots.txt"))).isTrue();
 
-        assertThat(Files.readString(outputRoot.resolve("current")).trim()).isEqualTo(String.valueOf(runId));
+        assertThat(Files.readString(targetDir.resolve("current")).trim()).isEqualTo(String.valueOf(runId));
     }
 
-    private GenerationRun awaitTerminal(long runId) throws InterruptedException {
+    /**
+     * {@code nav:root} is the documented way to address the whole navigation tree: it must save,
+     * pass generation's validate stage and render the Navigation store's root — not fail with
+     * SF-TPL-0110 because the uid "root" belongs to the hidden folder that parents every store.
+     */
+    @Test
+    void navRootTemplateSavesAndGeneratesSuccessfully() throws Exception {
+        AppUser user = userService.create("gen-nav-user", "gen-nav-user@example.com", "Gen Nav User", "secret-password");
+        Project project = projectService.create(
+                new CreateProjectRequest("gennavroot", "Gen Nav Root", null, "nav:root generation test"), user.getId());
+        RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "nav:root generation test");
+
+        TemplateView template = templateService.create(
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Nav Template", "",
+                        Map.of("html", "<nav>$CMS_NAVIGATION(nav:root)$</nav>"), null, false, null, null),
+                ctx);
+        ObjectNode pagePayload = mapper.createObjectNode();
+        pagePayload.put("templateRef", template.uuid().toString());
+        pagePayload.set("content", mapper.createObjectNode());
+        assetService.create(new CreateAssetCommand(project.getId(), AssetType.PAGE, "Home", null, pagePayload, null), ctx);
+        GenerationTarget target = targetRepository.save(new GenerationTarget(
+                project.getId(), "default", TargetType.FILESYSTEM, mapper.createObjectNode(), true));
+
+        GenerationRun run = generationService.start(
+                project.getKey(),
+                new GenerationRequest(GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null),
+                user.getId());
+        GenerationRun finished = awaitTerminal(project.getKey(), run.getId());
+
+        assertThat(finished.getStatus()).as("diagnostics: %s", finished.getDiagnostics()).isEqualTo(RunStatus.SUCCESS);
+        assertThat(finished.getErrorCount()).isZero();
+    }
+
+    /** Template save applies the same NAVIGATION-scope check as preview/generation, so the error surfaces on save. */
+    @Test
+    void navReferenceToAnotherStoresFolderIsRejectedOnTemplateSave() {
+        AppUser user = userService.create("gen-nav-bad", "gen-nav-bad@example.com", "Gen Nav Bad", "secret-password");
+        Project project = projectService.create(
+                new CreateProjectRequest("gennavbad", "Gen Nav Bad", null, "nav scope test"), user.getId());
+        RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "nav scope test");
+
+        assertThatThrownBy(() -> templateService.create(
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Bad Nav", "",
+                        Map.of("html", "$CMS_NAVIGATION(nav:pages_root)$"), null, false, null, null),
+                ctx))
+                .isInstanceOf(SfException.class);
+    }
+
+    private GenerationRun awaitTerminal(String projectKey, long runId) throws InterruptedException {
         long deadline = System.currentTimeMillis() + 60_000;
         while (System.currentTimeMillis() < deadline) {
-            GenerationRun run = generationService.status("genproj", runId);
+            GenerationRun run = generationService.status(projectKey, runId);
             RunStatus status = run.getStatus();
             if (status == RunStatus.SUCCESS || status == RunStatus.PARTIAL || status == RunStatus.FAILED
                     || status == RunStatus.CANCELLED) {

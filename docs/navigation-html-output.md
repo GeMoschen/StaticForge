@@ -126,6 +126,11 @@ Both "Section" and "Sub" pick up `trail` because "Leaf One" is active somewhere 
 
 - `label` is HTML-escaped (`Filters.escapeHtml`).
 - `href` is attribute-escaped (`Filters.escapeAttr`).
+- Generated output emits hrefs **relative to the page being rendered**: from `pf/pf1/p3.html`, the
+  page `p1.html` is linked as `../../p1.html` and `pf/p2.html` as `../p2.html`, so the site works from
+  any host path, `file://` or an unpacked ZIP. The URL registry stores the site path (`pf/p2.html`);
+  generation relativizes it per page. A manual registry override that is already absolute (`/…`,
+  `https://…`) is emitted unchanged. The same applies to `$CMS_REF` page, folder and media links.
 - A `PAGE_REFERENCE` node's href is resolved through the URL registry (`UrlRegistryService`,
   `UrlArea.GENERATED`), keyed on the reference's own UUID — stable across regeneration even if
   the target page's slug changes. A `FOLDER` entry-point node (resolved via its `startNode`

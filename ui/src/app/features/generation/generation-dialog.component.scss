@@ -91,6 +91,12 @@
   resize: vertical;
 }
 
+.dialog__note {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
 .dialog__error {
   margin: 0;
   padding: var(--sf-2) var(--sf-3);

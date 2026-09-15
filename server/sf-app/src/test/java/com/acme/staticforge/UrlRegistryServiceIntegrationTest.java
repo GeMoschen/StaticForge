@@ -28,8 +28,16 @@ import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,9 +49,8 @@ import org.springframework.test.context.ActiveProfiles;
  * {@link UrlRegistryService} tests (`M8.2.2`) against the real live repositories: the
  * read-through-cache contract (first {@code resolve} computes+persists, later calls never
  * recompute even after the underlying page changes), {@code override}, and every {@code reset}
- * scope followed by lazy repopulation. Race-safety on the unique-constraint catch-and-reread
- * path is covered separately (with mocks, so the race is deterministic) by
- * {@code UrlRegistryServiceImplTest} (sf-domain).
+ * scope followed by lazy repopulation, and concurrent first-{@code resolve} calls for the same
+ * tuple against the real database (the parallel-render path generation takes).
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -86,6 +93,39 @@ class UrlRegistryServiceIntegrationTest {
         String urlAfterEdit = urlRegistryService.resolve(pageRef.uuid(), "html", UrlArea.GENERATED, fx.ctx());
 
         assertThat(urlAfterEdit).isEqualTo(url);
+    }
+
+    /**
+     * Generation renders pages on parallel virtual threads, and every page renders the same
+     * navigation, so many threads resolve the same absent tuple at once. All of them must get the
+     * URL and exactly one row must exist — losing the insert race must not surface as an error
+     * (previously: "null id in UrlRegistryEntry entry (don't flush the Session after an exception
+     * occurs)").
+     */
+    @Test
+    void concurrentFirstResolvesOfTheSameTupleAllSucceedWithOneRow() throws Exception {
+        Fixture fx = newFixture();
+        AssetVersionView pageRef = createPageRef(fx, "Shared Nav Target");
+        int threads = 16;
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<String>> results = new ArrayList<>();
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int i = 0; i < threads; i++) {
+                results.add(executor.submit(() -> {
+                    start.await();
+                    return urlRegistryService.resolve(pageRef.uuid(), "html", UrlArea.GENERATED, fx.ctx());
+                }));
+            }
+            start.countDown();
+            Set<String> urls = new HashSet<>();
+            for (Future<String> result : results) {
+                urls.add(result.get());
+            }
+            assertThat(urls).containsExactly("shared-nav-target.html");
+        }
+        assertThat(urlRegistryRepository.search(fx.project().getId(), "html", UrlArea.GENERATED, PageRequest.of(0, 10))
+                        .getTotalElements())
+                .isEqualTo(1);
     }
 
     @Test

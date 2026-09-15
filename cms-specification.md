@@ -1351,6 +1351,8 @@ generation_target
   id, project_id, name, type (FILESYSTEM | ZIP | S3), config json, is_default
 ```
 
+Each target owns the directory `{root} = {sf.generate.output-root}/{projectKey}/{path}`, where `path` is `config.path` (relative, `[A-Za-z0-9._-]` segments, no `.`/`..`) or `target-{id}` when unset. Targets of one project may not share or nest directories, and a project has at most one default target. `config.baseUrl` is used for sitemap and absolute links.
+
 Filesystem publish is atomic via staged directories:
 
 ```

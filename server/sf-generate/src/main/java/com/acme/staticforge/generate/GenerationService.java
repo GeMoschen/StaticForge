@@ -217,19 +217,28 @@ public class GenerationService {
     public GenerationRun promote(String projectKey, long runId) {
         GenerationRun run = requireRun(projectKey, runId);
         GenerationTarget target = resolveTarget(run);
-        TargetWriter writer = targetWriterSelector.forTarget(target);
+        TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
         writer.promote(runId);
         return run;
     }
 
     /** Registers an SSE emitter to receive {@code progress} events for a run. */
     public void registerEmitter(long runId, SseEmitter emitter) {
-        emittersByRun.computeIfAbsent(runId, k -> new CopyOnWriteArrayList<>()).add(emitter);
+        emittersByRun.compute(runId, (id, emitters) -> {
+            List<SseEmitter> list = emitters == null ? new CopyOnWriteArrayList<>() : emitters;
+            list.add(emitter);
+            return list;
+        });
         emitter.onCompletion(() -> removeEmitter(runId, emitter));
         emitter.onTimeout(() -> {
             removeEmitter(runId, emitter);
             emitter.complete();
         });
+    }
+
+    /** Drops an emitter that will receive no further events (e.g. subscribed after the run finished). */
+    public void unregisterEmitter(long runId, SseEmitter emitter) {
+        removeEmitter(runId, emitter);
     }
 
     // ------------------------------------------------------------------
@@ -308,7 +317,7 @@ public class GenerationService {
             materializeReferences(snapshot, plan, outcome);
 
             emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, outcome.warnings().size(), null);
-            TargetWriter writer = targetWriterSelector.forTarget(target);
+            TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
             writer.stage(runId, allFiles);
             writer.publish(runId);
 
@@ -375,6 +384,7 @@ public class GenerationService {
     private GenerationTarget resolveTarget(GenerationRun run) {
         if (run.getTargetId() != null) {
             return targets.findById(run.getTargetId())
+                    .filter(target -> target.getProjectId() == run.getProjectId())
                     .orElseThrow(() -> new SfException(
                             ProblemFactory.other(422, NO_TARGET_CODE, "Validation Failed", "Generation target not found.")));
         }
@@ -530,10 +540,10 @@ public class GenerationService {
     }
 
     private void removeEmitter(long runId, SseEmitter emitter) {
-        List<SseEmitter> emitters = emittersByRun.get(runId);
-        if (emitters != null) {
+        emittersByRun.computeIfPresent(runId, (id, emitters) -> {
             emitters.remove(emitter);
-        }
+            return emitters.isEmpty() ? null : emitters;
+        });
     }
 
     private static String trimmed(String value) {

@@ -90,10 +90,19 @@ public class GenerationController {
     @GetMapping("/{runId}/events")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public SseEmitter events(@PathVariable String projectKey, @PathVariable long runId) {
+        generationService.status(projectKey, runId); // 404 before registering anything
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MILLIS);
+        // Register before reading the status: a run finishing in between then either reaches this
+        // emitter through the normal completion path or is seen as terminal below.
         generationService.registerEmitter(runId, emitter);
         GenerationRun run = generationService.status(projectKey, runId);
         emitCurrent(run, emitter);
+        if (run.getStatus().isTerminal()) {
+            // Already finished (fast failures often are): no further events will come, so close the
+            // stream after the final status instead of leaving the client waiting until timeout.
+            generationService.unregisterEmitter(runId, emitter);
+            emitter.complete();
+        }
         return emitter;
     }
 

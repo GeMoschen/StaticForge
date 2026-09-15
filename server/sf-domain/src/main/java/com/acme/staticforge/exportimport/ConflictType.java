@@ -56,7 +56,15 @@ public enum ConflictType {
      * in the target project. Will be skipped on import, not overwritten — surfaced as a
      * warning, not blocking, since skip is a safe default.
      */
-    SETTINGS_KEY_COLLISION(ConflictSeverity.WARNING);
+    SETTINGS_KEY_COLLISION(ConflictSeverity.WARNING),
+
+    /**
+     * An {@code ExportedGenerationTarget.config.path} that is invalid, or whose output folder
+     * would coincide with / nest in an existing target's (or an earlier imported target's)
+     * folder. The target is still imported, but without {@code path}, so it publishes to its
+     * collision-free {@code target-{id}} default — a warning, since that is a safe default.
+     */
+    TARGET_PATH_COLLISION(ConflictSeverity.WARNING);
 
     private final ConflictSeverity severity;
 

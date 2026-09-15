@@ -1,0 +1,132 @@
+<div class="targets">
+  <header class="targets__header">
+    <div>
+      <h1 class="targets__title">Generation targets</h1>
+      <p class="targets__subtitle">
+        Where generation runs publish. Each target writes into its own folder under the
+        server's output root; the default target is used when a run doesn't pick one.
+      </p>
+    </div>
+    <sf-button variant="primary" [disabled]="readOnly()" (click)="openCreate()">New target</sf-button>
+  </header>
+
+  @if (formOpen()) {
+    <form class="form" [formGroup]="form" (ngSubmit)="submit()">
+      <sf-field label="Name">
+        <input class="input" type="text" formControlName="name" autocomplete="off" />
+      </sf-field>
+
+      <sf-field label="Type">
+        <select class="select" formControlName="type">
+          @for (type of types; track type) {
+            <option [value]="type">{{ type }}</option>
+          }
+        </select>
+      </sf-field>
+
+      <sf-field
+        label="Output folder"
+        [hint]="pathHint()"
+      >
+        <input
+          class="input"
+          type="text"
+          formControlName="path"
+          autocomplete="off"
+          [placeholder]="pathPlaceholder()"
+        />
+      </sf-field>
+
+      <sf-field label="Base URL" hint="Public site URL, used for the sitemap and absolute links.">
+        <input
+          class="input"
+          type="url"
+          formControlName="baseUrl"
+          autocomplete="off"
+          placeholder="https://example.com"
+        />
+      </sf-field>
+
+      <sf-field label="Default target">
+        <input class="checkbox" type="checkbox" formControlName="isDefault" />
+      </sf-field>
+
+      @if (error()) {
+        <p class="form__error" role="alert">{{ error() }}</p>
+      }
+
+      <div class="form__actions">
+        <sf-button variant="ghost" (click)="closeForm()">Cancel</sf-button>
+        <sf-button type="submit" variant="primary" [disabled]="form.invalid || submitting() || readOnly()">
+          {{ submitting() ? 'Saving…' : editing() ? 'Save changes' : 'Create target' }}
+        </sf-button>
+      </div>
+    </form>
+  }
+
+  @if (loading()) {
+    <sf-spinner label="Loading generation targets…" />
+  } @else if (targets().length === 0) {
+    <sf-empty-state
+      title="No generation targets yet"
+      description="Create a target to be able to generate and publish this project."
+    />
+  } @else {
+    <sf-table>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Output folder</th>
+            <th>Base URL</th>
+            <th class="table__actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (target of targets(); track target.id) {
+            <tr>
+              <td>
+                <span class="name">
+                  {{ target.name }}
+                  @if (target.isDefault) {
+                    <span class="badge badge--default">default</span>
+                  }
+                </span>
+              </td>
+              <td>{{ target.type }}</td>
+              <td><code class="mono">{{ target.outputPath ?? '—' }}</code></td>
+              <td><code class="mono">{{ baseUrlOf(target) || '—' }}</code></td>
+              <td class="table__actions">
+                <sf-button variant="ghost" [disabled]="readOnly()" (click)="openEdit(target)">Edit</sf-button>
+                <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete(target)">Delete</sf-button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </sf-table>
+  }
+</div>
+
+@if (confirmDelete(); as target) {
+  <div class="scrim" (click)="confirmDelete.set(null)"></div>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Confirm delete">
+    <header class="dialog__header">
+      <h2 class="dialog__title">Delete target</h2>
+    </header>
+    <div class="dialog__body">
+      <p>
+        Delete "{{ target.name }}"? Past runs published to it can no longer be promoted from
+        the Generation page. Files already written to
+        <code class="mono">{{ target.outputPath }}</code> stay on the server.
+      </p>
+    </div>
+    <footer class="dialog__footer">
+      <sf-button variant="ghost" (click)="confirmDelete.set(null)">Cancel</sf-button>
+      <sf-button variant="danger" [disabled]="submitting() || readOnly()" (click)="confirmDeleteAction()">
+        {{ submitting() ? 'Deleting…' : 'Delete' }}
+      </sf-button>
+    </footer>
+  </div>
+}

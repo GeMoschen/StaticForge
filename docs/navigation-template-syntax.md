@@ -30,6 +30,11 @@ compile error (`SF-TPL-0110`).
 $CMS_NAVIGATION(nav:root)$
 ```
 
+`nav:root` is a reserved alias for the Navigation store's own root folder (uid `navigation_root`, shown
+as "All Navigation"), i.e. the whole navigation tree. A `nav:` reference only resolves to folders in
+the Navigation store; naming a folder from another store (e.g. `nav:pages_root`) is `SF-TPL-0110` when
+the template is saved.
+
 Navigation folders are plain folders with no template of their own — there's nothing to author on
 the folder side beyond building its tree (start nodes, page references, sub-folders). All markup
 comes from the renderer described in `navigation-html-output.md`.

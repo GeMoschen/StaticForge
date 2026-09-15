@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Renders a single (page, channel) unit into a {@link RenderedFile} against a revision-pinned
@@ -57,6 +58,9 @@ import java.util.UUID;
  * across concurrent virtual threads.
  */
 final class GenerationRenderer {
+
+    /** A URL that starts with a scheme ({@code https:}, {@code mailto:}) — never rewritten by {@link #relativeUrl}. */
+    private static final Pattern ABSOLUTE_URL = Pattern.compile("[A-Za-z][A-Za-z0-9+.-]*:");
 
     private final Snapshot snapshot;
     private final OutputPathResolver paths;
@@ -139,8 +143,8 @@ final class GenerationRenderer {
         Set<UUID> deps = new LinkedHashSet<>();
         List<Diagnostic> warnings = new ArrayList<>();
 
-        UrlResolver urlResolver = urlResolver(entry.channel());
-        BlockResolver blocks = blockResolver(content, bodies, entry.channel(), entry.pageUuid(), deps, warnings);
+        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath());
+        BlockResolver blocks = blockResolver(content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), deps, warnings);
 
         RenderContext context = RenderContext.builder()
                 .channel(entry.channel())
@@ -229,14 +233,13 @@ final class GenerationRenderer {
             if (byUid == null) {
                 return Optional.empty();
             }
-            UUID resolved = byUid.get(uid);
-            if (resolved != null && "nav".equals(assetType) && !isNavigationFolder(resolved)) {
-                // A folder's uid is unique per (project, FOLDER), not per store — "root" is the
-                // uid of the single shared hidden folder that parents every store (Templates/
-                // Pages/Media/Navigation alike, see PathService#ROOT_UID), so a bare FOLDER-type
-                // uid lookup for a "nav:" reference can resolve outside the Navigation store
-                // entirely. Reject anything that isn't actually NAVIGATION-scoped rather than
-                // silently rendering an unrelated store's subtree as if it were navigation.
+            boolean nav = "nav".equals(assetType);
+            UUID resolved = byUid.get(nav ? FolderScope.navigationReferenceUid(uid) : uid);
+            if (resolved != null && nav && !isNavigationFolder(resolved)) {
+                // A folder's uid is unique per (project, FOLDER), not per store, so a bare
+                // FOLDER-type uid lookup for a "nav:" reference can resolve outside the Navigation
+                // store entirely (e.g. nav:templates_root). Reject anything that isn't actually
+                // NAVIGATION-scoped rather than silently rendering an unrelated store's subtree.
                 return Optional.empty();
             }
             return Optional.ofNullable(resolved);
@@ -265,15 +268,16 @@ final class GenerationRenderer {
         }
     }
 
-    private UrlResolver urlResolver(String channel) {
+    /** @param pagePath output path of the page being rendered; generated links are relative to it */
+    private UrlResolver urlResolver(String channel, String pagePath) {
         return (kind, uid, uuid, args) -> {
             if (uuid == null) {
                 return "";
             }
             return switch (kind) {
-                case "media" -> resolveMedia(uuid, args);
-                case "page" -> paths == null ? "" : paths.resolvePageUrl(uuid, channel);
-                case "folder" -> resolveFolder(uuid);
+                case "media" -> relativeUrl(pagePath, resolveMedia(uuid, args));
+                case "page" -> paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(uuid, channel));
+                case "folder" -> resolveFolder(uuid, pagePath);
                 default -> "";
             };
         };
@@ -302,12 +306,64 @@ final class GenerationRenderer {
         return "";
     }
 
-    private String resolveFolder(UUID uuid) {
+    private String resolveFolder(UUID uuid, String pagePath) {
         SnapshotAsset folder = snapshot.assetByUuid(uuid);
         if (folder == null) {
             return "";
         }
-        return relativeFolder(folder.folderPath());
+        String relative = relativeFolder(folder.folderPath());
+        return relativeUrl(pagePath, relative.isEmpty() ? "./" : relative);
+    }
+
+    /**
+     * Rewrites a resolved site path ({@code pf/p2.html}, {@code media/logo.png}, directory form
+     * {@code products/}) into a link relative to the page being rendered, so generated output works
+     * wherever the site is hosted (domain root, sub-path, {@code file://}, unpacked ZIP). From
+     * {@code pf/pf1/p3.html}: {@code p1.html} becomes {@code ../../p1.html} and {@code pf/p2.html}
+     * becomes {@code ../p2.html}. Blank (unresolved) stays blank; values that are already absolute
+     * (a leading {@code /}, a scheme such as {@code https:}, a fragment) are returned unchanged,
+     * e.g. a manual URL registry override.
+     *
+     * @param pagePath the current page's output path, relative to the site root
+     * @param sitePath the link target relative to the site root ({@code ./} means the root itself)
+     */
+    static String relativeUrl(String pagePath, String sitePath) {
+        if (sitePath == null || sitePath.isBlank()) {
+            return sitePath == null ? "" : sitePath;
+        }
+        if (sitePath.startsWith("/") || sitePath.startsWith("#") || ABSOLUTE_URL.matcher(sitePath).lookingAt()) {
+            return sitePath;
+        }
+        List<String> from = directorySegments(pagePath);
+        String target = sitePath.startsWith("./") ? sitePath.substring(2) : sitePath;
+        boolean directory = target.isEmpty() || target.endsWith("/");
+        List<String> to = new ArrayList<>(List.of(target.split("/")));
+        to.removeIf(String::isEmpty);
+        String fileName = directory || to.isEmpty() ? "" : to.remove(to.size() - 1);
+
+        int common = 0;
+        while (common < from.size() && common < to.size() && from.get(common).equals(to.get(common))) {
+            common++;
+        }
+        StringBuilder url = new StringBuilder("../".repeat(from.size() - common));
+        for (String segment : to.subList(common, to.size())) {
+            url.append(segment).append('/');
+        }
+        url.append(fileName);
+        return url.isEmpty() ? "./" : url.toString();
+    }
+
+    /** Folder segments of a site-relative file path: {@code pf/pf1/p3.html} gives {@code [pf, pf1]}. */
+    private static List<String> directorySegments(String pagePath) {
+        if (pagePath == null || pagePath.isBlank()) {
+            return List.of();
+        }
+        List<String> segments = new ArrayList<>(List.of(pagePath.replace('\\', '/').split("/")));
+        segments.removeIf(String::isEmpty);
+        if (!segments.isEmpty()) {
+            segments.remove(segments.size() - 1); // the file name
+        }
+        return segments;
     }
 
     private static String relativeFolder(String folderPath) {
@@ -326,7 +382,13 @@ final class GenerationRenderer {
     // ------------------------------------------------------------------
 
     private BlockResolver blockResolver(
-            JsonNode pageContent, JsonNode bodies, String channel, UUID activePageUuid, Set<UUID> deps, List<Diagnostic> warnings) {
+            JsonNode pageContent,
+            JsonNode bodies,
+            String channel,
+            UUID activePageUuid,
+            String pagePath,
+            Set<UUID> deps,
+            List<Diagnostic> warnings) {
         return new BlockResolver() {
             @Override
             public String renderBody(String bodyName) {
@@ -336,7 +398,7 @@ final class GenerationRenderer {
                 }
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
-                    out.append(renderSectionInstance(pageContent, section, channel, activePageUuid, deps, warnings));
+                    out.append(renderSectionInstance(pageContent, section, channel, activePageUuid, pagePath, deps, warnings));
                 }
                 return out.toString();
             }
@@ -348,7 +410,7 @@ final class GenerationRenderer {
                 }
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
-                    out.append(renderSectionInstance(pageContent, card, channel, activePageUuid, deps, warnings));
+                    out.append(renderSectionInstance(pageContent, card, channel, activePageUuid, pagePath, deps, warnings));
                 }
                 return out.toString();
             }
@@ -359,13 +421,13 @@ final class GenerationRenderer {
                 if (uuid == null) {
                     return "";
                 }
-                return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, null, deps, warnings);
+                return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, deps, warnings);
             }
 
             @Override
             public String renderNavigation(UUID navFolderUuid, Map<String, String> args) {
                 JsonNode json = GenerationRenderer.this.navigationTreeJson(
-                        navFolderUuid, args, channel, activePageUuid, deps, warnings);
+                        navFolderUuid, args, channel, activePageUuid, pagePath, deps, warnings);
                 return json == null ? "" : NavigationHtmlRenderer.renderRoot(json);
             }
 
@@ -377,7 +439,7 @@ final class GenerationRenderer {
             @Override
             public JsonNode resolveNavigationChildren(UUID navFolderUuid, Map<String, String> args) {
                 JsonNode json = GenerationRenderer.this.navigationTreeJson(
-                        navFolderUuid, args, channel, activePageUuid, deps, warnings);
+                        navFolderUuid, args, channel, activePageUuid, pagePath, deps, warnings);
                 return json == null ? null : json.path("children");
             }
         };
@@ -395,7 +457,13 @@ final class GenerationRenderer {
      * reference check (`SF-GEN-0411`), and dependency-tracking live in exactly one place.
      */
     private JsonNode navigationTreeJson(
-            UUID navFolderUuid, Map<String, String> args, String defaultChannel, UUID activePageUuid, Set<UUID> deps, List<Diagnostic> warnings) {
+            UUID navFolderUuid,
+            Map<String, String> args,
+            String defaultChannel,
+            UUID activePageUuid,
+            String pagePath,
+            Set<UUID> deps,
+            List<Diagnostic> warnings) {
         if (navFolderUuid == null) {
             return null;
         }
@@ -426,7 +494,7 @@ final class GenerationRenderer {
                     0));
         }
 
-        return NavigationTreeJson.toJson(tree, activePageUuid, node -> navHref(node, navChannel));
+        return NavigationTreeJson.toJson(tree, activePageUuid, node -> navHref(node, navChannel, pagePath));
     }
 
     /**
@@ -440,16 +508,16 @@ final class GenerationRenderer {
      * PageReference} identity to key a registry lookup on, so it keeps resolving directly via
      * {@link OutputPathResolver} — unchanged pre-`M8.2.3` behavior for that node kind.
      */
-    private String navHref(NavTreeNode node, String channel) {
+    private String navHref(NavTreeNode node, String channel, String pagePath) {
         UUID resolvedPageUuid = node.resolvedPageUuid();
         if (resolvedPageUuid == null) {
             return "";
         }
         if (node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
             RevisionContext ctx = RevisionContext.of(snapshot.projectId(), generationUserId, "generation");
-            return urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.GENERATED, ctx);
+            return relativeUrl(pagePath, urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.GENERATED, ctx));
         }
-        return paths == null ? "" : paths.resolvePageUrl(resolvedPageUuid, channel);
+        return paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(resolvedPageUuid, channel));
     }
 
     /** {@code depth} named arg → int, {@code -1} (unlimited, still hard-capped) when absent/invalid. */
@@ -466,7 +534,13 @@ final class GenerationRenderer {
     }
 
     private String renderSectionInstance(
-            JsonNode pageContent, JsonNode section, String channel, UUID activePageUuid, Set<UUID> deps, List<Diagnostic> warnings) {
+            JsonNode pageContent,
+            JsonNode section,
+            String channel,
+            UUID activePageUuid,
+            String pagePath,
+            Set<UUID> deps,
+            List<Diagnostic> warnings) {
         String templateRef = section.path("templateRef").asText();
         if (templateRef.isBlank()) {
             return "";
@@ -479,7 +553,7 @@ final class GenerationRenderer {
         }
         JsonNode values = section.path("content");
         String instanceId = section.path("instanceId").asText();
-        return renderSection(sectionUuid, values, pageContent, channel, activePageUuid, instanceId, deps, warnings);
+        return renderSection(sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, deps, warnings);
     }
 
     private String renderSection(
@@ -488,6 +562,7 @@ final class GenerationRenderer {
             JsonNode pageValues,
             String channel,
             UUID activePageUuid,
+            String pagePath,
             String instanceId,
             Set<UUID> deps,
             List<Diagnostic> warnings) {
@@ -507,8 +582,8 @@ final class GenerationRenderer {
                 .pageValues(pageValues != null ? pageValues : mapper.createObjectNode())
                 .meta("uid", TextNode.valueOf(emptyIfNull(template.uid())))
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
-                .urlResolver(urlResolver(channel))
-                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, deps, warnings));
+                .urlResolver(urlResolver(channel, pagePath))
+                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, deps, warnings));
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
         }

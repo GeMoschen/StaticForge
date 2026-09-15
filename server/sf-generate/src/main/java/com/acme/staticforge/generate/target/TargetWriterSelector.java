@@ -2,14 +2,15 @@ package com.acme.staticforge.generate.target;
 
 import com.acme.staticforge.generate.GenerationProperties;
 import com.acme.staticforge.generate.GenerationTarget;
+import com.acme.staticforge.generate.TargetLocations;
 import java.nio.file.Path;
 import org.springframework.stereotype.Service;
 
 /**
  * Selects the correct {@link TargetWriter} for a {@link GenerationTarget} (spec §18.4) based on
- * its {@code TargetType}. Writers are constructed per-target with the shared
- * {@link GenerationProperties} (output root and retention) so that concurrent runs of different
- * projects write into distinct, runId-qualified directories.
+ * its {@code TargetType}. Each writer is rooted at the target's own directory (see
+ * {@link TargetLocations}), so runs of different projects or targets never share a
+ * {@code current} pointer or a retention pool.
  */
 @Service
 public class TargetWriterSelector {
@@ -20,12 +21,12 @@ public class TargetWriterSelector {
         this.properties = properties;
     }
 
-    public TargetWriter forTarget(GenerationTarget target) {
-        Path outputRoot = Path.of(properties.getOutputRoot());
+    public TargetWriter forTarget(String projectKey, GenerationTarget target) {
+        Path root = TargetLocations.resolve(Path.of(properties.getOutputRoot()), projectKey, target);
         return switch (target.getType()) {
-            case FILESYSTEM -> new FilesystemTargetWriter(outputRoot, properties.getKeepBuilds());
-            case ZIP -> new ZipTargetWriter(outputRoot, properties.getKeepBuilds());
-            case S3 -> new S3TargetWriter(outputRoot, target.getName());
+            case FILESYSTEM -> new FilesystemTargetWriter(root, properties.getKeepBuilds());
+            case ZIP -> new ZipTargetWriter(root, properties.getKeepBuilds());
+            case S3 -> new S3TargetWriter(root);
         };
     }
 }

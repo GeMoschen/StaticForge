@@ -121,7 +121,7 @@ class GenerationServiceTest {
         TargetWriter writer = mock(TargetWriter.class);
         when(runs.findById(5L)).thenReturn(Optional.of(run));
         when(targets.findByProjectIdAndDefaultTargetTrue(anyLong())).thenReturn(Optional.of(target));
-        when(writers.forTarget(target)).thenReturn(writer);
+        when(writers.forTarget("p", target)).thenReturn(writer);
 
         service.promote("p", 5L);
 

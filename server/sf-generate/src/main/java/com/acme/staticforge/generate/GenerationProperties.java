@@ -30,6 +30,13 @@ public class GenerationProperties {
     /** Per-asset render budget, kept as a config string (e.g. {@code "5s"}). */
     private String renderTimeout = "5s";
 
+    /**
+     * Remove output of the old shared-root layout ({@code {outputRoot}/builds}, {@code current},
+     * {@code s3}) at startup. On by default; disable to keep it around, e.g. until a web server
+     * still pointing at {@code {outputRoot}/current} has been repointed.
+     */
+    private boolean cleanupLegacyOutput = true;
+
     public int getParallelism() {
         return parallelism;
     }
@@ -68,6 +75,14 @@ public class GenerationProperties {
 
     public void setRenderTimeout(String renderTimeout) {
         this.renderTimeout = renderTimeout;
+    }
+
+    public boolean isCleanupLegacyOutput() {
+        return cleanupLegacyOutput;
+    }
+
+    public void setCleanupLegacyOutput(boolean cleanupLegacyOutput) {
+        this.cleanupLegacyOutput = cleanupLegacyOutput;
     }
 
     /** Parsed render-time budget (default {@code 5s}). */

@@ -83,6 +83,38 @@ class GenerationRendererNavigationTest {
     }
 
     @Test
+    void linksAreRelativeToThePageBeingRenderedWhenItLivesInAFolder() {
+        SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:main)$");
+        SnapshotAsset navRoot = folder(NAV_ROOT, "main", "/nav/", "{\"scope\":\"NAVIGATION\"}");
+        SnapshotAsset homeRef = pageReference(HOME_REF, "home-ref", "/nav/", HOME_PAGE, "Home");
+        SnapshotAsset widgetRef = pageReference(WIDGET_REF, "widget-ref", "/nav/", WIDGET_PAGE, "Widget");
+        SnapshotAsset homePage = page(HOME_PAGE, "home", "/", PAGE_TEMPLATE);
+        SnapshotAsset widgetPage = page(WIDGET_PAGE, "widget", "/products/tools/", PAGE_TEMPLATE);
+
+        Snapshot snapshot = snapshot(template, navRoot, homeRef, widgetRef, homePage, widgetPage);
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+
+        String fromNested = new String(
+                renderer.render(new PlanEntry(WIDGET_PAGE, "html", "products/tools/widget.html")).bytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        String fromRoot = new String(
+                renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html")).bytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+
+        assertThat(fromNested).isEqualTo(
+                "<ul class=\"nav\">"
+                        + "<li class=\"nav-item\"><a href=\"../../home.html\">Home</a></li>"
+                        + "<li class=\"nav-item active\"><a href=\"widget.html\">Widget</a></li>"
+                        + "</ul>");
+        assertThat(fromRoot).isEqualTo(
+                "<ul class=\"nav\">"
+                        + "<li class=\"nav-item active\"><a href=\"home.html\">Home</a></li>"
+                        + "<li class=\"nav-item\"><a href=\"products/tools/widget.html\">Widget</a></li>"
+                        + "</ul>");
+    }
+
+    @Test
     void nestedGroupingFolderWithNoStartNodeRendersAsNonLinkedGrouping() {
         SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:main)$");
         SnapshotAsset navRoot = folder(NAV_ROOT, "main", "/nav/", "{\"scope\":\"NAVIGATION\"}");
@@ -108,19 +140,37 @@ class GenerationRendererNavigationTest {
     }
 
     @Test
-    void navReferenceToNonNavigationScopedFolderDoesNotResolve() {
+    void navRootResolvesToTheNavigationStoreRootNotTheSharedHiddenRoot() {
         SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:root)$");
-        // Mirrors the real shared hidden project root (PathService#ROOT_UID = "root"): a plain
-        // FOLDER with uid "root" and no "scope" payload field at all — the same folder every
-        // other store's root (Templates/Pages/Media/Navigation) nests under. A folder's uid is
-        // unique per (project, FOLDER) only, not per store, so without scope-filtering a
-        // "nav:root" reference would resolve straight to this folder and render its (unrelated)
-        // children as if they were a navigation tree.
-        SnapshotAsset sharedRoot = folder(NAV_ROOT, "root", "/", "{}");
+        // The real shared hidden project root (PathService#ROOT_UID = "root") parents every store;
+        // "nav:root" must address the Navigation store's own root (FolderScope#NAVIGATION_ROOT_UID).
+        SnapshotAsset sharedRoot = folder(CYCLIC_NAV_ROOT, "root", "/", "{}");
+        SnapshotAsset navRoot = folder(NAV_ROOT, "navigation_root", "/navigation_root/", "{\"scope\":\"NAVIGATION\"}");
+        SnapshotAsset homeRef = pageReference(HOME_REF, "home-ref", "/navigation_root/", HOME_PAGE, "Home");
+        SnapshotAsset homePage = page(HOME_PAGE, "home", "/", PAGE_TEMPLATE);
+
+        Snapshot snapshot = snapshot(template, sharedRoot, navRoot, homeRef, homePage);
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+
+        RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
+        String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+        assertThat(html).isEqualTo(
+                "<ul class=\"nav\"><li class=\"nav-item active\"><a href=\"home.html\">Home</a></li></ul>");
+        assertThat(file.dependencies()).contains(NAV_ROOT).doesNotContain(CYCLIC_NAV_ROOT);
+    }
+
+    @Test
+    void navReferenceToNonNavigationScopedFolderDoesNotResolve() {
+        SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:templates_root)$");
+        // A folder's uid is unique per (project, FOLDER) only, not per store, so without
+        // scope-filtering a "nav:" reference to another store's folder would render that folder's
+        // (unrelated) children as if they were a navigation tree.
         SnapshotAsset templatesRoot = folder(PRODUCTS_FOLDER, "templates_root", "/templates/", "{\"scope\":\"TEMPLATES\"}");
         SnapshotAsset homePage = page(HOME_PAGE, "home", "/", PAGE_TEMPLATE);
 
-        Snapshot snapshot = snapshot(template, sharedRoot, templatesRoot, homePage);
+        Snapshot snapshot = snapshot(template, templatesRoot, homePage);
         GenerationRenderer renderer = new GenerationRenderer(
                 snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
 
@@ -130,7 +180,7 @@ class GenerationRendererNavigationTest {
         // The reference fails to resolve (degrades to empty, like any other unresolvable
         // $CMS_NAVIGATION reference) rather than rendering another store's contents.
         assertThat(html).isEmpty();
-        assertThat(file.dependencies()).doesNotContain(NAV_ROOT);
+        assertThat(file.dependencies()).doesNotContain(PRODUCTS_FOLDER);
     }
 
     @Test

@@ -82,6 +82,23 @@ export class GenerationService {
     );
   }
 
+  updateTarget(
+    projectKey: string,
+    id: number,
+    req: GenerationTargetRequest,
+  ): Observable<GenerationTargetView> {
+    return this.http.put<GenerationTargetView>(
+      `${BASE}/projects/${projectKey}/targets/${id}`,
+      req,
+    );
+  }
+
+  deleteTarget(projectKey: string, id: number): Observable<void> {
+    return this.http.delete<void>(
+      `${BASE}/projects/${projectKey}/targets/${id}`,
+    );
+  }
+
   /**
    * Opens the live progress stream for a run. Emits decoded
    * {@link GenerationRunEvent} frames and completes when the run finishes or

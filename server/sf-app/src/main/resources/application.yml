@@ -58,5 +58,6 @@ sf:
     keep-builds: 5
     max-file-size: 32MB
     render-timeout: 5s
+    cleanup-legacy-output: true
   revision:
     retention-days: unlimited

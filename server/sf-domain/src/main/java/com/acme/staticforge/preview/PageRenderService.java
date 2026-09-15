@@ -424,13 +424,13 @@ public class PageRenderService {
             if (type == null) {
                 return Optional.empty();
             }
-            Optional<UUID> resolved =
-                    assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
-            if (resolved.isPresent() && "nav".equals(assetType) && !isNavigationFolder(projectId, resolved.get())) {
-                // Same rationale as GenerationRenderer#isNavigationFolder: a folder's uid is
-                // unique per (project, FOLDER), not per store, so "root" is the shared hidden
-                // folder that parents every store (Templates/Pages/Media/Navigation alike), not
-                // the Navigation store's own root — reject anything not actually NAVIGATION-scoped.
+            boolean nav = "nav".equals(assetType);
+            Optional<UUID> resolved = assetRepository
+                    .findByProjectIdAndAssetTypeAndUid(projectId, type, nav ? FolderScope.navigationReferenceUid(uid) : uid)
+                    .map(Asset::getUuid);
+            if (resolved.isPresent() && nav && !isNavigationFolder(projectId, resolved.get())) {
+                // Same rationale as GenerationRenderer: a folder's uid is unique per (project,
+                // FOLDER), not per store — reject anything not actually NAVIGATION-scoped.
                 return Optional.empty();
             }
             return resolved;

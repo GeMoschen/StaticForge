@@ -23,6 +23,7 @@ import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.RunStatus;
+import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
@@ -149,7 +150,7 @@ class M8NavigationJourneyIntegrationTest {
         GenerationTarget target = createTarget(fx);
 
         long runId1 = runGenerationToSuccess(fx, target);
-        String html1 = navHtmlFromOutput(runId1);
+        String html1 = navHtmlFromOutput(fx, target, runId1);
 
         String contactHref1 = hrefFor(html1, "Contact");
         String productsHref1 = hrefFor(html1, "Products");
@@ -175,7 +176,7 @@ class M8NavigationJourneyIntegrationTest {
                 pageA.uuid(), new UpdateAssetCommand("Page A Renamed", pageA.payload()), pageA.validFromRevision(), fx.ctx());
 
         long runId2 = runGenerationToSuccess(fx, target);
-        String html2 = navHtmlFromOutput(runId2);
+        String html2 = navHtmlFromOutput(fx, target, runId2);
         String catalogRefHref2 = hrefFor(html2, "Browse Catalog");
 
         assertThat(catalogRefHref2)
@@ -191,7 +192,7 @@ class M8NavigationJourneyIntegrationTest {
         urlRegistryService.reset(fx.project().getId(), ResetScope.channel("html"), fx.ctx());
 
         long runId3 = runGenerationToSuccess(fx, target);
-        String html3 = navHtmlFromOutput(runId3);
+        String html3 = navHtmlFromOutput(fx, target, runId3);
         String catalogRefHref3 = hrefFor(html3, "Browse Catalog");
 
         assertThat(catalogRefHref3)
@@ -216,7 +217,7 @@ class M8NavigationJourneyIntegrationTest {
         assertThat(hrefFor(previewHtmlAfter, "Browse Catalog")).isEqualTo("preview-only/catalog.html");
 
         long runId4 = runGenerationToSuccess(fx, target);
-        String html4 = navHtmlFromOutput(runId4);
+        String html4 = navHtmlFromOutput(fx, target, runId4);
         assertThat(hrefFor(html4, "Browse Catalog"))
                 .as("PREVIEW override never leaks into GENERATED")
                 .isEqualTo(catalogRefHref3);
@@ -252,8 +253,8 @@ class M8NavigationJourneyIntegrationTest {
         throw new AssertionError("Generation did not reach a terminal state within 60s");
     }
 
-    private String navHtmlFromOutput(long runId) throws IOException {
-        Path homeFile = outputRoot.resolve("builds").resolve(String.valueOf(runId)).resolve("index.html");
+    private String navHtmlFromOutput(Fixture fx, GenerationTarget target, long runId) throws IOException {
+        Path homeFile = TargetLocations.resolve(outputRoot, fx.project().getKey(), target).resolve("builds").resolve(String.valueOf(runId)).resolve("index.html");
         assertThat(Files.isRegularFile(homeFile)).as("home output file exists").isTrue();
         return Files.readString(homeFile);
     }

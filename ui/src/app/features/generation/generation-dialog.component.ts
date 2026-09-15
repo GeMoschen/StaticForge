@@ -1,11 +1,12 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
+  effect,
   inject,
   input,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -14,8 +15,9 @@ import {
   FormGroup,
   ReactiveFormsModule,
 } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { ChannelsService } from '../channels/channels.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
-import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
@@ -29,8 +31,6 @@ type GenerationRunView = components['schemas']['GenerationRunView'];
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
 type GenerationMode = 'FULL' | 'INCREMENTAL';
 
-const DEFAULT_CHANNELS = ['html', 'markdown'];
-
 interface GenerationForm {
   mode: FormControl<GenerationMode>;
   targetId: FormControl<number | null>;
@@ -42,7 +42,7 @@ interface GenerationForm {
   selector: 'sf-generation-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, SfButtonComponent, SfFieldComponent, SfIconComponent],
+  imports: [ReactiveFormsModule, RouterLink, SfButtonComponent, SfFieldComponent, SfIconComponent],
   templateUrl: './generation-dialog.component.html',
   styleUrl: './generation-dialog.component.scss',
 })
@@ -53,16 +53,14 @@ export class GenerationDialogComponent {
   readonly cancelled = output<void>();
 
   private readonly api = inject(GenerationService);
-  private readonly store = inject(ProjectContextStore);
+  private readonly channelsApi = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
 
   readonly submitting = signal(false);
   readonly error = signal<string | null>(null);
 
-  readonly channelOptions = computed<string[]>(() => {
-    const set = new Set<string>([...DEFAULT_CHANNELS, ...this.store.channels()]);
-    return Array.from(set);
-  });
+  /** The project's enabled channels — only those can be generated. */
+  readonly channelOptions = signal<string[]>([]);
 
   readonly form = new FormGroup<GenerationForm>({
     mode: new FormControl<GenerationMode>('FULL', { nonNullable: true }),
@@ -72,13 +70,24 @@ export class GenerationDialogComponent {
   });
 
   constructor() {
-    for (const channel of this.channelOptions()) {
-      this.form.controls.channels.push(
-        new FormControl<boolean>(DEFAULT_CHANNELS.includes(channel), {
-          nonNullable: true,
-        }),
-      );
-    }
+    effect(() => {
+      const key = this.projectKey();
+      untracked(() => this.loadChannels(key));
+    });
+  }
+
+  private loadChannels(projectKey: string): void {
+    this.channelsApi.list(projectKey).subscribe({
+      next: (list) => {
+        const keys = (list ?? []).filter((c) => c.enabled && c.key).map((c) => c.key as string);
+        const controls = this.form.controls.channels;
+        controls.clear();
+        keys.forEach(() => controls.push(new FormControl<boolean>(true, { nonNullable: true })));
+        this.channelOptions.set(keys);
+      },
+      // Leave the list empty: a request without channels generates every enabled channel.
+      error: () => this.channelOptions.set([]),
+    });
   }
 
   onBackdrop(): void {

@@ -582,17 +582,26 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                                     + "' already exists in the target project and will be skipped."));
                 }
             }
-            List<GenerationTarget> existingTargets = generationTargetRepository.findByProjectId(targetProjectId);
-            Set<String> existingNames =
-                    existingTargets.stream().map(GenerationTarget::getName).collect(Collectors.toSet());
-            for (ExportedGenerationTarget t : content.settings().targets()) {
-                if (existingNames.contains(t.name())) {
-                    conflicts.add(ImportConflict.of(
+            List<TargetImportPlan.Decision> targetPlan = TargetImportPlan.plan(
+                    generationTargetRepository.findByProjectId(targetProjectId), content.settings().targets());
+            for (TargetImportPlan.Decision decision : targetPlan) {
+                String name = decision.source().name();
+                switch (decision.action()) {
+                    case SKIP_NAME_COLLISION -> conflicts.add(ImportConflict.of(
                             ConflictType.SETTINGS_KEY_COLLISION,
                             null,
-                            t.name(),
-                            "A generation target named '" + t.name()
+                            name,
+                            "A generation target named '" + name
                                     + "' already exists in the target project and will be skipped."));
+                    case IMPORT_WITHOUT_PATH -> conflicts.add(ImportConflict.of(
+                            ConflictType.TARGET_PATH_COLLISION,
+                            null,
+                            name,
+                            "Generation target '" + name + "' will be imported without its output folder because "
+                                    + decision.reason() + "; it will publish to its default folder instead."));
+                    case IMPORT -> {
+                        // no conflict
+                    }
                 }
             }
         }
@@ -629,8 +638,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     /**
      * Merges exported channels/targets into the target project: a key/name that already
      * exists there is left untouched and skipped silently — settings import only *adds*
-     * new entries, never overwrites (collisions surface as an `M10.2` conflict later, out
-     * of scope here).
+     * new entries, never overwrites. A target whose output folder is invalid or would clash
+     * is imported without it ({@link TargetImportPlan}); both cases are reported by analysis.
      */
     private void importSettings(long targetProjectId, ExportedSettings settings) {
         for (ExportedChannel c : settings.channels()) {
@@ -651,13 +660,17 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         }
 
         List<GenerationTarget> existingTargets = generationTargetRepository.findByProjectId(targetProjectId);
-        Set<String> existingNames = existingTargets.stream().map(GenerationTarget::getName).collect(Collectors.toSet());
-        for (ExportedGenerationTarget t : settings.targets()) {
-            if (existingNames.contains(t.name())) {
+        // A project has at most one default target (generation resolves it as a single row).
+        boolean hasDefault = existingTargets.stream().anyMatch(GenerationTarget::isDefaultTarget);
+        for (TargetImportPlan.Decision decision : TargetImportPlan.plan(existingTargets, settings.targets())) {
+            if (decision.action() == TargetImportPlan.Action.SKIP_NAME_COLLISION) {
                 continue;
             }
+            ExportedGenerationTarget t = decision.source();
+            boolean isDefault = t.isDefault() && !hasDefault;
+            hasDefault |= isDefault;
             generationTargetRepository.save(new GenerationTarget(
-                    targetProjectId, t.name(), TargetType.valueOf(t.type()), t.config(), t.isDefault()));
+                    targetProjectId, t.name(), TargetType.valueOf(t.type()), decision.config(), isDefault));
         }
     }
 

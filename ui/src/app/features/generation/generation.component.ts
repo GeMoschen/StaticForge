@@ -2,10 +2,13 @@ import {
   ChangeDetectionStrategy,
   Component,
   OnDestroy,
+  effect,
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { Subscription } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { AuthStore } from '../../core/auth/auth.store';
@@ -16,6 +19,7 @@ import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { GenerationService } from './generation.service';
 import { GenerationDialogComponent } from './generation-dialog.component';
+import { DiagnosticGroup, parseDiagnostics } from './generation-diagnostics';
 import { GenerationRunEvent } from './generation-sse';
 
 type GenerationRunView = components['schemas']['GenerationRunView'];
@@ -26,6 +30,8 @@ interface LogLine {
   stage: string;
   message: string;
 }
+
+const TERMINAL_STATUSES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'CANCELLED']);
 
 interface LiveSummary {
   filesWritten: number;
@@ -38,6 +44,7 @@ interface LiveSummary {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    DatePipe,
     SfButtonComponent,
     SfEmptyStateComponent,
     SfSpinnerComponent,
@@ -67,8 +74,23 @@ export class GenerationComponent implements OnDestroy {
     errors: 0,
     warnings: 0,
   });
+  /** Final run status once the stream has ended; the log stays open until the user closes it. */
+  readonly liveStatus = signal<string | null>(null);
+  readonly liveDiagnostics = signal<DiagnosticGroup[]>([]);
+
+  readonly expandedRunId = signal<number | null>(null);
 
   private liveSub: Subscription | null = null;
+
+  constructor() {
+    effect(() => {
+      this.projectKey();
+      untracked(() => {
+        this.load();
+        this.loadTargets();
+      });
+    });
+  }
 
   trackRun(index: number, run: GenerationRunView): number {
     return run.id ?? index;
@@ -81,16 +103,40 @@ export class GenerationComponent implements OnDestroy {
         this.runs.set(runs ?? []);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        this.loading.set(false);
+        this.toasts.show('Could not load generation history — check your connection and try again.', 'error');
+      },
     });
   }
 
   openDialog(): void {
     this.dialogOpen.set(true);
+    this.loadTargets();
+  }
+
+  private loadTargets(): void {
     this.api.listTargets(this.projectKey()).subscribe({
       next: (targets) => this.targets.set(targets ?? []),
       error: () => this.targets.set([]),
     });
+  }
+
+  toggleDetails(run: GenerationRunView): void {
+    const id = run.id ?? null;
+    this.expandedRunId.update((current) => (current === id ? null : id));
+  }
+
+  diagnosticsOf(run: GenerationRunView): DiagnosticGroup[] {
+    return parseDiagnostics(run.diagnostics);
+  }
+
+  targetLabel(run: GenerationRunView): string {
+    if (run.targetId == null) {
+      return 'Default target';
+    }
+    const target = this.targets().find((t) => t.id === run.targetId);
+    return target ? `${target.name} (${target.outputPath})` : `Target #${run.targetId} (deleted)`;
   }
 
   onStarted(run: GenerationRunView): void {
@@ -133,14 +179,6 @@ export class GenerationComponent implements OnDestroy {
     });
   }
 
-  rollback(run: GenerationRunView): void {
-    const id = run.id ?? 0;
-    this.api.promote(this.projectKey(), id).subscribe({
-      next: () => this.toasts.show('Rolled back to previous generation', 'success'),
-      error: () => this.toasts.show('Could not roll back — try again in a moment.', 'error'),
-    });
-  }
-
   cancel(run: GenerationRunView): void {
     const id = run.id ?? 0;
     this.api.cancel(this.projectKey(), id).subscribe({
@@ -163,10 +201,15 @@ export class GenerationComponent implements OnDestroy {
     this.liveRunId.set(id);
     this.liveLines.set([]);
     this.liveSummary.set({ filesWritten: 0, errors: 0, warnings: 0 });
+    this.liveStatus.set(null);
+    this.liveDiagnostics.set([]);
     this.liveActive.set(true);
     this.liveSub = this.api.connectEvents(this.projectKey(), id, token).subscribe({
       next: (event) => this.onLiveEvent(event),
-      error: () => this.liveDone(),
+      error: () => {
+        this.appendLiveLine('LOG', 'Lost connection to the live log.');
+        this.liveDone();
+      },
       complete: () => this.liveDone(),
     });
   }
@@ -181,33 +224,51 @@ export class GenerationComponent implements OnDestroy {
   }
 
   private onLiveEvent(event: GenerationRunEvent): void {
-    this.liveLines.update((list) => [
-      ...list,
-      { id: list.length, stage: event.stage, message: event.message },
-    ]);
+    this.appendLiveLine(event.stage, event.message);
     this.liveSummary.set({
       filesWritten: event.filesWritten,
       errors: event.errors,
       warnings: event.warnings,
     });
+    if (event.diagnostics) {
+      this.liveDiagnostics.set(parseDiagnostics(event.diagnostics));
+    }
+    if (TERMINAL_STATUSES.has(event.message) && (event.stage === 'REPORT' || event.stage === 'STATUS')) {
+      this.liveStatus.set(event.message);
+    }
   }
 
+  private appendLiveLine(stage: string, message: string): void {
+    this.liveLines.update((list) => [...list, { id: list.length, stage, message }]);
+  }
+
+  /** Stream ended: keep the log open and settle its final status/diagnostics from the stored run. */
   private liveDone(): void {
     this.liveSub = null;
-    this.liveActive.set(false);
     const id = this.liveRunId();
     if (id !== null) {
-      this.refreshRun(id);
+      this.refreshRun(id, (fresh) => {
+        if (this.liveRunId() !== id) {
+          return;
+        }
+        this.liveStatus.set(fresh.status ?? null);
+        this.liveDiagnostics.set(parseDiagnostics(fresh.diagnostics));
+        this.liveSummary.set({
+          filesWritten: fresh.filesWritten ?? 0,
+          errors: fresh.errorCount ?? 0,
+          warnings: fresh.warningCount ?? 0,
+        });
+      });
     }
-    this.liveRunId.set(null);
   }
 
-  private refreshRun(id: number): void {
+  private refreshRun(id: number, then?: (fresh: GenerationRunView) => void): void {
     this.api.status(this.projectKey(), id).subscribe({
       next: (fresh) => {
         this.runs.update((list) =>
           list.map((r) => (r.id === id ? fresh : r)),
         );
+        then?.(fresh);
       },
       error: () => {
         /* leave existing row as-is */

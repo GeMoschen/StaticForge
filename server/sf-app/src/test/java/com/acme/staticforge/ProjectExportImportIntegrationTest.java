@@ -540,6 +540,64 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
+     * Imported target output folders: an invalid {@code config.path}, or one that overlaps an
+     * existing target's or an earlier imported target's folder, is reported as a
+     * TARGET_PATH_COLLISION warning and imported without {@code path} (other config kept), so it
+     * publishes to its collision-free {@code target-{id}} default. Valid, non-clashing paths survive.
+     */
+    @Test
+    void importDropsInvalidOrClashingTargetPathsAndReportsThem() {
+        Fixture source = newFixture("imp_tgt_path_src", "Import Target Path Source");
+        long sourceId = source.project().getId();
+        generationTargetRepository.save(new GenerationTarget(sourceId, "Live", TargetType.FILESYSTEM, targetConfig("site", null), true));
+        generationTargetRepository.save(new GenerationTarget(sourceId, "Nested", TargetType.FILESYSTEM, targetConfig("site/staging", null), false));
+        generationTargetRepository.save(new GenerationTarget(sourceId, "Broken", TargetType.ZIP, targetConfig("../escape", null), false));
+        generationTargetRepository.save(new GenerationTarget(sourceId, "Mirror", TargetType.FILESYSTEM, targetConfig("MIRROR", "https://mirror.example.com"), false));
+        generationTargetRepository.save(new GenerationTarget(sourceId, "Plain", TargetType.FILESYSTEM, targetConfig(null, null), false));
+        byte[] archive = exportImportService.exportSelection(
+                sourceId, new ExportSelection(rootFolderUuid(source), true, true, Set.of()));
+
+        Fixture target = newFixture("imp_tgt_path_dst", "Import Target Path Destination");
+        long targetId = target.project().getId();
+        generationTargetRepository.save(new GenerationTarget(targetId, "Existing", TargetType.FILESYSTEM, targetConfig("mirror", null), true));
+
+        ConflictReport report = exportImportService.analyzeImport(targetId, archive, ImportOptions.DEFAULT);
+        List<ImportConflict> pathConflicts = report.conflicts().stream()
+                .filter(c -> c.type() == ConflictType.TARGET_PATH_COLLISION)
+                .toList();
+        assertThat(pathConflicts).extracting(ImportConflict::elementLabel).containsExactlyInAnyOrder("Nested", "Broken", "Mirror");
+        assertThat(pathConflicts).allMatch(c -> c.severity() == ConflictSeverity.WARNING);
+        assertThat(pathConflicts.stream().filter(c -> c.elementLabel().equals("Mirror")).findFirst().orElseThrow().detail())
+                .contains("'Existing'");
+        assertThat(report.hasBlocking()).isFalse();
+
+        exportImportService.importProject(targetId, archive, target.ctx(), ImportOptions.DEFAULT);
+
+        Map<String, GenerationTarget> imported = generationTargetRepository.findByProjectId(targetId).stream()
+                .collect(Collectors.toMap(GenerationTarget::getName, t -> t));
+        assertThat(imported.get("Live").getConfig().path("path").asText()).isEqualTo("site");
+        assertThat(imported.get("Nested").getConfig().has("path")).isFalse();
+        assertThat(imported.get("Broken").getConfig().has("path")).isFalse();
+        assertThat(imported.get("Mirror").getConfig().has("path")).isFalse();
+        assertThat(imported.get("Mirror").getConfig().path("baseUrl").asText()).isEqualTo("https://mirror.example.com");
+        assertThat(imported.get("Existing").getConfig().path("path").asText()).isEqualTo("mirror");
+        // The destination already had a default; the imported "Live" must not become a second one.
+        assertThat(imported.values().stream().filter(GenerationTarget::isDefaultTarget).map(GenerationTarget::getName))
+                .containsExactly("Existing");
+    }
+
+    private static ObjectNode targetConfig(String path, String baseUrl) {
+        ObjectNode config = MAPPER.createObjectNode();
+        if (path != null) {
+            config.put("path", path);
+        }
+        if (baseUrl != null) {
+            config.put("baseUrl", baseUrl);
+        }
+        return config;
+    }
+
+    /**
      * Missing template reference (feature `import-conflicts`, `M10.2.2`): a selective
      * export that deliberately excludes the page's template (`M10.1.1`'s
      * exportSelectionOfASingleAssetExcludesItsTemplate scenario) must be flagged as a

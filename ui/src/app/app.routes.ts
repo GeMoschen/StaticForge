@@ -19,6 +19,7 @@ import { RevisionsListComponent } from './features/revisions/revisions-list.comp
 import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
 import { ProjectSettingsImportExportComponent } from './features/settings/project-settings-import-export.component';
 import { ProjectSettingsUrlRegistryComponent } from './features/settings/project-settings-url-registry.component';
+import { ProjectSettingsTargetsComponent } from './features/settings/project-settings-targets.component';
 
 export const routes: Routes = [
   {
@@ -85,6 +86,10 @@ export const routes: Routes = [
           {
             path: 'generation',
             component: GenerationComponent,
+          },
+          {
+            path: 'targets',
+            component: ProjectSettingsTargetsComponent,
           },
           {
             path: 'revisions',

@@ -225,7 +225,16 @@ public class TemplateServiceImpl implements TemplateService {
             if (type == null) {
                 return Optional.empty();
             }
-            return assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
+            if (!"nav".equals(assetType)) {
+                return assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
+            }
+            // Same lookup and NAVIGATION-scope check as preview and generation, so a nav: reference
+            // that saves cleanly also renders and generates.
+            return assetRepository
+                    .findByProjectIdAndAssetTypeAndUid(projectId, type, FolderScope.navigationReferenceUid(uid))
+                    .map(Asset::getUuid)
+                    .filter(uuid -> FolderScope.fromPayload(assetService.requireCurrent(projectId, uuid).payload())
+                            == FolderScope.NAVIGATION);
         };
     }
 

@@ -33,11 +33,19 @@
     </sf-field>
 
     <sf-field label="Target">
-      <select class="select" formControlName="targetId">
-        @for (target of targets(); track target.id) {
-          <option [ngValue]="target.id ?? null">{{ target.name ?? 'Untitled' }}</option>
-        }
-      </select>
+      @if (targets().length === 0) {
+        <p class="dialog__note">
+          This project has no generation target yet.
+          <a [routerLink]="['/p', projectKey(), 'settings', 'targets']" (click)="cancelled.emit()">Create one in Targets</a>
+          before generating.
+        </p>
+      } @else {
+        <select class="select" formControlName="targetId">
+          @for (target of targets(); track target.id) {
+            <option [ngValue]="target.id ?? null">{{ target.name ?? 'Untitled' }}</option>
+          }
+        </select>
+      }
     </sf-field>
 
     <sf-field label="Comment">
