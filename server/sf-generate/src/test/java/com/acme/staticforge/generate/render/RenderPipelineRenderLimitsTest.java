@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.template.CompiledTemplateCache;
 import com.acme.staticforge.generate.GenerationProperties;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.BuildPlan;
@@ -19,6 +20,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -129,7 +131,8 @@ class RenderPipelineRenderLimitsTest {
         }
         Snapshot snapshot = new Snapshot(1L, 1L, byUuid, byId);
         RenderPipeline pipeline = new RenderPipeline(
-                new GenerationProperties(), mock(ProjectRepository.class), null, new SimpleMeterRegistry(), null);
+                new GenerationProperties(), mock(ProjectRepository.class), null, new SimpleMeterRegistry(), null,
+                new CompiledTemplateCache(new SimpleMeterRegistry(), 2000, Duration.ofMinutes(30)));
         return pipeline.execute(
                 snapshot,
                 new BuildPlan(false, 1L, entries, Set.of()),

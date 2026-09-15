@@ -6,6 +6,7 @@ import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.template.CompiledTemplateCache;
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
@@ -17,12 +18,8 @@ import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.template.cdl.CdlCompiler;
-import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
-import com.acme.staticforge.template.octl.OctlCompiler;
-import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.acme.staticforge.template.render.BlockResolver;
 import com.acme.staticforge.template.render.Escaping;
@@ -48,7 +45,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Full page/section preview renderer (spec §19). Reuses the exact M2 render engine — the
- * {@link OctlCompiler} and {@link Renderer} (an {@link OctlRenderer}) — so preview and
+ * compilers (through {@link CompiledTemplateCache}) and {@link Renderer} (an {@link OctlRenderer}) — so preview and
  * generation can never diverge in rendering behavior. Compiles the page template's channel
  * OCTL, then renders it with a {@link BlockResolver} that expands each {@code $CMS_BODY}
  * into its section instances (recursively compiling and rendering each section template's
@@ -68,9 +65,8 @@ public class PageRenderService {
     private final NavigationService navigationService;
     private final LiveNavigationLookup navigationLookup;
     private final UrlRegistryService urlRegistryService;
+    private final CompiledTemplateCache compiledTemplates;
 
-    private final OctlCompiler octlCompiler = new OctlCompiler();
-    private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final Renderer renderer = new OctlRenderer();
 
     public PageRenderService(
@@ -81,7 +77,8 @@ public class PageRenderService {
             PreviewTokenService previewTokenService,
             NavigationService navigationService,
             LiveNavigationLookup navigationLookup,
-            UrlRegistryService urlRegistryService) {
+            UrlRegistryService urlRegistryService,
+            CompiledTemplateCache compiledTemplates) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.projectRepository = projectRepository;
@@ -90,6 +87,7 @@ public class PageRenderService {
         this.navigationService = navigationService;
         this.navigationLookup = navigationLookup;
         this.urlRegistryService = urlRegistryService;
+        this.compiledTemplates = compiledTemplates;
     }
 
     /**
@@ -126,7 +124,7 @@ public class PageRenderService {
     public String renderSection(long projectId, UUID sectionTemplateUuid, JsonNode sampleContent, String channel) {
         return withRenderLimitsAsProblem(() -> renderSectionTemplate(
                 projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, channel, false, null,
-                new RenderBudget()));
+                null, new RenderBudget()));
     }
 
     // ------------------------------------------------------------------
@@ -146,7 +144,7 @@ public class PageRenderService {
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found at revision " + revision + ".")));
             page = PageView.from(view);
         }
-        return withRenderLimitsAsProblem(() -> renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl));
+        return withRenderLimitsAsProblem(() -> renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision));
     }
 
     /**
@@ -169,10 +167,17 @@ public class PageRenderService {
     // Core render
     // ------------------------------------------------------------------
 
+    /** @param revision the time-travel revision templates are read at, or {@code null} for the current state */
     private String renderPage(
-            long projectId, String projectKey, PageView page, String channel, boolean rewriteLinks, String baseUrl) {
-        AssetVersionView pageTemplate = assetService.requireCurrent(projectId, page.pageTemplateUuid());
-        CompiledTemplate compiled = compilePageChannel(pageTemplate.payload(), channel, projectId);
+            long projectId,
+            String projectKey,
+            PageView page,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl,
+            Long revision) {
+        AssetVersionView pageTemplate = templateAt(projectId, page.pageTemplateUuid(), revision);
+        CompiledTemplate compiled = compileChannel(pageTemplate, channel, projectId);
         if (compiled == null) {
             return ""; // missing channel template degrades gracefully to an empty body
         }
@@ -180,7 +185,7 @@ public class PageRenderService {
         // One budget for the page and every section/include/catalog card rendered inside it.
         RenderBudget budget = new RenderBudget();
         UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl);
-        BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl, budget);
+        BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision, budget);
 
         RenderContext context = RenderContext.builder()
                 .channel(channel)
@@ -203,11 +208,25 @@ public class PageRenderService {
                 .output();
     }
 
-    private CompiledTemplate compilePageChannel(JsonNode templatePayload, String channel, long projectId) {
-        return compileChannel(templatePayload, channel, projectId);
+    /**
+     * The template version to render with: the current one for a live preview, the one valid at
+     * {@code revision} for time travel — never a newer version.
+     */
+    private AssetVersionView templateAt(long projectId, UUID templateUuid, Long revision) {
+        if (revision == null) {
+            return assetService.requireCurrent(projectId, templateUuid);
+        }
+        return assetService
+                .findAt(projectId, templateUuid, revision)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found at revision " + revision + ".")));
     }
 
-    private CompiledTemplate compileChannel(JsonNode templatePayload, String channel, long projectId) {
+    /**
+     * Compiles through the cross-request cache, keyed by the template version and re-validated
+     * against the project's current references on every hit (see {@link CompiledTemplateCache}).
+     */
+    private CompiledTemplate compileChannel(AssetVersionView template, String channel, long projectId) {
+        JsonNode templatePayload = template.payload();
         if (templatePayload == null) {
             return null;
         }
@@ -215,12 +234,16 @@ public class PageRenderService {
         if (channelNode.isMissingNode() || channelNode.isNull()) {
             return null;
         }
-        String source = channelNode.path("source").asText();
-        ContentDefinition definition = cdlCompiler
-                .compile(templatePayload.path("contentDefinition").asText(""))
-                .definition();
-        OctlResult result = octlCompiler.compile(source, channel, referenceResolver(projectId), definition);
-        return result.template();
+        return compiledTemplates
+                .compile(
+                        projectId,
+                        template.uuid(),
+                        template.validFromRevision(),
+                        channel,
+                        templatePayload.path("contentDefinition").asText(""),
+                        channelNode.path("source").asText(),
+                        referenceResolver(projectId))
+                .template();
     }
 
     // ------------------------------------------------------------------
@@ -234,6 +257,7 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl,
+            Long revision,
             RenderBudget budget) {
         return new BlockResolver() {
             @Override
@@ -245,7 +269,7 @@ public class PageRenderService {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
                     out.append(renderSectionInstance(
-                            projectId, projectKey, page.content(), section, channel, rewriteLinks, baseUrl, budget));
+                            projectId, projectKey, page.content(), section, channel, rewriteLinks, baseUrl, revision, budget));
                 }
                 return out.toString();
             }
@@ -258,7 +282,7 @@ public class PageRenderService {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
                     out.append(renderSectionInstance(
-                            projectId, projectKey, page.content(), card, channel, rewriteLinks, baseUrl, budget));
+                            projectId, projectKey, page.content(), card, channel, rewriteLinks, baseUrl, revision, budget));
                 }
                 return out.toString();
             }
@@ -271,7 +295,7 @@ public class PageRenderService {
                 }
                 return renderSectionTemplate(
                         projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, channel, rewriteLinks, baseUrl,
-                        budget);
+                        revision, budget);
             }
 
             @Override
@@ -399,6 +423,7 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl,
+            Long revision,
             RenderBudget budget) {
         String templateRef = section.path("templateRef").asText();
         if (templateRef.isBlank()) {
@@ -409,7 +434,7 @@ public class PageRenderService {
         String instanceId = section.path("instanceId").asText();
         return renderSectionTemplate(
                 projectId, projectKey, sectionTemplateUuid, null, instanceId,
-                content, pageContent, channel, rewriteLinks, baseUrl, budget);
+                content, pageContent, channel, rewriteLinks, baseUrl, revision, budget);
     }
 
     private String renderSectionTemplate(
@@ -423,9 +448,10 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl,
+            Long revision,
             RenderBudget budget) {
-        AssetVersionView template = assetService.requireCurrent(projectId, sectionTemplateUuid);
-        CompiledTemplate compiled = compileChannel(template.payload(), channel, projectId);
+        AssetVersionView template = templateAt(projectId, sectionTemplateUuid, revision);
+        CompiledTemplate compiled = compileChannel(template, channel, projectId);
         if (compiled == null) {
             return ""; // section template has no channel template
         }
@@ -441,7 +467,7 @@ public class PageRenderService {
                 .meta("uuid", TextNode.valueOf(sectionTemplateUuid.toString()))
                 .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl))
                 .blockResolver(blockResolver(
-                        projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl, budget))
+                        projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl, revision, budget))
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));

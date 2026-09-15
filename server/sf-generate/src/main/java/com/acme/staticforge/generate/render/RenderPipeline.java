@@ -1,5 +1,6 @@
 package com.acme.staticforge.generate.render;
 
+import com.acme.staticforge.asset.template.CompiledTemplateCache;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -51,6 +52,7 @@ public class RenderPipeline {
     private final ChannelService channelService;
     private final MeterRegistry meterRegistry;
     private final UrlRegistryService urlRegistryService;
+    private final CompiledTemplateCache compiledTemplates;
 
     private volatile Map<UUID, Set<UUID>> dependenciesByPage = Map.of();
 
@@ -59,21 +61,25 @@ public class RenderPipeline {
             ProjectRepository projects,
             ChannelService channelService,
             MeterRegistry meterRegistry,
-            UrlRegistryService urlRegistryService) {
+            UrlRegistryService urlRegistryService,
+            CompiledTemplateCache compiledTemplates) {
         this.properties = properties;
         this.projects = projects;
         this.channelService = channelService;
         this.meterRegistry = meterRegistry;
         this.urlRegistryService = urlRegistryService;
+        this.compiledTemplates = compiledTemplates;
     }
 
     /**
      * Compiles every page template channel in the plan and returns the union of ERROR diagnostics
      * (empty when the plan validates cleanly). Section templates are validated transitively as
-     * the renderer encounters them.
+     * the renderer encounters them. Compiles go through the snapshot's build memo, so the render
+     * stage of the same build reuses them.
      */
     public List<Diagnostic> validate(Snapshot snapshot, BuildPlan plan) {
-        GenerationRenderer renderer = new GenerationRenderer(snapshot, null, "", channelService);
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot, null, "", channelService, null, null, compiledTemplates.buildMemo(snapshot));
         Set<String> seen = new HashSet<>();
         List<Diagnostic> errors = new ArrayList<>();
         for (PlanEntry entry : plan.entries()) {
@@ -132,7 +138,8 @@ public class RenderPipeline {
 
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
         GenerationRenderer renderer =
-                new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId);
+                new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId,
+                        compiledTemplates.buildMemo(snapshot));
 
         RenderBatch batch = renderParallel(renderer, plan, snapshot);
 

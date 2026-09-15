@@ -1,6 +1,8 @@
 package com.acme.staticforge.generate.render;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.template.CompiledChannel;
+import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
@@ -18,11 +20,8 @@ import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.template.cdl.CdlCompiler;
-import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
-import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.acme.staticforge.template.render.BlockResolver;
@@ -39,6 +38,7 @@ import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.micrometer.core.instrument.Metrics;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -69,13 +69,12 @@ final class GenerationRenderer {
     private final ChannelService channelService;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<AssetType, Map<String, UUID>> uidIndex;
+    private final TemplateCompileMemo compiledTemplates;
 
-    private final OctlCompiler octlCompiler = new OctlCompiler();
-    private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final Renderer renderer = new OctlRenderer();
 
     // NavigationServiceImpl is pure/stateless (no dependencies) — instantiated directly, same as
-    // octlCompiler/cdlCompiler/renderer above, rather than threaded in as a Spring bean.
+    // renderer above, rather than threaded in as a Spring bean.
     private final NavigationService navigationService = new NavigationServiceImpl();
     private final NavigationLookup navigationLookup;
 
@@ -101,6 +100,23 @@ final class GenerationRenderer {
             ChannelService channelService,
             UrlRegistryService urlRegistryService,
             Long generationUserId) {
+        this(snapshot, paths, projectKey, channelService, urlRegistryService, generationUserId,
+                new TemplateCompileMemo(Metrics.globalRegistry));
+    }
+
+    /**
+     * @param compiledTemplates the build's compile memo — shared by every renderer of the same
+     *     snapshot (see {@code CompiledTemplateCache#buildMemo}), so each (template, channel)
+     *     compiles once per build; the shorter constructors use a memo private to this renderer
+     */
+    GenerationRenderer(
+            Snapshot snapshot,
+            OutputPathResolver paths,
+            String projectKey,
+            ChannelService channelService,
+            UrlRegistryService urlRegistryService,
+            Long generationUserId,
+            TemplateCompileMemo compiledTemplates) {
         this.snapshot = snapshot;
         this.paths = paths;
         this.projectKey = projectKey == null ? "" : projectKey;
@@ -109,6 +125,7 @@ final class GenerationRenderer {
         this.navigationLookup = new SnapshotNavigationLookup(snapshot);
         this.urlRegistryService = urlRegistryService;
         this.generationUserId = generationUserId;
+        this.compiledTemplates = compiledTemplates;
     }
 
     /** Renders one plan entry; produces empty bytes (with no deps) when the template has no channel source. */
@@ -181,12 +198,11 @@ final class GenerationRenderer {
             return List.of();
         }
         List<Diagnostic> errors = new ArrayList<>();
-        ContentDefinition definition = cdlCompiler.compile(payload.path("contentDefinition").asText("")).definition();
         JsonNode channelNode = payload.path("channelTemplates").path(channel);
         if (channelNode.isMissingNode() || channelNode.isNull()) {
             return List.of();
         }
-        OctlResult result = octlCompiler.compile(channelNode.path("source").asText(), channel, referenceResolver(), definition);
+        OctlResult result = compile(template, channel).octl();
         result.diagnostics().stream()
                 .filter(d -> d.severity() == com.acme.staticforge.template.diagnostic.Severity.ERROR)
                 .forEach(errors::add);
@@ -223,8 +239,18 @@ final class GenerationRenderer {
         if (channelNode.isMissingNode() || channelNode.isNull() || channelNode.path("source").asText().isBlank()) {
             return null;
         }
-        ContentDefinition definition = cdlCompiler.compile(payload.path("contentDefinition").asText("")).definition();
-        return octlCompiler.compile(channelNode.path("source").asText(), channel, referenceResolver(), definition).template();
+        return compile(template, channel).template();
+    }
+
+    /** Compiles through the build memo: once per (template, channel) for the whole build. */
+    private CompiledChannel compile(SnapshotAsset template, String channel) {
+        JsonNode payload = template.payload();
+        return compiledTemplates.compile(
+                template.uuid(),
+                channel,
+                payload.path("contentDefinition").asText(""),
+                payload.path("channelTemplates").path(channel).path("source").asText(),
+                referenceResolver());
     }
 
     private ReferenceResolver referenceResolver() {

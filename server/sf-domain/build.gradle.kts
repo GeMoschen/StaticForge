@@ -14,6 +14,7 @@ dependencies {
     api(libs.jackson.databind)
     implementation(libs.spring.security.crypto)
     implementation(libs.micrometer.core)
+    implementation(libs.caffeine)
     implementation(libs.tika.core)
     implementation(libs.metadata.extractor)
 
