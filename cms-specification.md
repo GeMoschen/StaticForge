@@ -250,15 +250,31 @@ Assets reference each other (page → page template, section instance → sectio
 A `asset_reference` table materializes the outgoing edges of each asset version:
 
 ```
-asset_reference(from_asset_id, from_revision_from, from_revision_to,
+asset_reference(from_asset_id, valid_from_revision, valid_to_revision,
                 to_asset_id, kind, source_path)
 ```
 
-`kind ∈ {TEMPLATE, CONTENT_REF, MEDIA_REF, OCTL_VALUE, OCTL_REF, OCTL_INCLUDE, NAV}`.
+An edge row carries the same kind of interval as a version row (§7.4): it is open (`valid_to_revision IS NULL`) while the edge exists in the asset's current version, and "edges valid at revision R" are the rows with `valid_from_revision <= R AND (valid_to_revision IS NULL OR valid_to_revision > R)`.
+
+| `kind` | From → to | `source_path` |
+|---|---|---|
+| `TEMPLATE` | page → page template; page → section template of a body section | `templateRef`, `bodies.<name>[i].templateRef` |
+| `MEDIA_REF` | page → media (`media` editor values, media links) | editor path, e.g. `content.heroImage`, `bodies.main[0].content.image` |
+| `CONTENT_REF` | page → asset of a `reference` value or internal link; page → section template of a catalog card | editor path; `….templateRef` for a card |
+| `OCTL_VALUE` | template → asset read by `$CMS_VALUE`, or by an asset accessor in `$CMS_IF`/`$CMS_SET`/`$CMS_FOR` (not `nav:`) | `channelTemplates.<channel>` |
+| `OCTL_REF` | template → target of `$CMS_REF`, `$CMS_NAVIGATION(nav:…)`, `$CMS_FOR(x : nav:…)` | `channelTemplates.<channel>` |
+| `OCTL_INCLUDE` | template → section template of `$CMS_INCLUDE` | `channelTemplates.<channel>` |
+| `NAV` | page reference → its target page or pages folder | `target` |
+
+Media and folder assets have no outgoing edges. A template reference used in several ways yields one edge per use.
+
+**Written on save.** `ReferenceMaterializer` is called by every code path that writes an asset version (asset create/update/move/delete/restore, folder subtree moves, template writes and rename cascades, channel seeding, project import, project restore), in the same transaction and with the same revision as the version. It derives the edge set from the new payload (templates: by compiling every channel source against the project's reference resolver) and diffs it against the open rows: unchanged edges keep their open row, removed edges are closed at the new revision, new edges are inserted. A soft delete closes every outgoing edge. Within one compound revision a row that would be closed in the revision it was opened in is deleted instead, and an edge closed earlier in that revision is re-opened, so no zero-length intervals exist. Targets that do not resolve to an asset of the project are skipped. Generation does not write reference rows.
+
+**Backfill.** Rows written before this model (by generation runs) were removed by Liquibase changeset `015-references-drop-generation-rows`. At startup `ReferenceBackfillRunner` rebuilds the table by replaying `ReferenceMaterializer` over every asset's versions in revision order whenever `asset_reference` is empty while `asset_version` has rows; disable it with `sf.references.backfill-on-startup=false`. Historical template versions are resolved against today's UIDs.
 
 This table powers:
-- **Usage view** ("where is this image used?") — required before deletion.
-- **Incremental generation** — the reverse edges define what to rebuild.
+- **Usage view** ("where is this image used?") — the open incoming edges, current right after a save; `GET …/assets/{uuid}/usages?revision=R` returns the edges valid at R. Deletion without `force` is blocked (`SF-DOM-0120`) only by open incoming edges from another asset whose current version is not deleted.
+- **Incremental generation** — the reverse edges valid at the snapshot revision and at the last successful run's revision define what to rebuild (§18.2). Render-time-only dependencies, such as a `$CMS_NAVIGATION` over a folder whose descendants changed, are not edges and are not covered.
 - **Broken-link report** — dangling `to_asset_id` after a delete.
 
 ---
@@ -327,7 +343,7 @@ UID allocation happens inside the same transaction as the insert; on constraint 
 
 ### 7.1 Concept
 
-Every project owns a **revision counter** (`long`, starts at `1`). A revision is the unit of atomic, attributable change: one API mutation → one revision, one transaction.
+Every project owns a **revision counter** (`long`, starts at `1`). A revision is the unit of atomic, attributable change: one API mutation → one revision, one transaction. The transaction covers everything the revision writes, including the `asset_reference` rows derived from the new versions (§5.4), so reference edges can never disagree with the payloads valid at the same revision.
 
 Revision `1` is created together with the project and contains the initial (empty or seeded) state.
 
@@ -634,8 +650,21 @@ Pages live in a folder tree. Folders are themselves assets (`type = FOLDER`) so 
 ### 10.5 Validation rules
 
 - `templateRef` must resolve to an existing, non-deleted `PAGE_TEMPLATE` in the same project.
-- Required editors must be non-empty **for publish**, not for save. Save always succeeds if structurally valid; publish blocks on `ERROR`-severity validations and lists them.
+- Required editors must be non-empty **for publish**, not for save. Save always succeeds if structurally valid; publish holds back pages with `ERROR`-severity completeness findings and lists them.
 - Section instance `templateRef` must be an allowed section template for that body (`allow` list in CDL, §14.6).
+
+Content findings (`ContentIssue`: `path`, `code`, `severity`, `message`, `kind`) are produced by `ContentValidator` and `PageContentValidator` against the compiled CDL of the page template and of each section and catalog card template. `visibleWhen`-hidden editors are skipped. Paths are full, e.g. `content.title`, `bodies.main[2].content.cards.cards[0].content.headline`. Every finding has one of two kinds:
+
+| Kind | Codes | On save | On publish |
+|---|---|---|---|
+| **Structural** — the value has the wrong shape | `type` (wrong JSON type; malformed `media`/`reference`/`link`/`richtext`/catalog value; a list item that is not an object), `option` (value outside `options`), `allow` (section or catalog card template not allowed there), `template` (catalog card template not found) | rejected: `422` `SF-API-0422` with the structural findings in an `issues` array | does not block |
+| **Completeness** — well-formed but unfinished | `required`, `min`, `max`, `maxLength`, `maxChars`, `pattern`, `mimeType`, `visibleWhen` | accepted | `ERROR` findings hold the page back with `SF-GEN-0120` |
+
+- **Save scope.** `PUT` of a page validates the whole page. `PATCH …/content` validates `content` if patched and every section of each patched body. Adding a section and moving a section (within a page or to another page) validate only that section, including the target body's `allow` list. Reordering and deleting sections change no content and are not validated. Legacy findings outside the validated subtree therefore never block an unrelated save.
+- **Untouched editors.** The form engine's placeholder values (`{"type":"MEDIA_REF","uuid":null}`, an `INTERNAL` link without `uuid`, `{"format":"html","value":""}`, `{"type":"CATALOG","cards":[]}`) count as empty: they save, and `required` fires for them at publish.
+- **Advisory `issues`.** Every page response (`GET`, create and each mutation) carries `issues`: all findings on the whole page, structural and completeness, each with its `kind`.
+- **Publish.** During generation every planned page is checked for completeness, with definitions compiled once per build (§21.5). A page with `ERROR` findings is not rendered and gets one `SF-GEN-0120` "Content incomplete" diagnostic listing `path (message)`; the other pages are written and the run ends `PARTIAL`. Structural findings do not block publish.
+- **Groups.** A `group` is a transparent wrapper: its children's values are stored at the top level of `content`, next to the group's siblings, and validated there. Values nested under the synthetic `_group_N` key by older UI builds are read by the form engine as a fallback and flattened on the next save.
 
 ---
 
@@ -959,7 +988,7 @@ output_channel
   enabled           boolean
   is_default        boolean
   position          int
-  settings          json          -- pretty-print, minify, line endings, index file name
+  settings          json          -- output path settings; other keys stored as sent
   UNIQUE (project_id, key)
 ```
 
@@ -967,15 +996,32 @@ output_channel
 
 ```json
 {
+  "indexUid": "index",
   "indexFileName": "index.html",
+  "urlStrategy": "RELATIVE",
+  "trailingSlash": false,
   "prettyPrint": true,
   "minify": false,
   "lineEnding": "LF",
-  "charset": "UTF-8",
-  "urlStrategy": "RELATIVE",
-  "trailingSlash": false
+  "charset": "UTF-8"
 }
 ```
+
+Generation, the URL registry and preview navigation links read a channel's output configuration as `ChannelOutputSettings`. Only these values are honored:
+
+| Field | Default | Effect |
+|---|---|---|
+| `file_extension` (`fileExtension`) | `md` for key `markdown`, otherwise the channel key | `{ext}` in output paths (§18.3) |
+| `settings.indexUid` | `index` | UID of the page rendered as its folder's index |
+| `settings.indexFileName` | `index.<ext>` | File name of a folder index; the index page's `{uid}` expands to its stem, and the PRETTY directory form writes into it |
+| `settings.urlStrategy` | `RELATIVE` | `RELATIVE` or `PRETTY` |
+| `settings.trailingSlash` | `false` | Only with `PRETTY`: `about.html` is written as `about/<indexFileName>` and linked as `about/`; the site-root index is linked as `./`. `PRETTY` without it behaves like `RELATIVE` |
+
+`prettyPrint`, `minify`, `lineEnding` and `charset` are stored and returned but not applied.
+
+- **Validation.** Channel create and update reject malformed values with `400` `SF-API-0400` and a `fieldErrors` array of `{field, message}` (fields `fileExtension`, `settings`, `settings.urlStrategy`, `settings.indexFileName`, `settings.indexUid`, `settings.trailingSlash`): `fileExtension` must match `[a-z0-9]{1,10}`, `urlStrategy` must be `RELATIVE` or `PRETTY`, `indexFileName` must match `[A-Za-z0-9._-]{1,64}`, `indexUid` must be a string and `trailingSlash` a boolean. Blank values fall back to the defaults. Unknown keys are kept. An update without `settings` keeps the stored settings. Channels arriving through project import are parsed leniently: unusable values fall back to defaults.
+- **Live configuration.** Channel settings are not revision-pinned: generating an older revision uses the current settings.
+- **Changing settings.** An update that changes `fileExtension` or `settings` records a `CHANNEL` entry in its revision summary; channel creation records one too. An `INCREMENTAL` generation that finds such an entry after its last successful run is planned as `FULL` (the run keeps its requested mode). When the resulting `ChannelOutputSettings` differ, the channel's URL registry entries that are not manual overrides are deleted in the same transaction, so they are recomputed with the new paths; overrides are kept. Channels added by project import carry no summary entry and do not trigger this.
 
 ### 15.3 CRUD API
 
@@ -1009,8 +1055,8 @@ Creating channel `markdown` immediately makes a new tab appear in every template
 | Construct | Meaning |
 |---|---|
 | `$CMS_VALUE(editorName)$` | Value of an editor in the current scope |
-| `$CMS_VALUE(assetType:uid)$` | Value pulled from another asset (see §16.4) |
-| `$CMS_VALUE(assetType:uid.editorName)$` | Specific editor of another asset |
+| `$CMS_VALUE(assetType:uid.editorName)$` | Value from another asset's root value object (see §16.4); dotted paths, conditions, loops and filters work as for local values |
+| `$CMS_VALUE(assetType:uid)$` | The whole value object of another asset; stringifies to nothing useful and warns (`SF-TPL-0111`) |
 | `$CMS_REF(assetType:uid)$` | Resolved URL/href to another asset in the current channel |
 | `$CMS_REF(editorName)$` | Resolved URL for a `link`/`media`/`reference` editor value |
 | `$CMS_BODY(name)$` | Renders a page body (page templates only) |
@@ -1037,13 +1083,28 @@ The channel's `default_escaping` is applied automatically as the final step unle
 
 ### 16.4 Reference syntax `assetType:uid`
 
-`assetType` is one of `page`, `media`, `section_template`, `page_template`, `structure`, `folder`. `uid` is the asset's UID within the current project.
+`assetType` is one of `page`, `media`, `section_template`, `page_template`, `folder`, `page_reference` (the lowercase asset type), or `nav` (a navigation folder, resolved through its navigation reference UID). `uid` is the asset's UID within the current project. `AssetReferencePrefixes` is the single registry of these prefixes for template save, preview and generation.
 
-At **compile time** the reference is resolved to a UUID and recorded in `asset_reference`; the compiled template stores the UUID. Consequences:
+At **compile time** the reference is resolved to a UUID; the compiled template stores the UUID. On **template save** every resolved reference of every channel source is recorded in `asset_reference` as an `OCTL_VALUE`, `OCTL_REF` or `OCTL_INCLUDE` edge (§5.4). Consequences:
 
 - Renaming an asset's UID does not break already-compiled templates, but the *source* still shows the old UID — the UID-change API therefore reports affected templates (§6.4).
 - An unresolvable UID is a **compile error** (`SF-TPL-0110`), not a silent empty string, so broken references cannot reach production.
-- A soft-deleted target degrades to a build **warning** and renders empty (`SF-GEN-0220`).
+- A generation run at the current revision loads no deleted assets, so a template reference to a soft-deleted asset fails VALIDATE with `SF-TPL-0110`. A cross-asset value whose target is soft-deleted in the data being rendered (preview, or a run pinned to a revision) renders empty with warning `SF-TPL-0112`.
+
+**Cross-asset values.** `$CMS_VALUE(assetType:uid.path)$`, and an asset accessor in `$CMS_IF`, `$CMS_SET` or a `$CMS_FOR` source (other than `nav:`), read the target's **root value object** and walk `path` over it exactly like a local value: dotted paths, truthiness, loop variables and filters behave identically, and escaping follows the channel default unless `raw` is used. Generation reads the revision-pinned snapshot (`SnapshotAssetValueResolver`); preview reads the version valid at the preview revision, live or time travel (`LiveAssetValueResolver`). Both project through the same function (`AssetValueProjection`), so they cannot disagree:
+
+| Target type | Root value object |
+|---|---|
+| `page` | The page's editor values (`payload.content`); `bodies`, `nav`, `output` and `meta` are not exposed |
+| `media` | `altText`, `caption`, `copyright`, `fileName`, `mimeType`, `sizeBytes`, `focalPoint`, and from the image metadata `width`, `height`, `orientation`, `dominantColor`; blob hashes and variants are not exposed |
+| `page_reference` | `label` |
+| `section_template`, `page_template`, `folder` | No values |
+
+Every root value object also carries the reserved `_meta` object with `uid` and `displayName` (`$CMS_VALUE(page:about._meta.displayName)$`). A value object is raw stored JSON, never rendered output, so reading one cannot trigger a render; a `catalog` value read this way renders its cards through the current page's block resolver, bounded by the include cycle guard (§16.10). Lookups are scoped to the rendering project, and a target whose type does not match the prefix is treated as missing.
+
+- A missing or soft-deleted target renders empty and emits `SF-TPL-0112` once per reference per render. Preview discards render warnings; in generation the warning is reported in the run's diagnostics and the run ends `PARTIAL`.
+- `$CMS_VALUE(assetType:uid)$` without a path is compile warning `SF-TPL-0111`. `$CMS_REF(assetType:uid)$` and conditions such as `$CMS_IF(page:about)$` are path-less by nature and do not warn.
+- The page that reads another asset's value has no edge of its own; its template holds the `OCTL_VALUE` edge, and an incremental build reaches the page from the changed target through that template's edges (`OCTL_VALUE`, then `OCTL_INCLUDE`/`TEMPLATE`).
 
 `$CMS_REF` resolves to:
 
@@ -1173,7 +1234,7 @@ nav           = "NAV("   , assetRef , [ "," , namedArgs ] , ")" ;
 accessor      = assetRef | path ;
 assetRef      = assetType , ":" , uid , [ "." , path ] ;
 path          = identifier , { "." , identifier } ;
-assetType     = "page" | "media" | "section_template" | "page_template" | "structure" | "folder" ;
+assetType     = "page" | "media" | "section_template" | "page_template" | "folder" | "page_reference" | "nav" ;
 
 control       = ifBlock | forBlock ;
 ifBlock       = "IF(" , expr , ")$" , template ,
@@ -1199,9 +1260,11 @@ OCTL source ──lex──▶ tokens ──parse──▶ AST ──resolve ref
                                        RenderContext ───render──────┘──▶ output string + collected deps
 ```
 
-- `CompiledTemplate` is cached in a Caffeine cache keyed by `(assetUuid, revision, channelKey)`; the cache is invalidated by revision, so a rebuild never serves stale templates.
+- Generation and preview compile through `CompiledTemplateCache` (per-build memo and cross-request cache, §21.5), so a template version is not recompiled per page. Template save compiles uncached.
 - Rendering is a stack-machine walk with an output `StringBuilder` sized from the previous render of the same template (adaptive).
-- Guard rails: max include depth 32, max loop iterations 100,000, max output size 32 MB per file, wall-clock budget 5 s per file. Exceeding a limit fails the file with a diagnostic, not the whole build.
+- Guard rails (`RenderBudget`, one per page render): max nesting depth 32 below the page template (`SF-TPL-0130`), max loop iterations 100,000 (`SF-TPL-0131`), max output size 32 MB (`SF-TPL-0132`), wall-clock budget 5 s (`SF-TPL-0133`). Body sections, `$CMS_INCLUDE`d sections and catalog cards render inside the page's budget, so depth counts every nesting level and the loop, output and time limits apply to the whole page render, not to each nested template.
+- Cycle guard: rendering a template that is already being rendered further up the chain (`a → b → a`, through an include, a body section or a catalog card) fails with `SF-TPL-0135` and the chain in the message. The check runs before the depth check. The same template rendered twice side by side is not a cycle.
+- Exceeding a limit fails that file with a diagnostic while the other pages still render; any such error then marks the generation run `FAILED`, so nothing is published. Preview returns a `422` problem carrying the diagnostic's code.
 - Rendering is side-effect free and thread-safe → pages render in parallel on virtual threads.
 
 ### 16.11 Diagnostics
@@ -1213,7 +1276,14 @@ OCTL source ──lex──▶ tokens ──parse──▶ AST ──resolve ref
 | `SF-TPL-0103` | error | Unknown editor name in this scope |
 | `SF-TPL-0104` | error | Unknown filter |
 | `SF-TPL-0110` | error | Unresolvable asset reference |
+| `SF-TPL-0111` | warning | Cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
+| `SF-TPL-0112` | warning (render) | Cross-asset value target missing or soft-deleted; renders empty |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
+| `SF-TPL-0130` | error (render) | Nesting depth above 32 below the page template |
+| `SF-TPL-0131` | error (render) | Loop iterations above 100,000 in one page render |
+| `SF-TPL-0132` | error (render) | Output above 32 MB in one page render |
+| `SF-TPL-0133` | error (render) | Page render exceeded the 5 s time budget |
+| `SF-TPL-0135` | error (render) | Include cycle (`a → b → a`) |
 | `SF-TPL-0201` | warning | Body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | Editor declared in CDL but never used in any channel template |
@@ -1318,10 +1388,13 @@ Request body:
                              expanded over asset_reference reverse edges
                              (transitive; navigation-affecting changes expand to
                              all pages that render that structure)
-3  VALIDATE    Compile every needed template, resolve refs, run content validation.
+3  VALIDATE    Compile every needed template and resolve refs.
                ERROR-severity findings abort before any file is written.
+               Pages with ERROR completeness findings are held back (SF-GEN-0120,
+               run PARTIAL; §10.5).
 4  RENDER      Parallel over virtual threads (bounded by sf.generate.parallelism).
-               Each unit: (page, channel) → rendered bytes + dependency set.
+               Each unit: (page, channel) → rendered bytes. Reference edges come
+               from save (§5.4); rendering does not write them.
 5  ASSETS      Copy referenced media (and requested variants) to the target.
                Content-addressed: unchanged blobs are skipped.
 6  POST        Optional per-channel post-processors: prettify/minify HTML,
@@ -1340,7 +1413,7 @@ Resolution order for a page in channel `c`:
 
 Placeholders: `{folder}`, `{uid}`, `{ext}`, `{displayNameSlug}`, `{year}`, `{month}`, `{day}` (from `nav.date`/`publishedOn`), `{channel}`.
 
-Index handling: a page whose UID equals the project's `indexUid` (default `index`) renders to `{folder}index.{ext}`. With `trailingSlash: true` and `urlStrategy: PRETTY`, `/products/hammer.html` becomes `/products/hammer/index.html` and `$CMS_REF` emits `/products/hammer/`.
+Index handling (per channel, §15.2): for a page whose UID equals the channel's `indexUid` (default `index`), `{uid}` expands to the stem of the channel's `indexFileName` (default `index.{ext}`), so it renders to `{folder}index.{ext}` by default. With `trailingSlash: true` and `urlStrategy: PRETTY`, `/products/hammer.html` becomes `/products/hammer/index.html` and `$CMS_REF` emits a relative href to `/products/hammer/`.
 
 Path collisions between two pages are a **build error** (`SF-GEN-0110`) listing both assets.
 
@@ -1453,7 +1526,7 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 |---|---|---|
 | `GET` | `/projects/{p}/assets` | Cross-type list/search, `?type=`, `?q=`, `?folder=` |
 | `GET` | `/projects/{p}/assets/{uuid}` | Type-polymorphic representation |
-| `GET` | `/projects/{p}/assets/{uuid}/usages` | Inbound references |
+| `GET` | `/projects/{p}/assets/{uuid}/usages` | Inbound references: open edges, or edges valid at `?revision=R` (§5.4) |
 | `GET` | `/projects/{p}/assets/{uuid}/history` | Revision list for this asset |
 | `GET` | `/projects/{p}/assets/{uuid}/versions/{revision}` | State at revision |
 | `POST` | `/projects/{p}/assets/{uuid}/restore` | `{fromRevision}` |
@@ -1644,26 +1717,33 @@ public interface Renderer {
 }
 ```
 
-`RenderResult` carries the output plus the set of asset UUIDs actually touched — this is what feeds `asset_reference` and incremental builds.
+`RenderResult` carries the output, the set of asset UUIDs actually touched (generation uses it to select the media files to copy) and render warnings. It does not feed `asset_reference`: edges are written on save (§5.4), and incremental builds read them from there.
 
 ### 21.4 Transactions & consistency
 
 - One HTTP mutation = one transaction = one revision. No cross-request "sessions".
+- Reference materialization (`ReferenceMaterializer`, §5.4) runs inside that transaction with the revision just allocated; a rolled-back write leaves no edge rows behind.
 - Isolation `READ_COMMITTED`; the revision counter row lock provides the serialization that matters.
 - Media bytes are written to the blob store **before** the transaction commits, and orphaned blobs (commit failed) are collected by the nightly sweep — never the reverse order, so a committed asset version always has its bytes.
 - Generation runs outside the request transaction: the snapshot is loaded read-only at a pinned revision, so a long build never holds locks.
 
 ### 21.5 Caching
 
-| Cache | Key | Eviction |
-|---|---|---|
-| `compiledTemplates` | `(assetUuid, revision, channel)` | size 2,000, 30 min idle |
-| `contentDefinitions` | `(assetUuid, revision)` | size 2,000 |
-| `projectAuth` | `(userId, projectKey)` | request-scoped + 60 s |
-| `navigationTrees` | `(structureUuid, revision, channel)` | per-build only |
-| `mediaThumbnails` | `(uuid, revision, size)` | disk, LRU 2 GB |
+Template compilation is cached in two tiers by `CompiledTemplateCache` (`sf-domain`, Caffeine). Only compilation is cached, never rendered output. Template save compiles uncached, since it is authoring-time validation.
 
-Caffeine, exposed via Spring `CacheManager`. Every cache key contains the revision, which makes explicit invalidation unnecessary for content.
+| Tier | Used by | Key | Eviction |
+|---|---|---|---|
+| Per-build memo (`TemplateCompileMemo`), OCTL | generation: VALIDATE, the completeness check and RENDER | `(templateUuid, channel)` | released with the build's snapshot object |
+| Per-build memo, CDL | same | `templateUuid` | same |
+| Cross-request, OCTL | preview | `(projectId, templateUuid, validFromRevision, channel)` | `sf.cache.compiled-templates.max-size` (2,000), `sf.cache.compiled-templates.idle` (30 min) |
+| Cross-request, CDL | preview | `(projectId, templateUuid, validFromRevision)` | same |
+
+- **Per build.** One memo per generation snapshot (held in a weak-keyed cache), shared by every stage and render thread of the run, so each (template, channel) compiles at most once per build. The key needs no revision because the snapshot pins every template source and every `assetType:uid → UUID` mapping for the build.
+- **Across requests.** The template version (`validFromRevision`) in the key means a template edit or a time-travel preview never hits another version's entry. OCTL resolution also depends on *other* assets, so each entry records every `assetType:uid` lookup the compile made, including failed ones. On a hit those lookups are re-resolved against the current project resolver; if any answer differs (a renamed, deleted or newly created target), the entry is recompiled and replaced. A stale mapping is never served. Two concurrent misses may both compile; the last write wins.
+- Every real compile increments the Micrometer counter `sf.template.compiles{kind=cdl|octl}`.
+- Save-time content validation (§10.5) compiles CDL uncached per validation.
+
+Specified but not implemented: `projectAuth` `(userId, projectKey)`, `navigationTrees` and `mediaThumbnails` caches.
 
 ### 21.6 Configuration (`application.yml`, excerpt)
 
@@ -1790,6 +1870,7 @@ CREATE TABLE asset_reference (
 );
 CREATE INDEX idx_ref_to   ON asset_reference (to_asset_id) WHERE valid_to_revision IS NULL;
 CREATE INDEX idx_ref_from ON asset_reference (from_asset_id) WHERE valid_to_revision IS NULL;
+CREATE INDEX idx_ref_to_valid_to ON asset_reference (to_asset_id, valid_to_revision);
 ```
 
 Partial indexes (`WHERE valid_to_revision IS NULL`) keep "current state" queries fast regardless of history depth.
@@ -2507,7 +2588,7 @@ Same content. Two channels. No duplication.
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `SF-API-0400` | 400 | Malformed request body |
+| `SF-API-0400` | 400 | Malformed request body; invalid channel output settings (`fieldErrors` attached, §15.2) |
 | `SF-API-0401` | 401 | Missing or expired access token |
 | `SF-API-0403` | 403 | Role insufficient for this project action |
 | `SF-API-0404` | 404 | Asset, project or revision not found (or not visible) |
@@ -2515,17 +2596,21 @@ Same content. Two channels. No duplication.
 | `SF-API-0412` | 412 | `If-Match` header missing on a mutating request |
 | `SF-API-0413` | 413 | Upload exceeds the configured limit |
 | `SF-API-0415` | 415 | MIME type not allowed |
-| `SF-API-0422` | 422 | Content fails CDL validation (field-level details attached) |
+| `SF-API-0422` | 422 | Content fails CDL validation (field-level details attached; structural page content findings in `issues`, §10.5) |
 | `SF-API-0429` | 429 | Rate limit exceeded |
 | `SF-DOM-0101` | 422 | UID already taken (after probe exhaustion) |
 | `SF-DOM-0102` | 422 | Reserved UID |
 | `SF-DOM-0110` | 409 | Folder not empty |
 | `SF-DOM-0120` | 409 | Asset still referenced (delete without `force`) |
-| `SF-DOM-0130` | 422 | Section template not allowed in this body |
+| `SF-DOM-0130` | 422 | Page reference folder target has no page in its subtree (a section template outside the body's `allow` list is `SF-API-0422` with an `allow` issue, §10.5) |
 | `SF-TPL-01xx` | 422 | CDL/OCTL compile errors (§16.11) |
+| `SF-TPL-0111` | — | Cross-asset value without an editor path (compile warning) |
+| `SF-TPL-0112` | — | Cross-asset value target missing or soft-deleted (render warning) |
+| `SF-TPL-0130`–`0133`, `SF-TPL-0135` | 422 (preview) | Render limit exceeded: depth, loop iterations, output size, time budget, include cycle (§16.10); fails the file in generation |
 | `SF-GEN-0110` | — | Output path collision (build error) |
+| `SF-GEN-0120` | — | Content incomplete: page held back, run `PARTIAL` (§10.5) |
 | `SF-GEN-0210` | — | No channel template for an enabled channel (warning) |
-| `SF-GEN-0220` | — | Reference to a deleted asset (warning) |
+| `SF-GEN-0220` | — | Reference to a deleted asset (warning; reserved, not emitted — see `SF-TPL-0112`, §16.4) |
 | `SF-GEN-0301` | — | `raw` filter on a plain-text editor (warning) |
 | `SF-GEN-0410` | — | Navigation cycle truncated (warning) |
 | `SF-GEN-0500` | 409 | A generation run is already active for this project |

@@ -58,7 +58,16 @@ The model strictly separates **identity** from **state** (ADR-0002):
 - `AssetVersion` — one row per change; holds the mutable state (`display_name`, `folder_id`, `folder_path`, `template_asset_id`, payload) plus a `valid_from_revision`/`valid_to_revision` interval and a `deleted` flag.
 - `AssetReference` — materialized outgoing edge (`from_asset_id`, `to_asset_id`, `kind`, `source_path`, revision interval), typed by `ReferenceKind` (ADR-0003).
 
-Type-specific data lives in a `jsonb` payload column (ADR-0003); the handful of query/integrity fields are real columns on `asset_version`, kept in sync by the domain layer. `asset_reference` powers the usage view, incremental generation, and broken-link reporting.
+Type-specific data lives in a `jsonb` payload column (ADR-0003); the handful of query/integrity fields are real columns on `asset_version`, kept in sync by the domain layer. `asset_reference` powers the usage view, the delete guard, incremental generation, and broken-link reporting.
+
+Reference edges are written on save (spec §5.4), in package `asset.reference`:
+
+- `ReferenceMaterializer` (`@RevisionAware`) — called by every version writer (`AssetServiceImpl`, `FolderServiceImpl`, `TemplateServiceImpl`, `ChannelServiceImpl.seedFrom`, `ProjectExportImportServiceImpl`, `ProjectRestoreService`) in the same transaction and revision. `extract(projectId, type, payload)` derives the edge set (`TEMPLATE`, `MEDIA_REF`/`CONTENT_REF` via `ContentReferenceService.extract`, `NAV`, and `OCTL_*` by compiling template channel sources); the write is a per-edge diff against the open rows. `ReferenceMaterializationGuardTest` (ArchUnit) fails if a class saves asset or media versions without depending on it.
+- `ProjectReferenceResolver` — the project-scoped OCTL `ReferenceResolver` (including the `nav:` alias and its navigation-scope check), shared by compile-on-save validation and edge extraction, so a reference that saves is exactly one that is persisted.
+- `ReferenceBackfill` + `bootstrap.ReferenceBackfillRunner` (`sf-app`) — rebuild all rows from `asset_version` at startup when the table is empty (`sf.references.backfill-on-startup`).
+- Readers use `AssetReferenceRepository`'s revision-aware queries: `findIncomingOpen` (delete guard, usages), `findIncomingValidAt` (usages at `?revision=`), `findValidAtByProject` (the `BuildPlanner` reverse index).
+
+Page content validation (spec §10.5): `asset.content.ContentValidator` and `PageContentValidator` are pure and return `ContentIssue`s with a `STRUCTURAL` or `COMPLETENESS` kind. `asset.page.PageContentValidation` rejects structural findings on save (`422` with `issues`) and fills `PageView.issues`; `RenderPipeline.incompletePages` holds back incomplete pages at publish (`SF-GEN-0120`).
 
 ## 4. Revision safety
 
@@ -75,13 +84,20 @@ Concurrency token is the revision interval itself (`If-Match: "rev-{n}"`); there
 ## 5. The two languages
 
 - **CDL** (`template.cdl`): `CdlLexer` → `CdlParser` → AST → `CdlCompiler`/`CdlValidator` → `ContentDefinition`, plus `Diagnostic[]`. Declares editors (`EditorDefinition`, `EditorType`), bodies (`BodyDefinition`), and conditional visibility (`visibleWhen`).
-- **OCTL** (`template.octl` + `template.render`): `OctlLexer` → `OctlParser` → AST → `OctlCompiler` → `CompiledTemplate` (immutable, cached by `(assetUuid, revision, channel)`). `Renderer`/`OctlRenderer` walks the compiled template against a `RenderContext`, applying `Filters` and channel `Escaping` (escaping-by-default).
+- **OCTL** (`template.octl` + `template.render`): `OctlLexer` → `OctlParser` → AST → `OctlCompiler` → `CompiledTemplate` (immutable; `references()` maps each `assetType:uid` key to its UUID, `referenceUses()` to its `ReferenceUse` — `VALUE`, `REF`, `INCLUDE`). `Renderer`/`OctlRenderer` walks the compiled template against a `RenderContext`, applying `Filters` and channel `Escaping` (escaping-by-default).
+- **Render SPIs** (`template.render`): `RenderContext` carries a `UrlResolver`, a `BlockResolver` (bodies, includes, catalog cards) and an `AssetValueResolver` (`valueOf(assetType, uuid)` → the target's root value object for cross-asset values, spec §16.4). `sf-template` stays free of repositories; implementations live in the pipelines: `SnapshotAssetValueResolver` (generation) and `LiveAssetValueResolver` (preview), both projecting through `asset.content.AssetValueProjection`. `AssetReferencePrefixes` (`asset.folder`) is the single prefix → `AssetType` registry.
+- **Render budget**: `RenderBudget` (one per page render, passed down through nested `RenderContext`s) holds the template nesting stack and the aggregate loop, output and time counters; it raises `SF-TPL-0130`–`0133` and the include cycle `SF-TPL-0135` as `RenderLimitException`. It is mutable and must never be shared across pipeline entries.
+- **Compile cache** (`asset.template`, spec §21.5): `CompiledTemplateCache` returns `CompiledChannel` (OCTL result + `ContentDefinition`). `buildMemo(snapshot)` gives generation a per-build `TemplateCompileMemo` keyed `(templateUuid, channel)`; `compile(...)` is preview's Caffeine tier keyed by `(projectId, templateUuid, validFromRevision, channel)`, validated on each hit by re-resolving the recorded reference lookups. Compiles are counted in `sf.template.compiles{kind}`. `TemplateServiceImpl` compiles uncached on save.
 
 Diagnostics: `template.diagnostic.DiagnosticCodes` (OCTL `SF-TPL-*`, CDL `SF-CDL-*`), `generate.GenerationDiagnosticCodes` (`SF-GEN-*`). See the [template-developer guide](template-developer-guide.md) for the full code catalogue.
 
 ## 6. Generation pipeline
 
-`generate.GenerationalService` orchestrates the eight stages of §18: snapshot (`SnapshotService`/`Snapshot`) → plan (`BuildPlanner`/`BuildPlan`) → validate → render (`RenderPipeline`/`GenerationRenderer`) → assets (`AssetCopyStage`) → post-process (`PostProcessStage` + `postprocess/*`) → atomic write (`target/*`) → report. Filesystem publish is atomic via `{root}/builds/{runId}/` + `current` symlink (ADR-0005). Paths resolve through `render.OutputPathResolver`.
+`generate.GenerationService` orchestrates the eight stages of §18: snapshot (`SnapshotService`/`Snapshot`) → plan (`BuildPlanner`/`BuildPlan`) → validate → render (`RenderPipeline`/`GenerationRenderer`) → assets (`AssetCopyStage`) → post-process (`PostProcessStage` + `postprocess/*`) → atomic write (`target/*`) → report. Filesystem publish is atomic via `{root}/builds/{runId}/` + `current` symlink (ADR-0005).
+
+- **Plan.** `BuildPlanner` expands changed assets over an in-memory reverse index of the `asset_reference` edges valid at the snapshot revision and at the last successful run's revision (two queries per plan). It no longer derives template edges from payloads, and generation writes no reference rows. Render-time-only dependencies (a `nav:` subtree whose descendants changed) are not covered.
+- **Validate and render.** All compiles of a run go through the snapshot's `TemplateCompileMemo`, shared by `RenderPipeline.validate`, the completeness check `RenderPipeline.incompletePages` (`PageContentValidator` → `SF-GEN-0120`, pages removed from the render, run `PARTIAL`) and the parallel render. Every page, section and catalog-card render gets the page's `RenderBudget` and a `SnapshotAssetValueResolver`.
+- **Paths.** `channel.ChannelOutputSettings` (extension, `indexUid`, `indexFileName`, `urlStrategy` `RELATIVE|PRETTY`, `trailingSlash`) is parsed from each `OutputChannel` and read once per run through `ChannelService.outputSettings(projectId)`. `channel.OutputPathExpander` is the single path/URL rule, used by `render.OutputPathResolver` (generation) and `urlregistry.LiveOutputPathResolver` (URL registry, preview navigation). `ChannelService.outputSettingsChangedSince` makes `GenerationService` plan an `INCREMENTAL` run as `FULL` after a channel output settings change.
 
 ## 7. Media and blob store
 

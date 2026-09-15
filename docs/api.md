@@ -36,7 +36,7 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 |---|---|
 | `GET` | `/projects/{projectKey}/assets` (`?type=`, `?q=`, `?folder=`) |
 | `GET` | `/projects/{projectKey}/assets/{uuid}` |
-| `GET` | `/projects/{projectKey}/assets/{uuid}/usages` |
+| `GET` | `/projects/{projectKey}/assets/{uuid}/usages` (`?revision=`) |
 | `GET` | `/projects/{projectKey}/assets/{uuid}/history` |
 | `GET` | `/projects/{projectKey}/assets/{uuid}/versions/{revision}` |
 | `POST` | `/projects/{projectKey}/assets/{uuid}/restore` |
@@ -143,7 +143,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 
 | Code | HTTP | Raised by / notes |
 |---|---|---|
-| `SF-API-0400` | 400 | malformed request body — `ProblemFactory` |
+| `SF-API-0400` | 400 | malformed request body — `ProblemFactory`; invalid channel output settings carry a `fieldErrors` array of `{field, message}` — `ChannelServiceImpl` |
 | `SF-API-0401` | 401 | missing/expired access token — `ProblemEntryPoint` |
 | `SF-API-0403` | 403 | role insufficient — `ProjectAuthorizationService` |
 | `SF-API-0404` | 404 | not found / not visible (does not leak existence, §8.4) |
@@ -151,7 +151,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-API-0412` | 412 | `If-Match` missing on a mutating request |
 | `SF-API-0413` | 413 | upload exceeds configured limit (§11.5) |
 | `SF-API-0415` | 415 | MIME type not allowed (Tika sniff, §11.4) |
-| `SF-API-0422` | 422 | CDL validation failed (field-level details) |
+| `SF-API-0422` | 422 | CDL validation failed (field-level details); structural page content findings on save carry an `issues` array — `PageContentValidation` |
 | `SF-API-0423` | 423 | account locked (login lockout, §9.5) — *implemented addition* |
 | `SF-API-0429` | 429 | rate limit exceeded (login) |
 | `SF-API-0500` | 500 | internal error — *implemented addition* |
@@ -164,8 +164,8 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0102` | 422 | reserved UID — `UidGenerator` |
 | `SF-DOM-0103` | 422 | folder depth limit exceeded — `PathService.MAX_DEPTH` — *implemented addition* |
 | `SF-DOM-0110` | 409 | folder not empty — `FolderService` |
-| `SF-DOM-0120` | 409 | asset still referenced (delete without `force`) — `AssetService`/`ContentReferenceService` |
-| `SF-DOM-0130` | 422 | section template not allowed in this body — `ContentValidator` |
+| `SF-DOM-0120` | 409 | asset still referenced by an open edge from a non-deleted asset (delete without `force`) — `AssetServiceImpl` |
+| `SF-DOM-0130` | 422 | page reference folder target has no page in its subtree — `PageReferenceServiceImpl` (a section template outside a body's `allow` list is `SF-API-0422` with an `allow` issue) |
 | `SF-DOM-0140` | 409 | project key already exists — *implemented addition* |
 
 ### Template (`SF-TPL-*`, `SF-CDL-*`)
@@ -181,7 +181,8 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 
 | Code | Severity | Meaning | Raised by |
 |---|---|---|---|
-| `SF-GEN-0110` | error | output path collision | `GenerationService` (`COLLISION_CODE`) |
+| `SF-GEN-0110` | error | output path collision | `RenderPipeline` (`COLLISION_CODE`) |
+| `SF-GEN-0120` | error (per page) | content incomplete; page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.incompletePages`) |
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
 | `SF-GEN-0220` | warning | reference to a deleted asset | (spec §16.4 — reserved; not yet wired to a constant) |
 | `SF-GEN-0301` | warning | `raw` filter on a plain-text editor | (spec §16.3 — raised via `SF-TPL-0301` at compile time) |
