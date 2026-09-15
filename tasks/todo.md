@@ -1,3 +1,165 @@
+# M16 implementation — Plan
+
+## Approach
+- Four parallel tracks, each in its own git worktree/branch (tasks inside a track run sequentially):
+  - **T1 render:** M16.2.1 → M16.5.1 → M16.1.1 → M16.2.2 (sf-template renderer/context, `GenerationRenderer`, `PageRenderService`)
+  - **T2 references:** M16.3.1 → M16.3.2 → M16.3.3 (`ReferenceMaterializer`, write paths, `BuildPlanner`, usages, Liquibase)
+  - **T3 channel settings:** M16.4.1 (path resolution, URL registry, channels UI)
+  - **T4 validation:** M16.5.2 (`PageServiceImpl`, `RenderPipeline.validate`)
+- Integrate on branch `m16-foundations` (master untouched): merge T1..T4, resolve conflicts, regenerate `schema.d.ts`, full `./gradlew build` + `ng build`.
+- Then M16.6.1: journeys, benchmark, docs/spec sync, live-app verification.
+
+## Decisions taken from the task files' recommendations
+- Add `ReferenceKind.NAV`; the compile cache adds Caffeine; the cross-request key is validated by re-resolving references
+- Validation on save: structural only; for section operations validate the changed subtree, for full updates the whole page
+- A channel settings change resets non-overridden URL registry entries; payload indexes in `BuildPlanner` are deleted once `TEMPLATE` rows exist
+
+## Steps
+- [ ] T1 render track
+- [ ] T2 references track
+- [ ] T3 channel settings track
+- [ ] T4 validation track
+- [ ] Integrate on `m16-foundations` + full verification
+- [ ] M16.6.1 journeys, benchmark, docs
+- [ ] Review section
+
+---
+
+# Feature roadmap M16–M24 — task breakdown — Plan
+
+## Goal
+Create task breakdowns (epic README → feature README → task files, same format as `M15`) for the
+selected features: parsable text media, global store, content store, template inheritance,
+multi-language, build insight, pagination, global search — plus a foundations epic for gaps the
+features depend on. **Planning only; no code.**
+
+## User decisions (2026-09-15)
+| Topic | Decision |
+|---|---|
+| Existing gaps (cross-asset `$CMS_VALUE` unimplemented, `asset_reference` only written by generation + never closed, no compile cache, channel path settings unwired, include cycle guard, no server-side content validation) | Separate foundations epic **M16** first |
+| Parsable text media | Per-media `processCms` toggle, text MIME only, in-app text editing (each save = revision), rendered once per generation with escaping NONE |
+| Global store | Named property sets (`GLOBAL_SET` assets, CDL schema, own "Globals" store); `$CMS_VALUE(global:site.title)$` + `$CMS_GLOBAL.site.title$` |
+| Content store | `DATASET` schema asset + one `RECORD` asset per entry in a foldered "Content" store; `$CMS_FOR(r : dataset:team, where=…, sort=…, limit=…)$` |
+| Template inheritance | `abstract` page templates, multi-level `$CMS_EXTENDS$` / `$CMS_BLOCK$` / `$CMS_PARENT$`, child inherits parent CDL editors + bodies; page templates only |
+| Multi-language | Per-editor `localizable` (value `{type:"L10N", values:{de,en}}`), project locales + default + fallback chain; `{locale}` path placeholder, default pattern prefixes all, setting "default locale without prefix", hreflang |
+| Pagination | New CDL editor type `pagination` (source nav folder / dataset, page size, sort); planner emits N entries; `$CMS_PAGINATION…$` scope |
+| Build insight | Reason chain per plan entry stored per run + `POST /generations/plan` dry run |
+| Global search | **Embedded Lucene index** (after-commit indexing, rebuildable, single-instance hazard documented) |
+| Order | Dependency order M16 → M24 (multi-language last) |
+
+## Skeleton (IDs are binding for cross-epic `depends`)
+
+### M16 — render-reference-foundations (`16-m16-render-reference-foundations`)
+- 1 compile-cache: M16.1.1 `CompiledTemplateCache` (OCTL + CDL) used by generation + preview
+- 2 cross-asset-values: M16.2.1 `AssetValueResolver` SPI in `RenderContext` + renderer; M16.2.2 generation (snapshot) + preview (live) implementations, dependency recording, golden tests
+- 3 reference-materialization: M16.3.1 content references written on save in the same revision + previous rows closed; M16.3.2 template OCTL references (`OCTL_INCLUDE`/`OCTL_VALUE`/`OCTL_REF`) written on template save; M16.3.3 revision-aware reference queries, `BuildPlanner`/usages migrated, generation stops inserting, duplicate cleanup changeset
+- 4 channel-path-settings: M16.4.1 channel settings (index file, trailing slash, URL strategy, file extension) wired into `OutputPathResolver`/`LiveOutputPathResolver`
+- 5 render-safety-validation: M16.5.1 include cycle guard across nested renders + diagnostic constants; M16.5.2 server-side `ContentValidator` on page/section save
+- 6 e2e-verification: M16.6.1 regression + journey
+
+### M17 — global-store (`17-m17-global-store`)
+- 1 domain: M17.1.1 `GLOBAL_SET` asset type + `GLOBALS` folder scope + root provisioning; M17.1.2 `GlobalSetService` (schema DEVELOPER / values EDITOR, CDL compile, validation, references); M17.1.3 export/import + diff/usages coverage
+- 2 api: M17.2.1 `GlobalsController` + DTOs + OpenAPI regen
+- 3 octl: M17.3.1 `global:` prefix + `$CMS_GLOBAL$` scope, generation/preview resolvers, dependency edges → incremental rebuild
+- 4 ui: M17.4.1 Globals store (nav rail, tree, set value editor, schema editor, time-travel read-only)
+- 5 docs-e2e: M17.5.1 docs; M17.5.2 E2E journey
+
+### M18 — parsable-text-media (`18-m18-parsable-text-media`)
+- 1 domain: M18.1.1 `processCms` flag + text MIME allow-list + extension mapping; M18.1.2 text content editing endpoint (new blob, revision, SVG sanitize)
+- 2 compile-on-save: M18.2.1 OCTL validation on flag/content change + reference materialization
+- 3 generation-preview: M18.3.1 render stage for processed media in generation + incremental planning of media entries; M18.3.2 preview/share serves rendered output
+- 4 ui: M18.4.1 media drawer toggle + text editor with diagnostics
+- 5 docs-e2e: M18.5.1 docs + E2E
+
+### M19 — content-store (`19-m19-content-store`)
+- 1 domain: M19.1.1 `DATASET` + `RECORD` asset types + `CONTENT` scope; M19.1.2 `DatasetService`/`RecordService` + schema-change migration of records (compound revision); M19.1.3 export/import + usages + diff
+- 2 api: M19.2.1 controllers + paginated/filterable record listing
+- 3 query-octl: M19.3.1 pure dataset query model (where/sort/limit/offset) in sf-template; M19.3.2 `$CMS_FOR(… : dataset:uid, …)$`, `record:` values, reference editor to records, resolvers + dependency edges + golden tests
+- 4 ui: M19.4.1 Content store + dataset schema editor; M19.4.2 record grid + record editor + picker support
+- 5 docs-e2e: M19.5.1 docs; M19.5.2 E2E
+
+### M20 — template-inheritance (`20-m20-template-inheritance`)
+- 1 language: M20.1.1 lexer/parser/AST `EXTENDS`/`BLOCK`/`END_BLOCK`/`PARENT` + diagnostics; M20.1.2 compiler chain resolution (cycle, depth cap, block merge) + golden runner with stub resolver
+- 2 domain: M20.2.1 `abstract` page templates + effective (inherited) CDL; M20.2.2 parent-change cascade validation (compound revision), `TEMPLATE` edges child→parent, planner rebuilds descendants' pages
+- 3 rendering: M20.3.1 generation + preview render linked templates
+- 4 ui: M20.4.1 template IDE: abstract toggle, parent + effective editors, OCTL diagnostics via context-aware validate endpoint
+- 5 docs-e2e: M20.5.1 docs + E2E
+
+### M21 — pagination (`21-m21-pagination`)
+- 1 cdl: M21.1.1 `pagination` editor type (attributes, stored value, one-per-template diagnostic, editor doc)
+- 2 planning: M21.2.1 planner emits N entries (`pageNumber`), `{pageNumber}` path pattern, collision detection, deps keyed per entry; M21.2.2 sitemap/search index/URL registry/canonical + rel prev/next
+- 3 rendering: M21.3.1 `$CMS_PAGINATION$` scope in generation + preview (`?page=n`) + golden tests
+- 4 ui: M21.4.1 pagination editor component + preview page selector
+- 5 docs-e2e: M21.5.1 docs + E2E
+
+### M22 — build-insight (`22-m22-build-insight`)
+- 1 planner: M22.1.1 reason chains in `BuildPlanner` (incl. §18.2 navigation-change rule); M22.1.2 `generation_run_plan` persistence
+- 2 api: M22.2.1 `POST /generations/plan` dry run + `GET /generations/{runId}/plan`; M22.2.2 `GET /assets/{uuid}/impact`
+- 3 ui: M22.3.1 dry-run preview in generation dialog; M22.3.2 run "Rebuilt pages" tab + asset impact panel
+- 4 incremental-correctness: M22.4.1 incremental runs publish the complete site (carry-forward of unchanged output per target, removed paths, full site page list for sitemap/search index, per-target baseline) — **verified existing bug, do first**
+- 5 docs-e2e: M22.5.1 docs + E2E
+
+### M23 — global-search (`23-m23-global-search`)
+- 1 index-core: M23.1.1 Lucene dependency + `SearchIndexService` (per-project directory, document model, analyzers); M23.1.2 text extraction per asset type
+- 2 index-lifecycle: M23.2.1 after-commit incremental indexing from revision summary; M23.2.2 index revision stamp, startup rebuild, admin reindex endpoint, project delete
+- 3 query-api: M23.3.1 `GET /search` (paging, highlights, type facets, safe query parsing)
+- 4 ui: M23.4.1 Ctrl+K command palette; M23.4.2 full search page with facets
+- 5 docs-e2e: M23.5.1 docs + benchmark + E2E
+
+### M24 — multi-language (`24-m24-multi-language`)
+- 1 project-locales: M24.1.1 project locale config (domain, API, revisioned); M24.1.2 settings UI tab
+- 2 cdl-storage: M24.2.1 `localizable` CDL attribute + `L10N` value shape + validation; M24.2.2 toggle migration (compound revision) + localizable media metadata + nav labels
+- 3 rendering: M24.3.1 locale in `RenderContext`, fallback resolution, `$CMS_META(locale)$`, locale-aware filters, `$CMS_LOCALES$`; M24.3.2 generation fan-out page×channel×locale, `{locale}` placeholder, URL registry locale key, hreflang; M24.3.3 locale-aware globals/datasets/pagination/search
+- 4 ui: M24.4.1 editor locale switcher + fallback indicator (pages, globals, records, media); M24.4.2 missing-translation indicators
+- 5 export-import: M24.5.1 locale settings in archive + protocol bump
+- 6 docs-e2e: M24.6.1 docs + E2E
+
+## Steps
+- [x] 1. Write skeleton (this file)
+- [x] 2. Write epic/feature/task files per epic (one subagent per epic, in parallel)
+- [x] 3. Add M16–M24 to `tasks/README.md` epic map
+- [x] 4. Verify: every skeleton ID exists, front-matter parses, `depends` ids exist, no dangling links
+
+## Review
+- **Output:** 131 files in `tasks/16-…` to `tasks/24-…`: 9 epic READMEs, 47 feature READMEs, 75 task files.
+- **Checks (script):** all 75 skeleton IDs have exactly one task file, with none extra; every front-matter has
+  `id/status/depends/epic/feature/area` and `status: todo`; all `depends` resolve; no dependency cycles; no epic
+  depends on a later epic; no broken relative `.md` links.
+- **Verified existing bugs found while planning (now tracked as tasks):**
+  - Incremental generation publishes an incomplete site. `FilesystemTargetWriter.stage` writes only rebuilt files
+    into a fresh build dir and `current` is flipped to it → M22.4.1.
+  - `RenderPipeline` stores dependencies per page UUID with `put`, so multi-channel pages lose deps → M21.2.1.
+  - Include cycle probably ends in `StackOverflowError`: nested renders reset `State` (found by reading the code,
+    not run) → M16.5.1.
+  - `GenerationService` passes the invalid URL strategy `"DEFAULT"`, and channel settings are ignored → M16.4.1.
+  - `asset_reference` rows are never closed and are only written by generation → M16.3.x.
+  - Cross-asset `$CMS_VALUE` renders empty → M16.2.x.
+  - `ContentValidator` is never called → M16.5.2.
+- **Decisions the writers made (each recorded in its epic Notes; review before implementing):**
+  - M16.5.2: structural errors return 422 on save; `required` fails only at generation (`SF-GEN-0120`), per spec §10.5
+    and autosave.
+  - M16.1.1: Caffeine needs to be added. The cache key must include resolved references, not just the source.
+  - M17: shorthand is `$CMS_VALUE(CMS_GLOBAL.site.title)$` (like `CMS_PAGE`), not a standalone `$CMS_GLOBAL…$`
+    instruction. Property sets can't have bodies/catalogs. Separate schema (DEVELOPER) and content (EDITOR)
+    endpoints. New projects bootstrap one more folder.
+  - M19: `DATASET` schemas live in a new fixed `datasets` folder in the Templates store; only records live in the
+    Content store. The record→dataset link reuses `template_asset_id`. `where=` uses the OCTL `Expr` grammar.
+  - M20: one parent per template, stored as `payload.parentTemplateRef`. The effective CDL is computed on read, not
+    copied into children. A parent change validates descendants but writes nothing.
+  - M21: dataset source lives inside M21.2.1/3.1/4.1 but is not a hard dependency on M19 (nav source ships first).
+  - M23: projects are archived, not deleted, so the index is closed on archive. The after-commit hook is new (none
+    exists). German + English analyzers. Search is unavailable, not a startup failure, when the index is locked.
+  - M24: container editors (`group/list/catalog/pagination`) can't be `localizable`, only leaves can. `required` is
+    checked only for the default locale. Locale config is not revision-scoped (like other `Project` columns).
+    Missing `{locale}` in a path → `SF-GEN-0111`.
+- **Cross-epic coordination notes:** Liquibase changelog numbers, `SF-*` diagnostic numbers and the export
+  `protocolVersion` bump are assigned at implementation time. Several epics add them and the order may change.
+  The golden-runner stub resolver is needed by both M19.3.2 and M20.1.2; whichever lands first builds it.
+- **Spec follow-ups (not tracked as tasks):** §2.2/Q2 (multi-language non-goal reversed), §5.4 column names + `NAV`
+  kind, §7.1, §16.2 (new instructions), §18.2/§18.4/§18.6.
+
+---
+
 # Generation targets — per-target output location + management UI — Plan
 
 ## Goal

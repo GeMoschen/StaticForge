@@ -84,6 +84,23 @@ Rules of thumb:
 | 06 | [m6-revision-ux](06-m6-revision-ux/README.md) | 17, 24 | Journeys 5–8 pass |
 | 07 | [m7-hardening](07-m7-hardening/README.md) | 2, 25, 26 | Quality gates (§25.7) met; pen-test findings closed |
 
+### Post-roadmap feature epics (M16–M24)
+
+Inserted after the §27 roadmap the same way `M8`–`M15` were. Decisions and the binding
+feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M24").
+
+| # | Epic | Spec (§) | Exit criterion |
+|---|---|---|---|
+| 16 | [m16-render-reference-foundations](16-m16-render-reference-foundations/README.md) | 5.4, 16, 18 | Cross-asset values render; references current on save; compile cache; channel path settings honored |
+| 17 | [m17-global-store](17-m17-global-store/README.md) | 5, 14, 16 | Property sets editable and readable via `$CMS_GLOBAL$` / `global:` |
+| 18 | [m18-parsable-text-media](18-m18-parsable-text-media/README.md) | 11, 16, 18 | Flagged text media rendered through OCTL in preview and generation |
+| 19 | [m19-content-store](19-m19-content-store/README.md) | 5, 14, 16 | Dataset records editable and iterable with where/sort/limit |
+| 20 | [m20-template-inheritance](20-m20-template-inheritance/README.md) | 13, 16 | Multi-level `$CMS_EXTENDS$`/`$CMS_BLOCK$` with inherited CDL |
+| 21 | [m21-pagination](21-m21-pagination/README.md) | 14, 18 | One page generates N paginated outputs from nav or dataset |
+| 22 | [m22-build-insight](22-m22-build-insight/README.md) | 18 | Dry-run plan + stored rebuild reasons per run |
+| 23 | [m23-global-search](23-m23-global-search/README.md) | 20, 24 | Ctrl+K search across all stores backed by Lucene |
+| 24 | [m24-multi-language](24-m24-multi-language/README.md) | 2.2, 14–18 | Localizable editors, per-locale output + hreflang |
+
 Epics are sequential **hard** dependencies. Within an epic, features and tasks declare
 their own `depends` graph; anything with no dependencies can be parallelised across
 agents.
