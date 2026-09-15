@@ -1,6 +1,6 @@
 ---
 id: M16.1.1
-status: todo
+status: done
 depends: []
 epic: m16-render-reference-foundations
 feature: compile-cache
@@ -50,17 +50,17 @@ build has no cache library yet.
 
 ## Acceptance criteria
 
-- [ ] Generation integration test with 50 pages sharing 1 page template and 2 section templates on
+- [x] Generation integration test with 50 pages sharing 1 page template and 2 section templates on
       one channel: exactly 3 OCTL compiles and 3 CDL compiles per run.
-- [ ] Preview test: two consecutive renders of the same page → 1 compile. Editing the template
+- [x] Preview test: two consecutive renders of the same page → 1 compile. Editing the template
       (new version) → recompile. Renaming the UID of an asset referenced by `$CMS_REF(page:x)$` →
       the next render does not use the stale mapping.
-- [ ] Time-travel preview at revision N uses the template version valid at N, never a newer
+- [x] Time-travel preview at revision N uses the template version valid at N, never a newer
       cached one.
-- [ ] Existing suites stay green: `GenerationRendererNavigationTest`,
+- [x] Existing suites stay green: `GenerationRendererNavigationTest`,
       `GenerationRendererRelativeUrlTest`, `GenerationIntegrationTest`, the preview tests, and
       `GoldenFileRenderTest` (unaffected, since it compiles directly).
-- [ ] `./gradlew :server:sf-generate:test :server:sf-domain:test` green; `checkModuleLayers` green.
+- [x] `./gradlew :server:sf-generate:test :server:sf-domain:test` green; `checkModuleLayers` green.
 
 ## Out of scope
 
@@ -78,3 +78,31 @@ build has no cache library yet.
   per-build memo on `(templateUuid, channel)` only, which the snapshot makes safe anyway.
 - Never share a `CompiledTemplate` between projects. Resolution runs against one project's assets
   (see `M9`), so include `projectId` in every cross-request key.
+
+### Implementation notes
+
+- New in sf-domain `asset/template`: `CompiledTemplateCache` (Spring `@Component`, Caffeine), `TemplateCompileMemo`
+  (per-build tier, `ConcurrentHashMap.computeIfAbsent`), `CompiledChannel` (OctlResult + ContentDefinition) and the
+  package-private `MeteredTemplateCompiler`, which counts real compiles in the Micrometer counter
+  `sf.template.compiles{kind=cdl|octl}` (the test hook). Caffeine added as `libs.caffeine` (BOM-managed version) to
+  sf-domain only; `sf.cache.compiled-templates.max-size` / `idle` in `application.yml` (defaults 2000 / 30m).
+- Per-build tier: keyed `(templateUuid, channel)` (CDL: `templateUuid`). `CompiledTemplateCache.buildMemo(snapshot)`
+  keeps one memo per snapshot *object* in a weak-keyed (identity) Caffeine cache, so `GenerationService`'s validate
+  call, `RenderPipeline.execute`'s own validate pass and the parallel render all share it without changing the
+  `RenderPipeline.validate/execute` signatures; it is released with the snapshot. `SnapshotAsset` was not extended.
+  `RenderPipeline` gets the cache injected; `GenerationRenderer` has a new 7-arg constructor taking the memo (the
+  existing 4/6-arg constructors, used by tests, create a private memo).
+- Cross-request tier (preview): CDL keyed `(projectId, templateUuid, validFromRevision)`, OCTL keyed
+  `(projectId, templateUuid, validFromRevision, channel)`. The compile runs with a recording `ReferenceResolver` that
+  stores every `(assetType, uid) → UUID|unresolved` lookup; each hit re-resolves them and recompiles on any
+  difference — this also catches a previously unresolvable reference that now resolves, not only renames/deletes.
+  Strategy documented in the class Javadoc. Concurrent misses may compile twice (last write wins).
+- Preview behaviour fix required by the time-travel criterion: `PageRenderService` previously rendered time-travel
+  previews with the *current* page/section templates; it now loads template versions valid at the requested revision
+  (`templateAt`), threading `revision` through the block resolver alongside the render budget.
+- `TemplateServiceImpl` still compiles uncached on save.
+- Tests: `CompiledTemplateCacheTest` (sf-domain, 7), `RenderPipelineCompileCacheTest` (sf-generate: 50 pages, 1 page
+  template with a body of 3 instances of 2 section templates; validate + execute → exactly 3 OCTL and 3 CDL compiles;
+  a new snapshot compiles again), `PreviewCompileCacheIntegrationTest` (sf-app: 2 renders → 1 compile, channel edit →
+  recompile, time travel renders the old version, UID rename of a `$CMS_REF(page:x)$` target → recompiled, renders
+  unresolved instead of the stale uid).

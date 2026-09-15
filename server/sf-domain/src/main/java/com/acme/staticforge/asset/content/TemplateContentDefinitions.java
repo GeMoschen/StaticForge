@@ -5,10 +5,10 @@ import com.acme.staticforge.template.content.ContentDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
- * Obtains a page/section template's {@link ContentDefinition} for content validation, on save and
- * on publish alike. It compiles the template payload's {@code contentDefinition} CDL source (the
- * compiler returns a best-effort definition even for CDL with errors). This is the single seam to
- * switch to the compiled-template cache (spec §21.5, {@code M16.1.1}).
+ * Obtains a page/section template's {@link ContentDefinition} for save-time content validation. It
+ * compiles the template payload's {@code contentDefinition} CDL source (the compiler returns a
+ * best-effort definition even for CDL with errors). Generation's publish check uses the build's
+ * {@code TemplateCompileMemo} instead, so a build compiles each CDL once.
  */
 public final class TemplateContentDefinitions {
 

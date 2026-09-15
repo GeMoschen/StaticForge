@@ -24,6 +24,8 @@ spring-security-crypto = { module = "org.springframework.security:spring-securit
 jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
 tika-core = { module = "org.apache.tika:tika-core", version.ref = "tika" }
 metadata-extractor = { module = "com.drewnoakes:metadata-extractor", version.ref = "metadataExtractor" }
+# Caffeine (version managed by the Spring Boot BOM) — in-process caches (§21.5)
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }
 liquibase-core = { module = "org.liquibase:liquibase-core" }
 h2 = { module = "com.h2database:h2" }
 postgresql = { module = "org.postgresql:postgresql", version = "42.7.4" }

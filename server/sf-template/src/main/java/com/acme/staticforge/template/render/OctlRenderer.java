@@ -1,6 +1,7 @@
 package com.acme.staticforge.template.render;
 
 import com.acme.staticforge.template.diagnostic.Diagnostic;
+import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.octl.Accessor;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.Expr;
@@ -14,12 +15,14 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Thread-safe, side-effect-free stack-machine renderer (spec §16.5, §16.10). Walks the
@@ -28,21 +31,18 @@ import java.util.UUID;
  * renderer instance is safe to share across concurrent virtual threads.
  *
  * <p>Guard rails throw {@link RenderLimitException} so a caller can fail the affected file
- * with a diagnostic rather than abort the whole build.
+ * with a diagnostic rather than abort the whole build. They are enforced through the context's
+ * {@link RenderBudget} — shared with every nested render the resolvers trigger, so limits apply
+ * to the whole page — or a fresh budget when the context carries none.
  */
 public final class OctlRenderer implements Renderer {
-
-    private static final int MAX_INCLUDE_DEPTH = 32;
-    private static final int MAX_LOOP_ITERATIONS = 100_000;
-    private static final int MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
-    private static final long TIME_BUDGET_NANOS = 5_000_000_000L;
 
     public OctlRenderer() {}
 
     @Override
     public RenderResult render(CompiledTemplate template, RenderContext context) {
-        State s = new State(template, context);
-        s.startNanos = System.nanoTime();
+        RenderBudget budget = context.budget() != null ? context.budget() : new RenderBudget();
+        State s = new State(template, context, budget);
         renderNodes(template.nodes(), s);
         return new RenderResult(s.out.toString(), s.deps, s.warnings);
     }
@@ -53,7 +53,7 @@ public final class OctlRenderer implements Renderer {
 
     private void renderNodes(List<OctlNode> nodes, State s) {
         for (OctlNode node : nodes) {
-            s.checkTime();
+            s.budget.checkTime();
             switch (node) {
                 case OctlNode.Text t -> s.append(t.value());
                 case OctlNode.Value v -> renderValue(v, s);
@@ -107,7 +107,9 @@ public final class OctlRenderer implements Renderer {
 
     private void renderBody(OctlNode.Body b, State s) {
         BlockResolver resolver = s.context.blockResolver();
-        s.append(resolver == null ? "" : nullToEmpty(resolver.renderBody(b.name())));
+        if (resolver != null) {
+            s.appendResolved(() -> resolver.renderBody(b.name()));
+        }
     }
 
     /**
@@ -127,7 +129,9 @@ public final class OctlRenderer implements Renderer {
         JsonNode cards = value == null ? MissingNode.getInstance() : value.path("cards");
         collectCatalogDeps(cards, s);
         BlockResolver resolver = s.context.blockResolver();
-        s.append(resolver == null ? "" : nullToEmpty(resolver.renderCatalog(cards)));
+        if (resolver != null) {
+            s.appendResolved(() -> resolver.renderCatalog(cards));
+        }
     }
 
     /** {@code State.collectDeps} only recognizes a {@code uuid} field; cards reference their section template via {@code templateRef}. */
@@ -148,22 +152,18 @@ public final class OctlRenderer implements Renderer {
         }
     }
 
+    /**
+     * Include depth and cycles are not tracked here: the resolver renders the section through a
+     * nested {@link Renderer#render} call, guarded by {@link RenderBudget#withTemplate}.
+     */
     private void renderInclude(OctlNode.Include i, State s) {
-        s.includeDepth++;
-        if (s.includeDepth > MAX_INCLUDE_DEPTH) {
-            throw new RenderLimitException(Diagnostic.error(
-                    "SF-TPL-0130", "Include depth exceeded", i.line(), i.col()));
-        }
         // Resolving the referenced template's UUID keeps it in the dependency set.
         noteReference(i.accessor(), s);
         BlockResolver resolver = s.context.blockResolver();
-        if (resolver == null) {
-            s.append(""); // full include rendering is deferred (needs the generation snapshot)
-        } else {
+        if (resolver != null) {
             String uid = resolvedUid(i.accessor(), s);
-            s.append(nullToEmpty(resolver.renderInclude(uid, namedArgs(i.args()))));
+            s.appendResolved(() -> resolver.renderInclude(uid, namedArgs(i.args())));
         }
-        s.includeDepth--;
     }
 
     private void renderNavigation(OctlNode.Navigation nav, State s) {
@@ -178,7 +178,9 @@ public final class OctlRenderer implements Renderer {
         BlockResolver resolver = s.context.blockResolver();
         if (nav.variable() == null) {
             // Leaf form: the fixed default-rendered markup (NavigationHtmlRenderer), unchanged.
-            s.append(resolver == null ? "" : nullToEmpty(resolver.renderNavigation(navFolderUuid, namedArgs(nav.args()))));
+            if (resolver != null) {
+                s.appendResolved(() -> resolver.renderNavigation(navFolderUuid, namedArgs(nav.args())));
+            }
             return;
         }
         // Block form: fetch the top-level children as data and let the template's own body
@@ -195,11 +197,7 @@ public final class OctlRenderer implements Renderer {
         }
         int count = children.size();
         for (int index = 0; index < count; index++) {
-            s.loopIterations++;
-            if (s.loopIterations > MAX_LOOP_ITERATIONS) {
-                throw new RenderLimitException(Diagnostic.error(
-                        "SF-TPL-0131", "Loop iteration limit exceeded", line, col));
-            }
+            s.budget.countLoopIteration(line, col);
             s.pushLoop(new LoopFrame(variable, children.get(index), index, count, depth, body));
             try {
                 renderNodes(body, s);
@@ -258,11 +256,7 @@ public final class OctlRenderer implements Renderer {
         }
         int count = list.size();
         for (int index = 0; index < count; index++) {
-            s.loopIterations++;
-            if (s.loopIterations > MAX_LOOP_ITERATIONS) {
-                throw new RenderLimitException(Diagnostic.error(
-                        "SF-TPL-0131", "Loop iteration limit exceeded", f.line(), f.col()));
-            }
+            s.budget.countLoopIteration(f.line(), f.col());
             s.pushLoop(new LoopFrame(f.variable(), list.get(index), index, count));
             try {
                 renderNodes(f.body(), s);
@@ -274,9 +268,8 @@ public final class OctlRenderer implements Renderer {
 
     /**
      * {@code $CMS_FOR$}'s accessor resolution: a {@code nav:uid} reference bootstraps its
-     * top-level children from {@link BlockResolver#resolveNavigationChildren} (the generic {@link
-     * #resolve} always returns {@code MissingNode} for any asset reference — cross-asset value
-     * rendering there is deferred/unsupported); every other accessor goes through the normal path.
+     * top-level children from {@link BlockResolver#resolveNavigationChildren}; every other accessor
+     * (including a cross-asset {@code page:uid.list}) goes through the normal {@link #resolve} path.
      */
     private JsonNode resolveForList(Accessor accessor, List<NamedArg> args, State s) {
         if (accessor.isAssetReference() && "nav".equals(accessor.assetType())) {
@@ -325,8 +318,7 @@ public final class OctlRenderer implements Renderer {
     private JsonNode resolve(Accessor accessor, State s) {
         if (accessor.isAssetReference()) {
             noteReference(accessor, s);
-            // Cross-asset value rendering requires the generation snapshot; deferred.
-            return MissingNode.getInstance();
+            return resolveCrossAsset(accessor, s);
         }
         List<String> path = accessor.path();
         if (path.isEmpty()) {
@@ -355,6 +347,31 @@ public final class OctlRenderer implements Renderer {
             return resolveSub(setValue, path, 1, s);
         }
         return resolveSub(s.context.values(), path, 0, s);
+    }
+
+    /**
+     * {@code assetType:uid.path}: the target's root value object from the context's {@link
+     * AssetValueResolver}, walked by the accessor's path exactly like a local value. Empty when
+     * the context has no resolver or the reference did not resolve at compile time. A target the
+     * resolver reports as missing (soft-deleted since compile) also renders empty, with one
+     * {@code SF-TPL-0112} warning per reference (spec §16.4).
+     */
+    private JsonNode resolveCrossAsset(Accessor accessor, State s) {
+        AssetValueResolver resolver = s.context.assetValueResolver();
+        UUID uuid = s.template.references().get(accessor.referenceKey());
+        if (resolver == null || uuid == null) {
+            return MissingNode.getInstance();
+        }
+        JsonNode root = resolver.valueOf(accessor.assetType(), uuid);
+        if (root == null || root.isMissingNode()) {
+            if (s.missingTargets.add(accessor.referenceKey())) {
+                s.warnings.add(Diagnostic.warning(
+                        DiagnosticCodes.OCTL_MISSING_VALUE_TARGET,
+                        "Cross-asset value target is missing or deleted: " + accessor.referenceKey(), 0, 0));
+            }
+            return MissingNode.getInstance();
+        }
+        return resolveSub(root, accessor.path(), 0, s);
     }
 
     private JsonNode resolveMeta(Accessor accessor, State s) {
@@ -594,30 +611,33 @@ public final class OctlRenderer implements Renderer {
         final StringBuilder out = new StringBuilder(4096);
         final Set<UUID> deps = new LinkedHashSet<>();
         final List<Diagnostic> warnings = new ArrayList<>();
+        /** Reference keys already warned about as missing, so a loop emits one warning, not one per iteration. */
+        final Set<String> missingTargets = new HashSet<>();
         final Deque<LoopFrame> loops = new ArrayDeque<>();
         final Deque<Map<String, JsonNode>> vars = new ArrayDeque<>();
-        long startNanos;
-        int includeDepth;
-        int loopIterations;
+        final RenderBudget budget;
 
-        State(CompiledTemplate template, RenderContext context) {
+        State(CompiledTemplate template, RenderContext context, RenderBudget budget) {
             this.template = template;
             this.context = context;
+            this.budget = budget;
         }
 
         void append(String s) {
             out.append(s);
-            if (out.length() > MAX_OUTPUT_BYTES) {
-                throw new RenderLimitException(Diagnostic.error(
-                        "SF-TPL-0132", "Output size limit exceeded (32 MB)", 0, 0));
-            }
+            budget.chargeOutput(s.length());
         }
 
-        void checkTime() {
-            if (System.nanoTime() - startNanos > TIME_BUDGET_NANOS) {
-                throw new RenderLimitException(Diagnostic.error(
-                        "SF-TPL-0133", "Render time budget exceeded (5 s)", 0, 0));
-            }
+        /**
+         * Appends a {@link BlockResolver}'s output. Nested renders sharing this budget have
+         * already charged their own output, so only the remainder (markup the resolver produced
+         * itself) is charged here — the page's output is counted once, however deeply nested.
+         */
+        void appendResolved(Supplier<String> resolverCall) {
+            long before = budget.outputChars();
+            String text = nullToEmpty(resolverCall.get());
+            out.append(text);
+            budget.chargeOutput(Math.max(0, text.length() - (budget.outputChars() - before)));
         }
 
         void pushLoop(LoopFrame frame) {

@@ -5,7 +5,8 @@ import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.asset.content.PageContentValidator;
 import com.acme.staticforge.asset.content.SectionTemplateLookup;
 import com.acme.staticforge.asset.content.SectionTemplateLookup.SectionTemplate;
-import com.acme.staticforge.asset.content.TemplateContentDefinitions;
+import com.acme.staticforge.asset.template.CompiledTemplateCache;
+import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -65,6 +66,7 @@ public class RenderPipeline {
     private final ChannelService channelService;
     private final MeterRegistry meterRegistry;
     private final UrlRegistryService urlRegistryService;
+    private final CompiledTemplateCache compiledTemplates;
 
     private volatile Map<UUID, Set<UUID>> dependenciesByPage = Map.of();
 
@@ -73,21 +75,25 @@ public class RenderPipeline {
             ProjectRepository projects,
             ChannelService channelService,
             MeterRegistry meterRegistry,
-            UrlRegistryService urlRegistryService) {
+            UrlRegistryService urlRegistryService,
+            CompiledTemplateCache compiledTemplates) {
         this.properties = properties;
         this.projects = projects;
         this.channelService = channelService;
         this.meterRegistry = meterRegistry;
         this.urlRegistryService = urlRegistryService;
+        this.compiledTemplates = compiledTemplates;
     }
 
     /**
      * Compiles every page template channel in the plan and returns the union of ERROR diagnostics
      * (empty when the plan validates cleanly). Section templates are validated transitively as
-     * the renderer encounters them.
+     * the renderer encounters them. Compiles go through the snapshot's build memo, so the render
+     * stage of the same build reuses them.
      */
     public List<Diagnostic> validate(Snapshot snapshot, BuildPlan plan) {
-        GenerationRenderer renderer = new GenerationRenderer(snapshot, null, "", channelService);
+        GenerationRenderer renderer = new GenerationRenderer(
+                snapshot, null, "", channelService, null, null, compiledTemplates.buildMemo(snapshot));
         Set<String> seen = new HashSet<>();
         List<Diagnostic> errors = new ArrayList<>();
         for (PlanEntry entry : plan.entries()) {
@@ -118,8 +124,8 @@ public class RenderPipeline {
      * findings are the save path's concern ({@code PageContentValidation}) and don't block here.
      */
     public Map<UUID, Diagnostic> incompletePages(Snapshot snapshot, BuildPlan plan) {
-        SectionTemplateLookup sections = snapshotSectionTemplates(snapshot);
-        Map<UUID, ContentDefinition> pageDefinitions = new HashMap<>();
+        TemplateCompileMemo memo = compiledTemplates.buildMemo(snapshot);
+        SectionTemplateLookup sections = snapshotSectionTemplates(snapshot, memo);
         Map<UUID, Diagnostic> incomplete = new LinkedHashMap<>();
         Set<UUID> seen = new HashSet<>();
         for (PlanEntry entry : plan.entries()) {
@@ -131,8 +137,7 @@ public class RenderPipeline {
             if (template == null) {
                 continue;
             }
-            ContentDefinition definition = pageDefinitions.computeIfAbsent(
-                    template.uuid(), uuid -> TemplateContentDefinitions.of(template.payload()));
+            ContentDefinition definition = definitionOf(memo, template);
             List<ContentIssue> blocking = contentValidator.validatePage(definition, page.payload(), sections).stream()
                     .filter(issue -> issue.kind() == ContentIssue.Kind.COMPLETENESS)
                     .filter(issue -> issue.severity() == Severity.ERROR)
@@ -151,18 +156,22 @@ public class RenderPipeline {
         return incomplete;
     }
 
-    /** Section templates as of the snapshot, each compiled at most once per validation pass. */
-    private static SectionTemplateLookup snapshotSectionTemplates(Snapshot snapshot) {
+    /** Section templates as of the snapshot; definitions come from the build's compile memo. */
+    private static SectionTemplateLookup snapshotSectionTemplates(Snapshot snapshot, TemplateCompileMemo memo) {
         Map<String, Optional<SectionTemplate>> resolved = new HashMap<>();
         return templateRef -> resolved.computeIfAbsent(templateRef, ref -> {
             try {
                 return Optional.ofNullable(snapshot.assetByUuid(UUID.fromString(ref)))
                         .filter(asset -> asset.type() == AssetType.SECTION_TEMPLATE && !asset.deleted())
-                        .map(asset -> new SectionTemplate(asset.uid(), TemplateContentDefinitions.of(asset.payload())));
+                        .map(asset -> new SectionTemplate(asset.uid(), definitionOf(memo, asset)));
             } catch (IllegalArgumentException e) {
                 return Optional.empty();
             }
         });
+    }
+
+    private static ContentDefinition definitionOf(TemplateCompileMemo memo, SnapshotAsset template) {
+        return memo.definition(template.uuid(), template.payload().path("contentDefinition").asText(""));
     }
 
     /**
@@ -193,7 +202,8 @@ public class RenderPipeline {
 
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
         GenerationRenderer renderer =
-                new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId);
+                new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId,
+                        compiledTemplates.buildMemo(snapshot));
 
         Map<UUID, Diagnostic> incomplete = incompletePages(snapshot, plan);
         BuildPlan publishable = incomplete.isEmpty()

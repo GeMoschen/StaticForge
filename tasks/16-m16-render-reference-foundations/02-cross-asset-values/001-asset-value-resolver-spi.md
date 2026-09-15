@@ -1,6 +1,6 @@
 ---
 id: M16.2.1
-status: todo
+status: done
 depends: []
 epic: m16-render-reference-foundations
 feature: cross-asset-values
@@ -46,17 +46,17 @@ The pieces involved:
 
 ## Acceptance criteria
 
-- [ ] Unit tests in sf-template with a stub `AssetValueResolver` cover: scalar editor value, nested
+- [x] Unit tests in sf-template with a stub `AssetValueResolver` cover: scalar editor value, nested
       path, list iteration via `$CMS_FOR(link : page:about.links)$`, `$CMS_IF(page:about.flag)$`, a
       missing asset (renders empty) and filters on the value (`| upper`).
-- [ ] The dependency set still contains the target UUID in every case, including when the resolver
+- [x] The dependency set still contains the target UUID in every case, including when the resolver
       returns `MissingNode`.
-- [ ] Rendering with no resolver matches today's output byte-for-byte. The existing golden suites
+- [x] Rendering with no resolver matches today's output byte-for-byte. The existing golden suites
       (`GoldenFileRenderTest`, `MarkdownChannelGoldenTest`) pass unchanged.
-- [ ] New golden directory `render/value-cross-asset/` (template + content + a
+- [x] New golden directory `render/value-cross-asset/` (template + content + a
       `references.json`/stub fixture) is picked up by the runner. Extend `GoldenFileRenderTest` so
       it can supply a stub resolver from a fixture file.
-- [ ] `SF-TPL-0111` is emitted for a path-less cross-asset value and is documented in
+- [x] `SF-TPL-0111` is emitted for a path-less cross-asset value and is documented in
       `DiagnosticCodes`.
 
 ## Out of scope
@@ -73,3 +73,22 @@ The pieces involved:
   walk, so loop-variable and `_index` semantics can't drift.
 - Only depend on `UUID`/`JsonNode` in sf-template. `AssetType` lives in sf-domain and must not leak
   in (ADR-0001), which is why the asset type is passed as the accessor's string.
+
+### Implementation notes
+
+- `AssetValueResolver` (sf-template, `template/render`) + `RenderContext.Builder.assetValueResolver`. `OctlRenderer.resolve`
+  delegates asset-reference accessors to `resolveCrossAsset`, which walks the path with the existing `resolveSub`;
+  `$CMS_VALUE`, `$CMS_IF`, `$CMS_SET` and non-`nav:` `$CMS_FOR` all pick it up. The `nav:` branch is unchanged.
+- Contract refinement: template/folder types return an object holding only `_meta` (not `MissingNode`), because
+  `page:about._meta.displayName` could not be walked over a `MissingNode`. `MissingNode` (or `null`) therefore means
+  exactly "target missing / soft-deleted" — the renderer emits one new render-time warning **`SF-TPL-0112`**
+  (`OCTL_MISSING_VALUE_TARGET`) per reference key per render, which gives `M16.2.2` its §16.4 "empty render with a
+  warning". No resolver → no warning, output unchanged.
+- `SF-TPL-0111` is emitted only for `$CMS_VALUE(assetType:uid)$` (Value nodes); `$CMS_REF(page:x)$` and conditions
+  such as `$CMS_IF(page:x)$` are legitimately path-less and do not warn.
+- A cross-asset value that is itself a CATALOG object is rendered via the current page's `BlockResolver` like any
+  catalog value (no special case); recursion through it is bounded by `M16.5.1`'s cycle guard.
+- Golden runner: optional `references.json` (`{"assetType:uid": {uuid, value}}`; `value: null` = missing asset) drives
+  both the compile-time `ReferenceResolver` and a stub `AssetValueResolver`. Cases without it still compile with a null
+  resolver and render without resolvers. New case `render/value-cross-asset/`; unit tests in
+  `CrossAssetValueRenderTest` (13). Guide §2.1/§2.6/§3.1 updated.

@@ -11,6 +11,7 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
@@ -221,7 +222,7 @@ public class TemplateServiceImpl implements TemplateService {
 
     private ReferenceResolver referenceResolver(long projectId) {
         return (assetType, uid) -> {
-            AssetType type = assetTypeForRef(assetType);
+            AssetType type = AssetReferencePrefixes.assetTypeForRef(assetType);
             if (type == null) {
                 return Optional.empty();
             }
@@ -236,25 +237,6 @@ public class TemplateServiceImpl implements TemplateService {
                     .filter(uuid -> FolderScope.fromPayload(assetService.requireCurrent(projectId, uuid).payload())
                             == FolderScope.NAVIGATION);
         };
-    }
-
-    /**
-     * A navigation folder is plain {@code AssetType.FOLDER} under the hood (`M8.1.2`) — there is
-     * no {@code AssetType.NAV} — so a {@code nav:uid} reference needs this one special-case before
-     * falling back to {@code AssetType.valueOf(...)}, mirroring {@code GenerationRenderer}'s and
-     * {@code PageRenderService}'s identical helper. Without it, {@code $CMS_NAVIGATION(nav:uid)$}
-     * always failed compile-on-save validation with a false {@code SF-TPL-0110}, even against a
-     * real {@code FOLDER} asset with that uid.
-     */
-    private static AssetType assetTypeForRef(String assetType) {
-        if ("nav".equals(assetType)) {
-            return AssetType.FOLDER;
-        }
-        try {
-            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return null;
-        }
     }
 
     private ObjectNode buildPayload(
