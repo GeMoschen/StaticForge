@@ -10,7 +10,7 @@ common to every editor type.
 | Attribute | Meaning |
 |---|---|
 | `features [bold, italic, link, list, h2, h3, quote, …]` | which toolbar/formatting features are enabled |
-| `maxChars N` | maximum character count of the plain-text content, enforced on save |
+| `maxChars N` | maximum character count of the plain-text content, blocks publish when violated |
 
 ## Example
 

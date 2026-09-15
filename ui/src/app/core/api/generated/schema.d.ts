@@ -1328,6 +1328,15 @@ export interface components {
             compiledHash?: string;
             compiled?: components["schemas"]["JsonNode"];
         };
+        ContentIssue: {
+            path?: string;
+            code?: string;
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING";
+            message?: string;
+            /** @enum {string} */
+            kind?: "STRUCTURAL" | "COMPLETENESS";
+        };
         PageView: {
             /** Format: uuid */
             uuid?: string;
@@ -1342,6 +1351,7 @@ export interface components {
             nav?: components["schemas"]["JsonNode"];
             output?: components["schemas"]["JsonNode"];
             meta?: components["schemas"]["JsonNode"];
+            issues?: components["schemas"]["ContentIssue"][];
         };
         TemplateView: {
             /** Format: uuid */

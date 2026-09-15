@@ -1,5 +1,11 @@
 package com.acme.staticforge.generate.render;
 
+import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.content.ContentIssue;
+import com.acme.staticforge.asset.content.PageContentValidator;
+import com.acme.staticforge.asset.content.SectionTemplateLookup;
+import com.acme.staticforge.asset.content.SectionTemplateLookup.SectionTemplate;
+import com.acme.staticforge.asset.content.TemplateContentDefinitions;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -12,7 +18,9 @@ import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
+import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
+import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.render.RenderLimitException;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -22,10 +30,13 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -37,7 +48,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * The render pipeline (spec §18.2 RENDER): VALIDATE all needed templates, detect output-path
- * collisions, then render every plan entry in parallel over virtual threads bounded by
+ * collisions, hold back pages with incomplete content ({@code SF-GEN-0120}), then render every
+ * remaining plan entry in parallel over virtual threads bounded by
  * {@link GenerationProperties#getParallelism}. Exposes the last run's page → dependency map for
  * the orchestrator to persist into {@code asset_reference}.
  */
@@ -45,6 +57,8 @@ import org.springframework.stereotype.Service;
 public class RenderPipeline {
 
     private static final String COLLISION_CODE = "SF-GEN-0110";
+
+    private final PageContentValidator contentValidator = new PageContentValidator();
 
     private final GenerationProperties properties;
     private final ProjectRepository projects;
@@ -97,6 +111,61 @@ public class RenderPipeline {
     }
 
     /**
+     * Completeness validation per planned page (spec §10.5, VALIDATE): validates each page's
+     * content, bodies and sections against its snapshot templates and returns one
+     * {@code SF-GEN-0120} per page with ERROR-severity completeness findings (listing their paths),
+     * keyed by page UUID. Those pages are not rendered; the rest of the plan still is. Structural
+     * findings are the save path's concern ({@code PageContentValidation}) and don't block here.
+     */
+    public Map<UUID, Diagnostic> incompletePages(Snapshot snapshot, BuildPlan plan) {
+        SectionTemplateLookup sections = snapshotSectionTemplates(snapshot);
+        Map<UUID, ContentDefinition> pageDefinitions = new HashMap<>();
+        Map<UUID, Diagnostic> incomplete = new LinkedHashMap<>();
+        Set<UUID> seen = new HashSet<>();
+        for (PlanEntry entry : plan.entries()) {
+            if (!seen.add(entry.pageUuid())) {
+                continue;
+            }
+            SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
+            SnapshotAsset template = page == null ? null : GenerationRenderer.templateOf(snapshot, page);
+            if (template == null) {
+                continue;
+            }
+            ContentDefinition definition = pageDefinitions.computeIfAbsent(
+                    template.uuid(), uuid -> TemplateContentDefinitions.of(template.payload()));
+            List<ContentIssue> blocking = contentValidator.validatePage(definition, page.payload(), sections).stream()
+                    .filter(issue -> issue.kind() == ContentIssue.Kind.COMPLETENESS)
+                    .filter(issue -> issue.severity() == Severity.ERROR)
+                    .toList();
+            if (!blocking.isEmpty()) {
+                String findings = blocking.stream()
+                        .map(issue -> issue.path() + " (" + issue.message() + ")")
+                        .collect(Collectors.joining("; "));
+                incomplete.put(entry.pageUuid(), Diagnostic.error(
+                        GenerationDiagnosticCodes.GEN_CONTENT_INCOMPLETE,
+                        "Content incomplete for page '" + (page.uid() != null ? page.uid() : page.uuid()) + "': " + findings,
+                        0,
+                        0));
+            }
+        }
+        return incomplete;
+    }
+
+    /** Section templates as of the snapshot, each compiled at most once per validation pass. */
+    private static SectionTemplateLookup snapshotSectionTemplates(Snapshot snapshot) {
+        Map<String, Optional<SectionTemplate>> resolved = new HashMap<>();
+        return templateRef -> resolved.computeIfAbsent(templateRef, ref -> {
+            try {
+                return Optional.ofNullable(snapshot.assetByUuid(UUID.fromString(ref)))
+                        .filter(asset -> asset.type() == AssetType.SECTION_TEMPLATE && !asset.deleted())
+                        .map(asset -> new SectionTemplate(asset.uid(), TemplateContentDefinitions.of(asset.payload())));
+            } catch (IllegalArgumentException e) {
+                return Optional.empty();
+            }
+        });
+    }
+
+    /**
      * Executes the pipeline with the project's default output configuration
      * ({@code indexUid="index"}, {@code trailingSlash=false}, {@code urlStrategy="RELATIVE"}).
      */
@@ -134,13 +203,23 @@ public class RenderPipeline {
         GenerationRenderer renderer =
                 new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId);
 
-        RenderBatch batch = renderParallel(renderer, plan, snapshot);
+        Map<UUID, Diagnostic> incomplete = incompletePages(snapshot, plan);
+        BuildPlan publishable = incomplete.isEmpty()
+                ? plan
+                : new BuildPlan(
+                        plan.incremental(),
+                        plan.revision(),
+                        plan.entries().stream().filter(e -> !incomplete.containsKey(e.pageUuid())).toList(),
+                        plan.changedAssets());
+        RenderBatch batch = renderParallel(renderer, publishable, snapshot);
 
         this.dependenciesByPage = Map.copyOf(batch.dependencies);
 
         List<RenderedFile> files = new ArrayList<>(batch.files);
         files.sort(Comparator.comparing(RenderedFile::outputPath));
-        return new RenderOutcome(List.copyOf(files), List.copyOf(batch.errors), List.copyOf(batch.warnings));
+        return new RenderOutcome(
+                List.copyOf(files), List.copyOf(batch.errors), List.copyOf(batch.warnings), List.copyOf(incomplete.values()));
+
     }
 
     /** The page UUID → referenced asset UUID map from the most recent {@link #execute}. */

@@ -9,6 +9,7 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -24,8 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * {@link PageService} implementation. Structural validation resolves {@code templateRef}
  * to a live {@code PAGE_TEMPLATE} and each section's {@code templateRef} to a live
- * {@code SECTION_TEMPLATE}; full CDL allow-lists arrive in M2, so any structurally valid
- * section is accepted for now (§10.5 note).
+ * {@code SECTION_TEMPLATE}. Content is validated against those templates' CDL by
+ * {@link PageContentValidation}: structural findings reject the save, including a section whose
+ * template is outside its body's {@code allow} list (§10.5).
  */
 @Service
 @RevisionAware
@@ -35,16 +37,19 @@ public class PageServiceImpl implements PageService {
     private final AssetVersionRepository assetVersionRepository;
     private final AssetService assetService;
     private final BodyService bodyService;
+    private final PageContentValidation contentValidation;
 
     public PageServiceImpl(
             AssetRepository assetRepository,
             AssetVersionRepository assetVersionRepository,
             AssetService assetService,
-            BodyService bodyService) {
+            BodyService bodyService,
+            PageContentValidation contentValidation) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.bodyService = bodyService;
+        this.contentValidation = contentValidation;
     }
 
     @Override
@@ -77,6 +82,7 @@ public class PageServiceImpl implements PageService {
 
         ObjectNode newPayload = bodyService.mergePatch(null, payload);
         validatePagePayload(newPayload, ctx.projectId());
+        contentValidation.requireValidPage(ctx.projectId(), newPayload);
 
         String displayName = current.getDisplayName();
         return assetService.update(uuid, new UpdateAssetCommand(displayName, newPayload), expectedRevision, ctx);
@@ -90,6 +96,13 @@ public class PageServiceImpl implements PageService {
 
         ObjectNode newPayload = bodyService.mergePatch(current.getPayload(), mergePatch);
         validatePagePayload(newPayload, ctx.projectId());
+        if (mergePatch.has("content")) {
+            contentValidation.requireValidContent(ctx.projectId(), newPayload);
+        }
+        if (mergePatch.path("bodies").isObject()) {
+            mergePatch.get("bodies").fieldNames().forEachRemaining(
+                    body -> contentValidation.requireValidBody(ctx.projectId(), newPayload, body));
+        }
 
         return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedRevision, ctx);
     }
@@ -102,9 +115,10 @@ public class PageServiceImpl implements PageService {
         Asset page = requirePage(uuid, ctx.projectId());
         AssetVersion current = requireOpen(page.getId());
 
-        ObjectNode newPayload = bodyService.addSection(
-                current.getPayload(), bodyName, templateUuid, position, UUID.randomUUID().toString());
+        String instanceId = UUID.randomUUID().toString();
+        ObjectNode newPayload = bodyService.addSection(current.getPayload(), bodyName, templateUuid, position, instanceId);
         validatePagePayload(newPayload, ctx.projectId());
+        contentValidation.requireValidSection(ctx.projectId(), newPayload, bodyName, instanceId);
 
         return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedRevision, ctx);
     }
@@ -157,6 +171,7 @@ public class PageServiceImpl implements PageService {
             ObjectNode withoutSection = bodyService.removeSection(current.getPayload(), sourceBody, instanceId);
             ObjectNode newPayload = bodyService.insertSection(withoutSection, targetBody, position, section);
             validatePagePayload(newPayload, ctx.projectId());
+            contentValidation.requireValidSection(ctx.projectId(), newPayload, targetBody, instanceId);
 
             return assetService.update(
                     targetUuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedTargetRevision, ctx);
@@ -181,6 +196,7 @@ public class PageServiceImpl implements PageService {
         AssetVersion targetCurrent = requireOpen(targetPage.getId());
         ObjectNode targetNewPayload = bodyService.insertSection(targetCurrent.getPayload(), targetBody, position, section);
         validatePagePayload(targetNewPayload, ctx.projectId());
+        contentValidation.requireValidSection(ctx.projectId(), targetNewPayload, targetBody, instanceId);
 
         return assetService.update(
                 targetUuid, new UpdateAssetCommand(targetCurrent.getDisplayName(), targetNewPayload), expectedTargetRevision, ctx);
@@ -210,7 +226,14 @@ public class PageServiceImpl implements PageService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ContentIssue> contentIssues(long projectId, JsonNode payload) {
+        return payload == null ? List.of() : contentValidation.issues(projectId, payload);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public TemplateRefView resolveTemplate(long projectId, UUID uuid) {
+
         return resolveTemplate(uuid, projectId, AssetType.PAGE_TEMPLATE).view();
     }
 

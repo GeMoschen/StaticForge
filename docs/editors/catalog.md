@@ -11,8 +11,8 @@ section templates. See [README.md](README.md) for attributes common to every edi
 | Attribute | Meaning |
 |---|---|
 | `allow ["teaser", "cta_box", …]` | section-template **UIDs** a card may be created from (empty/`["*"]` allows any) |
-| `min N` | minimum number of cards, enforced on save |
-| `max N` | maximum number of cards, enforced on save |
+| `min N` | minimum number of cards, blocks publish when violated |
+| `max N` | maximum number of cards, blocks publish when violated |
 
 Unlike [`list`](list.md), a `catalog` editor has no `item {}` sub-editor declaration — each card's
 fields come from whichever section template it's an instance of, not from CDL declared here.

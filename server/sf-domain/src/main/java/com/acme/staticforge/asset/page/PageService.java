@@ -1,6 +1,7 @@
 package com.acme.staticforge.asset.page;
 
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.revision.RevisionContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
@@ -46,6 +47,14 @@ public interface PageService {
     AssetVersionView duplicate(UUID uuid, RevisionContext ctx);
 
     AssetVersionView find(long projectId, UUID uuid);
+
+    /**
+     * Every content-validation finding on a page payload against its current templates (spec
+     * §10.5): the advisory list a page view carries. Structural findings never reach a saved
+     * version through this service's own writes, but content saved before validation existed may
+     * still hold some; {@code ERROR} completeness findings block publish.
+     */
+    List<ContentIssue> contentIssues(long projectId, JsonNode payload);
 
     TemplateRefView resolveTemplate(long projectId, UUID uuid);
 
