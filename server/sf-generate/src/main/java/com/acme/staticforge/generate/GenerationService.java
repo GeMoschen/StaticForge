@@ -322,18 +322,20 @@ public class GenerationService {
             writer.publish(runId);
 
             long bytes = allFiles.stream().mapToLong(f -> f.bytes().length).sum();
-            boolean partial = !outcome.warnings().isEmpty();
+            boolean partial = !outcome.warnings().isEmpty() || !outcome.pageErrors().isEmpty();
             run.setStatus(partial ? RunStatus.PARTIAL : RunStatus.SUCCESS);
             run.setFilesWritten(allFiles.size());
             run.setFilesSkipped(assets.filesSkipped());
             run.setBytesWritten(bytes);
-            run.setErrorCount(0);
+            run.setErrorCount(outcome.pageErrors().size());
             run.setWarningCount(outcome.warnings().size());
-            run.setDiagnostics(diagnosticsJson(List.of(), outcome.warnings()));
+            run.setDiagnostics(diagnosticsJson(outcome.pageErrors(), outcome.warnings()));
             run.setFinishedAt(Instant.now());
             runs.save(run);
 
-            emit(runId, STAGE_REPORT, run.getStatus().name(), allFiles.size(), 0, run.getWarningCount(), run.getDiagnostics());
+            emit(runId, STAGE_REPORT, run.getStatus().name(), allFiles.size(), run.getErrorCount(), run.getWarningCount(),
+                    run.getDiagnostics());
+
             completeRun(runId);
             sample.stop(generationTimer);
             meterRegistry.counter("sf.generation.files", "mode", run.getMode().name()).increment(allFiles.size());

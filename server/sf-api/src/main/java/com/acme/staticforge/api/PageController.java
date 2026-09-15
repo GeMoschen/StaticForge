@@ -184,7 +184,8 @@ public class PageController {
                 payload != null ? payload.get("bodies") : null,
                 payload != null ? payload.get("nav") : null,
                 payload != null ? payload.get("output") : null,
-                payload != null ? payload.get("meta") : null);
+                payload != null ? payload.get("meta") : null,
+                pageService.contentIssues(projectId, payload));
     }
 
     private static AssetSummaryView toSummary(AssetVersionView v) {

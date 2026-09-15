@@ -9,14 +9,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Validates a content value object against its compiled {@link ContentDefinition} (spec §10.5,
  * §14.3–§14.4). Pure and dependency-free beyond the {@link ExpressionEvaluator}: it reports
  * findings, never mutates and never throws. The caller decides when {@link Severity#ERROR}
- * findings must block a publish as opposed to a save.
+ * findings must block a publish as opposed to a save; {@link ContentIssue#kind()} classifies
+ * each finding as structural (rejects a save) or completeness (blocks publish only).
  */
 public final class ContentValidator {
+
+    private static final Set<String> LINK_KINDS = Set.of("INTERNAL", "EXTERNAL", "MEDIA", "ANCHOR", "MAIL");
 
     private final ExpressionEvaluator evaluator;
 
@@ -36,31 +42,87 @@ public final class ContentValidator {
      * {@code false} are skipped entirely; unknown keys in {@code content} are ignored.
      */
     public List<ContentIssue> validate(ContentDefinition definition, JsonNode content) {
+        return validate(definition, content, null, "");
+    }
+
+    /**
+     * Validates {@code content} like {@link #validate(ContentDefinition, JsonNode)}, additionally
+     * resolving each CATALOG card's template through {@code sections} (when non-null): a card whose
+     * template doesn't resolve or isn't in the editor's {@code allow} list is a structural finding,
+     * and the card's own {@code content} is validated against its template, recursively. Every
+     * finding's path is rooted at {@code pathPrefix} (e.g. {@code bodies.main[2].content}; empty
+     * for none).
+     */
+    public List<ContentIssue> validate(
+            ContentDefinition definition, JsonNode content, SectionTemplateLookup sections, String pathPrefix) {
         List<ContentIssue> issues = new ArrayList<>();
         if (definition == null) {
             return issues;
         }
         JsonNode root = content == null || content.isMissingNode() ? NullNode.getInstance() : content;
-        validateEditors(definition.editors(), root, root, "", issues);
+        if (!root.isNull() && !root.isObject()) {
+            issues.add(new ContentIssue(pathPrefix, "type", Severity.ERROR, "Content must be an object."));
+            return issues;
+        }
+        validateEditors(definition.editors(), root, root, pathPrefix, sections, issues);
+        return issues;
+    }
+
+    /**
+     * Validates one section instance ({@code {instanceId, templateRef, content}}: a body section or
+     * a catalog card): its template must resolve through {@code sections} and be admitted by
+     * {@code allow}, and its {@code content} is validated against that template's definition,
+     * recursing into nested catalogs. {@code owner} names the body/editor in messages; findings are
+     * rooted at {@code instancePath}.
+     */
+    public List<ContentIssue> validateInstance(
+            JsonNode instance, String instancePath, List<String> allow, String owner, SectionTemplateLookup sections) {
+        List<ContentIssue> issues = new ArrayList<>();
+        if (instance == null || !instance.isObject()) {
+            issues.add(new ContentIssue(
+                    instancePath, "type", Severity.ERROR, owner + " has a section instance that is not an object."));
+            return issues;
+        }
+        String templateRef = instance.path("templateRef").asText("");
+        Optional<SectionTemplateLookup.SectionTemplate> template = sections.find(templateRef);
+        if (template.isEmpty()) {
+            issues.add(new ContentIssue(
+                    instancePath + ".templateRef", "template", Severity.ERROR,
+                    owner + " references section template '" + templateRef + "', which does not exist."));
+            return issues;
+        }
+        if (!template.get().allowedBy(allow)) {
+            String name = template.get().uid() != null ? template.get().uid() : templateRef;
+            issues.add(new ContentIssue(
+                    instancePath + ".templateRef", "allow", Severity.ERROR,
+                    owner + " does not allow section template '" + name + "'."));
+            return issues;
+        }
+        issues.addAll(validate(template.get().definition(), instance.get("content"), sections, instancePath + ".content"));
         return issues;
     }
 
     private void validateEditors(
-            List<EditorDefinition> editors, JsonNode scope, JsonNode node, String prefix, List<ContentIssue> issues) {
+            List<EditorDefinition> editors,
+            JsonNode scope,
+            JsonNode node,
+            String prefix,
+            SectionTemplateLookup sections,
+            List<ContentIssue> issues) {
         for (EditorDefinition editor : editors) {
             String path = prefix.isEmpty() ? editor.name() : prefix + "." + editor.name();
             if (!isVisible(editor, scope, path, issues)) {
                 continue;
             }
             if (editor.isGroup()) {
-                validateEditors(editor.items(), scope, node, prefix, issues);
+                validateEditors(editor.items(), scope, node, prefix, sections, issues);
                 continue;
             }
             JsonNode value = nodeValue(node, editor.name());
             if (editor.isList()) {
-                validateList(editor, scope, value, path, issues);
+                validateList(editor, scope, value, path, sections, issues);
             } else if (editor.isCatalog()) {
-                validateCatalog(editor, value, path, issues);
+                validateCatalog(editor, value, path, sections, issues);
             } else {
                 validateScalar(editor, value, path, issues);
             }
@@ -82,11 +144,12 @@ public final class ContentValidator {
     }
 
     private void validateScalar(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
-        if (editor.required() && isEmpty(value)) {
+        boolean empty = isEmpty(editor.type(), value);
+        if (editor.required() && empty) {
             issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
             return;
         }
-        if (isEmpty(value)) {
+        if (empty) {
             return;
         }
         if (!matchesShape(editor.type(), value)) {
@@ -107,11 +170,17 @@ public final class ContentValidator {
     }
 
     private void validateList(
-            EditorDefinition editor, JsonNode scope, JsonNode value, String path, List<ContentIssue> issues) {
-        if (editor.required() && isEmpty(value)) {
+            EditorDefinition editor,
+            JsonNode scope,
+            JsonNode value,
+            String path,
+            SectionTemplateLookup sections,
+            List<ContentIssue> issues) {
+        boolean empty = isEmpty(editor.type(), value);
+        if (editor.required() && empty) {
             issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
         }
-        if (isEmpty(value)) {
+        if (empty) {
             validateListBounds(editor, 0, path, issues);
             return;
         }
@@ -123,7 +192,11 @@ public final class ContentValidator {
         for (int i = 0; i < value.size(); i++) {
             JsonNode element = value.get(i);
             if (element != null && element.isObject()) {
-                validateEditors(editor.items(), scope, element, path + "[" + i + "]", issues);
+                validateEditors(editor.items(), scope, element, path + "[" + i + "]", sections, issues);
+            } else {
+                issues.add(new ContentIssue(
+                        path + "[" + i + "]", "type", Severity.ERROR,
+                        "Editor '" + editor.name() + "' has a list item that is not an object."));
             }
         }
     }
@@ -131,13 +204,20 @@ public final class ContentValidator {
     /**
      * Validates a CATALOG editor's cardinality and per-card shape ({@code instanceId}/{@code
      * templateRef} present). A card's own fields come from another asset's template, not this
-     * one's, so — same as bodies/sections — this class doesn't validate a card's field values.
+     * one's: they are validated only when a {@link SectionTemplateLookup} is supplied, which also
+     * enforces the editor's {@code allow} list.
      */
-    private void validateCatalog(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
-        if (editor.required() && isEmpty(value)) {
+    private void validateCatalog(
+            EditorDefinition editor,
+            JsonNode value,
+            String path,
+            SectionTemplateLookup sections,
+            List<ContentIssue> issues) {
+        boolean empty = isEmpty(editor.type(), value);
+        if (editor.required() && empty) {
             issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
         }
-        if (isEmpty(value)) {
+        if (empty) {
             validateListBounds(editor, 0, path, issues);
             return;
         }
@@ -149,12 +229,15 @@ public final class ContentValidator {
         validateListBounds(editor, cards.size(), path, issues);
         for (int i = 0; i < cards.size(); i++) {
             JsonNode card = cards.get(i);
+            String cardPath = path + ".cards[" + i + "]";
             boolean valid = card != null && card.isObject()
                     && card.hasNonNull("instanceId") && card.hasNonNull("templateRef");
             if (!valid) {
                 issues.add(new ContentIssue(
-                        path + ".cards[" + i + "]", "type", Severity.ERROR,
+                        cardPath, "type", Severity.ERROR,
                         "Editor '" + editor.name() + "' has a card missing 'instanceId'/'templateRef'."));
+            } else if (sections != null) {
+                issues.addAll(validateInstance(card, cardPath, editor.allow(), "Editor '" + editor.name() + "'", sections));
             }
         }
     }
@@ -284,13 +367,51 @@ public final class ContentValidator {
             case NUMBER -> value.isNumber();
             case BOOLEAN -> value.isBoolean();
             case MULTISELECT -> value.isArray() && allTextual(value);
-            case RICHTEXT, LINK, GROUP -> value.isObject();
-            case MEDIA -> isTyped(value, "MEDIA_REF");
-            case REFERENCE -> isTyped(value, "ASSET_REF");
+            case RICHTEXT -> value.isObject() && optionalText(value, "format") && optionalText(value, "value");
+            case GROUP -> value.isObject();
+            case LINK -> isLink(value);
+            case MEDIA -> isTyped(value, "MEDIA_REF") && isUuid(value.get("uuid"))
+                    && optionalText(value, "variant") && optionalText(value, "altOverride");
+            case REFERENCE -> isTyped(value, "ASSET_REF") && isUuid(value.get("uuid")) && optionalText(value, "assetType");
             case LIST -> value.isArray();
             case CATALOG -> isTyped(value, "CATALOG");
             case JSON -> true;
         };
+    }
+
+    /** {@code {kind, uuid?, url?, anchor?, target?, title?}} with a known {@code kind} (spec §14.3). */
+    private static boolean isLink(JsonNode value) {
+        if (!value.isObject()) {
+            return false;
+        }
+        JsonNode kind = value.get("kind");
+        if (kind == null || !kind.isTextual() || !LINK_KINDS.contains(kind.asText())) {
+            return false;
+        }
+        JsonNode uuid = value.get("uuid");
+        return (uuid == null || uuid.isNull() || isUuid(uuid))
+                && optionalText(value, "url")
+                && optionalText(value, "anchor")
+                && optionalText(value, "target")
+                && optionalText(value, "title");
+    }
+
+    private static boolean isUuid(JsonNode node) {
+        if (node == null || !node.isTextual()) {
+            return false;
+        }
+        try {
+            UUID.fromString(node.asText());
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /** True when {@code field} is absent, {@code null} or a string. */
+    private static boolean optionalText(JsonNode object, String field) {
+        JsonNode node = object.get(field);
+        return node == null || node.isNull() || node.isTextual();
     }
 
     private static boolean isTyped(JsonNode value, String expectedType) {
@@ -310,14 +431,42 @@ public final class ContentValidator {
         return true;
     }
 
-    private static boolean isEmpty(JsonNode value) {
+    /**
+     * Whether {@code value} counts as "not filled in" for an editor of {@code type}: absent/null,
+     * blank text, an empty array or object, or the placeholder the form engine stores for an
+     * untouched object editor — a MEDIA/REFERENCE ref without a {@code uuid}, a LINK without a
+     * {@code uuid}/{@code url}/{@code anchor} (and no unknown {@code kind}), a RICHTEXT with a blank {@code value}, a CATALOG
+     * without cards. A value of the wrong shape is never empty, so it still fails the shape check.
+     */
+    private static boolean isEmpty(EditorType type, JsonNode value) {
         if (value == null || value.isNull() || value.isMissingNode()) {
             return true;
         }
-        if (value.isTextual() && value.asText().isBlank()) {
+        if (value.isTextual()) {
+            return value.asText().isBlank();
+        }
+        if (value.isArray()) {
+            return value.isEmpty();
+        }
+        if (!value.isObject()) {
+            return false;
+        }
+        if (value.isEmpty()) {
             return true;
         }
-        return value.isArray() && value.isEmpty();
+        return switch (type) {
+            case MEDIA -> isTyped(value, "MEDIA_REF") && isBlank(value.get("uuid"));
+            case REFERENCE -> isTyped(value, "ASSET_REF") && isBlank(value.get("uuid"));
+            case LINK -> (isBlank(value.get("kind")) || LINK_KINDS.contains(value.get("kind").asText()))
+                    && isBlank(value.get("uuid")) && isBlank(value.get("url")) && isBlank(value.get("anchor"));
+            case RICHTEXT -> isBlank(value.get("value"));
+            case CATALOG -> isTyped(value, "CATALOG") && value.path("cards").isArray() && value.path("cards").isEmpty();
+            default -> false;
+        };
+    }
+
+    private static boolean isBlank(JsonNode node) {
+        return node == null || node.isNull() || (node.isTextual() && node.asText().isBlank());
     }
 
     private static JsonNode nodeValue(JsonNode node, String name) {

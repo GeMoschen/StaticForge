@@ -9,7 +9,7 @@ Markdown syntax directly). See [README.md](README.md) for attributes common to e
 
 | Attribute | Meaning |
 |---|---|
-| `maxChars N` | maximum character count, enforced on save |
+| `maxChars N` | maximum character count, blocks publish when violated |
 
 ## Example
 

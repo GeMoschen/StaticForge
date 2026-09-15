@@ -1,6 +1,6 @@
 ---
 id: M16.5.2
-status: todo
+status: done
 depends: []
 epic: m16-render-reference-foundations
 feature: render-safety-validation
@@ -51,18 +51,18 @@ The UI autosaves (`PageAutosaveService`), so a half-filled form must still save.
 
 ## Acceptance criteria
 
-- [ ] API test: saving a page with a number editor holding `"abc"` → 422 with path `content.<editor>`.
+- [x] API test: saving a page with a number editor holding `"abc"` → 422 with path `content.<editor>`.
       Saving with a required text editor empty → 200 and `issues` contains the required finding.
-- [ ] Adding a section whose template isn't in the body's `allow` list → 422. Moving a section into
+- [x] Adding a section whose template isn't in the body's `allow` list → 422. Moving a section into
       such a body → 422.
-- [ ] A catalog card nested two levels deep with a structural error → 422 with a nested path.
-- [ ] Generation test: a page with an empty required editor fails with `SF-GEN-0120`, the run is
+- [x] A catalog card nested two levels deep with a structural error → 422 with a nested path.
+- [x] Generation test: a page with an empty required editor fails with `SF-GEN-0120`, the run is
       PARTIAL, and other pages are written.
-- [ ] Existing page and section API tests still pass. Any fixture that relied on invalid content is
+- [x] Existing page and section API tests still pass. Any fixture that relied on invalid content is
       fixed, with each such fixture listed in the PR.
-- [ ] The UI build is green after the schema regeneration. The page editor shows no errors for the
+- [x] The UI build is green after the schema regeneration. The page editor shows no errors for the
       new advisory `issues` field; displaying them is optional polish.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -81,3 +81,61 @@ The UI autosaves (`PageAutosaveService`), so a half-filled form must still save.
   document it.
 - `SF-GEN-0120` must not collide with existing codes. `GenerationDiagnosticCodes` currently has
   `0110`, `0210`, `0410`, `0411` and `0500`; confirm before assigning.
+
+### Implementation notes
+
+- **Classification:** `ContentIssue` gained a `kind` component (`STRUCTURAL` | `COMPLETENESS`), derived
+  from the code by the 4-arg constructor. Structural codes: `type`, `option`, `allow`, `template`
+  (catalog card template not found). Everything else (`required`, `min`, `max`, `maxLength`,
+  `maxChars`, `pattern`, `mimeType`, `visibleWhen`) is completeness.
+- **`ContentValidator` hardening:** a non-object list item is a `type` issue. `media`/`reference`
+  need a UUID `uuid`; `link` needs a known `kind` and string/UUID members; `richtext` needs string
+  `format`/`value`. The form engine's placeholders for untouched object editors
+  (`{type:"MEDIA_REF",uuid:null}`, `{kind:"INTERNAL",uuid:null,…}`, `{format:"html",value:""}`,
+  `{type:"CATALOG",cards:[]}`) count as *empty*, so autosave never 422s on them and `required` now
+  fires for them. A new overload takes a `SectionTemplateLookup` and a path prefix. Catalog cards are
+  then checked against the editor's `allow` list and validated recursively against their own
+  template.
+- **`PageContentValidator`** (pure, `asset.content`) validates page content, body cardinality
+  (`min`/`max` → completeness), body `allow` lists and section content. Paths look like
+  `content.x` and `bodies.main[2].content.cards.cards[0].content.y`. Sections in undeclared
+  (orphaned) bodies get no allow check; their content is still validated.
+- **Save (`PageContentValidation`, `asset.page`):** a live-template lookup plus `422 SF-API-0422`
+  with `issues` (structural only), built by the new `ProblemFactory.unprocessableEntity(detail,
+  name, findings)`. Legacy strategy is subtree-only: `PUT` checks the whole page;
+  `PATCH …/content` checks `content` if patched and every section of each patched body; add and move
+  (same page and cross page) check only the inserted section, including the target body's `allow`
+  list. Reorder and delete change no content and aren't validated. **There is no server-side
+  "copy section" operation** (the UI has none either), so there was nothing to enforce for copy.
+  Page duplicate copies stored content as-is.
+- **`issues` on the view:** `PageController.toPage` fills `PageView.issues` for every page response
+  (GET, create and all mutations) through `PageService.contentIssues`. It lists all findings on the
+  whole page, each with its `kind`, so legacy structural findings outside the edited subtree show up
+  too. The UI ignores the field for now. `schema.d.ts` was regenerated. Only the `ContentIssue` and
+  `PageView.issues` hunks were kept; springdoc reordered unrelated `first`/`last`/`paged`
+  properties, and those hunks were dropped to keep the shared file's diff minimal.
+- **Definitions:** `TemplateContentDefinitions.of(templatePayload)` compiles the CDL. It is the single
+  seam to switch to `CompiledTemplateCache` (M16.1.1). Save memoizes per validation; generation
+  memoizes per pass (page templates by UUID, section templates by ref).
+- **Publish:** `RenderPipeline.incompletePages(snapshot, plan)` returns one `SF-GEN-0120` per page
+  with ERROR completeness findings, listing `path (message)`. Code confirmed free: existing codes
+  are 0110, 0202–0206, 0210, 0220, 0301, 0410, 0411 and 0500–0503. `execute` removes those pages'
+  entries before rendering and returns the diagnostics in the new `RenderOutcome.pageErrors`.
+  `GenerationService` marks the run PARTIAL with `errorCount` and `diagnostics.errors`.
+  **Deviations from the task text:**
+  - The check runs inside `execute` rather than `validate()`, because `validate()`'s return
+    contract is run-aborting errors.
+  - Render failures today actually fail the whole run (FAILED), so "matching how render failures
+    behave" isn't literally true. Only `SF-GEN-0120` is per-page PARTIAL.
+  - Structural findings don't block publish. They were rendering before this task, and blocking
+    them there is left to save-time validation.
+  - Collision detection still sees the full plan, and the sitemap still lists held-back pages (the
+    same as missing-channel skips today).
+- **Fixtures:** no existing test fixture relied on invalid content. The full suite passed unchanged.
+- **Hazard found (pre-existing, not fixed):** the Angular form engine stores `group "…" {}` children
+  nested under the synthetic `_group_N` key. `docs/editors/group.md`, the renderer and
+  `ContentValidator` all expect them at top level. A required editor inside a group edited through
+  the UI therefore reports `required` and blocks publish with `SF-GEN-0120`. It already rendered
+  empty before this task. Needs a UI fix (flatten group values).
+- Docs: `docs/editors/README.md` has a new "When content is validated" section. The per-editor
+  "enforced on save" wording now reads "blocks publish when violated".

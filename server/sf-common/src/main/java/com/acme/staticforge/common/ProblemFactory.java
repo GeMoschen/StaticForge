@@ -45,6 +45,21 @@ public final class ProblemFactory {
         return of(422, "SF-API-0422", "Validation Failed", detail);
     }
 
+    /**
+     * A 422 validation problem that also lists its field-level findings under {@code name}
+     * (e.g. {@code diagnostics}, {@code issues}) as a peer of the standard members.
+     */
+    public static Problem unprocessableEntity(String detail, String name, Object findings) {
+        return Problem.builder()
+                .type(PROBLEMS_BASE + "sf-api-0422")
+                .title("Validation Failed")
+                .status(422)
+                .detail(detail)
+                .property("code", "SF-API-0422")
+                .property(name, findings)
+                .build();
+    }
+
     public static Problem other(int status, String code, String title, String detail) {
         return Problem.builder()
                 .type(PROBLEMS_BASE + code.toLowerCase().replace('_', '-'))

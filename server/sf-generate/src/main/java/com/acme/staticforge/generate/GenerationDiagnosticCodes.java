@@ -10,4 +10,10 @@ public final class GenerationDiagnosticCodes {
     private GenerationDiagnosticCodes() {}
 
     public static final String GEN_CHANNEL_MISSING = "SF-GEN-0210";
+
+    /**
+     * A planned page's content has ERROR-severity completeness findings (an empty required editor,
+     * a count or length out of bounds; spec §10.5): the page is not published, other pages are.
+     */
+    public static final String GEN_CONTENT_INCOMPLETE = "SF-GEN-0120";
 }
