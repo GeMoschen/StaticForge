@@ -14,6 +14,7 @@ import com.acme.staticforge.asset.AssetReference;
 import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.ReferenceKind;
 import com.acme.staticforge.asset.content.ContentReferenceService;
 import com.acme.staticforge.common.JsonUtil;
@@ -44,7 +45,10 @@ class ReferenceMaterializerTest {
         assets = mock(AssetRepository.class);
         references = mock(AssetReferenceRepository.class);
         materializer = new ReferenceMaterializer(
-                references, assets, new ContentReferenceService(references, assets));
+                references,
+                assets,
+                new ContentReferenceService(references, assets),
+                new ProjectReferenceResolver(assets, mock(AssetVersionRepository.class)));
         List<Asset> targets = List.of(
                 asset(pageTemplate, 11L), asset(sectionTemplate, 12L), asset(media, 13L), asset(page, 14L));
         when(assets.findByProjectIdAndUuidIn(eq(PROJECT), any())).thenReturn(targets);
@@ -77,6 +81,27 @@ class ReferenceMaterializerTest {
 
         assertThat(materializer.extract(PROJECT, AssetType.PAGE_REFERENCE, payload))
                 .containsExactly(new ReferenceEdge(14L, ReferenceKind.NAV, "target"));
+    }
+
+    @Test
+    void derivesOctlEdgesPerChannelFromATemplate() {
+        Asset teaser = asset(sectionTemplate, 12L);
+        Asset about = asset(page, 14L);
+        when(assets.findByProjectIdAndAssetTypeAndUid(PROJECT, AssetType.SECTION_TEMPLATE, "teaser"))
+                .thenReturn(java.util.Optional.of(teaser));
+        when(assets.findByProjectIdAndAssetTypeAndUid(PROJECT, AssetType.PAGE, "about"))
+                .thenReturn(java.util.Optional.of(about));
+        JsonNode payload = JsonUtil.parse("""
+                { "channelTemplates": {
+                    "html": { "source": "$CMS_INCLUDE(section_template:teaser)$ $CMS_VALUE(page:about.title)$ $CMS_REF(page:nope)$" },
+                    "markdown": { "source": "$CMS_REF(page:about)$" }
+                } }
+                """);
+
+        assertThat(materializer.extract(PROJECT, AssetType.PAGE_TEMPLATE, payload)).containsExactlyInAnyOrder(
+                new ReferenceEdge(12L, ReferenceKind.OCTL_INCLUDE, "channelTemplates.html"),
+                new ReferenceEdge(14L, ReferenceKind.OCTL_VALUE, "channelTemplates.html"),
+                new ReferenceEdge(14L, ReferenceKind.OCTL_REF, "channelTemplates.markdown"));
     }
 
     @Test

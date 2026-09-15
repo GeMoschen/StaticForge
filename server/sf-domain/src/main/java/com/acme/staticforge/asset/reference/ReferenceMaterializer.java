@@ -10,6 +10,10 @@ import com.acme.staticforge.asset.ReferenceKind;
 import com.acme.staticforge.asset.content.ContentReferenceService;
 import com.acme.staticforge.asset.content.ExtractedReference;
 import com.acme.staticforge.revision.RevisionAware;
+import com.acme.staticforge.template.octl.CompiledTemplate;
+import com.acme.staticforge.template.octl.OctlCompiler;
+import com.acme.staticforge.template.octl.ReferenceResolver;
+import com.acme.staticforge.template.octl.ReferenceUse;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,6 +37,10 @@ import org.springframework.stereotype.Service;
  *       {@link ReferenceKind#TEMPLATE}; content and section-content values via
  *       {@link ContentReferenceService#extract} ({@code MEDIA_REF}/{@code CONTENT_REF}).</li>
  *   <li>{@code PAGE_REFERENCE}: its {@code target.assetUuid} as {@link ReferenceKind#NAV}.</li>
+ *   <li>{@code PAGE_TEMPLATE}, {@code SECTION_TEMPLATE}: the OCTL references of every channel source
+ *       as {@code OCTL_VALUE}/{@code OCTL_REF}/{@code OCTL_INCLUDE}, with source path
+ *       {@code channelTemplates.<channel>}. Sections placed in page bodies are not duplicated here;
+ *       those are the pages' {@code TEMPLATE} edges.</li>
  *   <li>{@code MEDIA}, {@code FOLDER}: none.</li>
  * </ul>
  *
@@ -51,12 +59,18 @@ public class ReferenceMaterializer {
     private final AssetReferenceRepository references;
     private final AssetRepository assets;
     private final ContentReferenceService contentReferences;
+    private final ProjectReferenceResolver projectReferences;
+    private final OctlCompiler octlCompiler = new OctlCompiler();
 
     public ReferenceMaterializer(
-            AssetReferenceRepository references, AssetRepository assets, ContentReferenceService contentReferences) {
+            AssetReferenceRepository references,
+            AssetRepository assets,
+            ContentReferenceService contentReferences,
+            ProjectReferenceResolver projectReferences) {
         this.references = references;
         this.assets = assets;
         this.contentReferences = contentReferences;
+        this.projectReferences = projectReferences;
     }
 
     /**
@@ -91,7 +105,8 @@ public class ReferenceMaterializer {
         List<ExtractedReference> found = payload == null || payload.isNull() ? List.of() : switch (type) {
             case PAGE -> pageReferences(payload);
             case PAGE_REFERENCE -> navigationReferences(payload);
-            case PAGE_TEMPLATE, SECTION_TEMPLATE, MEDIA, FOLDER -> List.of();
+            case PAGE_TEMPLATE, SECTION_TEMPLATE -> templateReferences(projectId, payload);
+            case MEDIA, FOLDER -> List.of();
         };
         if (found.isEmpty()) {
             return Set.of();
@@ -135,6 +150,42 @@ public class ReferenceMaterializer {
             });
         }
         return found;
+    }
+
+    /**
+     * OCTL edges of every channel source: each channel is compiled against the project resolver
+     * (without the content definition, which only drives name diagnostics, not reference
+     * resolution) and every resolved reference becomes one edge per use, addressed by
+     * {@code channelTemplates.<channel>}. Unresolvable references are simply absent.
+     */
+    private List<ExtractedReference> templateReferences(long projectId, JsonNode payload) {
+        JsonNode channels = payload.get("channelTemplates");
+        if (channels == null || !channels.isObject()) {
+            return List.of();
+        }
+        ReferenceResolver resolver = projectReferences.forProject(projectId);
+        List<ExtractedReference> found = new ArrayList<>();
+        channels.fields().forEachRemaining(channel -> {
+            JsonNode source = channel.getValue() == null ? null : channel.getValue().get("source");
+            if (source == null || !source.isTextual() || source.asText().isEmpty()) {
+                return;
+            }
+            CompiledTemplate compiled = octlCompiler.compile(source.asText(), channel.getKey(), resolver).template();
+            String path = "channelTemplates." + channel.getKey();
+            compiled.referenceUses().forEach((key, uses) -> {
+                UUID target = compiled.references().get(key);
+                uses.forEach(use -> found.add(new ExtractedReference(referenceKind(use), target, path)));
+            });
+        });
+        return found;
+    }
+
+    private static ReferenceKind referenceKind(ReferenceUse use) {
+        return switch (use) {
+            case VALUE -> ReferenceKind.OCTL_VALUE;
+            case REF -> ReferenceKind.OCTL_REF;
+            case INCLUDE -> ReferenceKind.OCTL_INCLUDE;
+        };
     }
 
     private static List<ExtractedReference> navigationReferences(JsonNode payload) {

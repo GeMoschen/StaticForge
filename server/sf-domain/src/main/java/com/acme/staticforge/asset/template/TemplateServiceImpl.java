@@ -12,6 +12,7 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.reference.ProjectReferenceResolver;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
@@ -41,7 +42,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -68,6 +68,7 @@ public class TemplateServiceImpl implements TemplateService {
     private final RevisionService revisionService;
     private final ObjectMapper objectMapper;
     private final ReferenceMaterializer referenceMaterializer;
+    private final ProjectReferenceResolver projectReferences;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final OctlCompiler octlCompiler = new OctlCompiler();
 
@@ -77,13 +78,15 @@ public class TemplateServiceImpl implements TemplateService {
             AssetService assetService,
             RevisionService revisionService,
             ObjectMapper objectMapper,
-            ReferenceMaterializer referenceMaterializer) {
+            ReferenceMaterializer referenceMaterializer,
+            ProjectReferenceResolver projectReferences) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.revisionService = revisionService;
         this.objectMapper = objectMapper;
         this.referenceMaterializer = referenceMaterializer;
+        this.projectReferences = projectReferences;
     }
 
     @Override
@@ -223,42 +226,9 @@ public class TemplateServiceImpl implements TemplateService {
         return result;
     }
 
+    /** The project-scoped resolver shared with reference materialization (§16.4, §5.4). */
     private ReferenceResolver referenceResolver(long projectId) {
-        return (assetType, uid) -> {
-            AssetType type = assetTypeForRef(assetType);
-            if (type == null) {
-                return Optional.empty();
-            }
-            if (!"nav".equals(assetType)) {
-                return assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
-            }
-            // Same lookup and NAVIGATION-scope check as preview and generation, so a nav: reference
-            // that saves cleanly also renders and generates.
-            return assetRepository
-                    .findByProjectIdAndAssetTypeAndUid(projectId, type, FolderScope.navigationReferenceUid(uid))
-                    .map(Asset::getUuid)
-                    .filter(uuid -> FolderScope.fromPayload(assetService.requireCurrent(projectId, uuid).payload())
-                            == FolderScope.NAVIGATION);
-        };
-    }
-
-    /**
-     * A navigation folder is plain {@code AssetType.FOLDER} under the hood (`M8.1.2`) — there is
-     * no {@code AssetType.NAV} — so a {@code nav:uid} reference needs this one special-case before
-     * falling back to {@code AssetType.valueOf(...)}, mirroring {@code GenerationRenderer}'s and
-     * {@code PageRenderService}'s identical helper. Without it, {@code $CMS_NAVIGATION(nav:uid)$}
-     * always failed compile-on-save validation with a false {@code SF-TPL-0110}, even against a
-     * real {@code FOLDER} asset with that uid.
-     */
-    private static AssetType assetTypeForRef(String assetType) {
-        if ("nav".equals(assetType)) {
-            return AssetType.FOLDER;
-        }
-        try {
-            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return null;
-        }
+        return projectReferences.forProject(projectId);
     }
 
     private ObjectNode buildPayload(

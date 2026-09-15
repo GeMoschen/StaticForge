@@ -12,6 +12,7 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.ReferenceKind;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.navigation.CreatePageReferenceCommand;
 import com.acme.staticforge.asset.navigation.PageReferenceService;
 import com.acme.staticforge.asset.navigation.PageReferenceTargetKind;
@@ -225,14 +226,23 @@ class ReferenceMaterializationIntegrationTest {
                 createPage(fx, pageWithImageSection(template.uuid(), section.uuid(), media.uuid())),
                 createPage(fx, pageWithImageSection(template.uuid(), section.uuid(), media.uuid())));
 
-        templateService.update(
+        TemplateView renamed = templateService.update(
                 section.uuid(),
                 new UpdateTemplateCommand("Card", "content { editor text hero { renamedFrom \"image\" } }",
-                        Map.of(), null, false, null),
+                        Map.of("html", "$CMS_REF(page:" + pages.get(0).uid() + ")$"), null, false, null),
                 section.validFromRevision(),
                 fx.ctx());
 
+        // The renamed template's own version carries its new OCTL edge set ...
+        assertThat(open(fx, section.uuid())).singleElement().satisfies(row -> {
+            assertThat(row.getKind()).isEqualTo(ReferenceKind.OCTL_REF);
+            assertThat(row.getToAssetId()).isEqualTo(id(fx, pages.get(0).uuid()));
+            assertThat(row.getValidFromRevision()).isEqualTo(renamed.validFromRevision());
+        });
+
+        // ... and every rewritten page's edge set is written in the cascade's one batch revision.
         long batch = assetService.requireCurrent(fx.project().getId(), pages.get(0).uuid()).validFromRevision();
+        assertThat(batch).isGreaterThan(renamed.validFromRevision());
         for (AssetVersionView page : pages) {
             assertThat(assetService.requireCurrent(fx.project().getId(), page.uuid()).validFromRevision()).isEqualTo(batch);
             List<AssetReference> mediaRows = rows(fx, page.uuid(), ReferenceKind.MEDIA_REF);
@@ -245,6 +255,56 @@ class ReferenceMaterializationIntegrationTest {
                 assertThat(row.getValidToRevision()).isEqualTo(batch);
             });
         }
+    }
+
+    @Test
+    void templateSaveWritesOctlEdgesPerChannelAndClosesRemovedOnes() {
+        Fixture fx = newFixture();
+        TemplateView teaser = templateService.create(
+                new CreateTemplateCommand(fx.project().getId(), AssetType.SECTION_TEMPLATE, "Teaser", "",
+                        Map.of("html", "<p>teaser</p>"), null, false, null),
+                fx.ctx());
+        AssetVersionView about = createPage(fx, pagePayload(pageTemplate(fx).uuid()));
+
+        TemplateView template = templateService.create(
+                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Landing", "",
+                        Map.of(
+                                "html", "<main>$CMS_INCLUDE(section_template:" + teaser.uid() + ")$</main>",
+                                "markdown", "[About]($CMS_REF(page:" + about.uid() + ")$)"),
+                        null, false, null),
+                fx.ctx());
+
+        assertThat(open(fx, template.uuid()))
+                .extracting(row -> new Edge(row.getToAssetId(), row.getKind(), row.getSourcePath()))
+                .containsExactlyInAnyOrder(
+                        new Edge(id(fx, teaser.uuid()), ReferenceKind.OCTL_INCLUDE, "channelTemplates.html"),
+                        new Edge(id(fx, about.uuid()), ReferenceKind.OCTL_REF, "channelTemplates.markdown"));
+
+        TemplateView withoutInclude = templateService.saveChannel(
+                template.uuid(), "html", "<main></main>", template.validFromRevision(), fx.ctx());
+
+        assertThat(rows(fx, template.uuid(), ReferenceKind.OCTL_INCLUDE)).singleElement()
+                .satisfies(row -> assertThat(row.getValidToRevision()).isEqualTo(withoutInclude.validFromRevision()));
+        assertThat(open(fx, template.uuid())).extracting(AssetReference::getKind).containsExactly(ReferenceKind.OCTL_REF);
+    }
+
+    @Test
+    void navRootReferenceWritesAnOctlRefToTheNavigationRoot() {
+        Fixture fx = newFixture();
+        TemplateView template = templateService.create(
+                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Nav", "",
+                        Map.of("html", "<nav>$CMS_NAVIGATION(nav:root)$</nav>"), null, false, null),
+                fx.ctx());
+
+        long navigationRoot = assetRepository
+                .findByProjectIdAndAssetTypeAndUid(fx.project().getId(), AssetType.FOLDER, FolderScope.NAVIGATION_ROOT_UID)
+                .map(Asset::getId)
+                .orElseThrow();
+        assertThat(open(fx, template.uuid())).singleElement().satisfies(row -> {
+            assertThat(row.getKind()).isEqualTo(ReferenceKind.OCTL_REF);
+            assertThat(row.getToAssetId()).isEqualTo(navigationRoot);
+            assertThat(row.getSourcePath()).isEqualTo("channelTemplates.html");
+        });
     }
 
     // ------------------------------------------------------------------

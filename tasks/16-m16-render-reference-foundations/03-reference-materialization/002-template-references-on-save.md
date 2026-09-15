@@ -1,6 +1,6 @@
 ---
 id: M16.3.2
-status: todo
+status: done
 depends: [M16.3.1]
 epic: m16-render-reference-foundations
 feature: reference-materialization
@@ -38,17 +38,17 @@ but none of them is ever written.
 
 ## Acceptance criteria
 
-- [ ] Saving a page template whose html channel has `$CMS_INCLUDE(section_template:teaser)$` and
+- [x] Saving a page template whose html channel has `$CMS_INCLUDE(section_template:teaser)$` and
       whose markdown channel has `$CMS_REF(page:about)$` → open rows `OCTL_INCLUDE` → teaser and
       `OCTL_REF` → about, each with its channel in `source_path`.
-- [ ] Removing the include in a later save closes that row at the new revision.
-- [ ] A `nav:root` navigation reference writes an `OCTL_REF` row to `navigation_root` (the alias from
+- [x] Removing the include in a later save closes that row at the new revision.
+- [x] A `nav:root` navigation reference writes an `OCTL_REF` row to `navigation_root` (the alias from
       `FolderScope.navigationReferenceUid`).
-- [ ] Compiler unit test: the reference kinds are reported correctly for every instruction type,
+- [x] Compiler unit test: the reference kinds are reported correctly for every instruction type,
       including references inside `$CMS_IF` conditions and `$CMS_FOR` sources.
-- [ ] The template UID-rename cascade (`M15.2.2`) writes edges for the renamed template and for
+- [x] The template UID-rename cascade (`M15.2.2`) writes edges for the renamed template and for
       every rewritten page in the one compound revision.
-- [ ] `./gradlew :server:sf-template:test :server:sf-domain:test` green.
+- [x] `./gradlew :server:sf-template:test :server:sf-domain:test` green.
 
 ## Out of scope
 
@@ -63,3 +63,40 @@ but none of them is ever written.
   `findUidLiteralReferences` as it is here; just note the opportunity in the PR.
 - Section templates rendered via a page's `bodies` are already connected by `TEMPLATE` rows from
   `M16.3.1`. Don't duplicate those edges from OCTL.
+
+### Implementation notes
+
+- sf-template: new `ReferenceUse { VALUE, REF, INCLUDE }` and a package-private
+  `ReferenceUseCollector` AST pass (kept separate from `OctlCompiler.validate`, so it does not
+  couple to diagnostics). `CompiledTemplate.referenceUses()` returns `referenceKey -> Set<ReferenceUse>`
+  restricted to the resolved keys of `references()` (unchanged for existing callers). The
+  package-private `CompiledTemplate` constructor gained that fifth argument; `OctlCompiler.compile`
+  passes it (one-line change).
+- Classification: `$CMS_VALUE` and asset accessors in `$CMS_IF` conditions, `$CMS_SET` expressions
+  and non-`nav:` `$CMS_FOR` sources → `VALUE`; `$CMS_REF`, `$CMS_NAVIGATION`, `$CMS_FOR(x : nav:…)` → `REF`;
+  `$CMS_INCLUDE` → `INCLUDE`. A key used several ways keeps every use (one edge per use).
+  `$CMS_META` accessors are not resolved by the compiler and therefore produce no edge.
+- sf-domain: template edges are derived inside `ReferenceMaterializer.extract` (PAGE_TEMPLATE /
+  SECTION_TEMPLATE branch) rather than passed in by `TemplateServiceImpl`, so **every** writer of a
+  template version (create/update/saveChannel/deleteChannel, folder moves, channel seeding, import,
+  asset/project restore) yields the same edge set. `source_path` = `channelTemplates.<channel>`.
+  Channels are compiled without the CDL (it only drives name diagnostics). Cost: a template save
+  compiles its channels twice (validation + extraction) — acceptable at template-save frequency;
+  the compile cache (M16.1) can remove it later.
+- The resolver (incl. the `nav:` → `FolderScope.navigationReferenceUid` + NAVIGATION-scope check) moved
+  from `TemplateServiceImpl` into the shared `asset/reference/ProjectReferenceResolver` component, used
+  by both compile-on-save and extraction, so a reference that saves is exactly one that is persisted.
+  The nav scope check now reads the folder's open version via `AssetVersionRepository` (was
+  `AssetService.requireCurrent`, which the materializer cannot depend on without a cycle).
+- Rename cascade deviation: `TemplateServiceImpl.update` writes the template's version (and OCTL
+  edges) in its own revision, and `migrateRenames` opens a separate batch for the rewritten pages —
+  that was already M15.2.2's behaviour (`TemplateServiceTest` asserts `before + 2`). The test proves
+  the template's edges at the template revision and all rewritten pages' edge sets in the one batch
+  revision; merging both into one revision is not in this task's scope.
+- Tests: `OctlCompilerReferenceUseTest` (every instruction type, nested `$CMS_IF`/`$CMS_FOR`,
+  multi-use keys, keys == resolved references), `ReferenceMaterializerTest.derivesOctlEdgesPerChannelFromATemplate`,
+  `ReferenceMaterializationIntegrationTest` (include + markdown ref per channel, include removal closes
+  the row, `nav:root` → `navigation_root`, rename cascade). sf-template, sf-domain, sf-generate, sf-api,
+  sf-app suites green.
+- PR note (UID literal references): with persisted `OCTL_*` rows, `UidChangeResult.affectedTemplates`
+  could be answered from `asset_reference` instead of scanning sources; left unchanged as instructed.
