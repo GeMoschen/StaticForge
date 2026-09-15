@@ -15,13 +15,40 @@
 - A channel settings change resets non-overridden URL registry entries; payload indexes in `BuildPlanner` are deleted once `TEMPLATE` rows exist
 
 ## Steps
-- [ ] T1 render track
-- [ ] T2 references track
-- [ ] T3 channel settings track
-- [ ] T4 validation track
-- [ ] Integrate on `m16-foundations` + full verification
-- [ ] M16.6.1 journeys, benchmark, docs
-- [ ] Review section
+- [x] T1 render track
+- [x] T2 references track
+- [x] T3 channel settings track
+- [x] T4 validation track
+- [x] Integrate on `m16-foundations` + full verification (`./gradlew build` green: 454 tests, 0 failures, 1 skipped)
+- [x] Extra fixes found during M16: form engine nested CDL `group` values under `_group_N`; project restore left tombstones open
+- [x] M16.6.1 journeys, benchmark, docs
+- [x] Review section
+
+## Review
+- **Branch:** `m16-foundations` (master untouched). Four worktree tracks + docs branch merged; conflicts were
+  mechanical (`RenderPipeline`, `GenerationService`, `ChannelServiceImpl`, `TemplateServiceImpl`, tests using the old
+  `forSnapshot(...)` tuple).
+- **Verification:** `./gradlew build --rerun-tasks` green (457 tests, 0 failures, 1 skipped = benchmark; includes
+  `ng build`). `ui/e2e/m16-journeys.spec.ts` 5/5 against a live dev backend + ng serve. Benchmark 5,000 pages:
+  full 6.8–10.5 s, incremental 336–471 ms (master: 8.8 s / 0.38 s medians); G5 holds.
+- **Integration fixes beyond the tracks:**
+  - Form engine stored CDL `group` children under `_group_N` (would block publish via `SF-GEN-0120`) → flattened,
+    legacy fallback, `form-builder.service.spec.ts` (fails on old code).
+  - `ProjectRestoreService` left tombstones open (two open versions) → `findOpenByProject`; 2 regression tests (fail
+    on old code).
+  - Render-limit errors failed the whole run → page-scoped, run `PARTIAL` (`IncludeCycleGenerationIntegrationTest`).
+  - Unpinned runs omitted deleted assets (`SF-TPL-0110` instead of empty + warning) → pinned to head revision,
+    `SF-GEN-0220` for deleted `$CMS_REF`/include/section targets.
+  - Preview frame blank on render errors → shows problem code/detail (`preview-error.spec.ts`).
+  - `BuildPlanner` redundant second edge load removed (projected `ReferenceEdge`), unused render dependency map
+    removed, generation completeness check shares the build compile memo, last duplicate prefix mapper removed.
+- **Open / not verified:**
+  - Liquibase `015-revision-aware-references.xml` not run on PostgreSQL (none available; changeset is a plain
+    `createIndex` + `delete`, reviewed as portable). Epic exit criterion left unticked for that reason.
+  - Channels UI settings fields verified via journey 3 in the browser; no component spec (templateUrl specs broken).
+  - Known, out of M16 scope: Angular sanitizes the preview `srcdoc` (strips template `<style>`/`<script>`); older
+    e2e journey files (m3–m15) use outdated login selectors; render-time `nav:` subtree changes aren't in the
+    incremental graph (M22.1.1).
 
 ---
 
