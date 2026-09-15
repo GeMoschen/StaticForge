@@ -12,6 +12,7 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -66,6 +67,7 @@ public class TemplateServiceImpl implements TemplateService {
     private final AssetService assetService;
     private final RevisionService revisionService;
     private final ObjectMapper objectMapper;
+    private final ReferenceMaterializer referenceMaterializer;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final OctlCompiler octlCompiler = new OctlCompiler();
 
@@ -74,12 +76,14 @@ public class TemplateServiceImpl implements TemplateService {
             AssetVersionRepository assetVersionRepository,
             AssetService assetService,
             RevisionService revisionService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ReferenceMaterializer referenceMaterializer) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.revisionService = revisionService;
         this.objectMapper = objectMapper;
+        this.referenceMaterializer = referenceMaterializer;
     }
 
     @Override
@@ -349,10 +353,10 @@ public class TemplateServiceImpl implements TemplateService {
         RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
         for (AffectedPage page : affected) {
             Revision revision = revisionService.allocateOrJoin(batchCtx, ChangeType.UPDATE);
-            close(page.version().getAssetId(), revision.getRevisionId());
-            insertVersion(page.version(), page.payload(), revision.getRevisionId(), ctx.userId());
             Asset asset = assetRepository.findById(page.version().getAssetId())
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found.")));
+            close(page.version().getAssetId(), revision.getRevisionId());
+            insertVersion(page.version(), page.payload(), revision.getRevisionId(), ctx.userId(), asset);
             appendSummary(asset, revision);
         }
     }
@@ -410,16 +414,17 @@ public class TemplateServiceImpl implements TemplateService {
         });
     }
 
-    private void insertVersion(AssetVersion current, JsonNode payload, long revisionId, Long changedBy) {
-        insertVersion(current, payload, revisionId, changedBy, current.getFolderId(), current.getFolderPath(), null);
+    private void insertVersion(AssetVersion current, JsonNode payload, long revisionId, Long changedBy, Asset asset) {
+        insertVersion(current, payload, revisionId, changedBy, current.getFolderId(), current.getFolderPath(), asset);
     }
 
     /**
-     * {@code asset}, when non-null, is wired directly onto the new row (see {@link
-     * AssetVersion#setAsset}) — required whenever the caller's own transaction might read the
-     * new version back out through a JPQL query joining {@code v.asset} (e.g. {@code
-     * AssetServiceImpl#search}), since the session's identity map would otherwise keep handing
-     * back this very instance with a still-null association.
+     * {@code asset} is wired directly onto the new row (see {@link AssetVersion#setAsset}) —
+     * required whenever the caller's own transaction might read the new version back out through
+     * a JPQL query joining {@code v.asset} (e.g. {@code AssetServiceImpl#search}), since the
+     * session's identity map would otherwise keep handing back this very instance with a
+     * still-null association — and the version's outgoing reference rows are synced in the same
+     * revision (§5.4).
      */
     private void insertVersion(
             AssetVersion current, JsonNode payload, long revisionId, Long changedBy, Long folderId, String folderPath, Asset asset) {
@@ -429,10 +434,8 @@ public class TemplateServiceImpl implements TemplateService {
         next.setFolderPath(folderPath);
         next.setTemplateAssetId(current.getTemplateAssetId());
         next.setDeleted(current.isDeleted());
-        if (asset != null) {
-            next.setAsset(asset);
-        }
-        assetVersionRepository.save(next);
+        next.setAsset(asset);
+        referenceMaterializer.materialize(asset, assetVersionRepository.save(next));
     }
 
     private void appendSummary(Asset asset, Revision revision) {

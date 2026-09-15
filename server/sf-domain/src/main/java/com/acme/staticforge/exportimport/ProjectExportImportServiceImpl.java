@@ -15,6 +15,7 @@ import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.media.Blob;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.channel.OutputChannel;
 import com.acme.staticforge.channel.OutputChannelRepository;
 import com.acme.staticforge.common.JsonUtil;
@@ -121,6 +122,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final ObjectMapper objectMapper;
     private final OutputChannelRepository outputChannelRepository;
     private final GenerationTargetRepository generationTargetRepository;
+    private final ReferenceMaterializer referenceMaterializer;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -135,7 +137,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             BlobRepository blobRepository,
             ObjectMapper objectMapper,
             OutputChannelRepository outputChannelRepository,
-            GenerationTargetRepository generationTargetRepository) {
+            GenerationTargetRepository generationTargetRepository,
+            ReferenceMaterializer referenceMaterializer) {
         this.projectRepository = projectRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetRepository = assetRepository;
@@ -149,6 +152,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         this.objectMapper = objectMapper;
         this.outputChannelRepository = outputChannelRepository;
         this.generationTargetRepository = generationTargetRepository;
+        this.referenceMaterializer = referenceMaterializer;
     }
 
     // ------------------------------------------------------------------
@@ -455,18 +459,25 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Instant importedAt = Instant.now();
         int created = 0;
         int updated = 0;
+        List<AssetVersion> importedVersions = new ArrayList<>();
         for (ExportedAsset asset : order(assets, rootAsset)) {
             String key = asset.uuid().toLowerCase();
             if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key)) {
                 continue;
             }
-            createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest, importedAt,
-                    revision.getRevisionId(), ctx);
+            importedVersions.add(createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest,
+                    importedAt, revision.getRevisionId(), ctx));
             if (overwritten.contains(key)) {
                 updated++;
             } else {
                 created++;
             }
+        }
+
+        // Outgoing reference rows for every imported asset, in the import's revision (§5.4) —
+        // only once all assets exist, since a reference may point at an asset imported later.
+        for (AssetVersion version : importedVersions) {
+            referenceMaterializer.materialize(version.getAsset(), version);
         }
 
         if (content.settings() != null) {
@@ -682,19 +693,21 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
      * way {@code uid} is never re-derived from the archive on overwrite — {@code Asset.uid} is
      * identity, changed only through the explicit rename flow, never as a side effect of import.
      */
-    private void createImportedAsset(
+    private AssetVersion createImportedAsset(
             long projectId, ExportedAsset asset, Map<String, UUID> remap, Set<String> overwritten, IdMaps idMaps,
             ExportManifest manifest, Instant importedAt, long revision, RevisionContext ctx) {
         AssetType type = AssetType.valueOf(asset.type());
         UUID uuid = remap.get(asset.uuid().toLowerCase());
         boolean overwrite = overwritten.contains(asset.uuid().toLowerCase());
 
+        Asset identity;
         long assetId;
         String uid;
         String changeAction;
         if (overwrite) {
             Asset existing = assetRepository.findByProjectIdAndUuid(projectId, uuid)
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Existing asset not found for overwrite.")));
+            identity = existing;
             assetId = existing.getId();
             uid = existing.getUid();
             changeAction = "UPDATE";
@@ -705,6 +718,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         } else {
             uid = uidGenerator.deriveUid(asset.displayName(), projectId, type);
             Asset saved = assetRepository.save(new Asset(uuid, projectId, type, uid, importedAt, ctx.userId()));
+            identity = saved;
             assetId = saved.getId();
             changeAction = "CREATE";
         }
@@ -739,10 +753,12 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             version.setMimeType(asset.mimeType());
             version.setSizeBytes(asset.sizeBytes());
         }
-        assetVersionRepository.save(version);
+        version.setAsset(identity);
+        AssetVersion saved = assetVersionRepository.save(version);
 
         revisionService.appendSummary(projectId, revision,
                 new AssetChange(uuid.toString(), type.name(), uid, changeAction, List.of(), false));
+        return saved;
     }
 
     private void importBlobs(JsonNode payload, Map<String, byte[]> archiveBlobs, Set<String> importedShas) {

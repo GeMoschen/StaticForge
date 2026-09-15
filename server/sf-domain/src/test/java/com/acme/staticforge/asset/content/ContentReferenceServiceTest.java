@@ -21,7 +21,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** {@link ContentReferenceService#materialize} against mock repositories (spec §5.4, §14.3). */
+/**
+ * {@link ContentReferenceService}: the pure {@link ContentReferenceService#extract} scanner and the
+ * persisting {@link ContentReferenceService#materialize} wrapper against mock repositories
+ * (spec §5.4, §14.3).
+ */
 class ContentReferenceServiceTest {
 
     private AssetRepository assets;
@@ -132,6 +136,39 @@ class ContentReferenceServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result).extracting(AssetReference::getSourcePath)
                 .containsExactlyInAnyOrder("content.gallery[0]", "content.gallery[1]");
+    }
+
+    @Test
+    void extractIsPureAndRootsPathsAtTheGivenPath() {
+        UUID mediaUuid = UUID.randomUUID();
+        UUID cardTemplate = UUID.randomUUID();
+
+        JsonNode content = JsonUtil.parse("""
+                {
+                  "heroImage": { "type": "MEDIA_REF", "uuid": "%s" },
+                  "broken":    { "type": "MEDIA_REF", "uuid": "not-a-uuid" },
+                  "cards": { "type": "CATALOG", "cards": [
+                    { "instanceId": "c1", "templateRef": "%s", "content": { "img": { "kind": "MEDIA", "uuid": "%s" } } }
+                  ] }
+                }
+                """.formatted(mediaUuid, cardTemplate, mediaUuid));
+
+        List<ExtractedReference> result = service.extract(content, "bodies.main[0].content");
+
+        assertThat(result).containsExactly(
+                new ExtractedReference(ReferenceKind.MEDIA_REF, mediaUuid, "bodies.main[0].content.heroImage"),
+                new ExtractedReference(
+                        ReferenceKind.CONTENT_REF, cardTemplate, "bodies.main[0].content.cards.cards[0].templateRef"),
+                new ExtractedReference(
+                        ReferenceKind.MEDIA_REF, mediaUuid, "bodies.main[0].content.cards.cards[0].content.img"));
+        verify(references, never()).save(any(AssetReference.class));
+        verify(assets, never()).findByProjectIdAndUuid(org.mockito.ArgumentMatchers.anyLong(), any());
+    }
+
+    @Test
+    void extractOfMissingContentIsEmpty() {
+        assertThat(service.extract(null, "content")).isEmpty();
+        assertThat(service.extract(JsonUtil.parse("null"), "content")).isEmpty();
     }
 
     private static Asset asset(Long id) {

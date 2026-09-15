@@ -5,6 +5,7 @@ import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
@@ -50,6 +51,7 @@ public class ChannelServiceImpl implements ChannelService {
     private final AssetVersionRepository assetVersionRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final ReferenceMaterializer referenceMaterializer;
 
     public ChannelServiceImpl(
             OutputChannelRepository channelRepository,
@@ -57,13 +59,15 @@ public class ChannelServiceImpl implements ChannelService {
             AssetRepository assetRepository,
             AssetVersionRepository assetVersionRepository,
             AuditService auditService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ReferenceMaterializer referenceMaterializer) {
         this.channelRepository = channelRepository;
         this.revisionService = revisionService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.referenceMaterializer = referenceMaterializer;
     }
 
     @Override
@@ -201,11 +205,10 @@ public class ChannelServiceImpl implements ChannelService {
             ObjectNode payload = (ObjectNode) current.getPayload().deepCopy();
             payload.withObject("channelTemplates").set(newChannelKey, target.source().deepCopy());
 
-            close(current.getAssetId(), revision.getRevisionId());
-            insertVersion(current, payload, revision.getRevisionId(), ctx.userId());
-
             Asset asset = assetRepository.findById(current.getAssetId())
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found.")));
+            close(current.getAssetId(), revision.getRevisionId());
+            insertVersion(asset, current, payload, revision.getRevisionId(), ctx.userId());
             appendSummary(asset, revision, List.of("channelTemplates"));
         }
     }
@@ -314,14 +317,15 @@ public class ChannelServiceImpl implements ChannelService {
         });
     }
 
-    private void insertVersion(AssetVersion current, JsonNode payload, long revisionId, Long changedBy) {
+    /** Inserts the new version and, in the same revision, syncs its outgoing reference rows (§5.4). */
+    private void insertVersion(Asset asset, AssetVersion current, JsonNode payload, long revisionId, Long changedBy) {
         AssetVersion next = new AssetVersion(
                 current.getAssetId(), revisionId, current.getDisplayName(), payload, changedBy, Instant.now());
         next.setFolderId(current.getFolderId());
         next.setFolderPath(current.getFolderPath());
         next.setTemplateAssetId(current.getTemplateAssetId());
         next.setDeleted(current.isDeleted());
-        assetVersionRepository.save(next);
+        referenceMaterializer.materialize(asset, assetVersionRepository.save(next));
     }
 
     private void appendSummary(Asset asset, Revision revision, List<String> fields) {

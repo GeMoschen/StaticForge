@@ -2,6 +2,7 @@ package com.acme.staticforge.asset;
 
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
@@ -47,6 +48,7 @@ public class AssetServiceImpl implements AssetService {
     private final RevisionService revisionService;
     private final PathService pathService;
     private final UrlRegistryRepository urlRegistryRepository;
+    private final ReferenceMaterializer referenceMaterializer;
 
     public AssetServiceImpl(
             AssetRepository assetRepository,
@@ -56,7 +58,8 @@ public class AssetServiceImpl implements AssetService {
             UidGenerator uidGenerator,
             RevisionService revisionService,
             PathService pathService,
-            UrlRegistryRepository urlRegistryRepository) {
+            UrlRegistryRepository urlRegistryRepository,
+            ReferenceMaterializer referenceMaterializer) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetReferenceRepository = assetReferenceRepository;
@@ -65,6 +68,7 @@ public class AssetServiceImpl implements AssetService {
         this.revisionService = revisionService;
         this.pathService = pathService;
         this.urlRegistryRepository = urlRegistryRepository;
+        this.referenceMaterializer = referenceMaterializer;
     }
 
     @Override
@@ -210,7 +214,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 validatedDisplayName(cmd.displayName()),
                 cmd.payload(),
@@ -243,7 +247,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 current.getDisplayName(),
                 current.getPayload(),
@@ -278,7 +282,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 source.getDisplayName(),
                 source.getPayload(),
@@ -427,7 +431,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 current.getDisplayName(),
                 current.getPayload(),
@@ -449,7 +453,7 @@ public class AssetServiceImpl implements AssetService {
 
         Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.CREATE);
         AssetVersion version = insertVersion(
-                asset.getId(), revision.getRevisionId(), displayName, payload, ctx.userId(), Instant.now(),
+                asset, revision.getRevisionId(), displayName, payload, ctx.userId(), Instant.now(),
                 folderId, folderPath, templateAssetId, false);
         appendSummary(asset, revision, "CREATE", List.of());
         return toView(version);
@@ -462,15 +466,18 @@ public class AssetServiceImpl implements AssetService {
         });
     }
 
+    /** Inserts the new version and, in the same revision, syncs its outgoing reference rows (§5.4). */
     private AssetVersion insertVersion(
-            Long assetId, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
+            Asset asset, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
             Long folderId, String folderPath, Long templateAssetId, boolean deleted) {
-        AssetVersion version = new AssetVersion(assetId, revisionId, displayName, payload, changedBy, changedAt);
+        AssetVersion version = new AssetVersion(asset.getId(), revisionId, displayName, payload, changedBy, changedAt);
         version.setFolderId(folderId);
         version.setFolderPath(folderPath);
         version.setTemplateAssetId(templateAssetId);
         version.setDeleted(deleted);
-        return assetVersionRepository.save(version);
+        AssetVersion saved = assetVersionRepository.save(version);
+        referenceMaterializer.materialize(asset, saved);
+        return saved;
     }
 
     private void appendSummary(Asset asset, Revision revision, String action, List<String> fields) {
