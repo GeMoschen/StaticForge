@@ -184,7 +184,7 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | `SF-GEN-0110` | error | output path collision | `RenderPipeline` (`COLLISION_CODE`) |
 | `SF-GEN-0120` | error (per page) | content incomplete; page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.incompletePages`) |
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
-| `SF-GEN-0220` | warning | reference to a deleted asset | (spec §16.4 — reserved; not yet wired to a constant) |
+| `SF-GEN-0220` | warning | reference to a deleted asset (`$CMS_REF`, `$CMS_INCLUDE`, body section); renders empty | `GenerationRenderer` |
 | `SF-GEN-0301` | warning | `raw` filter on a plain-text editor | (spec §16.3 — raised via `SF-TPL-0301` at compile time) |
 | `SF-GEN-0410` | warning | navigation cycle truncated | `GenerationDiagnosticCodes` |
 | `SF-GEN-0500` | 409 | a generation run is already active | `GenerationService` (`CONFLICT_CODE`) |

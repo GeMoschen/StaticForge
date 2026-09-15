@@ -1,6 +1,6 @@
 ---
 id: M16.6.1
-status: in-progress
+status: done
 depends: [M16.1.1, M16.2.2, M16.3.3, M16.4.1, M16.5.1, M16.5.2]
 epic: m16-render-reference-foundations
 feature: e2e-verification
@@ -53,10 +53,11 @@ navigation trick). The 5,000-page benchmark fixture is the one used for §2.1 G5
       `M15.6.1`, and each journey step is verified manually with evidence (screenshots or generated
       output listing).
 - [x] Benchmark numbers recorded, with full < 5 min and incremental < 10 s on the fixture.
-- [ ] Every doc and spec section listed in Goals is updated. Grep for "deferred" in `OctlRenderer`
-      and the docs returns nothing about cross-asset values. **Open:** owned by the docs agent on a separate
-      branch; `git log m16-foundations` shows no docs/spec commit merged yet (`OctlRenderer` itself has no
-      "deferred" left).
+- [x] Every doc and spec section listed in Goals is updated. Grep for "deferred" in `OctlRenderer`
+      and the docs returns nothing about cross-asset values. *Proof:* docs/spec sync merged on `m16-foundations`
+      and then aligned with the behavior fixed here (render limits → run `PARTIAL`, unpinned runs render deleted
+      targets empty with `SF-TPL-0112`/`SF-GEN-0220`); remaining "deferred" hits are unrelated (demo seed,
+      key-store, OpenTelemetry, Appendix C Q2/Q4/Q7).
 - [x] `./gradlew build` and `ui npm run build` green.
 
 ## Out of scope
@@ -155,3 +156,6 @@ warnings only).
   degrade to `SF-GEN-0220`.
 - The older journey files (m3–m15) still use `input[name="username"]` and deep `page.goto` links, which match neither
   the current login form nor the memory-only token. Not touched here; noted in `ui/e2e/README.md`.
+- Integration follow-up (after this run): `BuildPlanner` loads edges valid at the snapshot revision only, as
+  projected `(from, to)` pairs. Re-measured 5,000 pages, 3 runs: full 6.8 / 8.4 / 10.5 s, incremental 336 / 471 /
+  404 ms — incremental back on master's level (the earlier ~1.05 s median came from the redundant second edge load).

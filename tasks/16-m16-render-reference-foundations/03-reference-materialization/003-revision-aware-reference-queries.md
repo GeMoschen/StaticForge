@@ -100,8 +100,10 @@ dependencies on every run. The table (`006-asset-references.xml`) has indexes `i
   `usages` operation's `query.revision` was taken from the regenerated file — the rest of the regeneration was
   springdoc property-order noise and was dropped to keep the merge small. `npm run build` green.
 - **BuildPlanner**: payload indexes (`pagesByTemplate`/`pagesBySection`, `indexPages`, `parseUuid`) deleted — `TEMPLATE`
-  rows are the single source. Edges valid at `snapshot.revision()` ∪ valid at `lastSuccessfulRevision` are loaded once
-  into an in-memory reverse index (two queries per plan instead of one per visited asset). Deviation/tightening: the walk
+  rows are the single source. Edges valid at `snapshot.revision()` are loaded once, as projected `(from, to)` id pairs
+  (`ReferenceEdge`), into an in-memory reverse index. (Integration follow-up: the original second load of edges valid
+  at `lastSuccessfulRevision` was dropped — a closed edge's `from` asset is always in `changedAssets` — which brought
+  5,000-page incremental planning back to master's level: 336–471 ms vs ~1.05 s.) Deviation/tightening: the walk
   no longer continues past a page that was only *reached* (it still continues from *changed* pages and through
   non-page assets), so "rebuilds exactly the expected pages" holds instead of flooding link chains.
 - The render-time navigation gap (`$CMS_FOR`/`$CMS_NAVIGATION` over a `nav:` subtree whose descendants changed) is

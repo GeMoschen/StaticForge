@@ -274,7 +274,7 @@ Media and folder assets have no outgoing edges. A template reference used in sev
 
 This table powers:
 - **Usage view** ("where is this image used?") — the open incoming edges, current right after a save; `GET …/assets/{uuid}/usages?revision=R` returns the edges valid at R. Deletion without `force` is blocked (`SF-DOM-0120`) only by open incoming edges from another asset whose current version is not deleted.
-- **Incremental generation** — the reverse edges valid at the snapshot revision and at the last successful run's revision define what to rebuild (§18.2). Render-time-only dependencies, such as a `$CMS_NAVIGATION` over a folder whose descendants changed, are not edges and are not covered.
+- **Incremental generation** — the reverse edges valid at the snapshot revision define what to rebuild (§18.2); an edge that closed since the last successful run belongs to an asset that itself changed, so it needs no separate lookup. Render-time-only dependencies, such as a `$CMS_NAVIGATION` over a folder whose descendants changed, are not edges and are not covered.
 - **Broken-link report** — dangling `to_asset_id` after a delete.
 
 ---
@@ -1089,7 +1089,7 @@ At **compile time** the reference is resolved to a UUID; the compiled template s
 
 - Renaming an asset's UID does not break already-compiled templates, but the *source* still shows the old UID — the UID-change API therefore reports affected templates (§6.4).
 - An unresolvable UID is a **compile error** (`SF-TPL-0110`), not a silent empty string, so broken references cannot reach production.
-- A generation run at the current revision loads no deleted assets, so a template reference to a soft-deleted asset fails VALIDATE with `SF-TPL-0110`. A cross-asset value whose target is soft-deleted in the data being rendered (preview, or a run pinned to a revision) renders empty with warning `SF-TPL-0112`.
+- A generation run without an explicit revision is pinned to the project's head revision, so its snapshot is identical to a pinned run's and includes soft-deleted versions. A cross-asset value whose target is soft-deleted renders empty with warning `SF-TPL-0112` (preview and generation alike); `$CMS_REF`, `$CMS_INCLUDE` and body sections pointing at a deleted asset render empty with warning `SF-GEN-0220` in generation.
 
 **Cross-asset values.** `$CMS_VALUE(assetType:uid.path)$`, and an asset accessor in `$CMS_IF`, `$CMS_SET` or a `$CMS_FOR` source (other than `nav:`), read the target's **root value object** and walk `path` over it exactly like a local value: dotted paths, truthiness, loop variables and filters behave identically, and escaping follows the channel default unless `raw` is used. Generation reads the revision-pinned snapshot (`SnapshotAssetValueResolver`); preview reads the version valid at the preview revision, live or time travel (`LiveAssetValueResolver`). Both project through the same function (`AssetValueProjection`), so they cannot disagree:
 
@@ -1264,7 +1264,7 @@ OCTL source ──lex──▶ tokens ──parse──▶ AST ──resolve ref
 - Rendering is a stack-machine walk with an output `StringBuilder` sized from the previous render of the same template (adaptive).
 - Guard rails (`RenderBudget`, one per page render): max nesting depth 32 below the page template (`SF-TPL-0130`), max loop iterations 100,000 (`SF-TPL-0131`), max output size 32 MB (`SF-TPL-0132`), wall-clock budget 5 s (`SF-TPL-0133`). Body sections, `$CMS_INCLUDE`d sections and catalog cards render inside the page's budget, so depth counts every nesting level and the loop, output and time limits apply to the whole page render, not to each nested template.
 - Cycle guard: rendering a template that is already being rendered further up the chain (`a → b → a`, through an include, a body section or a catalog card) fails with `SF-TPL-0135` and the chain in the message. The check runs before the depth check. The same template rendered twice side by side is not a cycle.
-- Exceeding a limit fails that file with a diagnostic while the other pages still render; any such error then marks the generation run `FAILED`, so nothing is published. Preview returns a `422` problem carrying the diagnostic's code.
+- Exceeding a limit fails only that page in generation: the diagnostic names the page and channel, the other pages render and are published, and the run ends `PARTIAL` (the same as a page held back with `SF-GEN-0120`, and as `SF-GEN-0203` oversized file and `SF-GEN-0205` per-page timeout). Run-level errors still fail the run: template VALIDATE errors, `SF-GEN-0110` path collisions, `SF-GEN-0204` and `SF-GEN-0206`. Preview returns a `422` problem carrying the diagnostic's code.
 - Rendering is side-effect free and thread-safe → pages render in parallel on virtual threads.
 
 ### 16.11 Diagnostics
@@ -2606,11 +2606,11 @@ Same content. Two channels. No duplication.
 | `SF-TPL-01xx` | 422 | CDL/OCTL compile errors (§16.11) |
 | `SF-TPL-0111` | — | Cross-asset value without an editor path (compile warning) |
 | `SF-TPL-0112` | — | Cross-asset value target missing or soft-deleted (render warning) |
-| `SF-TPL-0130`–`0133`, `SF-TPL-0135` | 422 (preview) | Render limit exceeded: depth, loop iterations, output size, time budget, include cycle (§16.10); fails the file in generation |
+| `SF-TPL-0130`–`0133`, `SF-TPL-0135` | 422 (preview) | Render limit exceeded: depth, loop iterations, output size, time budget, include cycle (§16.10); fails only that page in generation (run `PARTIAL`) |
 | `SF-GEN-0110` | — | Output path collision (build error) |
 | `SF-GEN-0120` | — | Content incomplete: page held back, run `PARTIAL` (§10.5) |
 | `SF-GEN-0210` | — | No channel template for an enabled channel (warning) |
-| `SF-GEN-0220` | — | Reference to a deleted asset (warning; reserved, not emitted — see `SF-TPL-0112`, §16.4) |
+| `SF-GEN-0220` | — | Reference to a deleted asset: `$CMS_REF`, `$CMS_INCLUDE` or a body section target is soft-deleted; renders empty (warning, §16.4). Cross-asset values use `SF-TPL-0112` |
 | `SF-GEN-0301` | — | `raw` filter on a plain-text editor (warning) |
 | `SF-GEN-0410` | — | Navigation cycle truncated (warning) |
 | `SF-GEN-0500` | 409 | A generation run is already active for this project |

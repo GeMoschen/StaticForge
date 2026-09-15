@@ -114,7 +114,7 @@ $CMS_END_FOR$
 
 ### 2.6 Reference resolution (§16.4)
 
-`assetType:uid` resolves to a UUID at compile time; saving the template records one `asset_reference` row per resolved reference and use (`OCTL_VALUE`, `OCTL_REF`, `OCTL_INCLUDE`, source path `channelTemplates.<channel>`), so usages of the target list your template immediately. An unresolvable UID is a compile error (`SF-TPL-0110`). A generation run at the current revision does not load deleted assets, so a reference to a soft-deleted asset fails validation there with `SF-TPL-0110`; in preview and in runs pinned to a revision a deleted cross-asset value target renders empty with `SF-TPL-0112`. `$CMS_REF` resolves pages → output path (per URL strategy), media → public path (`?variant=w800`), folders → index page.
+`assetType:uid` resolves to a UUID at compile time; saving the template records one `asset_reference` row per resolved reference and use (`OCTL_VALUE`, `OCTL_REF`, `OCTL_INCLUDE`, source path `channelTemplates.<channel>`), so usages of the target list your template immediately. An unresolvable UID is a compile error (`SF-TPL-0110`). A reference to a soft-deleted asset renders empty with a warning, in preview and generation alike: `SF-TPL-0112` for a cross-asset value, `SF-GEN-0220` for a `$CMS_REF`, `$CMS_INCLUDE` or body section target in generation. `$CMS_REF` resolves pages → output path (per URL strategy), media → public path (`?variant=w800`), folders → index page.
 
 Cross-asset values walk the target's *root value object* exactly like a local value, so paths, `$CMS_IF`, `$CMS_SET`, `$CMS_FOR` and filters work unchanged (`$CMS_FOR(link : page:about.links)$`). The root value object is: `page` → the page's editor values (bodies, nav, output and meta are not exposed); `media` → `altText`, `caption`, `copyright`, `fileName`, `mimeType`, `sizeBytes`, `focalPoint`, `width`, `height`, `orientation`, `dominantColor`; `page_reference` → `label`; template and folder types → no values. Every asset also exposes a reserved `_meta` object with `uid` and `displayName` (`$CMS_VALUE(page:about._meta.displayName)$`). Values are escaped by the channel default like any other value. A target deleted after compile renders empty with a warning (`SF-TPL-0112`). A path-less `$CMS_VALUE(page:about)$` is a warning (`SF-TPL-0111`).
 
@@ -142,7 +142,7 @@ Cross-asset values walk the target's *root value object* exactly like a local va
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | editor declared but never used in any channel template |
 
-The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail the affected file in generation (the other pages still render, but the run ends `FAILED` and nothing is published) and return a `422` problem with the diagnostic's code in preview. They apply to the **whole page render**: loop iterations, output size and time are counted across the page template and every section, include and catalog card rendered inside it, not per nested template.
+The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected page in generation (the other pages render and are published, the run ends `PARTIAL`, and the diagnostic names the page) and return a `422` problem with the diagnostic's code in preview. They apply to the **whole page render**: loop iterations, output size and time are counted across the page template and every section, include and catalog card rendered inside it, not per nested template.
 
 ### 3.2 CDL (`SF-CDL-*`) — `template.diagnostic.DiagnosticCodes`
 
@@ -163,6 +163,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail the affected file i
 | `SF-GEN-0110` | error | output path collision |
 | `SF-GEN-0120` | error (per page) | content incomplete: the page has `ERROR` completeness findings (an empty required editor, a count or length out of bounds) and is not published; the message lists `path (message)`, other pages are written and the run ends `PARTIAL` |
 | `SF-GEN-0210` | warning | no channel template for an enabled channel |
+| `SF-GEN-0220` | warning | reference to a deleted asset: a `$CMS_REF`, `$CMS_INCLUDE` or body section target is soft-deleted and renders empty |
 | `SF-GEN-0410` | warning | navigation cycle truncated |
 | `SF-GEN-0411` | error | `$CMS_NAVIGATION` tree contains a dangling `PAGE_REFERENCE` (target missing/deleted, or an empty folder subtree) |
 | `SF-GEN-0500` | 409 | a generation run is already active |
