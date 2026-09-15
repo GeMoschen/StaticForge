@@ -5,11 +5,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
+import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +24,12 @@ import org.junit.jupiter.api.Test;
  * {@code src/test/resources/render} holds {@code template.octl}, {@code content.json}
  * (optional) and {@code expected.html}; adding a language feature adds a directory with
  * no test-code change.
+ *
+ * <p>An optional {@code references.json} stubs cross-asset lookups: it maps each
+ * {@code assetType:uid} reference key to {@code {uuid, value}}. The compiler resolves the key to
+ * {@code uuid}, and the render context gets an {@link AssetValueResolver} returning {@code value}
+ * for that UUID ({@code null} stands for a missing/deleted asset). Without the file, the case
+ * compiles and renders with no resolvers at all.
  */
 class GoldenFileRenderTest {
 
@@ -43,15 +55,32 @@ class GoldenFileRenderTest {
                     : mapper.createObjectNode();
             String expected = read(dir.resolve("expected.html"));
 
-            OctlResult result = compiler.compile(octl, "html", null);
+            Map<String, UUID> uuids = new HashMap<>();
+            Map<UUID, JsonNode> assetValues = new HashMap<>();
+            if (Files.exists(dir.resolve("references.json"))) {
+                mapper.readTree(read(dir.resolve("references.json"))).fields().forEachRemaining(entry -> {
+                    UUID uuid = UUID.fromString(entry.getValue().path("uuid").asText());
+                    uuids.put(entry.getKey(), uuid);
+                    JsonNode value = entry.getValue().path("value");
+                    assetValues.put(uuid, value.isObject() ? value : MissingNode.getInstance());
+                });
+            }
+            ReferenceResolver references = uuids.isEmpty()
+                    ? null
+                    : (assetType, uid) -> Optional.ofNullable(uuids.get(assetType + ":" + uid));
+
+            OctlResult result = compiler.compile(octl, "html", references);
             List<com.acme.staticforge.template.diagnostic.Diagnostic> errors =
                     result.diagnostics().stream()
                             .filter(d -> d.severity() == Severity.ERROR)
                             .toList();
             assertThat(errors).as("compile errors in %s", dir.getFileName()).isEmpty();
 
-            RenderContext context =
-                    RenderContext.builder().channel("html").escaping(Escaping.HTML).values(content).build();
+            RenderContext.Builder builder = RenderContext.builder().channel("html").escaping(Escaping.HTML).values(content);
+            if (!assetValues.isEmpty()) {
+                builder.assetValueResolver((assetType, uuid) -> assetValues.getOrDefault(uuid, MissingNode.getInstance()));
+            }
+            RenderContext context = builder.build();
             String actual = renderer.render(result.template(), context).output();
 
             assertThat(normalize(actual))

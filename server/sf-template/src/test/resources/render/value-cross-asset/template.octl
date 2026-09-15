@@ -1,0 +1,6 @@
+<h1>$CMS_VALUE(page:about.headline)$</h1>
+<p>$CMS_VALUE(page:about._meta.displayName | upper)$ / $CMS_VALUE(title)$</p>
+$CMS_IF(page:about.featured)$<strong>featured</strong>$CMS_ELSE$plain$CMS_END_IF$
+<ul>$CMS_FOR(link : page:about.links)$<li>$CMS_VALUE(link._index)$:$CMS_VALUE(link.label)$</li>$CMS_END_FOR$</ul>
+<img alt="$CMS_VALUE(media:logo.altText)$" width="$CMS_VALUE(media:logo.width)$">
+[$CMS_VALUE(page:gone.headline)$]

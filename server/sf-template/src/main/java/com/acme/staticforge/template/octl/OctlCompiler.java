@@ -81,6 +81,7 @@ public final class OctlCompiler {
                 case OctlNode.Text t -> { /* nothing */ }
                 case OctlNode.Value v -> {
                     checkAccessorRoot(v.accessor(), shadowed, v.line(), v.col(), ctx);
+                    checkCrossAssetPath(v.accessor(), v.line(), v.col(), ctx);
                     checkFilters(v.filters(), v.line(), v.col(), ctx);
                     checkRaw(v.accessor(), v.filters(), v.line(), v.col(), ctx);
                 }
@@ -182,6 +183,20 @@ public final class OctlCompiler {
         }
         ctx.diagnostics.add(Diagnostic.error(
                 DiagnosticCodes.OCTL_UNKNOWN_EDITOR, "Unknown editor name: " + name, line, col));
+    }
+
+    /**
+     * {@code $CMS_VALUE(page:about)$} with no editor path would stringify the target's whole
+     * value object — never useful output, almost always a forgotten {@code .editorName}.
+     */
+    private void checkCrossAssetPath(Accessor accessor, int line, int col, ValidateCtx ctx) {
+        if (accessor.isAssetReference() && accessor.path().isEmpty()) {
+            ctx.diagnostics.add(Diagnostic.warning(
+                    DiagnosticCodes.OCTL_CROSS_ASSET_VALUE_WITHOUT_PATH,
+                    "Cross-asset value without an editor path: " + accessor.referenceKey()
+                            + " (did you mean " + accessor.referenceKey() + ".editorName?)",
+                    line, col));
+        }
     }
 
     private void resolveReference(Accessor accessor, int line, int col, ValidateCtx ctx) {

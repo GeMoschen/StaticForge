@@ -18,6 +18,10 @@ public final class DiagnosticCodes {
     public static final String OCTL_UNKNOWN_NAV_VARIABLE = "SF-TPL-0134";
 
     // OCTL warnings (§16.11)
+    /** A cross-asset {@code $CMS_VALUE(assetType:uid)$} with no editor path (stringifies the whole value object). */
+    public static final String OCTL_CROSS_ASSET_VALUE_WITHOUT_PATH = "SF-TPL-0111";
+    /** Render-time: a cross-asset value's target resolved at compile time but is now missing or soft-deleted (renders empty). */
+    public static final String OCTL_MISSING_VALUE_TARGET = "SF-TPL-0112";
     public static final String OCTL_BODY_NEVER_RENDERED = "SF-TPL-0201";
     public static final String OCTL_RAW_ON_TEXT = "SF-TPL-0301";
     public static final String OCTL_EDITOR_NEVER_USED = "SF-TPL-0310";

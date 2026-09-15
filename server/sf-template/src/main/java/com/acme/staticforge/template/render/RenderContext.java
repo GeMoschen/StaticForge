@@ -9,7 +9,8 @@ import java.util.Map;
 /**
  * The inputs to a single render (spec §16.5): the channel + escaping mode, the asset's
  * editor values, the {@code $CMS_META} values, the enclosing page for {@code $CMS_PAGE.*}
- * read-only access, and an optional {@link UrlResolver} for {@code $CMS_REF}. Built via
+ * read-only access, an optional {@link UrlResolver} for {@code $CMS_REF}, and an optional
+ * {@link AssetValueResolver} for cross-asset values. Built via
  * {@link Builder} and immutable once built; never shared across concurrent renders.
  */
 public final class RenderContext {
@@ -21,6 +22,7 @@ public final class RenderContext {
     private final JsonNode pageValues;
     private final UrlResolver urlResolver;
     private final BlockResolver blockResolver;
+    private final AssetValueResolver assetValueResolver;
 
     private RenderContext(
             String channelKey,
@@ -29,7 +31,8 @@ public final class RenderContext {
             Map<String, JsonNode> meta,
             JsonNode pageValues,
             UrlResolver urlResolver,
-            BlockResolver blockResolver) {
+            BlockResolver blockResolver,
+            AssetValueResolver assetValueResolver) {
         this.channelKey = channelKey;
         this.escaping = escaping;
         this.values = values;
@@ -37,6 +40,7 @@ public final class RenderContext {
         this.pageValues = pageValues;
         this.urlResolver = urlResolver;
         this.blockResolver = blockResolver;
+        this.assetValueResolver = assetValueResolver;
     }
 
     /** A fluent builder for {@link RenderContext}. */
@@ -79,6 +83,11 @@ public final class RenderContext {
         return blockResolver;
     }
 
+    /** The cross-asset value resolver, or {@code null} when cross-asset values render as empty. */
+    public AssetValueResolver assetValueResolver() {
+        return assetValueResolver;
+    }
+
     /** Fluent builder for {@link RenderContext}. */
     public static final class Builder {
         private String channel = "html";
@@ -88,6 +97,7 @@ public final class RenderContext {
         private JsonNode pageValues = MissingNode.getInstance();
         private UrlResolver urlResolver;
         private BlockResolver blockResolver;
+        private AssetValueResolver assetValueResolver;
 
         /** Sets the channel key (for example {@code "markdown"}). */
         public Builder channel(String key) {
@@ -131,9 +141,15 @@ public final class RenderContext {
             return this;
         }
 
+        /** Sets the resolver used for cross-asset values ({@code $CMS_VALUE(page:uid.editor)$}). */
+        public Builder assetValueResolver(AssetValueResolver resolver) {
+            this.assetValueResolver = resolver;
+            return this;
+        }
+
         /** Builds an immutable {@link RenderContext}. */
         public RenderContext build() {
-            return new RenderContext(channel, escaping, values, Map.copyOf(meta), pageValues, urlResolver, blockResolver);
+            return new RenderContext(channel, escaping, values, Map.copyOf(meta), pageValues, urlResolver, blockResolver, assetValueResolver);
         }
     }
 }

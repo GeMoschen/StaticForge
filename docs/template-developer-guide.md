@@ -32,7 +32,7 @@ OCTL renders content into a channel. One template per (template asset, channel).
 | Construct | Meaning |
 |---|---|
 | `$CMS_VALUE(editorName)$` | editor value in scope |
-| `$CMS_VALUE(assetType:uid)$` / `$CMS_VALUE(assetType:uid.editorName)$` | value from another asset |
+| `$CMS_VALUE(assetType:uid.editorName)$` | value from another asset (see §2.6) |
 | `$CMS_REF(assetType:uid)$` | resolved URL/href |
 | `$CMS_REF(editorName)$` | URL for a link/media/reference value |
 | `$CMS_BODY(name)$` | render a body (page templates only) |
@@ -116,6 +116,8 @@ $CMS_END_FOR$
 
 `assetType:uid` resolves to a UUID at compile time and records an `asset_reference` row. An unresolvable UID is a compile error (`SF-TPL-0110`); a soft-deleted target degrades to an empty render with a warning. `$CMS_REF` resolves pages → output path (per URL strategy), media → public path (`?variant=w800`), folders → index page.
 
+Cross-asset values walk the target's *root value object* exactly like a local value, so paths, `$CMS_IF`, `$CMS_SET`, `$CMS_FOR` and filters work unchanged (`$CMS_FOR(link : page:about.links)$`). The root value object is: `page` → the page's editor values (bodies are not exposed); `media` → `altText`, `caption`, `copyright`, `fileName`, `mimeType`, `width`, `height`, …; `page_reference` → `label`, …; template and folder types → no values. Every asset also exposes a reserved `_meta` object with `uid` and `displayName` (`$CMS_VALUE(page:about._meta.displayName)$`). Values are escaped by the channel default like any other value. A target deleted after compile renders empty with a warning (`SF-TPL-0112`); the dependency on it is still recorded. A path-less `$CMS_VALUE(page:about)$` is a warning (`SF-TPL-0111`).
+
 ## Part 3 — Diagnostics
 
 ### 3.1 OCTL (`SF-TPL-*`) — `template.diagnostic.DiagnosticCodes`
@@ -129,6 +131,8 @@ $CMS_END_FOR$
 | `SF-TPL-0110` | error | unresolvable asset reference |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
 | `SF-TPL-0134` | error | `$CMS_NAVIGATION_RECURSE(name)$` references a variable not bound by an enclosing `$CMS_NAVIGATION(...) as name$` |
+| `SF-TPL-0111` | warning | cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
+| `SF-TPL-0112` | warning | render time: a cross-asset value's target is missing or soft-deleted (renders empty) |
 | `SF-TPL-0201` | warning | body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | editor declared but never used in any channel template |

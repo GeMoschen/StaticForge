@@ -1,6 +1,7 @@
 package com.acme.staticforge.template.render;
 
 import com.acme.staticforge.template.diagnostic.Diagnostic;
+import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.octl.Accessor;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.Expr;
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -274,9 +276,8 @@ public final class OctlRenderer implements Renderer {
 
     /**
      * {@code $CMS_FOR$}'s accessor resolution: a {@code nav:uid} reference bootstraps its
-     * top-level children from {@link BlockResolver#resolveNavigationChildren} (the generic {@link
-     * #resolve} always returns {@code MissingNode} for any asset reference — cross-asset value
-     * rendering there is deferred/unsupported); every other accessor goes through the normal path.
+     * top-level children from {@link BlockResolver#resolveNavigationChildren}; every other accessor
+     * (including a cross-asset {@code page:uid.list}) goes through the normal {@link #resolve} path.
      */
     private JsonNode resolveForList(Accessor accessor, List<NamedArg> args, State s) {
         if (accessor.isAssetReference() && "nav".equals(accessor.assetType())) {
@@ -325,8 +326,7 @@ public final class OctlRenderer implements Renderer {
     private JsonNode resolve(Accessor accessor, State s) {
         if (accessor.isAssetReference()) {
             noteReference(accessor, s);
-            // Cross-asset value rendering requires the generation snapshot; deferred.
-            return MissingNode.getInstance();
+            return resolveCrossAsset(accessor, s);
         }
         List<String> path = accessor.path();
         if (path.isEmpty()) {
@@ -355,6 +355,31 @@ public final class OctlRenderer implements Renderer {
             return resolveSub(setValue, path, 1, s);
         }
         return resolveSub(s.context.values(), path, 0, s);
+    }
+
+    /**
+     * {@code assetType:uid.path}: the target's root value object from the context's {@link
+     * AssetValueResolver}, walked by the accessor's path exactly like a local value. Empty when
+     * the context has no resolver or the reference did not resolve at compile time. A target the
+     * resolver reports as missing (soft-deleted since compile) also renders empty, with one
+     * {@code SF-TPL-0112} warning per reference (spec §16.4).
+     */
+    private JsonNode resolveCrossAsset(Accessor accessor, State s) {
+        AssetValueResolver resolver = s.context.assetValueResolver();
+        UUID uuid = s.template.references().get(accessor.referenceKey());
+        if (resolver == null || uuid == null) {
+            return MissingNode.getInstance();
+        }
+        JsonNode root = resolver.valueOf(accessor.assetType(), uuid);
+        if (root == null || root.isMissingNode()) {
+            if (s.missingTargets.add(accessor.referenceKey())) {
+                s.warnings.add(Diagnostic.warning(
+                        DiagnosticCodes.OCTL_MISSING_VALUE_TARGET,
+                        "Cross-asset value target is missing or deleted: " + accessor.referenceKey(), 0, 0));
+            }
+            return MissingNode.getInstance();
+        }
+        return resolveSub(root, accessor.path(), 0, s);
     }
 
     private JsonNode resolveMeta(Accessor accessor, State s) {
@@ -594,6 +619,8 @@ public final class OctlRenderer implements Renderer {
         final StringBuilder out = new StringBuilder(4096);
         final Set<UUID> deps = new LinkedHashSet<>();
         final List<Diagnostic> warnings = new ArrayList<>();
+        /** Reference keys already warned about as missing, so a loop emits one warning, not one per iteration. */
+        final Set<String> missingTargets = new HashSet<>();
         final Deque<LoopFrame> loops = new ArrayDeque<>();
         final Deque<Map<String, JsonNode>> vars = new ArrayDeque<>();
         long startNanos;
