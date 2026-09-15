@@ -97,17 +97,9 @@ public class RenderPipeline {
     }
 
     /**
-     * Executes the pipeline with the project's default output configuration
-     * ({@code indexUid="index"}, {@code trailingSlash=false}, {@code urlStrategy="RELATIVE"}).
-     */
-    public RenderOutcome execute(Snapshot snapshot, BuildPlan plan) {
-        return execute(snapshot, plan, OutputPathResolver.forSnapshot(
-                snapshot, OutputPathResolver.DEFAULT_INDEX_UID, false, "RELATIVE"), null);
-    }
-
-    /**
      * Executes the pipeline against an explicit {@link OutputPathResolver} (matching the one the
-     * planner used), so PRETTY/trailing-slash projects resolve page references correctly.
+     * planner used, built from the channels' output settings), so page references resolve to the
+     * same paths the plan writes.
      */
     public RenderOutcome execute(Snapshot snapshot, BuildPlan plan, OutputPathResolver paths) {
         return execute(snapshot, plan, paths, null);

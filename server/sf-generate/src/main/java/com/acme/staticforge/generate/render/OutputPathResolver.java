@@ -1,5 +1,6 @@
 package com.acme.staticforge.generate.render;
 
+import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.channel.OutputPathExpander;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -29,32 +30,30 @@ import java.util.UUID;
  */
 public final class OutputPathResolver {
 
-    /** The default {@code indexUid}; a page whose UID equals this renders as {@code index.ext}. */
-    public static final String DEFAULT_INDEX_UID = OutputPathExpander.DEFAULT_INDEX_UID;
-
-    /** {@code urlStrategy} value that turns {@code /products/hammer.html} into the pretty form. */
-    public static final String STRATEGY_PRETTY = OutputPathExpander.STRATEGY_PRETTY;
-
-    private static final String STRATEGY_RELATIVE = "RELATIVE";
-
     private final Snapshot snapshot;
-    private final String indexUid;
-    private final boolean trailingSlash;
-    private final String urlStrategy;
+    private final Map<String, ChannelOutputSettings> settingsByChannel;
 
     private volatile Map<String, UUID> collisionOwners = Map.of();
 
-    private OutputPathResolver(Snapshot snapshot, String indexUid, boolean trailingSlash, String urlStrategy) {
+    private OutputPathResolver(Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel) {
         this.snapshot = snapshot;
-        this.indexUid = indexUid == null || indexUid.isBlank() ? DEFAULT_INDEX_UID : indexUid;
-        this.trailingSlash = trailingSlash;
-        this.urlStrategy = urlStrategy == null || urlStrategy.isBlank() ? STRATEGY_RELATIVE : urlStrategy;
+        this.settingsByChannel = Map.copyOf(settingsByChannel);
     }
 
-    /** Builds a resolver for one generation run, pinned to the given snapshot. */
-    public static OutputPathResolver forSnapshot(
-            Snapshot snapshot, String indexUid, boolean trailingSlash, String urlStrategy) {
-        return new OutputPathResolver(snapshot, indexUid, trailingSlash, urlStrategy);
+    /**
+     * Builds a resolver for one generation run, pinned to the given snapshot.
+     *
+     * @param settingsByChannel output settings per channel key; a channel without an entry uses
+     *     {@link ChannelOutputSettings#defaults}
+     */
+    public static OutputPathResolver forSnapshot(Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel) {
+        return new OutputPathResolver(snapshot, settingsByChannel);
+    }
+
+    /** The output settings this resolver applies to {@code channel}. */
+    public ChannelOutputSettings settingsFor(String channel) {
+        ChannelOutputSettings settings = settingsByChannel.get(channel);
+        return settings != null ? settings : ChannelOutputSettings.defaults(channel);
     }
 
     /**
@@ -68,7 +67,7 @@ public final class OutputPathResolver {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }
         OutputPathExpander.PageContext context = toPageContext(page);
-        String path = OutputPathExpander.resolvePath(context, channel, indexUid, trailingSlash, urlStrategy);
+        String path = OutputPathExpander.resolvePath(context, channel, settingsFor(channel));
         return OutputFile.normalize(path);
     }
 
@@ -79,27 +78,13 @@ public final class OutputPathResolver {
     }
 
     /**
-     * Resolves the URL (href) a {@code $CMS_REF(page:...)} should emit for a page. With
-     * {@code urlStrategy=PRETTY} and {@code trailingSlash} this is the directory form
-     * ({@code products/hammer/}); otherwise it matches the concrete output path.
+     * Resolves the URL (href) a {@code $CMS_REF(page:...)} should emit for a page, relative to the
+     * site root. With {@code urlStrategy=PRETTY} and {@code trailingSlash} this is the directory
+     * form ({@code products/hammer/}, the site root as {@code ./}); otherwise it matches the
+     * concrete output path.
      */
     public String resolvePageUrl(UUID pageUuid, String channel) {
-        String path = resolvePagePath(pageUuid, channel);
-        if (!isPretty() || !trailingSlash) {
-            return path;
-        }
-        int slash = path.lastIndexOf('/');
-        return slash >= 0 ? path.substring(0, slash + 1) : "";
-    }
-
-    /** The file extension for a channel key (html→html, markdown→md, else the key itself). */
-    public static String extensionForChannel(String channel) {
-        return OutputPathExpander.extensionForChannel(channel);
-    }
-
-    /** {@code true} when the run uses the PRETTY URL strategy. */
-    public boolean isPretty() {
-        return OutputPathExpander.isPretty(urlStrategy);
+        return OutputPathExpander.urlForPath(resolvePagePath(pageUuid, channel), settingsFor(channel));
     }
 
     /** First-resolved owner (path → page UUID) of each output path; populated by {@link #findCollisions}. */

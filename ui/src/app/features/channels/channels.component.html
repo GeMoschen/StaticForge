@@ -20,14 +20,65 @@
         <input class="input" type="text" formControlName="name" />
       </sf-field>
 
-      <sf-field label="File extension">
+      <sf-field
+        label="File extension"
+        [hint]="
+          form.controls.fileExtension.invalid
+            ? 'Invalid: use 1–10 lowercase letters or digits, without the dot.'
+            : 'Lowercase letters and digits, without the dot. Leave empty to derive it from the key.'
+        "
+      >
         <input
           class="input"
           type="text"
           formControlName="fileExtension"
           autocomplete="off"
+          [placeholder]="extensionPlaceholder()"
         />
       </sf-field>
+
+      <sf-field
+        label="URL strategy"
+        hint="Relative: pages are files (about.html). Pretty: with a trailing slash, pages are folders (about/index.html) linked as about/."
+      >
+        <select class="select" formControlName="urlStrategy">
+          @for (option of urlStrategyOptions; track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </sf-field>
+
+      <sf-field label="Trailing slash" hint="Only available with the Pretty URL strategy.">
+        <input class="checkbox" type="checkbox" formControlName="trailingSlash" />
+      </sf-field>
+
+      <sf-field label="Index page UID" hint="The page with this UID becomes its folder's index page.">
+        <input class="input" type="text" formControlName="indexUid" autocomplete="off" placeholder="index" />
+      </sf-field>
+
+      <sf-field
+        label="Index file name"
+        [hint]="
+          form.controls.indexFileName.invalid
+            ? 'Invalid: use up to 64 letters, digits, dots, dashes or underscores.'
+            : 'File name of a folder\'s index page; also used for pretty folder URLs.'
+        "
+      >
+        <input
+          class="input"
+          type="text"
+          formControlName="indexFileName"
+          autocomplete="off"
+          [placeholder]="indexFileNamePlaceholder()"
+        />
+      </sf-field>
+
+      @if (editing()) {
+        <p class="channels__subtitle">
+          Changing the extension or URL settings moves every page of this channel: the next generation
+          rebuilds all pages, and generated URL registry entries are recomputed (manual overrides are kept).
+        </p>
+      }
 
       <sf-field label="Default escaping">
         <select class="select" formControlName="defaultEscaping">

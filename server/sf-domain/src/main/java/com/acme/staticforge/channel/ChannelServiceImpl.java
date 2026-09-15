@@ -16,15 +16,20 @@ import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.render.Escaping;
+import com.acme.staticforge.urlregistry.UrlRegistryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +55,7 @@ public class ChannelServiceImpl implements ChannelService {
     private final AssetVersionRepository assetVersionRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final UrlRegistryRepository urlRegistryRepository;
 
     public ChannelServiceImpl(
             OutputChannelRepository channelRepository,
@@ -57,13 +63,15 @@ public class ChannelServiceImpl implements ChannelService {
             AssetRepository assetRepository,
             AssetVersionRepository assetVersionRepository,
             AuditService auditService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            UrlRegistryRepository urlRegistryRepository) {
         this.channelRepository = channelRepository;
         this.revisionService = revisionService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.urlRegistryRepository = urlRegistryRepository;
     }
 
     @Override
@@ -77,6 +85,7 @@ public class ChannelServiceImpl implements ChannelService {
     public OutputChannel create(CreateChannelRequest req, RevisionContext ctx) {
         long projectId = ctx.projectId();
         String key = validateKey(req.key());
+        validateOutputSettings(req.fileExtension(), req.settings());
         if (channelRepository.existsByProjectIdAndKey(projectId, key)) {
             throw new SfException(ProblemFactory.conflict("A channel with this key already exists."));
         }
@@ -113,6 +122,16 @@ public class ChannelServiceImpl implements ChannelService {
     public OutputChannel update(String key, UpdateChannelRequest req, RevisionContext ctx) {
         long projectId = ctx.projectId();
         OutputChannel channel = requireChannel(projectId, key);
+        validateOutputSettings(req.fileExtension(), req.settings());
+        ChannelOutputSettings previousOutput = ChannelOutputSettings.of(channel);
+        List<String> outputFields = new ArrayList<>();
+        if (!Objects.equals(defaultString(channel.getFileExtension(), ""), defaultString(req.fileExtension(), ""))) {
+            outputFields.add("fileExtension");
+        }
+        if (req.settings() != null && !req.settings().equals(channel.getSettings())) {
+            outputFields.add("settings");
+        }
+
         channel.setName(defaultString(req.name(), key));
         channel.setFileExtension(req.fileExtension());
         channel.setMimeType(req.mimeType() == null ? channel.getMimeType() : req.mimeType());
@@ -120,10 +139,21 @@ public class ChannelServiceImpl implements ChannelService {
         channel.setEnabled(req.enabled());
         channel.setDefaultChannel(req.isDefault());
         channel.setPosition(req.position() == null ? channel.getPosition() : req.position());
-        channel.setSettings(req.settings());
+        channel.setSettings(req.settings() == null ? channel.getSettings() : req.settings());
         channel = channelRepository.save(channel);
 
-        revisionService.allocate(projectId, ChangeType.UPDATE, null, ctx.userId());
+        Revision revision = revisionService.allocate(projectId, ChangeType.UPDATE, null, ctx.userId());
+        if (!outputFields.isEmpty()) {
+            // Recorded so an incremental build can tell that output paths may have moved.
+            revisionService.appendSummary(
+                    projectId,
+                    revision.getRevisionId(),
+                    AssetChange.create(channelUuid(key), CHANNEL_ASSET_TYPE, "UPDATE", outputFields));
+        }
+        if (!previousOutput.equals(ChannelOutputSettings.of(channel))) {
+            // Registry entries are assign-once; computed ones would keep the old paths forever.
+            urlRegistryRepository.deleteByProjectIdAndChannelKeyAndOverriddenFalse(projectId, key);
+        }
         auditService.record(projectId, ctx.userId(), "CHANNEL_UPDATE", "channel:" + key, channelDetail(key, channel.getName()));
         return channel;
     }
@@ -163,6 +193,41 @@ public class ChannelServiceImpl implements ChannelService {
         channelRepository.delete(channel);
         revisionService.allocate(projectId, ChangeType.DELETE, ctx.comment(), ctx.userId());
         auditService.record(projectId, ctx.userId(), "CHANNEL_DELETE", "channel:" + key, channelDetail(key, channel.getName()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ChannelOutputSettings outputSettings(long projectId, String channelKey) {
+        return channelRepository.findByProjectIdAndKey(projectId, channelKey)
+                .map(ChannelOutputSettings::of)
+                .orElseGet(() -> ChannelOutputSettings.defaults(channelKey));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, ChannelOutputSettings> outputSettings(long projectId) {
+        Map<String, ChannelOutputSettings> settings = new LinkedHashMap<>();
+        for (OutputChannel channel : channelRepository.findByProjectIdOrderByPositionAsc(projectId)) {
+            settings.put(channel.getKey(), ChannelOutputSettings.of(channel));
+        }
+        return settings;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean outputSettingsChangedSince(long projectId, long revision) {
+        for (Revision later : revisionService.findRecent(projectId, revision, null, null, Pageable.unpaged())) {
+            JsonNode assets = later.getSummary() == null ? null : later.getSummary().get("assets");
+            if (assets == null || !assets.isArray()) {
+                continue;
+            }
+            for (JsonNode change : assets) {
+                if (CHANNEL_ASSET_TYPE.equals(change.path("type").asText()) && changesOutput(change)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Override
@@ -274,6 +339,37 @@ public class ChannelServiceImpl implements ChannelService {
                     "Channel key must match [a-z][a-z0-9_]{1,39}."));
         }
         return key;
+    }
+
+    /** 400 with one {@code fieldErrors} entry per invalid {@code fileExtension}/settings value. */
+    private static void validateOutputSettings(String fileExtension, JsonNode settings) {
+        List<ChannelOutputSettings.FieldError> errors = ChannelOutputSettings.validate(fileExtension, settings);
+        if (errors.isEmpty()) {
+            return;
+        }
+        Problem problem = Problem.builder()
+                .type("https://cms.example.com/problems/sf-api-0400")
+                .title("Bad Request")
+                .status(400)
+                .detail(errors.stream().map(e -> e.field() + " " + e.message()).collect(Collectors.joining("; ")))
+                .property("code", "SF-API-0400")
+                .property("fieldErrors", errors)
+                .build();
+        throw new SfException(problem);
+    }
+
+    /** A {@code CHANNEL} summary entry that can move output paths: a new channel, or a changed extension/settings. */
+    private static boolean changesOutput(JsonNode change) {
+        if ("CREATE".equals(change.path("action").asText())) {
+            return true;
+        }
+        for (JsonNode field : change.path("fields")) {
+            String name = field.asText();
+            if ("fileExtension".equals(name) || "settings".equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String channelUuid(String key) {
