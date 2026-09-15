@@ -9,23 +9,28 @@ import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.template.CreateTemplateCommand;
 import com.acme.staticforge.asset.template.TemplateService;
 import com.acme.staticforge.asset.template.TemplateView;
+import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.channel.CreateChannelRequest;
 import com.acme.staticforge.channel.DeletePreview;
 import com.acme.staticforge.channel.OutputChannel;
+import com.acme.staticforge.channel.UpdateChannelRequest;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.render.Escaping;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -44,6 +49,7 @@ class ChannelServiceTest {
     @Autowired ChannelService channelService;
     @Autowired TemplateService templateService;
     @Autowired AssetService assetService;
+    @Autowired RevisionService revisionService;
 
     @Test
     void projectCreateSeedsDefaultHtmlChannel() {
@@ -162,6 +168,43 @@ class ChannelServiceTest {
         assertThat(channelService.defaultEscaping(fx.project().getId(), "markdown")).isEqualTo(Escaping.MARKDOWN);
         assertThat(channelService.defaultEscaping(fx.project().getId(), "html")).isEqualTo(Escaping.HTML);
         assertThat(channelService.defaultEscaping(fx.project().getId(), "missing")).isEqualTo(Escaping.HTML);
+    }
+
+    @Test
+    void outputSettingsChangesAreDetectableSinceARevision() {
+        Fixture fx = newFixture();
+        long projectId = fx.project().getId();
+        OutputChannel html = channelService.list(projectId).get(0);
+
+        long beforeRename = latestRevision(projectId);
+        channelService.update("html", new UpdateChannelRequest("Web", html.getFileExtension(), null, "HTML",
+                true, true, 0, html.getSettings()), fx.ctx());
+        assertThat(channelService.outputSettingsChangedSince(projectId, beforeRename))
+                .as("a rename does not move output paths")
+                .isFalse();
+
+        long beforeSettings = latestRevision(projectId);
+        ObjectNode pretty = html.getSettings().deepCopy();
+        pretty.put("urlStrategy", "PRETTY").put("trailingSlash", true);
+        channelService.update("html", new UpdateChannelRequest("Web", html.getFileExtension(), null, "HTML",
+                true, true, 0, pretty), fx.ctx());
+        assertThat(channelService.outputSettingsChangedSince(projectId, beforeSettings)).isTrue();
+        assertThat(channelService.outputSettings(projectId, "html"))
+                .isEqualTo(new ChannelOutputSettings("html", null, null, ChannelOutputSettings.UrlStrategy.PRETTY, true));
+
+        long beforeCreate = latestRevision(projectId);
+        assertThat(channelService.outputSettingsChangedSince(projectId, beforeCreate)).isFalse();
+        channelService.create(
+                new CreateChannelRequest("markdown", "Markdown", null, "text/markdown", "MARKDOWN",
+                        true, false, 1, null, null),
+                fx.ctx());
+        assertThat(channelService.outputSettingsChangedSince(projectId, beforeCreate)).isTrue();
+        assertThat(channelService.outputSettings(projectId, "markdown").extension()).isEqualTo("md");
+        assertThat(channelService.outputSettings(projectId, "missing")).isEqualTo(ChannelOutputSettings.defaults("missing"));
+    }
+
+    private long latestRevision(long projectId) {
+        return revisionService.findRecent(projectId, PageRequest.of(0, 1)).get(0).getRevisionId();
     }
 
     private Fixture newFixture() {

@@ -67,7 +67,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, navRoot, homeRef, aboutRef, homePage, aboutPage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
         String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -93,7 +93,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, navRoot, homeRef, widgetRef, homePage, widgetPage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         String fromNested = new String(
                 renderer.render(new PlanEntry(WIDGET_PAGE, "html", "products/tools/widget.html")).bytes(),
@@ -125,7 +125,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, navRoot, products, widgetRef, homePage, widgetPage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         RenderedFile file = renderer.render(new PlanEntry(WIDGET_PAGE, "html", "widget.html"));
         String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -151,7 +151,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, sharedRoot, navRoot, homeRef, homePage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
         String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -172,7 +172,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, templatesRoot, homePage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
         String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -195,7 +195,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, cyclicRoot, cyclicPage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         RenderedFile file = renderer.render(new PlanEntry(CYCLIC_PAGE, "html", "cyclic-page.html"));
 
@@ -215,7 +215,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, navRoot, danglingRef, homePage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         assertThatThrownBy(() -> renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html")))
                 .isInstanceOf(RenderLimitException.class)
@@ -236,7 +236,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, navRoot, homeRef, aboutRef, homePage, aboutPage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
         String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -260,7 +260,7 @@ class GenerationRendererNavigationTest {
 
         Snapshot snapshot = snapshot(template, navRoot, products, widgetRef, homePage, widgetPage);
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"), "proj", null);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()), "proj", null);
 
         RenderedFile file = renderer.render(new PlanEntry(WIDGET_PAGE, "html", "widget.html"));
         String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -281,7 +281,7 @@ class GenerationRendererNavigationTest {
         FakeUrlRegistryService registry = new FakeUrlRegistryService();
         GenerationRenderer renderer = new GenerationRenderer(
                 snapshot,
-                OutputPathResolver.forSnapshot(snapshot, "index", false, "RELATIVE"),
+                OutputPathResolver.forSnapshot(snapshot, Map.of()),
                 "proj",
                 null,
                 registry,

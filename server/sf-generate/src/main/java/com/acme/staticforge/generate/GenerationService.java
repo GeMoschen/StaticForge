@@ -5,6 +5,7 @@ import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.ReferenceKind;
 import com.acme.staticforge.asset.content.ContentReferenceService;
+import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.plan.BuildPlan;
@@ -86,6 +87,7 @@ public class GenerationService {
     private final GenerationRunRepository runs;
     private final GenerationTargetRepository targets;
     private final ProjectService projectService;
+    private final ChannelService channelService;
     private final SnapshotService snapshotService;
     private final BuildPlanner buildPlanner;
     private final RenderPipeline renderPipeline;
@@ -106,6 +108,7 @@ public class GenerationService {
             GenerationRunRepository runs,
             GenerationTargetRepository targets,
             ProjectService projectService,
+            ChannelService channelService,
             SnapshotService snapshotService,
             BuildPlanner buildPlanner,
             RenderPipeline renderPipeline,
@@ -119,6 +122,7 @@ public class GenerationService {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
+        this.channelService = channelService;
         this.snapshotService = snapshotService;
         this.buildPlanner = buildPlanner;
         this.renderPipeline = renderPipeline;
@@ -266,18 +270,26 @@ public class GenerationService {
             runs.save(run);
 
             emit(runId, STAGE_PLAN, "Planning build", 0, 0, 0, null);
-            OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, "index", false, "DEFAULT");
+            // Channel settings are live configuration (not revision-pinned), read once per run.
+            OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, channelService.outputSettings(projectId));
             Long lastRevision = runs.findRecentSuccesses(projectId).stream()
                     .findFirst()
                     .map(GenerationRun::getRevisionId)
                     .orElse(null);
+            // A channel output-settings change moves every page of that channel, which the
+            // incremental expansion (asset changes over references) cannot see: build FULL instead.
+            GenerationMode mode = run.getMode() == GenerationMode.INCREMENTAL
+                            && lastRevision != null
+                            && channelService.outputSettingsChangedSince(projectId, lastRevision)
+                    ? GenerationMode.FULL
+                    : run.getMode();
             GenerationTarget target = resolveTarget(run);
             List<String> channels = request.channels() == null
                     ? parseChannels(run.getChannels())
                     : request.channels();
             BuildPlan plan = buildPlanner.plan(
                     snapshot,
-                    run.getMode(),
+                    mode,
                     lastRevision,
                     channels == null || channels.isEmpty() ? null : Set.copyOf(channels),
                     request.folderPath(),

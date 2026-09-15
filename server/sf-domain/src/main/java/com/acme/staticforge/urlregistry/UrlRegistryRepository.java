@@ -64,6 +64,12 @@ public interface UrlRegistryRepository extends JpaRepository<UrlRegistryEntry, L
     /** Reset scope: every entry for one channel in a project (both areas). */
     void deleteByProjectIdAndChannelKey(long projectId, String channelKey);
 
+    /**
+     * Every computed (non-overridden) entry for one channel, both areas — used when the channel's
+     * output settings change ({@code ChannelServiceImpl.update}); manual overrides are kept.
+     */
+    void deleteByProjectIdAndChannelKeyAndOverriddenFalse(long projectId, String channelKey);
+
     /** Reset scope: every entry for a project (all channels, both areas). */
     void deleteByProjectId(long projectId);
 

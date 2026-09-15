@@ -2,6 +2,8 @@ package com.acme.staticforge.urlregistry;
 
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavigationService;
+import com.acme.staticforge.channel.ChannelOutputSettings;
+import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.channel.OutputPathExpander;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -37,15 +39,11 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code PREVIEW} and, before generation wiring lands in `M8.2.3`, {@code GENERATED}) can never
  * drift apart.
  *
- * <p><b>Channel output settings.</b> {@code indexUid}/{@code trailingSlash}/{@code urlStrategy}
- * are not yet wired from {@code OutputChannel.settings} anywhere in this codebase —
- * {@code GenerationService} itself still hardcodes {@code ("index", false, "DEFAULT")}
- * (see {@code GenerationService.run}). This service intentionally mirrors that exact same
- * hardcoded tuple ({@link #DEFAULT_INDEX_UID}/{@link #DEFAULT_TRAILING_SLASH}/{@link
- * #DEFAULT_URL_STRATEGY}) rather than inventing a different, disconnected convention — wiring
- * real per-channel settings through both call sites is a pre-existing gap left for whichever
- * future task closes it, not something this task should paper over with a second hardcoded
- * default that could drift from generation's.
+ * <p><b>Channel output settings.</b> URLs are computed with the channel's own
+ * {@link ChannelOutputSettings} ({@link ChannelService#outputSettings(long, String)}), the same
+ * settings generation's {@code OutputPathResolver} is built from (`M16.4.1`). Because entries are
+ * assign-once, {@code ChannelServiceImpl.update} drops a channel's non-overridden entries when its
+ * output settings change, so they are recomputed with the new settings on next access.
  *
  * <p><b>Concurrent first-{@code resolve} race safety.</b> Per this feature's Notes/hazards, no
  * distributed lock is used. The unique constraint from `M8.2.1`
@@ -76,27 +74,26 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UrlRegistryServiceImpl implements UrlRegistryService {
 
-    static final String DEFAULT_INDEX_UID = "index";
-    static final boolean DEFAULT_TRAILING_SLASH = false;
-    static final String DEFAULT_URL_STRATEGY = "DEFAULT";
-
     private final UrlRegistryRepository repository;
     private final NavigationService navigationService;
     private final LiveNavigationLookup navigationLookup;
     private final LiveOutputPathResolver outputPathResolver;
     private final RevisionService revisionService;
+    private final ChannelService channelService;
 
     public UrlRegistryServiceImpl(
             UrlRegistryRepository repository,
             NavigationService navigationService,
             LiveNavigationLookup navigationLookup,
             LiveOutputPathResolver outputPathResolver,
-            RevisionService revisionService) {
+            RevisionService revisionService,
+            ChannelService channelService) {
         this.repository = repository;
         this.navigationService = navigationService;
         this.navigationLookup = navigationLookup;
         this.outputPathResolver = outputPathResolver;
         this.revisionService = revisionService;
+        this.channelService = channelService;
     }
 
     @Override
@@ -161,7 +158,7 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
             throw new SfException(ProblemFactory.notFound("Page reference does not resolve to a navigable page."));
         }
         String url = outputPathResolver
-                .resolveUrl(ctx.projectId(), resolvedPageUuid, channelKey, DEFAULT_INDEX_UID, DEFAULT_TRAILING_SLASH, DEFAULT_URL_STRATEGY)
+                .resolveUrl(ctx.projectId(), resolvedPageUuid, channelKey, channelService.outputSettings(ctx.projectId(), channelKey))
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Resolved page not found.")));
         // Insert-if-absent, then read back: whether this call or a concurrent one inserted the row,
         // the read returns the single winner. A lost race is a no-op insert, never an exception.

@@ -24,12 +24,6 @@ import java.util.Locale;
  */
 public final class OutputPathExpander {
 
-    /** The default {@code indexUid}; a page whose UID equals this renders as {@code index.ext}. */
-    public static final String DEFAULT_INDEX_UID = "index";
-
-    /** {@code urlStrategy} value that turns {@code /products/hammer.html} into the pretty form. */
-    public static final String STRATEGY_PRETTY = "PRETTY";
-
     private OutputPathExpander() {}
 
     /**
@@ -41,44 +35,38 @@ public final class OutputPathExpander {
     public record PageContext(
             String uid, String displayName, String folderPath, JsonNode payload, JsonNode templatePayload) {}
 
-    /** {@code true} when {@code urlStrategy} is the PRETTY strategy. */
-    public static boolean isPretty(String urlStrategy) {
-        return STRATEGY_PRETTY.equalsIgnoreCase(urlStrategy);
-    }
-
-    /** The file extension for a channel key (html→html, markdown→md, else the key itself). */
-    public static String extensionForChannel(String channel) {
-        if ("markdown".equals(channel)) {
-            return "md";
-        }
-        return channel == null || channel.isBlank() ? "html" : channel;
-    }
-
     /**
      * Resolves the (not-yet-syntax-normalized) relative output path for a page in a channel,
-     * applying the PRETTY/trailingSlash directory rewrite when applicable.
+     * applying the channel's directory form ({@link ChannelOutputSettings#directoryUrls()}) when set.
      */
-    public static String resolvePath(PageContext page, String channel, String indexUid, boolean trailingSlash, String urlStrategy) {
-        String resolvedIndexUid = indexUid == null || indexUid.isBlank() ? DEFAULT_INDEX_UID : indexUid;
-        String path = expand(expressionFor(page, channel), page, channel, resolvedIndexUid);
-        if (isPretty(urlStrategy) && trailingSlash) {
-            path = prettify(path);
+    public static String resolvePath(PageContext page, String channel, ChannelOutputSettings settings) {
+        String path = expand(expressionFor(page, channel), page, channel, settings);
+        if (settings.directoryUrls()) {
+            path = prettify(path, settings);
         }
         return path;
     }
 
     /**
-     * Resolves the URL (href) a {@code $CMS_REF(page:...)} should emit for a page. With
-     * {@code urlStrategy=PRETTY} and {@code trailingSlash} this is the directory form
-     * ({@code products/hammer/}); otherwise it matches the (unnormalized) output path.
+     * Resolves the URL (href) a {@code $CMS_REF(page:...)} should emit for a page: the directory
+     * form of its output path ({@link #urlForPath}) when the channel uses directory URLs, otherwise
+     * the (unnormalized) output path itself.
      */
-    public static String resolveUrl(PageContext page, String channel, String indexUid, boolean trailingSlash, String urlStrategy) {
-        String path = resolvePath(page, channel, indexUid, trailingSlash, urlStrategy);
-        if (!isPretty(urlStrategy) || !trailingSlash) {
+    public static String resolveUrl(PageContext page, String channel, ChannelOutputSettings settings) {
+        return urlForPath(resolvePath(page, channel, settings), settings);
+    }
+
+    /**
+     * The URL for a resolved output path. With directory URLs, {@code products/hammer/index.html}
+     * links as {@code products/hammer/} and a site-root index as {@code ./} (never blank, which a
+     * browser would resolve to the current page); otherwise the path is the URL.
+     */
+    public static String urlForPath(String path, ChannelOutputSettings settings) {
+        if (!settings.directoryUrls()) {
             return path;
         }
         int slash = path.lastIndexOf('/');
-        return slash >= 0 ? path.substring(0, slash + 1) : "";
+        return slash >= 0 ? path.substring(0, slash + 1) : "./";
     }
 
     // ------------------------------------------------------------------
@@ -103,10 +91,10 @@ public final class OutputPathExpander {
         return "{folder}{uid}.{ext}";
     }
 
-    private static String expand(String expression, PageContext page, String channel, String indexUid) {
+    private static String expand(String expression, PageContext page, String channel, ChannelOutputSettings settings) {
         String folder = relativeFolder(page.folderPath());
-        String uid = indexUid.equals(page.uid()) ? DEFAULT_INDEX_UID : (page.uid() == null ? "" : page.uid());
-        String ext = extensionForChannel(channel);
+        String uid = settings.indexUid().equals(page.uid()) ? settings.indexStem() : (page.uid() == null ? "" : page.uid());
+        String ext = settings.extension();
         DateParts date = dateParts(page);
         return expression
                 .replace("{displayNameSlug}", slugify(page.displayName()))
@@ -193,8 +181,11 @@ public final class OutputPathExpander {
         }
     }
 
-    /** {@code products/hammer.html} → {@code products/hammer/index.html} (already-index paths unchanged). */
-    private static String prettify(String path) {
+    /**
+     * {@code products/hammer.html} → {@code products/hammer/index.html}, using the channel's
+     * {@code indexFileName}; a path whose file stem already is the index stem stays unchanged.
+     */
+    private static String prettify(String path, ChannelOutputSettings settings) {
         int slash = path.lastIndexOf('/');
         String dir = slash >= 0 ? path.substring(0, slash + 1) : "";
         String leaf = path.substring(slash + 1);
@@ -203,10 +194,10 @@ public final class OutputPathExpander {
             return path;
         }
         String stem = leaf.substring(0, dot);
-        if ("index".equals(stem)) {
+        if (settings.indexStem().equals(stem)) {
             return path;
         }
-        return dir + stem + "/index" + leaf.substring(dot);
+        return dir + stem + "/" + settings.indexFileName();
     }
 
     private record DateParts(String year, String month, String day) {

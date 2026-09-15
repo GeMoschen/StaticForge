@@ -3,6 +3,7 @@ package com.acme.staticforge.urlregistry;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
+import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.channel.OutputPathExpander;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Optional;
@@ -41,10 +42,9 @@ public class LiveOutputPathResolver {
      * placeholder-resolution order as generation. Empty when the page uuid doesn't resolve to a
      * live, non-deleted asset.
      */
-    public Optional<String> resolveUrl(
-            long projectId, UUID pageUuid, String channel, String indexUid, boolean trailingSlash, String urlStrategy) {
+    public Optional<String> resolveUrl(long projectId, UUID pageUuid, String channel, ChannelOutputSettings settings) {
         return pageContext(projectId, pageUuid)
-                .map(context -> normalize(OutputPathExpander.resolveUrl(context, channel, indexUid, trailingSlash, urlStrategy)));
+                .map(context -> normalize(OutputPathExpander.resolveUrl(context, channel, settings)));
     }
 
     private Optional<OutputPathExpander.PageContext> pageContext(long projectId, UUID pageUuid) {
