@@ -1,10 +1,12 @@
 package com.acme.staticforge.urlregistry;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,6 +20,31 @@ public interface UrlRegistryRepository extends JpaRepository<UrlRegistryEntry, L
 
     Optional<UrlRegistryEntry> findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
             long projectId, String channelKey, UUID pageReferenceUuid, UrlArea area);
+
+    /**
+     * Inserts a computed (non-overridden) entry unless the tuple already exists, atomically at the
+     * database level ({@code uq_url_registry_tuple}). Unlike {@code save} + catching the unique
+     * violation, losing a concurrent race here raises no exception, so it neither poisons the
+     * persistence context nor marks the transaction rollback-only. Supported by PostgreSQL and by
+     * H2 in PostgreSQL mode (dev/test).
+     *
+     * @return 1 if this call inserted the row, 0 if the tuple already existed
+     */
+    @Modifying
+    @Query(value = """
+            INSERT INTO url_registry_entry
+                (project_id, channel_key, page_reference_uuid, area, url, assigned_at, assigned_revision, overridden)
+            VALUES (:projectId, :channelKey, :pageReferenceUuid, :area, :url, :assignedAt, :assignedRevision, FALSE)
+            ON CONFLICT DO NOTHING
+            """, nativeQuery = true)
+    int insertIfAbsent(
+            @Param("projectId") long projectId,
+            @Param("channelKey") String channelKey,
+            @Param("pageReferenceUuid") UUID pageReferenceUuid,
+            @Param("area") String area,
+            @Param("url") String url,
+            @Param("assignedAt") Instant assignedAt,
+            @Param("assignedRevision") long assignedRevision);
 
     /** Paginated, filterable listing for the settings UI: {@code channelKey}/{@code area} are optional. */
     @Query("""

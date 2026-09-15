@@ -7,5 +7,10 @@ public enum RunStatus {
     SUCCESS,
     PARTIAL,
     FAILED,
-    CANCELLED
+    CANCELLED;
+
+    /** Whether the run has finished and will emit no further progress. */
+    public boolean isTerminal() {
+        return this != QUEUED && this != RUNNING;
+    }
 }

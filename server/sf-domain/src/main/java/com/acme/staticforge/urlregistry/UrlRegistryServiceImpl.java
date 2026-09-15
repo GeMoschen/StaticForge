@@ -12,7 +12,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -51,8 +50,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>Concurrent first-{@code resolve} race safety.</b> Per this feature's Notes/hazards, no
  * distributed lock is used. The unique constraint from `M8.2.1`
  * ({@code uq_url_registry_tuple}) is the source of truth: if two callers race to compute the
- * same absent tuple, the loser's {@code save} throws {@link DataIntegrityViolationException},
- * which is caught here and turned into a re-read of the now-present row the winner inserted.
+ * same absent tuple, both run {@link UrlRegistryRepository#insertIfAbsent} ({@code INSERT ... ON
+ * CONFLICT DO NOTHING}) and then re-read, so the loser's insert is a silent no-op and it reads the
+ * winner's row. (Catching a unique violation from {@code save} instead cannot work: the failed
+ * insert leaves the entity in the session and marks the transaction rollback-only.)
  *
  * <p><b>{@code RevisionContext} / audit trail.</b> Confirmed against {@code RevisionService}
  * (the M1 revision service): {@code RevisionService.allocate} always creates a real {@code
@@ -162,15 +163,13 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
         String url = outputPathResolver
                 .resolveUrl(ctx.projectId(), resolvedPageUuid, channelKey, DEFAULT_INDEX_UID, DEFAULT_TRAILING_SLASH, DEFAULT_URL_STRATEGY)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Resolved page not found.")));
-        UrlRegistryEntry entry = new UrlRegistryEntry(
-                ctx.projectId(), channelKey, pageReferenceUuid, area, url, Instant.now(), currentRevision(ctx.projectId()), false);
-        try {
-            return repository.save(entry);
-        } catch (DataIntegrityViolationException raceLost) {
-            // Another caller won the race and inserted the same tuple first (unique constraint,
-            // `M8.2.1`) — reread rather than retry-writing (Notes/hazards: no distributed lock).
-            return find(ctx.projectId(), channelKey, pageReferenceUuid, area).orElseThrow(() -> raceLost);
-        }
+        // Insert-if-absent, then read back: whether this call or a concurrent one inserted the row,
+        // the read returns the single winner. A lost race is a no-op insert, never an exception.
+        repository.insertIfAbsent(
+                ctx.projectId(), channelKey, pageReferenceUuid, area.name(), url, Instant.now(), currentRevision(ctx.projectId()));
+        return find(ctx.projectId(), channelKey, pageReferenceUuid, area)
+                .orElseThrow(() -> new IllegalStateException(
+                        "URL registry entry missing right after insert-if-absent for " + pageReferenceUuid));
     }
 
     private long currentRevision(long projectId) {

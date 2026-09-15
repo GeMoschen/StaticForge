@@ -39,6 +39,8 @@ Templates are owned by **template developers** (see the [template-developer guid
 
 ### Generate & publish
 
+First, in **Settings → Targets**, create at least one target (the first one becomes the default). Each target writes into its own folder, `{projectKey}/{output folder}` under the server's output root (`{projectKey}/target-{id}` when the folder is left empty); two targets of a project may not share or nest folders (an imported target whose folder is invalid or clashes is imported without it and uses its default folder; the import analysis warns about this). Set **Base URL** for correct sitemap and absolute links.
+
 1. Open **Generate**, pick full or incremental mode, channels, and a target, then start.
 2. A live log shows per-stage progress, error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5).
 3. Roll back to a previous build with **Promote** on a past run (the last few builds are retained).

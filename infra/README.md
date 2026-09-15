@@ -112,4 +112,4 @@ npm test
 | `SF_JWT_SECRET`     | backend  | HS256 secret (dev/demo only)                                  |
 | `SF_JWT_KEYSTORE`   | backend  | RS256 keystore location (prod; provisioned in M1)             |
 | `SF_MEDIA_ROOT`     | backend  | Media blob store root (mounted volume in compose)             |
-| `SF_OUTPUT_ROOT`    | backend  | Generated output root (mounted volume in compose)             |
+| `SF_OUTPUT_ROOT`    | backend  | Generated output root; each target publishes to `{projectKey}/{path}/current` beneath it. Old shared-root output (`builds/`, `current`, `s3/`) is deleted at startup unless `sf.generate.cleanup-legacy-output=false` — repoint web servers first |

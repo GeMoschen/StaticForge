@@ -1286,6 +1286,7 @@ export interface components {
             type?: string;
             config?: components["schemas"]["JsonNode"];
             isDefault?: boolean;
+            outputPath?: string;
         };
         UpdateTemplateRequest: {
             displayName?: string;

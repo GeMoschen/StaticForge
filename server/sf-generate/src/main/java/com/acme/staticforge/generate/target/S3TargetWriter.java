@@ -18,38 +18,32 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p><b>Documented design (single-node v1):</b> real S3 upload and CDN invalidation are a
  * config/runbook concern and are intentionally out of scope. This stub simulates the write by
- * mirroring keys under {@code {outputRoot}/s3/{targetName}/{runId}/...} and records the set of
+ * mirroring keys under {@code {targetRoot}/{runId}/...} and records the set of
  * <em>NEW or changed</em> keys (the invalidation set) on {@code publish} by diffing each key's
  * SHA-256 fingerprint against the previously published run's manifest. {@code promote} re-points
  * the {@code current} marker at a prior runId.
  */
 public final class S3TargetWriter implements TargetWriter {
 
-    private final Path outputRoot;
-    private final String targetName;
+    private final Path targetRoot;
 
     private final Map<Long, Map<String, String>> staged = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> changedKeys = new ConcurrentHashMap<>();
 
-    public S3TargetWriter(Path outputRoot, String targetName) {
-        this.outputRoot = outputRoot.toAbsolutePath().normalize();
-        this.targetName = targetName == null || targetName.isBlank() ? "default" : targetName;
-    }
-
-    private Path s3Root() {
-        return outputRoot.resolve("s3").resolve(targetName);
+    public S3TargetWriter(Path targetRoot) {
+        this.targetRoot = targetRoot.toAbsolutePath().normalize();
     }
 
     private Path runDir(long runId) {
-        return s3Root().resolve(String.valueOf(runId));
+        return targetRoot.resolve(String.valueOf(runId));
     }
 
     private Path manifest(long runId) {
-        return s3Root().resolve(String.valueOf(runId) + ".keys");
+        return targetRoot.resolve(String.valueOf(runId) + ".keys");
     }
 
     private Path current() {
-        return s3Root().resolve("current");
+        return targetRoot.resolve("current");
     }
 
     @Override
@@ -92,7 +86,7 @@ public final class S3TargetWriter implements TargetWriter {
 
     @Override
     public String describe() {
-        return "s3 (local mirror) target '" + targetName + "' at " + outputRoot;
+        return "s3 (local mirror) target at " + targetRoot;
     }
 
     /** Returns the NEW/changed keys (invalidation set) computed for {@code runId}, or empty. */

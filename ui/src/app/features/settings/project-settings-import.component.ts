@@ -25,6 +25,7 @@ const CONFLICT_ICONS: Record<string, string> = {
   MISSING_TEMPLATE_REFERENCE: 'link_off',
   MISSING_PARENT_FOLDER: 'folder_off',
   SETTINGS_KEY_COLLISION: 'settings',
+  TARGET_PATH_COLLISION: 'drive_file_move',
 };
 
 /**

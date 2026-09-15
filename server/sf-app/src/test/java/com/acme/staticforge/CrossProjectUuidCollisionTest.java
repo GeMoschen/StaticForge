@@ -23,6 +23,7 @@ import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.RunStatus;
+import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
@@ -180,8 +181,8 @@ class CrossProjectUuidCollisionTest {
         // The home page (index.html) is a $CMS_NAVIGATION listing, not the target page's own
         // content — it must link to each project's own (differently-slugged) target output, with
         // no cross-talk between the two nav trees.
-        String homeOutputA = Files.readString(outputRoot.resolve("builds").resolve(String.valueOf(runIdA)).resolve("index.html"));
-        String homeOutputB = Files.readString(outputRoot.resolve("builds").resolve(String.valueOf(runIdB)).resolve("index.html"));
+        String homeOutputA = Files.readString(buildDir(a, targetA, runIdA).resolve("index.html"));
+        String homeOutputB = Files.readString(buildDir(b, targetB, runIdB).resolve("index.html"));
 
         String generatedHrefA = urlRegistryService.resolve(pageRefA.uuid(), "html", UrlArea.GENERATED, a.ctx());
         String generatedHrefB = urlRegistryService.resolve(pageRefB.uuid(), "html", UrlArea.GENERATED, b.ctx());
@@ -194,9 +195,9 @@ class CrossProjectUuidCollisionTest {
         // The target page's own generated output (found at its resolved href) carries its
         // project's own content, not the other project's.
         String targetOutputA = Files.readString(
-                outputRoot.resolve("builds").resolve(String.valueOf(runIdA)).resolve(generatedHrefA));
+                buildDir(a, targetA, runIdA).resolve(generatedHrefA));
         String targetOutputB = Files.readString(
-                outputRoot.resolve("builds").resolve(String.valueOf(runIdB)).resolve(generatedHrefB));
+                buildDir(b, targetB, runIdB).resolve(generatedHrefB));
         assertThat(targetOutputA).contains("PROJECT_A_CONTENT").doesNotContain("PROJECT_B_CONTENT");
         assertThat(targetOutputB).contains("PROJECT_B_CONTENT").doesNotContain("PROJECT_A_CONTENT");
 
@@ -252,6 +253,12 @@ class CrossProjectUuidCollisionTest {
     // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
+
+    private static Path buildDir(Fixture fx, GenerationTarget target, long runId) {
+        return TargetLocations.resolve(outputRoot, fx.project().getKey(), target)
+                .resolve("builds")
+                .resolve(String.valueOf(runId));
+    }
 
     private GenerationTarget createTarget(Fixture fx) throws IOException {
         return targetRepository.save(new GenerationTarget(

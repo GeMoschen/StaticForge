@@ -113,3 +113,60 @@
 .summary-bad {
   color: var(--sf-rust);
 }
+
+.details-row td {
+  background: color-mix(in srgb, var(--sf-surface) 70%, transparent);
+}
+
+.details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--sf-1) var(--sf-3);
+  margin: 0 0 var(--sf-2);
+  font-size: var(--sf-text-sm);
+}
+
+.details dt {
+  color: var(--sf-slate);
+}
+
+.details dd {
+  margin: 0;
+}
+
+.details__empty {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.diagnostics {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+}
+
+.diagnostic {
+  color: var(--sf-amber);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diagnostic--error {
+  color: var(--sf-rust);
+}
+
+.diagnostic__code {
+  font-weight: 600;
+  margin-right: var(--sf-2);
+}
+
+.log-line--error {
+  color: #e0735a;
+}
+
+.log-line--warning {
+  color: #d9a441;
+}

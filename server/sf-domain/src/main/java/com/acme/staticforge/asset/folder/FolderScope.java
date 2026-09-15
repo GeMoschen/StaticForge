@@ -53,6 +53,16 @@ public enum FolderScope {
         };
     }
 
+    /**
+     * The folder uid a {@code nav:<uid>} template reference looks up. {@code nav:root} is the
+     * documented way to address the whole navigation tree, so it maps to {@link
+     * #NAVIGATION_ROOT_UID} — never to the hidden shared {@code root} folder that parents every
+     * store. Every other uid is returned unchanged.
+     */
+    public static String navigationReferenceUid(String uid) {
+        return "root".equals(uid) ? NAVIGATION_ROOT_UID : uid;
+    }
+
     /** Reads the {@code scope} field from a folder asset's payload, or {@code null} if absent/unrecognized (e.g. the internal root sentinel). */
     public static FolderScope fromPayload(JsonNode payload) {
         return JsonUtil.text(payload, "scope").map(text -> {

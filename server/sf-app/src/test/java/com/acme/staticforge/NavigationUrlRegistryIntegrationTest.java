@@ -21,6 +21,7 @@ import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.RunStatus;
+import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
@@ -105,7 +106,7 @@ class NavigationUrlRegistryIntegrationTest {
         GenerationTarget target = createTarget(fx);
 
         long runId1 = runGenerationToSuccess(fx, target);
-        String href1 = navHrefFromOutput(runId1);
+        String href1 = navHrefFromOutput(fx, target, runId1);
 
         // Rename the target page: its slug-derived URL would be different if the href were
         // recomputed fresh (as it was before `M8.2.3`).
@@ -116,7 +117,7 @@ class NavigationUrlRegistryIntegrationTest {
                 fx.ctx());
 
         long runId2 = runGenerationToSuccess(fx, target);
-        String href2 = navHrefFromOutput(runId2);
+        String href2 = navHrefFromOutput(fx, target, runId2);
 
         assertThat(href2).isEqualTo(href1);
         assertThat(urlRegistryService.resolve(pageRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
@@ -133,7 +134,7 @@ class NavigationUrlRegistryIntegrationTest {
         GenerationTarget target = createTarget(fx);
 
         long runId = runGenerationToSuccess(fx, target);
-        String generatedHref = navHrefFromOutput(runId);
+        String generatedHref = navHrefFromOutput(fx, target, runId);
 
         String previewHtml = pageRenderService.renderPage(fx.project().getId(), homePage.uuid(), null, "html", false);
         String previewHref = firstHref(previewHtml);
@@ -150,7 +151,7 @@ class NavigationUrlRegistryIntegrationTest {
         assertThat(firstHref(previewHtmlAfterOverride)).isEqualTo("custom/preview-only.html");
 
         long runId2 = runGenerationToSuccess(fx, target);
-        String generatedHrefAfterPreviewOverride = navHrefFromOutput(runId2);
+        String generatedHrefAfterPreviewOverride = navHrefFromOutput(fx, target, runId2);
         assertThat(generatedHrefAfterPreviewOverride).isEqualTo(generatedHref);
         assertThat(urlRegistryService.resolve(pageRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
                 .isEqualTo(generatedHref);
@@ -184,8 +185,8 @@ class NavigationUrlRegistryIntegrationTest {
         throw new AssertionError("Generation did not reach a terminal state within 60s");
     }
 
-    private String navHrefFromOutput(long runId) throws IOException {
-        Path homeFile = outputRoot.resolve("builds").resolve(String.valueOf(runId)).resolve("index.html");
+    private String navHrefFromOutput(Fixture fx, GenerationTarget target, long runId) throws IOException {
+        Path homeFile = TargetLocations.resolve(outputRoot, fx.project().getKey(), target).resolve("builds").resolve(String.valueOf(runId)).resolve("index.html");
         assertThat(Files.isRegularFile(homeFile)).as("home output file exists").isTrue();
         return firstHref(Files.readString(homeFile));
     }

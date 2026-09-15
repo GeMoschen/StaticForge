@@ -62,6 +62,13 @@
             <td>{{ run.startedAt | sfRelativeTime }}</td>
             <td>
               <div class="cell-actions">
+                <sf-button
+                  variant="ghost"
+                  [attr.aria-expanded]="expandedRunId() === run.id"
+                  (click)="toggleDetails(run)"
+                >
+                  {{ expandedRunId() === run.id ? 'Hide details' : 'Details' }}
+                </sf-button>
                 @if (run.status === 'QUEUED' || run.status === 'RUNNING') {
                   <sf-button variant="secondary" (click)="watchLive(run)">
                     Live log
@@ -69,18 +76,51 @@
                   <sf-button variant="danger" (click)="cancel(run)">
                     Cancel
                   </sf-button>
-                } @else if (run.status === 'SUCCESS') {
+                } @else if (run.status === 'SUCCESS' || run.status === 'PARTIAL') {
                   <sf-button variant="secondary" (click)="promote(run)">
                     Promote
-                  </sf-button>
-                } @else if (run.status === 'FAILED') {
-                  <sf-button variant="secondary" (click)="rollback(run)">
-                    Rollback
                   </sf-button>
                 }
               </div>
             </td>
           </tr>
+          @if (expandedRunId() === run.id) {
+            <tr class="details-row">
+              <td colspan="8">
+                <dl class="details">
+                  <dt>Started</dt>
+                  <dd>{{ run.startedAt ? (run.startedAt | date: 'medium') : '—' }}</dd>
+                  <dt>Finished</dt>
+                  <dd>{{ run.finishedAt ? (run.finishedAt | date: 'medium') : '—' }}</dd>
+                  <dt>Channels</dt>
+                  <dd>{{ run.channels?.length ? run.channels!.join(', ') : 'All enabled' }}</dd>
+                  <dt>Target</dt>
+                  <dd>{{ targetLabel(run) }}</dd>
+                  <dt>Revision</dt>
+                  <dd>{{ run.revisionId ?? '—' }}</dd>
+                  <dt>Output</dt>
+                  <dd>
+                    {{ run.filesWritten ?? 0 }} written, {{ run.filesSkipped ?? 0 }} skipped,
+                    {{ run.bytesWritten ?? 0 }} bytes
+                  </dd>
+                </dl>
+                @let groups = diagnosticsOf(run);
+                @if (groups.length === 0) {
+                  <p class="details__empty">No errors or warnings.</p>
+                } @else {
+                  <ul class="diagnostics">
+                    @for (group of groups; track $index) {
+                      @for (message of group.messages; track $index) {
+                        <li class="diagnostic" [class.diagnostic--error]="group.severity === 'error'">
+                          <span class="diagnostic__code">{{ group.code }}</span>{{ message }}
+                        </li>
+                      }
+                    }
+                  </ul>
+                }
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>
@@ -90,7 +130,12 @@
   @if (liveActive()) {
     <section class="live" aria-label="Live generation log">
       <header class="live__header">
-        <strong>Live log — run #{{ liveRunId() }}</strong>
+        <strong>
+          Live log — run #{{ liveRunId() }}
+          @if (liveStatus(); as status) {
+            <span class="badge" [style.color]="statusColor(status)">{{ status }}</span>
+          }
+        </strong>
         <div class="live__summary" aria-live="polite">
           <span class="summary-good">
             files: {{ liveSummary().filesWritten }}
@@ -110,7 +155,14 @@
             <span class="log-line__stage">{{ line.stage }}</span>{{ line.message }}
           </div>
         }
-        @if (liveLines().length === 0) {
+        @for (group of liveDiagnostics(); track $index) {
+          @for (message of group.messages; track $index) {
+            <div class="log-line" [class.log-line--error]="group.severity === 'error'" [class.log-line--warning]="group.severity === 'warning'">
+              <span class="log-line__stage">{{ group.code }}</span>{{ message }}
+            </div>
+          }
+        }
+        @if (liveLines().length === 0 && !liveStatus()) {
           <div class="log-line">Awaiting events…</div>
         }
       </div>
