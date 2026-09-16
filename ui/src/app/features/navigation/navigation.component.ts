@@ -7,10 +7,14 @@ import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.co
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTreeComponent } from '../../shared/components/sf-tree.component';
+import {
+  SfStoreTreeNodeComponent,
+  type StoreTreeMoveEvent,
+  type StoreTreeNode,
+} from '../../shared/components/sf-store-tree-node.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { NavFolderDetailComponent } from './nav-folder-detail.component';
 import { NavReferenceDetailComponent } from './nav-reference-detail.component';
-import { NavTreeNodeComponent, type NavMoveEvent } from './nav-tree-node.component';
 import { NavigationService, type NavigationFolderView, type NavTreeView, type PageReferenceView } from './navigation.service';
 import { sortNavTree } from '../../shared/tree-sort.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
@@ -49,7 +53,7 @@ interface RawReferencePayload {
     SfCreateAssetDialogComponent,
     NavFolderDetailComponent,
     NavReferenceDetailComponent,
-    NavTreeNodeComponent,
+    SfStoreTreeNodeComponent,
   ],
   templateUrl: './navigation.component.html',
   styleUrl: './navigation.component.scss',
@@ -89,6 +93,18 @@ export class NavigationComponent {
   /** The store's real top-level entries — the fixed "All Navigation" wrapper root's children
    * (see the class doc). */
   readonly topLevelNodes = computed<NavTreeView[]>(() => this.forest()[0]?.children ?? []);
+
+  /**
+   * The same entries in the store-agnostic shape {@link SfStoreTreeNodeComponent} renders. A
+   * reference shows its resolved page path as the trailing badge; a folder shows one only when it
+   * actually has a `startNode`, because for a folder an absent path is ambiguous (no entry page at
+   * all vs. a broken one) and flagging it "unresolved" would be wrong.
+   */
+  readonly treeNodes = computed<StoreTreeNode[]>(() => this.topLevelNodes().map(toStoreNode));
+
+  /** Navigation folders rename through the folder endpoint, not the generic asset one. */
+  protected readonly renameFolder = (projectKey: string, uuid: string, displayName: string) =>
+    this.nav.renameFolder(projectKey, uuid, displayName);
 
   /** The folder currently targeted by "New folder"/"New reference" — the selected folder, or
    * `undefined` (the project root — matches Pages' `selectedFolder() ?? undefined`) if nothing
@@ -188,7 +204,7 @@ export class NavigationComponent {
       });
   }
 
-  protected onMove(event: NavMoveEvent): void {
+  protected onMove(event: StoreTreeMoveEvent): void {
     if (this.readOnly()) {
       return;
     }
@@ -348,6 +364,25 @@ export class NavigationComponent {
       },
     });
   }
+}
+
+function toStoreNode(node: NavTreeView): StoreTreeNode {
+  const isFolder = node.type === 'FOLDER';
+  const path = node.resolvedPagePath;
+  return {
+    uuid: node.uuid,
+    uid: node.uid,
+    displayName: node.displayName,
+    kind: isFolder ? 'FOLDER' : 'LEAF',
+    icon: 'link',
+    protectedFolder: node.protectedFolder === true,
+    badge: path
+      ? { text: `→ ${path}` }
+      : isFolder
+        ? undefined
+        : { text: 'unresolved', broken: true },
+    children: (node.children ?? []).map(toStoreNode),
+  };
 }
 
 function findNode(nodes: NavTreeView[], uuid: string): NavTreeView | null {

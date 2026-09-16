@@ -61,6 +61,25 @@ class AssetValueProjectionTest {
                 .toIterable().containsExactly("_meta");
     }
 
+    /**
+     * {@code M17.3.1}: a property set exposes its values just like a page, and nothing else — a
+     * template reads {@code CMS_GLOBAL.site.title}, never the set's own CDL.
+     */
+    @Test
+    void globalSetExposesItsValuesButNeverItsSchema() throws Exception {
+        JsonNode payload = MAPPER.readTree(
+                "{\"contentDefinition\":\"content { editor text title { label \\\"T\\\" } }\","
+                        + "\"compiledDefinition\":{\"editors\":[]},"
+                        + "\"content\":{\"title\":\"Acme Outdoor\",\"showBanner\":true}}");
+
+        JsonNode root = AssetValueProjection.project(AssetType.GLOBAL_SET, "site", "Site", payload, false);
+
+        assertThat(root.path("title").asText()).isEqualTo("Acme Outdoor");
+        assertThat(root.path("showBanner").asBoolean()).isTrue();
+        assertThat(root.path("_meta").path("uid").asText()).isEqualTo("site");
+        assertThat(root.has("contentDefinition") || root.has("compiledDefinition")).isFalse();
+    }
+
     @Test
     void deletedAssetIsMissing() {
         assertThat(AssetValueProjection.project(AssetType.PAGE, "gone", "Gone", MAPPER.createObjectNode(), true).isMissingNode())

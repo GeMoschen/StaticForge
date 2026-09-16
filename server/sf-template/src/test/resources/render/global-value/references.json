@@ -1,0 +1,21 @@
+{
+  "global:site": {
+    "uuid": "b0000000-0000-0000-0000-000000000001",
+    "value": {
+      "title": "Acme <Outdoor>",
+      "showBanner": true,
+      "_meta": { "uid": "site", "displayName": "Site" }
+    }
+  },
+  "global:social": {
+    "uuid": "b0000000-0000-0000-0000-000000000002",
+    "value": {
+      "links": [{ "label": "Mastodon" }, { "label": "Bluesky" }],
+      "_meta": { "uid": "social", "displayName": "Social" }
+    }
+  },
+  "global:gone": {
+    "uuid": "b0000000-0000-0000-0000-000000000003",
+    "value": null
+  }
+}

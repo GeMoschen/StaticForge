@@ -42,7 +42,7 @@ sf-app → sf-api → { sf-domain, sf-template, sf-generate } → sf-common
 | Module | Package roots (`com.acme.staticforge.*`) | Responsibility |
 |---|---|---|
 | `sf-common` | `common` | `Problem`/`ProblemFactory` (RFC 9457), `JsonUtil`, shared utilities |
-| `sf-domain` | `asset`, `revision`, `project`, `user`, `channel`, `structure`, `preview`, `generate` | entities, repositories, domain services, transactions |
+| `sf-domain` | `asset` (incl. `asset.globals`), `revision`, `project`, `user`, `channel`, `structure`, `preview`, `generate` | entities, repositories, domain services, transactions |
 | `sf-template` | `template.cdl`, `.octl`, `.render`, `.content`, `.diagnostic`, `.expression` | CDL + OCTL lex/parse/compile/render |
 | `sf-generate` | `generate.plan`, `.snapshot`, `.render`, `.stage`, `.target`, `.nav`, `.postprocess` | build planning, rendering pipeline, writers, targets |
 | `sf-api` | `api`, `security` | REST controllers, DTOs, JWT/authorization |
@@ -68,6 +68,10 @@ Reference edges are written on save (spec §5.4), in package `asset.reference`:
 - Readers use `AssetReferenceRepository`'s revision-aware queries: `findIncomingOpen` (delete guard, usages), `findIncomingValidAt` (usages at `?revision=`), `findValidAtByProject` (the `BuildPlanner` reverse index).
 
 Page content validation (spec §10.5): `asset.content.ContentValidator` and `PageContentValidator` are pure and return `ContentIssue`s with a `STRUCTURAL` or `COMPLETENESS` kind. `asset.page.PageContentValidation` rejects structural findings on save (`422` with `issues`) and fills `PageView.issues`; `RenderPipeline.incompletePages` holds back incomplete pages at publish (`SF-GEN-0120`).
+
+Stores and asset types: `AssetType` is `PAGE`, `MEDIA`, `SECTION_TEMPLATE`, `PAGE_TEMPLATE`, `FOLDER`, `PAGE_REFERENCE` and `GLOBAL_SET`. Each leaf type lives in exactly one store, a folder hierarchy of its own (`FolderScope` `PAGES`, `MEDIA`, `NAVIGATION`, `TEMPLATES`, `GLOBALS`, mapped by `FolderScope.requiredFor`), under a fixed, protected root folder (`pages_root`, `media_root`, `navigation_root`, `templates_root`, `globals_root`) that project creation provisions inside its single revision and older projects get lazily.
+
+Global property sets (M17), package `asset.globals`: a `GLOBAL_SET` holds its CDL schema *and* its values in one payload (`{contentDefinition, compiledDefinition, content}`), so a schema change and the value migration it causes (`asset.content.ContentRenameMigrator`, shared with the section-template cascade) are one version write. `GlobalSetServiceImpl` adds only what is set-specific — compile with `template.cdl.GlobalSetCdlRules` (no `body`, no `catalog`: `SF-CDL-0107`), seed, migrate, validate with `ContentValidator` — and writes through `AssetService`, so concurrency, scope checks, revisions and reference edges are the generic ones. Templates read a set through the ordinary cross-asset path: `global:` is registered in `AssetReferencePrefixes`, `AssetValueProjection` exposes a set's `content`, and `CMS_GLOBAL.<set>.<path>` is desugared by the OCTL parser (`Accessor.scope`) into `global:<set>.<path>`, so there is no globals-specific resolver.
 
 ## 4. Revision safety
 

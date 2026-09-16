@@ -1,0 +1,133 @@
+@if (loading()) {
+  <p class="global-detail__loading">Loading property set…</p>
+} @else {
+  @if (detail(); as set) {
+    <header class="global-detail__header">
+      <div class="global-detail__title">
+        <h2>{{ set.displayName ?? set.uid }}</h2>
+        <code class="global-detail__uid">{{ set.uid }}</code>
+      </div>
+      <button
+        type="button"
+        class="global-detail__snippet"
+        (click)="copySnippet()"
+        [attr.aria-label]="'Copy ' + usageSnippet()"
+        title="Copy this into a channel template"
+      >
+        <sf-icon [name]="copied() ? 'check' : 'content_copy'" />
+        <code>{{ usageSnippet() }}</code>
+      </button>
+      <sf-button variant="secondary" (click)="close()">Close</sf-button>
+    </header>
+
+    @if (timeTravelling()) {
+      <p class="global-detail__time-travel" role="status">
+        Viewing an earlier revision — this property set is read-only until you leave time travel.
+      </p>
+    }
+
+    <div class="global-detail__tabs" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="tab() === 'values'"
+        [class.global-detail__tab--active]="tab() === 'values'"
+        (click)="showValues()"
+      >
+        Values
+      </button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="tab() === 'schema'"
+        [class.global-detail__tab--active]="tab() === 'schema'"
+        (click)="showSchema()"
+      >
+        Schema
+      </button>
+    </div>
+
+    @if (tab() === 'values') {
+      <section class="panel" role="tabpanel" aria-label="Values">
+        @if ((definition().editors ?? []).length === 0) {
+          <p class="global-detail__hint">
+            This property set declares no fields yet. Add them on the Schema tab.
+          </p>
+        } @else {
+          @if (valuesForm(); as form) {
+            <sf-content-form [definition]="definition()" [formGroup]="form" [projectKey]="projectKey()" />
+          }
+        }
+
+        @if (valueIssues().length > 0) {
+          <div class="diagnostics" aria-live="polite">
+            @for (issue of valueIssues(); track $index) {
+              <div class="diagnostic diagnostic--error">{{ issue.path }} — {{ issue.message }}</div>
+            }
+          </div>
+        }
+
+        <div class="actions">
+          <sf-button
+            variant="primary"
+            [disabled]="savingValues() || !canEditValues()"
+            (click)="saveValues()"
+          >
+            Save values
+          </sf-button>
+        </div>
+        @if (!canEditValues() && !timeTravelling()) {
+          <p class="global-detail__hint">You need the editor role to change these values.</p>
+        }
+      </section>
+    } @else {
+      <section class="panel" role="tabpanel" aria-label="Schema">
+        <sf-field
+          label="Content definition (CDL)"
+          hint="Declares the fields this property set exposes. No bodies and no catalog editors — a set has no page."
+        >
+          <textarea
+            [value]="contentDefinition()"
+            (input)="onContentDefinitionInput($event)"
+            [disabled]="!canEditSchema()"
+            spellcheck="false"
+          ></textarea>
+        </sf-field>
+        <div class="actions">
+          <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>
+          <sf-button
+            variant="primary"
+            [disabled]="savingSchema() || !canEditSchema()"
+            (click)="saveSchema()"
+          >
+            Save schema
+          </sf-button>
+          <sf-button variant="secondary" [disabled]="!canEditSchema()" (click)="deleteSet()">
+            Delete property set
+          </sf-button>
+        </div>
+        @if (!canEditSchema() && !timeTravelling()) {
+          <p class="global-detail__hint">You need the developer role to change this schema.</p>
+        }
+
+        @if (cdlDiagnostics().length > 0) {
+          <div class="diagnostics" aria-live="polite">
+            @for (diag of cdlDiagnostics(); track $index) {
+              <div
+                class="diagnostic"
+                [class.diagnostic--error]="diag.severity === 'ERROR'"
+                [class.diagnostic--warning]="diag.severity !== 'ERROR'"
+              >
+                {{ diag.severity }} {{ diag.code }}
+                @if (diag.line) {
+                  ({{ diag.line }}:{{ diag.column }})
+                }
+                — {{ diag.message }}
+              </div>
+            }
+          </div>
+        }
+      </section>
+    }
+  }
+}

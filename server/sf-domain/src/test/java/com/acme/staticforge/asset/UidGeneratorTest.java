@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.acme.staticforge.asset.folder.FolderScope;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,6 +38,20 @@ class UidGeneratorTest {
     void fallsBackToAssetTypeForSymbols() {
         UidGenerator generator = new UidGenerator(emptyRepository());
         assertThat(generator.deriveUid("!!!", 1L, AssetType.PAGE)).isEqualTo("page");
+    }
+
+    /**
+     * The fixed store roots are reserved (M17.1.1 adds {@code globals_root}), so a user-created
+     * folder called "Globals Root" can never occupy the uid the Globals store's own root needs.
+     */
+    @Test
+    void fixedStoreRootUidsAreReservedAgainstUserDerivedNames() {
+        UidGenerator generator = new UidGenerator(emptyRepository());
+        assertThat(generator.deriveUid("Globals Root", 1L, AssetType.FOLDER))
+                .isNotEqualTo(FolderScope.GLOBALS_ROOT_UID)
+                .isEqualTo(FolderScope.GLOBALS_ROOT_UID + "_1");
+        assertThat(generator.deriveUid("Navigation Root", 1L, AssetType.FOLDER))
+                .isEqualTo(FolderScope.NAVIGATION_ROOT_UID + "_1");
     }
 
     private static AssetRepository emptyRepository() {

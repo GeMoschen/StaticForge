@@ -8,7 +8,7 @@ The interface is built around one idea (§24.1): **every change is on the record
 
 | Persona | Can do |
 |---|---|
-| **Editor** | create/edit page content, sections, media; preview |
+| **Editor** | create/edit page content, sections, media, global values; preview |
 | **Project administrator** | + manage members, channels, generation targets, trigger publishes |
 | **Instance administrator** | + create/archive projects, manage global users |
 
@@ -24,6 +24,7 @@ Templates are owned by **template developers** (see the [template-developer guid
 4. Fill the template's editors. Save is ambient: the header shows `Saved 12:04` with a revision link. There is no blocking save spinner (§24.6).
    - A half-filled page always saves: an empty required field, too few list items or text that is too long doesn't stop the save. These are checked when you publish instead. A page with such a problem isn't published; the generation log lists it under `SF-GEN-0120` with the field paths, and the other pages are still published.
    - A save is rejected only when a value has the wrong shape for its field (for example text in a number field, a value that isn't one of the field's options, or a section whose template isn't allowed in that body). Nothing is stored, and the error lists each offending field path.
+   - A page often also shows values from **Globals** (below), such as the site title. Those aren't fields of the page — change them in Globals.
 5. Preview updates live as you type (debounced), and the viewport switcher (mobile / tablet / desktop) resizes the preview.
 
 ### Sections
@@ -38,6 +39,27 @@ Templates are owned by **template developers** (see the [template-developer guid
 2. Set alt text, caption, copyright, and focal point in the detail drawer.
 3. Reference media from a `media` or `link` editor using the picker.
 4. The drawer shows **usages** ("where is this used?") before you delete anything. Usages are current as soon as a page or template is saved; you don't need to run a generation. Once you remove the media from every page that used it (or delete those pages), it can be deleted without forcing.
+
+### Globals
+
+Site-wide values — the site title, the logo, the social links, the footer copyright line — live in **Globals**, not on any single page. Change one there and every page that shows it picks the change up.
+
+1. Open **Globals** from the nav. Like Navigation, the folder tree is on the left and the selected item on the right. Folders are only for keeping things tidy; they don't change where a value shows up.
+2. The store holds **property sets**, each a named group of fields such as `site` or `social`. Select one to open it.
+3. The **Values** tab is a form, like a page's fields. Fill it in and choose **Save values**. Globals don't autosave: a property set is shown on many pages at once, so nothing reaches a preview until you save.
+4. The **Schema** tab shows which fields the set has. Developers declare them; editors can read the schema but not change it.
+5. Every save is a revision, so a property set has history, a diff and restore like everything else. If someone else saved the same set since you opened it, your save is refused and the set reloads with their version — re-apply your change and save again.
+6. The header shows the set's UID and a snippet such as `$CMS_VALUE(CMS_GLOBAL.site.title)$` — hand that to a developer if a template should show this value.
+
+A property set that a template or page still reads can't be deleted; its usages list who reads it.
+
+| Role | Globals: values | Globals: schema, create, delete |
+|---|---|---|
+| Viewer | read | read |
+| Editor | edit | read |
+| Developer and project admin | edit | edit |
+
+During time travel the whole Globals screen is read-only and shows each set as it was at that revision.
 
 ### Generate & publish
 
@@ -73,6 +95,8 @@ When two people edit the same asset, the second save shows a conflict drawer wit
 ## Keyboard
 
 Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` command palette, `g p` pages, `g m` media, `g t` templates, `g r` revisions, `Cmd/Ctrl+S` save, `Cmd/Ctrl+Enter` refresh preview, `Alt+↑/↓` move section, `?` shortcut sheet.
+
+In the Globals tree and the other store trees, `Tab` reaches each item, `Enter` or `Space` opens it, and `→`/`←` expand and collapse a folder. The Values and Schema tabs are ordinary buttons you can `Tab` to.
 
 ## Roles in detail
 

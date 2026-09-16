@@ -9,6 +9,7 @@ import { PagesListComponent } from './features/pages/pages-list.component';
 import { PageEditorComponent } from './features/pages/page-editor.component';
 import { MediaLibraryComponent } from './features/media/media-library.component';
 import { NavigationComponent } from './features/navigation/navigation.component';
+import { GlobalsComponent } from './features/globals/globals.component';
 import { TemplatesComponent } from './features/templates/templates.component';
 import { ProjectSettingsShellComponent } from './features/settings/project-settings-shell.component';
 import { ProjectSettingsGeneralComponent } from './features/settings/project-settings-general.component';
@@ -61,6 +62,10 @@ export const routes: Routes = [
       {
         path: 'navigation',
         component: NavigationComponent,
+      },
+      {
+        path: 'globals',
+        component: GlobalsComponent,
       },
       {
         path: 'templates',

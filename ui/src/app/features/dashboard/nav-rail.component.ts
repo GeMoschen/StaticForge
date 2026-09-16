@@ -49,6 +49,7 @@ export class NavRailComponent {
       { label: 'Pages', icon: 'description', route: `${base}/pages` },
       { label: 'Media', icon: 'perm_media', route: `${base}/media` },
       { label: 'Navigation', icon: 'account_tree', route: `${base}/navigation` },
+      { label: 'Globals', icon: 'tune', route: `${base}/globals` },
       { label: 'Templates', icon: 'dashboard_customize', route: `${base}/templates` },
       { label: 'Settings', icon: 'settings', route: `${base}/settings` },
     ];

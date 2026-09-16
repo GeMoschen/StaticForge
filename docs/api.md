@@ -60,9 +60,26 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 
 | Method | Path |
 |---|---|
-| `GET`/`POST` | `/projects/{projectKey}/folders` |
+| `GET`/`POST` | `/projects/{projectKey}/folders` (`scope` = `PAGES`, `MEDIA`, `NAVIGATION`, `TEMPLATES` or `GLOBALS`) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/folders/{uuid}` |
 | `POST` | `/projects/{projectKey}/folders/{uuid}/move` |
+
+### 6.1 Globals (M17)
+
+Global property sets. Schema and values are separate endpoints because they need different roles. Every response carries `ETag: "rev-{n}"`, and both `PUT`s require `If-Match`, as for pages.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `GET` | `/projects/{projectKey}/globals` | `VIEWER` | `?folder=<uuid>` restricts to one folder |
+| `GET` | `/projects/{projectKey}/globals/{uuid}` | `VIEWER` | `?revision=` reads the version valid at that revision (time travel) |
+| `POST` | `/projects/{projectKey}/globals` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, comment?}` → `201` |
+| `PUT` | `/projects/{projectKey}/globals/{uuid}/schema` | `DEVELOPER` | `{contentDefinition, comment?}`; applies `renamedFrom` and drops values of removed editors in the same revision |
+| `PUT` | `/projects/{projectKey}/globals/{uuid}/content` | `EDITOR` | `{content, comment?}`; malformed values → `422` with `issues` |
+| `DELETE` | `/projects/{projectKey}/globals/{uuid}` | `DEVELOPER` | refused while a template or page reads the set |
+
+A uuid that belongs to another project or isn't a property set is `404`. CDL errors are `422` with `diagnostics` (`SF-CDL-*`, including `SF-CDL-0107` for a `body` or `catalog`).
+
+Everything that isn't specific to property sets uses the generic endpoints: folders are `/folders` with `scope=GLOBALS`; moving a set is `POST /assets/{uuid}/move`; its uid, usages, history and restore are under `/assets/{uuid}` (§4). Validate draft CDL with `POST /cdl/validate?kind=GLOBAL_SET`, which adds the property-set restrictions.
 
 ## 7. Media
 
@@ -87,7 +104,7 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 | `GET`/`POST` | `/projects/{projectKey}/structures` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/structures/{uuid}` |
 | `GET` | `/projects/{projectKey}/structures/{uuid}/preview` |
-| `POST` | `/projects/{projectKey}/cdl/validate` |
+| `POST` | `/projects/{projectKey}/cdl/validate` (`?kind=GLOBAL_SET` adds the property-set restrictions) |
 | `POST` | `/projects/{projectKey}/octl/validate` |
 
 ## 9. Channels & targets

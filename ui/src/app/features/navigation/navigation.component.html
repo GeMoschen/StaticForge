@@ -25,12 +25,14 @@
         <sf-empty-state title="No navigation yet" description="Create a folder or reference to get started." />
       } @else {
         <sf-tree>
-          @for (node of topLevelNodes(); track node.uuid) {
-            <sf-nav-tree-node
+          @for (node of treeNodes(); track node.uuid) {
+            <sf-store-tree-node
               [node]="node"
               [depth]="0"
               [selectedUuid]="selectedUuid()"
               [projectKey]="projectKey()"
+              leafNoun="Reference"
+              [renameFolder]="renameFolder"
               (select)="select($event)"
               (move)="onMove($event)"
               (changed)="onTreeNodeRenamed()"

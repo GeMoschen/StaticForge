@@ -33,14 +33,15 @@ const PROJECT_NAME = 'M15 E2E Project';
 
 /** Project creation touches: the project itself + the shared hidden root + "All
  * Templates" + "Page Templates" + "Section Templates" + "All Navigation" + "All Pages"
- * + "All Media" — 1 PROJECT entry and 7 FOLDER entries (spec M13.1.2's fixed folders),
- * per `ProjectApiIntegrationTests.createAllocatesRevisionOneAndGrantsCreatorProjectAdmin`.
+ * + "All Media" + "All Globals" (M17.1.1) — 1 PROJECT entry and 8 FOLDER entries (spec
+ * M13.1.2's fixed folders), per
+ * `ProjectApiIntegrationTests.createAllocatesRevisionOneAndGrantsCreatorProjectAdmin`.
  */
-const EXPECTED_ASSET_COUNT = 8;
+const EXPECTED_ASSET_COUNT = 9;
 /** The diff view only ever resolves entries with a real `Asset` row — the synthetic
  * "project-<id>" summary entry (`ProjectServiceImpl.create`) isn't a UUID, so
- * `DiffServiceImpl.diffEntry` silently skips it, leaving only the 7 bootstrap folders. */
-const EXPECTED_DIFF_ASSET_COUNT = 7;
+ * `DiffServiceImpl.diffEntry` silently skips it, leaving only the 8 bootstrap folders. */
+const EXPECTED_DIFF_ASSET_COUNT = 8;
 
 async function login(page: Page): Promise<void> {
   await page.goto('/login');
@@ -81,7 +82,7 @@ test('journey: project setup produces exactly one revision with an 8-asset affor
     `${EXPECTED_ASSET_COUNT} assets`,
   );
 
-  // 4. Open the single revision's diff view: the 7 resolvable bootstrap folders (the
+  // 4. Open the single revision's diff view: the 8 resolvable bootstrap folders (the
   // project's own synthetic summary entry isn't a real Asset, so DiffServiceImpl skips
   // it — see EXPECTED_DIFF_ASSET_COUNT above) all show as CREATE entries.
   await rows.first().click();

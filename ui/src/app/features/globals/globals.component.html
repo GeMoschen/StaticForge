@@ -1,0 +1,82 @@
+<div class="globals">
+  <aside class="globals__tree">
+    <div class="globals__toolbar">
+      <sf-button variant="secondary" [disabled]="readOnly()" (click)="newFolder()">New subfolder</sf-button>
+      <sf-button variant="secondary" [disabled]="readOnly()" (click)="newSet()">New property set</sf-button>
+    </div>
+
+    <button
+      type="button"
+      class="globals__clear"
+      [class.globals__clear--active]="!selectedUuid()"
+      (click)="closeDetail()"
+      (dragover)="onRootDragOver($event)"
+      (drop)="onRootDrop($event)"
+      (contextmenu)="onRootContextMenu($event)"
+    >
+      <sf-icon name="home" />
+      All globals
+    </button>
+
+    @if (loading()) {
+      <sf-spinner label="Loading globals…" />
+    } @else if (treeNodes().length === 0) {
+      <sf-empty-state
+        title="No property sets yet"
+        description="Create a property set to hold site-wide values such as the site title or social links."
+      />
+    } @else {
+      <sf-tree>
+        @for (node of treeNodes(); track node.uuid) {
+          <sf-store-tree-node
+            [node]="node"
+            [depth]="0"
+            [selectedUuid]="selectedUuid()"
+            [projectKey]="projectKey()"
+            leafNoun="Property set"
+            [renameFolder]="renameFolder"
+            (select)="select($event)"
+            (move)="onMove($event)"
+            (changed)="onSetChanged()"
+          />
+        }
+      </sf-tree>
+    }
+  </aside>
+
+  <section class="globals__detail">
+    @if (selectedSet(); as set) {
+      <sf-global-set-detail
+        [projectKey]="projectKey()"
+        [uuid]="set.uuid ?? ''"
+        (closed)="closeDetail()"
+        (changed)="onSetChanged()"
+        (deleted)="onSetDeleted()"
+      />
+    } @else {
+      <sf-empty-state
+        title="Select a property set"
+        description="Choose a set from the tree to edit its values, or its schema if you are a developer."
+      />
+    }
+  </section>
+</div>
+
+<sf-create-asset-dialog
+  kind="FOLDER"
+  scope="GLOBALS"
+  [open]="newFolderOpen()"
+  [submitting]="creatingFolder()"
+  [projectKey]="projectKey()"
+  (create)="submitNewFolder($event)"
+  (closed)="closeNewFolder()"
+/>
+
+<sf-create-asset-dialog
+  kind="GLOBAL_SET"
+  [open]="newSetOpen()"
+  [submitting]="creatingSet()"
+  [projectKey]="projectKey()"
+  (create)="submitNewSet($event)"
+  (closed)="closeNewSet()"
+/>

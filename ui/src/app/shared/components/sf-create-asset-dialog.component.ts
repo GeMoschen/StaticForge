@@ -28,8 +28,14 @@ import { SfSpinnerComponent } from './sf-spinner.component';
 
 type TemplateSummary = components['schemas']['TemplateSummary'];
 
-export type CreateAssetKind = 'FOLDER' | 'PAGE' | 'PAGE_TEMPLATE' | 'SECTION_TEMPLATE' | 'PAGE_REFERENCE';
-export type CreateAssetScope = 'PAGES' | 'MEDIA' | 'NAVIGATION';
+export type CreateAssetKind =
+  | 'FOLDER'
+  | 'PAGE'
+  | 'PAGE_TEMPLATE'
+  | 'SECTION_TEMPLATE'
+  | 'PAGE_REFERENCE'
+  | 'GLOBAL_SET';
+export type CreateAssetScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'GLOBALS';
 
 /** Kind-appropriate payload emitted by `create` — the dialog never calls a create API itself, the caller does. */
 export interface CreateAssetFormValue {
@@ -51,11 +57,12 @@ const TITLES: Record<CreateAssetKind, string> = {
   PAGE_TEMPLATE: 'New page template',
   SECTION_TEMPLATE: 'New section template',
   PAGE_REFERENCE: 'New reference',
+  GLOBAL_SET: 'New property set',
 };
 
 /**
- * Shared "create asset" modal — one dialog for the 5 creation flows (folder,
- * page, page/section template, navigation reference) that used to be raw
+ * Shared "create asset" modal — one dialog for the 6 creation flows (folder,
+ * page, page/section template, navigation reference, global property set) that used to be raw
  * `window.prompt` calls or one-off inline panels. Adapts its fields to
  * `kind`, validates with Reactive Forms, and emits the collected values via
  * `create` — it never calls a create API itself; the caller does that and

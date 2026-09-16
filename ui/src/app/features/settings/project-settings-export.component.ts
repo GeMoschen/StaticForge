@@ -19,15 +19,16 @@ type AssetSummaryView = components['schemas']['AssetSummaryView'];
  * just happens to have two fixed top-level folders ("Page Templates"/"Section Templates"),
  * structurally no different from any other scope having multiple top-level folders — so it
  * needs no special-casing anywhere below. */
-type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE' | 'TEMPLATES';
+type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE' | 'TEMPLATES' | 'GLOBAL_SET';
 /** The `FolderScope`/`ExportSelectionRequest.fullStores` string for each tree scope. */
-type StoreScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'TEMPLATES';
+type StoreScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'TEMPLATES' | 'GLOBALS';
 
 const STORE_SCOPE_FOR: Record<TreeScope, StoreScope> = {
   PAGE: 'PAGES',
   MEDIA: 'MEDIA',
   PAGE_REFERENCE: 'NAVIGATION',
   TEMPLATES: 'TEMPLATES',
+  GLOBAL_SET: 'GLOBALS',
 };
 
 /** The `ApiClient.listAssets` `type` filter(s) backing each tree scope — `TEMPLATES` needs two
@@ -37,6 +38,7 @@ const ASSET_TYPES_FOR: Record<TreeScope, string[]> = {
   MEDIA: ['MEDIA'],
   PAGE_REFERENCE: ['PAGE_REFERENCE'],
   TEMPLATES: ['PAGE_TEMPLATE', 'SECTION_TEMPLATE'],
+  GLOBAL_SET: ['GLOBAL_SET'],
 };
 
 /** Bucket key used for items with no folder — i.e. living directly at the store's hidden root. */
@@ -151,7 +153,7 @@ export class ProjectSettingsExportComponent {
 
   private loadAllAssets(key: string): void {
     this.loadingAssets.set(true);
-    const scopes: TreeScope[] = ['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'TEMPLATES'];
+    const scopes: TreeScope[] = ['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'TEMPLATES', 'GLOBAL_SET'];
     forkJoin(
       scopes.map((scope) =>
         forkJoin(
@@ -373,6 +375,8 @@ export class ProjectSettingsExportComponent {
         return 'link';
       case 'MEDIA':
         return 'perm_media';
+      case 'GLOBAL_SET':
+        return 'tune';
       default:
         return 'description';
     }
@@ -422,6 +426,8 @@ export class ProjectSettingsExportComponent {
         return this.store.navigationFolderTree();
       case 'TEMPLATES':
         return this.store.templateFolderTree();
+      case 'GLOBAL_SET':
+        return this.store.globalsFolderTree();
     }
   }
 

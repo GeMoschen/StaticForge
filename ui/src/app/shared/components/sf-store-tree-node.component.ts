@@ -1,57 +1,84 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
-import { SfIconComponent } from '../../shared/components/sf-icon.component';
-import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
-import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
-import { NavigationService, type NavTreeView } from './navigation.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
+import { TimeTravelStore } from '../../features/revisions/time-travel.store';
+import { ContextMenuItem, ContextMenuService } from '../services/context-menu.service';
+import { SfIconComponent } from './sf-icon.component';
+import { SfRenameAssetDialogComponent } from './sf-rename-asset-dialog.component';
 
-export interface NavMoveEvent {
+/**
+ * One node of a store tree, in the store-agnostic shape this component renders. A store maps its
+ * own view model onto it rather than this component knowing about any store's wire types.
+ */
+export interface StoreTreeNode {
+  uuid?: string;
+  uid?: string;
+  displayName?: string;
+  /** `FOLDER` groups children; `LEAF` is whatever asset the store holds. */
+  kind: 'FOLDER' | 'LEAF';
+  /** Material icon for a leaf row. Folders always use the open/closed folder pair. */
+  icon?: string;
+  /** The fixed, protected store root: no rename, no drag, no context menu. */
+  protectedFolder?: boolean;
+  /** Optional trailing annotation, e.g. a navigation reference's resolved page path. */
+  badge?: { text: string; broken?: boolean };
+  children?: StoreTreeNode[];
+}
+
+/** A drag-move: put `source` inside the folder `target`. */
+export interface StoreTreeMoveEvent {
   source: string;
   target: string;
 }
 
+/** How a folder rename is persisted; stores whose folders have a dedicated endpoint pass their own. */
+export type FolderRenameFn = (projectKey: string, uuid: string, displayName: string) => Observable<unknown>;
+
 /**
- * Recursive navigation-tree node. Renders both node shapes returned by
- * `GET .../navigation/tree` — `FOLDER` (a grouping node, possibly with a
- * `startNode`) and `PAGE_REFERENCE` (a leaf pointing at a page or page-store
- * folder) — with distinct icons, since the shared `sf-tree` component is
- * only a content-projection shell with no built-in node rendering (see
- * `sf-tree.component.html`: just `<ng-content />`) and has no notion of
- * heterogeneous node types itself.
+ * The recursive tree row shared by the project's store screens.
  *
- * Supports expand/collapse, selection, and native HTML5 drag-move (drag any
- * node onto a folder node to move it there — mirrors `sf-folder-node`'s
- * convention in the pages store). The fixed, protected "All Navigation" root
- * folder (`node().protectedFolder`) renders with no rename/drag affordance —
- * mirrors `sf-template-folder-node`'s treatment of its own two fixed roots —
- * everything nested beneath it gets the full toolset.
+ * <p>Before M17 every store (pages, media, navigation, templates) carried its own near-identical
+ * copy of this file, which is why a keyboard or drag-and-drop fix only ever landed in one of them.
+ * This is the one implementation: it renders a heterogeneous folder/leaf tree with expand/collapse,
+ * selection, keyboard navigation, native HTML5 drag-move onto a folder, a rename dialog and the
+ * fixed protected root's reduced affordances. Everything store-specific arrives as data
+ * ({@link StoreTreeNode}) or as the `renameFolder` strategy, so adding a store means mapping a view
+ * model, not copying a component.
+ *
+ * <p>Writes are blocked twice over while time travel is active: the read-only HTTP interceptor is
+ * the backstop, and these guards give the immediate feedback a round trip would not.
  */
 @Component({
-  selector: 'sf-nav-tree-node',
+  selector: 'sf-store-tree-node',
   standalone: true,
   imports: [SfIconComponent, SfRenameAssetDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './nav-tree-node.component.html',
-  styleUrl: './nav-tree-node.component.scss',
+  templateUrl: './sf-store-tree-node.component.html',
+  styleUrl: './sf-store-tree-node.component.scss',
 })
-export class NavTreeNodeComponent {
+export class SfStoreTreeNodeComponent {
   private readonly api = inject(ApiClient);
-  private readonly nav = inject(NavigationService);
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly timeTravel = inject(TimeTravelStore);
 
   protected readonly readOnly = this.timeTravel.isTimeTravel;
 
-  readonly node = input.required<NavTreeView>();
+  readonly node = input.required<StoreTreeNode>();
   readonly depth = input<number>(0);
   readonly selectedUuid = input<string | null>(null);
   readonly projectKey = input<string>('');
+  /** What a leaf is called in toasts, e.g. "Reference" or "Property set". */
+  readonly leafNoun = input<string>('Item');
+  /**
+   * Persists a folder rename. Defaults to the generic asset rename, which is right for every store
+   * whose folders have no endpoint of their own.
+   */
+  readonly renameFolder = input<FolderRenameFn | null>(null);
 
   readonly select = output<string>();
-  readonly move = output<NavMoveEvent>();
+  readonly move = output<StoreTreeMoveEvent>();
   /** Emitted after this node was renamed (display name or UID), so the parent reloads. */
   readonly changed = output<void>();
 
@@ -62,7 +89,7 @@ export class NavTreeNodeComponent {
   protected readonly isProtected = computed<boolean>(() => this.node().protectedFolder === true);
 
   protected isFolder(): boolean {
-    return this.node().type === 'FOLDER';
+    return this.node().kind === 'FOLDER';
   }
 
   protected hasChildren(): boolean {
@@ -74,12 +101,9 @@ export class NavTreeNodeComponent {
     return uuid != null && this.selectedUuid() === uuid;
   }
 
-  /** Folders show open/closed folder icons; a folder with a resolved `startNode` is instead
-   * distinguished by the `→ path` label rendered next to its name (see the template) — the same
-   * treatment a `PAGE_REFERENCE` leaf gets for its own resolved target. */
   protected icon(): string {
     if (!this.isFolder()) {
-      return 'link';
+      return this.node().icon ?? 'description';
     }
     return this.expanded() && this.hasChildren() ? 'folder_open' : 'folder';
   }
@@ -144,9 +168,7 @@ export class NavTreeNodeComponent {
     if (!uuid || this.isProtected() || this.readOnly()) {
       return;
     }
-    const items: ContextMenuItem[] = [
-      { label: 'Rename', icon: 'edit', action: () => this.openRename() },
-    ];
+    const items: ContextMenuItem[] = [{ label: 'Rename', icon: 'edit', action: () => this.openRename() }];
     this.menu.open(event, items);
   }
 
@@ -165,21 +187,22 @@ export class NavTreeNodeComponent {
       return;
     }
     this.renamingName.set(true);
-    const onSuccess = (): void => {
-      this.renamingName.set(false);
-      this.renameOpen.set(false);
-      this.toast.show(this.isFolder() ? 'Folder renamed' : 'Reference renamed', 'success');
-      this.changed.emit();
-    };
-    const onError = (): void => {
-      this.renamingName.set(false);
-      this.toast.show('Could not rename — try again in a moment.', 'error');
-    };
-    if (this.isFolder()) {
-      this.nav.renameFolder(key, uuid, displayName).subscribe({ next: onSuccess, error: onError });
-    } else {
-      this.api.renameAsset(key, uuid, { displayName }).subscribe({ next: onSuccess, error: onError });
-    }
+    const rename = this.isFolder() ? this.renameFolder() : null;
+    const request$ = rename
+      ? rename(key, uuid, displayName)
+      : this.api.renameAsset(key, uuid, { displayName });
+    request$.subscribe({
+      next: () => {
+        this.renamingName.set(false);
+        this.renameOpen.set(false);
+        this.toast.show(`${this.isFolder() ? 'Folder' : this.leafNoun()} renamed`, 'success');
+        this.changed.emit();
+      },
+      error: () => {
+        this.renamingName.set(false);
+        this.toast.show('Could not rename — try again in a moment.', 'error');
+      },
+    });
   }
 
   protected onRenameUidChanged(): void {

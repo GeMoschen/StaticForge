@@ -101,8 +101,9 @@ Because rendering is fully separated from content, the same content can be emitt
 | Term | Definition |
 |---|---|
 | **Project** | Top-level isolation unit. Owns assets, revisions, members, channels. |
-| **Asset** | Anything managed by the CMS with an identity: page, media, section template, page template, structure, folder. |
-| **Asset type** | Discriminator: `PAGE`, `MEDIA`, `SECTION_TEMPLATE`, `PAGE_TEMPLATE`, `STRUCTURE`, `FOLDER`. |
+| **Asset** | Anything managed by the CMS with an identity: page, media, section template, page template, structure, folder, page reference, global property set. |
+| **Asset type** | Discriminator: `PAGE`, `MEDIA`, `SECTION_TEMPLATE`, `PAGE_TEMPLATE`, `STRUCTURE`, `FOLDER`, `PAGE_REFERENCE`, `GLOBAL_SET`. |
+| **Property set** | A `GLOBAL_SET` asset in the Globals store: a named group of site-wide values (site title, logo, social links) whose fields are declared in CDL and whose values editors fill in. Templates read it as `CMS_GLOBAL.<set>.<editor>`. |
 | **UID** | Human-readable identifier, unique per (project, asset type), derived from the display name. |
 | **Revision** | Monotonic `long` per project describing one atomic change set. |
 | **Body** | Named content area on a page that holds an ordered list of section instances. |
@@ -1083,7 +1084,7 @@ The channel's `default_escaping` is applied automatically as the final step unle
 
 ### 16.4 Reference syntax `assetType:uid`
 
-`assetType` is one of `page`, `media`, `section_template`, `page_template`, `folder`, `page_reference` (the lowercase asset type), or `nav` (a navigation folder, resolved through its navigation reference UID). `uid` is the asset's UID within the current project. `AssetReferencePrefixes` is the single registry of these prefixes for template save, preview and generation.
+`assetType` is one of `page`, `media`, `section_template`, `page_template`, `folder`, `page_reference` (the lowercase asset type), `nav` (a navigation folder, resolved through its navigation reference UID), or `global` (a `GLOBAL_SET` property set). `uid` is the asset's UID within the current project. `AssetReferencePrefixes` is the single registry of these prefixes for template save, preview and generation.
 
 At **compile time** the reference is resolved to a UUID; the compiled template stores the UUID. On **template save** every resolved reference of every channel source is recorded in `asset_reference` as an `OCTL_VALUE`, `OCTL_REF` or `OCTL_INCLUDE` edge (§5.4). Consequences:
 
@@ -1098,6 +1099,7 @@ At **compile time** the reference is resolved to a UUID; the compiled template s
 | `page` | The page's editor values (`payload.content`); `bodies`, `nav`, `output` and `meta` are not exposed |
 | `media` | `altText`, `caption`, `copyright`, `fileName`, `mimeType`, `sizeBytes`, `focalPoint`, and from the image metadata `width`, `height`, `orientation`, `dominantColor`; blob hashes and variants are not exposed |
 | `page_reference` | `label` |
+| `global` | The property set's values (`payload.content`); its CDL is not exposed |
 | `section_template`, `page_template`, `folder` | No values |
 
 Every root value object also carries the reserved `_meta` object with `uid` and `displayName` (`$CMS_VALUE(page:about._meta.displayName)$`). A value object is raw stored JSON, never rendered output, so reading one cannot trigger a render; a `catalog` value read this way renders its cards through the current page's block resolver, bounded by the include cycle guard (§16.10). Lookups are scoped to the rendering project, and a target whose type does not match the prefix is treated as missing.
@@ -1107,6 +1109,8 @@ Every root value object also carries the reserved `_meta` object with `uid` and 
 - The page that reads another asset's value has no edge of its own; its template holds the `OCTL_VALUE` edge, and an incremental build reaches the page from the changed target through that template's edges (`OCTL_VALUE`, then `OCTL_INCLUDE`/`TEMPLATE`).
 
 `$CMS_REF` resolves to:
+
+A `$CMS_REF` on another asset *with* a value path (`$CMS_REF(page:about.heroImage)$`, `$CMS_REF(CMS_GLOBAL.site.logo)$`) resolves the link held by that editor, exactly like a local `$CMS_REF(editorName)$`; the linked media is a dependency of the rendering page. A path-less `$CMS_REF(global:site)$` is `SF-TPL-0105`, since a property set has no URL of its own.
 
 | Target | Result |
 |---|---|
@@ -1126,6 +1130,8 @@ Every root value object also carries the reserved `_meta` object with `uid` and 
 | List loop | `item.<itemEditorName>`, `item._index`, `item._first`, `item._last`, `item._count` |
 
 `$CMS_PAGE.headline$` inside a section reads the enclosing page's `headline` editor — a controlled, read-only upward reference; sections never write.
+
+`CMS_GLOBAL.<set>.<path>` is available in every channel template scope and reads a global property set. It is an accessor root used inside `$CMS_VALUE`, `$CMS_IF`, `$CMS_SET`, `$CMS_FOR` and `$CMS_REF`, not an instruction: `$CMS_VALUE(CMS_GLOBAL.site.title)$`. The compiler treats it as exactly `global:<set>.<path>` (§16.4). `CMS_GLOBAL` without a set is `SF-TPL-0105`.
 
 ### 16.6 Example — section channel template (HTML)
 
@@ -1275,6 +1281,7 @@ OCTL source ──lex──▶ tokens ──parse──▶ AST ──resolve ref
 | `SF-TPL-0102` | error | Unbalanced block (`$CMS_END_IF$` missing) |
 | `SF-TPL-0103` | error | Unknown editor name in this scope |
 | `SF-TPL-0104` | error | Unknown filter |
+| `SF-TPL-0105` | error | `CMS_GLOBAL` without a property set, or `$CMS_REF` on a property set without an editor path |
 | `SF-TPL-0110` | error | Unresolvable asset reference |
 | `SF-TPL-0111` | warning | Cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
 | `SF-TPL-0112` | warning (render) | Cross-asset value target missing or soft-deleted; renders empty |
