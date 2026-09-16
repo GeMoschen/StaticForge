@@ -1,12 +1,15 @@
 package com.acme.staticforge.asset.template;
 
 import com.acme.staticforge.template.content.ContentDefinition;
+import com.acme.staticforge.template.octl.ChainCompileMemo;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * The per-build compile tier (spec §21.5): within one generation build every (template, channel)
@@ -24,6 +27,8 @@ public final class TemplateCompileMemo {
     private final Map<UUID, ContentDefinition> definitions = new ConcurrentHashMap<>();
     private final Map<ChannelKey, CompiledChannel> channels = new ConcurrentHashMap<>();
     private final Map<ChannelKey, OctlResult> textMedia = new ConcurrentHashMap<>();
+    private final ChainCompileMemo chains = new ChainCompileMemo();
+    private final AtomicReference<TemplateHierarchy> hierarchy = new AtomicReference<>();
 
     /** A memo counting its compiles in {@code meterRegistry}. */
     public TemplateCompileMemo(MeterRegistry meterRegistry) {
@@ -46,6 +51,45 @@ public final class TemplateCompileMemo {
             ContentDefinition definition = definition(templateUuid, cdlSource);
             return new CompiledChannel(compiler.channel(octlSource, channel, resolver, definition), definition);
         });
+    }
+
+    /**
+     * Returns a page template's compiled channel against its inheritance chain (M20), compiling only on the first
+     * request for this template and channel in this build. Ancestors compile once per build for all their
+     * descendants.
+     *
+     * @param hierarchy the build's page templates ({@link #hierarchy})
+     * @param declaredParent the template's recorded {@code parentTemplateRef}, or {@code null}
+     */
+    public CompiledChannel compilePageTemplate(
+            UUID templateUuid,
+            String templateUid,
+            String channel,
+            String cdlSource,
+            String octlSource,
+            ReferenceResolver resolver,
+            TemplateHierarchy hierarchy,
+            UUID declaredParent) {
+        return channels.computeIfAbsent(new ChannelKey(templateUuid, channel), key -> {
+            ContentDefinition definition = definition(templateUuid, cdlSource);
+            return new CompiledChannel(
+                    compiler.chain(hierarchy, templateUuid, templateUid, octlSource, channel, resolver, definition,
+                            declaredParent, chains),
+                    definition);
+        });
+    }
+
+    /**
+     * The build's page template hierarchy (M20), built by {@code build} on first use and shared by every stage of
+     * the build afterwards.
+     */
+    public TemplateHierarchy hierarchy(Supplier<TemplateHierarchy> build) {
+        TemplateHierarchy existing = hierarchy.get();
+        if (existing != null) {
+            return existing;
+        }
+        hierarchy.compareAndSet(null, build.get());
+        return hierarchy.get();
     }
 
     /**

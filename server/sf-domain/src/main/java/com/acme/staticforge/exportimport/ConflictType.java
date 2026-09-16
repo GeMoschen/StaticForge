@@ -50,6 +50,12 @@ public enum ConflictType {
     RECORD_DATASET_MISSING(ConflictSeverity.BLOCKING),
 
     /**
+     * A {@code PAGE_TEMPLATE} whose {@code parentTemplateRef} is neither in the archive nor in the target project
+     * (M20). A template that extends can't compile or render without its parent.
+     */
+    PARENT_TEMPLATE_MISSING(ConflictSeverity.BLOCKING),
+
+    /**
      * An {@code ExportedAsset.parentFolderUuid} not resolvable within the archive. Should
      * be prevented by the exporter's ancestor-chain rule for archives produced by this
      * system, but a hand-edited or third-party archive could still hit it — defense in

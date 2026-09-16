@@ -1,0 +1,4 @@
+$CMS_EXTENDS(page_template:base)$
+$CMS_BLOCK(content)$$CMS_VALUE(body)$
+
+$CMS_PARENT$$CMS_END_BLOCK$

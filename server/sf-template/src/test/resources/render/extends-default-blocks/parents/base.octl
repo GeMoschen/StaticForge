@@ -1,0 +1,6 @@
+<html><head><title>$CMS_BLOCK(title)$$CMS_VALUE(title)$$CMS_END_BLOCK$</title></head>
+<body>
+<header>$CMS_BLOCK(header)$<h1>Acme</h1>$CMS_END_BLOCK$</header>
+<main>$CMS_BLOCK(content)$<p>Nothing here yet.</p>$CMS_END_BLOCK$</main>
+<footer>$CMS_BLOCK(footer)$&copy; Acme$CMS_END_BLOCK$</footer>
+</body></html>

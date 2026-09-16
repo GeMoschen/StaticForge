@@ -187,6 +187,19 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             """)
     long countCurrentRecordsOfDataset(@Param("projectId") long projectId, @Param("datasetAssetId") long datasetAssetId);
 
+    /** Current, non-deleted pages whose page template is one of {@code templateAssetIds} (M20), by uid. */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset a
+            WHERE a.projectId = :projectId
+              AND a.assetType = com.acme.staticforge.asset.AssetType.PAGE
+              AND v.templateAssetId IN :templateAssetIds
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            ORDER BY a.uid
+            """)
+    List<AssetVersion> findCurrentPagesOfTemplates(
+            @Param("projectId") long projectId, @Param("templateAssetIds") java.util.Collection<Long> templateAssetIds);
+
     /** Distinct asset ids with a version opened after {@code sinceRevision} (deletions included). */
     @Query("""
             SELECT DISTINCT v.assetId FROM AssetVersion v

@@ -344,7 +344,8 @@ export class PageEditorComponent {
 
     this.api.templateDetail(key, templateUuid).subscribe({
       next: (td) => {
-        const def = this.toDefinition(td.compiledDefinition);
+        // A page template's effective definition carries the editors and bodies it inherits (M20).
+        const def = this.toDefinition(td.effectiveDefinition ?? td.compiledDefinition);
         this.contentDefinition.set(def);
         this.buildFieldsForm(def, page.content);
         this.loadSectionDefs(key, page);

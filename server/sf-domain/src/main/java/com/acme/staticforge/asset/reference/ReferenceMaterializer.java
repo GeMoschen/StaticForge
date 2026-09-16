@@ -43,7 +43,9 @@ import org.springframework.stereotype.Service;
  *   <li>{@code PAGE_TEMPLATE}, {@code SECTION_TEMPLATE}: the OCTL references of every channel source
  *       as {@code OCTL_VALUE}/{@code OCTL_REF}/{@code OCTL_INCLUDE}, with source path
  *       {@code channelTemplates.<channel>}. Sections placed in page bodies are not duplicated here;
- *       those are the pages' {@code TEMPLATE} edges.</li>
+ *       those are the pages' {@code TEMPLATE} edges. A page template that extends another (M20) also has
+ *       its {@code parentTemplateRef} as {@link ReferenceKind#TEMPLATE}, so usages, export and incremental
+ *       builds see the chain.</li>
  *   <li>{@code MEDIA} with {@code processCms} on (M18.2.1): the OCTL references of the source blob,
  *       compiled with the text media profile, as {@code OCTL_*} edges with source path {@code source}.
  *       Unprocessed media has none, so switching the flag off closes them.</li>
@@ -195,6 +197,7 @@ public class ReferenceMaterializer {
         }
         ReferenceResolver resolver = projectReferences.forProject(projectId);
         List<ExtractedReference> found = new ArrayList<>();
+        addTemplate(found, payload.get("parentTemplateRef"), "parentTemplateRef");
         channels.fields().forEachRemaining(channel -> {
             JsonNode source = channel.getValue() == null ? null : channel.getValue().get("source");
             if (source == null || !source.isTextual() || source.asText().isEmpty()) {

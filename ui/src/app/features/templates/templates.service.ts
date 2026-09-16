@@ -99,6 +99,16 @@ export class TemplatesService {
     );
   }
 
+  /**
+   * Validates a channel source. With `templateUuid` it is checked as that template's channel (M20.4.1): references,
+   * the inheritance chain, and names against the effective definition built from `contentDefinition` when given.
+   */
+  validateOctl(key: string, body: S['OctlValidateRequest']): Observable<S['OctlValidateResponse']> {
+    return this.http.post<S['OctlValidateResponse']>(`${BASE}/projects/${key}/octl/validate`, body, {
+      withCredentials: true,
+    });
+  }
+
   validateCdl(key: string, source: string): Observable<S['CdlValidateResponse']> {
     return this.http.post<S['CdlValidateResponse']>(
       `${BASE}/projects/${key}/cdl/validate`,

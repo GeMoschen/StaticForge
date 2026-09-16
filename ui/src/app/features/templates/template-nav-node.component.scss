@@ -48,7 +48,18 @@
   color: var(--sf-signal);
 }
 
+.template-nav__badge {
+  flex: none;
+  padding: 0 var(--sf-1);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  font-size: var(--sf-text-xs, 0.6875rem);
+  line-height: 1.4;
+  color: var(--sf-slate);
+}
+
 .template-nav__name {
+  min-width: 3em;
   font-size: var(--sf-text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -61,5 +72,9 @@
   font-family: var(--sf-font-mono, monospace);
   font-size: var(--sf-text-xs);
   color: var(--sf-slate);
-  flex-shrink: 0;
+  // The uid gives way before the display name does (a badge also takes room, M20).
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

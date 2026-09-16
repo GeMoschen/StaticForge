@@ -12,6 +12,9 @@
     <span class="template-nav__spacer"></span>
     <sf-icon class="template-nav__icon" [name]="templateKind() === 'DATASET' ? 'dataset' : 'description'" />
     <span class="template-nav__name">{{ summary().displayName ?? summary().uid }}</span>
+    @if (summary().abstract) {
+      <span class="template-nav__badge" title="Abstract: a layout other templates extend; pages can't use it">Abstract</span>
+    }
     <span class="template-nav__mono">{{ summary().uid }}</span>
   </div>
 </div>

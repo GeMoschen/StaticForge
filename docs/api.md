@@ -154,14 +154,14 @@ with the diagnostic in `X-SF-Render-Error`.
 |---|---|
 | `GET`/`POST` | `/projects/{projectKey}/section-templates` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/section-templates/{uuid}` |
-| `GET`/`POST` | `/projects/{projectKey}/page-templates` |
-| `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/page-templates/{uuid}` |
+| `GET`/`POST` | `/projects/{projectKey}/page-templates` (list items carry `abstract` and `parentTemplateRef`; create accepts `abstract`) |
+| `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/page-templates/{uuid}` (M20: `abstract` on read and update; read-only `parentTemplateRef`, `ancestors`, `effectiveDefinition`, `inheritedFrom`; a save returns `descendantWarnings`; `422 SF-DOM-0122` making a used template abstract, `422 SF-DOM-0124` with `descendants[]` when descendants would break) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/{templateKind}/{uuid}/channels/{channelKey}` |
 | `GET`/`POST` | `/projects/{projectKey}/structures` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/structures/{uuid}` |
 | `GET` | `/projects/{projectKey}/structures/{uuid}/preview` |
 | `POST` | `/projects/{projectKey}/cdl/validate` (`?kind=GLOBAL_SET` adds the property-set restrictions, `?kind=DATASET` the dataset-schema ones) |
-| `POST` | `/projects/{projectKey}/octl/validate` |
+| `POST` | `/projects/{projectKey}/octl/validate` (body `source`, `channelKey`; with `templateUuid` and optional unsaved `contentDefinition` it returns the diagnostics a save of that template's channel would: references, inheritance chain, effective-definition names) |
 
 ## 9. Channels & targets
 
@@ -239,6 +239,9 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0110` | 409 | folder not empty — `FolderService` |
 | `SF-DOM-0120` | 409 | asset still referenced by an open edge from a non-deleted asset (delete without `force`) — `AssetServiceImpl` |
 | `SF-DOM-0121` | 409 | dataset still has live records (delete, with or without `force`); the problem carries `recordCount` — `AssetServiceImpl` |
+| `SF-DOM-0122` | 422 | a page template that pages use can't become abstract; carries `pageCount`, `pageUids`, `pageUuids` — `TemplateServiceImpl` |
+| `SF-DOM-0123` | 422 | a page can't be created on, or switched to, an abstract page template — `PageServiceImpl` |
+| `SF-DOM-0124` | 422 | a page template save would break templates that extend it; carries `descendants[]` (`uuid`, `uid`, `channel`, `diagnostics`) — `TemplateServiceImpl` |
 | `SF-DOM-0130` | 422 | page reference folder target has no page in its subtree — `PageReferenceServiceImpl` (a section template outside a body's `allow` list is `SF-API-0422` with an `allow` issue) |
 | `SF-DOM-0140` | 409 | project key already exists — *implemented addition* |
 

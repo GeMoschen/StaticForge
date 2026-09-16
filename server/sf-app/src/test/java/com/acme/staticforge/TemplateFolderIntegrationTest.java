@@ -351,7 +351,7 @@ class TemplateFolderIntegrationTest {
 
         // First relevant access (list) triggers the lazy migration.
         var page = templateService.list(fx.project().getId(), AssetType.SECTION_TEMPLATE, PageRequest.of(0, 50), fx.ctx());
-        assertThat(page.getContent()).anyMatch(s -> s.uuid().equals(legacy.uuid()));
+        assertThat(page.getContent()).anyMatch(s -> s.summary().uuid().equals(legacy.uuid()));
 
         AssetVersionView migrated = assetService.requireCurrent(fx.project().getId(), legacy.uuid());
         UUID sectionTemplatesUuid = fixedFolderUuid(fx, FolderScope.SECTION_TEMPLATES_UID);

@@ -1,0 +1,2 @@
+<body>$CMS_BLOCK(header)$<h1>$CMS_VALUE(title)$</h1>$CMS_END_BLOCK$
+$CMS_BLOCK(content)$<p>base</p>$CMS_END_BLOCK$</body>

@@ -453,7 +453,7 @@ export class PageNavNodeComponent {
             if (generation !== this.loadGeneration) {
               return;
             }
-            this.contentDefinition.set(this.toDefinition(td.compiledDefinition));
+            this.contentDefinition.set(this.toDefinition(td.effectiveDefinition ?? td.compiledDefinition));
             this.finishLoad();
           },
           error: () => this.fail(generation),

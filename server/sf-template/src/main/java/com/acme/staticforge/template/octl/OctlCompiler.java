@@ -1,9 +1,12 @@
 package com.acme.staticforge.template.octl;
 
 import com.acme.staticforge.template.content.ContentDefinition;
+import com.acme.staticforge.template.content.EditorDefinition;
 import com.acme.staticforge.template.content.EditorType;
+import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
+import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.query.DatasetQuery;
 import com.acme.staticforge.template.query.DatasetQueryParser;
 import com.acme.staticforge.template.render.Filters;
@@ -16,6 +19,7 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -30,6 +34,9 @@ import java.util.UUID;
 public final class OctlCompiler {
 
     private static final String HASH_ALGORITHM = "SHA-256";
+
+    /** How many ancestors a page template may have (M20): {@code SF-TPL-0155} beyond. */
+    public static final int MAX_INHERITANCE_DEPTH = 8;
 
     /** The {@code assetType:uid} prefix of a dataset loop source (M19.3.2). */
     private static final String DATASET_PREFIX = "dataset";
@@ -66,7 +73,7 @@ public final class OctlCompiler {
      */
     public OctlResult compile(
             String source, String channelKey, ReferenceResolver references, ContentDefinition contentDef) {
-        return compile(source, channelKey, references, contentDef, null);
+        return compile(source, channelKey, references, contentDef, (TextMedia) null);
     }
 
     /**
@@ -90,39 +97,357 @@ public final class OctlCompiler {
         return compile(source, channelKey, references, NO_EDITORS, new TextMedia(scriptLike));
     }
 
+    /**
+     * Compiles a page template's channel source against its inheritance chain (M20): the ancestors its
+     * {@code $CMS_EXTENDS} names are loaded through {@code parents}, compiled and linked, and names are
+     * checked against the effective definition (own + inherited). A template that doesn't extend compiles
+     * exactly as {@link #compile(String, String, ReferenceResolver, ContentDefinition)}.
+     *
+     * @param parents the ancestor loader; {@code null} reports a template that extends with {@code SF-TPL-0161}
+     * @param ownDefinition the template's own content definition, may be {@code null} to skip name checks
+     */
+    public OctlResult compile(
+            String source,
+            String channelKey,
+            ReferenceResolver references,
+            ParentTemplateLoader parents,
+            ContentDefinition ownDefinition) {
+        return compile(source, channelKey, references, ownDefinition, Inheritance.of(parents));
+    }
+
+    /**
+     * {@link #compile(String, String, ReferenceResolver, ParentTemplateLoader, ContentDefinition)} with the
+     * compiled template's identity and an ancestor memo shared by related compiles.
+     *
+     * <p>The result's {@link CompiledTemplate#hash()} covers every layer of the chain (channel, sources,
+     * ancestor UUIDs), so it is the key a compile cache must use for a template that extends: a key on the
+     * template's own version alone would serve a stale parent.
+     */
+    public OctlResult compile(
+            String source,
+            String channelKey,
+            ReferenceResolver references,
+            ContentDefinition ownDefinition,
+            Inheritance inheritance) {
+        Inheritance scope = inheritance == null ? new Inheritance(null, null, null, null) : inheritance;
+        return compile(new LayerSource(scope.templateUuid(), scope.templateUid(), source, ownDefinition),
+                channelKey, references, null, scope);
+    }
+
     private OctlResult compile(
             String source,
             String channelKey,
             ReferenceResolver references,
             ContentDefinition contentDef,
             TextMedia textMedia) {
-        String text = source == null ? "" : source;
-        String channel = channelKey == null ? "html" : channelKey;
+        return compile(new LayerSource(null, null, source, contentDef), channelKey, references, textMedia,
+                new Inheritance(null, null, null, null));
+    }
 
+    private OctlResult compile(
+            LayerSource layer, String channelKey, ReferenceResolver references, TextMedia textMedia, Inheritance inheritance) {
+        String channel = channelKey == null ? "html" : channelKey;
+        Link link = link(layer, channel, references, textMedia, inheritance, new ArrayList<>());
+        return new OctlResult(link.template(), link.diagnostics());
+    }
+
+    // ------------------------------------------------------------------
+    // Chain linking (M20)
+    // ------------------------------------------------------------------
+
+    /** One template of a chain: identity (unknown for an unsaved entry template), source and own CDL. */
+    private record LayerSource(UUID uuid, String uid, String source, ContentDefinition ownDefinition) {
+
+        LayerSource {
+            source = source == null ? "" : source;
+        }
+
+        String label() {
+            return uid != null ? uid : "this template";
+        }
+    }
+
+    /**
+     * A template compiled with its chain: the result, the own definitions along the chain root first (for
+     * descendants' effective definitions), the names used anywhere along it and its number of ancestors.
+     * {@code cycle} describes an inheritance cycle the chain ran into; {@code truncated} marks a chain whose
+     * loading stopped at the depth cap. Neither kind is memoized: both depend on where the compile entered.
+     */
+    record Link(
+            UUID uuid,
+            String uid,
+            CompiledTemplate template,
+            List<Diagnostic> diagnostics,
+            List<EffectiveDefinition.Layer> definitions,
+            Set<String> usedEditors,
+            Set<String> usedBodies,
+            int depth,
+            String cycle,
+            boolean truncated) {
+
+        boolean hasErrors() {
+            return diagnostics.stream().anyMatch(d -> d.severity() == Severity.ERROR);
+        }
+    }
+
+    /**
+     * Compiles {@code layer} and, when it extends, its chain. {@code path} holds the descendants that led
+     * here (entry template first) for cycle detection by UUID and the depth cap.
+     */
+    private Link link(
+            LayerSource layer,
+            String channel,
+            ReferenceResolver references,
+            TextMedia textMedia,
+            Inheritance inheritance,
+            List<LayerSource> path) {
+        String text = layer.source();
         OctlLexer.LexResult lexed = new OctlLexer().lex(text);
         OctlParser.ParseResult parsed = new OctlParser(lexed.tokens()).parse();
+        List<OctlNode> nodes = parsed.nodes();
 
         List<Diagnostic> diagnostics = new ArrayList<>(lexed.diagnostics());
         diagnostics.addAll(parsed.diagnostics());
+        OctlNode.Extends extendsNode = InheritanceRules.check(nodes, diagnostics);
+        boolean extending = nodes.stream().anyMatch(OctlNode.Extends.class::isInstance);
+        if (textMedia != null && extending) {
+            nodes.stream()
+                    .filter(OctlNode.Extends.class::isInstance)
+                    .map(OctlNode.Extends.class::cast)
+                    .forEach(e -> notInTextMedia("$CMS_EXTENDS", e.line(), e.col(), diagnostics));
+            extendsNode = null;
+        }
+
+        Link parent = null;
+        UUID parentUuid = null;
+        String cycle = null;
+        boolean truncated = false;
+        int depth = 0;
+        if (extendsNode != null) {
+            Accessor target = extendsNode.accessor();
+            // An unresolvable target is reported as SF-TPL-0110 by the validation walk below.
+            parentUuid = references == null ? null : references.resolve(target.assetType(), target.uid()).orElse(null);
+            UUID uuid = inheritance.loader() == null ? null : parentUuid;
+            if (inheritance.loader() == null || references == null) {
+                diagnostics.add(Diagnostic.error(
+                        DiagnosticCodes.OCTL_PARENT_UNAVAILABLE,
+                        "Parent template " + target.referenceKey() + " can't be loaded in this context, so inherited"
+                                + " blocks and editors aren't checked",
+                        extendsNode.line(), extendsNode.col()));
+            } else if (uuid != null && (uuid.equals(layer.uuid()) || path.stream().anyMatch(p -> uuid.equals(p.uuid())))) {
+                cycle = cycleDescription(path, layer, target.uid());
+            } else if (uuid != null && path.size() >= MAX_INHERITANCE_DEPTH) {
+                truncated = true;
+                depth = MAX_INHERITANCE_DEPTH + 1;
+            } else if (uuid != null) {
+                List<LayerSource> below = new ArrayList<>(path);
+                below.add(layer);
+                parent = loadParent(uuid, target, extendsNode, channel, references, inheritance, below, diagnostics);
+                if (parent != null) {
+                    cycle = parent.cycle();
+                    truncated = parent.truncated();
+                    depth = parent.depth() + 1;
+                }
+            }
+            if (cycle != null) {
+                diagnostics.add(Diagnostic.error(
+                        DiagnosticCodes.OCTL_INHERITANCE_CYCLE,
+                        "Inheritance cycle: " + cycle, extendsNode.line(), extendsNode.col()));
+                parent = null;
+            } else if (depth > MAX_INHERITANCE_DEPTH) {
+                diagnostics.add(Diagnostic.error(
+                        DiagnosticCodes.OCTL_INHERITANCE_DEPTH,
+                        "Inheritance chain is deeper than " + MAX_INHERITANCE_DEPTH + " templates",
+                        extendsNode.line(), extendsNode.col()));
+                parent = null;
+            } else if (parent != null && parent.hasErrors()) {
+                Diagnostic first = parent.diagnostics().stream()
+                        .filter(d -> d.severity() == Severity.ERROR)
+                        .findFirst()
+                        .orElseThrow();
+                diagnostics.add(Diagnostic.error(
+                        DiagnosticCodes.OCTL_ANCESTOR_INVALID,
+                        "Parent template '" + parent.uid() + "' has compile errors for this channel: " + first.code()
+                                + " " + first.message()
+                                + (first.line() > 0 ? " (line " + first.line() + ", col " + first.column() + ")" : ""),
+                        extendsNode.line(), extendsNode.col()));
+            }
+        }
+
+        // Names are checked against the effective definition: own + inherited, root first. A template that
+        // extends but whose chain didn't link can't tell inherited names from typos, so it skips the checks.
+        boolean namesUnknown = extending && parent == null;
+        List<EffectiveDefinition.Layer> definitions = new ArrayList<>();
+        if (parent != null) {
+            definitions.addAll(parent.definitions());
+        } else if (!extending && path.isEmpty() && inheritance.inheritedDefinitions() != null) {
+            definitions.addAll(inheritance.inheritedDefinitions());
+        }
+        definitions.add(new EffectiveDefinition.Layer(layer.label(), layer.ownDefinition()));
+        EffectiveDefinition effective = null;
+        if (layer.ownDefinition() != null && !namesUnknown) {
+            effective = EffectiveDefinition.merge(definitions);
+            diagnostics.addAll(effective.diagnostics());
+        }
 
         Map<String, UUID> refMap = new LinkedHashMap<>();
-        ValidateCtx ctx = new ValidateCtx(references, contentDef, refMap, diagnostics, textMedia);
-        validate(parsed.nodes(), new HashSet<>(), ctx);
+        ValidateCtx ctx = new ValidateCtx(
+                references, effective == null ? null : effective.definition(), refMap, diagnostics, textMedia, namesUnknown);
+        validate(nodes, new HashSet<>(), ctx);
 
-        ctx.emitDeclaredNeverUsed();
+        Set<String> usedEditors = new HashSet<>(ctx.usedEditors);
+        Set<String> usedBodies = new HashSet<>(ctx.usedBodies);
+        if (parent != null) {
+            usedEditors.addAll(parent.usedEditors());
+            usedBodies.addAll(parent.usedBodies());
+        }
+        if (effective != null) {
+            emitDeclaredNeverUsed(layer.ownDefinition(), effective, usedEditors, usedBodies, diagnostics);
+        }
         if (textMedia != null) {
             warnDollarEscapes(lexed, diagnostics);
         }
 
-        String hash = sha256(channel + '\u0000' + text);
+        Map<String, UUID> allReferences = new LinkedHashMap<>();
+        Map<OctlNode.For, DatasetQuery> allQueries = new IdentityHashMap<>();
+        CompiledTemplate.Chain chain;
+        String hash;
+        if (parent != null) {
+            CompiledTemplate linked = parent.template();
+            Map<String, List<List<OctlNode>>> table = new LinkedHashMap<>(linked.blocks());
+            InheritanceRules.blocks(nodes).forEach((name, body) -> {
+                List<List<OctlNode>> blockDefinitions = new ArrayList<>();
+                blockDefinitions.add(body);
+                blockDefinitions.addAll(linked.blocks().getOrDefault(name, List.of()));
+                table.put(name, blockDefinitions);
+            });
+            for (OctlNode.Block override : InheritanceRules.topLevelBlocks(nodes)) {
+                if (!linked.blocks().containsKey(override.name())) {
+                    String suggestion = InheritanceRules.suggestion(override.name(), linked.blocks().keySet());
+                    diagnostics.add(Diagnostic.warning(
+                            DiagnosticCodes.OCTL_UNKNOWN_BLOCK_OVERRIDE,
+                            "Block '" + override.name() + "' is not defined by any ancestor, so it never renders"
+                                    + (suggestion == null ? "" : " (did you mean '" + suggestion + "'?)"),
+                            override.line(), override.col()));
+                }
+            }
+            InheritanceRules.checkRecursion(table, diagnostics, extendsNode.line(), extendsNode.col());
+
+            List<OctlNode> setup = new ArrayList<>(linked.setupNodes());
+            setup.addAll(InheritanceRules.topLevelSets(nodes));
+            List<CompiledTemplate.Ancestor> ancestors = new ArrayList<>();
+            ancestors.add(new CompiledTemplate.Ancestor(parent.uuid(), parent.uid()));
+            ancestors.addAll(linked.ancestors());
+
+            allReferences.putAll(linked.references());
+            allQueries.putAll(linked.datasetQueryMap());
+            chain = new CompiledTemplate.Chain(linked.layoutNodes(), setup, table, ancestors, parentUuid, effective);
+            hash = sha256(channel + '\u0000' + text + '\u0000' + parentUuid + '\u0000' + linked.hash());
+        } else {
+            chain = new CompiledTemplate.Chain(
+                    nodes, List.of(), CompiledTemplate.Chain.standalone(nodes).blocks(), List.of(), parentUuid, effective);
+            hash = sha256(channel + '\u0000' + text);
+        }
+        allReferences.putAll(refMap);
+        allQueries.putAll(ctx.datasetQueries);
+
         CompiledTemplate template = new CompiledTemplate(
                 channel,
                 hash,
-                parsed.nodes(),
-                refMap,
-                ReferenceUseCollector.collect(parsed.nodes(), ctx.datasetQueries),
-                ctx.datasetQueries);
-        return new OctlResult(template, diagnostics);
+                nodes,
+                allReferences,
+                ReferenceUseCollector.collect(nodes, ctx.datasetQueries),
+                allQueries,
+                chain);
+        return new Link(
+                layer.uuid(), layer.label(), template, diagnostics, definitions, usedEditors, usedBodies, depth, cycle,
+                truncated);
+    }
+
+    /**
+     * Loads and links the parent {@code uuid}, reporting what makes it unusable ({@code SF-TPL-0161},
+     * {@code 0158}) on the child; {@code null} when it can't be linked.
+     */
+    private Link loadParent(
+            UUID uuid,
+            Accessor target,
+            OctlNode.Extends extendsNode,
+            String channel,
+            ReferenceResolver references,
+            Inheritance inheritance,
+            List<LayerSource> path,
+            List<Diagnostic> diagnostics) {
+        ChainCompileMemo memo = inheritance.memo();
+        Link cached = memo == null ? null : memo.get(uuid, channel);
+        if (cached != null) {
+            return cached;
+        }
+        Optional<ParentSource> loaded = inheritance.loader().load(uuid, channel);
+        if (loaded.isEmpty()) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_PARENT_UNAVAILABLE,
+                    "Parent " + target.referenceKey() + " is not a live page template",
+                    extendsNode.line(), extendsNode.col()));
+            return null;
+        }
+        ParentSource source = loaded.get();
+        if (source.channelSource() == null) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_ANCESTOR_MISSING_CHANNEL,
+                    "Parent template '" + source.uid() + "' has no template for channel '" + channel + "';"
+                            + " add one to it, or remove this channel from this template",
+                    extendsNode.line(), extendsNode.col()));
+            return null;
+        }
+        Link link = link(
+                new LayerSource(source.uuid(), source.uid(), source.channelSource(), source.ownDefinition()),
+                channel, references, null, inheritance, path);
+        if (memo != null && link.cycle() == null && !link.truncated()) {
+            memo.put(uuid, channel, link);
+        }
+        return link;
+    }
+
+    /** {@code a → b → a}: the part of the chain from the first occurrence of the repeated template. */
+    private static String cycleDescription(List<LayerSource> path, LayerSource layer, String targetUid) {
+        List<LayerSource> chain = new ArrayList<>(path);
+        chain.add(layer);
+        StringBuilder out = new StringBuilder();
+        for (LayerSource step : chain) {
+            out.append(step.label()).append(" → ");
+        }
+        return out.append(targetUid).toString();
+    }
+
+    /**
+     * {@code SF-TPL-0201}/{@code 0310} for the template's own bodies and editors that nothing along the chain
+     * renders or reads. Inherited ones are the ancestors' own concern, and a name that collided is already
+     * an error.
+     */
+    private static void emitDeclaredNeverUsed(
+            ContentDefinition own,
+            EffectiveDefinition effective,
+            Set<String> usedEditors,
+            Set<String> usedBodies,
+            List<Diagnostic> diagnostics) {
+        for (var body : own.bodies()) {
+            if (!effective.bodiesInheritedFrom().containsKey(body.name()) && !usedBodies.contains(body.name())) {
+                diagnostics.add(Diagnostic.warning(
+                        DiagnosticCodes.OCTL_BODY_NEVER_RENDERED,
+                        "Body declared but never rendered: " + body.name(), 0, 0));
+            }
+        }
+        for (EditorDefinition editor : own.editors()) {
+            if (editor.isGroup() || editor.name().startsWith("_group_")
+                    || effective.editorsInheritedFrom().containsKey(editor.name())) {
+                continue;
+            }
+            if (!usedEditors.contains(editor.name())) {
+                diagnostics.add(Diagnostic.warning(
+                        DiagnosticCodes.OCTL_EDITOR_NEVER_USED,
+                        "Editor declared but never used in this template: " + editor.name(), 0, 0));
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -146,14 +471,14 @@ public final class OctlCompiler {
                 }
                 case OctlNode.Body b -> {
                     if (ctx.textMedia != null) {
-                        notInTextMedia("$CMS_BODY", b.line(), b.col(), ctx);
+                        notInTextMedia("$CMS_BODY", b.line(), b.col(), ctx.diagnostics);
                     } else {
                         checkBody(b, ctx);
                     }
                 }
                 case OctlNode.Include i -> {
                     if (ctx.textMedia != null) {
-                        notInTextMedia("$CMS_INCLUDE", i.line(), i.col(), ctx);
+                        notInTextMedia("$CMS_INCLUDE", i.line(), i.col(), ctx.diagnostics);
                     } else {
                         resolveReference(i.accessor(), i.line(), i.col(), ctx);
                     }
@@ -205,6 +530,14 @@ public final class OctlCompiler {
                 }
                 case OctlNode.Meta m -> checkFilters(m.filters(), m.line(), m.col(), ctx);
                 case OctlNode.Comment c -> { /* nothing */ }
+                case OctlNode.Extends e -> {
+                    if (InheritanceRules.PAGE_TEMPLATE_PREFIX.equals(e.accessor().assetType())
+                            && e.accessor().uid() != null && !e.accessor().uid().isBlank()) {
+                        resolveReference(e.accessor(), e.line(), e.col(), ctx);
+                    }
+                }
+                case OctlNode.Block b -> validate(b.body(), shadowed, ctx);
+                case OctlNode.Parent p -> { /* placement checked by InheritanceRules */ }
             }
         }
     }
@@ -270,7 +603,7 @@ public final class OctlCompiler {
         }
         if ("CMS_PAGE".equals(name)) {
             if (ctx.textMedia != null) {
-                notInTextMedia("CMS_PAGE", line, col, ctx);
+                notInTextMedia("CMS_PAGE", line, col, ctx.diagnostics);
             }
             return;
         }
@@ -377,8 +710,8 @@ public final class OctlCompiler {
         }
     }
 
-    private static void notInTextMedia(String what, int line, int col, ValidateCtx ctx) {
-        ctx.diagnostics.add(Diagnostic.error(
+    private static void notInTextMedia(String what, int line, int col, List<Diagnostic> diagnostics) {
+        diagnostics.add(Diagnostic.error(
                 DiagnosticCodes.OCTL_NOT_ALLOWED_IN_TEXT_MEDIA,
                 what + " is not available in text media: the file belongs to no page",
                 line,
@@ -434,6 +767,9 @@ public final class OctlCompiler {
     }
 
     private void checkBody(OctlNode.Body body, ValidateCtx ctx) {
+        if (ctx.namesUnknown) {
+            return;
+        }
         boolean isSection = ctx.contentDef == null || ctx.contentDef.bodies().isEmpty();
         if (isSection) {
             ctx.diagnostics.add(Diagnostic.error(
@@ -492,41 +828,23 @@ public final class OctlCompiler {
         final Map<OctlNode.For, DatasetQuery> datasetQueries = new IdentityHashMap<>();
         /** The text media profile, or {@code null} when compiling a template. */
         final TextMedia textMedia;
+        /** A template that extends but whose chain didn't link: inherited names are unknown, so none are checked. */
+        final boolean namesUnknown;
 
         ValidateCtx(
                 ReferenceResolver references,
                 ContentDefinition contentDef,
                 Map<String, UUID> refMap,
                 List<Diagnostic> diagnostics,
-                TextMedia textMedia) {
+                TextMedia textMedia,
+                boolean namesUnknown) {
             this.references = references;
             this.contentDef = contentDef;
             this.refMap = refMap;
             this.diagnostics = diagnostics;
             this.textMedia = textMedia;
+            this.namesUnknown = namesUnknown;
         }
 
-        void emitDeclaredNeverUsed() {
-            if (contentDef == null) {
-                return;
-            }
-            for (var body : contentDef.bodies()) {
-                if (!usedBodies.contains(body.name())) {
-                    diagnostics.add(Diagnostic.warning(
-                            DiagnosticCodes.OCTL_BODY_NEVER_RENDERED,
-                            "Body declared but never rendered: " + body.name(), 0, 0));
-                }
-            }
-            for (var editor : contentDef.editors()) {
-                if (editor.isGroup() || editor.name().startsWith("_group_")) {
-                    continue;
-                }
-                if (!usedEditors.contains(editor.name())) {
-                    diagnostics.add(Diagnostic.warning(
-                            DiagnosticCodes.OCTL_EDITOR_NEVER_USED,
-                            "Editor declared but never used in this template: " + editor.name(), 0, 0));
-                }
-            }
-        }
     }
 }

@@ -13,6 +13,7 @@ import com.acme.staticforge.asset.template.TemplateView;
 import com.acme.staticforge.asset.template.UpdateTemplateCommand;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.security.SecuritySupport;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,8 +36,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectKey}/section-templates")
 public class SectionTemplateController extends AbstractTemplateController {
 
-    public SectionTemplateController(ProjectService projectService, TemplateService templateService, SecuritySupport securitySupport) {
-        super(projectService, templateService, securitySupport);
+    public SectionTemplateController(
+            ProjectService projectService, TemplateService templateService, SecuritySupport securitySupport,
+            ObjectMapper objectMapper) {
+        super(projectService, templateService, securitySupport, objectMapper);
     }
 
     @GetMapping
@@ -121,7 +124,7 @@ public class SectionTemplateController extends AbstractTemplateController {
                 uuid, channelKey, body.source(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "set channel template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toChannel(channelKey, view.payload().path("channelTemplates").path(channelKey)));
+                .body(toChannel(channelKey, view));
     }
 
     @DeleteMapping("/{uuid}/channels/{channelKey}")

@@ -25,6 +25,7 @@ import { SfAssetPickerDialogComponent, type AssetPicked } from './sf-asset-picke
 import { SfButtonComponent } from './sf-button.component';
 import { SfFieldComponent } from './sf-field.component';
 import { SfSpinnerComponent } from './sf-spinner.component';
+import { concreteTemplates } from '../../features/templates/inheritance.util';
 
 type TemplateSummary = components['schemas']['TemplateSummary'];
 
@@ -97,6 +98,8 @@ export class SfCreateAssetDialogComponent {
   readonly submitting = input(false);
   readonly projectKey = input.required<string>();
   readonly templates = input<TemplateSummary[]>([]);
+  /** Page templates a page may use: abstract templates are layouts for other templates (M20). */
+  protected readonly templateOptions = computed(() => concreteTemplates(this.templates()));
   /** For `RECORD`: the datasets to choose from; the chooser is shown when there is more than one. */
   readonly datasets = input<CreateAssetDatasetOption[]>([]);
   /** For `RECORD`: the dataset preselected in the chooser. */

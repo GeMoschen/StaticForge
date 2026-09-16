@@ -9,6 +9,7 @@ import com.acme.staticforge.asset.content.SectionTemplateLookup.SectionTemplate;
 import com.acme.staticforge.asset.content.SectionTemplateLookup;
 import com.acme.staticforge.asset.content.TemplateContentDefinitions;
 import com.acme.staticforge.asset.dataset.RecordDatasets;
+import com.acme.staticforge.asset.template.TemplateHierarchies;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.template.content.ContentDefinition;
@@ -38,12 +39,17 @@ public class PageContentValidation {
     private final AssetRepository assetRepository;
     private final AssetVersionRepository assetVersionRepository;
     private final RecordDatasets recordDatasets;
+    private final TemplateHierarchies hierarchies;
 
     public PageContentValidation(
-            AssetRepository assetRepository, AssetVersionRepository assetVersionRepository, RecordDatasets recordDatasets) {
+            AssetRepository assetRepository,
+            AssetVersionRepository assetVersionRepository,
+            RecordDatasets recordDatasets,
+            TemplateHierarchies hierarchies) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.recordDatasets = recordDatasets;
+        this.hierarchies = hierarchies;
     }
 
     /** A validator that checks dataset-restricted references against this project's records (M19.3.2). */
@@ -82,9 +88,16 @@ public class PageContentValidation {
                 (definition, sections) -> validator.validateSection(definition, bodyName, instanceId, payload, sections)));
     }
 
+    /** Page content validates against the page template's effective definition: own and inherited editors (M20). */
     private List<ContentIssue> validate(long projectId, JsonNode payload, Check check) {
-        return liveTemplate(projectId, payload.path("templateRef").asText(""), AssetType.PAGE_TEMPLATE)
-                .map(pageTemplate -> check.run(pageTemplate.definition(), sectionTemplates(projectId)))
+        UUID templateUuid;
+        try {
+            templateUuid = UUID.fromString(payload.path("templateRef").asText(""));
+        } catch (IllegalArgumentException e) {
+            return List.of();
+        }
+        return hierarchies.live(projectId).effectiveDefinition(templateUuid)
+                .map(effective -> check.run(effective.definition(), sectionTemplates(projectId)))
                 .orElse(List.of());
     }
 

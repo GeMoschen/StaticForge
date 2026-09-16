@@ -111,4 +111,23 @@ public sealed interface OctlNode {
 
     /** {@code $CMS_COMMENT$ … $CMS_END_COMMENT$} (content discarded). */
     record Comment(int line, int col) implements OctlNode {}
+
+    /** {@code $CMS_EXTENDS(page_template:uid)$}: this template is a layout's descendant (M20). */
+    record Extends(Accessor accessor, int line, int col) implements OctlNode {}
+
+    /**
+     * {@code $CMS_BLOCK(name)$ … $CMS_END_BLOCK$}: a named, overridable region (M20). In the template
+     * that renders, it is replaced by its most-derived definition along the inheritance chain.
+     */
+    record Block(String name, List<OctlNode> body, int line, int col) implements OctlNode {
+        public Block {
+            body = body == null ? List.of() : List.copyOf(body);
+        }
+    }
+
+    /**
+     * {@code $CMS_PARENT$}: inside a block override, the next less-derived definition of that block
+     * (M20). {@code hasArguments} records a stray argument list, which is a compile error.
+     */
+    record Parent(boolean hasArguments, int line, int col) implements OctlNode {}
 }

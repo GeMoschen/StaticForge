@@ -1,0 +1,6 @@
+# $CMS_VALUE(title)$
+
+$CMS_BLOCK(content)$_Nothing here yet._$CMS_END_BLOCK$
+
+---
+$CMS_BLOCK(footer)$(c) Acme$CMS_END_BLOCK$

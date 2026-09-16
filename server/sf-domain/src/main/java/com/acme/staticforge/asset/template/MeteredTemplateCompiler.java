@@ -2,11 +2,13 @@ package com.acme.staticforge.asset.template;
 
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.content.ContentDefinition;
+import com.acme.staticforge.template.octl.ChainCompileMemo;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.UUID;
 
 /**
  * The CDL and OCTL compilers behind the render-time compile tiers, counting every real compile in
@@ -36,6 +38,25 @@ final class MeteredTemplateCompiler {
     OctlResult channel(String octlSource, String channel, ReferenceResolver resolver, ContentDefinition definition) {
         octlCompiles.increment();
         return octlCompiler.compile(octlSource, channel, resolver, definition);
+    }
+
+    /**
+     * Compiles a page template channel against its chain in {@code hierarchy} (M20); counted as one {@code octl}
+     * compile, however many ancestors it links.
+     */
+    OctlResult chain(
+            TemplateHierarchy hierarchy,
+            UUID templateUuid,
+            String templateUid,
+            String octlSource,
+            String channel,
+            ReferenceResolver resolver,
+            ContentDefinition definition,
+            UUID declaredParent,
+            ChainCompileMemo memo) {
+        octlCompiles.increment();
+        return hierarchy.compile(
+                octlCompiler, resolver, templateUuid, templateUid, channel, octlSource, definition, declaredParent, memo);
     }
 
     /** Compiles a processed text media source (M18); counted as an {@code octl} compile. */

@@ -13,10 +13,22 @@ public record UpdateTemplateCommand(
         Map<String, String> channelSources,
         String category,
         boolean deprecated,
-        Map<String, String> outputPath) {
+        Map<String, String> outputPath,
+        boolean abstractTemplate) {
 
     public UpdateTemplateCommand {
         channelSources = channelSources == null ? Map.of() : channelSources;
         outputPath = outputPath == null ? Map.of() : outputPath;
+    }
+
+    /** A concrete (non-abstract) template, the only kind before M20. */
+    public UpdateTemplateCommand(
+            String displayName,
+            String contentDefinition,
+            Map<String, String> channelSources,
+            String category,
+            boolean deprecated,
+            Map<String, String> outputPath) {
+        this(displayName, contentDefinition, channelSources, category, deprecated, outputPath, false);
     }
 }

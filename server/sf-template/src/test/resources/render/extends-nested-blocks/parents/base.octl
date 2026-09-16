@@ -1,0 +1,1 @@
+$CMS_BLOCK(content)$<main>$CMS_BLOCK(sidebar)$<aside>links</aside>$CMS_END_BLOCK$<section>body</section></main>$CMS_END_BLOCK$

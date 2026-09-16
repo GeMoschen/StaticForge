@@ -1,0 +1,4 @@
+$CMS_EXTENDS(page_template:base)$
+$CMS_SET(crumb = "Guides")$
+$CMS_BLOCK(header)$<nav>$CMS_VALUE(crumb)$</nav>$CMS_PARENT$$CMS_END_BLOCK$
+$CMS_BLOCK(content)$<div class="docs">$CMS_PARENT$</div>$CMS_END_BLOCK$

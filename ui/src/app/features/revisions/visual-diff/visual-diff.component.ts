@@ -114,7 +114,7 @@ export class SfVisualDiffComponent {
         }
         this.api.templateDetail(key, templateRef).subscribe({
           next: (td) => {
-            const def = (td.compiledDefinition ?? null) as ContentDefinition | null;
+            const def = (td.effectiveDefinition ?? td.compiledDefinition ?? null) as ContentDefinition | null;
             this.render(asset.changes ?? [], def, beforePayload, afterPayload);
             this.loading.set(false);
           },

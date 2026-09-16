@@ -20,6 +20,7 @@ Templates are owned by **template developers** (see the [template-developer guid
 
 1. Open **Pages** from the nav. The folder tree is on the left, the page table in the centre.
 2. Create a page: choose a template, a display name, and a folder. The UID (shown in mono) is derived from the name automatically.
+   - Not every page template is offered. Templates marked **Abstract** (shown with an *Abstract* badge in the Templates store) are layouts that other templates build on, so no page can use them directly. Pick a template that extends the layout instead, or ask a developer to make one.
 3. Open the page editor — a split view: page fields on the left, live preview on the right.
 4. Fill the template's editors. Save is ambient: the header shows `Saved 12:04` with a revision link. There is no blocking save spinner (§24.6).
    - A half-filled page always saves: an empty required field, too few list items or text that is too long doesn't stop the save. These are checked when you publish instead. A page with such a problem isn't published; the generation log lists it under `SF-GEN-0120` with the field paths, and the other pages are still published.

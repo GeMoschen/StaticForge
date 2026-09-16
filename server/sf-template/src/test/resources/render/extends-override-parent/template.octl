@@ -1,0 +1,4 @@
+$CMS_EXTENDS(page_template:base)$
+$CMS_COMMENT$ An article: the base content stays as a lead-in, the footer is replaced. $CMS_END_COMMENT$
+$CMS_BLOCK(content)$<article>$CMS_PARENT$<p>$CMS_VALUE(summary)$</p></article>$CMS_END_BLOCK$
+$CMS_BLOCK(footer)$Written by $CMS_VALUE(title)$$CMS_END_BLOCK$

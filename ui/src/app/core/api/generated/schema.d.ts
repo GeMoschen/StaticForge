@@ -1491,6 +1491,32 @@ export interface components {
             outputPath?: {
                 [key: string]: string;
             };
+            abstract?: boolean;
+        };
+        DescendantIssueDto: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            channel?: string;
+            diagnostics?: components["schemas"]["Diagnostic"][];
+        };
+        Diagnostic: {
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING";
+            code?: string;
+            message?: string;
+            /** Format: int32 */
+            line?: number;
+            /** Format: int32 */
+            column?: number;
+        };
+        InheritedFrom: {
+            editors?: {
+                [key: string]: string;
+            };
+            bodies?: {
+                [key: string]: string;
+            };
         };
         TemplateDetail: {
             /** Format: uuid */
@@ -1510,6 +1536,18 @@ export interface components {
             /** Format: uuid */
             folderUuid?: string;
             folderPath?: string;
+            /** Format: uuid */
+            parentTemplateRef?: string;
+            ancestors?: components["schemas"]["TemplateRefDto"][];
+            effectiveDefinition?: components["schemas"]["JsonNode"];
+            inheritedFrom?: components["schemas"]["InheritedFrom"];
+            descendantWarnings?: components["schemas"]["DescendantIssueDto"][];
+            abstract?: boolean;
+        };
+        TemplateRefDto: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
         };
         ChannelTemplateRequest: {
             source?: string;
@@ -1519,6 +1557,7 @@ export interface components {
             source?: string;
             compiledHash?: string;
             compiled?: components["schemas"]["JsonNode"];
+            descendantWarnings?: components["schemas"]["DescendantIssueDto"][];
         };
         UpdateRecordRequest: {
             content?: components["schemas"]["JsonNode"];
@@ -1631,16 +1670,6 @@ export interface components {
         };
         MediaTextRequest: {
             text?: string;
-        };
-        Diagnostic: {
-            /** @enum {string} */
-            severity?: "ERROR" | "WARNING";
-            code?: string;
-            message?: string;
-            /** Format: int32 */
-            line?: number;
-            /** Format: int32 */
-            column?: number;
         };
         MediaSaveResponse: {
             media?: components["schemas"]["MediaView"];
@@ -1785,6 +1814,7 @@ export interface components {
             };
             /** Format: uuid */
             parentFolderUuid?: string;
+            abstract?: boolean;
         };
         ProjectRestoreRequest: {
             /** Format: int64 */
@@ -1832,6 +1862,7 @@ export interface components {
             source?: string;
             channelKey?: string;
             templateUuid?: string;
+            contentDefinition?: string;
         };
         OctlValidateResponse: {
             diagnostics?: components["schemas"]["Diagnostic"][];
@@ -2098,13 +2129,13 @@ export interface components {
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
-            numberOfElements?: number;
-            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -2112,12 +2143,12 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
+            paged?: boolean;
+            unpaged?: boolean;
             /** Format: int32 */
             pageSize?: number;
             /** Format: int32 */
             pageNumber?: number;
-            paged?: boolean;
-            unpaged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -2134,13 +2165,13 @@ export interface components {
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
-            numberOfElements?: number;
-            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -2153,6 +2184,9 @@ export interface components {
             folderPath?: string;
             /** Format: int64 */
             revision?: number;
+            /** Format: uuid */
+            parentTemplateRef?: string;
+            abstract?: boolean;
         };
         Pageable: {
             /** Format: int32 */
@@ -2181,8 +2215,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            remove?: boolean;
             add?: boolean;
+            remove?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -2245,13 +2279,13 @@ export interface components {
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
-            numberOfElements?: number;
-            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -2345,13 +2379,13 @@ export interface components {
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
-            numberOfElements?: number;
-            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };

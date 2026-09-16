@@ -66,6 +66,9 @@ final class ReferenceUseCollector {
                 case OctlNode.NavigationRecurse nr -> { /* nothing */ }
                 case OctlNode.Meta m -> { /* not resolved by the compiler */ }
                 case OctlNode.Comment c -> { /* nothing */ }
+                case OctlNode.Extends e -> { /* the parent link is the template's TEMPLATE edge, not an OCTL use */ }
+                case OctlNode.Block b -> nodes(b.body());
+                case OctlNode.Parent p -> { /* nothing */ }
             }
         }
     }

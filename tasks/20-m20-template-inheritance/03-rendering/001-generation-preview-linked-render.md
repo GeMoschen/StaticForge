@@ -1,6 +1,6 @@
 ---
 id: M20.3.1
-status: todo
+status: done
 depends: [M20.1.2, M20.2.1, M16.1.1]
 epic: m20-template-inheritance
 feature: rendering
@@ -52,19 +52,19 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Renderer unit tests cover: an override with `$CMS_PARENT$` at depth 1, 2 and 3; a root
+- [x] Renderer unit tests cover: an override with `$CMS_PARENT$` at depth 1, 2 and 3; a root
       `$CMS_PARENT$` rendering empty; a nested-block override through an un-overridden outer block;
       child `$CMS_SET` visibility.
-- [ ] Generation integration test: a page on `article` (→ `docs_layout` → `base`) generates the
+- [x] Generation integration test: a page on `article` (→ `docs_layout` → `base`) generates the
       expected HTML and Markdown. Changing only `base` and running INCREMENTAL re-renders that page,
       and its output reflects the new layout.
-- [ ] Preview of the same page at the same revision is byte-identical to the generated output (for
+- [x] Preview of the same page at the same revision is byte-identical to the generated output (for
       HTML, links rewritten per the preview rules).
-- [ ] Time travel: previewing the page at a revision before the parent's last change renders the
+- [x] Time travel: previewing the page at a revision before the parent's last change renders the
       **old** parent layout.
-- [ ] A chain error (e.g. parent lacks the channel) fails generation validation with `SF-TPL-0148` for
+- [x] A chain error (e.g. parent lacks the channel) fails generation validation with `SF-TPL-0148` for
       that template/channel, visible in the run diagnostics, without crashing the run.
-- [ ] `./gradlew build` is green.
+- [x] `./gradlew build` is green.
 
 ## Out of scope
 
