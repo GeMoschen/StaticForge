@@ -131,6 +131,11 @@ Both "Section" and "Sub" pick up `trail` because "Leaf One" is active somewhere 
   any host path, `file://` or an unpacked ZIP. The URL registry stores the site path (`pf/p2.html`);
   generation relativizes it per page. A manual registry override that is already absolute (`/…`,
   `https://…`) is emitted unchanged. The same applies to `$CMS_REF` page, folder and media links.
+- The site path follows the channel's output settings (`fileExtension`, `settings.urlStrategy`,
+  `trailingSlash`, `indexUid`, `indexFileName`). With `urlStrategy: PRETTY` and `trailingSlash: true`,
+  `pf/p2.html` is written as `pf/p2/index.html` and linked as `pf/p2/` (from `pf/pf1/p3/index.html`:
+  `../../p2/`); the site-root index is linked as `./`. Changing these settings drops the channel's
+  computed registry entries (manual overrides stay) and makes the next incremental generation a full one.
 - A `PAGE_REFERENCE` node's href is resolved through the URL registry (`UrlRegistryService`,
   `UrlArea.GENERATED`), keyed on the reference's own UUID — stable across regeneration even if
   the target page's slug changes. A `FOLDER` entry-point node (resolved via its `startNode`

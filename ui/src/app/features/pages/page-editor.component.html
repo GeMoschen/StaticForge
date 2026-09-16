@@ -173,7 +173,8 @@
         <sf-preview-frame
           [projectKey]="projectKey()"
           [pageUuid]="uuid()"
-          [revision]="autosave.revision()"
+          [revision]="timeTravelRevision()"
+          [refreshKey]="autosave.revision()"
           (sectionClick)="onPreviewSectionClick($event)"
         />
       </div>

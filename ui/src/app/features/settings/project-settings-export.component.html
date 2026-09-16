@@ -91,6 +91,45 @@
           </div>
         }
       </section>
+
+      <section class="tree-section">
+        <div class="tree-section__header">
+          <h2 class="tree-section__title">Globals</h2>
+          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('GLOBAL_SET')">
+            <sf-icon [name]="isStoreFull('GLOBAL_SET') ? 'check_box' : 'check_box_outline_blank'" />
+            Select all globals
+          </button>
+        </div>
+        @if (isLoadingAssets()) {
+          <sf-spinner label="Loading…" />
+        } @else if (topLevelFolders('GLOBAL_SET').length === 0 && rootAssets('GLOBAL_SET').length === 0) {
+          <sf-empty-state title="No property sets" description="This project has no global property sets yet." />
+        } @else {
+          <div class="tree" role="tree">
+            <ng-container *ngTemplateOutlet="rootSection; context: { scope: 'GLOBAL_SET' }"></ng-container>
+          </div>
+        }
+      </section>
+
+      <section class="tree-section">
+        <div class="tree-section__header">
+          <h2 class="tree-section__title">Content</h2>
+          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('RECORD')">
+            <sf-icon [name]="isStoreFull('RECORD') ? 'check_box' : 'check_box_outline_blank'" />
+            Select all content
+          </button>
+        </div>
+        <p class="tree-section__hint">A record's dataset is always exported with it.</p>
+        @if (isLoadingAssets()) {
+          <sf-spinner label="Loading…" />
+        } @else if (topLevelFolders('RECORD').length === 0 && rootAssets('RECORD').length === 0) {
+          <sf-empty-state title="No records" description="This project has no dataset records yet." />
+        } @else {
+          <div class="tree" role="tree">
+            <ng-container *ngTemplateOutlet="rootSection; context: { scope: 'RECORD' }"></ng-container>
+          </div>
+        }
+      </section>
     </div>
   }
 

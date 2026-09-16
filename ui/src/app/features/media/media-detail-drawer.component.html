@@ -1,106 +1,286 @@
 <div class="scrim" (click)="closeDrawer()"></div>
 
-<aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="media-drawer-title">
+<aside
+  class="drawer"
+  [class.drawer--wide]="tab() !== 'details'"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="media-drawer-title"
+>
   <header class="drawer__header">
     <h2 id="media-drawer-title" class="drawer__title">
       {{ media().displayName ?? media().uid ?? 'Media' }}
+      @if (processCms()) {
+        <span class="cms-badge" title="CMS syntax is processed when the site is generated">CMS</span>
+      }
     </h2>
     <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
   </header>
 
-  <div class="drawer__body">
-    <div class="preview">
-      <img
-        class="preview__img"
-        [src]="previewUrl()"
-        [alt]="media().altText ?? ''"
-        [style.object-position]="focalPosition()"
-      />
+  @if (textEditable()) {
+    <div class="tabs" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="tab() === 'details'"
+        [class.tab--active]="tab() === 'details'"
+        (click)="openTab('details')"
+      >
+        Details
+      </button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="tab() === 'source'"
+        [class.tab--active]="tab() === 'source'"
+        (click)="openTab('source')"
+      >
+        Source
+        @if (dirty()) {
+          <span class="tab__dirty" aria-label="unsaved changes">•</span>
+        }
+      </button>
+      @if (processCms()) {
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="tab() === 'rendered'"
+          [class.tab--active]="tab() === 'rendered'"
+          (click)="openTab('rendered')"
+        >
+          Rendered
+        </button>
+      }
     </div>
+  }
 
-    @if (usages().length > 0) {
-      <div class="banner banner--warning">
-        This file is referenced by {{ usages().length }} asset(s). Deleting it will
-        break those references.
-      </div>
-    }
-
+  <div class="drawer__body">
     @if (readOnly()) {
       <div class="banner banner--warning">
         Viewing a past revision — exit time travel to make changes.
       </div>
     }
 
-    <form [formGroup]="form">
-      <sf-field label="Alt text" hint="Required before publishing">
-        <input type="text" formControlName="altText" placeholder="Descriptive alt text" />
-        @if (form.controls.altText.invalid && form.controls.altText.touched) {
-          <span class="error">Alt text is required before publishing</span>
+    @if (textEditable()) {
+      <section class="process" aria-label="CMS processing">
+        <label class="switch">
+          <input
+            type="checkbox"
+            role="switch"
+            [checked]="processCms()"
+            [disabled]="readOnly() || togglingProcess()"
+            (change)="onProcessToggle($event)"
+          />
+          <span>Process CMS syntax</span>
+        </label>
+        <p class="hint">
+          When on, <code>$CMS_…$</code> instructions in this file are rendered when the site is generated
+          and in preview, and <code>$$</code> is output as a single <code>$</code>.
+        </p>
+        @if (processDiagnostics().length > 0) {
+          <div class="diagnostics" aria-live="polite">
+            @for (diag of processDiagnostics(); track $index) {
+              <div
+                class="diagnostic"
+                [class.diagnostic--error]="diag.severity === 'ERROR'"
+                [class.diagnostic--warning]="diag.severity !== 'ERROR'"
+              >
+                <span class="diagnostic__code">{{ diag.code }}</span>
+                @if (positionLabel(diag); as position) {
+                  <span class="diagnostic__position">{{ position }}</span>
+                }
+                <span>{{ diag.message }}</span>
+              </div>
+            }
+          </div>
         }
-      </sf-field>
-
-      <sf-field label="Caption">
-        <input type="text" formControlName="caption" placeholder="Optional caption" />
-      </sf-field>
-
-      <sf-field label="Copyright">
-        <input type="text" formControlName="copyright" placeholder="© Owner (year)" />
-      </sf-field>
-
-      <div class="focal">
-        <sf-field label="Focal point X" hint="0 – 1">
-          <input type="number" formControlName="focalX" min="0" max="1" step="0.01" />
-        </sf-field>
-        <sf-field label="Focal point Y" hint="0 – 1">
-          <input type="number" formControlName="focalY" min="0" max="1" step="0.01" />
-        </sf-field>
-      </div>
-
-      <sf-button variant="primary" [disabled]="saving() || readOnly()" (click)="save()">
-        Save metadata
-      </sf-button>
-    </form>
-
-    @if (variants().length > 0) {
-      <section class="section">
-        <h3 class="section__title">Variants</h3>
-        <ul class="variants">
-          @for (variant of variants(); track variant.name) {
-            <li>
-              <span>{{ variant.name }}</span>
-              <span class="meta">{{ variant.width ?? 0 }}px · {{ variant.format }}</span>
-              <button type="button" class="link-button" (click)="downloadVariant(variant.name)">Download</button>
-            </li>
-          }
-        </ul>
       </section>
     }
 
-    <section class="section">
-      <h3 class="section__title">Referenced by</h3>
-      @if (usagesLoading()) {
-        <span class="muted">Loading…</span>
-      } @else if (usages().length === 0) {
-        <span class="muted">Not referenced by any asset.</span>
-      } @else {
-        <ul class="usages">
-          @for (usage of usages(); track usage.fromUuid) {
-            <li>
-              <code>{{ usage.fromUid }}</code>
-              <span>{{ usage.fromType }}</span>
-              @if (usage.sourcePath) {
-                <span class="muted">{{ usage.sourcePath }}</span>
-              }
-            </li>
-          }
-        </ul>
-      }
-    </section>
+    @switch (tab()) {
+      @case ('source') {
+        <section class="source" aria-label="Source">
+          @if (tooLarge()) {
+            <div class="banner banner--warning">
+              This file is too large to edit here. Download it, edit it locally and use Replace file.
+            </div>
+          } @else if (sourceLoading()) {
+            <span class="muted">Loading…</span>
+          } @else {
+            @if (!sourceUtf8()) {
+              <div class="banner banner--warning">
+                This file is not valid UTF-8. Unreadable characters are shown as �, and saving stores the
+                file as UTF-8.
+              </div>
+            }
+            @if (lineEnding() === 'MIXED') {
+              <div class="banner banner--warning">
+                This file mixes line endings; saving stores LF line endings.
+              </div>
+            }
+            <textarea
+              #sourceArea
+              class="source__editor"
+              [value]="editorSeed()"
+              [readOnly]="readOnly()"
+              (input)="onSourceInput($event)"
+              (keydown)="onSourceKeydown($event)"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              aria-label="File source"
+            ></textarea>
 
+            @if (sourceDiagnostics().length > 0) {
+              <div class="diagnostics" aria-live="polite">
+                @for (diag of sourceDiagnostics(); track $index) {
+                  <button
+                    type="button"
+                    class="diagnostic diagnostic--button"
+                    [class.diagnostic--error]="diag.severity === 'ERROR'"
+                    [class.diagnostic--warning]="diag.severity !== 'ERROR'"
+                    (click)="goToDiagnostic(diag)"
+                  >
+                    <span class="diagnostic__code">{{ diag.code }}</span>
+                    @if (positionLabel(diag); as position) {
+                      <span class="diagnostic__position">{{ position }}</span>
+                    }
+                    <span>{{ diag.message }}</span>
+                  </button>
+                }
+              </div>
+            }
+
+            <div class="source__actions">
+              <sf-button variant="primary" [disabled]="!canSaveSource()" (click)="saveSource()">
+                {{ sourceSaving() ? 'Saving…' : 'Save' }}
+              </sf-button>
+              <span class="muted">
+                @if (sourceHasErrors()) {
+                  Fix the errors to save.
+                } @else if (dirty()) {
+                  Unsaved changes — saving creates a revision.
+                } @else {
+                  Every save creates a revision.
+                }
+              </span>
+            </div>
+          }
+        </section>
+      }
+      @case ('rendered') {
+        <section class="rendered" aria-label="Rendered output">
+          <div class="rendered__toolbar">
+            <span class="muted">The saved file rendered as preview serves it, with media links as preview URLs.</span>
+            <sf-button variant="ghost" [disabled]="renderedLoading()" (click)="loadRendered()">Refresh</sf-button>
+          </div>
+          @if (renderedLoading()) {
+            <span class="muted">Rendering…</span>
+          } @else if (renderedDiagnostics().length > 0) {
+            <div class="diagnostics" aria-live="polite">
+              @for (diag of renderedDiagnostics(); track $index) {
+                <div class="diagnostic diagnostic--error">
+                  <span class="diagnostic__code">{{ diag.code }}</span>
+                  @if (positionLabel(diag); as position) {
+                    <span class="diagnostic__position">{{ position }}</span>
+                  }
+                  <span>{{ diag.message }}</span>
+                </div>
+              }
+            </div>
+          } @else if (renderedText() !== null) {
+            <pre class="rendered__output">{{ renderedText() }}</pre>
+          }
+        </section>
+      }
+      @default {
+        <div class="preview">
+          <img
+            class="preview__img"
+            [src]="previewUrl()"
+            [alt]="media().altText ?? ''"
+            [style.object-position]="focalPosition()"
+          />
+        </div>
+
+        @if (usages().length > 0) {
+          <div class="banner banner--warning">
+            This file is referenced by {{ usages().length }} asset(s). Deleting it will
+            break those references.
+          </div>
+        }
+
+        <form [formGroup]="form">
+          <sf-field label="Alt text" hint="Required before publishing">
+            <input type="text" formControlName="altText" placeholder="Descriptive alt text" />
+            @if (form.controls.altText.invalid && form.controls.altText.touched) {
+              <span class="error">Alt text is required before publishing</span>
+            }
+          </sf-field>
+
+          <sf-field label="Caption">
+            <input type="text" formControlName="caption" placeholder="Optional caption" />
+          </sf-field>
+
+          <sf-field label="Copyright">
+            <input type="text" formControlName="copyright" placeholder="© Owner (year)" />
+          </sf-field>
+
+          <div class="focal">
+            <sf-field label="Focal point X" hint="0 – 1">
+              <input type="number" formControlName="focalX" min="0" max="1" step="0.01" />
+            </sf-field>
+            <sf-field label="Focal point Y" hint="0 – 1">
+              <input type="number" formControlName="focalY" min="0" max="1" step="0.01" />
+            </sf-field>
+          </div>
+
+          <sf-button variant="primary" [disabled]="saving() || readOnly()" (click)="save()">
+            Save metadata
+          </sf-button>
+        </form>
+
+        @if (variants().length > 0) {
+          <section class="section">
+            <h3 class="section__title">Variants</h3>
+            <ul class="variants">
+              @for (variant of variants(); track variant.name) {
+                <li>
+                  <span>{{ variant.name }}</span>
+                  <span class="meta">{{ variant.width ?? 0 }}px · {{ variant.format }}</span>
+                  <button type="button" class="link-button" (click)="downloadVariant(variant.name)">Download</button>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        <section class="section">
+          <h3 class="section__title">Referenced by</h3>
+          @if (usagesLoading()) {
+            <span class="muted">Loading…</span>
+          } @else if (usages().length === 0) {
+            <span class="muted">Not referenced by any asset.</span>
+          } @else {
+            <ul class="usages">
+              @for (usage of usages(); track usage.fromUuid) {
+                <li>
+                  <code>{{ usage.fromUid }}</code>
+                  <span>{{ usage.fromType }}</span>
+                  @if (usage.sourcePath) {
+                    <span class="muted">{{ usage.sourcePath }}</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      }
+    }
   </div>
 
   <footer class="drawer__footer">
-    <sf-field label="Replace binary">
+    <sf-field label="Replace file">
       <input type="file" [disabled]="readOnly()" (change)="onReplaceFile($event)" />
     </sf-field>
     <div class="drawer__footer-actions">
@@ -110,6 +290,17 @@
     </div>
   </footer>
 </aside>
+
+@if (conflict(); as c) {
+  <div class="conflict-overlay">
+    <sf-conflict-drawer
+      subject="file"
+      [conflict]="c"
+      (keepMine)="keepMineAfterConflict()"
+      (takeTheirs)="takeTheirsAfterConflict()"
+    />
+  </div>
+}
 
 @if (dialog.state(); as d) {
   <div class="dlg-scrim" (click)="cancelDelete()"></div>

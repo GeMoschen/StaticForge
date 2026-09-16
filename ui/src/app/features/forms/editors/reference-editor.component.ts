@@ -16,7 +16,10 @@ function linkFor(projectKey: string, assetType: string | null, uuid: string): st
       return ['/p', projectKey, 'pages', uuid];
     case 'PAGE_TEMPLATE':
     case 'SECTION_TEMPLATE':
+    case 'DATASET':
       return ['/p', projectKey, 'templates'];
+    case 'RECORD':
+      return ['/p', projectKey, 'content', 'records', uuid];
     default:
       return null;
   }

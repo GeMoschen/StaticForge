@@ -1,0 +1,6 @@
+$CMS_SET(minLevel = 2)$<ul>
+$CMS_FOR(member : dataset:team, where="member.role == 'lead' || member.level >= minLevel", sort="-joined,name", limit=3)$<li data-i="$CMS_VALUE(member._index)$">$CMS_VALUE(member.name)$ ($CMS_VALUE(member.role)$, $CMS_VALUE(member.joined)$)</li>
+$CMS_END_FOR$</ul>
+<p>$CMS_FOR(m : dataset:team, folder="alumni")$$CMS_VALUE(m._displayName)$ in $CMS_VALUE(m._folderPath)$$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : dataset:team, sort="_uid", offset=1, limit=2)$[$CMS_VALUE(m.name)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : dataset:team, where="m.nope == 1")$never$CMS_END_FOR$</p>

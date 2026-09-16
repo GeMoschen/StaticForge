@@ -3,3 +3,9 @@
   flex-direction: column;
   gap: var(--sf-4);
 }
+
+.sf-content-form__issue {
+  margin: var(--sf-1) 0 0;
+  color: var(--sf-rust);
+  font-size: var(--sf-text-xs);
+}

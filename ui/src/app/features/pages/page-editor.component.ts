@@ -108,6 +108,8 @@ export class PageEditorComponent {
   protected readonly previewFlex = computed(() => `${1 - this.splitRatio()} 1 0%`);
 
   protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** The preview's revision pin: set only while time travelling, so a live preview reads current state. */
+  protected readonly timeTravelRevision = this.timeTravel.activeRevision;
 
   protected readonly statusLabel = computed(() => {
     if (this.readOnly()) {

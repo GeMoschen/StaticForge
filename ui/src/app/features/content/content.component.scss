@@ -1,0 +1,130 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.content {
+  display: flex;
+  height: 100%;
+}
+
+.content__tree {
+  flex-shrink: 0;
+  width: 300px;
+  padding: var(--sf-4) var(--sf-3);
+  border-right: 1px solid var(--sf-line);
+  overflow-y: auto;
+}
+
+.content__toolbar {
+  display: flex;
+  gap: var(--sf-2);
+  margin-bottom: var(--sf-3);
+}
+
+.content__clear {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  width: 100%;
+  text-align: left;
+  padding: var(--sf-1) var(--sf-2);
+  margin-bottom: var(--sf-1);
+  background: transparent;
+  border: none;
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-slate);
+  cursor: pointer;
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-sm);
+}
+
+.content__clear--active {
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+}
+
+.content__hint {
+  margin: var(--sf-2) 0 0;
+  color: var(--sf-muted);
+  font-size: var(--sf-text-xs);
+}
+
+.content__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  flex: 1;
+  min-width: 0;
+  padding: var(--sf-4);
+  overflow-y: auto;
+}
+
+.content__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-2);
+}
+
+.content__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  padding: var(--sf-1) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+  cursor: pointer;
+}
+
+.content__chip--active {
+  border-color: var(--sf-signal);
+  background: color-mix(in srgb, var(--sf-signal) 12%, transparent);
+}
+
+.content__chip-count {
+  color: var(--sf-muted);
+  font-size: var(--sf-text-xs);
+}
+
+.content__dataset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+}
+
+.content__dataset-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.content__dataset-head h2 {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+}
+
+.content__badge {
+  padding: 0 var(--sf-2);
+  border: 1px solid var(--sf-line);
+  border-radius: 999px;
+  background: var(--sf-surface);
+  font-weight: 500;
+}
+
+.content__link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--sf-signal);
+  font-size: var(--sf-text-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.content__cta {
+  text-align: center;
+  font-size: var(--sf-text-sm);
+}

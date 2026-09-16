@@ -44,6 +44,13 @@ export class SfContentFormComponent {
   readonly definition = input.required<ContentDefinition>();
   readonly formGroup = input.required<FormGroup>();
   readonly projectKey = input<string>();
+  /**
+   * Server validation findings (`ContentIssue`s) to show under the editor they belong to. Paths are
+   * rooted at `issuePrefix` (`content.name`, `content.links[0].target`); a finding inside a list row
+   * or a group member is shown under its top-level editor.
+   */
+  readonly issues = input<ReadonlyArray<{ path?: string; message?: string }>>([]);
+  readonly issuePrefix = input<string>('content');
 
   readonly formValue = signal<Record<string, unknown>>({});
 
@@ -58,6 +65,29 @@ export class SfContentFormComponent {
       },
       { allowSignalWrites: true },
     );
+  }
+
+  /** The messages of every issue under `editor` (or, for a group, under any of its members). */
+  issuesFor(editor: EditorDefinition): string[] {
+    const names = new Set<string>();
+    const collect = (e: EditorDefinition) => {
+      names.add(e.name);
+      if (e.type === 'GROUP') {
+        (e.items ?? []).forEach(collect);
+      }
+    };
+    collect(editor);
+    const prefix = this.issuePrefix() ? `${this.issuePrefix()}.` : '';
+    return this.issues()
+      .filter((issue) => {
+        const path = issue.path ?? '';
+        if (!path.startsWith(prefix)) {
+          return false;
+        }
+        const head = path.slice(prefix.length).split(/[.[]/)[0];
+        return names.has(head);
+      })
+      .map((issue) => issue.message ?? '');
   }
 
   controlFor(editor: EditorDefinition): FormControl | FormGroup | FormArray {

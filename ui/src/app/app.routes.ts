@@ -7,9 +7,8 @@ import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { ProjectShellComponent } from './features/dashboard/project-shell.component';
 import { PagesListComponent } from './features/pages/pages-list.component';
 import { PageEditorComponent } from './features/pages/page-editor.component';
-import { MediaLibraryComponent } from './features/media/media-library.component';
 import { NavigationComponent } from './features/navigation/navigation.component';
-import { TemplatesComponent } from './features/templates/templates.component';
+import { GlobalsComponent } from './features/globals/globals.component';
 import { ProjectSettingsShellComponent } from './features/settings/project-settings-shell.component';
 import { ProjectSettingsGeneralComponent } from './features/settings/project-settings-general.component';
 import { ProjectSettingsMediaComponent } from './features/settings/project-settings-media.component';
@@ -55,16 +54,36 @@ export const routes: Routes = [
         ],
       },
       {
+        path: 'content',
+        // Lazy like media: the grid and record editor are only needed in the Content store.
+        loadComponent: () => import('./features/content/content.component').then((m) => m.ContentComponent),
+        children: [
+          {
+            path: 'records/:recordUuid',
+            loadComponent: () =>
+              import('./features/content/record-editor.component').then((m) => m.RecordEditorComponent),
+          },
+        ],
+      },
+      {
         path: 'media',
-        component: MediaLibraryComponent,
+        // Lazy: the library, its drawer and the text media editor (M18) are the largest single
+        // feature and only needed on this route, which keeps the initial bundle under its budget.
+        loadComponent: () =>
+          import('./features/media/media-library.component').then((m) => m.MediaLibraryComponent),
       },
       {
         path: 'navigation',
         component: NavigationComponent,
       },
       {
+        path: 'globals',
+        component: GlobalsComponent,
+      },
+      {
         path: 'templates',
-        component: TemplatesComponent,
+        // Lazy since M19: the dataset schema editor joined the templates screen.
+        loadComponent: () => import('./features/templates/templates.component').then((m) => m.TemplatesComponent),
       },
       {
         path: 'settings',

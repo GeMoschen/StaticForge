@@ -9,8 +9,8 @@ attributes common to every editor type.
 
 | Attribute | Meaning |
 |---|---|
-| `min N` | minimum number of items, enforced on save |
-| `max N` | maximum number of items, enforced on save |
+| `min N` | minimum number of items, blocks publish when violated |
+| `max N` | maximum number of items, blocks publish when violated |
 | `item { editor … editor … }` | the sub-editors each item is made of — **required**; `item` on any other editor type is a compile error |
 
 Each `list` item opens its own name-uniqueness namespace: a sub-editor name inside `item {}` can

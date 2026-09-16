@@ -23,12 +23,25 @@ final class OctlLexer {
         }
     }
 
-    record LexResult(List<Token> tokens, List<Diagnostic> diagnostics) {}
+    /** A 1-based source position. */
+    record Position(int line, int col) {
+
+        boolean isBefore(Position other) {
+            return line < other.line || (line == other.line && col < other.col);
+        }
+    }
+
+    /**
+     * @param escapes the position of every {@code $$} escape collapsed into a literal {@code $}, in
+     *     source order, so callers can report where the source and the output differ
+     */
+    record LexResult(List<Token> tokens, List<Diagnostic> diagnostics, List<Position> escapes) {}
 
     LexResult lex(String source) {
         String s = source == null ? "" : source;
         List<Token> tokens = new ArrayList<>();
         List<Diagnostic> diagnostics = new ArrayList<>();
+        List<Position> escapes = new ArrayList<>();
         int n = s.length();
         int i = 0;
         int line = 1;
@@ -48,7 +61,8 @@ final class OctlLexer {
                 int end = findEnd(s, body, line, col);
                 String raw = s.substring(body, end);
                 tokens.add(new Token(true, raw, sl, sc));
-                // Advance line/col accounting for the consumed span.
+                // Advance line/col accounting for the consumed span, starting with the "$CMS_" prefix.
+                col += 5;
                 int consumed = i + 5; // start of body
                 while (consumed < end) {
                     char c = s.charAt(consumed);
@@ -71,6 +85,7 @@ final class OctlLexer {
                     textCol = col;
                 }
                 text.append('$');
+                escapes.add(new Position(line, col));
                 i += 2;
                 col += 2;
             } else {
@@ -92,7 +107,7 @@ final class OctlLexer {
             }
         }
         flush(text, tokens, textLine, textCol);
-        return new LexResult(tokens, diagnostics);
+        return new LexResult(tokens, diagnostics, escapes);
     }
 
     private int findEnd(String s, int body, int line, int col) {

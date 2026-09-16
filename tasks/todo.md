@@ -1,3 +1,433 @@
+# M19 implementation — Plan
+
+## Approach
+Sequential on branch `m19-content-store` (off `m18-parsable-text-media`; master untouched). Layer order as the
+epic notes (M8/M17 precedent): query model (pure) → domain → export/import → OCTL/generation/preview → API →
+UI → docs/journeys. No worktree fan-out: the features share `AssetType`, the planner and both renderers.
+
+## Design (from reading the code)
+- **Record → dataset link:** `payload.datasetRef` (source of truth) mirrored into
+  `asset_version.template_asset_id` by `RecordServiceImpl` (via `CreateAssetCommand.templateUuid`, which every
+  version write already carries forward). Repository reads: current records of a dataset, records of a dataset
+  valid at a revision (both a column query, no JSON scan).
+- **Fixed folders:** `content_root` ("All Content", `CONTENT`) under the hidden root; `datasets` ("Datasets",
+  `templateKind: DATASET`) under `templates_root`, returned by `ensureTemplateFolders` with the other two, so
+  project creation, lazy self-heal and the import remap pick it up without new call sites.
+- **Query model (`template.query`):** `DatasetQuery`, `SortKey`, `DatasetQueryParser`, `DatasetQueryEvaluator`,
+  `RecordView`. `where` is parsed with the OCTL expression grammar through a new public
+  `octl.OctlExpressions.parse` (strict: leftover input and empty identifiers are errors with a column).
+  - Templates: record fields through the loop variable (`member.role`); any other root (`CMS_PAGE.x`, a
+    `$CMS_SET` variable, an editor) is evaluated in the render scope. No bare field names → no ambiguity.
+  - REST: bare field names (there is no other scope).
+- **Compiled once:** the compiler parses `dataset:` loop args into a `DatasetQuery` stored on `CompiledTemplate`
+  (identity map keyed by the `For` node), so rendering never re-parses. Invalid args → `SF-TPL-0140` error.
+  Field checks (`SF-TPL-0141` unknown field, `SF-TPL-0142` non-scalar sort) need the dataset schema: a default
+  method `ReferenceResolver.datasetDefinition(uuid)` implemented only by the save-time project resolver, so a
+  later schema change never breaks a generation run.
+- **Record data access on `AssetValueResolver`** (not `BlockResolver`): `datasetRecords(datasetUuid)` next to
+  `valueOf`. Generation already shares one `SnapshotAssetValueResolver` per build, so the per-snapshot index
+  (`ConcurrentHashMap.computeIfAbsent`, built once per snapshot, counted) lives there; preview's per-render live
+  resolver reads the revision-pinned repository query; processed text media gets loops for free.
+- **Dereference:** walking a path through an `ASSET_REF` whose `assetType` is `RECORD` (segment not one of the
+  ref's own fields) continues in the record's values via `valueOf("record", uuid)`. Depth is bounded by the
+  path length, so record cycles cannot recurse. CDL `reference` gains `dataset "uid"`.
+- **Incremental:** template → dataset is an `OCTL_VALUE` edge, record → dataset a `TEMPLATE` edge. The planner
+  enqueues a changed record's dataset and does not walk a dataset's `RECORD` referrers (otherwise every record
+  change would reach pages that reference sibling records).
+- **Dataset delete:** blocked with 409 `SF-DOM-0121` + `recordCount` while live records exist, also on the
+  generic `force` path (no cascade in v1).
+- **Export protocol 4 → 5:** same reason as M17 (an older server fails in `AssetType.valueOf` mid-import).
+
+## Steps
+- [x] M19.3.1 query model + expression entry point + tests
+- [x] M19.1.1 asset types, CONTENT scope, fixed folders, repository queries, switches
+- [x] M19.1.2 DatasetService / RecordService, validation, rename migration, delete guard
+- [x] M19.1.3 export/import (implicit dataset, ordering, RECORD_DATASET_MISSING), usages, diff
+- [x] M19.3.2 OCTL loops/values/dereference, generation + preview, planner, golden files
+- [x] M19.2.1 controllers, DTOs, paging envelope, OpenAPI + schema.d.ts
+- [x] M19.4.1 Content store shell, dataset schema editor, create dialog, export picker
+- [x] M19.4.2 record grid, record editor, picker support
+- [x] M19.5.1 docs + spec
+- [x] M19.5.2 backend journey, Playwright journey, benchmark, full verification, review
+
+## Review
+- **Branch:** `m19-content-store` (off `m18-parsable-text-media`; master untouched). Not committed.
+- **Verification:**
+  - `./gradlew build` green: 677 backend tests (601 at M18), 0 failures, 2 skipped (the gated `GenerationBenchmark`
+    and the new `DatasetBenchmark`).
+  - `DatasetBenchmark` (`SF_PERF=1`), 5,000 records × 500 looping pages: FULL 2.6 s, INCREMENTAL after one record
+    edit 2.2 s (all 500 pages loop the dataset, so all rebuild — measured against the < 20 s full budget), listing
+    page of 50 in 135 ms, `renamedFrom` migration of 5,000 records 9.0 s in one revision.
+  - `ng build` green (initial bundle 812 kB); vitest: the 19 known `templateUrl`/JIT spec files fail as before, all
+    18 logic spec files pass (new: `content.service`, `record-grid.util`, `asset-picker.util`).
+  - Live, against a dev backend + `ng serve`: `m19-journeys` 4/4, `m16-journeys` 5/5, `m17-journeys` 4/4,
+    `m18-journeys` 2/2.
+  - `DocsGoldenSnippetsTest` pins the developer guide's worked examples to the golden files.
+- **Design in one line each:** `datasetRef` mirrored into `template_asset_id`; pure `template.query` model shared by
+  REST, preview and generation; loop args compiled once onto `CompiledTemplate`; field checks only at save;
+  record data via `AssetValueResolver.datasetRecords` with a once-per-snapshot index; record dereference in
+  `OctlRenderer.resolveSub`; planner expands record → dataset and skips a dataset's own records; chunked
+  `RecordRenameMigration` in the schema's batch; export protocol 5.
+- **Changes beyond the task files (found during implementation/verification):**
+  - Spring binds a single `sort=field,desc` as two list items; the record listing reads the raw parameter values.
+  - The rename migration first rewrote records one version write at a time (1,000 records: 21 s); it now flushes
+    and clears in chunks of 200 with one revision summary (3 s).
+  - Autosave extracted to `shared/services/autosave.base.ts`; the page editor's service extends it.
+  - `sf-content-form` shows server issues per field (`issues`/`issuePrefix`), used by the record editor.
+  - The `templates` route is lazy-loaded (initial bundle was over the 864 kB warning).
+  - Journey locators fixed during the live run: the picker button's accessible name is the field label, and an
+    empty `<ul>` is attached but not visible.
+- **Deviations (recorded in the task files):** the Content tree shows folders, records live in the grid; record data
+  goes through `AssetValueResolver`, not `BlockResolver`.
+- **Open / not done:**
+  - No axe run: axe-core isn't installed in this workspace; accessibility checked structurally and by keyboard
+    journeys.
+  - New component specs can't run (`templateUrl` runner issue); the record conflict drawer is shared code covered
+    by the page editor, not by a record-specific journey.
+  - ~~Dependency granularity is per dataset~~ — fixed in the follow-up below (query-aware planning).
+  - `m13`/`m15` journey specs hard-code `localhost:4200` and old selectors; not run.
+
+### Follow-up — query-aware rebuilds for dataset loops
+- [x] `DatasetQueryEvaluator.maySelect` + `CompiledTemplate.datasetQueries(uid)` (unit tests)
+- [x] `BuildPlanner`: records continue only to loops that may select them (before/after), `DatasetLoopImpact`
+- [x] Integration tests for filtered-out, promote/demote, scope-reading and a reference into another dataset
+- [x] Benchmark, docs (guide §2.9, architecture, task notes), full build
+
+**Review:** a record change now rebuilds a looping page only if the loop's `folder`/`where` may select the
+record's previous or new version; filtering precedes sort, offset, limit and `_count`, so a record filtered out
+both times can't change the output. Conservative where analysis isn't possible: a `where` reading the render
+scope, a template without a loop spelling the dataset's current uid, processed text media. Also closes a gap in
+the first version: a loop item dereferencing a record in *another* dataset (`member.mentor.name`) wasn't rebuilt
+when that record changed; now the walk reaches the selecting record and continues to the loop. Benchmark
+(5,000 × 500): editing a record every loop filters out went from 2.2 s / 503 files to 181 ms / 2 files; FULL
+2.4 s and a selected record's edit 2.2 s are unchanged.
+
+---
+
+# M18 implementation — Plan
+
+## Approach
+Sequential on branch `m18-parsable-text-media` (off `m17-global-store`, master untouched). The features are a
+strict chain (domain → compile-on-save → generation/preview → UI → docs/E2E), so no worktree fan-out.
+
+## Design (from reading the code)
+- **One compile entry point.** `OctlCompiler.compileTextMedia(source, channel, resolver, mimeType)` in `sf-template`:
+  compiles against an *empty* content definition (bare names are unknown editors, `CMS_GLOBAL` misuse is checked) plus
+  a text-media profile inside the existing validation walk: `$CMS_BODY`, `$CMS_INCLUDE` and leaf `$CMS_NAVIGATION` →
+  new error; `$$` → warning (positions recorded by the lexer, skipped inside `$CMS_COMMENT$`); unescaped
+  `$CMS_VALUE` in JS/JSON → warning. No parser fork.
+- **`TextMediaTypes`** (`sf-domain`, `asset.media`): the allow-list, `isText(mime)`, `isProcessed(payload)`.
+- **Reference edges via `ReferenceMaterializer.extract(MEDIA, payload)`**: a processed media payload's edges come from
+  compiling its blob (source path `source`). Every version write already calls the materializer, so save, flag off,
+  soft delete, restore and import stay correct with no media-only copy.
+- **`TextMediaRenderer`** (`sf-domain`): compile (cache) + render with escaping `NONE`, default channel, media meta,
+  caller-supplied URL/value/nav resolvers, SVG re-sanitize. Used by generation (snapshot resolvers) and by preview
+  (live resolvers at the token's revision).
+- **Generation:** `MediaRenderStage` used by `AssetCopyStage`; copy set closed transitively over processed media
+  dependencies; `BuildPlan.processedMedia` filled by the planner's BFS.
+- **Preview:** media share tokens carry an optional revision; `shareBinary` renders processed media;
+  `GET /binary?rendered=true`.
+
+## Decisions
+Confirmed with the user (all the task files' recommendations):
+- A processed media render error makes the run **PARTIAL**; the file is not written and no previous content is substituted.
+- A text save whose bytes equal the stored blob creates **no revision** (a stale `If-Match` still 409s).
+- `GET /binary?rendered=true` is **EDITOR+**.
+- Processed media edges are derived in **`ReferenceMaterializer`** from the compiled blob.
+
+## Steps
+- [x] M18.1.1 `processCms` flag, `TextMediaTypes`, `MediaPaths` json/xml, DTO fields, Tika sample check
+- [x] M18.1.2 `GET`/`PUT /media/{uuid}/text`
+- [x] M18.2.1 text-media compile profile + diagnostics, compile on flag/text/replace, validate endpoint, reference edges, uid-literal scan
+- [x] M18.3.1 render processed media in generation, transitive copy set, incremental plan
+- [x] M18.3.2 preview/share + `?rendered=true`
+- [x] M18.4.1 media drawer: toggle, Source, Rendered, library badge; `schema.d.ts`
+- [x] M18.5.1 docs, spec, API doc, `m18-journeys.spec.ts` run live
+- [x] Full `./gradlew build` + `ng build`, review section
+
+## Review
+- **Branch:** `m18-parsable-text-media` (off `m17-global-store`; master untouched). Not committed.
+- **Verification:**
+  - `./gradlew build` green: 601 backend tests (510 at M17), 0 failures, 1 skipped (benchmark). Benchmark run
+    separately: 500 pages, full 2.1 s, incremental 0.12 s (§18.6: < 20 s / < 2 s).
+  - `ng build` green; vitest has only the 19 known `templateUrl` spec failures.
+  - Live, against a dev backend + `ng serve`: `m18-journeys` 2/2, `m16-journeys` 5/5, `m17-journeys` 4/4.
+- **Design in one line each:** `OctlCompiler.compileTextMedia` (profile in the existing walk); `TextMediaTypes`
+  and `MediaPaths` in `asset.media`; edges from `ReferenceMaterializer`; one `TextMediaRenderer` for generation
+  and preview; `MediaRenderStage` + a fixed-point copy set; `BuildPlan.processedMedia`; revision-pinned media
+  share tokens.
+- **Changes beyond the task files (found during implementation/verification):**
+  - **Bug:** the OCTL lexer skipped the 5 characters of `$CMS_` when counting columns, so diagnostics after an
+    instruction on the same line pointed 5 columns too far left.
+  - **Bug:** the UID-rename literal scan had no `global:` prefix (its Javadoc said both spellings were matched).
+  - **Bug, pre-existing, found by the live journey:** the editor preview's `[srcdoc]` went through Angular's HTML
+    sanitizer, which stripped `<link>`, `<style>`, `<script>` and `id`: no preview ever loaded a stylesheet. The
+    frame now binds a trusted value and its sandbox dropped `allow-same-origin` (scripts run in an opaque origin).
+  - `application/manifest+json` added to the text allow-list (Tika's type for `.webmanifest`).
+  - `MediaPaths` moved from `sf-generate` to `sf-domain` so preview shares it.
+  - The media route is lazy-loaded: the drawer growth broke the 900 kB initial bundle error budget.
+  - Planner: a merely *reached* processed file stops the reverse walk (a changed one continues), otherwise a
+    global-only change would re-render every page linking the stylesheet (see `M18.3.1` Review).
+  - Time-travel page previews now serve every media file at the viewed revision (the token carries it).
+- **Open / not done:**
+  - Incremental builds still don't carry unchanged files forward (`M22.4.1`); processed media is part of the run.
+  - `.mjs` is detected as `text/plain` and published as `.txt`.
+  - The drawer's component spec can't run (`templateUrl` runner issue).
+
+---
+
+# M17 implementation — Plan
+
+## Approach
+Sequential on branch `m17-global-store` (off `m16-foundations`, master untouched). The epic's
+tracks are dependency-chained (domain → api → ui; octl needs domain), so no worktree fan-out.
+
+## Decisions taken from the task files' recommendations (confirmed with the user)
+- **Shared tree node + migrate Navigation.** New `shared/components/sf-store-tree-node.*`;
+  `features/navigation/` is ported onto it and `nav-tree-node.*` deleted. Media/Templates/Pages
+  trees stay untouched.
+- **`$CMS_REF` path resolution fixed generally, for every prefix.** A path'd asset reference
+  (`page:about.heroImage`, `global:site.logo`) now resolves the cross-asset value and links the
+  resulting editor value, instead of silently referencing the asset itself. Keeps one resolution
+  path for `$CMS_REF(CMS_GLOBAL.site.logo)$` and fixes a latent bug.
+- **`PROTOCOL_VERSION` 3 → 4**, so an older server refuses a globals-carrying archive with the
+  existing `PROTOCOL_VERSION_MISMATCH` conflict instead of crashing in `AssetType.valueOf`.
+- **`CMS_GLOBAL` is parser-level sugar.** `OctlParser` rewrites `CMS_GLOBAL.<setUid>.<rest>` into
+  `Accessor("global", setUid, rest)`, so compile-time resolution, reference edges, dependency
+  recording and snapshot/live rendering all reuse the M16 cross-asset path. No second resolver.
+
+## Steps
+- [x] M17.1.1 `AssetType.GLOBAL_SET`, `FolderScope.GLOBALS`, `globals_root` provisioning
+- [x] M17.1.2 `GlobalSetService` (create, schema+migration, values, CDL restrictions)
+- [x] M17.1.3 Export/import, diff, usages coverage
+- [x] M17.2.1 `GlobalsController` + DTOs + OpenAPI regeneration
+- [x] M17.3.1 `global:` prefix, `CMS_GLOBAL` accessor root, dependency edges
+- [x] M17.4.1 Globals store UI + shared tree node + Navigation migration + export picker
+- [x] M17.5.1 Docs + spec follow-up
+- [x] M17.5.2 E2E journeys, regression pass, full verification
+- [x] Review section
+
+## Review
+- **Branch:** `m17-global-store` (off `m16-foundations`; master untouched).
+- **Verification:**
+  - `./gradlew build` green: 510 backend tests (457 at M16), 0 failures, 1 skipped (benchmark), plus `ng build`.
+  - Live against a dev backend + `ng serve`: `ui/e2e/m17-journeys.spec.ts` 4/4 and `m16-journeys.spec.ts` 5/5.
+  - The docs' worked example is pinned verbatim by `GlobalsDocsExampleTest`.
+- **Why so little render code changed:** `global:` plugs into M16's cross-asset path (`AssetReferencePrefixes`,
+  `AssetValueProjection`, snapshot/live resolvers, `ReferenceMaterializer`, `BuildPlanner`). `CMS_GLOBAL.<set>.<path>`
+  is desugared in the parser, so both spellings are one AST.
+- **Changes beyond the task files (agreed or found during verification):**
+  - `$CMS_REF` on a path'd asset reference now links the editor's value (was: silently linked the asset). This
+    applies to every prefix; agreed with the user.
+  - `sf-store-tree-node` is shared and Navigation is migrated onto it; agreed with the user.
+  - `PROTOCOL_VERSION` 3 -> 4; agreed with the user.
+  - **Bug, found by the export/import round-trip test:** import silently dropped `GLOBAL_SET`. `NON_FOLDER_ORDER`
+    is now a checked `AssetType` list.
+  - **Bug, pre-existing since M16, found by the live journey:** the page editor pinned its preview to the page's
+    concurrency token, which froze template and cross-asset/global values at the page's last save. Fixed with the
+    preview frame's `revision` (time-travel pin) vs `refreshKey` split.
+  - `ContentRenameMigrator` is extracted from `TemplateServiceImpl`. The template cascade now also walks
+    transparent groups.
+- **Open / not done:**
+  - Usages list the template that reads a set, not the pages. This is by M16 design (spec §16.4); the epic's
+    criterion is annotated.
+  - UI component specs can't run (`templateUrl`). The Analog plugin experiment is recorded in `M17.4.1`'s notes.
+  - A template that uses a set in both `$CMS_VALUE` and `$CMS_REF` appears twice in usages (one `OCTL_VALUE` and
+    one `OCTL_REF` row). This is generic behaviour, left as is.
+  - Lazy `globals_root` provisioning for pre-M17 projects is its own revision, like the other store roots.
+  - A values save re-compiles the set's CDL (it's not a render path). Rendering never compiles set CDL.
+
+---
+
+# M16 implementation — Plan
+
+## Approach
+- Four parallel tracks, each in its own git worktree/branch (tasks inside a track run sequentially):
+  - **T1 render:** M16.2.1 → M16.5.1 → M16.1.1 → M16.2.2 (sf-template renderer/context, `GenerationRenderer`, `PageRenderService`)
+  - **T2 references:** M16.3.1 → M16.3.2 → M16.3.3 (`ReferenceMaterializer`, write paths, `BuildPlanner`, usages, Liquibase)
+  - **T3 channel settings:** M16.4.1 (path resolution, URL registry, channels UI)
+  - **T4 validation:** M16.5.2 (`PageServiceImpl`, `RenderPipeline.validate`)
+- Integrate on branch `m16-foundations` (master untouched): merge T1..T4, resolve conflicts, regenerate `schema.d.ts`, full `./gradlew build` + `ng build`.
+- Then M16.6.1: journeys, benchmark, docs/spec sync, live-app verification.
+
+## Decisions taken from the task files' recommendations
+- Add `ReferenceKind.NAV`; the compile cache adds Caffeine; the cross-request key is validated by re-resolving references
+- Validation on save: structural only; for section operations validate the changed subtree, for full updates the whole page
+- A channel settings change resets non-overridden URL registry entries; payload indexes in `BuildPlanner` are deleted once `TEMPLATE` rows exist
+
+## Steps
+- [x] T1 render track
+- [x] T2 references track
+- [x] T3 channel settings track
+- [x] T4 validation track
+- [x] Integrate on `m16-foundations` + full verification (`./gradlew build` green: 454 tests, 0 failures, 1 skipped)
+- [x] Extra fixes found during M16: form engine nested CDL `group` values under `_group_N`; project restore left tombstones open
+- [x] M16.6.1 journeys, benchmark, docs
+- [x] Review section
+
+## Review
+- **Branch:** `m16-foundations` (master untouched). Four worktree tracks + docs branch merged; conflicts were
+  mechanical (`RenderPipeline`, `GenerationService`, `ChannelServiceImpl`, `TemplateServiceImpl`, tests using the old
+  `forSnapshot(...)` tuple).
+- **Verification:** `./gradlew build --rerun-tasks` green (457 tests, 0 failures, 1 skipped = benchmark; includes
+  `ng build`). `ui/e2e/m16-journeys.spec.ts` 5/5 against a live dev backend + ng serve. Benchmark 5,000 pages:
+  full 6.8–10.5 s, incremental 336–471 ms (master: 8.8 s / 0.38 s medians); G5 holds.
+- **Integration fixes beyond the tracks:**
+  - Form engine stored CDL `group` children under `_group_N` (would block publish via `SF-GEN-0120`) → flattened,
+    legacy fallback, `form-builder.service.spec.ts` (fails on old code).
+  - `ProjectRestoreService` left tombstones open (two open versions) → `findOpenByProject`; 2 regression tests (fail
+    on old code).
+  - Render-limit errors failed the whole run → page-scoped, run `PARTIAL` (`IncludeCycleGenerationIntegrationTest`).
+  - Unpinned runs omitted deleted assets (`SF-TPL-0110` instead of empty + warning) → pinned to head revision,
+    `SF-GEN-0220` for deleted `$CMS_REF`/include/section targets.
+  - Preview frame blank on render errors → shows problem code/detail (`preview-error.spec.ts`).
+  - `BuildPlanner` redundant second edge load removed (projected `ReferenceEdge`), unused render dependency map
+    removed, generation completeness check shares the build compile memo, last duplicate prefix mapper removed.
+- **Open / not verified:**
+  - Liquibase `015-revision-aware-references.xml` not run on PostgreSQL (none available; changeset is a plain
+    `createIndex` + `delete`, reviewed as portable). Epic exit criterion left unticked for that reason.
+  - Channels UI settings fields verified via journey 3 in the browser; no component spec (templateUrl specs broken).
+  - Known, out of M16 scope: Angular sanitizes the preview `srcdoc` (strips template `<style>`/`<script>`); older
+    e2e journey files (m3–m15) use outdated login selectors; render-time `nav:` subtree changes aren't in the
+    incremental graph (M22.1.1).
+
+---
+
+# Feature roadmap M16–M24 — task breakdown — Plan
+
+## Goal
+Create task breakdowns (epic README → feature README → task files, same format as `M15`) for the
+selected features: parsable text media, global store, content store, template inheritance,
+multi-language, build insight, pagination, global search — plus a foundations epic for gaps the
+features depend on. **Planning only; no code.**
+
+## User decisions (2026-09-15)
+| Topic | Decision |
+|---|---|
+| Existing gaps (cross-asset `$CMS_VALUE` unimplemented, `asset_reference` only written by generation + never closed, no compile cache, channel path settings unwired, include cycle guard, no server-side content validation) | Separate foundations epic **M16** first |
+| Parsable text media | Per-media `processCms` toggle, text MIME only, in-app text editing (each save = revision), rendered once per generation with escaping NONE |
+| Global store | Named property sets (`GLOBAL_SET` assets, CDL schema, own "Globals" store); `$CMS_VALUE(global:site.title)$` + `$CMS_GLOBAL.site.title$` |
+| Content store | `DATASET` schema asset + one `RECORD` asset per entry in a foldered "Content" store; `$CMS_FOR(r : dataset:team, where=…, sort=…, limit=…)$` |
+| Template inheritance | `abstract` page templates, multi-level `$CMS_EXTENDS$` / `$CMS_BLOCK$` / `$CMS_PARENT$`, child inherits parent CDL editors + bodies; page templates only |
+| Multi-language | Per-editor `localizable` (value `{type:"L10N", values:{de,en}}`), project locales + default + fallback chain; `{locale}` path placeholder, default pattern prefixes all, setting "default locale without prefix", hreflang |
+| Pagination | New CDL editor type `pagination` (source nav folder / dataset, page size, sort); planner emits N entries; `$CMS_PAGINATION…$` scope |
+| Build insight | Reason chain per plan entry stored per run + `POST /generations/plan` dry run |
+| Global search | **Embedded Lucene index** (after-commit indexing, rebuildable, single-instance hazard documented) |
+| Order | Dependency order M16 → M24 (multi-language last) |
+
+## Skeleton (IDs are binding for cross-epic `depends`)
+
+### M16 — render-reference-foundations (`16-m16-render-reference-foundations`)
+- 1 compile-cache: M16.1.1 `CompiledTemplateCache` (OCTL + CDL) used by generation + preview
+- 2 cross-asset-values: M16.2.1 `AssetValueResolver` SPI in `RenderContext` + renderer; M16.2.2 generation (snapshot) + preview (live) implementations, dependency recording, golden tests
+- 3 reference-materialization: M16.3.1 content references written on save in the same revision + previous rows closed; M16.3.2 template OCTL references (`OCTL_INCLUDE`/`OCTL_VALUE`/`OCTL_REF`) written on template save; M16.3.3 revision-aware reference queries, `BuildPlanner`/usages migrated, generation stops inserting, duplicate cleanup changeset
+- 4 channel-path-settings: M16.4.1 channel settings (index file, trailing slash, URL strategy, file extension) wired into `OutputPathResolver`/`LiveOutputPathResolver`
+- 5 render-safety-validation: M16.5.1 include cycle guard across nested renders + diagnostic constants; M16.5.2 server-side `ContentValidator` on page/section save
+- 6 e2e-verification: M16.6.1 regression + journey
+
+### M17 — global-store (`17-m17-global-store`)
+- 1 domain: M17.1.1 `GLOBAL_SET` asset type + `GLOBALS` folder scope + root provisioning; M17.1.2 `GlobalSetService` (schema DEVELOPER / values EDITOR, CDL compile, validation, references); M17.1.3 export/import + diff/usages coverage
+- 2 api: M17.2.1 `GlobalsController` + DTOs + OpenAPI regen
+- 3 octl: M17.3.1 `global:` prefix + `$CMS_GLOBAL$` scope, generation/preview resolvers, dependency edges → incremental rebuild
+- 4 ui: M17.4.1 Globals store (nav rail, tree, set value editor, schema editor, time-travel read-only)
+- 5 docs-e2e: M17.5.1 docs; M17.5.2 E2E journey
+
+### M18 — parsable-text-media (`18-m18-parsable-text-media`)
+- 1 domain: M18.1.1 `processCms` flag + text MIME allow-list + extension mapping; M18.1.2 text content editing endpoint (new blob, revision, SVG sanitize)
+- 2 compile-on-save: M18.2.1 OCTL validation on flag/content change + reference materialization
+- 3 generation-preview: M18.3.1 render stage for processed media in generation + incremental planning of media entries; M18.3.2 preview/share serves rendered output
+- 4 ui: M18.4.1 media drawer toggle + text editor with diagnostics
+- 5 docs-e2e: M18.5.1 docs + E2E
+
+### M19 — content-store (`19-m19-content-store`)
+- 1 domain: M19.1.1 `DATASET` + `RECORD` asset types + `CONTENT` scope; M19.1.2 `DatasetService`/`RecordService` + schema-change migration of records (compound revision); M19.1.3 export/import + usages + diff
+- 2 api: M19.2.1 controllers + paginated/filterable record listing
+- 3 query-octl: M19.3.1 pure dataset query model (where/sort/limit/offset) in sf-template; M19.3.2 `$CMS_FOR(… : dataset:uid, …)$`, `record:` values, reference editor to records, resolvers + dependency edges + golden tests
+- 4 ui: M19.4.1 Content store + dataset schema editor; M19.4.2 record grid + record editor + picker support
+- 5 docs-e2e: M19.5.1 docs; M19.5.2 E2E
+
+### M20 — template-inheritance (`20-m20-template-inheritance`)
+- 1 language: M20.1.1 lexer/parser/AST `EXTENDS`/`BLOCK`/`END_BLOCK`/`PARENT` + diagnostics; M20.1.2 compiler chain resolution (cycle, depth cap, block merge) + golden runner with stub resolver
+- 2 domain: M20.2.1 `abstract` page templates + effective (inherited) CDL; M20.2.2 parent-change cascade validation (compound revision), `TEMPLATE` edges child→parent, planner rebuilds descendants' pages
+- 3 rendering: M20.3.1 generation + preview render linked templates
+- 4 ui: M20.4.1 template IDE: abstract toggle, parent + effective editors, OCTL diagnostics via context-aware validate endpoint
+- 5 docs-e2e: M20.5.1 docs + E2E
+
+### M21 — pagination (`21-m21-pagination`)
+- 1 cdl: M21.1.1 `pagination` editor type (attributes, stored value, one-per-template diagnostic, editor doc)
+- 2 planning: M21.2.1 planner emits N entries (`pageNumber`), `{pageNumber}` path pattern, collision detection, deps keyed per entry; M21.2.2 sitemap/search index/URL registry/canonical + rel prev/next
+- 3 rendering: M21.3.1 `$CMS_PAGINATION$` scope in generation + preview (`?page=n`) + golden tests
+- 4 ui: M21.4.1 pagination editor component + preview page selector
+- 5 docs-e2e: M21.5.1 docs + E2E
+
+### M22 — build-insight (`22-m22-build-insight`)
+- 1 planner: M22.1.1 reason chains in `BuildPlanner` (incl. §18.2 navigation-change rule); M22.1.2 `generation_run_plan` persistence
+- 2 api: M22.2.1 `POST /generations/plan` dry run + `GET /generations/{runId}/plan`; M22.2.2 `GET /assets/{uuid}/impact`
+- 3 ui: M22.3.1 dry-run preview in generation dialog; M22.3.2 run "Rebuilt pages" tab + asset impact panel
+- 4 incremental-correctness: M22.4.1 incremental runs publish the complete site (carry-forward of unchanged output per target, removed paths, full site page list for sitemap/search index, per-target baseline) — **verified existing bug, do first**
+- 5 docs-e2e: M22.5.1 docs + E2E
+
+### M23 — global-search (`23-m23-global-search`)
+- 1 index-core: M23.1.1 Lucene dependency + `SearchIndexService` (per-project directory, document model, analyzers); M23.1.2 text extraction per asset type
+- 2 index-lifecycle: M23.2.1 after-commit incremental indexing from revision summary; M23.2.2 index revision stamp, startup rebuild, admin reindex endpoint, project delete
+- 3 query-api: M23.3.1 `GET /search` (paging, highlights, type facets, safe query parsing)
+- 4 ui: M23.4.1 Ctrl+K command palette; M23.4.2 full search page with facets
+- 5 docs-e2e: M23.5.1 docs + benchmark + E2E
+
+### M24 — multi-language (`24-m24-multi-language`)
+- 1 project-locales: M24.1.1 project locale config (domain, API, revisioned); M24.1.2 settings UI tab
+- 2 cdl-storage: M24.2.1 `localizable` CDL attribute + `L10N` value shape + validation; M24.2.2 toggle migration (compound revision) + localizable media metadata + nav labels
+- 3 rendering: M24.3.1 locale in `RenderContext`, fallback resolution, `$CMS_META(locale)$`, locale-aware filters, `$CMS_LOCALES$`; M24.3.2 generation fan-out page×channel×locale, `{locale}` placeholder, URL registry locale key, hreflang; M24.3.3 locale-aware globals/datasets/pagination/search
+- 4 ui: M24.4.1 editor locale switcher + fallback indicator (pages, globals, records, media); M24.4.2 missing-translation indicators
+- 5 export-import: M24.5.1 locale settings in archive + protocol bump
+- 6 docs-e2e: M24.6.1 docs + E2E
+
+## Steps
+- [x] 1. Write skeleton (this file)
+- [x] 2. Write epic/feature/task files per epic (one subagent per epic, in parallel)
+- [x] 3. Add M16–M24 to `tasks/README.md` epic map
+- [x] 4. Verify: every skeleton ID exists, front-matter parses, `depends` ids exist, no dangling links
+
+## Review
+- **Output:** 131 files in `tasks/16-…` to `tasks/24-…`: 9 epic READMEs, 47 feature READMEs, 75 task files.
+- **Checks (script):** all 75 skeleton IDs have exactly one task file, with none extra; every front-matter has
+  `id/status/depends/epic/feature/area` and `status: todo`; all `depends` resolve; no dependency cycles; no epic
+  depends on a later epic; no broken relative `.md` links.
+- **Verified existing bugs found while planning (now tracked as tasks):**
+  - Incremental generation publishes an incomplete site. `FilesystemTargetWriter.stage` writes only rebuilt files
+    into a fresh build dir and `current` is flipped to it → M22.4.1.
+  - `RenderPipeline` stores dependencies per page UUID with `put`, so multi-channel pages lose deps → M21.2.1.
+  - Include cycle probably ends in `StackOverflowError`: nested renders reset `State` (found by reading the code,
+    not run) → M16.5.1.
+  - `GenerationService` passes the invalid URL strategy `"DEFAULT"`, and channel settings are ignored → M16.4.1.
+  - `asset_reference` rows are never closed and are only written by generation → M16.3.x.
+  - Cross-asset `$CMS_VALUE` renders empty → M16.2.x.
+  - `ContentValidator` is never called → M16.5.2.
+- **Decisions the writers made (each recorded in its epic Notes; review before implementing):**
+  - M16.5.2: structural errors return 422 on save; `required` fails only at generation (`SF-GEN-0120`), per spec §10.5
+    and autosave.
+  - M16.1.1: Caffeine needs to be added. The cache key must include resolved references, not just the source.
+  - M17: shorthand is `$CMS_VALUE(CMS_GLOBAL.site.title)$` (like `CMS_PAGE`), not a standalone `$CMS_GLOBAL…$`
+    instruction. Property sets can't have bodies/catalogs. Separate schema (DEVELOPER) and content (EDITOR)
+    endpoints. New projects bootstrap one more folder.
+  - M19: `DATASET` schemas live in a new fixed `datasets` folder in the Templates store; only records live in the
+    Content store. The record→dataset link reuses `template_asset_id`. `where=` uses the OCTL `Expr` grammar.
+  - M20: one parent per template, stored as `payload.parentTemplateRef`. The effective CDL is computed on read, not
+    copied into children. A parent change validates descendants but writes nothing.
+  - M21: dataset source lives inside M21.2.1/3.1/4.1 but is not a hard dependency on M19 (nav source ships first).
+  - M23: projects are archived, not deleted, so the index is closed on archive. The after-commit hook is new (none
+    exists). German + English analyzers. Search is unavailable, not a startup failure, when the index is locked.
+  - M24: container editors (`group/list/catalog/pagination`) can't be `localizable`, only leaves can. `required` is
+    checked only for the default locale. Locale config is not revision-scoped (like other `Project` columns).
+    Missing `{locale}` in a path → `SF-GEN-0111`.
+- **Cross-epic coordination notes:** Liquibase changelog numbers, `SF-*` diagnostic numbers and the export
+  `protocolVersion` bump are assigned at implementation time. Several epics add them and the order may change.
+  The golden-runner stub resolver is needed by both M19.3.2 and M20.1.2; whichever lands first builds it.
+- **Spec follow-ups (not tracked as tasks):** §2.2/Q2 (multi-language non-goal reversed), §5.4 column names + `NAV`
+  kind, §7.1, §16.2 (new instructions), §18.2/§18.4/§18.6.
+
+---
+
 # Generation targets — per-target output location + management UI — Plan
 
 ## Goal

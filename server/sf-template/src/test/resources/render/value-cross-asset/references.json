@@ -1,0 +1,23 @@
+{
+  "page:about": {
+    "uuid": "a0000000-0000-0000-0000-000000000001",
+    "value": {
+      "headline": "About <us>",
+      "featured": true,
+      "links": [{ "label": "One" }, { "label": "Two" }],
+      "_meta": { "uid": "about", "displayName": "About page" }
+    }
+  },
+  "media:logo": {
+    "uuid": "a0000000-0000-0000-0000-000000000002",
+    "value": {
+      "altText": "Logo",
+      "width": 320,
+      "_meta": { "uid": "logo", "displayName": "Logo" }
+    }
+  },
+  "page:gone": {
+    "uuid": "a0000000-0000-0000-0000-000000000003",
+    "value": null
+  }
+}

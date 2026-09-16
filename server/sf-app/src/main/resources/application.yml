@@ -61,3 +61,8 @@ sf:
     cleanup-legacy-output: true
   revision:
     retention-days: unlimited
+  cache:
+    # Compiled CDL + OCTL reused across preview requests (spec §21.5); generation memoizes per build.
+    compiled-templates:
+      max-size: 2000
+      idle: 30m

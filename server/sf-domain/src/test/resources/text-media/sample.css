@@ -1,0 +1,2 @@
+a { color: $CMS_VALUE(global:site.brandColor)$; }
+body{margin:0}

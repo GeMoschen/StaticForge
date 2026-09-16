@@ -50,6 +50,8 @@ export interface EditorDefinition {
   mimeTypes?: string[];
   /** For REFERENCE editors: restricts the asset picker to these asset types (e.g. `['PAGE']`); empty/absent allows any type. */
   assetTypes?: string[];
+  /** For REFERENCE editors (M19.3.2): restricts picking to records of this dataset UID. */
+  dataset?: string;
   options?: SelectOption[];
   features?: string[];
   /** For CATALOG editors: restricts cards to these section-template UIDs; empty/absent allows any. */

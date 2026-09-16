@@ -33,6 +33,10 @@ export class ProjectContextStore {
   readonly navigationFolderTree = signal<FolderView[]>([]);
   /** The templates tree's folders — two fixed, protected roots ("Page Templates"/"Section Templates"), each holding one template kind. Entirely separate from the other three. */
   readonly templateFolderTree = signal<FolderView[]>([]);
+  /** The Globals store's folders (`GLOBAL_SET` leaves). Entirely separate from the other four. */
+  readonly globalsFolderTree = signal<FolderView[]>([]);
+  /** The Content store's folders (`RECORD` leaves, M19.4.1). Entirely separate from the other five. */
+  readonly contentFolderTree = signal<FolderView[]>([]);
   readonly pageTemplates = signal<TemplateSummary[]>([]);
   readonly sectionTemplates = signal<TemplateSummary[]>([]);
   readonly revisions = signal<RevisionView[]>([]);
@@ -95,6 +99,12 @@ export class ProjectContextStore {
       templateFolders: this.http.get<FolderView[]>(
         `/api/v1/projects/${projectKey}/folders?scope=TEMPLATES&depth=10`,
       ),
+      globalsFolders: this.http.get<FolderView[]>(
+        `/api/v1/projects/${projectKey}/folders?scope=GLOBALS&depth=10`,
+      ),
+      contentFolders: this.http.get<FolderView[]>(
+        `/api/v1/projects/${projectKey}/folders?scope=CONTENT&depth=10`,
+      ),
       pageTemplates: this.http.get<PageTemplateSummary>(
         `/api/v1/projects/${projectKey}/page-templates`,
       ),
@@ -111,6 +121,8 @@ export class ProjectContextStore {
         this.mediaFolderTree.set(sortFolderTree(res.mediaFolders ?? []));
         this.navigationFolderTree.set(sortFolderTree(res.navigationFolders ?? []));
         this.templateFolderTree.set(sortFolderTree(res.templateFolders ?? []));
+        this.globalsFolderTree.set(sortFolderTree(res.globalsFolders ?? []));
+        this.contentFolderTree.set(sortFolderTree(res.contentFolders ?? []));
         this.pageTemplates.set(res.pageTemplates.content ?? []);
         this.sectionTemplates.set(res.sectionTemplates.content ?? []);
         this.revisions.set(res.revisions ?? []);
@@ -141,6 +153,7 @@ export class ProjectContextStore {
     this.mediaFolderTree.set([]);
     this.navigationFolderTree.set([]);
     this.templateFolderTree.set([]);
+    this.globalsFolderTree.set([]);
     this.pageTemplates.set([]);
     this.sectionTemplates.set([]);
     this.revisions.set([]);

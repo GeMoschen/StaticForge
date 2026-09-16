@@ -1,0 +1,7 @@
+<h1>$CMS_VALUE(global:site.title)$</h1>
+<h2>$CMS_VALUE(CMS_GLOBAL.site.title)$</h2>
+<p>$CMS_VALUE(CMS_GLOBAL.site.title | upper)$ / $CMS_VALUE(tagline)$</p>
+<p>$CMS_VALUE(CMS_GLOBAL.site._meta.displayName)$</p>
+$CMS_IF(CMS_GLOBAL.site.showBanner)$<aside>banner</aside>$CMS_ELSE$<aside>no banner</aside>$CMS_END_IF$
+<ul>$CMS_FOR(link : CMS_GLOBAL.social.links)$<li>$CMS_VALUE(link._index)$:$CMS_VALUE(link.label)$</li>$CMS_END_FOR$</ul>
+[$CMS_VALUE(CMS_GLOBAL.gone.title)$]

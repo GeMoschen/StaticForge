@@ -1,0 +1,5 @@
+# Team
+
+$CMS_FOR(member : dataset:team, where="member.role == 'lead'", sort="name")$- **$CMS_VALUE(member.name)$** — joined $CMS_VALUE(member.joined)$
+$CMS_END_FOR$
+Mentor of Cy: $CMS_VALUE(record:cy.mentor.name)$

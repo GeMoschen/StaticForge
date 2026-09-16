@@ -9,6 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ToastService } from '../../core/ui/toast.service';
@@ -26,9 +27,31 @@ type ChannelTemplateRef = components['schemas']['ChannelTemplateRef'];
 type ChannelCreateRequest = components['schemas']['ChannelCreateRequest'];
 type ChannelUpdateRequest = components['schemas']['ChannelUpdateRequest'];
 
+type JsonNode = components['schemas']['JsonNode'];
+
+/** Plain view of a channel's free-form `settings`; keys this form doesn't edit are carried through untouched. */
+type ChannelSettings = Record<string, unknown>;
+
 const PROTECTED_KEY = 'html';
 
 const ESCAPING_OPTIONS = ['HTML', 'MARKDOWN', 'NONE'] as const;
+
+/** Spec §15.2 `urlStrategy`; the server rejects anything else. */
+const URL_STRATEGY_OPTIONS = ['RELATIVE', 'PRETTY'] as const;
+
+/** Mirrors the server-side validation in `ChannelOutputSettings.validate`. */
+const EXTENSION_PATTERN = /^[a-z0-9]{1,10}$/;
+const INDEX_FILE_NAME_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+
+const settingsOf = (channel: ChannelView | null): ChannelSettings => {
+  const settings = channel?.settings as unknown;
+  return settings && typeof settings === 'object' && !Array.isArray(settings)
+    ? (settings as ChannelSettings)
+    : {};
+};
+
+const textOf = (settings: ChannelSettings, key: string): string =>
+  typeof settings[key] === 'string' ? (settings[key] as string) : '';
 
 interface DeleteConfirmation {
   channel: ChannelView;
@@ -70,6 +93,7 @@ export class ChannelsComponent {
   protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly escapingOptions: readonly string[] = ESCAPING_OPTIONS;
+  readonly urlStrategyOptions: readonly string[] = URL_STRATEGY_OPTIONS;
   readonly isProtected = isProtected;
 
   readonly channels = signal<ChannelView[]>([]);
@@ -85,10 +109,14 @@ export class ChannelsComponent {
   readonly form = this.fb.nonNullable.group({
     key: ['', Validators.required],
     name: [''],
-    fileExtension: [''],
+    fileExtension: ['', Validators.pattern(EXTENSION_PATTERN)],
     defaultEscaping: ['HTML'],
     enabled: [true],
     copyFrom: [''],
+    urlStrategy: ['RELATIVE'],
+    trailingSlash: [{ value: false, disabled: true }],
+    indexUid: [''],
+    indexFileName: ['', Validators.pattern(INDEX_FILE_NAME_PATTERN)],
   });
 
   readonly copyFromOptions = computed<ChannelView[]>(() => {
@@ -101,6 +129,24 @@ export class ChannelsComponent {
       const key = this.projectKey();
       untracked(() => this.reload());
     });
+    // Trailing slash only has an effect with the PRETTY strategy.
+    this.form.controls.urlStrategy.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((strategy) => this.syncTrailingSlash(strategy));
+  }
+
+  /** Placeholder for the index file name input: what an empty value resolves to. */
+  indexFileNamePlaceholder(): string {
+    const { fileExtension, key } = this.form.getRawValue();
+    return `index.${this.extensionPlaceholder(fileExtension.trim(), key.trim())}`;
+  }
+
+  /** The extension an empty file extension resolves to (server: `ChannelOutputSettings.extensionForChannel`). */
+  extensionPlaceholder(fileExtension = '', key = this.form.getRawValue().key.trim()): string {
+    if (fileExtension) {
+      return fileExtension;
+    }
+    return key === 'markdown' ? 'md' : key || 'html';
   }
 
   reload(): void {
@@ -131,7 +177,12 @@ export class ChannelsComponent {
       defaultEscaping: 'HTML',
       enabled: true,
       copyFrom: '',
+      urlStrategy: 'RELATIVE',
+      trailingSlash: false,
+      indexUid: '',
+      indexFileName: '',
     });
+    this.syncTrailingSlash('RELATIVE');
     this.form.controls.key.enable();
     this.formOpen.set(true);
   }
@@ -143,6 +194,8 @@ export class ChannelsComponent {
     this.editing.set(channel);
     this.error.set(null);
     this.blocked.set(null);
+    const settings = settingsOf(channel);
+    const urlStrategy = textOf(settings, 'urlStrategy') || 'RELATIVE';
     this.form.reset({
       key: channel.key ?? '',
       name: channel.name ?? '',
@@ -150,7 +203,12 @@ export class ChannelsComponent {
       defaultEscaping: channel.defaultEscaping ?? 'HTML',
       enabled: channel.enabled ?? true,
       copyFrom: '',
+      urlStrategy,
+      trailingSlash: settings['trailingSlash'] === true,
+      indexUid: textOf(settings, 'indexUid'),
+      indexFileName: textOf(settings, 'indexFileName'),
     });
+    this.syncTrailingSlash(urlStrategy);
     this.form.controls.key.disable();
     this.formOpen.set(true);
   }
@@ -168,6 +226,15 @@ export class ChannelsComponent {
     }
     const editing = this.editing();
     const value = this.form.getRawValue();
+    const settings: ChannelSettings = { ...settingsOf(editing) };
+    settings['urlStrategy'] = value.urlStrategy;
+    if (value.urlStrategy === 'PRETTY') {
+      settings['trailingSlash'] = value.trailingSlash;
+    } else {
+      delete settings['trailingSlash'];
+    }
+    setOrDelete(settings, 'indexUid', value.indexUid.trim());
+    setOrDelete(settings, 'indexFileName', value.indexFileName.trim());
     this.submitting.set(true);
     this.error.set(null);
 
@@ -177,6 +244,10 @@ export class ChannelsComponent {
         fileExtension: value.fileExtension.trim(),
         defaultEscaping: value.defaultEscaping,
         enabled: value.enabled,
+        // PUT replaces the channel: carry the fields this form doesn't edit.
+        isDefault: editing.isDefault ?? false,
+        position: editing.position,
+        settings: settings as JsonNode,
       };
       this.api.update(this.projectKey(), editing.key ?? '', req).subscribe({
         next: (updated) => {
@@ -196,6 +267,7 @@ export class ChannelsComponent {
       fileExtension: value.fileExtension.trim(),
       defaultEscaping: value.defaultEscaping,
       enabled: value.enabled,
+      settings: settings as JsonNode,
       ...(value.copyFrom ? { copyFrom: value.copyFrom } : {}),
     };
     this.api.create(this.projectKey(), req).subscribe({
@@ -277,6 +349,15 @@ export class ChannelsComponent {
     });
   }
 
+  private syncTrailingSlash(strategy: string): void {
+    const control = this.form.controls.trailingSlash;
+    if (strategy === 'PRETTY') {
+      control.enable({ emitEvent: false });
+    } else {
+      control.disable({ emitEvent: false });
+    }
+  }
+
   private replaceChannel(updated: ChannelView): void {
     this.channels.update((list) =>
       list.map((c) => (c.key === updated.key ? updated : c)),
@@ -309,5 +390,13 @@ export class ChannelsComponent {
       return null;
     }
     return { detail: body?.detail, blockedBy };
+  }
+}
+
+function setOrDelete(settings: ChannelSettings, key: string, value: string): void {
+  if (value) {
+    settings[key] = value;
+  } else {
+    delete settings[key];
   }
 }

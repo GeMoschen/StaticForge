@@ -19,18 +19,20 @@ import { SfEmptyStateComponent } from './sf-empty-state.component';
 import { SfIconComponent } from './sf-icon.component';
 import { SfSpinnerComponent } from './sf-spinner.component';
 import { SfAssetPickerFolderNodeComponent } from './sf-asset-picker-folder-node.component';
+import { ContentService, type DatasetSummaryView } from '../../features/content/content.service';
+import { pickerDatasets, pickerTypeOptions, type PickerType } from './asset-picker.util';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type FolderView = components['schemas']['FolderView'];
 
-type PickerType = 'PAGE' | 'MEDIA' | 'PAGE_TEMPLATE' | 'SECTION_TEMPLATE';
-
-const TYPE_OPTIONS: { value: PickerType; label: string }[] = [
-  { value: 'PAGE', label: 'Pages' },
-  { value: 'MEDIA', label: 'Media' },
-  { value: 'PAGE_TEMPLATE', label: 'Page templates' },
-  { value: 'SECTION_TEMPLATE', label: 'Section templates' },
-];
+/** One row of the result list: an asset, or (type `RECORD`) a record with its dataset. */
+interface PickerItem {
+  uuid?: string;
+  uid?: string;
+  displayName?: string;
+  type?: string;
+  dataset?: string;
+}
 
 export interface AssetPicked {
   uuid: string;
@@ -41,7 +43,9 @@ export interface AssetPicked {
 /**
  * Modal asset picker — a type switch, a folder tree with search for the two
  * types that actually have folders (pages/media), and a flat searchable
- * list for the rest. Used by `sf-reference-editor` to fill an ASSET_REF
+ * list for the rest. Records (M19.4.2) are listed per dataset through the
+ * server-paged record listing, with a dataset switch unless a `dataset`
+ * restriction pins it. Used by `sf-reference-editor` to fill an ASSET_REF
  * value, but generic enough for anything that needs to point at an asset.
  */
 @Component({
@@ -58,27 +62,26 @@ export class SfAssetPickerDialogComponent {
   readonly initialType = input<string | null>(null);
   /** Restricts the type switch to these asset types (from the editor's CDL `assetTypes`); omit/empty allows any type. */
   readonly allowedTypes = input<string[] | null>(null);
+  /** Restricts picking to records of this dataset uid (the reference editor's `dataset` attribute). */
+  readonly dataset = input<string | null>(null);
 
   readonly picked = output<AssetPicked>();
   readonly closed = output<void>();
 
   private readonly api = inject(ApiClient);
   private readonly store = inject(ProjectContextStore);
+  private readonly content = inject(ContentService);
   private readonly search$ = new Subject<string>();
 
-  protected readonly typeOptions = computed<{ value: PickerType; label: string }[]>(() => {
-    const allowed = this.allowedTypes();
-    if (!allowed || allowed.length === 0) {
-      return TYPE_OPTIONS;
-    }
-    const filtered = TYPE_OPTIONS.filter((t) => allowed.includes(t.value));
-    return filtered.length > 0 ? filtered : TYPE_OPTIONS;
-  });
+  protected readonly typeOptions = computed(() => pickerTypeOptions(this.allowedTypes(), this.dataset()));
   protected readonly type = signal<PickerType>('PAGE');
+  private readonly allDatasets = signal<DatasetSummaryView[]>([]);
+  protected readonly datasets = computed(() => pickerDatasets(this.allDatasets(), this.dataset()));
+  protected readonly datasetUuid = signal('');
   protected readonly search = signal('');
   protected readonly folderUuid = signal('');
   protected readonly folderPath = signal('');
-  protected readonly items = signal<AssetSummaryView[]>([]);
+  protected readonly items = signal<PickerItem[]>([]);
   protected readonly loading = signal(false);
 
   protected readonly hasFolders = computed(() => this.type() === 'PAGE' || this.type() === 'MEDIA');
@@ -114,12 +117,17 @@ export class SfAssetPickerDialogComponent {
       this.type();
       this.folderPath();
       this.search();
+      this.datasetUuid();
       untracked(() => this.reload());
     });
 
     this.search$
       .pipe(debounceTime(250), distinctUntilChanged(), takeUntilDestroyed())
       .subscribe((q) => this.search.set(q));
+  }
+
+  protected onDatasetChange(event: Event): void {
+    this.datasetUuid.set((event.target as HTMLSelectElement).value);
   }
 
   protected onTypeChange(event: Event): void {
@@ -137,7 +145,7 @@ export class SfAssetPickerDialogComponent {
     this.folderPath.set(node?.path ?? '');
   }
 
-  protected pick(item: AssetSummaryView): void {
+  protected pick(item: PickerItem): void {
     if (!item.uuid) {
       return;
     }
@@ -157,6 +165,10 @@ export class SfAssetPickerDialogComponent {
     if (!key) {
       return;
     }
+    if (this.type() === 'RECORD') {
+      this.reloadRecords(key);
+      return;
+    }
     this.loading.set(true);
     this.api
       .listAssets(key, {
@@ -168,7 +180,59 @@ export class SfAssetPickerDialogComponent {
       })
       .subscribe({
         next: (res) => {
-          this.items.set(res.content ?? []);
+          this.items.set((res.content ?? []) as AssetSummaryView[]);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.items.set([]);
+          this.loading.set(false);
+        },
+      });
+  }
+
+  /** Records of the chosen dataset, searched by name through the paged record listing. */
+  private reloadRecords(key: string): void {
+    if (this.allDatasets().length === 0) {
+      this.loading.set(true);
+      this.content.listDatasets(key).subscribe({
+        next: (datasets) => {
+          this.allDatasets.set(datasets ?? []);
+          const first = this.datasets()[0]?.uuid ?? '';
+          if (first) {
+            this.datasetUuid.set(first);
+          } else {
+            this.items.set([]);
+            this.loading.set(false);
+          }
+        },
+        error: () => {
+          this.items.set([]);
+          this.loading.set(false);
+        },
+      });
+      return;
+    }
+    const uuid = this.datasetUuid() || this.datasets()[0]?.uuid;
+    const dataset = this.datasets().find((d) => d.uuid === uuid);
+    if (!uuid || !dataset) {
+      this.items.set([]);
+      this.loading.set(false);
+      return;
+    }
+    this.loading.set(true);
+    this.content
+      .listRecords(key, uuid, { page: 0, size: 100, sort: [], q: this.search().trim() || undefined })
+      .subscribe({
+        next: (res) => {
+          this.items.set(
+            (res.content ?? []).map((row) => ({
+              uuid: row.uuid,
+              uid: row.uid,
+              displayName: row.displayName,
+              type: 'RECORD',
+              dataset: dataset.displayName ?? dataset.uid,
+            })),
+          );
           this.loading.set(false);
         },
         error: () => {

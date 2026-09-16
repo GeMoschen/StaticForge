@@ -190,15 +190,42 @@ export function buildRowGroup(
       : {};
   const group = new FormGroup({});
   for (const item of items) {
-    group.addControl(
-      item.name,
-      buildEditorControl(item, seedObj[item.name] ?? item.defaultValue ?? null),
-    );
+    group.addControl(item.name, buildEditorControl(item, childSeed(item, seedObj)));
   }
   if (readOnly) {
     group.disable({ emitEvent: false });
   }
   return group;
+}
+
+/**
+ * The seed for one editor inside a content object. A GROUP is a transparent display wrapper
+ * (docs/editors/group.md): its children live at the same level as the group itself, so the
+ * group is seeded with the enclosing object. Values that older UI builds nested under the
+ * synthetic `_group_N` key are still read as a fallback; the next save flattens them.
+ */
+function childSeed(editor: EditorDefinition, parent: Record<string, unknown>): unknown {
+  if (editor.type === 'GROUP') {
+    const legacy = parent[editor.name];
+    return legacy && typeof legacy === 'object' && !Array.isArray(legacy)
+      ? { ...(legacy as Record<string, unknown>), ...parent }
+      : parent;
+  }
+  return parent[editor.name] ?? editor.defaultValue ?? null;
+}
+
+/** Writes one editor's raw value into a content object, flattening transparent GROUPs. */
+function writeRawValue(
+  out: Record<string, unknown>,
+  editor: EditorDefinition,
+  control: AbstractControl,
+): void {
+  const raw = editorRawValue(editor, control);
+  if (editor.type === 'GROUP') {
+    Object.assign(out, raw);
+  } else {
+    out[editor.name] = raw;
+  }
 }
 
 function buildFormArray(editor: EditorDefinition, seed: unknown): FormArray {
@@ -291,7 +318,7 @@ function rawGroupValue(
   for (const item of items) {
     const control = group.get(item.name);
     if (control) {
-      out[item.name] = editorRawValue(item, control);
+      writeRawValue(out, item, control);
     }
   }
   return out;
@@ -312,10 +339,7 @@ export class FormBuilderService {
   ): FormGroup {
     const form = new FormGroup({});
     for (const editor of definition.editors ?? []) {
-      form.addControl(
-        editor.name,
-        buildEditorControl(editor, value?.[editor.name] ?? editor.defaultValue ?? null),
-      );
+      form.addControl(editor.name, buildEditorControl(editor, childSeed(editor, value ?? {})));
     }
     this.lastForm = form;
     return form;
@@ -338,7 +362,7 @@ export class FormBuilderService {
     for (const editor of definition.editors ?? []) {
       const control = group.get(editor.name);
       if (control) {
-        out[editor.name] = editorRawValue(editor, control);
+        writeRawValue(out, editor, control);
       }
     }
     return out;

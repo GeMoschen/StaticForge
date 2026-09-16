@@ -18,6 +18,7 @@ so treat the specs as documentation of the intended flow until that seed lands.
 | navigation tree + URL registry stability/reset | `m8-journeys.spec.ts` | M8 |
 | template folder tree (create/move) + export/import templates tree scope | `m13-journeys.spec.ts` | M13 |
 | project setup is exactly one revision (8-asset affordance + diff) | `m15-journeys.spec.ts` | M15 |
+| M16 foundations: cross-asset value, usages + delete guard, PRETTY channel + link check, include cycle, validation split | `m16-journeys.spec.ts` | M16 |
 | unauthenticated → login redirect | `example.spec.ts` | — |
 
 ## Gating
@@ -58,3 +59,11 @@ so treat the specs as documentation of the intended flow until that seed lands.
   to `/p/:key/revisions`, which doesn't match any route (`RevisionsListComponent` is mounted at
   `/p/:key/settings/revisions`) and silently redirects to the dashboard via the `**` fallback —
   fixed to the correct path.
+- **`m16-journeys.spec.ts`** is the first journey file that is **self-seeding** (project, templates, pages, media,
+  navigation and target are created through the REST API per journey) and it **has been run** against a live dev
+  backend (`SPRING_PROFILES_ACTIVE=dev`, seeded `Admin`/`Admin`, port 8081) and `ng serve` on port 4300: 5/5 passed
+  (serial and with 2 workers). Journeys 1, 3 and 4 read generated files, so they need `SF_E2E_OUTPUT_ROOT` set to
+  the backend's `SF_OUTPUT_ROOT`; the file header lists the exact command. It logs in with the form's
+  `formControlName` inputs and navigates in-app (`history.pushState` + `popstate`) because the access token is
+  memory-only — the older journey files' `input[name="username"]` selectors and deep `page.goto` calls would not
+  work against the current login form.

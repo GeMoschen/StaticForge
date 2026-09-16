@@ -1,7 +1,11 @@
 package com.acme.staticforge.generate.render;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.media.MediaPaths;
+import com.acme.staticforge.asset.media.TextMediaRenderer;
+import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
@@ -9,25 +13,24 @@ import com.acme.staticforge.asset.navigation.NavigationLookup;
 import com.acme.staticforge.asset.navigation.NavigationService;
 import com.acme.staticforge.asset.navigation.NavigationServiceImpl;
 import com.acme.staticforge.asset.navigation.NavigationTreeJson;
+import com.acme.staticforge.asset.template.CompiledChannel;
+import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
-import com.acme.staticforge.generate.pipeline.MediaPaths;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.template.cdl.CdlCompiler;
-import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
-import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.acme.staticforge.template.render.BlockResolver;
 import com.acme.staticforge.template.render.Escaping;
 import com.acme.staticforge.template.render.OctlRenderer;
+import com.acme.staticforge.template.render.RenderBudget;
 import com.acme.staticforge.template.render.RenderContext;
 import com.acme.staticforge.template.render.RenderLimitException;
 import com.acme.staticforge.template.render.RenderResult;
@@ -38,6 +41,7 @@ import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.micrometer.core.instrument.Metrics;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -68,13 +72,14 @@ final class GenerationRenderer {
     private final ChannelService channelService;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<AssetType, Map<String, UUID>> uidIndex;
+    private final TemplateCompileMemo compiledTemplates;
+    private final SnapshotAssetValueResolver assetValues;
 
-    private final OctlCompiler octlCompiler = new OctlCompiler();
-    private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final Renderer renderer = new OctlRenderer();
+    private final TextMediaRenderer textMediaRenderer = new TextMediaRenderer();
 
     // NavigationServiceImpl is pure/stateless (no dependencies) — instantiated directly, same as
-    // octlCompiler/cdlCompiler/renderer above, rather than threaded in as a Spring bean.
+    // renderer above, rather than threaded in as a Spring bean.
     private final NavigationService navigationService = new NavigationServiceImpl();
     private final NavigationLookup navigationLookup;
 
@@ -100,6 +105,23 @@ final class GenerationRenderer {
             ChannelService channelService,
             UrlRegistryService urlRegistryService,
             Long generationUserId) {
+        this(snapshot, paths, projectKey, channelService, urlRegistryService, generationUserId,
+                new TemplateCompileMemo(Metrics.globalRegistry));
+    }
+
+    /**
+     * @param compiledTemplates the build's compile memo — shared by every renderer of the same
+     *     snapshot (see {@code CompiledTemplateCache#buildMemo}), so each (template, channel)
+     *     compiles once per build; the shorter constructors use a memo private to this renderer
+     */
+    GenerationRenderer(
+            Snapshot snapshot,
+            OutputPathResolver paths,
+            String projectKey,
+            ChannelService channelService,
+            UrlRegistryService urlRegistryService,
+            Long generationUserId,
+            TemplateCompileMemo compiledTemplates) {
         this.snapshot = snapshot;
         this.paths = paths;
         this.projectKey = projectKey == null ? "" : projectKey;
@@ -108,6 +130,13 @@ final class GenerationRenderer {
         this.navigationLookup = new SnapshotNavigationLookup(snapshot);
         this.urlRegistryService = urlRegistryService;
         this.generationUserId = generationUserId;
+        this.compiledTemplates = compiledTemplates;
+        this.assetValues = new SnapshotAssetValueResolver(snapshot);
+    }
+
+    /** How often this build's dataset record index was built (M19.3.2): at most once per snapshot. */
+    int recordIndexBuilds() {
+        return assetValues.indexBuilds();
     }
 
     /** Renders one plan entry; produces empty bytes (with no deps) when the template has no channel source. */
@@ -143,8 +172,10 @@ final class GenerationRenderer {
         Set<UUID> deps = new LinkedHashSet<>();
         List<Diagnostic> warnings = new ArrayList<>();
 
-        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath());
-        BlockResolver blocks = blockResolver(content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), deps, warnings);
+        // One budget for the page and every section/include/catalog card rendered inside it.
+        RenderBudget budget = new RenderBudget();
+        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath(), warnings);
+        BlockResolver blocks = blockResolver(content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), deps, warnings, budget);
 
         RenderContext context = RenderContext.builder()
                 .channel(entry.channel())
@@ -160,14 +191,63 @@ final class GenerationRenderer {
                 .meta("projectKey", TextNode.valueOf(projectKey))
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
+                .assetValueResolver(assetValues)
+                .budget(budget)
                 .build();
 
-        RenderResult result = renderer.render(compiled, context);
+        RenderResult result = budget.withTemplate(template.uuid(), template.uid(), () -> renderer.render(compiled, context));
         deps.addAll(result.dependencies());
         warnings.addAll(result.warnings());
 
         return new RenderedFile(
                 entry.outputPath(), result.output().getBytes(StandardCharsets.UTF_8), deps, warnings);
+    }
+
+    /**
+     * Renders a processed text media file (M18.3.1) to its canonical media path, through the shared
+     * {@link TextMediaRenderer} with this build's snapshot resolvers: links are relative to the media
+     * file's own output path, values and globals come from the snapshot, {@code nav:} iteration uses
+     * the snapshot navigation. The source compiles once per build through the compile memo.
+     * Compile-time warnings were shown when the file was saved and are not repeated here; render-time
+     * warnings (a deleted target, a missing value) are returned like a page's.
+     *
+     * @param source the media file's source text (its blob, decoded)
+     * @param channel the project's default channel, the only one media renders in
+     * @throws RenderLimitException when the source no longer compiles against the snapshot (e.g. a
+     *     referenced uid was renamed after the save) or a render limit is hit: this file fails, the
+     *     rest of the build does not
+     */
+    RenderedFile renderMedia(SnapshotAsset media, String source, String channel) {
+        JsonNode payload = media.payload();
+        String mimeType = payload == null ? null : payload.path("mimeType").asText(null);
+        String uid = emptyIfNull(media.uid());
+        String outputPath = MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mimeType));
+
+        OctlResult compiled = compiledTemplates.textMedia(
+                media.uuid(), channel, source, TextMediaTypes.isScriptLike(mimeType), referenceResolver());
+        Optional<Diagnostic> error = compiled.diagnostics().stream()
+                .filter(d -> d.severity() == com.acme.staticforge.template.diagnostic.Severity.ERROR)
+                .findFirst();
+        if (error.isPresent()) {
+            throw new RenderLimitException(error.get());
+        }
+
+        Set<UUID> deps = new LinkedHashSet<>();
+        List<Diagnostic> warnings = new ArrayList<>();
+        TextMediaRenderer.Target target = new TextMediaRenderer.Target(
+                media.uuid(), uid, media.displayName(), mimeType, outputPath, snapshot.revision(), channel, projectKey);
+        RenderResult result = textMediaRenderer.render(
+                compiled.template(),
+                target,
+                urlResolver(channel, outputPath, warnings),
+                assetValues,
+                (navFolderUuid, args) -> {
+                    JsonNode json = navigationTreeJson(navFolderUuid, args, channel, null, outputPath, deps, warnings);
+                    return json == null ? null : json.path("children");
+                });
+        deps.addAll(result.dependencies());
+        warnings.addAll(result.warnings());
+        return new RenderedFile(outputPath, result.output().getBytes(StandardCharsets.UTF_8), deps, warnings);
     }
 
     /** Compiles the template's channel and returns ERROR-severity diagnostics (empty when clean). */
@@ -177,19 +257,18 @@ final class GenerationRenderer {
             return List.of();
         }
         List<Diagnostic> errors = new ArrayList<>();
-        ContentDefinition definition = cdlCompiler.compile(payload.path("contentDefinition").asText("")).definition();
         JsonNode channelNode = payload.path("channelTemplates").path(channel);
         if (channelNode.isMissingNode() || channelNode.isNull()) {
             return List.of();
         }
-        OctlResult result = octlCompiler.compile(channelNode.path("source").asText(), channel, referenceResolver(), definition);
+        OctlResult result = compile(template, channel).octl();
         result.diagnostics().stream()
                 .filter(d -> d.severity() == com.acme.staticforge.template.diagnostic.Severity.ERROR)
                 .forEach(errors::add);
         return errors;
     }
 
-    /** The page template for a page, or {@code null} when missing/unresolvable. */
+    /** The page template for a page, or {@code null} when missing, soft-deleted or unresolvable. */
     static SnapshotAsset templateOf(Snapshot snapshot, SnapshotAsset page) {
         JsonNode payload = page.payload();
         if (payload == null) {
@@ -200,7 +279,8 @@ final class GenerationRenderer {
             return null;
         }
         try {
-            return snapshot.assetByUuid(UUID.fromString(ref));
+            SnapshotAsset template = snapshot.assetByUuid(UUID.fromString(ref));
+            return template == null || template.deleted() ? null : template;
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -219,13 +299,23 @@ final class GenerationRenderer {
         if (channelNode.isMissingNode() || channelNode.isNull() || channelNode.path("source").asText().isBlank()) {
             return null;
         }
-        ContentDefinition definition = cdlCompiler.compile(payload.path("contentDefinition").asText("")).definition();
-        return octlCompiler.compile(channelNode.path("source").asText(), channel, referenceResolver(), definition).template();
+        return compile(template, channel).template();
+    }
+
+    /** Compiles through the build memo: once per (template, channel) for the whole build. */
+    private CompiledChannel compile(SnapshotAsset template, String channel) {
+        JsonNode payload = template.payload();
+        return compiledTemplates.compile(
+                template.uuid(),
+                channel,
+                payload.path("contentDefinition").asText(""),
+                payload.path("channelTemplates").path(channel).path("source").asText(),
+                referenceResolver());
     }
 
     private ReferenceResolver referenceResolver() {
         return (assetType, uid) -> {
-            AssetType type = assetTypeForRef(assetType);
+            AssetType type = AssetReferencePrefixes.assetTypeForRef(assetType);
             if (type == null) {
                 return Optional.empty();
             }
@@ -248,30 +338,17 @@ final class GenerationRenderer {
 
     private boolean isNavigationFolder(UUID uuid) {
         SnapshotAsset asset = snapshot.assetByUuid(uuid);
-        return asset != null && FolderScope.fromPayload(asset.payload()) == FolderScope.NAVIGATION;
-    }
-
-    /**
-     * {@code assetType:uid} accessor kind -> {@link AssetType}. Every kind but {@code nav} maps
-     * 1:1 onto an {@link AssetType} enum name; {@code nav:<uid>} (`M8.1.4`) is special-cased since
-     * a navigation folder is still just {@link AssetType#FOLDER} under the hood (`M8.1.2` — plain
-     * folders, no dedicated navigation-folder asset type).
-     */
-    private static AssetType assetTypeForRef(String assetType) {
-        if ("nav".equals(assetType)) {
-            return AssetType.FOLDER;
-        }
-        try {
-            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return null;
-        }
+        return asset != null && !asset.deleted() && FolderScope.fromPayload(asset.payload()) == FolderScope.NAVIGATION;
     }
 
     /** @param pagePath output path of the page being rendered; generated links are relative to it */
-    private UrlResolver urlResolver(String channel, String pagePath) {
+    private UrlResolver urlResolver(String channel, String pagePath, List<Diagnostic> warnings) {
         return (kind, uid, uuid, args) -> {
             if (uuid == null) {
+                return "";
+            }
+            if (isDeleted(uuid)) {
+                warnDeletedReference(warnings, kind, uid);
                 return "";
             }
             return switch (kind) {
@@ -388,7 +465,8 @@ final class GenerationRenderer {
             UUID activePageUuid,
             String pagePath,
             Set<UUID> deps,
-            List<Diagnostic> warnings) {
+            List<Diagnostic> warnings,
+            RenderBudget budget) {
         return new BlockResolver() {
             @Override
             public String renderBody(String bodyName) {
@@ -398,7 +476,7 @@ final class GenerationRenderer {
                 }
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
-                    out.append(renderSectionInstance(pageContent, section, channel, activePageUuid, pagePath, deps, warnings));
+                    out.append(renderSectionInstance(pageContent, section, channel, activePageUuid, pagePath, deps, warnings, budget));
                 }
                 return out.toString();
             }
@@ -410,7 +488,7 @@ final class GenerationRenderer {
                 }
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
-                    out.append(renderSectionInstance(pageContent, card, channel, activePageUuid, pagePath, deps, warnings));
+                    out.append(renderSectionInstance(pageContent, card, channel, activePageUuid, pagePath, deps, warnings, budget));
                 }
                 return out.toString();
             }
@@ -421,7 +499,7 @@ final class GenerationRenderer {
                 if (uuid == null) {
                     return "";
                 }
-                return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, deps, warnings);
+                return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, deps, warnings, budget);
             }
 
             @Override
@@ -540,7 +618,8 @@ final class GenerationRenderer {
             UUID activePageUuid,
             String pagePath,
             Set<UUID> deps,
-            List<Diagnostic> warnings) {
+            List<Diagnostic> warnings,
+            RenderBudget budget) {
         String templateRef = section.path("templateRef").asText();
         if (templateRef.isBlank()) {
             return "";
@@ -553,7 +632,7 @@ final class GenerationRenderer {
         }
         JsonNode values = section.path("content");
         String instanceId = section.path("instanceId").asText();
-        return renderSection(sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, deps, warnings);
+        return renderSection(sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, deps, warnings, budget);
     }
 
     private String renderSection(
@@ -565,9 +644,14 @@ final class GenerationRenderer {
             String pagePath,
             String instanceId,
             Set<UUID> deps,
-            List<Diagnostic> warnings) {
+            List<Diagnostic> warnings,
+            RenderBudget budget) {
         SnapshotAsset template = snapshot.assetByUuid(sectionUuid);
         if (template == null) {
+            return "";
+        }
+        if (template.deleted()) {
+            warnDeletedReference(warnings, "section_template", template.uid());
             return "";
         }
         CompiledTemplate compiled = compileChannel(template, channel);
@@ -582,13 +666,16 @@ final class GenerationRenderer {
                 .pageValues(pageValues != null ? pageValues : mapper.createObjectNode())
                 .meta("uid", TextNode.valueOf(emptyIfNull(template.uid())))
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
-                .urlResolver(urlResolver(channel, pagePath))
-                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, deps, warnings));
+                .urlResolver(urlResolver(channel, pagePath, warnings))
+                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, deps, warnings, budget))
+                .assetValueResolver(assetValues)
+                .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
         }
 
-        RenderResult result = renderer.render(compiled, builder.build());
+        RenderContext context = builder.build();
+        RenderResult result = budget.withTemplate(sectionUuid, template.uid(), () -> renderer.render(compiled, context));
         deps.addAll(result.dependencies());
         warnings.addAll(result.warnings());
         return result.output();
@@ -606,15 +693,45 @@ final class GenerationRenderer {
         return byUid == null ? null : byUid.get(uid);
     }
 
+    /**
+     * {@code type -> uid -> uuid} over the snapshot. Soft-deleted assets are indexed too, so a reference
+     * to a deleted target resolves (and renders empty with a warning, spec §16.4) instead of failing
+     * compilation as unknown; a live asset always wins a uid it shares with a deleted one.
+     */
     private static Map<AssetType, Map<String, UUID>> indexUids(Snapshot snapshot) {
         Map<AssetType, Map<String, UUID>> index = new java.util.HashMap<>();
         for (SnapshotAsset asset : snapshot.byUuid().values()) {
             if (asset.uid() == null) {
                 continue;
             }
-            index.computeIfAbsent(asset.type(), t -> new java.util.HashMap<>()).put(asset.uid(), asset.uuid());
+            Map<String, UUID> byUid = index.computeIfAbsent(asset.type(), t -> new java.util.HashMap<>());
+            if (asset.deleted()) {
+                byUid.putIfAbsent(asset.uid(), asset.uuid());
+            } else {
+                UUID previous = byUid.get(asset.uid());
+                if (previous == null || snapshot.assetByUuid(previous).deleted()) {
+                    byUid.put(asset.uid(), asset.uuid());
+                }
+            }
         }
         return index;
+    }
+
+    private boolean isDeleted(UUID uuid) {
+        SnapshotAsset asset = snapshot.assetByUuid(uuid);
+        return asset != null && asset.deleted();
+    }
+
+    /** One {@code SF-GEN-0220} per deleted target per page (the same reference may render many times). */
+    private static void warnDeletedReference(List<Diagnostic> warnings, String kind, String uid) {
+        Diagnostic warning = Diagnostic.warning(
+                GenerationDiagnosticCodes.GEN_DELETED_REFERENCE,
+                "Reference to deleted " + kind + " '" + emptyIfNull(uid) + "' renders empty.",
+                0,
+                0);
+        if (!warnings.contains(warning)) {
+            warnings.add(warning);
+        }
     }
 
     /** Variant {@code format} ("jpeg") → file extension ("jpg"); mirrors the ASSETS copy stage. */

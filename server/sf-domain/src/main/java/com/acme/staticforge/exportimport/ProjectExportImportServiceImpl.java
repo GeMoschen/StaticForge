@@ -15,6 +15,7 @@ import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.media.Blob;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.channel.OutputChannel;
 import com.acme.staticforge.channel.OutputChannelRepository;
 import com.acme.staticforge.common.JsonUtil;
@@ -42,6 +43,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -104,9 +106,33 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private static final Set<String> REDACTED_KEYS = Set.of(
             "accesskey", "secretkey", "secretaccesskey", "password", "token", "credentials");
 
-    /** Import order for non-folder assets: templates first, dependents last. */
-    private static final List<String> NON_FOLDER_ORDER =
-            List.of("SECTION_TEMPLATE", "PAGE_TEMPLATE", "MEDIA", "PAGE", "PAGE_REFERENCE");
+    /**
+     * Import order for non-folder assets: templates first, dependents last. Reference rows are
+     * materialized only after every asset exists, so the order is about readability of the import,
+     * not about edges resolving.
+     *
+     * <p>Every non-folder {@link AssetType} must appear here: {@link #order} imports exactly these
+     * types, so a missing one is dropped from an import without any error (that is how M17's
+     * {@code GLOBAL_SET} first went missing). The static check turns that into a startup failure.
+     */
+    private static final List<AssetType> NON_FOLDER_ORDER = List.of(
+            AssetType.SECTION_TEMPLATE,
+            AssetType.PAGE_TEMPLATE,
+            AssetType.MEDIA,
+            AssetType.GLOBAL_SET,
+            // A record's validation and its template_asset_id need its dataset (M19.1.3).
+            AssetType.DATASET,
+            AssetType.RECORD,
+            AssetType.PAGE,
+            AssetType.PAGE_REFERENCE);
+
+    static {
+        EnumSet<AssetType> unordered = EnumSet.complementOf(EnumSet.of(AssetType.FOLDER));
+        NON_FOLDER_ORDER.forEach(unordered::remove);
+        if (!unordered.isEmpty()) {
+            throw new IllegalStateException("Asset types missing from the import order: " + unordered);
+        }
+    }
 
     private final ProjectRepository projectRepository;
     private final AssetVersionRepository assetVersionRepository;
@@ -121,6 +147,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final ObjectMapper objectMapper;
     private final OutputChannelRepository outputChannelRepository;
     private final GenerationTargetRepository generationTargetRepository;
+    private final ReferenceMaterializer referenceMaterializer;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -135,7 +162,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             BlobRepository blobRepository,
             ObjectMapper objectMapper,
             OutputChannelRepository outputChannelRepository,
-            GenerationTargetRepository generationTargetRepository) {
+            GenerationTargetRepository generationTargetRepository,
+            ReferenceMaterializer referenceMaterializer) {
         this.projectRepository = projectRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetRepository = assetRepository;
@@ -149,6 +177,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         this.objectMapper = objectMapper;
         this.outputChannelRepository = outputChannelRepository;
         this.generationTargetRepository = generationTargetRepository;
+        this.referenceMaterializer = referenceMaterializer;
     }
 
     // ------------------------------------------------------------------
@@ -295,9 +324,21 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
         }
 
-        // Always include every ancestor folder up to the project root.
+        // A record is meaningless without its schema (M19.1.3): its dataset joins the archive as an
+        // implicit pick, exactly like an ancestor folder, so an import can reuse an existing copy.
         Set<Long> ancestors = new HashSet<>();
-        for (Long id : included) {
+        for (Long id : List.copyOf(included)) {
+            AssetVersion version = versionByAssetId.get(id);
+            Long datasetId = version.getAsset().getAssetType() == AssetType.RECORD ? version.getTemplateAssetId() : null;
+            if (datasetId != null && !included.contains(datasetId) && versionByAssetId.containsKey(datasetId)) {
+                ancestors.add(datasetId);
+            }
+        }
+
+        // Always include every ancestor folder up to the project root.
+        Set<Long> withImplicit = new HashSet<>(included);
+        withImplicit.addAll(ancestors);
+        for (Long id : withImplicit) {
             Long folderId = versionByAssetId.get(id).getFolderId();
             while (folderId != null && !included.contains(folderId) && ancestors.add(folderId)) {
                 AssetVersion folderVersion = versionByAssetId.get(folderId);
@@ -408,8 +449,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
         }
 
-        // The fixed, protected "All Navigation", "All Templates", "All Pages" and "All Media"
-        // wrapper roots (generalized from M13.1.2's two-fixed-folder pattern) get the exact same
+        // The fixed, protected "All Navigation", "All Templates", "All Pages", "All Media" and
+        // "All Globals" wrapper roots (generalized from M13.1.2's two-fixed-folder pattern) get the exact same
         // resolve-not-create treatment: every project already has its own copy, so an archive's
         // copy must remap onto the target's existing folder rather than create a duplicate.
         fixedFolderKeys.addAll(resolveFixedFolder(
@@ -427,6 +468,14 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         fixedFolderKeys.addAll(resolveFixedFolder(
                 findFixedFolderByUid(assets, FolderScope.MEDIA_ROOT_UID),
                 assetService.ensureMediaRootFolder(targetProjectId, ctx),
+                targetProjectId, remap, idMaps));
+        fixedFolderKeys.addAll(resolveFixedFolder(
+                findFixedFolderByUid(assets, FolderScope.GLOBALS_ROOT_UID),
+                assetService.ensureGlobalsRootFolder(targetProjectId, ctx),
+                targetProjectId, remap, idMaps));
+        fixedFolderKeys.addAll(resolveFixedFolder(
+                findFixedFolderByUid(assets, FolderScope.CONTENT_ROOT_UID),
+                assetService.ensureContentRootFolder(targetProjectId, ctx),
                 targetProjectId, remap, idMaps));
 
         // Pre-populate idMaps for every skipped asset with the *existing* target asset's real
@@ -455,18 +504,25 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Instant importedAt = Instant.now();
         int created = 0;
         int updated = 0;
+        List<AssetVersion> importedVersions = new ArrayList<>();
         for (ExportedAsset asset : order(assets, rootAsset)) {
             String key = asset.uuid().toLowerCase();
             if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key)) {
                 continue;
             }
-            createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest, importedAt,
-                    revision.getRevisionId(), ctx);
+            importedVersions.add(createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest,
+                    importedAt, revision.getRevisionId(), ctx));
             if (overwritten.contains(key)) {
                 updated++;
             } else {
                 created++;
             }
+        }
+
+        // Outgoing reference rows for every imported asset, in the import's revision (§5.4) —
+        // only once all assets exist, since a reference may point at an asset imported later.
+        for (AssetVersion version : importedVersions) {
+            referenceMaterializer.materialize(version.getAsset(), version);
         }
 
         if (content.settings() != null) {
@@ -546,7 +602,15 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 boolean satisfied = archiveUuids.contains(templateUuid.toLowerCase(Locale.ROOT))
                         || assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(templateUuid))
                                 .isPresent();
-                if (!satisfied) {
+                if (!satisfied && AssetType.RECORD.name().equals(asset.type())) {
+                    conflicts.add(ImportConflict.of(
+                            ConflictType.RECORD_DATASET_MISSING,
+                            asset.uuid(),
+                            label,
+                            "Belongs to dataset " + templateUuid
+                                    + ", which is not in this archive and does not exist in the target project.",
+                            asset.isExplicit()));
+                } else if (!satisfied) {
                     // Deliberately no UID-based fallback lookup here: once the missing template is
                     // excluded from the archive, its human-assigned UID isn't derivable from what
                     // remains — scope limitation, not an oversight.
@@ -682,19 +746,21 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
      * way {@code uid} is never re-derived from the archive on overwrite — {@code Asset.uid} is
      * identity, changed only through the explicit rename flow, never as a side effect of import.
      */
-    private void createImportedAsset(
+    private AssetVersion createImportedAsset(
             long projectId, ExportedAsset asset, Map<String, UUID> remap, Set<String> overwritten, IdMaps idMaps,
             ExportManifest manifest, Instant importedAt, long revision, RevisionContext ctx) {
         AssetType type = AssetType.valueOf(asset.type());
         UUID uuid = remap.get(asset.uuid().toLowerCase());
         boolean overwrite = overwritten.contains(asset.uuid().toLowerCase());
 
+        Asset identity;
         long assetId;
         String uid;
         String changeAction;
         if (overwrite) {
             Asset existing = assetRepository.findByProjectIdAndUuid(projectId, uuid)
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Existing asset not found for overwrite.")));
+            identity = existing;
             assetId = existing.getId();
             uid = existing.getUid();
             changeAction = "UPDATE";
@@ -705,6 +771,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         } else {
             uid = uidGenerator.deriveUid(asset.displayName(), projectId, type);
             Asset saved = assetRepository.save(new Asset(uuid, projectId, type, uid, importedAt, ctx.userId()));
+            identity = saved;
             assetId = saved.getId();
             changeAction = "CREATE";
         }
@@ -715,6 +782,13 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 ? pathService.childPath(parentPath, uid)
                 : pathService.contentPath(parentPath);
         Long templateAssetId = idMaps.idOf(asset.templateUuid());
+        if (templateAssetId == null && asset.templateUuid() != null && !asset.templateUuid().isBlank()) {
+            // The template (or a record's dataset, M19.1.3) is not in the archive but already exists in
+            // the target project: link to it, since a record without template_asset_id drops out of
+            // every dataset query.
+            UUID targetTemplate = remap.getOrDefault(asset.templateUuid().toLowerCase(), UUID.fromString(asset.templateUuid()));
+            templateAssetId = assetRepository.findByProjectIdAndUuid(projectId, targetTemplate).map(Asset::getId).orElse(null);
+        }
 
         JsonNode remapped = UuidRemapper.remap(asset.payload(), remap);
         ObjectNode payload = JsonUtil.object(remapped).deepCopy();
@@ -739,10 +813,12 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             version.setMimeType(asset.mimeType());
             version.setSizeBytes(asset.sizeBytes());
         }
-        assetVersionRepository.save(version);
+        version.setAsset(identity);
+        AssetVersion saved = assetVersionRepository.save(version);
 
         revisionService.appendSummary(projectId, revision,
                 new AssetChange(uuid.toString(), type.name(), uid, changeAction, List.of(), false));
+        return saved;
     }
 
     private void importBlobs(JsonNode payload, Map<String, byte[]> archiveBlobs, Set<String> importedShas) {
@@ -788,9 +864,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 .filter(asset -> asset != rootAsset && "FOLDER".equals(asset.type()))
                 .sorted(Comparator.comparing(ExportedAsset::folderPath))
                 .forEach(ordered::add);
-        for (String type : NON_FOLDER_ORDER) {
+        for (AssetType type : NON_FOLDER_ORDER) {
             assets.stream()
-                    .filter(asset -> type.equals(asset.type()))
+                    .filter(asset -> type.name().equals(asset.type()))
                     .sorted(Comparator.comparing(ExportedAsset::uuid))
                     .forEach(ordered::add);
         }
@@ -825,6 +901,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 found.put(AssetType.PAGE_TEMPLATE, asset);
             } else if (FolderScope.SECTION_TEMPLATES_UID.equals(asset.uid())) {
                 found.put(AssetType.SECTION_TEMPLATE, asset);
+            } else if (FolderScope.DATASETS_UID.equals(asset.uid())) {
+                found.put(AssetType.DATASET, asset);
             }
         }
         return found;

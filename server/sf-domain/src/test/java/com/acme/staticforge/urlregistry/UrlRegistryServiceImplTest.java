@@ -2,7 +2,6 @@ package com.acme.staticforge.urlregistry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -13,6 +12,8 @@ import static org.mockito.Mockito.when;
 
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavigationService;
+import com.acme.staticforge.channel.ChannelOutputSettings;
+import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import java.time.Instant;
@@ -33,11 +34,15 @@ class UrlRegistryServiceImplTest {
     private static final long PROJECT_ID = 42L;
     private static final UUID PAGE_REF = UUID.randomUUID();
     private static final UUID PAGE = UUID.randomUUID();
+    /** Non-default settings, so the stubs prove the channel's own settings reach the URL computation. */
+    private static final ChannelOutputSettings PRETTY =
+            new ChannelOutputSettings("html", null, null, ChannelOutputSettings.UrlStrategy.PRETTY, true);
 
     private UrlRegistryRepository repository;
     private NavigationService navigationService;
     private LiveOutputPathResolver outputPathResolver;
     private RevisionService revisionService;
+    private ChannelService channelService;
     private UrlRegistryServiceImpl service;
 
     @BeforeEach
@@ -47,10 +52,13 @@ class UrlRegistryServiceImplTest {
         outputPathResolver = mock(LiveOutputPathResolver.class);
         revisionService = mock(RevisionService.class);
         LiveNavigationLookup lookup = mock(LiveNavigationLookup.class);
-        service = new UrlRegistryServiceImpl(repository, navigationService, lookup, outputPathResolver, revisionService);
+        channelService = mock(ChannelService.class);
+        service = new UrlRegistryServiceImpl(
+                repository, navigationService, lookup, outputPathResolver, revisionService, channelService);
 
         when(navigationService.resolve(eq(PROJECT_ID), eq(PAGE_REF), any())).thenReturn(PAGE);
-        when(outputPathResolver.resolveUrl(eq(PROJECT_ID), eq(PAGE), eq("html"), any(), anyBoolean(), any()))
+        when(channelService.outputSettings(PROJECT_ID, "html")).thenReturn(PRETTY);
+        when(outputPathResolver.resolveUrl(PROJECT_ID, PAGE, "html", PRETTY))
                 .thenReturn(Optional.of("products/hammer.html"));
         when(revisionService.findRecent(eq(PROJECT_ID), any())).thenReturn(List.of());
     }

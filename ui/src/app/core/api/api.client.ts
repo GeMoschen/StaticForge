@@ -412,10 +412,11 @@ export class ApiClient {
     );
   }
 
-  replaceMedia(projectKey: string, uuid: string, file: File): Observable<S['MediaView']> {
+  /** Swaps the file; `processCmsCleared` reports a processed file that is no longer text (M18). */
+  replaceMedia(projectKey: string, uuid: string, file: File): Observable<S['MediaSaveResponse']> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<S['MediaView']>(
+    return this.http.post<S['MediaSaveResponse']>(
       `${BASE}/projects/${projectKey}/media/${uuid}/replace`,
       formData,
       { withCredentials: true },
@@ -433,6 +434,60 @@ export class ApiClient {
       body,
       this.mutationOptions(etag),
     );
+  }
+
+  /** Switches CMS syntax processing of a text media file on or off (M18.1.1); a 422 carries `diagnostics`. */
+  setMediaProcessCms(
+    projectKey: string,
+    uuid: string,
+    processCms: boolean,
+    etag?: number,
+  ): Observable<S['MediaSaveResponse']> {
+    return this.http.put<S['MediaSaveResponse']>(
+      `${BASE}/projects/${projectKey}/media/${uuid}/process`,
+      { processCms } satisfies S['MediaProcessRequest'],
+      this.mutationOptions(etag),
+    );
+  }
+
+  /** A text media file's content, current or at a time-travel `revision` (M18.1.2). */
+  mediaText(projectKey: string, uuid: string, revision?: number | null): Observable<S['MediaTextView']> {
+    return this.http.get<S['MediaTextView']>(`${BASE}/projects/${projectKey}/media/${uuid}/text`, {
+      withCredentials: true,
+      params: this.params({ revision: revision ?? undefined }),
+    });
+  }
+
+  /** Saves a text media file's content: one revision per change; a 422 carries `diagnostics`. */
+  saveMediaText(
+    projectKey: string,
+    uuid: string,
+    text: string,
+    etag?: number,
+  ): Observable<S['MediaSaveResponse']> {
+    return this.http.put<S['MediaSaveResponse']>(
+      `${BASE}/projects/${projectKey}/media/${uuid}/text`,
+      { text } satisfies S['MediaTextRequest'],
+      this.mutationOptions(etag),
+    );
+  }
+
+  /** Compiles draft text as the file's CMS syntax source without saving (M18.2.1). */
+  validateMediaText(projectKey: string, uuid: string, text: string): Observable<S['OctlValidateResponse']> {
+    return this.http.post<S['OctlValidateResponse']>(
+      `${BASE}/projects/${projectKey}/media/${uuid}/text/validate`,
+      { text } satisfies S['MediaTextRequest'],
+      { withCredentials: true },
+    );
+  }
+
+  /** The rendered output of a processed text media file, as text (M18.3.2); a 422 carries `diagnostics`. */
+  mediaRenderedText(projectKey: string, uuid: string, revision?: number | null): Observable<string> {
+    return this.http.get(`${BASE}/projects/${projectKey}/media/${uuid}/binary`, {
+      withCredentials: true,
+      params: this.params({ rendered: true, revision: revision ?? undefined }),
+      responseType: 'text',
+    });
   }
 
   mediaBinaryUrl(projectKey: string, uuid: string, variant?: string): string {

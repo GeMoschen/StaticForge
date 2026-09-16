@@ -9,6 +9,7 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -39,18 +40,21 @@ public class FolderServiceImpl implements FolderService {
     private final AssetService assetService;
     private final PathService pathService;
     private final RevisionService revisionService;
+    private final ReferenceMaterializer referenceMaterializer;
 
     public FolderServiceImpl(
             AssetRepository assetRepository,
             AssetVersionRepository assetVersionRepository,
             AssetService assetService,
             PathService pathService,
-            RevisionService revisionService) {
+            RevisionService revisionService,
+            ReferenceMaterializer referenceMaterializer) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.pathService = pathService;
         this.revisionService = revisionService;
+        this.referenceMaterializer = referenceMaterializer;
     }
 
     @Override
@@ -117,7 +121,7 @@ public class FolderServiceImpl implements FolderService {
             UUID parentFolderUuid, String displayName, FolderScope scope, AssetType templateKind, RevisionContext ctx) {
         if (parentFolderUuid == null && scope == FolderScope.TEMPLATES) {
             throw new SfException(ProblemFactory.unprocessableEntity(
-                    "The top level of the template store is fixed to \"Page Templates\" and \"Section Templates\" — "
+                    "The top level of the template store is fixed to \"Page Templates\", \"Section Templates\" and \"Datasets\" — "
                             + "new top-level folders cannot be created there."));
         }
 
@@ -150,7 +154,7 @@ public class FolderServiceImpl implements FolderService {
                 // top-level TEMPLATES folder already is above.
                 throw new SfException(ProblemFactory.unprocessableEntity(
                         "New folders can't be created directly under the templates root — "
-                                + "pick Page Templates or Section Templates first."));
+                                + "pick Page Templates, Section Templates or Datasets first."));
             }
         }
         if (effectiveScope == null) {
@@ -267,7 +271,7 @@ public class FolderServiceImpl implements FolderService {
             String rebased = pathService.rebase(version.getFolderPath(), oldPath, newPath);
             close(version.getAssetId(), revision.getRevisionId());
             insertVersion(
-                    version.getAssetId(),
+                    version.getAsset(),
                     revision.getRevisionId(),
                     version.getDisplayName(),
                     version.getPayload(),
@@ -301,7 +305,7 @@ public class FolderServiceImpl implements FolderService {
         for (AssetVersion version : subtree) {
             close(version.getAssetId(), revision.getRevisionId());
             insertVersion(
-                    version.getAssetId(),
+                    version.getAsset(),
                     revision.getRevisionId(),
                     version.getDisplayName(),
                     version.getPayload(),
@@ -359,15 +363,16 @@ public class FolderServiceImpl implements FolderService {
         });
     }
 
+    /** Inserts the new version and, in the same revision, syncs its outgoing reference rows (§5.4). */
     private void insertVersion(
-            Long assetId, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
+            Asset asset, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
             Long folderId, String folderPath, Long templateAssetId, boolean deleted) {
-        AssetVersion version = new AssetVersion(assetId, revisionId, displayName, payload, changedBy, changedAt);
+        AssetVersion version = new AssetVersion(asset.getId(), revisionId, displayName, payload, changedBy, changedAt);
         version.setFolderId(folderId);
         version.setFolderPath(folderPath);
         version.setTemplateAssetId(templateAssetId);
         version.setDeleted(deleted);
-        assetVersionRepository.save(version);
+        referenceMaterializer.materialize(asset, assetVersionRepository.save(version));
     }
 
     private void appendSummary(Asset asset, Revision revision, String action, List<String> fields) {

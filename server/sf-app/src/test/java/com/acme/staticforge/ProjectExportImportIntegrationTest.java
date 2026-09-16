@@ -10,11 +10,14 @@ import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetSummary;
 import com.acme.staticforge.asset.AssetType;
-import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.AssetVersion;
+import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
+import com.acme.staticforge.asset.globals.CreateGlobalSetCommand;
+import com.acme.staticforge.asset.globals.GlobalSetService;
+import com.acme.staticforge.asset.globals.GlobalSetView;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.MediaBinary;
 import com.acme.staticforge.asset.media.MediaService;
@@ -47,7 +50,11 @@ import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.revision.AssetDiff;
+import com.acme.staticforge.revision.DiffService;
+import com.acme.staticforge.revision.FieldChange;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.revision.RevisionDiff;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -92,6 +99,15 @@ class ProjectExportImportIntegrationTest {
     private static final AtomicInteger SEQ = new AtomicInteger();
     private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
 
+    /** The CDL of the running Globals example: a required text plus a media the values point at. */
+    private static final String GLOBAL_SET_CDL =
+            """
+            content {
+              editor text title { label "Site title" required }
+              editor media logo { label "Logo" }
+            }
+            """;
+
     @Autowired UserService userService;
     @Autowired ProjectService projectService;
     @Autowired AssetService assetService;
@@ -106,6 +122,11 @@ class ProjectExportImportIntegrationTest {
     @Autowired FolderService folderService;
     @Autowired PageReferenceService pageReferenceService;
     @Autowired com.acme.staticforge.asset.AssetVersionRepository assetVersionRepository;
+    @Autowired GlobalSetService globalSetService;
+    @Autowired DiffService diffService;
+    @Autowired com.acme.staticforge.asset.dataset.DatasetService datasetService;
+    @Autowired com.acme.staticforge.asset.dataset.RecordService recordService;
+    @Autowired com.acme.staticforge.asset.AssetReferenceRepository assetReferenceRepository;
 
     @Test
     void roundTripPreservesAssetsAndMediaRemapsUuidsAndAddsProvenance() {
@@ -1767,17 +1788,20 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
-     * {@code manifest.json}'s {@code protocolVersion} reads {@code 3} after this change (task
-     * {@code M14.1.1}) — the structural shape change from one combined {@code assets.json} to
-     * many {@code assets/<uuid>.json} entries is a protocol bump, not an additive field.
+     * {@code manifest.json}'s {@code protocolVersion} reads {@code 5}. It went to {@code 3} in
+     * {@code M14.1.1} for the structural shape change from one combined {@code assets.json} to
+     * many {@code assets/<uuid>.json} entries, to {@code 4} in {@code M17.1.3} because an
+     * archive may now carry {@code GLOBAL_SET} assets — an importer that predates them would fail
+     * inside {@code AssetType.valueOf} part-way through, whereas a version mismatch is reported as
+     * a clean conflict — and to {@code 5} in {@code M19.1.3} for {@code DATASET}/{@code RECORD}.
      */
     @Test
-    void manifestReportsProtocolVersionThree() {
+    void manifestReportsProtocolVersionFive() {
         Fixture source = newFixture("m141_manifest", "M14.1 Manifest Protocol Version");
         byte[] archive = exportImportService.exportProject(source.project().getId());
 
         ExportManifest manifest = parseManifest(archive);
-        assertThat(manifest.protocolVersion()).isEqualTo(3);
+        assertThat(manifest.protocolVersion()).isEqualTo(5);
     }
 
     /**
@@ -1917,6 +1941,410 @@ class ProjectExportImportIntegrationTest {
         AssetVersionView legacyMedia = assetService.requireCurrent(legacyTarget.project().getId(), legacyMediaUuid);
         assertThat(legacyMedia.payload().path("blobSha256").asText())
                 .isEqualTo(perFileMedia.payload().path("blobSha256").asText());
+    }
+
+    // ---- M17.1.3 Globals store coverage ----
+
+    /**
+     * Full-Globals-store round trip (`M17.1.3`): {@code fullStores={GLOBALS}} behaves like every
+     * other store — every live set and folder of the scope travels, nested ones keep their place,
+     * and a set's schema, values and uid come back unchanged. Both halves are deliberately run:
+     * importing into a FRESH project and back into the SOURCE project must each resolve the
+     * archive's {@code globals_root} onto the target's own fixed root rather than minting a second
+     * one, which is what {@code findFixedFolderByUid} was extended for.
+     */
+    @Test
+    void fullGlobalsStoreRoundTripsIntoAFreshProjectAndBackIntoItsOwn() {
+        Fixture source = newFixture("glb_full", "Globals Full Store Source");
+        AssetVersionView branding = folderService.create(null, "Branding", FolderScope.GLOBALS, source.ctx());
+        AssetVersionView logo = mediaService.upload(
+                source.project().getId(), null, "logo.png", "image/png", solidPng(32, 32, Color.BLUE), source.ctx());
+
+        GlobalSetView site = globalSetService.create(
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+        ObjectNode siteValues = MAPPER.createObjectNode();
+        siteValues.put("title", "Acme Outdoor");
+        siteValues.putObject("logo").put("type", "MEDIA_REF").put("uuid", logo.uuid().toString());
+        globalSetService.updateValues(site.uuid(), siteValues, site.revision(), source.ctx());
+
+        GlobalSetView theme = globalSetService.create(
+                new CreateGlobalSetCommand(
+                        source.project().getId(), branding.uuid(), "Theme",
+                        "content { editor text accent { label \"Accent\" } }"),
+                source.ctx());
+        globalSetService.updateValues(
+                theme.uuid(), MAPPER.createObjectNode().put("accent", "#ff6600"), theme.revision(), source.ctx());
+
+        // The media is picked explicitly alongside the store, so the referenced-logo case is a
+        // clean round trip here; the unselected-media case is the next test's subject.
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(logo.uuid()), false, false, Set.of(FolderScope.GLOBALS)));
+        Set<String> exported = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(exported).contains(
+                site.uuid().toString(), theme.uuid().toString(), branding.uuid().toString(),
+                fixedFolderUuid(source, FolderScope.GLOBALS_ROOT_UID).toString());
+
+        Fixture target = newFixture("glb_full_tgt", "Globals Full Store Target");
+        UUID targetGlobalsRoot = fixedFolderUuid(target, FolderScope.GLOBALS_ROOT_UID);
+        exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+
+        assertThat(globalsRoots(target.project().getId()))
+                .extracting(Asset::getUuid)
+                .as("the archive's root resolved onto the target's own, pre-existing one")
+                .containsExactly(targetGlobalsRoot);
+
+        GlobalSetView importedSite =
+                globalSetService.find(target.project().getId(), site.uuid(), null).orElseThrow();
+        assertThat(importedSite.uid()).isEqualTo("site");
+        assertThat(importedSite.contentDefinition()).isEqualTo(GLOBAL_SET_CDL);
+        assertThat(importedSite.content().path("title").asText()).isEqualTo("Acme Outdoor");
+        assertThat(importedSite.content().path("logo").path("uuid").asText()).isEqualTo(logo.uuid().toString());
+        assertThat(importedSite.folderPath()).isEqualTo("/" + FolderScope.GLOBALS_ROOT_UID + "/");
+
+        GlobalSetView importedTheme =
+                globalSetService.find(target.project().getId(), theme.uuid(), null).orElseThrow();
+        assertThat(importedTheme.uid()).isEqualTo("theme");
+        assertThat(importedTheme.content().path("accent").asText()).isEqualTo("#ff6600");
+        assertThat(importedTheme.folderPath())
+                .as("a set in a nested Globals folder keeps its place")
+                .isEqualTo(assetService.requireCurrent(target.project().getId(), branding.uuid()).folderPath())
+                .startsWith("/" + FolderScope.GLOBALS_ROOT_UID + "/");
+
+        // Back into the source project: every uuid collides with itself, so every set is
+        // overwritten in place and the project still has exactly one Globals root.
+        UUID sourceGlobalsRoot = fixedFolderUuid(source, FolderScope.GLOBALS_ROOT_UID);
+        exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
+        assertThat(globalsRoots(source.project().getId())).extracting(Asset::getUuid).containsExactly(sourceGlobalsRoot);
+        assertThat(uidsByType(source.project().getId(), AssetType.GLOBAL_SET).keySet())
+                .containsExactlyInAnyOrder("site", "theme");
+        GlobalSetView reimportedSite =
+                globalSetService.find(source.project().getId(), site.uuid(), null).orElseThrow();
+        assertThat(reimportedSite.contentDefinition()).isEqualTo(GLOBAL_SET_CDL);
+        assertThat(reimportedSite.content().path("title").asText()).isEqualTo("Acme Outdoor");
+        assertThat(reimportedSite.folderPath()).isEqualTo("/" + FolderScope.GLOBALS_ROOT_UID + "/");
+    }
+
+    // ------------------------------------------------------------------
+    // M19.1.3 — datasets and records
+    // ------------------------------------------------------------------
+
+    private static final String TEAM_CDL = "content {\n"
+            + "  editor text name { label \"Name\" }\n"
+            + "  editor text role { label \"Role\" }\n"
+            + "  editor reference mentor { label \"Mentor\" dataset \"team\" }\n"
+            + "}";
+
+    /**
+     * The Content store round trip ({@code M19.1.3}): a dataset and three records in nested Content
+     * folders move into an empty project with payloads, the dataset link (payload and
+     * {@code template_asset_id}), folder paths and reference edges intact.
+     */
+    @Test
+    void contentStoreRoundTripsWithDatasetLinksFoldersAndReferences() {
+        Fixture source = newFixture("m19_content", "M19 Content Source");
+        com.acme.staticforge.asset.dataset.DatasetView team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
+                        source.project().getId(), null, "Team", TEAM_CDL, "name", "People"),
+                source.ctx());
+        AssetVersionView people = folderService.create(null, "People", FolderScope.CONTENT, source.ctx());
+        AssetVersionView leads = folderService.create(people.uuid(), "Leads", FolderScope.CONTENT, source.ctx());
+        var ada = createRecord(source, team, leads.uuid(), "{\"name\":\"Ada\",\"role\":\"lead\"}");
+        var bob = createRecord(source, team, people.uuid(),
+                "{\"name\":\"Bob\",\"mentor\":{\"type\":\"ASSET_REF\",\"uuid\":\"" + ada.uuid() + "\",\"assetType\":\"RECORD\"}}");
+        var cy = createRecord(source, team, null, "{\"name\":\"Cy\"}");
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(), false, false, Set.of(FolderScope.CONTENT)));
+        assertThat(readAssetEntry(archive, team.uuid()).isExplicit())
+                .as("the dataset of exported records rides along implicitly")
+                .isFalse();
+        assertThat(readAssetEntry(archive, bob.uuid()).templateUuid()).isEqualTo(team.uuid().toString());
+
+        Fixture target = newFixture("m19_content_tgt", "M19 Content Target");
+        exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+
+        long targetId = target.project().getId();
+        var importedTeam = datasetService.find(targetId, team.uuid(), null).orElseThrow();
+        assertThat(importedTeam.folderPath()).isEqualTo("/templates_root/datasets/");
+        assertThat(importedTeam.titleEditor()).isEqualTo("name");
+        assertThat(importedTeam.recordCount()).isEqualTo(3);
+        var importedBob = recordService.find(targetId, bob.uuid(), null).orElseThrow();
+        assertThat(importedBob.datasetUuid()).isEqualTo(team.uuid());
+        assertThat(importedBob.folderPath()).isEqualTo("/people/");
+        assertThat(importedBob.content().path("mentor").path("uuid").asText()).isEqualTo(ada.uuid().toString());
+        assertThat(recordService.find(targetId, ada.uuid(), null).orElseThrow().folderPath()).isEqualTo("/people/leads/");
+        assertThat(recordService.find(targetId, cy.uuid(), null).orElseThrow().folderPath()).isEqualTo("/");
+
+        long teamId = assetRepository.findByProjectIdAndUuid(targetId, team.uuid()).orElseThrow().getId();
+        assertThat(assetVersionRepository.findCurrentRecordsOfDataset(targetId, teamId))
+                .extracting(v -> v.getAsset().getUuid())
+                .containsExactlyInAnyOrder(ada.uuid(), bob.uuid(), cy.uuid());
+        long bobId = assetRepository.findByProjectIdAndUuid(targetId, bob.uuid()).orElseThrow().getId();
+        long adaId = assetRepository.findByProjectIdAndUuid(targetId, ada.uuid()).orElseThrow().getId();
+        assertThat(assetReferenceRepository.findByFromAssetIdAndValidToRevisionIsNull(bobId))
+                .extracting(com.acme.staticforge.asset.AssetReference::getKind, com.acme.staticforge.asset.AssetReference::getToAssetId)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(com.acme.staticforge.asset.ReferenceKind.TEMPLATE, teamId),
+                        org.assertj.core.groups.Tuple.tuple(com.acme.staticforge.asset.ReferenceKind.CONTENT_REF, adaId));
+        assertThat(assetRepository.findAll().stream()
+                        .filter(a -> a.getProjectId() == targetId && FolderScope.CONTENT_ROOT_UID.equals(a.getUid())))
+                .as("the archive's Content root remapped onto the target's own")
+                .hasSize(1);
+    }
+
+    /**
+     * Exporting one record includes its dataset as an implicit pick; importing back into a project
+     * that already has the dataset with "skip existing implicit" leaves the dataset untouched.
+     */
+    @Test
+    void aSingleRecordExportCarriesItsDatasetImplicitly() {
+        Fixture source = newFixture("m19_single", "M19 Single Record Source");
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                source.ctx());
+        var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(ada.uuid()), false, false, Set.of()));
+        assertThat(readAssetEntry(archive, ada.uuid()).isExplicit()).isTrue();
+        assertThat(readAssetEntry(archive, team.uuid()).isExplicit()).isFalse();
+        assertThat(parseAssets(archive).stream().map(ExportedAsset::uid))
+                .contains(FolderScope.DATASETS_UID, FolderScope.TEMPLATES_ROOT_UID, FolderScope.CONTENT_ROOT_UID);
+
+        long datasetRevision = datasetService.find(source.project().getId(), team.uuid(), null).orElseThrow().revision();
+        ImportOptions skip = new ImportOptions(true);
+        assertThat(exportImportService.analyzeImport(source.project().getId(), archive, skip).conflicts())
+                .extracting(ImportConflict::elementUuid)
+                .doesNotContain(team.uuid().toString());
+        exportImportService.importProject(source.project().getId(), archive, source.ctx(), skip);
+        assertThat(datasetService.find(source.project().getId(), team.uuid(), null).orElseThrow().revision())
+                .as("the implicit, existing dataset was skipped, not overwritten")
+                .isEqualTo(datasetRevision);
+
+        Fixture fresh = newFixture("m19_single_tgt", "M19 Single Record Target");
+        exportImportService.importProject(fresh.project().getId(), archive, fresh.ctx(), skip);
+        assertThat(recordService.find(fresh.project().getId(), ada.uuid(), null).orElseThrow().datasetUid()).isEqualTo("team");
+    }
+
+    /** A record whose dataset is neither in the archive nor in the target is a blocking conflict. */
+    @Test
+    void aRecordWithoutItsDatasetIsABlockingConflict() {
+        Fixture source = newFixture("m19_missing", "M19 Missing Dataset Source");
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                source.ctx());
+        var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
+        byte[] archive = withoutEntry(
+                exportImportService.exportSelection(
+                        source.project().getId(), new ExportSelection(Set.of(ada.uuid()), false, false, Set.of())),
+                "assets/" + team.uuid() + ".json");
+
+        Fixture target = newFixture("m19_missing_tgt", "M19 Missing Dataset Target");
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
+        assertThat(report.conflicts())
+                .filteredOn(c -> c.type() == ConflictType.RECORD_DATASET_MISSING)
+                .extracting(ImportConflict::elementUuid, ImportConflict::severity)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(ada.uuid().toString(), ConflictSeverity.BLOCKING));
+        assertThat(report.conflicts()).noneMatch(c -> c.type() == ConflictType.MISSING_TEMPLATE_REFERENCE);
+        assertThatThrownBy(() -> exportImportService.importProject(
+                        target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT))
+                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
+
+        // The same archive into the source project, where the dataset exists: no conflict, and the
+        // record links to the existing dataset.
+        assertThat(exportImportService.analyzeImport(source.project().getId(), archive, ImportOptions.DEFAULT).conflicts())
+                .noneMatch(c -> c.type() == ConflictType.RECORD_DATASET_MISSING);
+        exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
+        long teamId = assetRepository.findByProjectIdAndUuid(source.project().getId(), team.uuid()).orElseThrow().getId();
+        assertThat(assetVersionRepository.findCurrentRecordsOfDataset(source.project().getId(), teamId))
+                .extracting(v -> v.getAsset().getUuid())
+                .containsExactly(ada.uuid());
+    }
+
+    /** Record and dataset diffs are the generic payload diff: content fields and the CDL source. */
+    @Test
+    void recordAndDatasetDiffsShowTheChangedFields() {
+        Fixture source = newFixture("m19_diff", "M19 Diff");
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                source.ctx());
+        var ada = createRecord(source, team, null, "{\"name\":\"Ada\",\"role\":\"dev\"}");
+        var updated = recordService.update(ada.uuid(), json("{\"name\":\"Ada\",\"role\":\"lead\"}"), null, ada.revision(), source.ctx()).record();
+
+        AssetDiff recordDiff = onlyAssetDiff(diffService.diff(source.project().getId(), updated.revision()));
+        assertThat(recordDiff.type()).isEqualTo("RECORD");
+        assertThat(recordDiff.changes()).extracting(FieldChange::path).containsExactly("content.role");
+
+        var retyped = datasetService.update(team.uuid(),
+                new com.acme.staticforge.asset.dataset.UpdateDatasetCommand("Team", TEAM_CDL.replace("\"Role\"", "\"Position\""), null, null),
+                team.revision(), source.ctx());
+        AssetDiff datasetDiff = onlyAssetDiff(diffService.diff(source.project().getId(), retyped.revision()));
+        assertThat(datasetDiff.type()).isEqualTo("DATASET");
+        assertThat(datasetDiff.changes()).extracting(FieldChange::path).contains("contentDefinition");
+    }
+
+    private com.acme.staticforge.asset.dataset.RecordDetail createRecord(
+            Fixture fixture, com.acme.staticforge.asset.dataset.DatasetView dataset, UUID folder, String content) {
+        JsonNode values = json(content);
+        return recordService.create(
+                        new com.acme.staticforge.asset.dataset.CreateRecordCommand(
+                                fixture.project().getId(), dataset.uuid(), folder, values.path("name").asText(), values),
+                        fixture.ctx())
+                .record();
+    }
+
+    private static JsonNode json(String content) {
+        try {
+            return MAPPER.readTree(content);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static byte[] withoutEntry(byte[] archiveBytes, String entryName) {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes));
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                java.util.zip.ZipOutputStream zipOut = new java.util.zip.ZipOutputStream(out)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                byte[] bytes = zip.readAllBytes();
+                if (entryName.equals(entry.getName())) {
+                    continue;
+                }
+                zipOut.putNextEntry(new ZipEntry(entry.getName()));
+                zipOut.write(bytes);
+                zipOut.closeEntry();
+            }
+            zipOut.finish();
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * A set whose media value wasn't selected must behave exactly like a page whose image wasn't
+     * selected (`M17.1.3`): the referential-integrity rules are type-agnostic, and a set must not
+     * quietly get a stricter or laxer treatment than a page. Rather than restating what that
+     * treatment is, the test builds both situations side by side and asserts the reports agree.
+     */
+    @Test
+    void aSetWithAnUnselectedMediaIsReportedExactlyLikeAPageWithOne() {
+        Fixture source = newFixture("glb_media", "Globals Missing Media Source");
+        AssetVersionView media = mediaService.upload(
+                source.project().getId(), null, "logo.png", "image/png", solidPng(32, 32, Color.BLUE), source.ctx());
+
+        GlobalSetView site = globalSetService.create(
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+        ObjectNode siteValues = MAPPER.createObjectNode();
+        siteValues.put("title", "Acme Outdoor");
+        siteValues.putObject("logo").put("type", "MEDIA_REF").put("uuid", media.uuid().toString());
+        globalSetService.updateValues(site.uuid(), siteValues, site.revision(), source.ctx());
+
+        TemplateView pageTemplate = createPageTemplate(source, "Landing", null);
+        ObjectNode pagePayload = MAPPER.createObjectNode();
+        pagePayload.put("templateRef", pageTemplate.uuid().toString());
+        pagePayload.putObject("content").putObject("heroImage")
+                .put("type", "MEDIA_REF")
+                .put("uuid", media.uuid().toString());
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(
+                        source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
+                source.ctx());
+
+        byte[] setArchive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(site.uuid()), false, false, Set.of()));
+        byte[] pageArchive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(page.uuid(), pageTemplate.uuid()), false, false, Set.of()));
+
+        assertThat(parseAssets(setArchive)).extracting(ExportedAsset::uuid).doesNotContain(media.uuid().toString());
+        assertThat(parseAssets(pageArchive)).extracting(ExportedAsset::uuid).doesNotContain(media.uuid().toString());
+
+        Fixture setTarget = newFixture("glb_media_set", "Globals Missing Media Set Target");
+        Fixture pageTarget = newFixture("glb_media_page", "Globals Missing Media Page Target");
+        List<ConflictType> setConflicts = conflictTypes(
+                exportImportService.analyzeImport(setTarget.project().getId(), setArchive, ImportOptions.DEFAULT));
+        List<ConflictType> pageConflicts = conflictTypes(
+                exportImportService.analyzeImport(pageTarget.project().getId(), pageArchive, ImportOptions.DEFAULT));
+        assertThat(setConflicts).isEqualTo(pageConflicts);
+
+        // And the import itself resolves identically: the dangling MEDIA_REF uuid survives
+        // untouched in both, since UuidRemapper leaves values it has no mapping for alone.
+        exportImportService.importProject(setTarget.project().getId(), setArchive, setTarget.ctx(), ImportOptions.DEFAULT);
+        exportImportService.importProject(
+                pageTarget.project().getId(), pageArchive, pageTarget.ctx(), ImportOptions.DEFAULT);
+        String setLogo = globalSetService.find(setTarget.project().getId(), site.uuid(), null).orElseThrow()
+                .content().path("logo").path("uuid").asText();
+        String pageHero = assetService.requireCurrent(pageTarget.project().getId(), page.uuid())
+                .payload().path("content").path("heroImage").path("uuid").asText();
+        assertThat(setLogo).isEqualTo(pageHero).isEqualTo(media.uuid().toString());
+    }
+
+    /**
+     * Revision diffs of a set (`M17.1.3`). {@code DiffServiceImpl} is type-agnostic, so this is a
+     * verification rather than a feature: a values change must show up as {@code content.*} field
+     * changes, and a {@code renamedFrom} schema change must show the {@code contentDefinition} text
+     * change <em>and</em> the value migration it caused in the same revision — the reviewable
+     * evidence that the two really are one write.
+     */
+    @Test
+    void revisionDiffShowsValueChangesAndASchemaChangeWithItsMigrationInOneRevision() {
+        Fixture source = newFixture("glb_diff", "Globals Diff Source");
+        GlobalSetView site = globalSetService.create(
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+        GlobalSetView valued = globalSetService.updateValues(
+                site.uuid(), MAPPER.createObjectNode().put("title", "Acme Outdoor"), site.revision(), source.ctx());
+
+        AssetDiff valuesDiff = onlyAssetDiff(diffService.diff(source.project().getId(), valued.revision()));
+        assertThat(valuesDiff.uuid()).isEqualTo(site.uuid());
+        assertThat(valuesDiff.type()).isEqualTo(AssetType.GLOBAL_SET.name());
+        assertThat(valuesDiff.changes()).extracting(FieldChange::path)
+                .contains("content.title")
+                .doesNotContain("contentDefinition");
+        assertThat(valuesDiff.changes()).filteredOn(c -> c.path().equals("content.title")).singleElement()
+                .satisfies(change -> assertThat(change.after().asText()).isEqualTo("Acme Outdoor"));
+
+        GlobalSetView renamed = globalSetService.updateSchema(
+                site.uuid(),
+                """
+                content {
+                  editor text siteTitle { label "Site title" required renamedFrom "title" }
+                  editor media logo { label "Logo" }
+                }
+                """,
+                valued.revision(),
+                source.ctx());
+
+        AssetDiff schemaDiff = onlyAssetDiff(diffService.diff(source.project().getId(), renamed.revision()));
+        assertThat(schemaDiff.changes()).extracting(FieldChange::path)
+                .as("the CDL text and the value migration it caused are the same revision")
+                .contains("contentDefinition", "content.title", "content.siteTitle");
+        assertThat(schemaDiff.changes()).filteredOn(c -> c.path().equals("content.title")).singleElement()
+                .satisfies(change -> assertThat(change.isRemove()).isTrue());
+        assertThat(schemaDiff.changes()).filteredOn(c -> c.path().equals("content.siteTitle")).singleElement()
+                .satisfies(change -> {
+                    assertThat(change.isAdd()).isTrue();
+                    assertThat(change.after().asText()).isEqualTo("Acme Outdoor");
+                });
+    }
+
+    private static List<ConflictType> conflictTypes(ConflictReport report) {
+        return report.conflicts().stream().map(ImportConflict::type).sorted().toList();
+    }
+
+    private static AssetDiff onlyAssetDiff(RevisionDiff diff) {
+        assertThat(diff.assets()).hasSize(1);
+        return diff.assets().get(0);
+    }
+
+    private List<Asset> globalsRoots(long projectId) {
+        return assetRepository.findAll().stream()
+                .filter(a -> a.getProjectId() == projectId
+                        && a.getAssetType() == AssetType.FOLDER
+                        && FolderScope.GLOBALS_ROOT_UID.equals(a.getUid()))
+                .toList();
     }
 
     private ExportedAsset readAssetEntry(byte[] archiveBytes, UUID assetUuid) {

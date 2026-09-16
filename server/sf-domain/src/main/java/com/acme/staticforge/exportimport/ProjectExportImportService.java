@@ -10,8 +10,19 @@ import com.acme.staticforge.revision.RevisionContext;
  */
 public interface ProjectExportImportService {
 
-    /** The archive protocol version written and accepted by this implementation. */
-    int PROTOCOL_VERSION = 3;
+    /**
+     * The archive protocol version written and accepted by this implementation.
+     *
+     * <p>Bumped to {@code 4} by M17: archives can now carry {@code GLOBAL_SET} assets, and an
+     * older server reading one would blow up inside {@code AssetType.valueOf} half-way through an
+     * import. A version mismatch is reported as a clean conflict instead, so the cost — an old
+     * server also refusing a new archive that happens to contain no property sets — buys a
+     * predictable failure in place of a partial one.
+     *
+     * <p>Bumped to {@code 5} by M19 for the same reason: archives can carry {@code DATASET} and
+     * {@code RECORD} assets. The file layout itself is unchanged.
+     */
+    int PROTOCOL_VERSION = 5;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP

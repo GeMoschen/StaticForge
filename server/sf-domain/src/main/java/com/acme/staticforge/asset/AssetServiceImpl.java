@@ -2,6 +2,10 @@ package com.acme.staticforge.asset;
 
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
+import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.media.TextMediaCompiler;
+import com.acme.staticforge.asset.media.TextMediaTypes;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
@@ -47,6 +51,8 @@ public class AssetServiceImpl implements AssetService {
     private final RevisionService revisionService;
     private final PathService pathService;
     private final UrlRegistryRepository urlRegistryRepository;
+    private final ReferenceMaterializer referenceMaterializer;
+    private final BlobStore blobStore;
 
     public AssetServiceImpl(
             AssetRepository assetRepository,
@@ -56,7 +62,9 @@ public class AssetServiceImpl implements AssetService {
             UidGenerator uidGenerator,
             RevisionService revisionService,
             PathService pathService,
-            UrlRegistryRepository urlRegistryRepository) {
+            UrlRegistryRepository urlRegistryRepository,
+            ReferenceMaterializer referenceMaterializer,
+            BlobStore blobStore) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetReferenceRepository = assetReferenceRepository;
@@ -65,6 +73,8 @@ public class AssetServiceImpl implements AssetService {
         this.revisionService = revisionService;
         this.pathService = pathService;
         this.urlRegistryRepository = urlRegistryRepository;
+        this.referenceMaterializer = referenceMaterializer;
+        this.blobStore = blobStore;
     }
 
     @Override
@@ -128,7 +138,11 @@ public class AssetServiceImpl implements AssetService {
                 AssetType.SECTION_TEMPLATE, ensureFixedFolder(
                         projectId, templatesRootAsset.getId(), templatesRoot.folderPath(),
                         FolderScope.SECTION_TEMPLATES_UID, "Section Templates",
-                        FolderScope.TEMPLATES, AssetType.SECTION_TEMPLATE, ctx));
+                        FolderScope.TEMPLATES, AssetType.SECTION_TEMPLATE, ctx),
+                AssetType.DATASET, ensureFixedFolder(
+                        projectId, templatesRootAsset.getId(), templatesRoot.folderPath(),
+                        FolderScope.DATASETS_UID, "Datasets",
+                        FolderScope.TEMPLATES, AssetType.DATASET, ctx));
     }
 
     @Override
@@ -171,6 +185,26 @@ public class AssetServiceImpl implements AssetService {
                 FolderScope.MEDIA_ROOT_UID, "All Media", FolderScope.MEDIA, null, ctx);
     }
 
+    @Override
+    @Transactional
+    public AssetVersionView ensureGlobalsRootFolder(long projectId, RevisionContext ctx) {
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        return ensureFixedFolder(
+                projectId, rootAsset.getId(), root.folderPath(),
+                FolderScope.GLOBALS_ROOT_UID, "All Globals", FolderScope.GLOBALS, null, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView ensureContentRootFolder(long projectId, RevisionContext ctx) {
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        return ensureFixedFolder(
+                projectId, rootAsset.getId(), root.folderPath(),
+                FolderScope.CONTENT_ROOT_UID, "All Content", FolderScope.CONTENT, null, ctx);
+    }
+
     /**
      * Finds-or-creates a fixed, protected root folder by its well-known uid under a given
      * parent, mirroring {@link #ensureRootFolder}'s exact lazy pattern. Deliberately bypasses
@@ -205,12 +239,13 @@ public class AssetServiceImpl implements AssetService {
         Asset asset = require(ctx.projectId(), uuid);
         AssetVersion current = requireOpen(asset.getId());
 
-        Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        // Joins an open batch (a dataset schema change migrating its records, M19.1.2), else allocates.
+        Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.UPDATE);
         checkExpectedRevision(current, expectedRevision);
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 validatedDisplayName(cmd.displayName()),
                 cmd.payload(),
@@ -225,11 +260,33 @@ public class AssetServiceImpl implements AssetService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public void requireRevision(long projectId, UUID uuid, long expectedRevision) {
+        checkExpectedRevision(requireOpen(require(projectId, uuid).getId()), expectedRevision);
+    }
+
+    @Override
     @Transactional
     public void softDelete(UUID uuid, boolean force, RevisionContext ctx) {
         Asset asset = require(ctx.projectId(), uuid);
 
-        if (!force && !assetReferenceRepository.findByToAssetId(asset.getId()).isEmpty()) {
+        if (asset.getAssetType() == AssetType.DATASET) {
+            // No cascade in v1 (M19.1.2): records would be orphaned, so not even `force` deletes a
+            // dataset that still has live records.
+            long records = assetVersionRepository.countCurrentRecordsOfDataset(asset.getProjectId(), asset.getId());
+            if (records > 0) {
+                throw new SfException(Problem.builder()
+                        .type("https://cms.example.com/problems/sf-dom-0121")
+                        .title("Conflict")
+                        .status(409)
+                        .detail("Dataset still has " + records + " record" + (records == 1 ? "" : "s")
+                                + ". Delete them first.")
+                        .property("code", "SF-DOM-0121")
+                        .property("recordCount", records)
+                        .build());
+            }
+        }
+        if (!force && isReferencedByLiveAssets(asset)) {
             throw new SfException(ProblemFactory.other(
                     409, "SF-DOM-0120", "Conflict", "Asset is still referenced by other assets."));
         }
@@ -243,7 +300,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 current.getDisplayName(),
                 current.getPayload(),
@@ -278,7 +335,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 source.getDisplayName(),
                 source.getPayload(),
@@ -329,17 +386,35 @@ public class AssetServiceImpl implements AssetService {
     @Transactional(readOnly = true)
     public List<UsageView> usages(long projectId, UUID uuid) {
         Asset asset = require(projectId, uuid);
-        return assetReferenceRepository.findByToAssetId(asset.getId()).stream()
-                .filter(ref -> ref.getValidToRevision() == null)
+        return toUsages(asset, assetReferenceRepository.findIncomingOpen(asset.getId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UsageView> usagesAt(long projectId, UUID uuid, long revision) {
+        Asset asset = require(projectId, uuid);
+        return toUsages(asset, assetReferenceRepository.findIncomingValidAt(asset.getId(), revision));
+    }
+
+    /**
+     * Incoming edges as usage rows. A dataset's own records ({@code TEMPLATE} edges from
+     * {@code RECORD}s, M19.1.3) are left out: a dataset can have thousands, and its record count is
+     * part of the dataset read model. What loops or reads it (templates) is listed as usual.
+     */
+    private List<UsageView> toUsages(Asset target, List<AssetReference> incoming) {
+        List<AssetReference> refs = target.getAssetType() == AssetType.DATASET
+                ? incoming.stream().filter(ref -> ref.getKind() != ReferenceKind.TEMPLATE).toList()
+                : incoming;
+        Map<Long, Asset> fromAssets = new java.util.HashMap<>();
+        assetRepository.findAllById(refs.stream().map(AssetReference::getFromAssetId).distinct().toList())
+                .forEach(from -> fromAssets.put(from.getId(), from));
+        return refs.stream()
+                .filter(ref -> fromAssets.containsKey(ref.getFromAssetId()))
                 .map(ref -> {
-                    Asset from = assetRepository.findById(ref.getFromAssetId()).orElse(null);
-                    if (from == null) {
-                        return null;
-                    }
+                    Asset from = fromAssets.get(ref.getFromAssetId());
                     return new UsageView(
                             from.getUuid(), from.getUid(), from.getAssetType(), ref.getKind(), ref.getSourcePath());
                 })
-                .filter(java.util.Objects::nonNull)
                 .toList();
     }
 
@@ -379,13 +454,22 @@ public class AssetServiceImpl implements AssetService {
 
     /**
      * Scans every current section/page template for the literal {@code assetType:oldUid}
-     * reference form (§16.4) still present in the OCTL {@code source} after a UID change.
+     * reference form (§16.4) still present in the OCTL {@code source} after a UID change
+     * ({@code dataset:}/{@code record:} included, M19.3.2).
      * Compiled templates already hold UUIDs; this is purely the source text the developer
      * should fix by hand.
+     *
+     * <p>A global property set has two spellings (M17.3.1) — the explicit {@code global:<uid>}
+     * reference and the {@code CMS_GLOBAL.<uid>} accessor-root shorthand the parser desugars into
+     * it — so both are matched; flagging only one would leave the other silently stale.
+     *
+     * <p>A processed text media file's source (its blob, M18.2.1) is OCTL too and is scanned the same
+     * way; its entry carries the channel key {@code source}.
      */
     private List<UidLiteralReference> findUidLiteralReferences(long projectId, String oldUid) {
         Pattern pattern = Pattern.compile(
-                "\\b(?:page|media|section_template|page_template|folder|nav):" + Pattern.quote(oldUid) + "\\b");
+                "\\b(?:(?:page|media|section_template|page_template|folder|nav|global|dataset|record):|CMS_GLOBAL\\.)"
+                        + Pattern.quote(oldUid) + "\\b");
         List<UidLiteralReference> found = new java.util.ArrayList<>();
         for (AssetType type : List.of(AssetType.SECTION_TEMPLATE, AssetType.PAGE_TEMPLATE)) {
             for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, type)) {
@@ -405,6 +489,19 @@ public class AssetServiceImpl implements AssetService {
                                 from.getUuid(), from.getUid(), from.getAssetType(), version.getDisplayName(), entry.getKey()));
                     }
                 });
+            }
+        }
+        for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.MEDIA)) {
+            JsonNode payload = version.getPayload();
+            String sha = payload == null ? null : payload.path("blobSha256").asText(null);
+            if (!TextMediaTypes.isProcessed(payload) || sha == null || !blobStore.exists(sha)) {
+                continue;
+            }
+            if (pattern.matcher(TextMediaCompiler.decode(blobStore.get(sha)).text()).find()) {
+                Asset from = version.getAsset();
+                found.add(new UidLiteralReference(
+                        from.getUuid(), from.getUid(), from.getAssetType(), version.getDisplayName(),
+                        ReferenceMaterializer.MEDIA_SOURCE_PATH));
             }
         }
         return found;
@@ -427,7 +524,7 @@ public class AssetServiceImpl implements AssetService {
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
-                asset.getId(),
+                asset,
                 revision.getRevisionId(),
                 current.getDisplayName(),
                 current.getPayload(),
@@ -449,10 +546,25 @@ public class AssetServiceImpl implements AssetService {
 
         Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.CREATE);
         AssetVersion version = insertVersion(
-                asset.getId(), revision.getRevisionId(), displayName, payload, ctx.userId(), Instant.now(),
+                asset, revision.getRevisionId(), displayName, payload, ctx.userId(), Instant.now(),
                 folderId, folderPath, templateAssetId, false);
         appendSummary(asset, revision, "CREATE", List.of());
         return toView(version);
+    }
+
+    /**
+     * The delete guard (spec §5.4): only <em>open</em> incoming edges from another asset whose
+     * current version is not deleted block deletion. Closed edges (a page that dropped the
+     * reference) and self-references never do.
+     */
+    private boolean isReferencedByLiveAssets(Asset asset) {
+        return assetReferenceRepository.findIncomingOpen(asset.getId()).stream()
+                .map(AssetReference::getFromAssetId)
+                .filter(fromAssetId -> !fromAssetId.equals(asset.getId()))
+                .distinct()
+                .anyMatch(fromAssetId -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(fromAssetId)
+                        .map(version -> !version.isDeleted())
+                        .orElse(false));
     }
 
     private void close(Long assetId, long revisionId) {
@@ -462,15 +574,18 @@ public class AssetServiceImpl implements AssetService {
         });
     }
 
+    /** Inserts the new version and, in the same revision, syncs its outgoing reference rows (§5.4). */
     private AssetVersion insertVersion(
-            Long assetId, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
+            Asset asset, long revisionId, String displayName, JsonNode payload, Long changedBy, Instant changedAt,
             Long folderId, String folderPath, Long templateAssetId, boolean deleted) {
-        AssetVersion version = new AssetVersion(assetId, revisionId, displayName, payload, changedBy, changedAt);
+        AssetVersion version = new AssetVersion(asset.getId(), revisionId, displayName, payload, changedBy, changedAt);
         version.setFolderId(folderId);
         version.setFolderPath(folderPath);
         version.setTemplateAssetId(templateAssetId);
         version.setDeleted(deleted);
-        return assetVersionRepository.save(version);
+        AssetVersion saved = assetVersionRepository.save(version);
+        referenceMaterializer.materialize(asset, saved);
+        return saved;
     }
 
     private void appendSummary(Asset asset, Revision revision, String action, List<String> fields) {
@@ -562,6 +677,10 @@ public class AssetServiceImpl implements AssetService {
                 root = ensurePagesRootFolder(projectId, ctx);
             } else if (scopeHint == FolderScope.MEDIA) {
                 root = ensureMediaRootFolder(projectId, ctx);
+            } else if (scopeHint == FolderScope.GLOBALS) {
+                root = ensureGlobalsRootFolder(projectId, ctx);
+            } else if (scopeHint == FolderScope.CONTENT) {
+                root = ensureContentRootFolder(projectId, ctx);
             } else {
                 root = ensureRootFolder(projectId, ctx);
             }

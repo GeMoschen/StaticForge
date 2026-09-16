@@ -4,29 +4,38 @@ import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.media.MediaPaths;
+import com.acme.staticforge.asset.media.TextMediaCompiler;
+import com.acme.staticforge.asset.media.TextMediaRenderer;
+import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
 import com.acme.staticforge.asset.navigation.NavigationService;
 import com.acme.staticforge.asset.navigation.NavigationTreeJson;
+import com.acme.staticforge.asset.template.CompiledTemplateCache;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.template.cdl.CdlCompiler;
-import com.acme.staticforge.template.content.ContentDefinition;
+import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
-import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
+import com.acme.staticforge.template.render.AssetValueResolver;
 import com.acme.staticforge.template.render.BlockResolver;
 import com.acme.staticforge.template.render.Escaping;
 import com.acme.staticforge.template.render.OctlRenderer;
+import com.acme.staticforge.template.render.RenderBudget;
 import com.acme.staticforge.template.render.RenderContext;
+import com.acme.staticforge.template.render.RenderLimitException;
 import com.acme.staticforge.template.render.Renderer;
 import com.acme.staticforge.template.render.UrlResolver;
 import com.acme.staticforge.urlregistry.UrlArea;
@@ -36,15 +45,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /**
  * Full page/section preview renderer (spec §19). Reuses the exact M2 render engine — the
- * {@link OctlCompiler} and {@link Renderer} (an {@link OctlRenderer}) — so preview and
+ * compilers (through {@link CompiledTemplateCache}) and {@link Renderer} (an {@link OctlRenderer}) — so preview and
  * generation can never diverge in rendering behavior. Compiles the page template's channel
  * OCTL, then renders it with a {@link BlockResolver} that expands each {@code $CMS_BODY}
  * into its section instances (recursively compiling and rendering each section template's
@@ -58,34 +67,45 @@ public class PageRenderService {
 
     private final AssetService assetService;
     private final AssetRepository assetRepository;
+    private final AssetVersionRepository assetVersionRepository;
     private final ProjectRepository projectRepository;
     private final ObjectMapper objectMapper;
     private final PreviewTokenService previewTokenService;
     private final NavigationService navigationService;
     private final LiveNavigationLookup navigationLookup;
     private final UrlRegistryService urlRegistryService;
+    private final CompiledTemplateCache compiledTemplates;
+    private final BlobStore blobStore;
+    private final TextMediaCompiler textMediaCompiler;
 
-    private final OctlCompiler octlCompiler = new OctlCompiler();
-    private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final Renderer renderer = new OctlRenderer();
+    private final TextMediaRenderer textMediaRenderer = new TextMediaRenderer();
 
     public PageRenderService(
             AssetService assetService,
             AssetRepository assetRepository,
+            AssetVersionRepository assetVersionRepository,
             ProjectRepository projectRepository,
             ObjectMapper objectMapper,
             PreviewTokenService previewTokenService,
             NavigationService navigationService,
             LiveNavigationLookup navigationLookup,
-            UrlRegistryService urlRegistryService) {
+            UrlRegistryService urlRegistryService,
+            CompiledTemplateCache compiledTemplates,
+            BlobStore blobStore,
+            TextMediaCompiler textMediaCompiler) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
+        this.assetVersionRepository = assetVersionRepository;
         this.projectRepository = projectRepository;
         this.objectMapper = objectMapper;
         this.previewTokenService = previewTokenService;
         this.navigationService = navigationService;
         this.navigationLookup = navigationLookup;
         this.urlRegistryService = urlRegistryService;
+        this.compiledTemplates = compiledTemplates;
+        this.blobStore = blobStore;
+        this.textMediaCompiler = textMediaCompiler;
     }
 
     /**
@@ -120,8 +140,63 @@ public class PageRenderService {
      * @param channel the channel key
      */
     public String renderSection(long projectId, UUID sectionTemplateUuid, JsonNode sampleContent, String channel) {
-        return renderSectionTemplate(
-                projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, channel, false, null);
+        return withRenderLimitsAsProblem(() -> renderSectionTemplate(
+                projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, channel, false, null,
+                null, new RenderBudget()));
+    }
+
+    /**
+     * Renders a processed text media file for preview (M18.3.2) through the same
+     * {@link TextMediaRenderer} generation uses, with live resolvers at {@code revision}: values and
+     * globals as of that revision (current when {@code null}), and media links rewritten to preview
+     * share URLs pinned to the same revision, so a font referenced by a processed stylesheet loads in
+     * a time-travel preview too.
+     *
+     * @param media the media version to render, the one valid at {@code revision}
+     * @param baseUrl the API base the page preview used, so links survive a reverse proxy
+     * @throws SfException {@code 422} with {@code diagnostics} when the source doesn't compile, or with
+     *     the limit's code when a render limit is hit
+     */
+    public String renderMedia(long projectId, AssetVersionView media, Long revision, String baseUrl) {
+        String projectKey = projectKeyOf(projectId);
+        JsonNode payload = media.payload();
+        String mimeType = payload.path("mimeType").asText(null);
+        String sha = payload.path("blobSha256").asText(null);
+        if (sha == null) {
+            throw new SfException(ProblemFactory.notFound("Media blob is missing."));
+        }
+        String channel = textMediaCompiler.defaultChannelKey(projectId);
+        OctlResult compiled = compiledTemplates.compileTextMedia(
+                projectId,
+                media.uuid(),
+                media.validFromRevision(),
+                channel,
+                TextMediaCompiler.decode(blobStore.get(sha)).text(),
+                TextMediaTypes.isScriptLike(mimeType),
+                referenceResolver(projectId));
+        TextMediaCompiler.requireNoErrors(compiled);
+
+        String uid = emptyIfNull(media.uid());
+        TextMediaRenderer.Target target = new TextMediaRenderer.Target(
+                media.uuid(),
+                uid,
+                media.displayName(),
+                mimeType,
+                MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mimeType)),
+                media.validFromRevision(),
+                channel,
+                projectKey);
+        return withRenderLimitsAsProblem(() -> textMediaRenderer.render(
+                        compiled.template(),
+                        target,
+                        urlResolver(projectKey, channel, true, baseUrl, revision),
+                        assetValues(projectId, revision),
+                        (navFolderUuid, args) -> {
+                            JsonNode json = navigationTreeJson(
+                                    navFolderUuid, args, projectId, projectKey, null, channel, true, baseUrl);
+                            return json == null ? null : json.path("children");
+                        })
+                .output());
     }
 
     // ------------------------------------------------------------------
@@ -141,23 +216,49 @@ public class PageRenderService {
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found at revision " + revision + ".")));
             page = PageView.from(view);
         }
-        return renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
+        return withRenderLimitsAsProblem(() -> renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision));
+    }
+
+    /**
+     * A render limit ({@code SF-TPL-0130}–{@code 0135}, e.g. an include cycle) fails the preview
+     * with a {@code 422} problem carrying the diagnostic code — the preview counterpart of
+     * generation failing just the affected file — instead of surfacing as a 500.
+     */
+    private static String withRenderLimitsAsProblem(Supplier<String> render) {
+        try {
+            return render.get();
+        } catch (RenderLimitException e) {
+            Diagnostic diagnostic = e.diagnostic();
+            throw new SfException(diagnostic == null
+                    ? ProblemFactory.unprocessableEntity(e.getMessage())
+                    : ProblemFactory.other(422, diagnostic.code(), "Render Limit Exceeded", diagnostic.message()));
+        }
     }
 
     // ------------------------------------------------------------------
     // Core render
     // ------------------------------------------------------------------
 
+    /** @param revision the time-travel revision templates are read at, or {@code null} for the current state */
     private String renderPage(
-            long projectId, String projectKey, PageView page, String channel, boolean rewriteLinks, String baseUrl) {
-        AssetVersionView pageTemplate = assetService.requireCurrent(projectId, page.pageTemplateUuid());
-        CompiledTemplate compiled = compilePageChannel(pageTemplate.payload(), channel, projectId);
+            long projectId,
+            String projectKey,
+            PageView page,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl,
+            Long revision) {
+        AssetVersionView pageTemplate = templateAt(projectId, page.pageTemplateUuid(), revision);
+        CompiledTemplate compiled = compileChannel(pageTemplate, channel, projectId);
         if (compiled == null) {
             return ""; // missing channel template degrades gracefully to an empty body
         }
 
-        UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl);
-        BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl);
+        // One budget for the page and every section/include/catalog card rendered inside it.
+        RenderBudget budget = new RenderBudget();
+        UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision);
+        BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision, budget);
+        AssetValueResolver assetValues = assetValues(projectId, revision);
 
         RenderContext context = RenderContext.builder()
                 .channel(channel)
@@ -173,16 +274,33 @@ public class PageRenderService {
                 .meta("projectKey", TextNode.valueOf(emptyIfNull(projectKey)))
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
+                .assetValueResolver(assetValues)
+                .budget(budget)
                 .build();
 
-        return renderer.render(compiled, context).output();
+        return budget.withTemplate(page.pageTemplateUuid(), pageTemplate.uid(), () -> renderer.render(compiled, context))
+                .output();
     }
 
-    private CompiledTemplate compilePageChannel(JsonNode templatePayload, String channel, long projectId) {
-        return compileChannel(templatePayload, channel, projectId);
+    /**
+     * The template version to render with: the current one for a live preview, the one valid at
+     * {@code revision} for time travel — never a newer version.
+     */
+    private AssetVersionView templateAt(long projectId, UUID templateUuid, Long revision) {
+        if (revision == null) {
+            return assetService.requireCurrent(projectId, templateUuid);
+        }
+        return assetService
+                .findAt(projectId, templateUuid, revision)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found at revision " + revision + ".")));
     }
 
-    private CompiledTemplate compileChannel(JsonNode templatePayload, String channel, long projectId) {
+    /**
+     * Compiles through the cross-request cache, keyed by the template version and re-validated
+     * against the project's current references on every hit (see {@link CompiledTemplateCache}).
+     */
+    private CompiledTemplate compileChannel(AssetVersionView template, String channel, long projectId) {
+        JsonNode templatePayload = template.payload();
         if (templatePayload == null) {
             return null;
         }
@@ -190,12 +308,16 @@ public class PageRenderService {
         if (channelNode.isMissingNode() || channelNode.isNull()) {
             return null;
         }
-        String source = channelNode.path("source").asText();
-        ContentDefinition definition = cdlCompiler
-                .compile(templatePayload.path("contentDefinition").asText(""))
-                .definition();
-        OctlResult result = octlCompiler.compile(source, channel, referenceResolver(projectId), definition);
-        return result.template();
+        return compiledTemplates
+                .compile(
+                        projectId,
+                        template.uuid(),
+                        template.validFromRevision(),
+                        channel,
+                        templatePayload.path("contentDefinition").asText(""),
+                        channelNode.path("source").asText(),
+                        referenceResolver(projectId))
+                .template();
     }
 
     // ------------------------------------------------------------------
@@ -203,7 +325,14 @@ public class PageRenderService {
     // ------------------------------------------------------------------
 
     private BlockResolver blockResolver(
-            long projectId, String projectKey, PageView page, String channel, boolean rewriteLinks, String baseUrl) {
+            long projectId,
+            String projectKey,
+            PageView page,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl,
+            Long revision,
+            RenderBudget budget) {
         return new BlockResolver() {
             @Override
             public String renderBody(String bodyName) {
@@ -214,7 +343,7 @@ public class PageRenderService {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
                     out.append(renderSectionInstance(
-                            projectId, projectKey, page.content(), section, channel, rewriteLinks, baseUrl));
+                            projectId, projectKey, page.content(), section, channel, rewriteLinks, baseUrl, revision, budget));
                 }
                 return out.toString();
             }
@@ -227,7 +356,7 @@ public class PageRenderService {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
                     out.append(renderSectionInstance(
-                            projectId, projectKey, page.content(), card, channel, rewriteLinks, baseUrl));
+                            projectId, projectKey, page.content(), card, channel, rewriteLinks, baseUrl, revision, budget));
                 }
                 return out.toString();
             }
@@ -239,7 +368,8 @@ public class PageRenderService {
                     return "";
                 }
                 return renderSectionTemplate(
-                        projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, channel, rewriteLinks, baseUrl);
+                        projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, channel, rewriteLinks, baseUrl,
+                        revision, budget);
             }
 
             @Override
@@ -343,7 +473,8 @@ public class PageRenderService {
             RevisionContext ctx = RevisionContext.of(projectId, null, "preview");
             return urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.PREVIEW, ctx);
         }
-        return urlResolver(projectKey, channel, rewriteLinks, baseUrl).resolve("page", null, resolvedPageUuid, Map.of());
+        // Page links are never revision-pinned, so the media revision doesn't matter here.
+        return urlResolver(projectKey, channel, rewriteLinks, baseUrl, null).resolve("page", null, resolvedPageUuid, Map.of());
     }
 
     /** {@code depth} named arg → int, {@code -1} (unlimited, still hard-capped) when absent/invalid. */
@@ -366,7 +497,9 @@ public class PageRenderService {
             JsonNode section,
             String channel,
             boolean rewriteLinks,
-            String baseUrl) {
+            String baseUrl,
+            Long revision,
+            RenderBudget budget) {
         String templateRef = section.path("templateRef").asText();
         if (templateRef.isBlank()) {
             return "";
@@ -376,7 +509,7 @@ public class PageRenderService {
         String instanceId = section.path("instanceId").asText();
         return renderSectionTemplate(
                 projectId, projectKey, sectionTemplateUuid, null, instanceId,
-                content, pageContent, channel, rewriteLinks, baseUrl);
+                content, pageContent, channel, rewriteLinks, baseUrl, revision, budget);
     }
 
     private String renderSectionTemplate(
@@ -389,9 +522,11 @@ public class PageRenderService {
             JsonNode pageValues,
             String channel,
             boolean rewriteLinks,
-            String baseUrl) {
-        AssetVersionView template = assetService.requireCurrent(projectId, sectionTemplateUuid);
-        CompiledTemplate compiled = compileChannel(template.payload(), channel, projectId);
+            String baseUrl,
+            Long revision,
+            RenderBudget budget) {
+        AssetVersionView template = templateAt(projectId, sectionTemplateUuid, revision);
+        CompiledTemplate compiled = compileChannel(template, channel, projectId);
         if (compiled == null) {
             return ""; // section template has no channel template
         }
@@ -405,22 +540,30 @@ public class PageRenderService {
                 .pageValues(pageValues != null ? pageValues : objectMapper.createObjectNode())
                 .meta("uid", TextNode.valueOf(uid))
                 .meta("uuid", TextNode.valueOf(sectionTemplateUuid.toString()))
-                .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl))
+                .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision))
                 .blockResolver(blockResolver(
-                        projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl));
+                        projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl, revision, budget))
+                .assetValueResolver(assetValues(projectId, revision))
+                .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
         }
-        return renderer.render(compiled, builder.build()).output();
+        RenderContext context = builder.build();
+        return budget.withTemplate(sectionTemplateUuid, uid, () -> renderer.render(compiled, context)).output();
     }
 
     // ------------------------------------------------------------------
     // Resolvers
     // ------------------------------------------------------------------
 
+    /** Cross-asset values at the preview's revision (current when {@code revision} is {@code null}). */
+    private AssetValueResolver assetValues(long projectId, Long revision) {
+        return new LiveAssetValueResolver(assetService, assetRepository, assetVersionRepository, projectId, revision);
+    }
+
     private ReferenceResolver referenceResolver(long projectId) {
         return (assetType, uid) -> {
-            AssetType type = assetTypeForRef(assetType);
+            AssetType type = AssetReferencePrefixes.assetTypeForRef(assetType);
             if (type == null) {
                 return Optional.empty();
             }
@@ -441,23 +584,6 @@ public class PageRenderService {
         return FolderScope.fromPayload(assetService.requireCurrent(projectId, folderUuid).payload()) == FolderScope.NAVIGATION;
     }
 
-    /**
-     * {@code assetType:uid} accessor kind -> {@link AssetType}. Every kind but {@code nav} maps
-     * 1:1 onto an {@link AssetType} enum name; {@code nav:<uid>} (`M8.1.4`) is special-cased since
-     * a navigation folder is still just {@link AssetType#FOLDER} under the hood (`M8.1.2` — plain
-     * folders, no dedicated navigation-folder asset type).
-     */
-    private static AssetType assetTypeForRef(String assetType) {
-        if ("nav".equals(assetType)) {
-            return AssetType.FOLDER;
-        }
-        try {
-            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return null;
-        }
-    }
-
     private UUID resolveSectionTemplateByUid(long projectId, String uid) {
         if (uid == null || uid.isBlank()) {
             return null;
@@ -473,8 +599,11 @@ public class PageRenderService {
      * route (not the Bearer-only {@code /preview/pages/{uuid}}) — this HTML is loaded into the
      * browser's own iframe navigation (not Angular's authenticated {@code HttpClient}) whenever
      * the viewer clicks a link inside the preview, so the auth has to travel in the URL itself.
+     *
+     * @param revision the time-travel revision media share links are pinned to (M18.3.2), so a
+     *     processed file renders with that revision's values; {@code null} for the current state
      */
-    private UrlResolver urlResolver(String projectKey, String channel, boolean rewriteLinks, String baseUrl) {
+    private UrlResolver urlResolver(String projectKey, String channel, boolean rewriteLinks, String baseUrl, Long revision) {
         if (!rewriteLinks) {
             return (kind, uid, uuid, args) -> uid != null && !uid.isBlank() ? uid : (uuid == null ? "" : uuid.toString());
         }
@@ -488,7 +617,7 @@ public class PageRenderService {
                 // `/media/{uuid}/binary` route is Bearer-only, and this HTML's `<img src>`/link
                 // is fetched by the browser directly, without the app's session.
                 String variant = args == null ? null : args.get("variant");
-                String mediaToken = previewTokenService.issueMediaShareToken(uuid, projectKey);
+                String mediaToken = previewTokenService.issueMediaShareToken(uuid, revision, projectKey);
                 String query = variant == null || variant.isBlank() ? "" : "&variant=" + variant;
                 return base + "/projects/" + projectKey + "/media/" + uuid + "/share?t=" + mediaToken + query;
             }

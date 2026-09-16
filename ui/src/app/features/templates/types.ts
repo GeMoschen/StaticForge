@@ -9,7 +9,7 @@ export type { FolderMoveEvent } from '../pages/types';
  * `PAGE_TEMPLATE`, every node under "Section Templates" is `SECTION_TEMPLATE`. The backend
  * doesn't surface this on `FolderView` directly, so the UI threads it down explicitly from
  * whichever of the two fixed roots a node descends from (see `TemplatesComponent.rootKind`). */
-export type TemplateAssetKind = 'PAGE_TEMPLATE' | 'SECTION_TEMPLATE';
+export type TemplateAssetKind = 'PAGE_TEMPLATE' | 'SECTION_TEMPLATE' | 'DATASET';
 
 /** Folder-tree selection event — carries the selected folder's inherited kind alongside its
  * uuid so `TemplatesComponent` never has to re-derive it by walking the tree. */
@@ -22,6 +22,8 @@ export interface TemplateFolderSelectEvent {
  * `FolderScope.PAGE_TEMPLATES_UID`/`SECTION_TEMPLATES_UID` server-side). */
 export const PAGE_TEMPLATES_ROOT_UID = 'page_templates';
 export const SECTION_TEMPLATES_ROOT_UID = 'section_templates';
+/** Well-known `uid` of the fixed, protected folder holding dataset schemas (M19.1.1, `FolderScope.DATASETS_UID`). */
+export const DATASETS_ROOT_UID = 'datasets';
 
 /** Well-known `uid` of the fixed, protected "All Templates" wrapper root — the real parent of
  * both fixed kind-roots above (mirrors `FolderScope.TEMPLATES_ROOT_UID` server-side). It has no

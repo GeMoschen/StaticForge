@@ -1,0 +1,4 @@
+<p>$CMS_VALUE(record:dee.name)$ ($CMS_VALUE(record:dee._folderPath)$, $CMS_VALUE(record:dee._meta.displayName)$)</p>
+<p>By $CMS_VALUE(author.name)$, $CMS_VALUE(author.role | upper)$ [$CMS_VALUE(author.uuid)$]</p>
+<ul>$CMS_FOR(r : reviewers)$<li>$CMS_VALUE(r.person.name)$$CMS_IF(r.person.mentor.name)$ mentored by $CMS_VALUE(r.person.mentor.name)$$CMS_END_IF$</li>$CMS_END_FOR$</ul>
+<p>[$CMS_VALUE(related.name)$][$CMS_VALUE(missing.name)$]</p>

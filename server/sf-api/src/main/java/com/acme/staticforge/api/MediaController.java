@@ -4,26 +4,39 @@ import com.acme.staticforge.api.dto.FocalPointView;
 import com.acme.staticforge.api.dto.MediaBulkItemResult;
 import com.acme.staticforge.api.dto.MediaImageView;
 import com.acme.staticforge.api.dto.MediaMetadataRequest;
+import com.acme.staticforge.api.dto.MediaProcessRequest;
+import com.acme.staticforge.api.dto.MediaSaveResponse;
 import com.acme.staticforge.api.dto.MediaSummaryView;
 import com.acme.staticforge.api.dto.MediaVariantView;
+import com.acme.staticforge.api.dto.MediaTextRequest;
+import com.acme.staticforge.api.dto.MediaTextView;
 import com.acme.staticforge.api.dto.MediaView;
+import com.acme.staticforge.api.dto.OctlValidateResponse;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.media.FocalPoint;
 import com.acme.staticforge.asset.media.MediaBinary;
 import com.acme.staticforge.asset.media.MediaService;
+import com.acme.staticforge.asset.media.MediaText;
+import com.acme.staticforge.asset.media.MediaWriteResult;
+import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -52,20 +65,26 @@ public class MediaController {
 
     private static final int THUMBNAIL_CACHE_SECONDS = 86_400;
 
+    /** Carries the diagnostic when a processed media file is served as its unrendered source (M18.3.2). */
+    static final String RENDER_ERROR_HEADER = "X-SF-Render-Error";
+
     private final ProjectService projectService;
     private final MediaService mediaService;
     private final SecuritySupport securitySupport;
     private final PreviewTokenService previewTokenService;
+    private final PageRenderService pageRenderService;
 
     public MediaController(
             ProjectService projectService,
             MediaService mediaService,
             SecuritySupport securitySupport,
-            PreviewTokenService previewTokenService) {
+            PreviewTokenService previewTokenService,
+            PageRenderService pageRenderService) {
         this.projectService = projectService;
         this.mediaService = mediaService;
         this.securitySupport = securitySupport;
         this.previewTokenService = previewTokenService;
+        this.pageRenderService = pageRenderService;
     }
 
     @GetMapping
@@ -147,17 +166,103 @@ public class MediaController {
                 .body(toMediaView(view));
     }
 
+    /**
+     * Swaps the file. A processed text file that stays text keeps {@code processCms} (its new source is
+     * compiled: errors are a {@code 422} with {@code diagnostics}); otherwise the flag is switched off
+     * and {@code processCmsCleared} says so.
+     */
     @PostMapping("/{uuid}/replace")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
-    public ResponseEntity<MediaView> replace(
+    public ResponseEntity<MediaSaveResponse> replace(
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam("file") MultipartFile file) {
-        AssetVersionView view = mediaService.replace(
+        MediaWriteResult result = mediaService.replace(
                 uuid, file.getOriginalFilename(), file.getContentType(), bytes(file), ctx(projectKey, "replace media"));
+        return saved(result);
+    }
+
+    /**
+     * Switches CMS syntax processing of a text media file on or off (M18.1.1). Non-text files are a
+     * {@code 400}. Switching on compiles the file: errors are a {@code 422} with {@code diagnostics}
+     * and leave the flag off; warnings ({@code $$}, unescaped JS/JSON values) come back in the response.
+     */
+    @PutMapping("/{uuid}/process")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<MediaSaveResponse> setProcessCms(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @org.springframework.web.bind.annotation.RequestBody MediaProcessRequest body) {
+        MediaWriteResult result = mediaService.setProcessCms(
+                uuid,
+                body.processCms(),
+                RevisionHeaders.expectedRevision(ifMatch),
+                ctx(projectKey, body.processCms() ? "enable CMS processing" : "disable CMS processing"));
+        return saved(result);
+    }
+
+    /** A text media file's content, current or at {@code ?revision=} (M18.1.2); non-text files are a {@code 400}. */
+    @GetMapping("/{uuid}/text")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public ResponseEntity<MediaTextView> readText(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestParam(required = false) Long revision) {
+        MediaText text = mediaService.readText(projectId(projectKey), uuid, revision);
         return ResponseEntity.ok()
-                .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toMediaView(view));
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(text.revision()))
+                .body(new MediaTextView(text.text(), text.mimeType(), text.revision(), text.utf8()));
+    }
+
+    /**
+     * Replaces a text media file's content (M18.1.2); every change is one revision. A processed file's
+     * new source is compiled first: errors are a {@code 422} with {@code diagnostics} and nothing is stored.
+     */
+    @PutMapping("/{uuid}/text")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<MediaSaveResponse> writeText(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @org.springframework.web.bind.annotation.RequestBody MediaTextRequest body) {
+        MediaWriteResult result = mediaService.writeText(
+                uuid, body.text(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "edit media text"));
+        return saved(result);
+    }
+
+    /** Compiles draft text as this text media file's CMS syntax source, without saving (M18.2.1). */
+    @PostMapping("/{uuid}/text/validate")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public OctlValidateResponse validateText(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @org.springframework.web.bind.annotation.RequestBody MediaTextRequest body) {
+        return new OctlValidateResponse(mediaService.validateText(projectId(projectKey), uuid, body.text()));
+    }
+
+    /**
+     * The rendered output of a processed text media file (M18.3.2), as preview serves it: values at
+     * {@code ?revision=} (current when absent) and media links rewritten to preview share URLs. For the
+     * media drawer's Rendered tab; {@code EDITOR}, since it exposes the output of the file's source.
+     * A file that isn't processed is a {@code 400}; a source that doesn't compile or render is a
+     * {@code 422} with {@code diagnostics} (or the render limit's code). The plain {@code /binary}
+     * route keeps serving the source.
+     */
+    @GetMapping(value = "/{uuid}/binary", params = "rendered=true")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<byte[]> renderedBinary(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestParam(required = false) Long revision,
+            HttpServletRequest request) {
+        long projectId = projectId(projectKey);
+        AssetVersionView media = mediaService.requireAt(projectId, uuid, revision);
+        if (!TextMediaTypes.isProcessed(media.payload())) {
+            throw new SfException(ProblemFactory.badRequest("This media file does not have CMS processing switched on."));
+        }
+        String rendered = pageRenderService.renderMedia(projectId, media, revision, apiBase(request));
+        return renderedResponse(media, rendered.getBytes(StandardCharsets.UTF_8), null);
     }
 
     @GetMapping("/{uuid}/binary")
@@ -181,6 +286,12 @@ public class MediaController {
      * {@code <img src>} fetch of that HTML doesn't carry the app's Bearer session. Reachable
      * without one — {@code SecurityConfig} permits {@code GET .../media/*}/share} at the
      * filter-chain level, since method-level {@code @PreAuthorize} alone can't achieve that.
+     *
+     * <p>The file is served at the token's revision (current when the token carries none). A
+     * processed text media file (M18.3.2) is rendered first, with {@code Cache-Control: no-store}
+     * because its output depends on other assets. When it fails to compile or render, the source is
+     * served instead with the diagnostic in {@code X-SF-Render-Error}, so one broken stylesheet
+     * doesn't break the whole preview.
      */
     @GetMapping("/{uuid}/share")
     @PreAuthorize("permitAll()")
@@ -188,18 +299,67 @@ public class MediaController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam("t") String token,
-            @RequestParam(required = false) String variant) {
+            @RequestParam(required = false) String variant,
+            HttpServletRequest request) {
         PreviewTokenService.ShareTarget target = previewTokenService.verifyMediaShareToken(token);
         if (!target.pageUuid().equals(uuid) || (target.projectKey() != null && !target.projectKey().equals(projectKey))) {
             throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
         }
-        MediaBinary binary = mediaService.binary(projectId(projectKey), uuid, variant);
+        long projectId = projectId(projectKey);
+        if (variant == null || variant.isBlank()) {
+            AssetVersionView media = mediaService.requireAt(projectId, uuid, target.revision());
+            if (TextMediaTypes.isProcessed(media.payload())) {
+                return sharedProcessed(projectId, media, target.revision(), request);
+            }
+        }
+        MediaBinary binary = mediaService.binary(projectId, uuid, variant, target.revision());
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(binary.mimeType()));
         if (!isRenderable(binary.mimeType())) {
             headers.setContentDisposition(ContentDisposition.attachment().filename(binary.fileName()).build());
         }
         return new ResponseEntity<>(binary.bytes(), headers, HttpStatus.OK);
+    }
+
+    private ResponseEntity<byte[]> sharedProcessed(
+            long projectId, AssetVersionView media, Long revision, HttpServletRequest request) {
+        try {
+            String rendered = pageRenderService.renderMedia(projectId, media, revision, apiBase(request));
+            return renderedResponse(media, rendered.getBytes(StandardCharsets.UTF_8), null);
+        } catch (SfException e) {
+            MediaBinary source = mediaService.binary(projectId, media.uuid(), null, revision);
+            return renderedResponse(media, source.bytes(), renderErrorSummary(e));
+        }
+    }
+
+    private static ResponseEntity<byte[]> renderedResponse(AssetVersionView media, byte[] bytes, String renderError) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(text(media.payload(), "mimeType")));
+        headers.setCacheControl(CacheControl.noStore());
+        if (renderError != null) {
+            headers.set(RENDER_ERROR_HEADER, renderError);
+        }
+        return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+    }
+
+    /** {@code code: message} of the first diagnostic (or the problem detail), reduced to a single header-safe line. */
+    private static String renderErrorSummary(SfException e) {
+        Object diagnostics = e.getProblem().getExtensions().get("diagnostics");
+        String summary;
+        if (diagnostics instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Diagnostic first) {
+            summary = first.code() + " " + first.line() + ":" + first.column() + " " + first.message();
+        } else {
+            Object code = e.getProblem().getExtensions().get("code");
+            summary = (code == null ? "" : code + " ") + e.getProblem().getDetail();
+        }
+        String ascii = summary.replaceAll("[^\\x20-\\x7E]", " ");
+        return ascii.length() > 500 ? ascii.substring(0, 500) : ascii;
+    }
+
+    private static String apiBase(HttpServletRequest request) {
+        String url = request.getRequestURL().toString();
+        int idx = url.indexOf("/projects/");
+        return idx < 0 ? "" : url.substring(0, idx);
     }
 
     @GetMapping("/{uuid}/thumbnail")
@@ -210,6 +370,12 @@ public class MediaController {
                 .contentType(MediaType.parseMediaType(thumb.mimeType()))
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=" + THUMBNAIL_CACHE_SECONDS)
                 .body(thumb.bytes());
+    }
+
+    private static ResponseEntity<MediaSaveResponse> saved(MediaWriteResult result) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.media().validFromRevision()))
+                .body(new MediaSaveResponse(toMediaView(result.media()), result.warnings(), result.processCmsCleared()));
     }
 
     private long projectId(String key) {
@@ -252,7 +418,9 @@ public class MediaController {
                 payload == null ? null : text(payload, "mimeType"),
                 payload == null ? null : longOrNull(payload, "sizeBytes"),
                 v.folderPath(),
-                v.validFromRevision());
+                v.validFromRevision(),
+                TextMediaTypes.isProcessed(payload),
+                payload != null && TextMediaTypes.isText(text(payload, "mimeType")));
     }
 
     private static MediaView toMediaView(AssetVersionView v) {
@@ -271,7 +439,9 @@ public class MediaController {
                 text(payload, "caption"),
                 text(payload, "copyright"),
                 focalPoint(payload),
-                variants(payload));
+                variants(payload),
+                TextMediaTypes.isProcessed(payload),
+                TextMediaTypes.isText(text(payload, "mimeType")));
     }
 
     private static MediaImageView image(JsonNode payload) {

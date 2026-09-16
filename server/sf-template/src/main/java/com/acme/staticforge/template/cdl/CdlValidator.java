@@ -110,6 +110,7 @@ final class CdlValidator {
             return null;
         }
         checkExpression(node, diagnostics);
+        checkDataset(node, type, diagnostics);
         List<EditorDefinition> items = buildEditors(node.items, diagnostics);
         String name = node.groupWrapper ? syntheticGroupName() : node.name;
         return new EditorDefinition(
@@ -134,7 +135,32 @@ final class CdlValidator {
                 node.allow,
                 node.visibleWhen,
                 node.renamedFrom,
-                items);
+                items,
+                node.dataset);
+    }
+
+    /**
+     * {@code dataset "uid"} (M19.3.2) restricts a {@code reference} editor to one dataset's records,
+     * so it is only meaningful on a reference editor that can pick records at all.
+     */
+    private static void checkDataset(CdlParser.EditorNode node, EditorType type, List<Diagnostic> diagnostics) {
+        if (node.dataset == null) {
+            return;
+        }
+        if (type != EditorType.REFERENCE) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
+                    "'dataset' is only valid on a 'reference' editor", node.datasetLine, node.datasetCol));
+        } else if (node.dataset.isBlank()) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
+                    "'dataset' needs the dataset's UID", node.datasetLine, node.datasetCol));
+        } else if (!node.assetTypes.isEmpty() && !node.assetTypes.contains("RECORD")) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
+                    "'dataset' restricts the editor to records, but assetTypes does not include RECORD",
+                    node.datasetLine, node.datasetCol));
+        }
     }
 
     private void checkExpression(EditorNode node, List<Diagnostic> diagnostics) {

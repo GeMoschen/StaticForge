@@ -1,10 +1,7 @@
 package com.acme.staticforge.generate;
 
-import com.acme.staticforge.asset.AssetReference;
-import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetType;
-import com.acme.staticforge.asset.ReferenceKind;
-import com.acme.staticforge.asset.content.ContentReferenceService;
+import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.plan.BuildPlan;
@@ -21,6 +18,7 @@ import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
 import com.acme.staticforge.generate.stage.AssetCopyResult;
 import com.acme.staticforge.generate.stage.AssetCopyStage;
+import com.acme.staticforge.generate.stage.MediaRenderStage;
 import com.acme.staticforge.generate.stage.PostProcessContext;
 import com.acme.staticforge.generate.stage.PostProcessStage;
 import com.acme.staticforge.generate.target.TargetWriter;
@@ -37,7 +35,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -86,14 +83,14 @@ public class GenerationService {
     private final GenerationRunRepository runs;
     private final GenerationTargetRepository targets;
     private final ProjectService projectService;
+    private final ChannelService channelService;
     private final SnapshotService snapshotService;
     private final BuildPlanner buildPlanner;
     private final RenderPipeline renderPipeline;
     private final AssetCopyStage assetCopyStage;
+    private final MediaRenderStage mediaRenderStage;
     private final PostProcessStage postProcessStage;
     private final TargetWriterSelector targetWriterSelector;
-    private final ContentReferenceService contentReferenceService;
-    private final AssetReferenceRepository assetReferenceRepository;
     private final ObjectMapper mapper;
     private final MeterRegistry meterRegistry;
 
@@ -106,27 +103,27 @@ public class GenerationService {
             GenerationRunRepository runs,
             GenerationTargetRepository targets,
             ProjectService projectService,
+            ChannelService channelService,
             SnapshotService snapshotService,
             BuildPlanner buildPlanner,
             RenderPipeline renderPipeline,
             AssetCopyStage assetCopyStage,
+            MediaRenderStage mediaRenderStage,
             PostProcessStage postProcessStage,
             TargetWriterSelector targetWriterSelector,
-            ContentReferenceService contentReferenceService,
-            AssetReferenceRepository assetReferenceRepository,
             ObjectMapper mapper,
             MeterRegistry meterRegistry) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
+        this.channelService = channelService;
         this.snapshotService = snapshotService;
         this.buildPlanner = buildPlanner;
         this.renderPipeline = renderPipeline;
         this.assetCopyStage = assetCopyStage;
+        this.mediaRenderStage = mediaRenderStage;
         this.postProcessStage = postProcessStage;
         this.targetWriterSelector = targetWriterSelector;
-        this.contentReferenceService = contentReferenceService;
-        this.assetReferenceRepository = assetReferenceRepository;
         this.mapper = mapper;
         this.meterRegistry = meterRegistry;
     }
@@ -266,18 +263,26 @@ public class GenerationService {
             runs.save(run);
 
             emit(runId, STAGE_PLAN, "Planning build", 0, 0, 0, null);
-            OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, "index", false, "DEFAULT");
+            // Channel settings are live configuration (not revision-pinned), read once per run.
+            OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, channelService.outputSettings(projectId));
             Long lastRevision = runs.findRecentSuccesses(projectId).stream()
                     .findFirst()
                     .map(GenerationRun::getRevisionId)
                     .orElse(null);
+            // A channel output-settings change moves every page of that channel, which the
+            // incremental expansion (asset changes over references) cannot see: build FULL instead.
+            GenerationMode mode = run.getMode() == GenerationMode.INCREMENTAL
+                            && lastRevision != null
+                            && channelService.outputSettingsChangedSince(projectId, lastRevision)
+                    ? GenerationMode.FULL
+                    : run.getMode();
             GenerationTarget target = resolveTarget(run);
             List<String> channels = request.channels() == null
                     ? parseChannels(run.getChannels())
                     : request.channels();
             BuildPlan plan = buildPlanner.plan(
                     snapshot,
-                    run.getMode(),
+                    mode,
                     lastRevision,
                     channels == null || channels.isEmpty() ? null : Set.copyOf(channels),
                     request.folderPath(),
@@ -301,7 +306,14 @@ public class GenerationService {
             }
 
             emit(runId, STAGE_ASSETS, "Copying media", 0, 0, 0, null);
-            AssetCopyResult assets = assetCopyStage.copy(snapshot, mediaUuids(outcome, snapshot));
+            Set<UUID> media = mediaUuids(outcome, snapshot);
+            media.addAll(plan.processedMedia());
+            AssetCopyResult assets = assetCopyStage.copy(
+                    snapshot, media, mediaRenderStage.open(snapshot, paths, run.getStartedBy()));
+            List<Diagnostic> warnings = new ArrayList<>(outcome.warnings());
+            warnings.addAll(assets.warnings());
+            List<Diagnostic> fileErrors = new ArrayList<>(outcome.pageErrors());
+            fileErrors.addAll(assets.fileErrors());
 
             List<OutputFile> allFiles = new ArrayList<>();
             for (RenderedFile file : outcome.files()) {
@@ -309,31 +321,32 @@ public class GenerationService {
             }
             allFiles.addAll(assets.files());
 
-            emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, outcome.warnings().size(), null);
+            emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
             PostProcessContext ctx = new PostProcessContext(
                     projectId, projectKey, baseUrl(target), channels, sitePages(snapshot, plan, channels));
             allFiles = postProcessStage.apply(ctx, allFiles);
 
-            materializeReferences(snapshot, plan, outcome);
-
-            emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, outcome.warnings().size(), null);
+            emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, warnings.size(), null);
             TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
             writer.stage(runId, allFiles);
             writer.publish(runId);
 
             long bytes = allFiles.stream().mapToLong(f -> f.bytes().length).sum();
-            boolean partial = !outcome.warnings().isEmpty();
+            // A page or processed media file held back makes the run PARTIAL; the rest is published.
+            boolean partial = !warnings.isEmpty() || !fileErrors.isEmpty();
             run.setStatus(partial ? RunStatus.PARTIAL : RunStatus.SUCCESS);
             run.setFilesWritten(allFiles.size());
             run.setFilesSkipped(assets.filesSkipped());
             run.setBytesWritten(bytes);
-            run.setErrorCount(0);
-            run.setWarningCount(outcome.warnings().size());
-            run.setDiagnostics(diagnosticsJson(List.of(), outcome.warnings()));
+            run.setErrorCount(fileErrors.size());
+            run.setWarningCount(warnings.size());
+            run.setDiagnostics(diagnosticsJson(fileErrors, warnings));
             run.setFinishedAt(Instant.now());
             runs.save(run);
 
-            emit(runId, STAGE_REPORT, run.getStatus().name(), allFiles.size(), 0, run.getWarningCount(), run.getDiagnostics());
+            emit(runId, STAGE_REPORT, run.getStatus().name(), allFiles.size(), run.getErrorCount(), run.getWarningCount(),
+                    run.getDiagnostics());
+
             completeRun(runId);
             sample.stop(generationTimer);
             meterRegistry.counter("sf.generation.files", "mode", run.getMode().name()).increment(allFiles.size());
@@ -405,39 +418,6 @@ public class GenerationService {
             }
         }
         return media;
-    }
-
-    /** Materializes content refs and OCTL/media dependency refs into {@code asset_reference}. */
-    private void materializeReferences(Snapshot snapshot, BuildPlan plan, RenderOutcome outcome) {
-        Map<UUID, Set<UUID>> depsByPage = renderPipeline.dependenciesByPage();
-        Set<String> seen = new HashSet<>();
-        for (PlanEntry entry : plan.entries()) {
-            SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
-            if (page == null) {
-                continue;
-            }
-            Long pageAssetId = page.assetId();
-            if (page.payload() != null) {
-                contentReferenceService.materialize(
-                        snapshot.projectId(), pageAssetId, snapshot.revision(), page.payload());
-            }
-            Set<UUID> deps = depsByPage.get(entry.pageUuid());
-            if (deps == null) {
-                continue;
-            }
-            for (UUID depUuid : deps) {
-                SnapshotAsset dep = snapshot.assetByUuid(depUuid);
-                if (dep == null) {
-                    continue;
-                }
-                ReferenceKind kind = dep.type() == AssetType.MEDIA ? ReferenceKind.MEDIA_REF : ReferenceKind.OCTL_REF;
-                String key = pageAssetId + "|" + dep.assetId() + "|" + kind.name();
-                if (seen.add(key)) {
-                    assetReferenceRepository.save(new AssetReference(
-                            pageAssetId, snapshot.revision(), dep.assetId(), kind, ""));
-                }
-            }
-        }
     }
 
     private static List<SitePage> sitePages(Snapshot snapshot, BuildPlan plan, List<String> channels) {

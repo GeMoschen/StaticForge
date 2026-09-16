@@ -11,7 +11,11 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.content.ContentRenameMigrator;
+import com.acme.staticforge.asset.content.ContentRenameMigrator.EditorRename;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.reference.ProjectReferenceResolver;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -25,7 +29,6 @@ import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
 import com.acme.staticforge.template.content.BodyDefinition;
 import com.acme.staticforge.template.content.ContentDefinition;
-import com.acme.staticforge.template.content.EditorDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
@@ -40,7 +43,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -66,6 +68,8 @@ public class TemplateServiceImpl implements TemplateService {
     private final AssetService assetService;
     private final RevisionService revisionService;
     private final ObjectMapper objectMapper;
+    private final ReferenceMaterializer referenceMaterializer;
+    private final ProjectReferenceResolver projectReferences;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final OctlCompiler octlCompiler = new OctlCompiler();
 
@@ -74,12 +78,16 @@ public class TemplateServiceImpl implements TemplateService {
             AssetVersionRepository assetVersionRepository,
             AssetService assetService,
             RevisionService revisionService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ReferenceMaterializer referenceMaterializer,
+            ProjectReferenceResolver projectReferences) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.revisionService = revisionService;
         this.objectMapper = objectMapper;
+        this.referenceMaterializer = referenceMaterializer;
+        this.projectReferences = projectReferences;
     }
 
     @Override
@@ -219,42 +227,9 @@ public class TemplateServiceImpl implements TemplateService {
         return result;
     }
 
+    /** The project-scoped resolver shared with reference materialization (§16.4, §5.4). */
     private ReferenceResolver referenceResolver(long projectId) {
-        return (assetType, uid) -> {
-            AssetType type = assetTypeForRef(assetType);
-            if (type == null) {
-                return Optional.empty();
-            }
-            if (!"nav".equals(assetType)) {
-                return assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).map(Asset::getUuid);
-            }
-            // Same lookup and NAVIGATION-scope check as preview and generation, so a nav: reference
-            // that saves cleanly also renders and generates.
-            return assetRepository
-                    .findByProjectIdAndAssetTypeAndUid(projectId, type, FolderScope.navigationReferenceUid(uid))
-                    .map(Asset::getUuid)
-                    .filter(uuid -> FolderScope.fromPayload(assetService.requireCurrent(projectId, uuid).payload())
-                            == FolderScope.NAVIGATION);
-        };
-    }
-
-    /**
-     * A navigation folder is plain {@code AssetType.FOLDER} under the hood (`M8.1.2`) — there is
-     * no {@code AssetType.NAV} — so a {@code nav:uid} reference needs this one special-case before
-     * falling back to {@code AssetType.valueOf(...)}, mirroring {@code GenerationRenderer}'s and
-     * {@code PageRenderService}'s identical helper. Without it, {@code $CMS_NAVIGATION(nav:uid)$}
-     * always failed compile-on-save validation with a false {@code SF-TPL-0110}, even against a
-     * real {@code FOLDER} asset with that uid.
-     */
-    private static AssetType assetTypeForRef(String assetType) {
-        if ("nav".equals(assetType)) {
-            return AssetType.FOLDER;
-        }
-        try {
-            return AssetType.valueOf(assetType.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return null;
-        }
+        return projectReferences.forProject(projectId);
     }
 
     private ObjectNode buildPayload(
@@ -325,7 +300,7 @@ public class TemplateServiceImpl implements TemplateService {
     // ------------------------------------------------------------------
 
     private void migrateRenames(Asset template, ContentDefinition definition, RevisionContext ctx) {
-        List<EditorRename> renames = collectRenames(definition);
+        List<EditorRename> renames = ContentRenameMigrator.collect(definition);
         if (renames.isEmpty()) {
             return;
         }
@@ -349,23 +324,12 @@ public class TemplateServiceImpl implements TemplateService {
         RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
         for (AffectedPage page : affected) {
             Revision revision = revisionService.allocateOrJoin(batchCtx, ChangeType.UPDATE);
-            close(page.version().getAssetId(), revision.getRevisionId());
-            insertVersion(page.version(), page.payload(), revision.getRevisionId(), ctx.userId());
             Asset asset = assetRepository.findById(page.version().getAssetId())
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found.")));
+            close(page.version().getAssetId(), revision.getRevisionId());
+            insertVersion(page.version(), page.payload(), revision.getRevisionId(), ctx.userId(), asset);
             appendSummary(asset, revision);
         }
-    }
-
-    private List<EditorRename> collectRenames(ContentDefinition definition) {
-        List<EditorRename> renames = new ArrayList<>();
-        for (EditorDefinition editor : definition.editors()) {
-            String from = editor.renamedFrom();
-            if (from != null && !from.isBlank() && !from.equals(editor.name())) {
-                renames.add(new EditorRename(from, editor.name()));
-            }
-        }
-        return renames;
     }
 
     private ObjectNode migratePagePayload(JsonNode payload, String templateUuid, List<EditorRename> renames) {
@@ -390,14 +354,7 @@ public class TemplateServiceImpl implements TemplateService {
                 if (contentNode == null || !contentNode.isObject()) {
                     continue;
                 }
-                ObjectNode content = (ObjectNode) contentNode;
-                for (EditorRename rename : renames) {
-                    if (content.has(rename.from())) {
-                        content.set(rename.to(), content.get(rename.from()));
-                        content.remove(rename.from());
-                        changed = true;
-                    }
-                }
+                changed |= ContentRenameMigrator.apply((ObjectNode) contentNode, renames);
             }
         }
         return changed ? copy : null;
@@ -410,16 +367,17 @@ public class TemplateServiceImpl implements TemplateService {
         });
     }
 
-    private void insertVersion(AssetVersion current, JsonNode payload, long revisionId, Long changedBy) {
-        insertVersion(current, payload, revisionId, changedBy, current.getFolderId(), current.getFolderPath(), null);
+    private void insertVersion(AssetVersion current, JsonNode payload, long revisionId, Long changedBy, Asset asset) {
+        insertVersion(current, payload, revisionId, changedBy, current.getFolderId(), current.getFolderPath(), asset);
     }
 
     /**
-     * {@code asset}, when non-null, is wired directly onto the new row (see {@link
-     * AssetVersion#setAsset}) — required whenever the caller's own transaction might read the
-     * new version back out through a JPQL query joining {@code v.asset} (e.g. {@code
-     * AssetServiceImpl#search}), since the session's identity map would otherwise keep handing
-     * back this very instance with a still-null association.
+     * {@code asset} is wired directly onto the new row (see {@link AssetVersion#setAsset}) —
+     * required whenever the caller's own transaction might read the new version back out through
+     * a JPQL query joining {@code v.asset} (e.g. {@code AssetServiceImpl#search}), since the
+     * session's identity map would otherwise keep handing back this very instance with a
+     * still-null association — and the version's outgoing reference rows are synced in the same
+     * revision (§5.4).
      */
     private void insertVersion(
             AssetVersion current, JsonNode payload, long revisionId, Long changedBy, Long folderId, String folderPath, Asset asset) {
@@ -429,10 +387,8 @@ public class TemplateServiceImpl implements TemplateService {
         next.setFolderPath(folderPath);
         next.setTemplateAssetId(current.getTemplateAssetId());
         next.setDeleted(current.isDeleted());
-        if (asset != null) {
-            next.setAsset(asset);
-        }
-        assetVersionRepository.save(next);
+        next.setAsset(asset);
+        referenceMaterializer.materialize(asset, assetVersionRepository.save(next));
     }
 
     private void appendSummary(Asset asset, Revision revision) {
@@ -545,8 +501,6 @@ public class TemplateServiceImpl implements TemplateService {
     private UUID folderUuid(Long folderId) {
         return assetRepository.findById(folderId).map(Asset::getUuid).orElse(null);
     }
-
-    private record EditorRename(String from, String to) {}
 
     private record AffectedPage(AssetVersion version, ObjectNode payload) {}
 }

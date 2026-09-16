@@ -44,6 +44,12 @@ public enum ConflictType {
     MISSING_TEMPLATE_REFERENCE(ConflictSeverity.BLOCKING),
 
     /**
+     * A {@code RECORD} whose dataset ({@code ExportedAsset.templateUuid}) is neither in the archive
+     * nor in the target project (M19.1.3). A record cannot exist without its schema.
+     */
+    RECORD_DATASET_MISSING(ConflictSeverity.BLOCKING),
+
+    /**
      * An {@code ExportedAsset.parentFolderUuid} not resolvable within the archive. Should
      * be prevented by the exporter's ancestor-chain rule for archives produced by this
      * system, but a hand-edited or third-party archive could still hit it — defense in

@@ -52,7 +52,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/pages/{uuid}": {
+    "/api/v1/projects/{projectKey}/records/{uuid}": {
         parameters: {
             query?: never;
             header?: never;
@@ -61,6 +61,22 @@ export interface paths {
         };
         get: operations["detail_1"];
         put: operations["update_2"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/pages/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_2"];
+        put: operations["update_3"];
         post?: never;
         delete?: never;
         options?: never;
@@ -91,8 +107,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_2"];
-        put: operations["update_3"];
+        get: operations["detail_3"];
+        put: operations["update_4"];
         post?: never;
         delete: operations["delete_2"];
         options?: never;
@@ -132,6 +148,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/media/{uuid}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["readText"];
+        put: operations["writeText"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/media/{uuid}/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setProcessCms"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/globals/{uuid}/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateSchema"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/globals/{uuid}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateContent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/folders/{uuid}": {
         parameters: {
             query?: never;
@@ -142,7 +222,23 @@ export interface paths {
         get?: never;
         put: operations["rename"];
         post?: never;
-        delete: operations["delete_3"];
+        delete: operations["delete_4"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/datasets/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_5"];
+        put: operations["update_5"];
+        post?: never;
+        delete: operations["delete_5"];
         options?: never;
         head?: never;
         patch?: never;
@@ -156,9 +252,9 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_4"];
+        put: operations["update_6"];
         post?: never;
-        delete: operations["delete_4"];
+        delete: operations["delete_6"];
         options?: never;
         head?: never;
         patch?: never;
@@ -171,8 +267,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_4"];
-        put: operations["update_5"];
+        get: operations["detail_7"];
+        put: operations["update_7"];
         post?: never;
         delete?: never;
         options?: never;
@@ -420,6 +516,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/media/{uuid}/text/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validateText"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/media/{uuid}/replace": {
         parameters: {
             query?: never;
@@ -484,6 +596,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/globals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_8"];
+        put?: never;
+        post: operations["create_5"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/generations": {
         parameters: {
             query?: never;
@@ -541,7 +669,7 @@ export interface paths {
         };
         get: operations["tree_1"];
         put?: never;
-        post: operations["create_5"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -580,6 +708,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_9"];
+        put?: never;
+        post: operations["create_7"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/datasets/{uuid}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/datasets/{datasetUuid}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_10"];
+        put?: never;
+        post: operations["create_8"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/channels": {
         parameters: {
             query?: never;
@@ -587,9 +763,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_11"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_9"];
         delete?: never;
         options?: never;
         head?: never;
@@ -653,7 +829,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["restore_1"];
+        post: operations["restore_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1051,10 +1227,26 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["binary"];
+        get: operations["binary_1"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/globals/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_4"];
+        put?: never;
+        post?: never;
+        delete: operations["delete_3"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1131,7 +1323,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_12"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1147,7 +1339,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_13"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1163,10 +1355,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_3"];
+        get: operations["detail_6"];
         put?: never;
         post?: never;
-        delete: operations["delete_5"];
+        delete: operations["delete_7"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1328,6 +1520,41 @@ export interface components {
             compiledHash?: string;
             compiled?: components["schemas"]["JsonNode"];
         };
+        UpdateRecordRequest: {
+            content?: components["schemas"]["JsonNode"];
+            displayName?: string;
+            comment?: string;
+        };
+        ContentIssue: {
+            path?: string;
+            code?: string;
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING";
+            message?: string;
+            /** @enum {string} */
+            kind?: "STRUCTURAL" | "COMPLETENESS";
+        };
+        RecordDetailView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            /** Format: uuid */
+            datasetUuid?: string;
+            datasetUid?: string;
+            /** Format: uuid */
+            folderUuid?: string;
+            folderPath?: string;
+            content?: components["schemas"]["JsonNode"];
+            /** Format: int64 */
+            revision?: number;
+            /** Format: int64 */
+            changedBy?: number;
+            /** Format: date-time */
+            changedAt?: string;
+            deleted?: boolean;
+            issues?: components["schemas"]["ContentIssue"][];
+        };
         PageView: {
             /** Format: uuid */
             uuid?: string;
@@ -1342,6 +1569,7 @@ export interface components {
             nav?: components["schemas"]["JsonNode"];
             output?: components["schemas"]["JsonNode"];
             meta?: components["schemas"]["JsonNode"];
+            issues?: components["schemas"]["ContentIssue"][];
         };
         TemplateView: {
             /** Format: uuid */
@@ -1398,6 +1626,49 @@ export interface components {
             copyright?: string;
             focalPoint?: components["schemas"]["FocalPointView"];
             variants?: components["schemas"]["MediaVariantView"][];
+            processCms?: boolean;
+            textEditable?: boolean;
+        };
+        MediaTextRequest: {
+            text?: string;
+        };
+        Diagnostic: {
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING";
+            code?: string;
+            message?: string;
+            /** Format: int32 */
+            line?: number;
+            /** Format: int32 */
+            column?: number;
+        };
+        MediaSaveResponse: {
+            media?: components["schemas"]["MediaView"];
+            warnings?: components["schemas"]["Diagnostic"][];
+            processCmsCleared?: boolean;
+        };
+        MediaProcessRequest: {
+            processCms?: boolean;
+        };
+        UpdateGlobalSetSchemaRequest: {
+            contentDefinition?: string;
+            comment?: string;
+        };
+        GlobalSetDetailView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            folderPath?: string;
+            contentDefinition?: string;
+            compiledDefinition?: components["schemas"]["JsonNode"];
+            content?: components["schemas"]["JsonNode"];
+            /** Format: int64 */
+            revision?: number;
+        };
+        UpdateGlobalSetContentRequest: {
+            content?: components["schemas"]["JsonNode"];
+            comment?: string;
         };
         RenameFolderRequest: {
             displayName?: string;
@@ -1411,6 +1682,31 @@ export interface components {
             scope?: string;
             protectedFolder?: boolean;
             children?: components["schemas"]["FolderView"][];
+        };
+        UpdateDatasetRequest: {
+            displayName?: string;
+            contentDefinition?: string;
+            titleEditor?: string;
+            description?: string;
+            comment?: string;
+        };
+        DatasetDetailView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            /** Format: uuid */
+            folderUuid?: string;
+            folderPath?: string;
+            contentDefinition?: string;
+            compiledDefinition?: components["schemas"]["JsonNode"];
+            titleEditor?: string;
+            description?: string;
+            /** Format: int64 */
+            recordCount?: number;
+            /** Format: int64 */
+            revision?: number;
+            deleted?: boolean;
         };
         ChannelUpdateRequest: {
             name?: string;
@@ -1537,16 +1833,6 @@ export interface components {
             channelKey?: string;
             templateUuid?: string;
         };
-        Diagnostic: {
-            /** @enum {string} */
-            severity?: "ERROR" | "WARNING";
-            code?: string;
-            message?: string;
-            /** Format: int32 */
-            line?: number;
-            /** Format: int32 */
-            column?: number;
-        };
         OctlValidateResponse: {
             diagnostics?: components["schemas"]["Diagnostic"][];
         };
@@ -1600,6 +1886,13 @@ export interface components {
             elementLabel?: string;
             detail?: string;
             explicit?: boolean;
+        };
+        CreateGlobalSetRequest: {
+            /** Format: uuid */
+            parentFolderUuid?: string;
+            displayName?: string;
+            contentDefinition?: string;
+            comment?: string;
         };
         GenerationRequestDto: {
             /** @enum {string} */
@@ -1662,6 +1955,26 @@ export interface components {
             includeGenerationTargets?: boolean;
             fullStores?: string[];
         };
+        CreateDatasetRequest: {
+            /** Format: uuid */
+            parentFolderUuid?: string;
+            displayName?: string;
+            contentDefinition?: string;
+            titleEditor?: string;
+            description?: string;
+            comment?: string;
+        };
+        RestoreRequest: {
+            /** Format: int64 */
+            fromRevision?: number;
+        };
+        CreateRecordRequest: {
+            /** Format: uuid */
+            folderUuid?: string;
+            displayName?: string;
+            content?: components["schemas"]["JsonNode"];
+            comment?: string;
+        };
         ChannelCreateRequest: {
             key?: string;
             name?: string;
@@ -1680,10 +1993,6 @@ export interface components {
         };
         CdlValidateResponse: {
             diagnostics?: components["schemas"]["Diagnostic"][];
-        };
-        RestoreRequest: {
-            /** Format: int64 */
-            fromRevision?: number;
         };
         AssetDetailView: {
             /** Format: uuid */
@@ -1789,13 +2098,13 @@ export interface components {
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
+            numberOfElements?: number;
+            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -1804,9 +2113,9 @@ export interface components {
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
             /** Format: int32 */
-            pageNumber?: number;
-            /** Format: int32 */
             pageSize?: number;
+            /** Format: int32 */
+            pageNumber?: number;
             paged?: boolean;
             unpaged?: boolean;
         };
@@ -1825,13 +2134,13 @@ export interface components {
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
+            numberOfElements?: number;
+            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -1925,6 +2234,8 @@ export interface components {
             folderPath?: string;
             /** Format: int64 */
             revision?: number;
+            processCms?: boolean;
+            textEditable?: boolean;
         };
         PageMediaSummaryView: {
             /** Format: int64 */
@@ -1934,19 +2245,76 @@ export interface components {
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
+            numberOfElements?: number;
+            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
+        };
+        MediaTextView: {
+            text?: string;
+            mimeType?: string;
+            /** Format: int64 */
+            revision?: number;
+            utf8?: boolean;
+        };
+        GlobalSetSummaryView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            folderPath?: string;
+            /** Format: int64 */
+            revision?: number;
         };
         SseEmitter: {
             /** Format: int64 */
             timeout?: number;
+        };
+        DatasetSummaryView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            /** Format: uuid */
+            folderUuid?: string;
+            folderPath?: string;
+            titleEditor?: string;
+            description?: string;
+            /** Format: int64 */
+            recordCount?: number;
+            /** Format: int64 */
+            revision?: number;
+        };
+        PageMeta: {
+            /** Format: int32 */
+            size?: number;
+            /** Format: int32 */
+            number?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        RecordPageView: {
+            content?: components["schemas"]["RecordRowView"][];
+            page?: components["schemas"]["PageMeta"];
+        };
+        RecordRowView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            folderPath?: string;
+            /** Format: date-time */
+            changedAt?: string;
+            /** Format: int64 */
+            changedBy?: number;
+            values?: components["schemas"]["JsonNode"];
         };
         ChannelDeletePreview: {
             affectedTemplates?: components["schemas"]["ChannelTemplateRef"][];
@@ -1977,13 +2345,13 @@ export interface components {
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
+            numberOfElements?: number;
+            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -2201,6 +2569,60 @@ export interface operations {
     };
     detail_1: {
         parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordDetailView"];
+                };
+            };
+        };
+    };
+    update_2: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordDetailView"];
+                };
+            };
+        };
+    };
+    detail_2: {
+        parameters: {
             query?: never;
             header?: never;
             path: {
@@ -2222,7 +2644,7 @@ export interface operations {
             };
         };
     };
-    update_2: {
+    update_3: {
         parameters: {
             query?: never;
             header?: {
@@ -2281,7 +2703,7 @@ export interface operations {
             };
         };
     };
-    detail_2: {
+    detail_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2304,7 +2726,7 @@ export interface operations {
             };
         };
     };
-    update_3: {
+    update_4: {
         parameters: {
             query?: never;
             header?: {
@@ -2437,6 +2859,147 @@ export interface operations {
             };
         };
     };
+    readText: {
+        parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaTextView"];
+                };
+            };
+        };
+    };
+    writeText: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaTextRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaSaveResponse"];
+                };
+            };
+        };
+    };
+    setProcessCms: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaProcessRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaSaveResponse"];
+                };
+            };
+        };
+    };
+    updateSchema: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGlobalSetSchemaRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GlobalSetDetailView"];
+                };
+            };
+        };
+    };
+    updateContent: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGlobalSetContentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GlobalSetDetailView"];
+                };
+            };
+        };
+    };
     rename: {
         parameters: {
             query?: never;
@@ -2466,7 +3029,7 @@ export interface operations {
             };
         };
     };
-    delete_3: {
+    delete_4: {
         parameters: {
             query?: {
                 cascade?: boolean;
@@ -2489,7 +3052,82 @@ export interface operations {
             };
         };
     };
-    update_4: {
+    detail_5: {
+        parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDetailView"];
+                };
+            };
+        };
+    };
+    update_5: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDatasetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDetailView"];
+                };
+            };
+        };
+    };
+    delete_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -2516,7 +3154,7 @@ export interface operations {
             };
         };
     };
-    delete_4: {
+    delete_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -2537,7 +3175,7 @@ export interface operations {
             };
         };
     };
-    detail_4: {
+    detail_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -2559,7 +3197,7 @@ export interface operations {
             };
         };
     };
-    update_5: {
+    update_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -3154,6 +3792,33 @@ export interface operations {
             };
         };
     };
+    validateText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaTextRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OctlValidateResponse"];
+                };
+            };
+        };
+    };
     replace: {
         parameters: {
             query?: never;
@@ -3179,7 +3844,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["MediaView"];
+                    "*/*": components["schemas"]["MediaSaveResponse"];
                 };
             };
         };
@@ -3267,6 +3932,56 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ConflictReportView"];
+                };
+            };
+        };
+    };
+    list_8: {
+        parameters: {
+            query?: {
+                folder?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GlobalSetSummaryView"][];
+                };
+            };
+        };
+    };
+    create_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGlobalSetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GlobalSetDetailView"];
                 };
             };
         };
@@ -3392,7 +4107,7 @@ export interface operations {
             };
         };
     };
-    create_5: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -3473,7 +4188,139 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetSummaryView"][];
+                };
+            };
+        };
+    };
+    create_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDatasetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDetailView"];
+                };
+            };
+        };
+    };
+    restore_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDetailView"];
+                };
+            };
+        };
+    };
+    list_10: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+                sort?: string[];
+                q?: string;
+                where?: string;
+                folder?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                datasetUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordPageView"];
+                };
+            };
+        };
+    };
+    create_8: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                datasetUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordDetailView"];
+                };
+            };
+        };
+    };
+    list_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -3495,7 +4342,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -3569,7 +4416,9 @@ export interface operations {
     };
     validate_1: {
         parameters: {
-            query?: never;
+            query?: {
+                kind?: string;
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -3593,7 +4442,7 @@ export interface operations {
             };
         };
     };
-    restore_1: {
+    restore_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -4241,10 +5090,11 @@ export interface operations {
             };
         };
     };
-    binary: {
+    binary_1: {
         parameters: {
             query?: {
                 variant?: string;
+                revision?: number;
             };
             header?: never;
             path: {
@@ -4263,6 +5113,52 @@ export interface operations {
                 content: {
                     "*/*": string;
                 };
+            };
+        };
+    };
+    detail_4: {
+        parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GlobalSetDetailView"];
+                };
+            };
+        };
+    };
+    delete_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4357,7 +5253,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_12: {
         parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
@@ -4381,7 +5277,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_13: {
         parameters: {
             query?: {
                 type?: string;
@@ -4409,7 +5305,7 @@ export interface operations {
             };
         };
     };
-    detail_3: {
+    detail_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -4432,7 +5328,7 @@ export interface operations {
             };
         };
     };
-    delete_5: {
+    delete_7: {
         parameters: {
             query?: {
                 force?: boolean;
@@ -4481,7 +5377,9 @@ export interface operations {
     };
     usages: {
         parameters: {
-            query?: never;
+            query?: {
+                revision?: number;
+            };
             header?: never;
             path: {
                 projectKey: string;

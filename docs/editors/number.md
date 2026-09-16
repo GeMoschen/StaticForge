@@ -8,8 +8,8 @@ A numeric input. See [README.md](README.md) for attributes common to every edito
 
 | Attribute | Meaning |
 |---|---|
-| `min N` | minimum allowed value, enforced on save |
-| `max N` | maximum allowed value, enforced on save |
+| `min N` | minimum allowed value, blocks publish when violated |
+| `max N` | maximum allowed value, blocks publish when violated |
 
 ## Example
 

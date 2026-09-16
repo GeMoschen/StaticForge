@@ -234,7 +234,7 @@ final class OctlParser {
             path.add(seg);
             c.skipWs();
         }
-        return new Accessor(null, null, path);
+        return Accessor.scope(path);
     }
 
     private List<FilterNode> parseFilters(Cursor c) {
@@ -419,7 +419,7 @@ final class OctlParser {
             path.add(c.readIdent());
             c.skipWs();
         }
-        return new Accessor(null, null, path);
+        return Accessor.scope(path);
     }
 
     private JsonNode parseArrayLiteral(Cursor c) {
@@ -506,7 +506,8 @@ final class OctlParser {
     // Token-stream helpers
     // ------------------------------------------------------------------
 
-    private static String keyword(String raw) {
+    /** The instruction keyword at the start of a raw {@code $CMS_…$} token body ({@code VALUE}, {@code END_IF}, …). */
+    static String keyword(String raw) {
         int i = 0;
         int n = raw.length();
         while (i < n) {

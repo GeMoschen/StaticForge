@@ -63,9 +63,13 @@ public class PreviewTokenService {
      * {@code urlResolver} to rewrite MEDIA references inside rendered preview HTML, since
      * {@code MediaController}'s normal {@code /binary} route is Bearer-only and the preview is
      * loaded by the browser's own (unauthenticated) frame navigation / {@code <img src>} fetch.
+     *
+     * @param revision the preview revision the media is served at (M18.3.2: a processed file renders
+     *     with that revision's values), or {@code null} for the current state; tokens issued before the
+     *     claim existed carry none and keep meaning "current"
      */
-    public String issueMediaShareToken(UUID mediaUuid, String projectKey) {
-        return issueAssetShareToken("media", mediaUuid, null, null, projectKey);
+    public String issueMediaShareToken(UUID mediaUuid, Long revision, String projectKey) {
+        return issueAssetShareToken("media", mediaUuid, revision, null, projectKey);
     }
 
     private String issueAssetShareToken(String kind, UUID assetUuid, Long revision, String channel, String projectKey) {

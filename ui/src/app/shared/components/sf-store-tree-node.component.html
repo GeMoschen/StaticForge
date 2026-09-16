@@ -1,0 +1,78 @@
+<div
+  class="store-node"
+  [class.store-node--selected]="isSelected()"
+  [style.padding-left.px]="depth() * 14"
+>
+  <div
+    class="store-node__row"
+    [attr.draggable]="isProtected() || readOnly() ? null : true"
+    role="treeitem"
+    tabindex="0"
+    [attr.aria-expanded]="isFolder() ? expanded() : null"
+    [attr.aria-selected]="isSelected()"
+    (click)="onSelect()"
+    (keydown)="onKeydown($event)"
+    (dragstart)="onDragStart($event)"
+    (dragover)="onDragOver($event)"
+    (drop)="onDrop($event)"
+    (contextmenu)="onContextMenu($event)"
+  >
+    @if (isFolder()) {
+      <button
+        type="button"
+        class="store-node__toggle"
+        [class.store-node__toggle--leaf]="!hasChildren()"
+        (click)="toggle($event)"
+        [attr.aria-label]="hasChildren() ? 'Toggle folder' : 'Folder'"
+      >
+        <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
+      </button>
+    } @else {
+      <span class="store-node__toggle store-node__toggle--leaf"></span>
+    }
+    <sf-icon class="store-node__icon" [name]="icon()" />
+    <span class="store-node__name">{{ node().displayName ?? node().uid }}</span>
+    @if (node().badge; as badge) {
+      <span class="store-node__badge" [class.store-node__badge--broken]="badge.broken">{{ badge.text }}</span>
+    }
+    @if (isProtected()) {
+      <sf-icon
+        class="store-node__protected-icon"
+        name="lock"
+        title="Built-in folder — can't be renamed, moved, or deleted"
+      />
+    }
+  </div>
+
+  @if (isFolder() && expanded() && hasChildren()) {
+    <div class="store-node__children" role="group">
+      @for (child of node().children ?? []; track child.uuid) {
+        <sf-store-tree-node
+          [node]="child"
+          [depth]="depth() + 1"
+          [selectedUuid]="selectedUuid()"
+          [projectKey]="projectKey()"
+          [leafNoun]="leafNoun()"
+          [renameFolder]="renameFolder()"
+          (select)="select.emit($event)"
+          (move)="move.emit($event)"
+          (changed)="changed.emit()"
+        />
+      }
+    </div>
+  }
+
+  @if (!isProtected()) {
+    <sf-rename-asset-dialog
+      [open]="renameOpen()"
+      [projectKey]="projectKey()"
+      [uuid]="node().uuid ?? ''"
+      [uid]="node().uid ?? ''"
+      [displayName]="node().displayName ?? node().uid ?? ''"
+      [submittingName]="renamingName()"
+      (renameDisplayName)="submitRenameDisplayName($event)"
+      (uidChanged)="onRenameUidChanged()"
+      (closed)="closeRename()"
+    />
+  }
+</div>

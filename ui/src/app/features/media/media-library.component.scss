@@ -256,3 +256,14 @@
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
 }
+
+.cell__badge {
+  margin-left: var(--sf-1);
+  padding: 0 var(--sf-1);
+  border: 1px solid var(--sf-signal);
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-signal);
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+  font-weight: 400;
+}

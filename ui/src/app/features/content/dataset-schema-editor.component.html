@@ -1,0 +1,77 @@
+@if (detail(); as d) {
+  <div class="dataset-editor">
+    <div class="dataset-editor__head">
+      <div>
+        <h3>{{ d.displayName ?? d.uid }}</h3>
+        <div class="dataset-editor__meta">{{ d.uid }} · dataset · rev {{ d.revision }}</div>
+      </div>
+      <div class="dataset-editor__records">
+        <span>{{ d.recordCount }} {{ d.recordCount === 1 ? 'record' : 'records' }}</span>
+        <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ dataset: d.uuid }">Open records</a>
+      </div>
+    </div>
+
+    @if (!canEdit()) {
+      <p class="dataset-editor__hint" role="status">Only a developer can change a dataset schema.</p>
+    }
+
+    <div class="panel">
+      <sf-field label="Display name">
+        <input type="text" [value]="displayName()" [disabled]="!canEdit()" (input)="onNameInput($event)" />
+      </sf-field>
+      <sf-field label="Description" hint="Shown to editors in the Content store.">
+        <textarea class="dataset-editor__description" [value]="description()" [disabled]="!canEdit()" (input)="onDescriptionInput($event)"></textarea>
+      </sf-field>
+      <sf-uid-rename [projectKey]="projectKey()" [uuid]="d.uuid ?? ''" [uid]="d.uid ?? ''" (uidChanged)="onUidChanged()" />
+    </div>
+
+    <div class="panel">
+      <sf-field
+        label="Record fields (CDL)"
+        hint="Editors only — records have no bodies. Rename a field with renamedFrom and every record follows in one revision."
+      >
+        <textarea
+          class="dataset-editor__cdl"
+          spellcheck="false"
+          [value]="contentDefinition()"
+          [disabled]="!canEdit()"
+          [attr.aria-invalid]="hasErrors() ? true : null"
+          aria-describedby="dataset-cdl-diagnostics"
+          (input)="onCdlInput($event)"
+        ></textarea>
+      </sf-field>
+
+      <div id="dataset-cdl-diagnostics" class="diagnostics" aria-live="polite">
+        @for (diag of diagnostics(); track $index) {
+          <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+            {{ diag.severity }} {{ diag.code }}
+            @if (diag.line) {
+              ({{ diag.line }}:{{ diag.column }})
+            }
+            — {{ diag.message }}
+          </div>
+        }
+      </div>
+
+      <sf-field label="Title field" hint="A text field whose value becomes each record's display name. Takes effect after saving the schema.">
+        <select [value]="titleEditor()" [disabled]="!canEdit()" (change)="onTitleEditorChange($event)">
+          <option value="">None — editors name records themselves</option>
+          @for (editor of textEditors(); track editor.name) {
+            <option [value]="editor.name" [selected]="editor.name === titleEditor()">{{ editor.label ?? editor.name }}</option>
+          }
+        </select>
+      </sf-field>
+
+      <p class="dataset-editor__snippet"><span class="sf-sr-only">Template snippet: </span><code>{{ loopSnippet() }}</code></p>
+
+      <div class="actions">
+        <sf-button variant="secondary" [disabled]="validating()" (click)="validate()">Validate</sf-button>
+        <sf-button variant="primary" [disabled]="saving() || !canEdit()" (click)="save()">Save dataset</sf-button>
+        <sf-button variant="danger" [disabled]="!canEdit() || (d.recordCount ?? 0) > 0" (click)="remove()">Delete</sf-button>
+        @if ((d.recordCount ?? 0) > 0) {
+          <span class="dataset-editor__hint">Delete its {{ d.recordCount }} records first to delete the dataset.</span>
+        }
+      </div>
+    </div>
+  </div>
+}

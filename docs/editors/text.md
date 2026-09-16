@@ -9,7 +9,7 @@ type and for grouping/validation.
 
 | Attribute | Meaning |
 |---|---|
-| `maxLength N` | maximum character count, enforced on save |
+| `maxLength N` | maximum character count, blocks publish when violated |
 
 ## Example
 

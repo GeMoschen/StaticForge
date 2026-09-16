@@ -18,6 +18,7 @@ import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../s
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { TemplateNavNodeComponent } from './template-nav-node.component';
 import {
+  DATASETS_ROOT_UID,
   PAGE_TEMPLATES_ROOT_UID,
   SECTION_TEMPLATES_ROOT_UID,
   TEMPLATES_ROOT_UID,
@@ -107,6 +108,9 @@ export class TemplateFolderNodeComponent {
     if (child.uid === PAGE_TEMPLATES_ROOT_UID) {
       return 'PAGE_TEMPLATE';
     }
+    if (child.uid === DATASETS_ROOT_UID) {
+      return 'DATASET';
+    }
     return this.templateKind();
   }
 
@@ -177,7 +181,7 @@ export class TemplateFolderNodeComponent {
       return;
     }
     if (sourceKind && sourceKind !== this.templateKind()) {
-      this.toast.show('Page templates and section templates can\'t share a folder.', 'error');
+      this.toast.show('Page templates, section templates and datasets each keep to their own folders.', 'error');
       return;
     }
     this.move.emit({ source, target });
@@ -196,7 +200,7 @@ export class TemplateFolderNodeComponent {
     if (!this.isAmbiguousRoot()) {
       items.push(
         {
-          label: 'New template here',
+          label: this.templateKind() === 'DATASET' ? 'New dataset here' : 'New template here',
           icon: 'note_add',
           action: () => {
             this.select.emit({ uuid, templateKind: this.templateKind() });

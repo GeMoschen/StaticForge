@@ -23,6 +23,7 @@ const CONFLICT_ICONS: Record<string, string> = {
   DUPLICATE_UUID: 'content_copy',
   DUPLICATE_UUID_TYPE_MISMATCH: 'report',
   MISSING_TEMPLATE_REFERENCE: 'link_off',
+  RECORD_DATASET_MISSING: 'dataset_linked',
   MISSING_PARENT_FOLDER: 'folder_off',
   SETTINGS_KEY_COLLISION: 'settings',
   TARGET_PATH_COLLISION: 'drive_file_move',

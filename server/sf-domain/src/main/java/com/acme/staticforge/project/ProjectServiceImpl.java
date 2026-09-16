@@ -122,6 +122,14 @@ public class ProjectServiceImpl implements ProjectService {
         assetService.ensurePagesRootFolder(project.getId(), creationCtx);
         assetService.ensureMediaRootFolder(project.getId(), creationCtx);
 
+        // The globals store (M17.1.1) gets the same treatment — a fixed, protected "All Globals"
+        // root that every property set and Globals folder nests under.
+        assetService.ensureGlobalsRootFolder(project.getId(), creationCtx);
+
+        // The Content store (M19.1.1): a fixed, protected "All Content" root for dataset records and
+        // their folders. The dataset schema folder comes with ensureTemplateFolders above.
+        assetService.ensureContentRootFolder(project.getId(), creationCtx);
+
         return project;
     }
 

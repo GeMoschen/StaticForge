@@ -1,0 +1,81 @@
+:host {
+  display: block;
+}
+
+.store-node__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-1);
+  padding-top: var(--sf-1);
+  padding-bottom: var(--sf-1);
+  padding-right: var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  cursor: pointer;
+  user-select: none;
+  color: var(--sf-ink);
+}
+
+.store-node__row:hover {
+  background: var(--sf-surface);
+}
+
+.store-node--selected > .store-node__row {
+  background: var(--sf-signal);
+  color: #fff;
+}
+
+.store-node__toggle {
+  flex-shrink: 0;
+  width: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: var(--sf-text-xs);
+  cursor: pointer;
+}
+
+.store-node__toggle--leaf {
+  visibility: hidden;
+}
+
+.store-node__icon {
+  flex-shrink: 0;
+  color: var(--sf-amber);
+  font-size: 1.1em;
+}
+
+.store-node--selected > .store-node__row .store-node__icon {
+  color: inherit;
+}
+
+.store-node__name {
+  font-size: var(--sf-text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.store-node__badge {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.store-node--selected > .store-node__row .store-node__badge {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.store-node__badge--broken {
+  color: var(--sf-danger, #c0392b);
+}
+
+.store-node__protected-icon {
+  flex-shrink: 0;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 0.95em;
+}

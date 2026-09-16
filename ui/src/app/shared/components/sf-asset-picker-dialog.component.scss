@@ -163,3 +163,11 @@
   font-size: var(--sf-text-xs);
   color: var(--sf-slate);
 }
+
+.dialog__item-badge {
+  padding: 0 var(--sf-2);
+  border: 1px solid var(--sf-line);
+  border-radius: 999px;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}

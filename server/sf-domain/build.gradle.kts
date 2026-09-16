@@ -14,9 +14,11 @@ dependencies {
     api(libs.jackson.databind)
     implementation(libs.spring.security.crypto)
     implementation(libs.micrometer.core)
+    implementation(libs.caffeine)
     implementation(libs.tika.core)
     implementation(libs.metadata.extractor)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.archunit)
     testRuntimeOnly(libs.h2)
 }
