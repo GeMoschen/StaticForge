@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -105,9 +106,30 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private static final Set<String> REDACTED_KEYS = Set.of(
             "accesskey", "secretkey", "secretaccesskey", "password", "token", "credentials");
 
-    /** Import order for non-folder assets: templates first, dependents last. */
-    private static final List<String> NON_FOLDER_ORDER =
-            List.of("SECTION_TEMPLATE", "PAGE_TEMPLATE", "MEDIA", "PAGE", "PAGE_REFERENCE");
+    /**
+     * Import order for non-folder assets: templates first, dependents last. Reference rows are
+     * materialized only after every asset exists, so the order is about readability of the import,
+     * not about edges resolving.
+     *
+     * <p>Every non-folder {@link AssetType} must appear here: {@link #order} imports exactly these
+     * types, so a missing one is dropped from an import without any error (that is how M17's
+     * {@code GLOBAL_SET} first went missing). The static check turns that into a startup failure.
+     */
+    private static final List<AssetType> NON_FOLDER_ORDER = List.of(
+            AssetType.SECTION_TEMPLATE,
+            AssetType.PAGE_TEMPLATE,
+            AssetType.MEDIA,
+            AssetType.GLOBAL_SET,
+            AssetType.PAGE,
+            AssetType.PAGE_REFERENCE);
+
+    static {
+        EnumSet<AssetType> unordered = EnumSet.complementOf(EnumSet.of(AssetType.FOLDER));
+        NON_FOLDER_ORDER.forEach(unordered::remove);
+        if (!unordered.isEmpty()) {
+            throw new IllegalStateException("Asset types missing from the import order: " + unordered);
+        }
+    }
 
     private final ProjectRepository projectRepository;
     private final AssetVersionRepository assetVersionRepository;
@@ -808,9 +830,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 .filter(asset -> asset != rootAsset && "FOLDER".equals(asset.type()))
                 .sorted(Comparator.comparing(ExportedAsset::folderPath))
                 .forEach(ordered::add);
-        for (String type : NON_FOLDER_ORDER) {
+        for (AssetType type : NON_FOLDER_ORDER) {
             assets.stream()
-                    .filter(asset -> type.equals(asset.type()))
+                    .filter(asset -> type.name().equals(asset.type()))
                     .sorted(Comparator.comparing(ExportedAsset::uuid))
                     .forEach(ordered::add);
         }

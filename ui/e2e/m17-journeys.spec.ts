@@ -145,6 +145,19 @@ function detail(page: Page) {
   return page.locator('sf-global-set-detail');
 }
 
+/** Clicks a save button and returns the status of the `PUT` it sends, so a failed save fails loudly. */
+async function saveAndStatus(page: Page, button: string, path: 'content' | 'schema'): Promise<number> {
+  const response = page.waitForResponse(
+    (r) => r.request().method() === 'PUT' && r.url().includes('/globals/') && r.url().endsWith(`/${path}`),
+  );
+  await detail(page).getByRole('button', { name: button }).click();
+  const res = await response;
+  if (res.status() >= 300) {
+    console.log(`PUT ${path} -> ${res.status()} ${await res.text()} body=${res.request().postData()}`);
+  }
+  return res.status();
+}
+
 test.beforeEach(() => {
   test.skip(!process.env['SF_RUN_E2E'], 'requires a running dev backend + ng serve (SF_RUN_E2E=1)');
 });
@@ -155,7 +168,8 @@ test('journey 1: a developer creates a property set, fixes a CDL error and fills
     await login(page);
     await navigate(page, `/p/${api.projectKey}/globals`);
     await expect(page.locator('sf-globals')).toBeVisible();
-    await expect(page.locator('sf-nav-rail').getByText('Globals')).toBeVisible();
+    // The rail may be collapsed (icons only), so find the entry by its accessible name.
+    await expect(page.locator('sf-nav-rail').getByRole('link', { name: 'Globals' })).toBeVisible();
 
     // Create "Site" through the create dialog; it opens with a starter CDL.
     await page.getByRole('button', { name: 'New property set' }).click();
@@ -180,8 +194,7 @@ test('journey 1: a developer creates a property set, fixes a CDL error and fills
     // Values: the rebuilt form shows the new fields.
     await detail(page).getByRole('tab', { name: 'Values' }).click();
     await detail(page).locator('sf-content-form input').first().fill('Acme Outdoor');
-    await detail(page).getByRole('button', { name: 'Save values' }).click();
-    await expect(page.getByText('Values saved')).toBeVisible();
+    expect(await saveAndStatus(page, 'Save values', 'content')).toBe(200);
     await snap(page, 'j1-values-saved');
 
     const sets = await api.get('/globals');
@@ -217,8 +230,7 @@ test('journey 2: a page preview shows the property-set value and follows an edit
     await navigate(page, `/p/${api.projectKey}/globals`);
     await globalsTree(page).getByText('Site').click();
     await detail(page).locator('sf-content-form input').first().fill('Acme Outdoor Co.');
-    await detail(page).getByRole('button', { name: 'Save values' }).click();
-    await expect(page.getByText('Values saved')).toBeVisible();
+    expect(await saveAndStatus(page, 'Save values', 'content')).toBe(200);
 
     await navigate(page, `/p/${api.projectKey}/pages/${home.uuid}`);
     await page.locator('sf-page-editor sf-preview-frame').getByRole('button', { name: 'Refresh' }).click();

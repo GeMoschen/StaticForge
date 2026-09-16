@@ -1,6 +1,6 @@
 ---
 id: M17.4.1
-status: todo
+status: done
 depends: [M17.2.1]
 epic: m17-global-store
 feature: ui
@@ -90,3 +90,22 @@ area: frontend
   save. Reusing a `FormGroup` across definitions leaves orphan controls behind.
 - Check the time-travel interceptor's allow-list: a new mutating endpoint needs no
   registration if the interceptor blocks by HTTP method, but verify it rather than assuming.
+
+## Implementation notes (2026-09-16)
+
+- **Tree:** decided with the user to build a shared `shared/components/sf-store-tree-node` and migrate the
+  Navigation store onto it (its `nav-tree-node` copy is deleted). Media, Templates and Pages still use their own
+  tree nodes.
+- **409:** the Values/Schema save reloads the set instead of opening the page editor's conflict drawer (the
+  `M17.2.1` note: "reload after a 409 instead of retrying blindly"). A set's save is explicit, not autosaved, so
+  there is no pending draft to merge field by field.
+- **Specs:** `globals.service.spec.ts` (11) runs and passes. `global-set-detail.component.spec.ts` (9) and
+  `sf-store-tree-node.component.spec.ts` (5) are written and fail to resolve `templateUrl`, like every component
+  spec in the repo. UI suite before M17: 18 failed files / 68 failed / 116 passed tests. After: 19 / 78 / 127.
+  That is +11 passing service tests, +14 new component tests failing on `templateUrl`, and −4 from the deleted
+  `nav-tree-node` spec. No previously passing test fails. Tried and reverted: wiring `@analogjs/vite-plugin-angular` into `vitest.config`. It needs an ESM
+  config (`.mts`) and a plugin version that matches Vite 5 (`1.13.1`; the hoisted `1.22.5` needs Vite 6). With
+  both, `templateUrl` resolves, but `TestBed` then reports "Need to call TestBed.initTestEnvironment() first" with
+  either the hand-rolled zone setup or `@analogjs/vitest-angular/setup-zone`. Fixing the runner is its own task.
+- **Behaviour is proven live instead:** `ui/e2e/m17-journeys.spec.ts` 4/4 against a dev backend + `ng serve`
+  (see `M17.5.2`).

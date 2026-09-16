@@ -1,6 +1,6 @@
 ---
 id: M17.1.1
-status: todo
+status: done
 depends: [M16.3.1]
 epic: m17-global-store
 feature: domain

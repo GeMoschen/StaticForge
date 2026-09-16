@@ -34,28 +34,32 @@ assets such as `site`, `social` and `footer`. Each set:
 
 ## Exit criteria (epic is done when)
 
-- [ ] A developer can create a property set `site` in the Globals store, declare
+- [x] A developer can create a property set `site` in the Globals store, declare
       `editor text title`, `editor media logo` and `editor boolean showBanner` in its
       CDL, and save it. CDL errors are reported with `SF-CDL-*` diagnostics exactly as
       for templates.
-- [ ] An editor (role `EDITOR`) can fill in and save the values of `site`, but cannot
+- [x] An editor (role `EDITOR`) can fill in and save the values of `site`, but cannot
       change its schema (403). Each save is exactly one revision touching exactly one
       asset.
-- [ ] `$CMS_VALUE(global:site.title)$`, `$CMS_VALUE(CMS_GLOBAL.site.title)$`,
+- [x] `$CMS_VALUE(global:site.title)$`, `$CMS_VALUE(CMS_GLOBAL.site.title)$`,
       `$CMS_REF(CMS_GLOBAL.site.logo)$` and `$CMS_IF(CMS_GLOBAL.site.showBanner)$` render
       the set's current values in preview and at the snapshot revision in generation.
       A template that references an unknown set fails to save with `SF-TPL-0110`.
-- [ ] After changing `site.title`, an `INCREMENTAL` generation re-renders every page that
+- [x] After changing `site.title`, an `INCREMENTAL` generation re-renders every page that
       read `site` and no page that didn't (verified by the plan entries).
-- [ ] Renaming an editor in a set's CDL with `renamedFrom` keeps its value, in the same
+- [x] Renaming an editor in a set's CDL with `renamedFrom` keeps its value, in the same
       single revision as the schema change.
-- [ ] A set referenced by a template or rendered page can't be deleted, and its usages
+- [x] A set referenced by a template or rendered page can't be deleted, and its usages
       list those referrers.
-- [ ] A Globals store (whole store, a folder, or single sets) round-trips through selective
+  - *Verified 2026-09-16:* the delete guard and template usages hold (`M17GlobalsJourneyIntegrationTest`). Usages list
+    the referring **template**, not the pages: since `M16.3.3` generation no longer writes page → asset rows, and
+    spec §16.4 documents that a page reading another asset's value has no edge of its own (its template holds the
+    `OCTL_VALUE` edge). Incremental rebuilds still reach the pages through that template edge.
+- [x] A Globals store (whole store, a folder, or single sets) round-trips through selective
       export/import with schema and values intact.
-- [ ] The Globals UI (nav rail entry, tree, values form, schema editor) is fully
+- [x] The Globals UI (nav rail entry, tree, values form, schema editor) is fully
       read-only while time travel is active (`M15.5` backstop plus visibly disabled controls).
-- [ ] `./gradlew build` and `ui` `npm run build` are green. New UI component specs are
+- [x] `./gradlew build` and `ui` `npm run build` are green. New UI component specs are
       written; their execution is subject to the known `templateUrl` spec-runner issue
       (see `M15` exit criteria).
 

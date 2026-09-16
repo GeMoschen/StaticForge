@@ -14,6 +14,9 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.globals.CreateGlobalSetCommand;
+import com.acme.staticforge.asset.globals.GlobalSetService;
+import com.acme.staticforge.asset.globals.GlobalSetView;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.MediaBinary;
@@ -47,7 +50,11 @@ import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.revision.AssetDiff;
+import com.acme.staticforge.revision.DiffService;
+import com.acme.staticforge.revision.FieldChange;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.revision.RevisionDiff;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -92,6 +99,15 @@ class ProjectExportImportIntegrationTest {
     private static final AtomicInteger SEQ = new AtomicInteger();
     private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
 
+    /** The CDL of the running Globals example: a required text plus a media the values point at. */
+    private static final String GLOBAL_SET_CDL =
+            """
+            content {
+              editor text title { label "Site title" required }
+              editor media logo { label "Logo" }
+            }
+            """;
+
     @Autowired UserService userService;
     @Autowired ProjectService projectService;
     @Autowired AssetService assetService;
@@ -106,6 +122,8 @@ class ProjectExportImportIntegrationTest {
     @Autowired FolderService folderService;
     @Autowired PageReferenceService pageReferenceService;
     @Autowired com.acme.staticforge.asset.AssetVersionRepository assetVersionRepository;
+    @Autowired GlobalSetService globalSetService;
+    @Autowired DiffService diffService;
 
     @Test
     void roundTripPreservesAssetsAndMediaRemapsUuidsAndAddsProvenance() {
@@ -1920,6 +1938,212 @@ class ProjectExportImportIntegrationTest {
         AssetVersionView legacyMedia = assetService.requireCurrent(legacyTarget.project().getId(), legacyMediaUuid);
         assertThat(legacyMedia.payload().path("blobSha256").asText())
                 .isEqualTo(perFileMedia.payload().path("blobSha256").asText());
+    }
+
+    // ---- M17.1.3 Globals store coverage ----
+
+    /**
+     * Full-Globals-store round trip (`M17.1.3`): {@code fullStores={GLOBALS}} behaves like every
+     * other store — every live set and folder of the scope travels, nested ones keep their place,
+     * and a set's schema, values and uid come back unchanged. Both halves are deliberately run:
+     * importing into a FRESH project and back into the SOURCE project must each resolve the
+     * archive's {@code globals_root} onto the target's own fixed root rather than minting a second
+     * one, which is what {@code findFixedFolderByUid} was extended for.
+     */
+    @Test
+    void fullGlobalsStoreRoundTripsIntoAFreshProjectAndBackIntoItsOwn() {
+        Fixture source = newFixture("glb_full", "Globals Full Store Source");
+        AssetVersionView branding = folderService.create(null, "Branding", FolderScope.GLOBALS, source.ctx());
+        AssetVersionView logo = mediaService.upload(
+                source.project().getId(), null, "logo.png", "image/png", solidPng(32, 32, Color.BLUE), source.ctx());
+
+        GlobalSetView site = globalSetService.create(
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+        ObjectNode siteValues = MAPPER.createObjectNode();
+        siteValues.put("title", "Acme Outdoor");
+        siteValues.putObject("logo").put("type", "MEDIA_REF").put("uuid", logo.uuid().toString());
+        globalSetService.updateValues(site.uuid(), siteValues, site.revision(), source.ctx());
+
+        GlobalSetView theme = globalSetService.create(
+                new CreateGlobalSetCommand(
+                        source.project().getId(), branding.uuid(), "Theme",
+                        "content { editor text accent { label \"Accent\" } }"),
+                source.ctx());
+        globalSetService.updateValues(
+                theme.uuid(), MAPPER.createObjectNode().put("accent", "#ff6600"), theme.revision(), source.ctx());
+
+        // The media is picked explicitly alongside the store, so the referenced-logo case is a
+        // clean round trip here; the unselected-media case is the next test's subject.
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(logo.uuid()), false, false, Set.of(FolderScope.GLOBALS)));
+        Set<String> exported = parseAssets(archive).stream().map(ExportedAsset::uuid).collect(Collectors.toSet());
+        assertThat(exported).contains(
+                site.uuid().toString(), theme.uuid().toString(), branding.uuid().toString(),
+                fixedFolderUuid(source, FolderScope.GLOBALS_ROOT_UID).toString());
+
+        Fixture target = newFixture("glb_full_tgt", "Globals Full Store Target");
+        UUID targetGlobalsRoot = fixedFolderUuid(target, FolderScope.GLOBALS_ROOT_UID);
+        exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+
+        assertThat(globalsRoots(target.project().getId()))
+                .extracting(Asset::getUuid)
+                .as("the archive's root resolved onto the target's own, pre-existing one")
+                .containsExactly(targetGlobalsRoot);
+
+        GlobalSetView importedSite =
+                globalSetService.find(target.project().getId(), site.uuid(), null).orElseThrow();
+        assertThat(importedSite.uid()).isEqualTo("site");
+        assertThat(importedSite.contentDefinition()).isEqualTo(GLOBAL_SET_CDL);
+        assertThat(importedSite.content().path("title").asText()).isEqualTo("Acme Outdoor");
+        assertThat(importedSite.content().path("logo").path("uuid").asText()).isEqualTo(logo.uuid().toString());
+        assertThat(importedSite.folderPath()).isEqualTo("/" + FolderScope.GLOBALS_ROOT_UID + "/");
+
+        GlobalSetView importedTheme =
+                globalSetService.find(target.project().getId(), theme.uuid(), null).orElseThrow();
+        assertThat(importedTheme.uid()).isEqualTo("theme");
+        assertThat(importedTheme.content().path("accent").asText()).isEqualTo("#ff6600");
+        assertThat(importedTheme.folderPath())
+                .as("a set in a nested Globals folder keeps its place")
+                .isEqualTo(assetService.requireCurrent(target.project().getId(), branding.uuid()).folderPath())
+                .startsWith("/" + FolderScope.GLOBALS_ROOT_UID + "/");
+
+        // Back into the source project: every uuid collides with itself, so every set is
+        // overwritten in place and the project still has exactly one Globals root.
+        UUID sourceGlobalsRoot = fixedFolderUuid(source, FolderScope.GLOBALS_ROOT_UID);
+        exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
+        assertThat(globalsRoots(source.project().getId())).extracting(Asset::getUuid).containsExactly(sourceGlobalsRoot);
+        assertThat(uidsByType(source.project().getId(), AssetType.GLOBAL_SET).keySet())
+                .containsExactlyInAnyOrder("site", "theme");
+        GlobalSetView reimportedSite =
+                globalSetService.find(source.project().getId(), site.uuid(), null).orElseThrow();
+        assertThat(reimportedSite.contentDefinition()).isEqualTo(GLOBAL_SET_CDL);
+        assertThat(reimportedSite.content().path("title").asText()).isEqualTo("Acme Outdoor");
+        assertThat(reimportedSite.folderPath()).isEqualTo("/" + FolderScope.GLOBALS_ROOT_UID + "/");
+    }
+
+    /**
+     * A set whose media value wasn't selected must behave exactly like a page whose image wasn't
+     * selected (`M17.1.3`): the referential-integrity rules are type-agnostic, and a set must not
+     * quietly get a stricter or laxer treatment than a page. Rather than restating what that
+     * treatment is, the test builds both situations side by side and asserts the reports agree.
+     */
+    @Test
+    void aSetWithAnUnselectedMediaIsReportedExactlyLikeAPageWithOne() {
+        Fixture source = newFixture("glb_media", "Globals Missing Media Source");
+        AssetVersionView media = mediaService.upload(
+                source.project().getId(), null, "logo.png", "image/png", solidPng(32, 32, Color.BLUE), source.ctx());
+
+        GlobalSetView site = globalSetService.create(
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+        ObjectNode siteValues = MAPPER.createObjectNode();
+        siteValues.put("title", "Acme Outdoor");
+        siteValues.putObject("logo").put("type", "MEDIA_REF").put("uuid", media.uuid().toString());
+        globalSetService.updateValues(site.uuid(), siteValues, site.revision(), source.ctx());
+
+        TemplateView pageTemplate = createPageTemplate(source, "Landing", null);
+        ObjectNode pagePayload = MAPPER.createObjectNode();
+        pagePayload.put("templateRef", pageTemplate.uuid().toString());
+        pagePayload.putObject("content").putObject("heroImage")
+                .put("type", "MEDIA_REF")
+                .put("uuid", media.uuid().toString());
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(
+                        source.project().getId(), AssetType.PAGE, "Home", null, pagePayload, pageTemplate.uuid()),
+                source.ctx());
+
+        byte[] setArchive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(site.uuid()), false, false, Set.of()));
+        byte[] pageArchive = exportImportService.exportSelection(
+                source.project().getId(),
+                new ExportSelection(Set.of(page.uuid(), pageTemplate.uuid()), false, false, Set.of()));
+
+        assertThat(parseAssets(setArchive)).extracting(ExportedAsset::uuid).doesNotContain(media.uuid().toString());
+        assertThat(parseAssets(pageArchive)).extracting(ExportedAsset::uuid).doesNotContain(media.uuid().toString());
+
+        Fixture setTarget = newFixture("glb_media_set", "Globals Missing Media Set Target");
+        Fixture pageTarget = newFixture("glb_media_page", "Globals Missing Media Page Target");
+        List<ConflictType> setConflicts = conflictTypes(
+                exportImportService.analyzeImport(setTarget.project().getId(), setArchive, ImportOptions.DEFAULT));
+        List<ConflictType> pageConflicts = conflictTypes(
+                exportImportService.analyzeImport(pageTarget.project().getId(), pageArchive, ImportOptions.DEFAULT));
+        assertThat(setConflicts).isEqualTo(pageConflicts);
+
+        // And the import itself resolves identically: the dangling MEDIA_REF uuid survives
+        // untouched in both, since UuidRemapper leaves values it has no mapping for alone.
+        exportImportService.importProject(setTarget.project().getId(), setArchive, setTarget.ctx(), ImportOptions.DEFAULT);
+        exportImportService.importProject(
+                pageTarget.project().getId(), pageArchive, pageTarget.ctx(), ImportOptions.DEFAULT);
+        String setLogo = globalSetService.find(setTarget.project().getId(), site.uuid(), null).orElseThrow()
+                .content().path("logo").path("uuid").asText();
+        String pageHero = assetService.requireCurrent(pageTarget.project().getId(), page.uuid())
+                .payload().path("content").path("heroImage").path("uuid").asText();
+        assertThat(setLogo).isEqualTo(pageHero).isEqualTo(media.uuid().toString());
+    }
+
+    /**
+     * Revision diffs of a set (`M17.1.3`). {@code DiffServiceImpl} is type-agnostic, so this is a
+     * verification rather than a feature: a values change must show up as {@code content.*} field
+     * changes, and a {@code renamedFrom} schema change must show the {@code contentDefinition} text
+     * change <em>and</em> the value migration it caused in the same revision — the reviewable
+     * evidence that the two really are one write.
+     */
+    @Test
+    void revisionDiffShowsValueChangesAndASchemaChangeWithItsMigrationInOneRevision() {
+        Fixture source = newFixture("glb_diff", "Globals Diff Source");
+        GlobalSetView site = globalSetService.create(
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+        GlobalSetView valued = globalSetService.updateValues(
+                site.uuid(), MAPPER.createObjectNode().put("title", "Acme Outdoor"), site.revision(), source.ctx());
+
+        AssetDiff valuesDiff = onlyAssetDiff(diffService.diff(source.project().getId(), valued.revision()));
+        assertThat(valuesDiff.uuid()).isEqualTo(site.uuid());
+        assertThat(valuesDiff.type()).isEqualTo(AssetType.GLOBAL_SET.name());
+        assertThat(valuesDiff.changes()).extracting(FieldChange::path)
+                .contains("content.title")
+                .doesNotContain("contentDefinition");
+        assertThat(valuesDiff.changes()).filteredOn(c -> c.path().equals("content.title")).singleElement()
+                .satisfies(change -> assertThat(change.after().asText()).isEqualTo("Acme Outdoor"));
+
+        GlobalSetView renamed = globalSetService.updateSchema(
+                site.uuid(),
+                """
+                content {
+                  editor text siteTitle { label "Site title" required renamedFrom "title" }
+                  editor media logo { label "Logo" }
+                }
+                """,
+                valued.revision(),
+                source.ctx());
+
+        AssetDiff schemaDiff = onlyAssetDiff(diffService.diff(source.project().getId(), renamed.revision()));
+        assertThat(schemaDiff.changes()).extracting(FieldChange::path)
+                .as("the CDL text and the value migration it caused are the same revision")
+                .contains("contentDefinition", "content.title", "content.siteTitle");
+        assertThat(schemaDiff.changes()).filteredOn(c -> c.path().equals("content.title")).singleElement()
+                .satisfies(change -> assertThat(change.isRemove()).isTrue());
+        assertThat(schemaDiff.changes()).filteredOn(c -> c.path().equals("content.siteTitle")).singleElement()
+                .satisfies(change -> {
+                    assertThat(change.isAdd()).isTrue();
+                    assertThat(change.after().asText()).isEqualTo("Acme Outdoor");
+                });
+    }
+
+    private static List<ConflictType> conflictTypes(ConflictReport report) {
+        return report.conflicts().stream().map(ImportConflict::type).sorted().toList();
+    }
+
+    private static AssetDiff onlyAssetDiff(RevisionDiff diff) {
+        assertThat(diff.assets()).hasSize(1);
+        return diff.assets().get(0);
+    }
+
+    private List<Asset> globalsRoots(long projectId) {
+        return assetRepository.findAll().stream()
+                .filter(a -> a.getProjectId() == projectId
+                        && a.getAssetType() == AssetType.FOLDER
+                        && FolderScope.GLOBALS_ROOT_UID.equals(a.getUid()))
+                .toList();
     }
 
     private ExportedAsset readAssetEntry(byte[] archiveBytes, UUID assetUuid) {

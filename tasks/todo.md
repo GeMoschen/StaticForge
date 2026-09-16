@@ -19,18 +19,45 @@ tracks are dependency-chained (domain → api → ui; octl needs domain), so no 
   recording and snapshot/live rendering all reuse the M16 cross-asset path. No second resolver.
 
 ## Steps
-- [ ] M17.1.1 `AssetType.GLOBAL_SET`, `FolderScope.GLOBALS`, `globals_root` provisioning
-- [ ] M17.1.2 `GlobalSetService` (create, schema+migration, values, CDL restrictions)
-- [ ] M17.1.3 Export/import, diff, usages coverage
-- [ ] M17.2.1 `GlobalsController` + DTOs + OpenAPI regeneration
-- [ ] M17.3.1 `global:` prefix, `CMS_GLOBAL` accessor root, dependency edges
-- [ ] M17.4.1 Globals store UI + shared tree node + Navigation migration + export picker
-- [ ] M17.5.1 Docs + spec follow-up
-- [ ] M17.5.2 E2E journeys, regression pass, full verification
-- [ ] Review section
+- [x] M17.1.1 `AssetType.GLOBAL_SET`, `FolderScope.GLOBALS`, `globals_root` provisioning
+- [x] M17.1.2 `GlobalSetService` (create, schema+migration, values, CDL restrictions)
+- [x] M17.1.3 Export/import, diff, usages coverage
+- [x] M17.2.1 `GlobalsController` + DTOs + OpenAPI regeneration
+- [x] M17.3.1 `global:` prefix, `CMS_GLOBAL` accessor root, dependency edges
+- [x] M17.4.1 Globals store UI + shared tree node + Navigation migration + export picker
+- [x] M17.5.1 Docs + spec follow-up
+- [x] M17.5.2 E2E journeys, regression pass, full verification
+- [x] Review section
 
 ## Review
-_(filled in when the epic is done)_
+- **Branch:** `m17-global-store` (off `m16-foundations`; master untouched).
+- **Verification:**
+  - `./gradlew build` green: 510 backend tests (457 at M16), 0 failures, 1 skipped (benchmark), plus `ng build`.
+  - Live against a dev backend + `ng serve`: `ui/e2e/m17-journeys.spec.ts` 4/4 and `m16-journeys.spec.ts` 5/5.
+  - The docs' worked example is pinned verbatim by `GlobalsDocsExampleTest`.
+- **Why so little render code changed:** `global:` plugs into M16's cross-asset path (`AssetReferencePrefixes`,
+  `AssetValueProjection`, snapshot/live resolvers, `ReferenceMaterializer`, `BuildPlanner`). `CMS_GLOBAL.<set>.<path>`
+  is desugared in the parser, so both spellings are one AST.
+- **Changes beyond the task files (agreed or found during verification):**
+  - `$CMS_REF` on a path'd asset reference now links the editor's value (was: silently linked the asset). This
+    applies to every prefix; agreed with the user.
+  - `sf-store-tree-node` is shared and Navigation is migrated onto it; agreed with the user.
+  - `PROTOCOL_VERSION` 3 -> 4; agreed with the user.
+  - **Bug, found by the export/import round-trip test:** import silently dropped `GLOBAL_SET`. `NON_FOLDER_ORDER`
+    is now a checked `AssetType` list.
+  - **Bug, pre-existing since M16, found by the live journey:** the page editor pinned its preview to the page's
+    concurrency token, which froze template and cross-asset/global values at the page's last save. Fixed with the
+    preview frame's `revision` (time-travel pin) vs `refreshKey` split.
+  - `ContentRenameMigrator` is extracted from `TemplateServiceImpl`. The template cascade now also walks
+    transparent groups.
+- **Open / not done:**
+  - Usages list the template that reads a set, not the pages. This is by M16 design (spec §16.4); the epic's
+    criterion is annotated.
+  - UI component specs can't run (`templateUrl`). The Analog plugin experiment is recorded in `M17.4.1`'s notes.
+  - A template that uses a set in both `$CMS_VALUE` and `$CMS_REF` appears twice in usages (one `OCTL_VALUE` and
+    one `OCTL_REF` row). This is generic behaviour, left as is.
+  - Lazy `globals_root` provisioning for pre-M17 projects is its own revision, like the other store roots.
+  - A values save re-compiles the set's CDL (it's not a render path). Rendering never compiles set CDL.
 
 ---
 

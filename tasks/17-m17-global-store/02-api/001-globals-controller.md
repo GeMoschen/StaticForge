@@ -1,6 +1,6 @@
 ---
 id: M17.2.1
-status: todo
+status: done
 depends: [M17.1.2]
 epic: m17-global-store
 feature: api

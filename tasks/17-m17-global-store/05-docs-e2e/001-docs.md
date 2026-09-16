@@ -1,6 +1,6 @@
 ---
 id: M17.5.1
-status: todo
+status: done
 depends: [M17.3.1, M17.4.1]
 epic: m17-global-store
 feature: docs-e2e

@@ -51,6 +51,9 @@ public class GlobalSetServiceImpl implements GlobalSetService {
 
     private static final String PROBLEM_TYPE_422 = "https://cms.example.com/problems/sf-api-0422";
 
+    /** Issue paths are rooted at the payload's {@code content}, exactly as page saves report them. */
+    private static final String CONTENT_PATH = "content";
+
     private final AssetService assetService;
     private final AssetRepository assetRepository;
     private final AssetVersionRepository assetVersionRepository;
@@ -106,7 +109,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
         ContentRenameMigrator.pruneUnknown(content, definition);
         payload.set("content", content);
 
-        rejectStructural(contentValidator.validate(definition, content));
+        rejectStructural(contentValidator.validate(definition, content, null, CONTENT_PATH));
 
         return toView(assetService.update(
                 uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx));
@@ -118,7 +121,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
         AssetVersion current = requireOpenSet(ctx.projectId(), uuid);
         ContentDefinition definition = definitionOf(current.getPayload());
 
-        rejectStructural(contentValidator.validate(definition, content));
+        rejectStructural(contentValidator.validate(definition, content, null, CONTENT_PATH));
 
         ObjectNode payload = (ObjectNode) current.getPayload().deepCopy();
         payload.set("content", content == null || content.isNull() ? objectMapper.createObjectNode() : content);

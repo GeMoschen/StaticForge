@@ -88,8 +88,18 @@ export class SfPreviewFrameComponent implements OnDestroy {
 
   readonly projectKey = input.required<string>();
   readonly pageUuid = input.required<string>();
-  /** Pins the preview to a specific revision; omitted/null renders the current one. */
+  /**
+   * Pins the preview to a specific revision (time travel); omitted/null renders the current one.
+   * Everything the page reads is taken at this revision — its templates, and the values of other
+   * assets such as `CMS_GLOBAL` property sets — so it must never be the page's own concurrency
+   * token: that would freeze every template or global change made since the page's last save.
+   */
   readonly revision = input<number | null>(null);
+  /**
+   * Refreshes the preview whenever it changes, without being sent to the server. The page editor
+   * passes the page's own revision here so a save re-renders the preview.
+   */
+  readonly refreshKey = input<unknown>(null);
 
   readonly sectionClick = output<string>();
 
@@ -121,6 +131,7 @@ export class SfPreviewFrameComponent implements OnDestroy {
       this.projectKey();
       this.pageUuid();
       this.revision();
+      this.refreshKey();
       this.scheduleDebounced();
     });
   }
