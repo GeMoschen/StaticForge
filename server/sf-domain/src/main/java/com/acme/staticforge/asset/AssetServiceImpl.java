@@ -175,6 +175,16 @@ public class AssetServiceImpl implements AssetService {
                 FolderScope.MEDIA_ROOT_UID, "All Media", FolderScope.MEDIA, null, ctx);
     }
 
+    @Override
+    @Transactional
+    public AssetVersionView ensureGlobalsRootFolder(long projectId, RevisionContext ctx) {
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        return ensureFixedFolder(
+                projectId, rootAsset.getId(), root.folderPath(),
+                FolderScope.GLOBALS_ROOT_UID, "All Globals", FolderScope.GLOBALS, null, ctx);
+    }
+
     /**
      * Finds-or-creates a fixed, protected root folder by its well-known uid under a given
      * parent, mirroring {@link #ensureRootFolder}'s exact lazy pattern. Deliberately bypasses
@@ -396,10 +406,15 @@ public class AssetServiceImpl implements AssetService {
      * reference form (§16.4) still present in the OCTL {@code source} after a UID change.
      * Compiled templates already hold UUIDs; this is purely the source text the developer
      * should fix by hand.
+     *
+     * <p>A global property set has two spellings (M17.3.1) — the explicit {@code global:<uid>}
+     * reference and the {@code CMS_GLOBAL.<uid>} accessor-root shorthand the parser desugars into
+     * it — so both are matched; flagging only one would leave the other silently stale.
      */
     private List<UidLiteralReference> findUidLiteralReferences(long projectId, String oldUid) {
         Pattern pattern = Pattern.compile(
-                "\\b(?:page|media|section_template|page_template|folder|nav):" + Pattern.quote(oldUid) + "\\b");
+                "\\b(?:(?:page|media|section_template|page_template|folder|nav):|CMS_GLOBAL\\.)"
+                        + Pattern.quote(oldUid) + "\\b");
         List<UidLiteralReference> found = new java.util.ArrayList<>();
         for (AssetType type : List.of(AssetType.SECTION_TEMPLATE, AssetType.PAGE_TEMPLATE)) {
             for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, type)) {
@@ -594,6 +609,8 @@ public class AssetServiceImpl implements AssetService {
                 root = ensurePagesRootFolder(projectId, ctx);
             } else if (scopeHint == FolderScope.MEDIA) {
                 root = ensureMediaRootFolder(projectId, ctx);
+            } else if (scopeHint == FolderScope.GLOBALS) {
+                root = ensureGlobalsRootFolder(projectId, ctx);
             } else {
                 root = ensureRootFolder(projectId, ctx);
             }

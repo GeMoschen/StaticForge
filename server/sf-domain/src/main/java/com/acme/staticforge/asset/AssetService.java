@@ -58,6 +58,14 @@ public interface AssetService {
      */
     AssetVersionView ensureMediaRootFolder(long projectId, RevisionContext ctx);
 
+    /**
+     * Lazily and idempotently ensures the project's fixed, protected {@code GLOBALS}-scope root
+     * folder ("All Globals") exists directly under the hidden root (M17.1.1) — every top-level
+     * Globals folder/loose property set nests under it, mirroring {@link
+     * #ensureNavigationRootFolder}.
+     */
+    AssetVersionView ensureGlobalsRootFolder(long projectId, RevisionContext ctx);
+
     /** Applies a full state change, closing the current version and opening a new one. Optimistic-concurrency-checked. */
     AssetVersionView update(UUID uuid, UpdateAssetCommand cmd, long expectedRevision, RevisionContext ctx);
 

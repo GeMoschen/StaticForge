@@ -122,6 +122,10 @@ public class ProjectServiceImpl implements ProjectService {
         assetService.ensurePagesRootFolder(project.getId(), creationCtx);
         assetService.ensureMediaRootFolder(project.getId(), creationCtx);
 
+        // The globals store (M17.1.1) gets the same treatment — a fixed, protected "All Globals"
+        // root that every property set and Globals folder nests under.
+        assetService.ensureGlobalsRootFolder(project.getId(), creationCtx);
+
         return project;
     }
 

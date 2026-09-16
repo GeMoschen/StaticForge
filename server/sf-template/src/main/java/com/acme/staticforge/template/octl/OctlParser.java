@@ -234,7 +234,7 @@ final class OctlParser {
             path.add(seg);
             c.skipWs();
         }
-        return new Accessor(null, null, path);
+        return Accessor.scope(path);
     }
 
     private List<FilterNode> parseFilters(Cursor c) {
@@ -419,7 +419,7 @@ final class OctlParser {
             path.add(c.readIdent());
             c.skipWs();
         }
-        return new Accessor(null, null, path);
+        return Accessor.scope(path);
     }
 
     private JsonNode parseArrayLiteral(Cursor c) {

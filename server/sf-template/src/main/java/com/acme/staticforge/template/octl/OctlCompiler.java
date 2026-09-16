@@ -86,7 +86,10 @@ public final class OctlCompiler {
                     checkFilters(v.filters(), v.line(), v.col(), ctx);
                     checkRaw(v.accessor(), v.filters(), v.line(), v.col(), ctx);
                 }
-                case OctlNode.Ref r -> checkAccessorRoot(r.accessor(), shadowed, r.line(), r.col(), ctx);
+                case OctlNode.Ref r -> {
+                    checkAccessorRoot(r.accessor(), shadowed, r.line(), r.col(), ctx);
+                    checkGlobalRefPath(r.accessor(), r.line(), r.col(), ctx);
+                }
                 case OctlNode.Body b -> checkBody(b, ctx);
                 case OctlNode.Include i -> resolveReference(i.accessor(), i.line(), i.col(), ctx);
                 case OctlNode.Navigation nav -> {
@@ -175,6 +178,16 @@ public final class OctlCompiler {
             return;
         }
         String name = path.get(0);
+        if (Accessor.GLOBAL_ROOT.equals(name) && !shadowed.contains(name)) {
+            // A CMS_GLOBAL accessor with a set uid was already desugared into a global: reference
+            // by the parser, so reaching here means the uid is missing (spec §16.5, M17.3.1).
+            ctx.diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_GLOBAL_REFERENCE_MISUSE,
+                    Accessor.GLOBAL_ROOT + " needs the property set to read, e.g. "
+                            + Accessor.GLOBAL_ROOT + ".site.title",
+                    line, col));
+            return;
+        }
         if ("CMS_PAGE".equals(name) || shadowed.contains(name)) {
             return;
         }
@@ -196,6 +209,24 @@ public final class OctlCompiler {
                     DiagnosticCodes.OCTL_CROSS_ASSET_VALUE_WITHOUT_PATH,
                     "Cross-asset value without an editor path: " + accessor.referenceKey()
                             + " (did you mean " + accessor.referenceKey() + ".editorName?)",
+                    line, col));
+        }
+    }
+
+    /**
+     * A property set has no URL of its own, so {@code $CMS_REF(CMS_GLOBAL.site)$} (or the
+     * equivalent {@code global:site}) can only ever render empty. The value path is what carries
+     * the link — {@code $CMS_REF(CMS_GLOBAL.site.logo)$} refs the media the {@code logo} editor
+     * holds — so the path-less form is a compile error rather than a silent blank (M17.3.1).
+     */
+    private void checkGlobalRefPath(Accessor accessor, int line, int col, ValidateCtx ctx) {
+        if (accessor.isAssetReference()
+                && Accessor.GLOBAL_PREFIX.equals(accessor.assetType())
+                && accessor.path().isEmpty()) {
+            ctx.diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_GLOBAL_REFERENCE_MISUSE,
+                    "$CMS_REF on a property set needs the editor holding the link, e.g. "
+                            + Accessor.GLOBAL_ROOT + "." + accessor.uid() + ".logo",
                     line, col));
         }
     }

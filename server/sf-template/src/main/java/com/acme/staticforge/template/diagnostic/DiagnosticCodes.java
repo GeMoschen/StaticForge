@@ -13,6 +13,7 @@ public final class DiagnosticCodes {
     public static final String OCTL_UNBALANCED_BLOCK = "SF-TPL-0102";
     public static final String OCTL_UNKNOWN_EDITOR = "SF-TPL-0103";
     public static final String OCTL_UNKNOWN_FILTER = "SF-TPL-0104";
+    public static final String OCTL_GLOBAL_REFERENCE_MISUSE = "SF-TPL-0105";
     public static final String OCTL_UNRESOLVABLE_REF = "SF-TPL-0110";
     public static final String OCTL_BODY_IN_SECTION = "SF-TPL-0120";
     public static final String OCTL_UNKNOWN_NAV_VARIABLE = "SF-TPL-0134";
@@ -40,5 +41,6 @@ public final class DiagnosticCodes {
     public static final String CDL_INVALID_ATTRIBUTE = "SF-CDL-0104";
     public static final String CDL_INVALID_EXPRESSION = "SF-CDL-0105";
     public static final String CDL_INVALID_NAME = "SF-CDL-0106";
+    public static final String CDL_NOT_ALLOWED_IN_GLOBAL_SET = "SF-CDL-0107";
     public static final String CDL_SYNTAX = "SF-CDL-0200";
 }

@@ -21,6 +21,9 @@ import java.util.List;
  *       fileName, mimeType, sizeBytes, width, height, orientation, dominantColor, focalPoint}); blob
  *       hashes and variants stay hidden;
  *   <li>{@code PAGE_REFERENCE} — {@code label};
+ *   <li>{@code GLOBAL_SET} — the property set's values ({@code payload.content}), exactly like a
+ *       page; {@code contentDefinition}/{@code compiledDefinition} stay hidden so a template
+ *       reads a set's values, never its schema (M17.3.1);
  *   <li>templates and folders — no values.
  * </ul>
  *
@@ -47,7 +50,7 @@ public final class AssetValueProjection {
         ObjectNode root = JsonNodeFactory.instance.objectNode();
         JsonNode data = payload == null ? MissingNode.getInstance() : payload;
         switch (type) {
-            case PAGE -> {
+            case PAGE, GLOBAL_SET -> {
                 JsonNode content = data.path("content");
                 if (content.isObject()) {
                     root.setAll((ObjectNode) content);

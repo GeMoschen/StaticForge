@@ -23,6 +23,9 @@ public final class AssetReferencePrefixes {
         if ("nav".equals(prefix)) {
             return AssetType.FOLDER;
         }
+        if ("global".equals(prefix)) {
+            return AssetType.GLOBAL_SET;
+        }
         try {
             return AssetType.valueOf(prefix.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException | NullPointerException e) {

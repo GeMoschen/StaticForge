@@ -1,3 +1,39 @@
+# M17 implementation — Plan
+
+## Approach
+Sequential on branch `m17-global-store` (off `m16-foundations`, master untouched). The epic's
+tracks are dependency-chained (domain → api → ui; octl needs domain), so no worktree fan-out.
+
+## Decisions taken from the task files' recommendations (confirmed with the user)
+- **Shared tree node + migrate Navigation.** New `shared/components/sf-store-tree-node.*`;
+  `features/navigation/` is ported onto it and `nav-tree-node.*` deleted. Media/Templates/Pages
+  trees stay untouched.
+- **`$CMS_REF` path resolution fixed generally, for every prefix.** A path'd asset reference
+  (`page:about.heroImage`, `global:site.logo`) now resolves the cross-asset value and links the
+  resulting editor value, instead of silently referencing the asset itself. Keeps one resolution
+  path for `$CMS_REF(CMS_GLOBAL.site.logo)$` and fixes a latent bug.
+- **`PROTOCOL_VERSION` 3 → 4**, so an older server refuses a globals-carrying archive with the
+  existing `PROTOCOL_VERSION_MISMATCH` conflict instead of crashing in `AssetType.valueOf`.
+- **`CMS_GLOBAL` is parser-level sugar.** `OctlParser` rewrites `CMS_GLOBAL.<setUid>.<rest>` into
+  `Accessor("global", setUid, rest)`, so compile-time resolution, reference edges, dependency
+  recording and snapshot/live rendering all reuse the M16 cross-asset path. No second resolver.
+
+## Steps
+- [ ] M17.1.1 `AssetType.GLOBAL_SET`, `FolderScope.GLOBALS`, `globals_root` provisioning
+- [ ] M17.1.2 `GlobalSetService` (create, schema+migration, values, CDL restrictions)
+- [ ] M17.1.3 Export/import, diff, usages coverage
+- [ ] M17.2.1 `GlobalsController` + DTOs + OpenAPI regeneration
+- [ ] M17.3.1 `global:` prefix, `CMS_GLOBAL` accessor root, dependency edges
+- [ ] M17.4.1 Globals store UI + shared tree node + Navigation migration + export picker
+- [ ] M17.5.1 Docs + spec follow-up
+- [ ] M17.5.2 E2E journeys, regression pass, full verification
+- [ ] Review section
+
+## Review
+_(filled in when the epic is done)_
+
+---
+
 # M16 implementation — Plan
 
 ## Approach

@@ -13,7 +13,8 @@ public enum FolderScope {
     PAGES,
     MEDIA,
     NAVIGATION,
-    TEMPLATES;
+    TEMPLATES,
+    GLOBALS;
 
     /**
      * Well-known {@code uid}s of the two fixed, auto-provisioned, protected top-level folders
@@ -42,6 +43,11 @@ public enum FolderScope {
      * {@link #NAVIGATION_ROOT_UID}. */
     public static final String MEDIA_ROOT_UID = "media_root";
 
+    /** Well-known {@code uid} of the fixed, auto-provisioned, protected {@code GLOBALS}-scope
+     * root folder (M17.1.1) — every top-level Globals folder/loose property set nests under it,
+     * mirroring {@link #NAVIGATION_ROOT_UID}. */
+    public static final String GLOBALS_ROOT_UID = "globals_root";
+
     /** The scope an asset of this type must be placed under, or {@code null} if the type isn't scoped to a store. */
     public static FolderScope requiredFor(AssetType type) {
         return switch (type) {
@@ -49,6 +55,7 @@ public enum FolderScope {
             case MEDIA -> MEDIA;
             case PAGE_REFERENCE -> NAVIGATION;
             case PAGE_TEMPLATE, SECTION_TEMPLATE -> TEMPLATES;
+            case GLOBAL_SET -> GLOBALS;
             default -> null;
         };
     }

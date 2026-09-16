@@ -1767,17 +1767,20 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
-     * {@code manifest.json}'s {@code protocolVersion} reads {@code 3} after this change (task
-     * {@code M14.1.1}) — the structural shape change from one combined {@code assets.json} to
-     * many {@code assets/<uuid>.json} entries is a protocol bump, not an additive field.
+     * {@code manifest.json}'s {@code protocolVersion} reads {@code 4}. It went to {@code 3} in
+     * {@code M14.1.1} for the structural shape change from one combined {@code assets.json} to
+     * many {@code assets/<uuid>.json} entries, and to {@code 4} in {@code M17.1.3} because an
+     * archive may now carry {@code GLOBAL_SET} assets: an importer that predates them would fail
+     * inside {@code AssetType.valueOf} part-way through, whereas a version mismatch is reported as
+     * a clean conflict.
      */
     @Test
-    void manifestReportsProtocolVersionThree() {
+    void manifestReportsProtocolVersionFour() {
         Fixture source = newFixture("m141_manifest", "M14.1 Manifest Protocol Version");
         byte[] archive = exportImportService.exportProject(source.project().getId());
 
         ExportManifest manifest = parseManifest(archive);
-        assertThat(manifest.protocolVersion()).isEqualTo(3);
+        assertThat(manifest.protocolVersion()).isEqualTo(4);
     }
 
     /**

@@ -11,6 +11,8 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
+import com.acme.staticforge.asset.content.ContentRenameMigrator;
+import com.acme.staticforge.asset.content.ContentRenameMigrator.EditorRename;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.reference.ProjectReferenceResolver;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
@@ -27,7 +29,6 @@ import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
 import com.acme.staticforge.template.content.BodyDefinition;
 import com.acme.staticforge.template.content.ContentDefinition;
-import com.acme.staticforge.template.content.EditorDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
@@ -299,7 +300,7 @@ public class TemplateServiceImpl implements TemplateService {
     // ------------------------------------------------------------------
 
     private void migrateRenames(Asset template, ContentDefinition definition, RevisionContext ctx) {
-        List<EditorRename> renames = collectRenames(definition);
+        List<EditorRename> renames = ContentRenameMigrator.collect(definition);
         if (renames.isEmpty()) {
             return;
         }
@@ -331,17 +332,6 @@ public class TemplateServiceImpl implements TemplateService {
         }
     }
 
-    private List<EditorRename> collectRenames(ContentDefinition definition) {
-        List<EditorRename> renames = new ArrayList<>();
-        for (EditorDefinition editor : definition.editors()) {
-            String from = editor.renamedFrom();
-            if (from != null && !from.isBlank() && !from.equals(editor.name())) {
-                renames.add(new EditorRename(from, editor.name()));
-            }
-        }
-        return renames;
-    }
-
     private ObjectNode migratePagePayload(JsonNode payload, String templateUuid, List<EditorRename> renames) {
         JsonNode bodies = payload.get("bodies");
         if (bodies == null || !bodies.isObject()) {
@@ -364,14 +354,7 @@ public class TemplateServiceImpl implements TemplateService {
                 if (contentNode == null || !contentNode.isObject()) {
                     continue;
                 }
-                ObjectNode content = (ObjectNode) contentNode;
-                for (EditorRename rename : renames) {
-                    if (content.has(rename.from())) {
-                        content.set(rename.to(), content.get(rename.from()));
-                        content.remove(rename.from());
-                        changed = true;
-                    }
-                }
+                changed |= ContentRenameMigrator.apply((ObjectNode) contentNode, renames);
             }
         }
         return changed ? copy : null;
@@ -518,8 +501,6 @@ public class TemplateServiceImpl implements TemplateService {
     private UUID folderUuid(Long folderId) {
         return assetRepository.findById(folderId).map(Asset::getUuid).orElse(null);
     }
-
-    private record EditorRename(String from, String to) {}
 
     private record AffectedPage(AssetVersion version, ObjectNode payload) {}
 }

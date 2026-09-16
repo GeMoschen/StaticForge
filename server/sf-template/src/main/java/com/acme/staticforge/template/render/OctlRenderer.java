@@ -416,8 +416,19 @@ public final class OctlRenderer implements Renderer {
         }
     }
 
+    /**
+     * The asset a {@code $CMS_REF} points at.
+     *
+     * <p>A path-less asset reference ({@code page:about}, {@code media:logo}) refs that asset
+     * directly. An asset reference <em>with</em> a value path ({@code CMS_GLOBAL.site.logo},
+     * {@code page:about.heroImage}) refs what that editor holds, not the asset the editor lives
+     * on — it goes through exactly the same media/link resolution a local editor value does. That
+     * is what lets {@code $CMS_REF(CMS_GLOBAL.site.logo)$} yield a media URL relative to the
+     * rendering page without a second, globals-only code path; before M17.3.1 a path'd reference
+     * silently ignored its path and linked the target asset instead.
+     */
     private RefTarget resolveRefTarget(Accessor accessor, State s) {
-        if (accessor.isAssetReference()) {
+        if (accessor.isAssetReference() && accessor.path().isEmpty()) {
             String key = accessor.referenceKey();
             UUID uuid = s.template.references().get(key);
             if (uuid == null) {

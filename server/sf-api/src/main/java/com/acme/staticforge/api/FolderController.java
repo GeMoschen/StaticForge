@@ -72,7 +72,8 @@ public class FolderController {
         try {
             return FolderScope.valueOf(scope);
         } catch (IllegalArgumentException e) {
-            throw new SfException(ProblemFactory.badRequest("scope must be PAGES, MEDIA, NAVIGATION, or TEMPLATES."));
+            throw new SfException(
+                    ProblemFactory.badRequest("scope must be PAGES, MEDIA, NAVIGATION, TEMPLATES, or GLOBALS."));
         }
     }
 

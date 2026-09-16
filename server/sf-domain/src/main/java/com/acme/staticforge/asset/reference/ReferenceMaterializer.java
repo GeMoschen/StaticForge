@@ -106,6 +106,7 @@ public class ReferenceMaterializer {
             case PAGE -> pageReferences(payload);
             case PAGE_REFERENCE -> navigationReferences(payload);
             case PAGE_TEMPLATE, SECTION_TEMPLATE -> templateReferences(projectId, payload);
+            case GLOBAL_SET -> contentReferences.extract(payload.get("content"), "content");
             case MEDIA, FOLDER -> List.of();
         };
         if (found.isEmpty()) {

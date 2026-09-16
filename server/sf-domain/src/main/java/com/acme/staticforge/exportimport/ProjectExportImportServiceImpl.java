@@ -412,8 +412,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
         }
 
-        // The fixed, protected "All Navigation", "All Templates", "All Pages" and "All Media"
-        // wrapper roots (generalized from M13.1.2's two-fixed-folder pattern) get the exact same
+        // The fixed, protected "All Navigation", "All Templates", "All Pages", "All Media" and
+        // "All Globals" wrapper roots (generalized from M13.1.2's two-fixed-folder pattern) get the exact same
         // resolve-not-create treatment: every project already has its own copy, so an archive's
         // copy must remap onto the target's existing folder rather than create a duplicate.
         fixedFolderKeys.addAll(resolveFixedFolder(
@@ -431,6 +431,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         fixedFolderKeys.addAll(resolveFixedFolder(
                 findFixedFolderByUid(assets, FolderScope.MEDIA_ROOT_UID),
                 assetService.ensureMediaRootFolder(targetProjectId, ctx),
+                targetProjectId, remap, idMaps));
+        fixedFolderKeys.addAll(resolveFixedFolder(
+                findFixedFolderByUid(assets, FolderScope.GLOBALS_ROOT_UID),
+                assetService.ensureGlobalsRootFolder(targetProjectId, ctx),
                 targetProjectId, remap, idMaps));
 
         // Pre-populate idMaps for every skipped asset with the *existing* target asset's real
