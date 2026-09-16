@@ -6,6 +6,7 @@ import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
+import com.acme.staticforge.template.query.RecordView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.MissingNode;
@@ -30,6 +31,11 @@ import org.junit.jupiter.api.Test;
  * {@code uuid}, and the render context gets an {@link AssetValueResolver} returning {@code value}
  * for that UUID ({@code null} stands for a missing/deleted asset). Without the file, the case
  * compiles and renders with no resolvers at all.
+ *
+ * <p>An optional {@code records.json} stubs datasets (M19.3.2): it maps a dataset uid to
+ * {@code {uuid, records: [{uuid, uid, displayName, folderPath, changedAt, content}]}}. Each dataset
+ * resolves as {@code dataset:<uid>} and lists its records to loops; each record resolves as
+ * {@code record:<uid>} and reads as its loop item, also when reached by dereferencing a reference.
  */
 class GoldenFileRenderTest {
 
@@ -65,6 +71,10 @@ class GoldenFileRenderTest {
                     assetValues.put(uuid, value.isObject() ? value : MissingNode.getInstance());
                 });
             }
+            Map<UUID, List<RecordView>> datasets = new HashMap<>();
+            if (Files.exists(dir.resolve("records.json"))) {
+                loadRecords(mapper.readTree(read(dir.resolve("records.json"))), uuids, assetValues, datasets);
+            }
             ReferenceResolver references = uuids.isEmpty()
                     ? null
                     : (assetType, uid) -> Optional.ofNullable(uuids.get(assetType + ":" + uid));
@@ -78,7 +88,17 @@ class GoldenFileRenderTest {
 
             RenderContext.Builder builder = RenderContext.builder().channel("html").escaping(Escaping.HTML).values(content);
             if (!assetValues.isEmpty()) {
-                builder.assetValueResolver((assetType, uuid) -> assetValues.getOrDefault(uuid, MissingNode.getInstance()));
+                builder.assetValueResolver(new AssetValueResolver() {
+                    @Override
+                    public JsonNode valueOf(String assetType, UUID uuid) {
+                        return assetValues.getOrDefault(uuid, MissingNode.getInstance());
+                    }
+
+                    @Override
+                    public List<RecordView> datasetRecords(UUID datasetUuid) {
+                        return datasets.getOrDefault(datasetUuid, List.of());
+                    }
+                });
             }
             RenderContext context = builder.build();
             String actual = renderer.render(result.template(), context).output();
@@ -87,6 +107,29 @@ class GoldenFileRenderTest {
                     .as("case %s\n--- actual ---\n%s\n--- expected ---\n%s", dir.getFileName(), actual, expected)
                     .isEqualTo(normalize(expected));
         }
+    }
+
+    /** Registers each dataset and record of a {@code records.json} fixture with the stub resolvers. */
+    static void loadRecords(
+            JsonNode fixture, Map<String, UUID> uuids, Map<UUID, JsonNode> assetValues, Map<UUID, List<RecordView>> datasets) {
+        fixture.fields().forEachRemaining(dataset -> {
+            UUID datasetUuid = UUID.fromString(dataset.getValue().path("uuid").asText());
+            uuids.put("dataset:" + dataset.getKey(), datasetUuid);
+            List<RecordView> records = new java.util.ArrayList<>();
+            for (JsonNode record : dataset.getValue().path("records")) {
+                RecordView view = new RecordView(
+                        UUID.fromString(record.path("uuid").asText()),
+                        record.path("uid").asText(),
+                        record.path("displayName").asText(),
+                        record.path("folderPath").asText("/"),
+                        java.time.Instant.parse(record.path("changedAt").asText("2026-01-01T00:00:00Z")),
+                        record.path("content"));
+                records.add(view);
+                uuids.put("record:" + view.uid(), view.uuid());
+                assetValues.put(view.uuid(), view.item());
+            }
+            datasets.put(datasetUuid, records);
+        });
     }
 
     private static String read(Path path) throws java.io.IOException {

@@ -4,6 +4,7 @@ import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
@@ -66,6 +67,7 @@ public class PageRenderService {
 
     private final AssetService assetService;
     private final AssetRepository assetRepository;
+    private final AssetVersionRepository assetVersionRepository;
     private final ProjectRepository projectRepository;
     private final ObjectMapper objectMapper;
     private final PreviewTokenService previewTokenService;
@@ -82,6 +84,7 @@ public class PageRenderService {
     public PageRenderService(
             AssetService assetService,
             AssetRepository assetRepository,
+            AssetVersionRepository assetVersionRepository,
             ProjectRepository projectRepository,
             ObjectMapper objectMapper,
             PreviewTokenService previewTokenService,
@@ -93,6 +96,7 @@ public class PageRenderService {
             TextMediaCompiler textMediaCompiler) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
+        this.assetVersionRepository = assetVersionRepository;
         this.projectRepository = projectRepository;
         this.objectMapper = objectMapper;
         this.previewTokenService = previewTokenService;
@@ -554,7 +558,7 @@ public class PageRenderService {
 
     /** Cross-asset values at the preview's revision (current when {@code revision} is {@code null}). */
     private AssetValueResolver assetValues(long projectId, Long revision) {
-        return new LiveAssetValueResolver(assetService, assetRepository, projectId, revision);
+        return new LiveAssetValueResolver(assetService, assetRepository, assetVersionRepository, projectId, revision);
     }
 
     private ReferenceResolver referenceResolver(long projectId) {

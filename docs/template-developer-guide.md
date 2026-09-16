@@ -289,6 +289,177 @@ revision; a broken file is served as its source with the diagnostic in the `X-SF
 response header, so one bad stylesheet doesn't break the preview. An SVG is sanitized again after
 rendering, so a value can't bring back `<script>` or event handlers.
 
+### 2.9 Datasets and records (M19)
+
+A **dataset** is a list of structured entries that many pages show: team members, products, FAQs,
+locations. A developer declares the fields once as a **dataset schema** (Templates store, fixed
+**Datasets** folder); editors add one **record** per entry in the **Content** store. Records have no
+page of their own — templates loop over them, read single ones, or follow a `reference` to one.
+
+**Declaring a dataset.** A schema is ordinary CDL with one restriction: no `bodies { … }` (records have
+values only, `SF-CDL-0108`). Every editor type works, `renamedFrom` included: renaming a field rewrites
+that key in every record of the dataset, and the schema change plus all rewritten records are **one
+revision**. Removed fields keep their stored values, exactly as on pages. Validate a draft with
+`POST /projects/{p}/cdl/validate?kind=DATASET`. A schema can name a **title field** (a `text` editor):
+a record's display name then follows that field.
+
+**Looping a dataset.**
+
+```
+$CMS_FOR(member : dataset:team, where="member.role == 'lead'", sort="-joined,name", limit=6, offset=0, folder="staff")$
+  <li>$CMS_VALUE(member.name)$</li>
+$CMS_END_FOR$
+```
+
+| Argument | Meaning |
+|---|---|
+| `where` | an OCTL expression — the `$CMS_IF` grammar (§16.9) — that a record must satisfy |
+| `sort` | comma-separated fields, `-` for descending; after them records order by `_displayName`, then `_uid` |
+| `limit`, `offset` | non-negative integers |
+| `folder` | a Content folder path prefix: `staff` or `/staff/leads/` |
+
+They apply in the order `folder` → `where` → `sort` → `offset` → `limit`, and are parsed when the
+template is saved: a malformed argument is `SF-TPL-0140`, and a field the dataset doesn't declare is
+`SF-TPL-0141` (`SF-TPL-0142` for sorting by a list, rich text, media or reference field, which have no
+order). An unknown dataset uid is `SF-TPL-0110`. Loops count toward the 100,000 iteration limit
+(`SF-TPL-0131`) like any other.
+
+- **Fields are read through the loop variable** (`member.role`). Any other name in `where` is the
+  render scope, so a loop can depend on the page it renders on:
+  `where="member.team == CMS_PAGE.team"`, or a `$CMS_SET` variable. There are no bare field names.
+- **Comparisons.** Numbers compare numerically; strings that are both ISO dates or date-times
+  (`2024-05-01`, `2024-05-01T10:00:00Z`) chronologically (a date is the start of its day, UTC); other
+  strings case-sensitively. A `reference` or `media` value compares as its uuid. A missing field is
+  `null`: `member.joined == null` tests absence; `<`/`>` against a missing value, or across types
+  (`member.level > 'x'`), are simply false. `in` tests membership: `member.role in ['lead', 'cto']`,
+  `'vip' in member.tags`, or a substring: `'Love' in member.name`. Filters work: `member.name | lower == 'ada'`.
+- **Sorting** is stable; missing values sort last in both directions; strings sort case-insensitively
+  with a fixed, locale-independent order, so output is identical on every server.
+- **Loop scope.** Each item has the record's fields plus `_uuid`, `_uid`, `_displayName`,
+  `_folderPath` (relative to the Content store: `/staff/leads/`), `_changedAt` (ISO instant) and the
+  usual `_index`, `_first`, `_last`, `_count`. A record's list fields loop like any list:
+  `$CMS_FOR(tag : member.tags)$`.
+- **Deleted records** never appear. Preview in time travel loops the records as they were then.
+
+**Reading one record.** `record:<uid>` is a cross-asset value (§2.6) whose root is the same item a loop
+binds: `$CMS_VALUE(record:dee.name)$`, `$CMS_VALUE(record:dee._folderPath)$`. `$CMS_REF(record:dee)$`
+has no URL and is `SF-TPL-0105`; `$CMS_REF(record:dee.website)$` links what the field holds.
+
+**Following a reference.** A `reference` editor value pointing at a record can be walked into:
+`$CMS_VALUE(author.name)$` reads the referenced record's `name`, and `$CMS_VALUE(r.person.mentor.name)$`
+follows references through records. Only segments the reference value itself lacks dereference, so
+`author.uuid` is still the stored uuid. Restrict a reference to one dataset with `dataset "uid"`
+(see [`editors/reference.md`](editors/reference.md)).
+
+**Worked example: a team page.** The records (from the golden-file fixture, as `records.json`):
+
+<!-- golden: render/for-dataset-where-sort/records.json -->
+```json
+{
+  "team": {
+    "uuid": "d0000000-0000-0000-0000-000000000001",
+    "records": [
+      { "uuid": "e0000000-0000-0000-0000-00000000000a", "uid": "ada", "displayName": "Ada", "folderPath": "/team/leads/",
+        "content": { "name": "Ada", "role": "lead", "level": 3, "joined": "2021-03-01", "tags": ["vip", "founder"] } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000b", "uid": "bob", "displayName": "bob", "folderPath": "/team/",
+        "content": { "name": "bob <b>", "role": "dev", "level": 1.5, "joined": "2023-07-15", "tags": [] } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000c", "uid": "cy", "displayName": "Cy", "folderPath": "/team/",
+        "content": { "name": "Cy", "role": "dev", "level": 2, "joined": "2022-11-30",
+                     "mentor": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-00000000000a", "assetType": "RECORD" } } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000d", "uid": "dee", "displayName": "Dee", "folderPath": "/alumni/",
+        "content": { "name": "Dee", "role": "lead", "joined": "2019-05-05" } }
+    ]
+  }
+}
+```
+
+The HTML channel:
+
+<!-- golden: render/for-dataset-where-sort/template.octl -->
+```
+$CMS_SET(minLevel = 2)$<ul>
+$CMS_FOR(member : dataset:team, where="member.role == 'lead' || member.level >= minLevel", sort="-joined,name", limit=3)$<li data-i="$CMS_VALUE(member._index)$">$CMS_VALUE(member.name)$ ($CMS_VALUE(member.role)$, $CMS_VALUE(member.joined)$)</li>
+$CMS_END_FOR$</ul>
+<p>$CMS_FOR(m : dataset:team, folder="alumni")$$CMS_VALUE(m._displayName)$ in $CMS_VALUE(m._folderPath)$$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : dataset:team, sort="_uid", offset=1, limit=2)$[$CMS_VALUE(m.name)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : dataset:team, where="m.nope == 1")$never$CMS_END_FOR$</p>
+```
+
+renders:
+
+<!-- golden: render/for-dataset-where-sort/expected.html -->
+```html
+<ul>
+<li data-i="0">Cy (dev, 2022-11-30)</li>
+<li data-i="1">Ada (lead, 2021-03-01)</li>
+<li data-i="2">Dee (lead, 2019-05-05)</li>
+</ul>
+<p>Dee in /alumni/</p>
+<p>[bob &lt;b&gt;][Cy]</p>
+<p></p>
+```
+
+(The last loop compiles here because the golden runner knows no schema; saved against the `team`
+schema it is `SF-TPL-0141`.) The Markdown channel of the same data:
+
+<!-- golden: render-md/for-dataset-markdown/template.octl -->
+```
+# Team
+
+$CMS_FOR(member : dataset:team, where="member.role == 'lead'", sort="name")$- **$CMS_VALUE(member.name)$** — joined $CMS_VALUE(member.joined)$
+$CMS_END_FOR$
+Mentor of Cy: $CMS_VALUE(record:cy.mentor.name)$
+```
+
+<!-- golden: render-md/for-dataset-markdown/expected.md -->
+```markdown
+# Team
+
+- **Ada** — joined 2021-03-01
+- **Dee** — joined 2019-05-05
+
+Mentor of Cy: Ada
+```
+
+Record values and references, with a page whose `author` and `reviewers[].person` are `reference`
+editors pointing at records (and `related` pointing at a page, which is not dereferenced):
+
+<!-- golden: render/record-value-and-reference/template.octl -->
+```
+<p>$CMS_VALUE(record:dee.name)$ ($CMS_VALUE(record:dee._folderPath)$, $CMS_VALUE(record:dee._meta.displayName)$)</p>
+<p>By $CMS_VALUE(author.name)$, $CMS_VALUE(author.role | upper)$ [$CMS_VALUE(author.uuid)$]</p>
+<ul>$CMS_FOR(r : reviewers)$<li>$CMS_VALUE(r.person.name)$$CMS_IF(r.person.mentor.name)$ mentored by $CMS_VALUE(r.person.mentor.name)$$CMS_END_IF$</li>$CMS_END_FOR$</ul>
+<p>[$CMS_VALUE(related.name)$][$CMS_VALUE(missing.name)$]</p>
+```
+
+<!-- golden: render/record-value-and-reference/expected.html -->
+```html
+<p>Dee (/alumni/, Dee)</p>
+<p>By Ada, LEAD [e0000000-0000-0000-0000-00000000000a]</p>
+<ul><li>Cy mentored by Ada</li><li>bob &lt;b&gt;</li><li></li></ul>
+<p>[][]</p>
+```
+
+Every snippet in this section is checked against its golden file by `DocsGoldenSnippetsTest`.
+
+**Rebuilds.** An `INCREMENTAL` generation rebuilds a page that loops `dataset:team` when a team record
+is created, edited, moved or deleted **and the loop's `folder` and `where` select that record before or
+after the change**. A record the loop filters out both times can't change its output — sorting,
+`offset`, `limit` and `_count` all apply after the filter — so, with the example above, editing a `dev`
+record doesn't rebuild the leads page, while promoting one to `lead` (or demoting a lead) does. A loop
+without `folder`/`where` selects every record, so every change rebuilds it. A `where` that reads the
+render scope (`CMS_PAGE.team`, a `$CMS_SET` variable, an outer loop, another asset) can't be decided
+before rendering: the page rebuilds for every record in the loop's folder. Items a loop dereferences
+count too: if a selected record references a record that changes (`member.mentor.name`), the page
+rebuilds. A page that reads one record — by `record:` or through a `reference` — depends on that record
+only; editing a sibling record does not rebuild it. Changing the schema rebuilds every page that loops
+the dataset. A 5,000-record dataset looped
+by 500 pages generates in about 2.6 s (full) on the development machine.
+
+**Not the `visibleWhen` grammar.** `where` is the OCTL expression grammar `$CMS_IF` uses. The CDL
+`visibleWhen` attribute has its own, deliberately tiny grammar shared with the editor UI (§14.4) — no
+filters, no `in`, no dates — and the two are not interchangeable.
+
 ## Part 3 — Diagnostics
 
 ### 3.1 OCTL (`SF-TPL-*`) — `template.diagnostic.DiagnosticCodes`
@@ -299,10 +470,13 @@ rendering, so a value can't bring back `<script>` or event handlers.
 | `SF-TPL-0102` | error | unbalanced block (missing `$CMS_END_IF$`) |
 | `SF-TPL-0103` | error | unknown editor name in scope |
 | `SF-TPL-0104` | error | unknown filter |
-| `SF-TPL-0105` | error | `CMS_GLOBAL` without a property set (`$CMS_VALUE(CMS_GLOBAL)$`), or `$CMS_REF` on a property set without an editor path (`$CMS_REF(CMS_GLOBAL.site)$`) |
+| `SF-TPL-0105` | error | `CMS_GLOBAL` without a property set (`$CMS_VALUE(CMS_GLOBAL)$`), or `$CMS_REF` without an editor path on a property set (`$CMS_REF(CMS_GLOBAL.site)$`), a record (`$CMS_REF(record:dee)$`) or a dataset — none has a URL |
 | `SF-TPL-0110` | error | unresolvable asset reference |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
 | `SF-TPL-0121` | error | processed text media (§2.8): `$CMS_BODY`, `$CMS_INCLUDE`, the leaf `$CMS_NAVIGATION(nav:…)$` or `CMS_PAGE`, none of which exist outside a page |
+| `SF-TPL-0140` | error | dataset loop (§2.9): a malformed `where`, `sort`, `limit`, `offset` or `folder`, an unknown loop argument, or a path after `dataset:uid`; the message carries the column inside the argument |
+| `SF-TPL-0141` | error | dataset loop: `where` or `sort` names a field the dataset's schema doesn't declare (checked when the template is saved) |
+| `SF-TPL-0142` | error | dataset loop: `sort` by a field with no order — `list`, `richtext`, `media`, `reference` and other structured editors |
 | `SF-TPL-0134` | error | `$CMS_NAVIGATION_RECURSE(name)$` references a variable not bound by an enclosing `$CMS_NAVIGATION(...) as name$` |
 | `SF-TPL-0130` | error (render) | include depth exceeded: more than 32 nested section/include/catalog-card levels below the page template |
 | `SF-TPL-0131` | error (render) | loop iteration limit (100,000) exceeded |
@@ -330,6 +504,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-CDL-0105` | error | invalid `visibleWhen`/validation expression |
 | `SF-CDL-0106` | error | invalid editor name |
 | `SF-CDL-0107` | error | not allowed in a global property set: a `body` declaration or a `catalog` editor (`POST /cdl/validate?kind=GLOBAL_SET` and property-set saves only) |
+| `SF-CDL-0108` | error | not allowed in a dataset schema: a `body` declaration (`POST /cdl/validate?kind=DATASET` and dataset saves only) |
 | `SF-CDL-0200` | error | CDL syntax error |
 
 ### 3.3 Generation (`SF-GEN-*`) — `generate.GenerationDiagnosticCodes` + `generate.GenerationService`

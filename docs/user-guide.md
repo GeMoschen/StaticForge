@@ -8,7 +8,7 @@ The interface is built around one idea (§24.1): **every change is on the record
 
 | Persona | Can do |
 |---|---|
-| **Editor** | create/edit page content, sections, media, global values; preview |
+| **Editor** | create/edit page content, sections, media, records, global values; preview |
 | **Project administrator** | + manage members, channels, generation targets, trigger publishes |
 | **Instance administrator** | + create/archive projects, manage global users |
 
@@ -88,6 +88,27 @@ A property set that a template or page still reads can't be deleted; its usages 
 | Developer and project admin | edit | edit |
 
 During time travel the whole Globals screen is read-only and shows each set as it was at that revision.
+
+### Content
+
+Lists that many pages show — team members, products, FAQs, office locations — live in **Content** as **records**, not on any page. Each list is a **dataset**: a developer decides which fields its records have, and you fill them in. Edit a record once and every page that shows it follows.
+
+1. Open **Content** from the nav. The chips at the top pick a dataset (**All** shows a card per dataset with its record count); the tree on the left holds folders, which only keep records tidy.
+2. A dataset's records are a grid. **Search by name** filters as you type. For more precise filters, type an expression such as `role == 'lead' && joined > '2022-01-01'` and choose **Apply** — a mistake is shown with its column. Click a column header to sort (again to reverse, Shift+click to add a second sort); the column chooser hides columns you don't need, and remembers that on this device.
+3. **New record** asks for a name and a dataset, then opens the record. Records autosave like pages; **Save now** or `Cmd/Ctrl+S` saves at once. If the dataset has a title field, the record's name follows that field.
+4. The panel beside the form has **Checks** (empty required fields and similar findings — they don't block saving), **History** (every save is a revision, with restore) and **Usages** (the pages and templates that show this record).
+5. **Delete** asks first, and says how many pages or templates still show the record; a deleted record disappears from every list on the next preview or publish, and can be restored from its history.
+6. In a page, a field that points at a record opens a picker that lists only that dataset's records.
+
+During time travel a record opens read-only, as it was at that revision, and page previews loop the records of that revision. The grid itself always lists today's records.
+
+| Role | Records | Dataset fields, create and delete datasets |
+|---|---|---|
+| Viewer | read | read |
+| Editor | edit | read |
+| Developer and project admin | edit | edit (Templates → Datasets) |
+
+A dataset that still has records can't be deleted — delete its records first.
 
 ### Generate & publish
 

@@ -1,0 +1,159 @@
+@if (loading() && !record()) {
+  <p class="record-editor__loading">Loading record…</p>
+} @else {
+  @if (record(); as rec) {
+    <div class="record-editor">
+      <header class="record-editor__header">
+        <a class="record-editor__back" [routerLink]="['/p', projectKey(), 'content']" queryParamsHandling="preserve">
+          <sf-icon name="arrow_back" />
+          <span>All records</span>
+        </a>
+        <div class="record-editor__title">
+          <h2>{{ rec.displayName ?? rec.uid }}</h2>
+          <code class="record-editor__uid">{{ rec.uid }}</code>
+          @if (rec.datasetUid) {
+            <span class="record-editor__badge" title="Dataset">{{ dataset()?.displayName ?? rec.datasetUid }}</span>
+          }
+          <span class="record-editor__path" title="Folder">{{ rec.folderPath }}</span>
+        </div>
+        <span class="record-editor__status" role="status" aria-live="polite">{{ statusLabel() }}</span>
+        @if (!readOnly() && !rec.deleted) {
+          <sf-button variant="secondary" [disabled]="autosave.saveState() === 'saving'" (click)="saveNow()">Save now</sf-button>
+          <sf-button variant="danger" (click)="deleteRecord()">Delete</sf-button>
+        }
+        @if (rec.deleted && !timeTravelling()) {
+          <sf-button variant="primary" [disabled]="readOnly()" (click)="restoreRecord()">Restore</sf-button>
+        }
+      </header>
+
+      @if (timeTravelling()) {
+        <p class="record-editor__notice" role="status">
+          Viewing revision {{ rec.revision }} — the record is read-only until you leave time travel.
+          <button type="button" class="record-editor__link" (click)="leaveTimeTravel()">Back to now</button>
+        </p>
+      } @else if (rec.deleted) {
+        <p class="record-editor__notice" role="status">This record is deleted. Restore it to edit it again.</p>
+      }
+
+      <div class="record-editor__body">
+        <section class="record-editor__form" aria-label="Record values">
+          @if (!nameFromTitle()) {
+            <label class="record-editor__name">
+              <span>Display name</span>
+              <input type="text" [value]="displayName()" [disabled]="readOnly() || rec.deleted" (input)="onNameInput($event)" />
+            </label>
+          } @else {
+            <p class="record-editor__hint">The display name follows the “{{ dataset()?.titleEditor }}” field.</p>
+          }
+
+          @if (definition().editors.length === 0) {
+            <p class="record-editor__hint">The dataset declares no fields yet.</p>
+          } @else {
+            @if (form(); as group) {
+              <sf-content-form [definition]="definition()" [formGroup]="group" [projectKey]="projectKey()" [issues]="issues()" />
+            }
+          }
+
+          <p class="record-editor__snippet" title="Read this record in a template">
+            <span class="sf-sr-only">Template snippet: </span><code>{{ snippet() }}</code>
+          </p>
+        </section>
+
+        <aside class="record-editor__side">
+          <div class="record-editor__tabs" role="tablist">
+            <button type="button" role="tab" [attr.aria-selected]="panel() === 'issues'" [class.record-editor__tab--active]="panel() === 'issues'" (click)="showPanel('issues')">
+              Checks
+              @if (issues().length > 0) {
+                <span class="record-editor__count">{{ issues().length }}</span>
+              }
+            </button>
+            <button type="button" role="tab" [attr.aria-selected]="panel() === 'history'" [class.record-editor__tab--active]="panel() === 'history'" (click)="showPanel('history')">
+              History
+            </button>
+            <button type="button" role="tab" [attr.aria-selected]="panel() === 'usages'" [class.record-editor__tab--active]="panel() === 'usages'" (click)="showPanel('usages')">
+              Used by
+              @if (usages().length > 0) {
+                <span class="record-editor__count">{{ usages().length }}</span>
+              }
+            </button>
+          </div>
+
+          @switch (panel()) {
+            @case ('issues') {
+              <div role="tabpanel" aria-label="Checks" aria-live="polite">
+                @if (issues().length === 0) {
+                  <p class="record-editor__hint">No problems found in the last save.</p>
+                } @else {
+                  <ul class="record-editor__list">
+                    @for (issue of issues(); track $index) {
+                      <li class="record-editor__issue" [class.record-editor__issue--blocking]="issue.kind === 'STRUCTURAL'">
+                        <code>{{ issue.path }}</code>
+                        <span>{{ issue.message }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+            @case ('history') {
+              <div role="tabpanel" aria-label="History">
+                <ul class="record-editor__list">
+                  @for (entry of history(); track entry.revision) {
+                    <li>
+                      <button
+                        type="button"
+                        class="record-editor__revision"
+                        [class.record-editor__revision--current]="entry.revision === rec.revision"
+                        (click)="viewRevision(entry.revision)"
+                      >
+                        <span>rev {{ entry.revision }}</span>
+                        <span>{{ entry.displayName }}@if (entry.deleted) { (deleted) }</span>
+                        <span class="record-editor__muted">{{ entry.changedAt | sfRelativeTime }}</span>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+            @case ('usages') {
+              <div role="tabpanel" aria-label="Used by">
+                @if (usages().length === 0) {
+                  <p class="record-editor__hint">No page, template or record references this record.</p>
+                } @else {
+                  <ul class="record-editor__list">
+                    @for (usage of usages(); track $index) {
+                      <li class="record-editor__usage">
+                        <span class="record-editor__badge">{{ usage.fromType }}</span>
+                        @if (usage.fromType === 'PAGE') {
+                          <a [routerLink]="['/p', projectKey(), 'pages', usage.fromUuid]">{{ usage.fromUid }}</a>
+                        } @else if (usage.fromType === 'RECORD') {
+                          <a [routerLink]="['/p', projectKey(), 'content', 'records', usage.fromUuid]">{{ usage.fromUid }}</a>
+                        } @else {
+                          <span>{{ usage.fromUid }}</span>
+                        }
+                        <code class="record-editor__muted">{{ usage.sourcePath }}</code>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          }
+        </aside>
+      </div>
+
+      @if (autosave.conflict(); as conflict) {
+        <sf-conflict-drawer
+          subject="record"
+          [conflict]="conflict"
+          [changedKeys]="changedKeys()"
+          (keepMine)="onResolve('mine')"
+          (takeTheirs)="onResolve('theirs')"
+          (resolve)="onResolveFields($event)"
+        />
+      }
+    </div>
+  } @else {
+    <p class="record-editor__loading">This record could not be loaded.</p>
+  }
+}

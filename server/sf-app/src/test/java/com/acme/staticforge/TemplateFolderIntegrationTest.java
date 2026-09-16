@@ -17,23 +17,23 @@ import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
-import com.acme.staticforge.common.JsonUtil;
-import com.acme.staticforge.common.SfException;
-import com.acme.staticforge.project.CreateProjectRequest;
-import com.acme.staticforge.project.Project;
-import com.acme.staticforge.project.ProjectService;
-import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.security.JwtService;
 import com.acme.staticforge.asset.template.CreateTemplateCommand;
 import com.acme.staticforge.asset.template.TemplateService;
 import com.acme.staticforge.asset.template.TemplateView;
 import com.acme.staticforge.asset.template.UpdateTemplateCommand;
+import com.acme.staticforge.common.JsonUtil;
+import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.exportimport.ExportSelection;
 import com.acme.staticforge.exportimport.ImportOptions;
 import com.acme.staticforge.exportimport.ProjectExportImportService;
+import com.acme.staticforge.project.CreateProjectRequest;
+import com.acme.staticforge.project.Project;
+import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
+import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
+import com.acme.staticforge.security.JwtService;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -166,16 +166,20 @@ class TemplateFolderIntegrationTest {
         FolderNode wrapper = roots.get(0);
         assertThat(wrapper.uid()).isEqualTo(FolderScope.TEMPLATES_ROOT_UID);
         assertThat(wrapper.protectedFolder()).isTrue();
-        assertThat(wrapper.children()).hasSize(2);
+        // Page Templates, Section Templates and (M19.1.1) Datasets.
+        assertThat(wrapper.children()).hasSize(3);
         assertThat(wrapper.children()).allMatch(FolderNode::protectedFolder);
 
         FolderNode pageFolder = wrapper.children().stream().filter(n -> n.uid().equals(FolderScope.PAGE_TEMPLATES_UID)).findFirst().orElseThrow();
         FolderNode sectionFolder = wrapper.children().stream().filter(n -> n.uid().equals(FolderScope.SECTION_TEMPLATES_UID)).findFirst().orElseThrow();
+        FolderNode datasetFolder = wrapper.children().stream().filter(n -> n.uid().equals(FolderScope.DATASETS_UID)).findFirst().orElseThrow();
 
         assertThat(assetService.requireCurrent(fx.project().getId(), pageFolder.uuid()).payload().path("templateKind").asText())
                 .isEqualTo("PAGE_TEMPLATE");
         assertThat(assetService.requireCurrent(fx.project().getId(), sectionFolder.uuid()).payload().path("templateKind").asText())
                 .isEqualTo("SECTION_TEMPLATE");
+        assertThat(assetService.requireCurrent(fx.project().getId(), datasetFolder.uuid()).payload().path("templateKind").asText())
+                .isEqualTo("DATASET");
     }
 
     @Test
@@ -216,9 +220,10 @@ class TemplateFolderIntegrationTest {
 
         assertThat(first.get(AssetType.PAGE_TEMPLATE).uuid()).isEqualTo(second.get(AssetType.PAGE_TEMPLATE).uuid());
         assertThat(first.get(AssetType.SECTION_TEMPLATE).uuid()).isEqualTo(second.get(AssetType.SECTION_TEMPLATE).uuid());
+        assertThat(first.get(AssetType.DATASET).uuid()).isEqualTo(second.get(AssetType.DATASET).uuid());
         List<FolderNode> roots = folderService.tree(fx.project().getId(), FolderScope.TEMPLATES, -1, fx.ctx());
         assertThat(roots).hasSize(1);
-        assertThat(roots.get(0).children()).hasSize(2);
+        assertThat(roots.get(0).children()).hasSize(3);
     }
 
     // ------------------------------------------------------------------

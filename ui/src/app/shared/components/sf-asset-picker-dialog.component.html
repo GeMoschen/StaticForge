@@ -15,6 +15,13 @@
         }
       </select>
     }
+    @if (type() === 'RECORD' && datasets().length > 1) {
+      <select class="dialog__type" [value]="datasetUuid()" (change)="onDatasetChange($event)" aria-label="Dataset">
+        @for (ds of datasets(); track ds.uuid) {
+          <option [value]="ds.uuid">{{ ds.displayName ?? ds.uid }}</option>
+        }
+      </select>
+    }
     <input
       type="search"
       class="dialog__search"
@@ -50,13 +57,19 @@
       @if (loading()) {
         <sf-spinner label="Loading…" />
       } @else if (items().length === 0) {
-        <sf-empty-state title="No assets found" description="Try a different search or folder." />
+        <sf-empty-state
+          [title]="type() === 'RECORD' ? 'No records found' : 'No assets found'"
+          [description]="type() === 'RECORD' ? 'Try a different search or dataset.' : 'Try a different search or folder.'"
+        />
       } @else {
         <ul class="dialog__list">
           @for (item of items(); track item.uuid) {
             <li>
               <button type="button" class="dialog__item" (click)="pick(item)">
                 <span class="dialog__item-name">{{ item.displayName ?? item.uid }}</span>
+                @if (item.dataset) {
+                  <span class="dialog__item-badge">{{ item.dataset }}</span>
+                }
                 <span class="dialog__item-meta">{{ item.uid }}</span>
               </button>
             </li>

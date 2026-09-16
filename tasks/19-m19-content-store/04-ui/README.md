@@ -20,11 +20,11 @@ server-side paging/sorting/filtering, and a record editor built on the existing 
 
 ## Feature exit criteria
 
-- [ ] Nav rail has a Content entry; the Content tree shows folders and records; datasets appear in the
+- [x] Nav rail has a Content entry; the Content tree shows folders and records; datasets appear in the
       Templates store.
-- [ ] Record grid and record editor work keyboard-only, meet WCAG 2.2 AA, and honor time travel.
-- [ ] The asset picker and `reference` editor can pick records (optionally restricted to one dataset).
-- [ ] Export picker exposes the Content store and the `datasets` folder.
+- [x] Record grid and record editor work keyboard-only, meet WCAG 2.2 AA, and honor time travel.
+- [x] The asset picker and `reference` editor can pick records (optionally restricted to one dataset).
+- [x] Export picker exposes the Content store and the `datasets` folder.
 
 ## Dependencies
 

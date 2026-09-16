@@ -8,13 +8,18 @@ import com.acme.staticforge.template.octl.Expr;
 import com.acme.staticforge.template.octl.FilterNode;
 import com.acme.staticforge.template.octl.NamedArg;
 import com.acme.staticforge.template.octl.OctlNode;
+import com.acme.staticforge.template.query.DatasetQuery;
+import com.acme.staticforge.template.query.DatasetQueryEvaluator;
+import com.acme.staticforge.template.query.RecordView;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.MissingNode;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -250,7 +255,7 @@ public final class OctlRenderer implements Renderer {
     }
 
     private void renderFor(OctlNode.For f, State s) {
-        JsonNode list = resolveForList(f.accessor(), f.args(), s);
+        JsonNode list = resolveForList(f, s);
         if (list == null || !list.isArray()) {
             return;
         }
@@ -268,10 +273,16 @@ public final class OctlRenderer implements Renderer {
 
     /**
      * {@code $CMS_FOR$}'s accessor resolution: a {@code nav:uid} reference bootstraps its
-     * top-level children from {@link BlockResolver#resolveNavigationChildren}; every other accessor
+     * top-level children from {@link BlockResolver#resolveNavigationChildren}; a {@code dataset:uid}
+     * reference yields the records its compiled query selects (M19.3.2); every other accessor
      * (including a cross-asset {@code page:uid.list}) goes through the normal {@link #resolve} path.
      */
-    private JsonNode resolveForList(Accessor accessor, List<NamedArg> args, State s) {
+    private JsonNode resolveForList(OctlNode.For loop, State s) {
+        Accessor accessor = loop.accessor();
+        List<NamedArg> args = loop.args();
+        if (accessor.isAssetReference() && "dataset".equals(accessor.assetType())) {
+            return datasetItems(loop, s);
+        }
         if (accessor.isAssetReference() && "nav".equals(accessor.assetType())) {
             noteReference(accessor, s);
             UUID navFolderUuid = s.template.references().get(accessor.referenceKey());
@@ -282,6 +293,30 @@ public final class OctlRenderer implements Renderer {
             return resolver == null ? null : resolver.resolveNavigationChildren(navFolderUuid, namedArgs(args));
         }
         return resolve(accessor, s);
+    }
+
+    /**
+     * The items of a dataset loop: the dataset's records from the context's
+     * {@link AssetValueResolver#datasetRecords}, filtered, sorted and sliced by the query compiled
+     * with the loop. A {@code where} accessor that is not a record field reads the current render
+     * scope, so {@code member.team == CMS_PAGE.team} compares against this page. The loop depends on
+     * the dataset itself (M19 dependency granularity: any record change rebuilds the page).
+     */
+    private JsonNode datasetItems(OctlNode.For loop, State s) {
+        noteReference(loop.accessor(), s);
+        UUID dataset = s.template.references().get(loop.accessor().referenceKey());
+        AssetValueResolver resolver = s.context.assetValueResolver();
+        DatasetQuery query = s.template.datasetQuery(loop);
+        if (dataset == null || resolver == null || query == null) {
+            return null;
+        }
+        List<RecordView> records = DatasetQueryEvaluator.apply(
+                resolver.datasetRecords(dataset), query, scopeAccessor -> resolve(scopeAccessor, s));
+        ArrayNode items = JsonNodeFactory.instance.arrayNode(records.size());
+        for (RecordView record : records) {
+            items.add(record.item());
+        }
+        return items;
     }
 
     private void renderSet(OctlNode.Set st, State s) {
@@ -392,12 +427,42 @@ public final class OctlRenderer implements Renderer {
             if (node == null || node.isMissingNode() || node.isNull() || !node.isObject()) {
                 return MissingNode.getInstance();
             }
-            node = node.get(path.get(i));
-            if (node == null) {
+            JsonNode next = node.get(path.get(i));
+            if (next == null) {
+                next = dereferenceRecord(node, path.get(i), s);
+            }
+            if (next == null) {
                 return MissingNode.getInstance();
             }
+            node = next;
         }
         return node == null ? MissingNode.getInstance() : node;
+    }
+
+    /**
+     * Walking a path through a {@code reference} editor value that points at a record continues in
+     * the record (M19.3.2): {@code $CMS_VALUE(author.name)$} reads the referenced record's
+     * {@code name}. Only a segment the reference value itself does not have ({@code type},
+     * {@code uuid}, {@code assetType}) dereferences, so {@code author.uuid} keeps meaning the stored
+     * value. Each dereference consumes a path segment, so reference cycles between records cannot
+     * recurse. The record becomes a render dependency.
+     *
+     * @return the field of the referenced record, or {@code null} when {@code node} is not a record
+     *     reference or the record is missing
+     */
+    private static JsonNode dereferenceRecord(JsonNode node, String segment, State s) {
+        if (!"ASSET_REF".equals(node.path("type").asText(null))
+                || !"RECORD".equalsIgnoreCase(node.path("assetType").asText(""))) {
+            return null;
+        }
+        AssetValueResolver resolver = s.context.assetValueResolver();
+        UUID uuid = readUuid(node);
+        if (resolver == null || uuid == null) {
+            return null;
+        }
+        s.deps.add(uuid);
+        JsonNode record = resolver.valueOf("record", uuid);
+        return record == null || record.isMissingNode() ? null : record.get(segment);
     }
 
     // ------------------------------------------------------------------

@@ -26,12 +26,12 @@ change, usages, diff, export/import.
 
 ## Feature exit criteria
 
-- [ ] `AssetType.DATASET` / `AssetType.RECORD`, `FolderScope.CONTENT`, root `content_root` and the
+- [x] `AssetType.DATASET` / `AssetType.RECORD`, `FolderScope.CONTENT`, root `content_root` and the
       fixed `datasets` folder exist and are provisioned for new and existing projects.
-- [ ] `DatasetService` / `RecordService` cover create/update/delete/restore with role checks
+- [x] `DatasetService` / `RecordService` cover create/update/delete/restore with role checks
       (schema = DEVELOPER, records = EDITOR), server-side validation, reference materialization and
       the rename migration.
-- [ ] Export/import, usages and diff handle both types.
+- [x] Export/import, usages and diff handle both types.
 
 ## Dependencies
 

@@ -7,6 +7,7 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
 import { forkJoin } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -22,8 +23,11 @@ import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.comp
 import { ChannelsService } from '../channels/channels.service';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { ContentService } from '../content/content.service';
+import { DatasetSchemaEditorComponent } from '../content/dataset-schema-editor.component';
 import { TemplateFolderNodeComponent } from './template-folder-node.component';
 import {
+  DATASETS_ROOT_UID,
   PAGE_TEMPLATES_ROOT_UID,
   SECTION_TEMPLATES_ROOT_UID,
   TEMPLATES_ROOT_UID,
@@ -50,6 +54,12 @@ interface ChannelTemplateValue {
 
 const NEW_CONTENT_DEFINITION = '';
 
+/** What a new dataset starts with: one field, so its first record already has something to fill in. */
+const NEW_DATASET_DEFINITION = `content {
+  editor text name { label "Name" required }
+}
+`;
+
 @Component({
   selector: 'sf-templates',
   standalone: true,
@@ -62,14 +72,18 @@ const NEW_CONTENT_DEFINITION = '';
     SfSpinnerComponent,
     SfUidRenameComponent,
     TemplateFolderNodeComponent,
+    DatasetSchemaEditorComponent,
   ],
   templateUrl: './templates.component.html',
   styleUrl: './templates.component.scss',
 })
 export class TemplatesComponent {
   readonly projectKey = input.required<string>();
+  /** `?kind=DATASET` opens the store on the datasets folder (the Content store's empty state links here). */
+  readonly kind$ = input<string | undefined>(undefined, { alias: 'kind' });
 
   private readonly service = inject(TemplatesService);
+  private readonly contentService = inject(ContentService);
   private readonly channelsService = inject(ChannelsService);
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
@@ -130,8 +144,11 @@ export class TemplatesComponent {
     }
     const found = this.templates().find((t) => t.uuid === uuid);
     const assetType = found?.assetType?.toUpperCase();
-    return assetType === 'SECTION_TEMPLATE' || assetType === 'PAGE_TEMPLATE' ? assetType : null;
+    return assetType === 'SECTION_TEMPLATE' || assetType === 'PAGE_TEMPLATE' || assetType === 'DATASET' ? assetType : null;
   });
+
+  /** A dataset is selected: the detail pane is the dataset schema editor, not the template editor. */
+  protected readonly datasetSelected = computed(() => this.selectedTemplateAssetType() === 'DATASET');
 
   /** Templates grouped by their canonical folder path — threaded down the tree so every
    * folder node can render its own templates as leaves, sorted after subfolders (mirrors
@@ -213,7 +230,7 @@ export class TemplatesComponent {
       () => {
         const key = this.projectKey();
         const uuid = this.selectedUuid();
-        if (!key || !uuid) {
+        if (!key || !uuid || this.datasetSelected()) {
           this.detail.set(null);
           return;
         }
@@ -241,7 +258,8 @@ export class TemplatesComponent {
         // PAGE_TEMPLATES_ROOT_UID is no longer necessarily top-level — it now nests one level
         // inside the fixed "All Templates" wrapper root (M13.1.2, generalized) — so this needs
         // a recursive lookup, not a flat top-level `.find`.
-        const root = findFolderByUid(tree, PAGE_TEMPLATES_ROOT_UID) ?? tree[0];
+        const preferredUid = untracked(() => this.kind$()) === 'DATASET' ? DATASETS_ROOT_UID : PAGE_TEMPLATES_ROOT_UID;
+        const root = findFolderByUid(tree, preferredUid) ?? tree[0];
         if (root.uuid) {
           this.selectedFolder.set(root.uuid);
           this.selectedFolderKind.set(this.rootKind(root));
@@ -257,6 +275,9 @@ export class TemplatesComponent {
 
   /** The inherited kind of one of the two fixed roots, by its well-known `uid`. */
   protected rootKind(node: FolderView): TemplateAssetKind {
+    if (node.uid === DATASETS_ROOT_UID) {
+      return 'DATASET';
+    }
     return node.uid === SECTION_TEMPLATES_ROOT_UID ? 'SECTION_TEMPLATE' : 'PAGE_TEMPLATE';
   }
 
@@ -297,6 +318,19 @@ export class TemplatesComponent {
     this.selectedUuid.set(uuid ?? null);
   }
 
+  protected onDatasetChanged(): void {
+    const key = this.projectKey();
+    if (key) {
+      this.reloadList(key);
+    }
+  }
+
+  protected onDatasetDeleted(): void {
+    this.selectedUuid.set(null);
+    this.onDatasetChanged();
+    this.refreshTemplateStore();
+  }
+
   readonly newTemplateOpen = signal(false);
   readonly creatingTemplate = signal(false);
 
@@ -325,7 +359,9 @@ export class TemplatesComponent {
     if (selectedNode && selectedNode.uid !== TEMPLATES_ROOT_UID) {
       return selected ?? undefined;
     }
-    const rootUid = this.activeTemplateKind() === 'SECTION_TEMPLATE' ? SECTION_TEMPLATES_ROOT_UID : PAGE_TEMPLATES_ROOT_UID;
+    const kind = this.activeTemplateKind();
+    const rootUid =
+      kind === 'SECTION_TEMPLATE' ? SECTION_TEMPLATES_ROOT_UID : kind === 'DATASET' ? DATASETS_ROOT_UID : PAGE_TEMPLATES_ROOT_UID;
     return findFolderByUid(this.templateFolderTree(), rootUid)?.uuid;
   }
 
@@ -335,6 +371,29 @@ export class TemplatesComponent {
       return;
     }
     this.creatingTemplate.set(true);
+    if (this.activeTemplateKind() === 'DATASET') {
+      this.contentService
+        .createDataset(key, {
+          displayName: value.displayName,
+          contentDefinition: NEW_DATASET_DEFINITION,
+          titleEditor: 'name',
+          parentFolderUuid: this.newTemplateParentUuid(),
+        })
+        .subscribe({
+          next: (created) => {
+            this.creatingTemplate.set(false);
+            this.newTemplateOpen.set(false);
+            this.toast.show('Dataset created', 'success');
+            this.reloadList(key, created.uuid ?? null);
+            this.refreshTemplateStore();
+          },
+          error: () => {
+            this.creatingTemplate.set(false);
+            this.toast.show('Could not create the dataset — you may need the developer role.', 'error');
+          },
+        });
+      return;
+    }
     this.service
       .create(this.kind(), key, {
         displayName: value.displayName,
@@ -637,16 +696,30 @@ export class TemplatesComponent {
    * stores don't have and this one shouldn't either. `this.kind()` still exists and is still
    * correct to use for *per-item* operations (create/save/delete/channel calls scoped to
    * whichever one template is selected), just never again for "what to fetch". */
-  private reloadList(key: string): void {
+  private reloadList(key: string, select: string | null = null): void {
     this.loading.set(true);
     forkJoin({
       page: this.service.list('page', key),
       section: this.service.list('section', key),
+      datasets: this.contentService.listDatasets(key),
     }).subscribe({
-      next: ({ page, section }) => {
-        const list = [...(page.content ?? []), ...(section.content ?? [])];
+      next: ({ page, section, datasets }) => {
+        // Datasets (M19.4.1) share the tree as leaves of the fixed "Datasets" folder.
+        const datasetLeaves: TemplateSummary[] = (datasets ?? []).map((d) => ({
+          uuid: d.uuid,
+          uid: d.uid,
+          assetType: 'DATASET',
+          displayName: d.displayName,
+          folderPath: d.folderPath,
+          revision: d.revision,
+        }));
+        const list = [...(page.content ?? []), ...(section.content ?? []), ...datasetLeaves];
         this.templates.set(list);
         this.loading.set(false);
+        if (select) {
+          this.selectedUuid.set(select);
+          return;
+        }
         const current = this.selectedUuid();
         if (!current && list.length > 0) {
           this.selectedUuid.set(list[0].uuid ?? null);

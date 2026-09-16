@@ -18,8 +18,11 @@ public interface ProjectExportImportService {
      * import. A version mismatch is reported as a clean conflict instead, so the cost — an old
      * server also refusing a new archive that happens to contain no property sets — buys a
      * predictable failure in place of a partial one.
+     *
+     * <p>Bumped to {@code 5} by M19 for the same reason: archives can carry {@code DATASET} and
+     * {@code RECORD} assets. The file layout itself is unchanged.
      */
-    int PROTOCOL_VERSION = 4;
+    int PROTOCOL_VERSION = 5;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP

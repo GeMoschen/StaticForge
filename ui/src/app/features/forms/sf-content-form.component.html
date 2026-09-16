@@ -1,5 +1,10 @@
 <div class="sf-content-form">
   @for (editor of definition().editors; track editor.name) {
-    <sf-editor-outlet [definition]="editor" [control]="controlFor(editor)" />
+    <div class="sf-content-form__editor">
+      <sf-editor-outlet [definition]="editor" [control]="controlFor(editor)" />
+      @for (message of issuesFor(editor); track $index) {
+        <p class="sf-content-form__issue" role="alert">{{ message }}</p>
+      }
+    </div>
   }
 </div>

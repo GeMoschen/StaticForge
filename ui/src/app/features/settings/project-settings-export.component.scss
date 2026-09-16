@@ -197,3 +197,9 @@
   display: flex;
   justify-content: flex-end;
 }
+
+.tree-section__hint {
+  margin: 0 0 var(--sf-2);
+  color: var(--sf-muted);
+  font-size: var(--sf-text-xs);
+}

@@ -10,7 +10,7 @@
     (contextmenu)="onContextMenu($event)"
   >
     <span class="template-nav__spacer"></span>
-    <sf-icon class="template-nav__icon" name="description" />
+    <sf-icon class="template-nav__icon" [name]="templateKind() === 'DATASET' ? 'dataset' : 'description'" />
     <span class="template-nav__name">{{ summary().displayName ?? summary().uid }}</span>
     <span class="template-nav__mono">{{ summary().uid }}</span>
   </div>

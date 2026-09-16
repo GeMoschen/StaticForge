@@ -4,6 +4,7 @@ import com.acme.staticforge.api.dto.CdlValidateRequest;
 import com.acme.staticforge.api.dto.CdlValidateResponse;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
+import com.acme.staticforge.template.cdl.DatasetCdlRules;
 import com.acme.staticforge.template.cdl.GlobalSetCdlRules;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.ArrayList;
@@ -23,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
  * compiler server-side.
  *
  * <p>{@code kind=GLOBAL_SET} additionally applies the property-set restrictions (M17.2.1), so the
- * Globals schema editor gets exactly the diagnostics its save will enforce. A second endpoint
+ * Globals schema editor gets exactly the diagnostics its save will enforce. {@code kind=DATASET}
+ * does the same for dataset schemas (M19.2.1). A second endpoint
  * would have meant a second place for the two to drift apart.
  */
 @RestController
@@ -31,6 +33,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class CdlValidateController {
 
     private static final String GLOBAL_SET_KIND = "GLOBAL_SET";
+
+    private static final String DATASET_KIND = "DATASET";
 
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
@@ -41,11 +45,13 @@ public class CdlValidateController {
             @RequestParam(value = "kind", required = false) String kind,
             @RequestBody CdlValidateRequest body) {
         CdlResult result = cdlCompiler.compile(body.source());
-        if (!GLOBAL_SET_KIND.equalsIgnoreCase(kind == null ? "" : kind.trim())) {
-            return new CdlValidateResponse(result.diagnostics());
-        }
+        String requested = kind == null ? "" : kind.trim();
         List<Diagnostic> diagnostics = new ArrayList<>(result.diagnostics());
-        diagnostics.addAll(GlobalSetCdlRules.check(result.definition()));
+        if (GLOBAL_SET_KIND.equalsIgnoreCase(requested)) {
+            diagnostics.addAll(GlobalSetCdlRules.check(result.definition()));
+        } else if (DATASET_KIND.equalsIgnoreCase(requested)) {
+            diagnostics.addAll(DatasetCdlRules.check(result.definition()));
+        }
         return new CdlValidateResponse(diagnostics);
     }
 }

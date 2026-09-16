@@ -2,7 +2,10 @@ package com.acme.staticforge.asset;
 
 /** Kind of a materialized outgoing asset reference (spec §5.4). */
 public enum ReferenceKind {
-    /** Page → page template ({@code templateRef}) and page → section template (body section {@code templateRef}). */
+    /**
+     * Page → page template ({@code templateRef}), page → section template (body section
+     * {@code templateRef}) and record → dataset ({@code datasetRef}, M19.1.2).
+     */
     TEMPLATE,
     CONTENT_REF,
     MEDIA_REF,

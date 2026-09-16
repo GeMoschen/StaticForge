@@ -1,0 +1,9 @@
+{
+  "author": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-00000000000a", "assetType": "RECORD" },
+  "reviewers": [
+    { "person": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-00000000000c", "assetType": "RECORD" } },
+    { "person": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-00000000000b", "assetType": "RECORD" } },
+    { "person": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-0000000000ff", "assetType": "RECORD" } }
+  ],
+  "related": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-00000000000d", "assetType": "PAGE" }
+}

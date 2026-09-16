@@ -1,0 +1,190 @@
+import { Injectable, OnDestroy, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import type { ConflictInfo, ResolveMode, SaveState } from '../../features/pages/types';
+
+const DEFAULT_DEBOUNCE_MS = 500;
+
+function clockLabel(date: Date): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Debounced autosave for one revisioned asset: debounces changes, flushes on demand (blur, Ctrl+S,
+ * navigation), sends the concurrency token as `If-Match`, and on a `409` surfaces the conflict
+ * (with the server's `base`/`theirs` payloads for a field merge) instead of silently overwriting.
+ *
+ * <p>Shared by the page editor and the record editor (M19.4.2); a subclass says how its asset is
+ * persisted and re-read. Provide subclasses at the editor component level, never in root: the state
+ * belongs to one open asset.
+ *
+ * @typeParam P the payload a flush sends
+ * @typeParam V the asset view a save or refetch returns (it carries the new `revision`)
+ */
+@Injectable()
+export abstract class AutosaveService<P, V extends { revision?: number | null }> implements OnDestroy {
+  readonly saveState = signal<SaveState>('idle');
+  readonly lastSavedAt = signal<string | null>(null);
+  readonly revision = signal<number | null>(null);
+  readonly conflict = signal<ConflictInfo | null>(null);
+
+  protected projectKey = '';
+  protected uuid = '';
+  private payloadProvider: (() => P) | null = null;
+  private refetchHandler: ((view: V, mode: ResolveMode) => void) | null = null;
+  private savedHandler: ((view: V) => void) | null = null;
+  private errorHandler: ((err: unknown) => void) | null = null;
+
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private debounceMs = DEFAULT_DEBOUNCE_MS;
+
+  private readonly onKeydownRef = (event: KeyboardEvent) => this.onKeydown(event);
+
+  constructor() {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', this.onKeydownRef);
+    }
+  }
+
+  /** Writes the payload with `revision` as the expected revision. */
+  protected abstract persist(payload: P, revision: number | undefined): Observable<V>;
+
+  /** Re-reads the current version of the asset. */
+  protected abstract reload(): Observable<V>;
+
+  ngOnDestroy(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('keydown', this.onKeydownRef);
+    }
+  }
+
+  configure(
+    projectKey: string,
+    uuid: string,
+    initialRevision: number | null = null,
+    debounceMs: number = DEFAULT_DEBOUNCE_MS,
+  ): void {
+    this.projectKey = projectKey;
+    this.uuid = uuid;
+    this.revision.set(initialRevision);
+    this.saveState.set('idle');
+    this.conflict.set(null);
+    this.debounceMs = debounceMs;
+  }
+
+  setPayloadProvider(provider: () => P): void {
+    this.payloadProvider = provider;
+  }
+
+  setRefetchHandler(handler: (view: V, mode: ResolveMode) => void): void {
+    this.refetchHandler = handler;
+  }
+
+  /** Called with every successful save's response, e.g. to show non-blocking validation findings. */
+  setSavedHandler(handler: (view: V) => void): void {
+    this.savedHandler = handler;
+  }
+
+  /** Called with every failed save's error that is not a conflict, e.g. to show field-level issues. */
+  setErrorHandler(handler: (err: unknown) => void): void {
+    this.errorHandler = handler;
+  }
+
+  /** Keep the local revision in sync after an external mutation. */
+  setRevision(revision: number | null): void {
+    this.revision.set(revision);
+  }
+
+  markDirty(): void {
+    if (this.conflict()) {
+      return;
+    }
+    this.saveState.set('dirty');
+    if (this.timer) {
+      clearTimeout(this.timer);
+    }
+    this.timer = setTimeout(() => this.flush(), this.debounceMs);
+  }
+
+  flush(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    if (!this.uuid || !this.payloadProvider || this.conflict()) {
+      return;
+    }
+    this.saveState.set('saving');
+    const payload = this.payloadProvider();
+    const revision = this.revision();
+    this.persist(payload, revision ?? undefined).subscribe({
+      next: (res) => {
+        this.revision.set(res.revision ?? null);
+        this.saveState.set('saved');
+        this.lastSavedAt.set(clockLabel(new Date()));
+        this.savedHandler?.(res);
+      },
+      error: (err: unknown) => this.onFlushError(err),
+    });
+  }
+
+  /**
+   * Reconcile a conflict by refetching latest. "mine" reapplies local edits (host re-saves),
+   * "theirs" adopts server content (host rebuilds forms).
+   */
+  resolveConflict(mode: ResolveMode): void {
+    this.saveState.set('saving');
+    this.reload().subscribe({
+      next: (view) => {
+        this.revision.set(view.revision ?? null);
+        this.conflict.set(null);
+        this.saveState.set('idle');
+        this.refetchHandler?.(view, mode);
+      },
+      error: () => this.saveState.set('error'),
+    });
+  }
+
+  /**
+   * Clear a field-level conflict after the host has merged the payloads, adopting the server's
+   * current revision so the next save succeeds.
+   */
+  resolveFields(revision: number): void {
+    this.conflict.set(null);
+    this.revision.set(revision);
+    this.saveState.set('idle');
+  }
+
+  private onFlushError(err: unknown): void {
+    if (err instanceof HttpErrorResponse && err.status === 409) {
+      const body = (err.error ?? {}) as Record<string, unknown>;
+      this.conflict.set({
+        expectedRevision: this.numberOf(body['expectedRevision'], this.revision() ?? 0),
+        currentRevision: this.numberOf(body['currentRevision'], 0),
+        detail: typeof body['detail'] === 'string' ? body['detail'] : undefined,
+        changedBy: typeof body['changedBy'] === 'number' ? body['changedBy'] : undefined,
+        changedAt: typeof body['changedAt'] === 'string' ? body['changedAt'] : undefined,
+        base: body['base'],
+        theirs: body['theirs'],
+      });
+    } else {
+      this.errorHandler?.(err);
+    }
+    this.saveState.set('error');
+  }
+
+  private numberOf(value: unknown, fallback: number): number {
+    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  }
+
+  private onKeydown(event: KeyboardEvent): void {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      this.flush();
+    }
+  }
+}

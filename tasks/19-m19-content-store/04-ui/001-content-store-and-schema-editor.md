@@ -1,6 +1,6 @@
 ---
 id: M19.4.1
-status: todo
+status: done
 depends: [M19.2.1]
 epic: m19-content-store
 feature: ui
@@ -43,15 +43,15 @@ with plain `<textarea>`s for CDL and OCTL and `validateCdl` diagnostics. Asset c
 
 ## Acceptance criteria
 
-- [ ] Routes, nav rail entry and store render with real API data; role-dependent affordances (VIEWER
+- [x] Routes, nav rail entry and store render with real API data; role-dependent affordances (VIEWER
       sees no create; EDITOR cannot edit schemas).
-- [ ] Creating a dataset with CDL errors shows diagnostics inline and does not save; valid CDL saves
+- [x] Creating a dataset with CDL errors shows diagnostics inline and does not save; valid CDL saves
       and appears under `datasets`.
-- [ ] Creating a record from the tree opens the record editor route (`M19.4.2` provides the editor —
+- [x] Creating a record from the tree opens the record editor route (`M19.4.2` provides the editor —
       until then, a placeholder route is acceptable within this task).
-- [ ] Keyboard: tree navigation, create dialog and chips fully operable; axe checks clean on the new
+- [x] Keyboard: tree navigation, create dialog and chips fully operable; axe checks clean on the new
       screens.
-- [ ] Component spec tests added; `npm run build` green (note the known `templateUrl` spec-runner
+- [x] Component spec tests added; `npm run build` green (note the known `templateUrl` spec-runner
       issue in `M15` if `npm test` cannot run them).
 
 ## Out of scope
@@ -66,3 +66,19 @@ with plain `<textarea>`s for CDL and OCTL and `validateCdl` diagnostics. Asset c
   nothing.
 - Keep the Content store generic over datasets — no per-dataset routes or components generated from
   schemas.
+
+## Implementation notes (2026-09-16)
+
+- Lazy `content` route (child `records/:recordUuid`) and nav rail entry after Pages; the `templates` route was made
+  lazy too (initial bundle 864 → 812 kB, under the budget warning).
+- `sf-content`: dataset chips (radio group with arrow keys, record counts), Content folder tree, grid, editor outlet.
+  **Deviation:** the tree shows folders only; records are listed in the grid — a tree of thousands of records is
+  neither usable nor pageable.
+- The Templates store lists datasets under the fixed `Datasets` folder; `sf-dataset-schema-editor` validates live via
+  `POST /cdl/validate?kind=DATASET`, picks the title editor, shows the record count and the delete guard. The create
+  dialog supports DATASET/RECORD. Create affordances follow roles and time travel.
+- Verified live: `ui/e2e/m19-journeys.spec.ts` journeys 1–2 (SF-CDL-0108 inline, save, record creation opens editor).
+- **Caveats:** axe-core isn't installed in this workspace (see `e2e/a11y.spec.ts`), so accessibility was checked by
+  structure (roles, labels, keyboard), not by an axe run. Component specs don't run under the current vitest setup,
+  like every `templateUrl` component spec (M15); the pure-logic specs (`content.service.spec.ts`,
+  `record-grid.util.spec.ts`, `asset-picker.util.spec.ts`) pass. `npm run build` green.

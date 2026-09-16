@@ -1,3 +1,109 @@
+# M19 implementation — Plan
+
+## Approach
+Sequential on branch `m19-content-store` (off `m18-parsable-text-media`; master untouched). Layer order as the
+epic notes (M8/M17 precedent): query model (pure) → domain → export/import → OCTL/generation/preview → API →
+UI → docs/journeys. No worktree fan-out: the features share `AssetType`, the planner and both renderers.
+
+## Design (from reading the code)
+- **Record → dataset link:** `payload.datasetRef` (source of truth) mirrored into
+  `asset_version.template_asset_id` by `RecordServiceImpl` (via `CreateAssetCommand.templateUuid`, which every
+  version write already carries forward). Repository reads: current records of a dataset, records of a dataset
+  valid at a revision (both a column query, no JSON scan).
+- **Fixed folders:** `content_root` ("All Content", `CONTENT`) under the hidden root; `datasets` ("Datasets",
+  `templateKind: DATASET`) under `templates_root`, returned by `ensureTemplateFolders` with the other two, so
+  project creation, lazy self-heal and the import remap pick it up without new call sites.
+- **Query model (`template.query`):** `DatasetQuery`, `SortKey`, `DatasetQueryParser`, `DatasetQueryEvaluator`,
+  `RecordView`. `where` is parsed with the OCTL expression grammar through a new public
+  `octl.OctlExpressions.parse` (strict: leftover input and empty identifiers are errors with a column).
+  - Templates: record fields through the loop variable (`member.role`); any other root (`CMS_PAGE.x`, a
+    `$CMS_SET` variable, an editor) is evaluated in the render scope. No bare field names → no ambiguity.
+  - REST: bare field names (there is no other scope).
+- **Compiled once:** the compiler parses `dataset:` loop args into a `DatasetQuery` stored on `CompiledTemplate`
+  (identity map keyed by the `For` node), so rendering never re-parses. Invalid args → `SF-TPL-0140` error.
+  Field checks (`SF-TPL-0141` unknown field, `SF-TPL-0142` non-scalar sort) need the dataset schema: a default
+  method `ReferenceResolver.datasetDefinition(uuid)` implemented only by the save-time project resolver, so a
+  later schema change never breaks a generation run.
+- **Record data access on `AssetValueResolver`** (not `BlockResolver`): `datasetRecords(datasetUuid)` next to
+  `valueOf`. Generation already shares one `SnapshotAssetValueResolver` per build, so the per-snapshot index
+  (`ConcurrentHashMap.computeIfAbsent`, built once per snapshot, counted) lives there; preview's per-render live
+  resolver reads the revision-pinned repository query; processed text media gets loops for free.
+- **Dereference:** walking a path through an `ASSET_REF` whose `assetType` is `RECORD` (segment not one of the
+  ref's own fields) continues in the record's values via `valueOf("record", uuid)`. Depth is bounded by the
+  path length, so record cycles cannot recurse. CDL `reference` gains `dataset "uid"`.
+- **Incremental:** template → dataset is an `OCTL_VALUE` edge, record → dataset a `TEMPLATE` edge. The planner
+  enqueues a changed record's dataset and does not walk a dataset's `RECORD` referrers (otherwise every record
+  change would reach pages that reference sibling records).
+- **Dataset delete:** blocked with 409 `SF-DOM-0121` + `recordCount` while live records exist, also on the
+  generic `force` path (no cascade in v1).
+- **Export protocol 4 → 5:** same reason as M17 (an older server fails in `AssetType.valueOf` mid-import).
+
+## Steps
+- [x] M19.3.1 query model + expression entry point + tests
+- [x] M19.1.1 asset types, CONTENT scope, fixed folders, repository queries, switches
+- [x] M19.1.2 DatasetService / RecordService, validation, rename migration, delete guard
+- [x] M19.1.3 export/import (implicit dataset, ordering, RECORD_DATASET_MISSING), usages, diff
+- [x] M19.3.2 OCTL loops/values/dereference, generation + preview, planner, golden files
+- [x] M19.2.1 controllers, DTOs, paging envelope, OpenAPI + schema.d.ts
+- [x] M19.4.1 Content store shell, dataset schema editor, create dialog, export picker
+- [x] M19.4.2 record grid, record editor, picker support
+- [x] M19.5.1 docs + spec
+- [x] M19.5.2 backend journey, Playwright journey, benchmark, full verification, review
+
+## Review
+- **Branch:** `m19-content-store` (off `m18-parsable-text-media`; master untouched). Not committed.
+- **Verification:**
+  - `./gradlew build` green: 677 backend tests (601 at M18), 0 failures, 2 skipped (the gated `GenerationBenchmark`
+    and the new `DatasetBenchmark`).
+  - `DatasetBenchmark` (`SF_PERF=1`), 5,000 records × 500 looping pages: FULL 2.6 s, INCREMENTAL after one record
+    edit 2.2 s (all 500 pages loop the dataset, so all rebuild — measured against the < 20 s full budget), listing
+    page of 50 in 135 ms, `renamedFrom` migration of 5,000 records 9.0 s in one revision.
+  - `ng build` green (initial bundle 812 kB); vitest: the 19 known `templateUrl`/JIT spec files fail as before, all
+    18 logic spec files pass (new: `content.service`, `record-grid.util`, `asset-picker.util`).
+  - Live, against a dev backend + `ng serve`: `m19-journeys` 4/4, `m16-journeys` 5/5, `m17-journeys` 4/4,
+    `m18-journeys` 2/2.
+  - `DocsGoldenSnippetsTest` pins the developer guide's worked examples to the golden files.
+- **Design in one line each:** `datasetRef` mirrored into `template_asset_id`; pure `template.query` model shared by
+  REST, preview and generation; loop args compiled once onto `CompiledTemplate`; field checks only at save;
+  record data via `AssetValueResolver.datasetRecords` with a once-per-snapshot index; record dereference in
+  `OctlRenderer.resolveSub`; planner expands record → dataset and skips a dataset's own records; chunked
+  `RecordRenameMigration` in the schema's batch; export protocol 5.
+- **Changes beyond the task files (found during implementation/verification):**
+  - Spring binds a single `sort=field,desc` as two list items; the record listing reads the raw parameter values.
+  - The rename migration first rewrote records one version write at a time (1,000 records: 21 s); it now flushes
+    and clears in chunks of 200 with one revision summary (3 s).
+  - Autosave extracted to `shared/services/autosave.base.ts`; the page editor's service extends it.
+  - `sf-content-form` shows server issues per field (`issues`/`issuePrefix`), used by the record editor.
+  - The `templates` route is lazy-loaded (initial bundle was over the 864 kB warning).
+  - Journey locators fixed during the live run: the picker button's accessible name is the field label, and an
+    empty `<ul>` is attached but not visible.
+- **Deviations (recorded in the task files):** the Content tree shows folders, records live in the grid; record data
+  goes through `AssetValueResolver`, not `BlockResolver`.
+- **Open / not done:**
+  - No axe run: axe-core isn't installed in this workspace; accessibility checked structurally and by keyboard
+    journeys.
+  - New component specs can't run (`templateUrl` runner issue); the record conflict drawer is shared code covered
+    by the page editor, not by a record-specific journey.
+  - ~~Dependency granularity is per dataset~~ — fixed in the follow-up below (query-aware planning).
+  - `m13`/`m15` journey specs hard-code `localhost:4200` and old selectors; not run.
+
+### Follow-up — query-aware rebuilds for dataset loops
+- [x] `DatasetQueryEvaluator.maySelect` + `CompiledTemplate.datasetQueries(uid)` (unit tests)
+- [x] `BuildPlanner`: records continue only to loops that may select them (before/after), `DatasetLoopImpact`
+- [x] Integration tests for filtered-out, promote/demote, scope-reading and a reference into another dataset
+- [x] Benchmark, docs (guide §2.9, architecture, task notes), full build
+
+**Review:** a record change now rebuilds a looping page only if the loop's `folder`/`where` may select the
+record's previous or new version; filtering precedes sort, offset, limit and `_count`, so a record filtered out
+both times can't change the output. Conservative where analysis isn't possible: a `where` reading the render
+scope, a template without a loop spelling the dataset's current uid, processed text media. Also closes a gap in
+the first version: a loop item dereferencing a record in *another* dataset (`member.mentor.name`) wasn't rebuilt
+when that record changed; now the walk reaches the selecting record and continues to the loop. Benchmark
+(5,000 × 500): editing a record every loop filters out went from 2.2 s / 503 files to 181 ms / 2 files; FULL
+2.4 s and a selected record's edit 2.2 s are unchanged.
+
+---
+
 # M18 implementation — Plan
 
 ## Approach

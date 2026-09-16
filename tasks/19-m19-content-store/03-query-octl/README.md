@@ -24,11 +24,11 @@
 
 ## Feature exit criteria
 
-- [ ] `DatasetQuery` parse/validate/apply is unit-tested in isolation (operators, types, nulls,
+- [x] `DatasetQuery` parse/validate/apply is unit-tested in isolation (operators, types, nulls,
       stable multi-key sort, limit/offset bounds).
-- [ ] Dataset loops and record values render identically in generation and preview, backed by
+- [x] Dataset loops and record values render identically in generation and preview, backed by
       golden-file cases.
-- [ ] `BuildPlanner` rebuilds pages depending on a changed record (directly or via its dataset).
+- [x] `BuildPlanner` rebuilds pages depending on a changed record (directly or via its dataset).
 
 ## Dependencies
 

@@ -26,7 +26,9 @@ public class UidGenerator {
             // The fixed, auto-provisioned PAGES/MEDIA-scope roots — same reservation rationale.
             FolderScope.PAGES_ROOT_UID, FolderScope.MEDIA_ROOT_UID,
             // M17.1.1: the fixed, auto-provisioned GLOBALS-scope root — same reservation rationale.
-            FolderScope.GLOBALS_ROOT_UID);
+            FolderScope.GLOBALS_ROOT_UID,
+            // M19.1.1: the fixed Content-store root and the fixed dataset-schema folder.
+            FolderScope.CONTENT_ROOT_UID, FolderScope.DATASETS_UID);
     private static final int PROBE_LIMIT = 10_000;
 
     private final Slugifier slugifier = new Slugifier();

@@ -1,0 +1,134 @@
+<div class="record-grid" [class.record-grid--compact]="compact()">
+  @if (!compact()) {
+    <div class="record-grid__toolbar">
+      <label class="record-grid__search">
+        <sf-icon name="search" />
+        <span class="sf-sr-only">Search records by name</span>
+        <input type="search" placeholder="Search by name…" (input)="onSearch($event)" />
+      </label>
+      <div class="record-grid__filter">
+        <label class="sf-sr-only" [attr.for]="'where-' + dataset().uuid">Filter expression</label>
+        <input
+          [id]="'where-' + dataset().uuid"
+          type="text"
+          spellcheck="false"
+          placeholder="Filter, e.g. role == 'lead' && joined > '2022-01-01'"
+          [value]="whereDraft()"
+          [attr.aria-invalid]="whereError() ? true : null"
+          [attr.aria-describedby]="whereError() ? 'where-error-' + dataset().uuid : null"
+          (input)="onWhereInput($event)"
+          (keydown)="onWhereKeydown($event)"
+        />
+        <sf-button variant="secondary" (click)="applyWhere()">Apply</sf-button>
+        @if (where()) {
+          <sf-button variant="ghost" (click)="clearWhere()">Clear</sf-button>
+        }
+      </div>
+      <div class="record-grid__chooser">
+        <button type="button" class="record-grid__chooser-toggle" [attr.aria-expanded]="chooserOpen()" (click)="toggleChooser()">
+          <sf-icon name="view_column" /> Columns
+        </button>
+        @if (chooserOpen()) {
+          <div class="record-grid__chooser-menu" role="group" aria-label="Visible columns">
+            @for (column of columns(); track column.field) {
+              <label>
+                <input type="checkbox" [checked]="!isHidden(column.field)" (change)="toggleColumn(column.field)" />
+                {{ column.label }}
+              </label>
+            }
+          </div>
+        }
+      </div>
+    </div>
+    @if (whereError(); as problem) {
+      <p class="record-grid__error" role="alert" [id]="'where-error-' + dataset().uuid">
+        {{ problem.detail }}
+        @if (problem.column) {
+          <code class="record-grid__caret">{{ where() }}<br />{{ caretLine(problem.column) }}</code>
+        }
+      </p>
+    }
+  }
+
+  <div class="record-grid__table-wrap">
+    <table class="record-grid__table" [attr.aria-busy]="loading()" [attr.aria-rowcount]="totalElements()">
+      <caption class="sf-sr-only">Records of {{ dataset().displayName }}</caption>
+      <thead>
+        <tr>
+          <th scope="col" [attr.aria-sort]="ariaSortOf(sort(), '_displayName')">
+            <button type="button" class="record-grid__sort" (click)="onHeader('_displayName', $event)">
+              Name
+              @if (indicator(sort(), '_displayName'); as ind) {
+                <sf-icon [name]="ind.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
+                @if (sort().length > 1) {
+                  <span class="record-grid__sort-pos">{{ ind.position }}</span>
+                }
+              }
+            </button>
+          </th>
+          @for (column of visibleColumns(); track column.field) {
+            <th scope="col" [attr.aria-sort]="ariaSortOf(sort(), column.field)">
+              <button type="button" class="record-grid__sort" (click)="onHeader(column.field, $event)">
+                {{ column.label }}
+                @if (indicator(sort(), column.field); as ind) {
+                  <sf-icon [name]="ind.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
+                  @if (sort().length > 1) {
+                    <span class="record-grid__sort-pos">{{ ind.position }}</span>
+                  }
+                }
+              </button>
+            </th>
+          }
+          @if (!compact()) {
+            <th scope="col">Folder</th>
+            <th scope="col" [attr.aria-sort]="ariaSortOf(sort(), '_changedAt')">
+              <button type="button" class="record-grid__sort" (click)="onHeader('_changedAt', $event)">
+                Changed
+                @if (indicator(sort(), '_changedAt'); as ind) {
+                  <sf-icon [name]="ind.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
+                }
+              </button>
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.uuid; let i = $index) {
+          <tr
+            #row
+            class="record-grid__row"
+            [attr.tabindex]="i === activeRow() ? 0 : -1"
+            (click)="openRow(row)"
+            (keydown)="onRowKeydown($event, i, row)"
+            (focus)="activeRow.set(i)"
+          >
+            <td class="record-grid__name">{{ row.displayName }}</td>
+            @for (column of visibleColumns(); track column.field) {
+              <td>{{ valueOf(row, column) }}</td>
+            }
+            @if (!compact()) {
+              <td class="record-grid__muted">{{ row.folderPath }}</td>
+              <td class="record-grid__muted">{{ row.changedAt | sfRelativeTime }}</td>
+            }
+          </tr>
+        } @empty {
+          <tr>
+            <td class="record-grid__empty" [attr.colspan]="visibleColumns().length + (compact() ? 1 : 3)">
+              {{ loading() ? 'Loading…' : 'No records match.' }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (!compact() && totalPages() > 1) {
+    <nav class="record-grid__pager" aria-label="Record pages">
+      <sf-button variant="ghost" [disabled]="page() === 0" (click)="previousPage()">Previous</sf-button>
+      <span aria-live="polite">Page {{ page() + 1 }} of {{ totalPages() }} · {{ totalElements() }} records</span>
+      <sf-button variant="ghost" [disabled]="page() + 1 >= totalPages()" (click)="nextPage()">Next</sf-button>
+    </nav>
+  } @else if (!compact()) {
+    <p class="record-grid__summary" aria-live="polite">{{ totalElements() }} records</p>
+  }
+</div>

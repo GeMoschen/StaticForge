@@ -3,6 +3,7 @@ package com.acme.staticforge.generate.render;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.asset.media.TextMediaRenderer;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
@@ -17,7 +18,6 @@ import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
-import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
@@ -132,6 +132,11 @@ final class GenerationRenderer {
         this.generationUserId = generationUserId;
         this.compiledTemplates = compiledTemplates;
         this.assetValues = new SnapshotAssetValueResolver(snapshot);
+    }
+
+    /** How often this build's dataset record index was built (M19.3.2): at most once per snapshot. */
+    int recordIndexBuilds() {
+        return assetValues.indexBuilds();
     }
 
     /** Renders one plan entry; produces empty bytes (with no deps) when the template has no channel source. */

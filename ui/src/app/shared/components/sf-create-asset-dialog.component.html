@@ -50,6 +50,16 @@
           </sf-field>
         }
 
+        @if (showDatasetField()) {
+          <sf-field label="Dataset">
+            <select formControlName="datasetUuid">
+              @for (dataset of datasets(); track dataset.uuid) {
+                <option [value]="dataset.uuid">{{ dataset.displayName ?? dataset.uid }}</option>
+              }
+            </select>
+          </sf-field>
+        }
+
         @if (showTargetField()) {
           <sf-field label="Target page">
             @if (targetLabel()) {

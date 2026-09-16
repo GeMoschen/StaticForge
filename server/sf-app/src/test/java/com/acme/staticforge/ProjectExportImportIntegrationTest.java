@@ -10,14 +10,14 @@ import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetSummary;
 import com.acme.staticforge.asset.AssetType;
-import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.AssetVersion;
+import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.globals.CreateGlobalSetCommand;
 import com.acme.staticforge.asset.globals.GlobalSetService;
 import com.acme.staticforge.asset.globals.GlobalSetView;
-import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.MediaBinary;
 import com.acme.staticforge.asset.media.MediaService;
@@ -124,6 +124,9 @@ class ProjectExportImportIntegrationTest {
     @Autowired com.acme.staticforge.asset.AssetVersionRepository assetVersionRepository;
     @Autowired GlobalSetService globalSetService;
     @Autowired DiffService diffService;
+    @Autowired com.acme.staticforge.asset.dataset.DatasetService datasetService;
+    @Autowired com.acme.staticforge.asset.dataset.RecordService recordService;
+    @Autowired com.acme.staticforge.asset.AssetReferenceRepository assetReferenceRepository;
 
     @Test
     void roundTripPreservesAssetsAndMediaRemapsUuidsAndAddsProvenance() {
@@ -1785,20 +1788,20 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
-     * {@code manifest.json}'s {@code protocolVersion} reads {@code 4}. It went to {@code 3} in
+     * {@code manifest.json}'s {@code protocolVersion} reads {@code 5}. It went to {@code 3} in
      * {@code M14.1.1} for the structural shape change from one combined {@code assets.json} to
-     * many {@code assets/<uuid>.json} entries, and to {@code 4} in {@code M17.1.3} because an
-     * archive may now carry {@code GLOBAL_SET} assets: an importer that predates them would fail
+     * many {@code assets/<uuid>.json} entries, to {@code 4} in {@code M17.1.3} because an
+     * archive may now carry {@code GLOBAL_SET} assets — an importer that predates them would fail
      * inside {@code AssetType.valueOf} part-way through, whereas a version mismatch is reported as
-     * a clean conflict.
+     * a clean conflict — and to {@code 5} in {@code M19.1.3} for {@code DATASET}/{@code RECORD}.
      */
     @Test
-    void manifestReportsProtocolVersionFour() {
+    void manifestReportsProtocolVersionFive() {
         Fixture source = newFixture("m141_manifest", "M14.1 Manifest Protocol Version");
         byte[] archive = exportImportService.exportProject(source.project().getId());
 
         ExportManifest manifest = parseManifest(archive);
-        assertThat(manifest.protocolVersion()).isEqualTo(4);
+        assertThat(manifest.protocolVersion()).isEqualTo(5);
     }
 
     /**
@@ -2020,6 +2023,204 @@ class ProjectExportImportIntegrationTest {
         assertThat(reimportedSite.contentDefinition()).isEqualTo(GLOBAL_SET_CDL);
         assertThat(reimportedSite.content().path("title").asText()).isEqualTo("Acme Outdoor");
         assertThat(reimportedSite.folderPath()).isEqualTo("/" + FolderScope.GLOBALS_ROOT_UID + "/");
+    }
+
+    // ------------------------------------------------------------------
+    // M19.1.3 — datasets and records
+    // ------------------------------------------------------------------
+
+    private static final String TEAM_CDL = "content {\n"
+            + "  editor text name { label \"Name\" }\n"
+            + "  editor text role { label \"Role\" }\n"
+            + "  editor reference mentor { label \"Mentor\" dataset \"team\" }\n"
+            + "}";
+
+    /**
+     * The Content store round trip ({@code M19.1.3}): a dataset and three records in nested Content
+     * folders move into an empty project with payloads, the dataset link (payload and
+     * {@code template_asset_id}), folder paths and reference edges intact.
+     */
+    @Test
+    void contentStoreRoundTripsWithDatasetLinksFoldersAndReferences() {
+        Fixture source = newFixture("m19_content", "M19 Content Source");
+        com.acme.staticforge.asset.dataset.DatasetView team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
+                        source.project().getId(), null, "Team", TEAM_CDL, "name", "People"),
+                source.ctx());
+        AssetVersionView people = folderService.create(null, "People", FolderScope.CONTENT, source.ctx());
+        AssetVersionView leads = folderService.create(people.uuid(), "Leads", FolderScope.CONTENT, source.ctx());
+        var ada = createRecord(source, team, leads.uuid(), "{\"name\":\"Ada\",\"role\":\"lead\"}");
+        var bob = createRecord(source, team, people.uuid(),
+                "{\"name\":\"Bob\",\"mentor\":{\"type\":\"ASSET_REF\",\"uuid\":\"" + ada.uuid() + "\",\"assetType\":\"RECORD\"}}");
+        var cy = createRecord(source, team, null, "{\"name\":\"Cy\"}");
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(), false, false, Set.of(FolderScope.CONTENT)));
+        assertThat(readAssetEntry(archive, team.uuid()).isExplicit())
+                .as("the dataset of exported records rides along implicitly")
+                .isFalse();
+        assertThat(readAssetEntry(archive, bob.uuid()).templateUuid()).isEqualTo(team.uuid().toString());
+
+        Fixture target = newFixture("m19_content_tgt", "M19 Content Target");
+        exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
+
+        long targetId = target.project().getId();
+        var importedTeam = datasetService.find(targetId, team.uuid(), null).orElseThrow();
+        assertThat(importedTeam.folderPath()).isEqualTo("/templates_root/datasets/");
+        assertThat(importedTeam.titleEditor()).isEqualTo("name");
+        assertThat(importedTeam.recordCount()).isEqualTo(3);
+        var importedBob = recordService.find(targetId, bob.uuid(), null).orElseThrow();
+        assertThat(importedBob.datasetUuid()).isEqualTo(team.uuid());
+        assertThat(importedBob.folderPath()).isEqualTo("/people/");
+        assertThat(importedBob.content().path("mentor").path("uuid").asText()).isEqualTo(ada.uuid().toString());
+        assertThat(recordService.find(targetId, ada.uuid(), null).orElseThrow().folderPath()).isEqualTo("/people/leads/");
+        assertThat(recordService.find(targetId, cy.uuid(), null).orElseThrow().folderPath()).isEqualTo("/");
+
+        long teamId = assetRepository.findByProjectIdAndUuid(targetId, team.uuid()).orElseThrow().getId();
+        assertThat(assetVersionRepository.findCurrentRecordsOfDataset(targetId, teamId))
+                .extracting(v -> v.getAsset().getUuid())
+                .containsExactlyInAnyOrder(ada.uuid(), bob.uuid(), cy.uuid());
+        long bobId = assetRepository.findByProjectIdAndUuid(targetId, bob.uuid()).orElseThrow().getId();
+        long adaId = assetRepository.findByProjectIdAndUuid(targetId, ada.uuid()).orElseThrow().getId();
+        assertThat(assetReferenceRepository.findByFromAssetIdAndValidToRevisionIsNull(bobId))
+                .extracting(com.acme.staticforge.asset.AssetReference::getKind, com.acme.staticforge.asset.AssetReference::getToAssetId)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(com.acme.staticforge.asset.ReferenceKind.TEMPLATE, teamId),
+                        org.assertj.core.groups.Tuple.tuple(com.acme.staticforge.asset.ReferenceKind.CONTENT_REF, adaId));
+        assertThat(assetRepository.findAll().stream()
+                        .filter(a -> a.getProjectId() == targetId && FolderScope.CONTENT_ROOT_UID.equals(a.getUid())))
+                .as("the archive's Content root remapped onto the target's own")
+                .hasSize(1);
+    }
+
+    /**
+     * Exporting one record includes its dataset as an implicit pick; importing back into a project
+     * that already has the dataset with "skip existing implicit" leaves the dataset untouched.
+     */
+    @Test
+    void aSingleRecordExportCarriesItsDatasetImplicitly() {
+        Fixture source = newFixture("m19_single", "M19 Single Record Source");
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                source.ctx());
+        var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(ada.uuid()), false, false, Set.of()));
+        assertThat(readAssetEntry(archive, ada.uuid()).isExplicit()).isTrue();
+        assertThat(readAssetEntry(archive, team.uuid()).isExplicit()).isFalse();
+        assertThat(parseAssets(archive).stream().map(ExportedAsset::uid))
+                .contains(FolderScope.DATASETS_UID, FolderScope.TEMPLATES_ROOT_UID, FolderScope.CONTENT_ROOT_UID);
+
+        long datasetRevision = datasetService.find(source.project().getId(), team.uuid(), null).orElseThrow().revision();
+        ImportOptions skip = new ImportOptions(true);
+        assertThat(exportImportService.analyzeImport(source.project().getId(), archive, skip).conflicts())
+                .extracting(ImportConflict::elementUuid)
+                .doesNotContain(team.uuid().toString());
+        exportImportService.importProject(source.project().getId(), archive, source.ctx(), skip);
+        assertThat(datasetService.find(source.project().getId(), team.uuid(), null).orElseThrow().revision())
+                .as("the implicit, existing dataset was skipped, not overwritten")
+                .isEqualTo(datasetRevision);
+
+        Fixture fresh = newFixture("m19_single_tgt", "M19 Single Record Target");
+        exportImportService.importProject(fresh.project().getId(), archive, fresh.ctx(), skip);
+        assertThat(recordService.find(fresh.project().getId(), ada.uuid(), null).orElseThrow().datasetUid()).isEqualTo("team");
+    }
+
+    /** A record whose dataset is neither in the archive nor in the target is a blocking conflict. */
+    @Test
+    void aRecordWithoutItsDatasetIsABlockingConflict() {
+        Fixture source = newFixture("m19_missing", "M19 Missing Dataset Source");
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                source.ctx());
+        var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
+        byte[] archive = withoutEntry(
+                exportImportService.exportSelection(
+                        source.project().getId(), new ExportSelection(Set.of(ada.uuid()), false, false, Set.of())),
+                "assets/" + team.uuid() + ".json");
+
+        Fixture target = newFixture("m19_missing_tgt", "M19 Missing Dataset Target");
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
+        assertThat(report.conflicts())
+                .filteredOn(c -> c.type() == ConflictType.RECORD_DATASET_MISSING)
+                .extracting(ImportConflict::elementUuid, ImportConflict::severity)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(ada.uuid().toString(), ConflictSeverity.BLOCKING));
+        assertThat(report.conflicts()).noneMatch(c -> c.type() == ConflictType.MISSING_TEMPLATE_REFERENCE);
+        assertThatThrownBy(() -> exportImportService.importProject(
+                        target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT))
+                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
+
+        // The same archive into the source project, where the dataset exists: no conflict, and the
+        // record links to the existing dataset.
+        assertThat(exportImportService.analyzeImport(source.project().getId(), archive, ImportOptions.DEFAULT).conflicts())
+                .noneMatch(c -> c.type() == ConflictType.RECORD_DATASET_MISSING);
+        exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
+        long teamId = assetRepository.findByProjectIdAndUuid(source.project().getId(), team.uuid()).orElseThrow().getId();
+        assertThat(assetVersionRepository.findCurrentRecordsOfDataset(source.project().getId(), teamId))
+                .extracting(v -> v.getAsset().getUuid())
+                .containsExactly(ada.uuid());
+    }
+
+    /** Record and dataset diffs are the generic payload diff: content fields and the CDL source. */
+    @Test
+    void recordAndDatasetDiffsShowTheChangedFields() {
+        Fixture source = newFixture("m19_diff", "M19 Diff");
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                source.ctx());
+        var ada = createRecord(source, team, null, "{\"name\":\"Ada\",\"role\":\"dev\"}");
+        var updated = recordService.update(ada.uuid(), json("{\"name\":\"Ada\",\"role\":\"lead\"}"), null, ada.revision(), source.ctx()).record();
+
+        AssetDiff recordDiff = onlyAssetDiff(diffService.diff(source.project().getId(), updated.revision()));
+        assertThat(recordDiff.type()).isEqualTo("RECORD");
+        assertThat(recordDiff.changes()).extracting(FieldChange::path).containsExactly("content.role");
+
+        var retyped = datasetService.update(team.uuid(),
+                new com.acme.staticforge.asset.dataset.UpdateDatasetCommand("Team", TEAM_CDL.replace("\"Role\"", "\"Position\""), null, null),
+                team.revision(), source.ctx());
+        AssetDiff datasetDiff = onlyAssetDiff(diffService.diff(source.project().getId(), retyped.revision()));
+        assertThat(datasetDiff.type()).isEqualTo("DATASET");
+        assertThat(datasetDiff.changes()).extracting(FieldChange::path).contains("contentDefinition");
+    }
+
+    private com.acme.staticforge.asset.dataset.RecordDetail createRecord(
+            Fixture fixture, com.acme.staticforge.asset.dataset.DatasetView dataset, UUID folder, String content) {
+        JsonNode values = json(content);
+        return recordService.create(
+                        new com.acme.staticforge.asset.dataset.CreateRecordCommand(
+                                fixture.project().getId(), dataset.uuid(), folder, values.path("name").asText(), values),
+                        fixture.ctx())
+                .record();
+    }
+
+    private static JsonNode json(String content) {
+        try {
+            return MAPPER.readTree(content);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static byte[] withoutEntry(byte[] archiveBytes, String entryName) {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archiveBytes));
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                java.util.zip.ZipOutputStream zipOut = new java.util.zip.ZipOutputStream(out)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                byte[] bytes = zip.readAllBytes();
+                if (entryName.equals(entry.getName())) {
+                    continue;
+                }
+                zipOut.putNextEntry(new ZipEntry(entry.getName()));
+                zipOut.write(bytes);
+                zipOut.closeEntry();
+            }
+            zipOut.finish();
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**

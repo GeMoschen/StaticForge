@@ -22,10 +22,10 @@ public interface AssetService {
     AssetVersionView ensureRootFolder(long projectId, RevisionContext ctx);
 
     /**
-     * Lazily and idempotently ensures the project's two fixed, protected {@code TEMPLATES}-scope
-     * root folders ("Page Templates" / "Section Templates", spec M13.1.2) exist under
-     * {@link #ensureTemplatesRootFolder}, and returns them keyed by the template kind
-     * ({@code PAGE_TEMPLATE} / {@code SECTION_TEMPLATE}) each one holds.
+     * Lazily and idempotently ensures the project's fixed, protected {@code TEMPLATES}-scope
+     * kind folders ("Page Templates" / "Section Templates", spec M13.1.2, and "Datasets", M19.1.1)
+     * exist under {@link #ensureTemplatesRootFolder}, and returns them keyed by the asset type
+     * ({@code PAGE_TEMPLATE} / {@code SECTION_TEMPLATE} / {@code DATASET}) each one holds.
      */
     Map<AssetType, AssetVersionView> ensureTemplateFolders(long projectId, RevisionContext ctx);
 
@@ -65,6 +65,13 @@ public interface AssetService {
      * #ensureNavigationRootFolder}.
      */
     AssetVersionView ensureGlobalsRootFolder(long projectId, RevisionContext ctx);
+
+    /**
+     * Lazily and idempotently ensures the project's fixed, protected {@code CONTENT}-scope root
+     * folder ("All Content") exists directly under the hidden root (M19.1.1) — every top-level
+     * Content folder/loose record nests under it, mirroring {@link #ensureGlobalsRootFolder}.
+     */
+    AssetVersionView ensureContentRootFolder(long projectId, RevisionContext ctx);
 
     /** Applies a full state change, closing the current version and opening a new one. Optimistic-concurrency-checked. */
     AssetVersionView update(UUID uuid, UpdateAssetCommand cmd, long expectedRevision, RevisionContext ctx);

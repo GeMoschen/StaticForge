@@ -1,6 +1,6 @@
 ---
 id: M19.1.3
-status: todo
+status: done
 depends: [M19.1.2]
 epic: m19-content-store
 feature: domain
@@ -38,13 +38,13 @@ payloads). `AssetServiceImpl.usages` lists inbound references.
 
 ## Acceptance criteria
 
-- [ ] Export/import round-trip test: dataset + 3 records in nested Content folders into an empty
+- [x] Export/import round-trip test: dataset + 3 records in nested Content folders into an empty
       project; payloads, `datasetRef`, folder paths and references intact.
-- [ ] Selecting a single record exports its dataset as *implicit*; re-importing into a project that
+- [x] Selecting a single record exports its dataset as *implicit*; re-importing into a project that
       already has that dataset skips it when the "skip implicit existing" option is set (`M11`).
-- [ ] Missing-dataset conflict appears in `analyze` and blocks that record on import.
-- [ ] `GET /assets/{uuid}/usages` for a dataset and a record returns the expected rows.
-- [ ] `ProjectExportImportIntegrationTest` suite green; UI conflict icon map updated
+- [x] Missing-dataset conflict appears in `analyze` and blocks that record on import.
+- [x] `GET /assets/{uuid}/usages` for a dataset and a record returns the expected rows.
+- [x] `ProjectExportImportIntegrationTest` suite green; UI conflict icon map updated
       (`project-settings-export.component.ts`) for the new `ConflictType`.
 
 ## Out of scope
@@ -58,3 +58,14 @@ payloads). `AssetServiceImpl.usages` lists inbound references.
   unchanged; add a regression assertion.
 - Import order matters: a record created before its dataset breaks validation (`M19.1.2`) — make the
   ordering explicit rather than relying on `assets.json` order.
+
+## Implementation notes (2026-09-16)
+
+- Export order puts DATASET before RECORD; exporting a record adds its dataset (and the dataset's ancestors) as
+  implicit. Import remaps the fixed `datasets`/`content_root` folders, falls back to an existing target dataset
+  for `templateAssetId`, and reports `ConflictType.RECORD_DATASET_MISSING` (blocking). Export protocol 4 → 5.
+- Usages of a dataset list the templates that loop it, not its own records (TEMPLATE edges filtered).
+- UI: import conflict icon and export picker (Content scope, `datasets` folder) updated.
+- Tests: `ProjectExportImportIntegrationTest` (`contentStoreRoundTripsWithDatasetLinksFoldersAndReferences`,
+  `aSingleRecordExportCarriesItsDatasetImplicitly`, `aRecordWithoutItsDatasetIsABlockingConflict`,
+  `recordAndDatasetDiffsShowTheChangedFields`), `DatasetRecordIntegrationTest.datasetUsagesListLoopingTemplatesNotRecords`.

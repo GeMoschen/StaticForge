@@ -10,9 +10,9 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentIssue;
-import com.acme.staticforge.asset.content.ContentRenameMigrator;
 import com.acme.staticforge.asset.content.ContentRenameMigrator.EditorRename;
-import com.acme.staticforge.asset.content.ContentValidator;
+import com.acme.staticforge.asset.content.ContentRenameMigrator;
+import com.acme.staticforge.asset.dataset.RecordDatasets;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -58,18 +58,20 @@ public class GlobalSetServiceImpl implements GlobalSetService {
     private final AssetRepository assetRepository;
     private final AssetVersionRepository assetVersionRepository;
     private final ObjectMapper objectMapper;
+    private final RecordDatasets recordDatasets;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
-    private final ContentValidator contentValidator = new ContentValidator();
 
     public GlobalSetServiceImpl(
             AssetService assetService,
             AssetRepository assetRepository,
             AssetVersionRepository assetVersionRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            RecordDatasets recordDatasets) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.objectMapper = objectMapper;
+        this.recordDatasets = recordDatasets;
     }
 
     @Override
@@ -109,7 +111,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
         ContentRenameMigrator.pruneUnknown(content, definition);
         payload.set("content", content);
 
-        rejectStructural(contentValidator.validate(definition, content, null, CONTENT_PATH));
+        rejectStructural(recordDatasets.validator(ctx.projectId()).validate(definition, content, null, CONTENT_PATH));
 
         return toView(assetService.update(
                 uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx));
@@ -121,7 +123,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
         AssetVersion current = requireOpenSet(ctx.projectId(), uuid);
         ContentDefinition definition = definitionOf(current.getPayload());
 
-        rejectStructural(contentValidator.validate(definition, content, null, CONTENT_PATH));
+        rejectStructural(recordDatasets.validator(ctx.projectId()).validate(definition, content, null, CONTENT_PATH));
 
         ObjectNode payload = (ObjectNode) current.getPayload().deepCopy();
         payload.set("content", content == null || content.isNull() ? objectMapper.createObjectNode() : content);

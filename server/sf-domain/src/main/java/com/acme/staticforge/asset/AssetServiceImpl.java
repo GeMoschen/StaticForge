@@ -138,7 +138,11 @@ public class AssetServiceImpl implements AssetService {
                 AssetType.SECTION_TEMPLATE, ensureFixedFolder(
                         projectId, templatesRootAsset.getId(), templatesRoot.folderPath(),
                         FolderScope.SECTION_TEMPLATES_UID, "Section Templates",
-                        FolderScope.TEMPLATES, AssetType.SECTION_TEMPLATE, ctx));
+                        FolderScope.TEMPLATES, AssetType.SECTION_TEMPLATE, ctx),
+                AssetType.DATASET, ensureFixedFolder(
+                        projectId, templatesRootAsset.getId(), templatesRoot.folderPath(),
+                        FolderScope.DATASETS_UID, "Datasets",
+                        FolderScope.TEMPLATES, AssetType.DATASET, ctx));
     }
 
     @Override
@@ -191,6 +195,16 @@ public class AssetServiceImpl implements AssetService {
                 FolderScope.GLOBALS_ROOT_UID, "All Globals", FolderScope.GLOBALS, null, ctx);
     }
 
+    @Override
+    @Transactional
+    public AssetVersionView ensureContentRootFolder(long projectId, RevisionContext ctx) {
+        AssetVersionView root = ensureRootFolder(projectId, ctx);
+        Asset rootAsset = assetRepository.findByProjectIdAndUuid(projectId, root.uuid()).orElseThrow();
+        return ensureFixedFolder(
+                projectId, rootAsset.getId(), root.folderPath(),
+                FolderScope.CONTENT_ROOT_UID, "All Content", FolderScope.CONTENT, null, ctx);
+    }
+
     /**
      * Finds-or-creates a fixed, protected root folder by its well-known uid under a given
      * parent, mirroring {@link #ensureRootFolder}'s exact lazy pattern. Deliberately bypasses
@@ -225,7 +239,8 @@ public class AssetServiceImpl implements AssetService {
         Asset asset = require(ctx.projectId(), uuid);
         AssetVersion current = requireOpen(asset.getId());
 
-        Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        // Joins an open batch (a dataset schema change migrating its records, M19.1.2), else allocates.
+        Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.UPDATE);
         checkExpectedRevision(current, expectedRevision);
 
         close(asset.getId(), revision.getRevisionId());
@@ -255,6 +270,22 @@ public class AssetServiceImpl implements AssetService {
     public void softDelete(UUID uuid, boolean force, RevisionContext ctx) {
         Asset asset = require(ctx.projectId(), uuid);
 
+        if (asset.getAssetType() == AssetType.DATASET) {
+            // No cascade in v1 (M19.1.2): records would be orphaned, so not even `force` deletes a
+            // dataset that still has live records.
+            long records = assetVersionRepository.countCurrentRecordsOfDataset(asset.getProjectId(), asset.getId());
+            if (records > 0) {
+                throw new SfException(Problem.builder()
+                        .type("https://cms.example.com/problems/sf-dom-0121")
+                        .title("Conflict")
+                        .status(409)
+                        .detail("Dataset still has " + records + " record" + (records == 1 ? "" : "s")
+                                + ". Delete them first.")
+                        .property("code", "SF-DOM-0121")
+                        .property("recordCount", records)
+                        .build());
+            }
+        }
         if (!force && isReferencedByLiveAssets(asset)) {
             throw new SfException(ProblemFactory.other(
                     409, "SF-DOM-0120", "Conflict", "Asset is still referenced by other assets."));
@@ -355,17 +386,25 @@ public class AssetServiceImpl implements AssetService {
     @Transactional(readOnly = true)
     public List<UsageView> usages(long projectId, UUID uuid) {
         Asset asset = require(projectId, uuid);
-        return toUsages(assetReferenceRepository.findIncomingOpen(asset.getId()));
+        return toUsages(asset, assetReferenceRepository.findIncomingOpen(asset.getId()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<UsageView> usagesAt(long projectId, UUID uuid, long revision) {
         Asset asset = require(projectId, uuid);
-        return toUsages(assetReferenceRepository.findIncomingValidAt(asset.getId(), revision));
+        return toUsages(asset, assetReferenceRepository.findIncomingValidAt(asset.getId(), revision));
     }
 
-    private List<UsageView> toUsages(List<AssetReference> refs) {
+    /**
+     * Incoming edges as usage rows. A dataset's own records ({@code TEMPLATE} edges from
+     * {@code RECORD}s, M19.1.3) are left out: a dataset can have thousands, and its record count is
+     * part of the dataset read model. What loops or reads it (templates) is listed as usual.
+     */
+    private List<UsageView> toUsages(Asset target, List<AssetReference> incoming) {
+        List<AssetReference> refs = target.getAssetType() == AssetType.DATASET
+                ? incoming.stream().filter(ref -> ref.getKind() != ReferenceKind.TEMPLATE).toList()
+                : incoming;
         Map<Long, Asset> fromAssets = new java.util.HashMap<>();
         assetRepository.findAllById(refs.stream().map(AssetReference::getFromAssetId).distinct().toList())
                 .forEach(from -> fromAssets.put(from.getId(), from));
@@ -415,7 +454,8 @@ public class AssetServiceImpl implements AssetService {
 
     /**
      * Scans every current section/page template for the literal {@code assetType:oldUid}
-     * reference form (§16.4) still present in the OCTL {@code source} after a UID change.
+     * reference form (§16.4) still present in the OCTL {@code source} after a UID change
+     * ({@code dataset:}/{@code record:} included, M19.3.2).
      * Compiled templates already hold UUIDs; this is purely the source text the developer
      * should fix by hand.
      *
@@ -428,7 +468,7 @@ public class AssetServiceImpl implements AssetService {
      */
     private List<UidLiteralReference> findUidLiteralReferences(long projectId, String oldUid) {
         Pattern pattern = Pattern.compile(
-                "\\b(?:(?:page|media|section_template|page_template|folder|nav|global):|CMS_GLOBAL\\.)"
+                "\\b(?:(?:page|media|section_template|page_template|folder|nav|global|dataset|record):|CMS_GLOBAL\\.)"
                         + Pattern.quote(oldUid) + "\\b");
         List<UidLiteralReference> found = new java.util.ArrayList<>();
         for (AssetType type : List.of(AssetType.SECTION_TEMPLATE, AssetType.PAGE_TEMPLATE)) {
@@ -639,6 +679,8 @@ public class AssetServiceImpl implements AssetService {
                 root = ensureMediaRootFolder(projectId, ctx);
             } else if (scopeHint == FolderScope.GLOBALS) {
                 root = ensureGlobalsRootFolder(projectId, ctx);
+            } else if (scopeHint == FolderScope.CONTENT) {
+                root = ensureContentRootFolder(projectId, ctx);
             } else {
                 root = ensureRootFolder(projectId, ctx);
             }

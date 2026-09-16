@@ -4,12 +4,15 @@ import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorType;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
+import com.acme.staticforge.template.query.DatasetQuery;
+import com.acme.staticforge.template.query.DatasetQueryParser;
 import com.acme.staticforge.template.render.Filters;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +30,12 @@ import java.util.UUID;
 public final class OctlCompiler {
 
     private static final String HASH_ALGORITHM = "SHA-256";
+
+    /** The {@code assetType:uid} prefix of a dataset loop source (M19.3.2). */
+    private static final String DATASET_PREFIX = "dataset";
+
+    /** The {@code assetType:uid} prefix of a single record (M19.3.2). */
+    private static final String RECORD_PREFIX = "record";
 
     /** A text media file has no editors and no bodies: every bare name is unknown. */
     private static final ContentDefinition NO_EDITORS = new ContentDefinition(List.of(), List.of());
@@ -107,7 +116,12 @@ public final class OctlCompiler {
 
         String hash = sha256(channel + '\u0000' + text);
         CompiledTemplate template = new CompiledTemplate(
-                channel, hash, parsed.nodes(), refMap, ReferenceUseCollector.collect(parsed.nodes()));
+                channel,
+                hash,
+                parsed.nodes(),
+                refMap,
+                ReferenceUseCollector.collect(parsed.nodes(), ctx.datasetQueries),
+                ctx.datasetQueries);
         return new OctlResult(template, diagnostics);
     }
 
@@ -128,7 +142,7 @@ public final class OctlCompiler {
                 }
                 case OctlNode.Ref r -> {
                     checkAccessorRoot(r.accessor(), shadowed, r.line(), r.col(), ctx);
-                    checkGlobalRefPath(r.accessor(), r.line(), r.col(), ctx);
+                    checkRefHasUrl(r.accessor(), r.line(), r.col(), ctx);
                 }
                 case OctlNode.Body b -> {
                     if (ctx.textMedia != null) {
@@ -178,6 +192,9 @@ public final class OctlCompiler {
                 }
                 case OctlNode.For f -> {
                     checkAccessorRoot(f.accessor(), shadowed, f.line(), f.col(), ctx);
+                    if (f.accessor().isAssetReference() && DATASET_PREFIX.equals(f.accessor().assetType())) {
+                        compileDatasetLoop(f, shadowed, ctx);
+                    }
                     Set<String> inner = new HashSet<>(shadowed);
                     inner.add(f.variable());
                     validate(f.body(), inner, ctx);
@@ -284,16 +301,64 @@ public final class OctlCompiler {
      * equivalent {@code global:site}) can only ever render empty. The value path is what carries
      * the link — {@code $CMS_REF(CMS_GLOBAL.site.logo)$} refs the media the {@code logo} editor
      * holds — so the path-less form is a compile error rather than a silent blank (M17.3.1).
+     * Records and datasets (M19.3.2) have no URL either.
      */
-    private void checkGlobalRefPath(Accessor accessor, int line, int col, ValidateCtx ctx) {
-        if (accessor.isAssetReference()
-                && Accessor.GLOBAL_PREFIX.equals(accessor.assetType())
-                && accessor.path().isEmpty()) {
+    private void checkRefHasUrl(Accessor accessor, int line, int col, ValidateCtx ctx) {
+        if (!accessor.isAssetReference() || !accessor.path().isEmpty()) {
+            return;
+        }
+        if (Accessor.GLOBAL_PREFIX.equals(accessor.assetType())) {
             ctx.diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.OCTL_GLOBAL_REFERENCE_MISUSE,
                     "$CMS_REF on a property set needs the editor holding the link, e.g. "
                             + Accessor.GLOBAL_ROOT + "." + accessor.uid() + ".logo",
                     line, col));
+        } else if (DATASET_PREFIX.equals(accessor.assetType()) || RECORD_PREFIX.equals(accessor.assetType())) {
+            ctx.diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_GLOBAL_REFERENCE_MISUSE,
+                    "$CMS_REF on a " + accessor.assetType() + " needs the editor holding the link, e.g. "
+                            + accessor.referenceKey() + ".website: " + accessor.assetType() + "s have no URL",
+                    line, col));
+        }
+    }
+
+    /**
+     * {@code $CMS_FOR(x : dataset:uid, where=…, sort=…, limit=…, offset=…, folder=…)$} (M19.3.2): the
+     * arguments are parsed once here into the {@link com.acme.staticforge.template.query.DatasetQuery}
+     * the renderer applies, so a bad argument is a compile-time {@code SF-TPL-0140} instead of a
+     * render-time surprise. Accessors of {@code where} not rooted at the loop variable are ordinary
+     * scope accessors and are checked like any other. With the dataset's schema (template save only)
+     * the field names are checked too.
+     */
+    private void compileDatasetLoop(OctlNode.For loop, Set<String> shadowed, ValidateCtx ctx) {
+        if (!loop.accessor().path().isEmpty()) {
+            ctx.diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_DATASET_QUERY,
+                    "A dataset loop iterates " + loop.accessor().referenceKey() + " itself; remove the path ."
+                            + String.join(".", loop.accessor().path()),
+                    loop.line(), loop.col()));
+        }
+        Map<String, String> args = new LinkedHashMap<>();
+        loop.args().forEach(arg -> args.put(arg.name(), arg.value()));
+        DatasetQueryParser.Result parsed = DatasetQueryParser.parse(args, loop.variable(), loop.line(), loop.col());
+        ctx.diagnostics.addAll(parsed.diagnostics());
+        ctx.datasetQueries.put(loop, parsed.query());
+
+        if (parsed.query().where() != null) {
+            Set<String> withLoop = new HashSet<>(shadowed);
+            withLoop.add(loop.variable());
+            List<Expr.Access> accesses = new ArrayList<>();
+            DatasetQueryParser.collectAllAccesses(parsed.query().where(), accesses);
+            for (Expr.Access access : accesses) {
+                checkAccessorRoot(access.accessor(), withLoop, loop.line(), loop.col(), ctx);
+                checkFilters(access.filters(), loop.line(), loop.col(), ctx);
+            }
+        }
+
+        UUID dataset = ctx.refMap.get(loop.accessor().referenceKey());
+        if (dataset != null && ctx.references != null) {
+            ctx.references.datasetDefinition(dataset).ifPresent(definition -> ctx.diagnostics.addAll(
+                    DatasetQueryParser.validateFields(parsed.query(), definition, loop.line(), loop.col())));
         }
     }
 
@@ -423,6 +488,8 @@ public final class OctlCompiler {
         final List<Diagnostic> diagnostics;
         final Set<String> usedEditors = new HashSet<>();
         final Set<String> usedBodies = new HashSet<>();
+        /** Dataset loops' compiled queries, by loop node identity (M19.3.2). */
+        final Map<OctlNode.For, DatasetQuery> datasetQueries = new IdentityHashMap<>();
         /** The text media profile, or {@code null} when compiling a template. */
         final TextMedia textMedia;
 

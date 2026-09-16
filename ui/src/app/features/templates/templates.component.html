@@ -33,10 +33,22 @@
         <span class="templates__toolbar-readonly">Viewing a past revision — read-only</span>
       }
       <span class="templates__toolbar-spacer"></span>
-      <sf-button variant="primary" [disabled]="readOnly()" (click)="newTemplate()">New template</sf-button>
+      <sf-button variant="primary" [disabled]="readOnly()" (click)="newTemplate()">
+        {{ activeTemplateKind() === 'DATASET' ? 'New dataset' : 'New template' }}
+      </sf-button>
     </div>
 
-    @if (detail(); as d) {
+    @if (datasetSelected() && selectedUuid(); as datasetUuid) {
+      <div class="detail__scroll">
+        <sf-dataset-schema-editor
+          [projectKey]="projectKey()"
+          [uuid]="datasetUuid"
+          (changed)="onDatasetChanged()"
+          (deleted)="onDatasetDeleted()"
+        />
+      </div>
+    } @else {
+      @if (detail(); as d) {
       <div class="detail__scroll">
         <div class="detail__head">
           <div>
@@ -167,11 +179,12 @@
           }
         </div>
       </div>
-    } @else {
-      <sf-empty-state
-        title="No template selected"
-        description="Select a template on the left, or create a new one."
-      />
+      } @else {
+        <sf-empty-state
+          title="No template selected"
+          description="Select a template on the left, or create a new one."
+        />
+      }
     }
   </section>
 </div>

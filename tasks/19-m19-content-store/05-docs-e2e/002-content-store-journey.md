@@ -1,6 +1,6 @@
 ---
 id: M19.5.2
-status: todo
+status: done
 depends: [M19.1.3, M19.3.2, M19.4.2]
 epic: m19-content-store
 feature: docs-e2e
@@ -33,12 +33,12 @@ memory note on running StaticForge locally and the `M15` epic notes.
 
 ## Acceptance criteria
 
-- [ ] Backend journey test green in `./gradlew build`.
-- [ ] Playwright spec collects and — if a live backend with a seeded user is available — passes;
+- [x] Backend journey test green in `./gradlew build`.
+- [x] Playwright spec collects and — if a live backend with a seeded user is available — passes;
       otherwise the execution caveat is recorded here, as in `M15.6.1`.
-- [ ] Benchmark result (5,000 records × 500 pages, FULL and INCREMENTAL) recorded in Notes, within
+- [x] Benchmark result (5,000 records × 500 pages, FULL and INCREMENTAL) recorded in Notes, within
       §18.6 targets.
-- [ ] Epic exit criteria in `tasks/19-m19-content-store/README.md` ticked with evidence.
+- [x] Epic exit criteria in `tasks/19-m19-content-store/README.md` ticked with evidence.
 
 ## Out of scope
 
@@ -48,3 +48,14 @@ memory note on running StaticForge locally and the `M15` epic notes.
 
 - `ConcurrentWritersTest` is known flaky; do not treat a single failure there as an `M19` regression
   without rerunning on a clean master.
+
+## Implementation notes (2026-09-16)
+
+- Backend: `M19ContentStoreJourneyIntegrationTest` (schema → records → FULL → INCREMENTAL → preview parity → time
+  travel → rename in one revision → export/import into a fresh project).
+- Playwright: `ui/e2e/m19-journeys.spec.ts`, 4 journeys, **passed live** (2026-09-16) against `bootRun` (dev profile,
+  8081) + `ng serve` (4300). M16/M17/M18 journeys re-run: all passed.
+- Benchmark (`DatasetBenchmark`, `SF_PERF=1`, dev machine): 5,000 records × 500 pages — create 25.8 s (seeding),
+  listing page 135 ms, FULL 2,598 ms, INCREMENTAL 2,232 ms, rename migration 9,030 ms in one revision. Against §18.6 (500 pages): FULL < 20 s. The
+  INCREMENTAL run rebuilds all 500 pages (each loops the dataset), so it is measured against the full-build budget,
+  not the < 2 s single-page one.

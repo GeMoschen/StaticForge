@@ -1,6 +1,6 @@
 ---
 id: M19.1.2
-status: todo
+status: done
 depends: [M19.1.1, M16.3.1, M16.5.2]
 epic: m19-content-store
 feature: domain
@@ -50,14 +50,14 @@ When an editor is renamed via `renamedFrom`, `TemplateServiceImpl.migrateRenames
 
 ## Acceptance criteria
 
-- [ ] Integration tests: create dataset (valid CDL / CDL error → 422 with diagnostics / `body` → new
+- [x] Integration tests: create dataset (valid CDL / CDL error → 422 with diagnostics / `body` → new
       diagnostic); create/update record (valid, invalid → validator errors, `If-Match` conflict → 409).
-- [ ] Renaming an editor with `renamedFrom` on a dataset with 3 records produces **one** revision whose
+- [x] Renaming an editor with `renamedFrom` on a dataset with 3 records produces **one** revision whose
       `summary.assets` lists the dataset and all 3 records, and every record's content uses the new key.
-- [ ] Existing `TemplateServiceTest` rename tests pass unchanged after the helper extraction.
-- [ ] Record → dataset `TEMPLATE` edge and content references exist right after save (no generation run).
-- [ ] Deleting a dataset with live records → 409; after deleting the records → allowed.
-- [ ] `titleEditor` sets display name on create and update; UID only derived on create.
+- [x] Existing `TemplateServiceTest` rename tests pass unchanged after the helper extraction.
+- [x] Record → dataset `TEMPLATE` edge and content references exist right after save (no generation run).
+- [x] Deleting a dataset with live records → 409; after deleting the records → allowed.
+- [x] `titleEditor` sets display name on create and update; UID only derived on create.
 
 ## Out of scope
 
@@ -74,3 +74,20 @@ When an editor is renamed via `renamedFrom`, `TemplateServiceImpl.migrateRenames
 - Concurrency: a record edit racing a schema migration must surface as the normal `If-Match` 409, not
   silently lose the rename; cover with a test.
 - If `M17.1.2` created a reusable "CDL-backed asset" helper (compile + validate + references), use it.
+
+## Implementation notes (2026-09-16)
+
+- `asset.dataset`: `DatasetServiceImpl` compiles with `DatasetCdlRules` (`SF-CDL-0108` for bodies); `titleEditor`
+  must name a `text` editor. `RecordServiceImpl` validates with `ContentValidator` (structural → 422 `issues`,
+  completeness findings returned with the save) and derives the display name from the title editor; the uid is
+  derived on create only.
+- **Rename migration:** no extraction from `TemplateServiceImpl` was needed — values are rewritten by the existing
+  `ContentRenameMigrator`; `RecordRenameMigration` (`@RevisionAware`, `Propagation.MANDATORY`) walks the dataset's
+  records in chunks of 200 with `EntityManager` flush/clear and appends one summary. 1,000 records: 21 s before
+  chunking, 3 s after; 5,000 records: 9 s, one revision.
+- `ReferenceMaterializer`: RECORD → `TEMPLATE` edge to its dataset plus content refs; DATASET has none.
+  `softDelete` refuses a dataset with live records even with `force` (`SF-DOM-0121`, `recordCount`).
+- A `reference` editor may declare `dataset "uid"`; `RecordDatasetLookup` makes a value outside the dataset a
+  structural `dataset` finding.
+- Tests: `DatasetRecordIntegrationTest` (rename in one revision, racing edit is a conflict, validation, dataset
+  restriction, delete guard, title editor, move/restore through the generic paths).

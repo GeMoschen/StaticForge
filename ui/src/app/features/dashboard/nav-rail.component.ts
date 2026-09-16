@@ -47,6 +47,7 @@ export class NavRailComponent {
     const base = `/p/${key}`;
     return [
       { label: 'Pages', icon: 'description', route: `${base}/pages` },
+      { label: 'Content', icon: 'dataset', route: `${base}/content` },
       { label: 'Media', icon: 'perm_media', route: `${base}/media` },
       { label: 'Navigation', icon: 'account_tree', route: `${base}/navigation` },
       { label: 'Globals', icon: 'tune', route: `${base}/globals` },

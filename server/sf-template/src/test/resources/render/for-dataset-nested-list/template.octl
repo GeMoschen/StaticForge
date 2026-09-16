@@ -1,0 +1,1 @@
+$CMS_FOR(member : dataset:team, where="member.tags != null", sort="name")$$CMS_IF(member._first)$<h2>$CMS_VALUE(member._count)$ with tags</h2>$CMS_END_IF$<div class="$CMS_VALUE(member.role)$">$CMS_VALUE(member.name)$:$CMS_FOR(tag : member.tags)$ #$CMS_VALUE(tag)$$CMS_IF(tag._last)$.$CMS_END_IF$$CMS_END_FOR$</div>$CMS_END_FOR$

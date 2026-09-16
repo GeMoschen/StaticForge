@@ -14,7 +14,9 @@ public enum FolderScope {
     MEDIA,
     NAVIGATION,
     TEMPLATES,
-    GLOBALS;
+    GLOBALS,
+    /** The Content store (M19.1.1): dataset records and their folders. */
+    CONTENT;
 
     /**
      * Well-known {@code uid}s of the two fixed, auto-provisioned, protected top-level folders
@@ -48,14 +50,24 @@ public enum FolderScope {
      * mirroring {@link #NAVIGATION_ROOT_UID}. */
     public static final String GLOBALS_ROOT_UID = "globals_root";
 
+    /** Well-known {@code uid} of the fixed, auto-provisioned, protected {@code CONTENT}-scope root
+     * folder (M19.1.1) — every top-level Content folder/loose record nests under it, mirroring
+     * {@link #GLOBALS_ROOT_UID}. */
+    public static final String CONTENT_ROOT_UID = "content_root";
+
+    /** Well-known {@code uid} of the fixed, protected {@code TEMPLATES}-scope folder holding dataset
+     * schemas (M19.1.1), the third one next to {@link #PAGE_TEMPLATES_UID}/{@link #SECTION_TEMPLATES_UID}. */
+    public static final String DATASETS_UID = "datasets";
+
     /** The scope an asset of this type must be placed under, or {@code null} if the type isn't scoped to a store. */
     public static FolderScope requiredFor(AssetType type) {
         return switch (type) {
             case PAGE -> PAGES;
             case MEDIA -> MEDIA;
             case PAGE_REFERENCE -> NAVIGATION;
-            case PAGE_TEMPLATE, SECTION_TEMPLATE -> TEMPLATES;
+            case PAGE_TEMPLATE, SECTION_TEMPLATE, DATASET -> TEMPLATES;
             case GLOBAL_SET -> GLOBALS;
+            case RECORD -> CONTENT;
             default -> null;
         };
     }
@@ -83,7 +95,7 @@ public enum FolderScope {
 
     /**
      * Reads the {@code templateKind} field from a folder asset's payload ({@code TEMPLATES}
-     * scope only) — {@code PAGE_TEMPLATE} or {@code SECTION_TEMPLATE} — or {@code null} if
+     * scope only) — {@code PAGE_TEMPLATE}, {@code SECTION_TEMPLATE} or {@code DATASET} — or {@code null} if
      * absent/unrecognized.
      */
     public static AssetType templateKindFromPayload(JsonNode payload) {

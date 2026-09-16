@@ -121,7 +121,7 @@ public class FolderServiceImpl implements FolderService {
             UUID parentFolderUuid, String displayName, FolderScope scope, AssetType templateKind, RevisionContext ctx) {
         if (parentFolderUuid == null && scope == FolderScope.TEMPLATES) {
             throw new SfException(ProblemFactory.unprocessableEntity(
-                    "The top level of the template store is fixed to \"Page Templates\" and \"Section Templates\" — "
+                    "The top level of the template store is fixed to \"Page Templates\", \"Section Templates\" and \"Datasets\" — "
                             + "new top-level folders cannot be created there."));
         }
 
@@ -154,7 +154,7 @@ public class FolderServiceImpl implements FolderService {
                 // top-level TEMPLATES folder already is above.
                 throw new SfException(ProblemFactory.unprocessableEntity(
                         "New folders can't be created directly under the templates root — "
-                                + "pick Page Templates or Section Templates first."));
+                                + "pick Page Templates, Section Templates or Datasets first."));
             }
         }
         if (effectiveScope == null) {

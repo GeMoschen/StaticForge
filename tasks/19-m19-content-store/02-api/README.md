@@ -19,9 +19,9 @@ so the UI grid never downloads a whole dataset.
 
 ## Feature exit criteria
 
-- [ ] Dataset and record CRUD endpoints with correct roles, `If-Match`, 404-vs-403 behavior.
-- [ ] Paged, sortable, filterable record listing per dataset.
-- [ ] OpenAPI regenerated; `ui/src/app/core/api/generated/schema.d.ts` updated.
+- [x] Dataset and record CRUD endpoints with correct roles, `If-Match`, 404-vs-403 behavior.
+- [x] Paged, sortable, filterable record listing per dataset.
+- [x] OpenAPI regenerated; `ui/src/app/core/api/generated/schema.d.ts` updated.
 
 ## Dependencies
 

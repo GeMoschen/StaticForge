@@ -46,6 +46,9 @@ final class CdlParser {
         int visibleWhenLine = -1;
         int visibleWhenCol = -1;
         String renamedFrom;
+        String dataset;
+        int datasetLine = -1;
+        int datasetCol = -1;
         final List<String> mimeTypes = new ArrayList<>();
         final List<String> assetTypes = new ArrayList<>();
         final List<SelectOption> options = new ArrayList<>();
@@ -207,6 +210,11 @@ final class CdlParser {
             case "maxChars" -> node.maxChars = expectInt(attrTok);
             case "mimeTypes" -> node.mimeTypes.addAll(expectStringArray(attrTok));
             case "assetTypes" -> node.assetTypes.addAll(expectIdentArray(attrTok));
+            case "dataset" -> {
+                node.datasetLine = attrTok.line();
+                node.datasetCol = attrTok.column();
+                node.dataset = expectString(attrTok);
+            }
             case "options" -> node.options.addAll(parseOptions(attrTok));
             case "features" -> node.features.addAll(expectIdentArray(attrTok));
             case "allow" -> node.allow.addAll(expectStringArray(attrTok));

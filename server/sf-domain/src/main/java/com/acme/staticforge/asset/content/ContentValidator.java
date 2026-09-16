@@ -25,6 +25,7 @@ public final class ContentValidator {
     private static final Set<String> LINK_KINDS = Set.of("INTERNAL", "EXTERNAL", "MEDIA", "ANCHOR", "MAIL");
 
     private final ExpressionEvaluator evaluator;
+    private final RecordDatasetLookup recordDatasets;
 
     /** Creates a validator with a fresh expression evaluator. */
     public ContentValidator() {
@@ -33,7 +34,17 @@ public final class ContentValidator {
 
     /** Creates a validator backed by the supplied evaluator (useful in tests). */
     public ContentValidator(ExpressionEvaluator evaluator) {
+        this(evaluator, null);
+    }
+
+    /**
+     * Creates a validator that also checks dataset membership of references restricted with
+     * {@code dataset "uid"} through {@code recordDatasets} (M19.3.2); {@code null} checks only that
+     * such a reference points at a record.
+     */
+    public ContentValidator(ExpressionEvaluator evaluator, RecordDatasetLookup recordDatasets) {
         this.evaluator = evaluator;
+        this.recordDatasets = recordDatasets;
     }
 
     /**
@@ -163,6 +174,7 @@ public final class ContentValidator {
             case SELECT -> validateSelect(editor, value, path, issues);
             case MULTISELECT -> validateMultiselect(editor, value, path, issues);
             case MEDIA -> validateMime(editor, value, path, issues);
+            case REFERENCE -> validateDataset(editor, value, path, issues);
             default -> {
                 // LINK, REFERENCE, COLOR, DATE, DATETIME, BOOLEAN, JSON: shape checked only.
             }
@@ -330,6 +342,30 @@ public final class ContentValidator {
             issues.add(new ContentIssue(
                     path, "mimeType", Severity.ERROR,
                     "Editor '" + editor.name() + "' has a mime type '" + mime + "' that is not allowed."));
+        }
+    }
+
+    /**
+     * A reference restricted with {@code dataset "uid"} must point at a record of that dataset. A
+     * record of another dataset (or any other asset type) is a structural {@code dataset} finding,
+     * the same as a value outside a select's options.
+     */
+    private void validateDataset(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
+        String dataset = editor.dataset();
+        if (dataset == null || dataset.isBlank()) {
+            return;
+        }
+        String message = "Editor '" + editor.name() + "' must reference a record of dataset '" + dataset + "'.";
+        JsonNode assetType = value.get("assetType");
+        if (assetType != null && assetType.isTextual() && !"RECORD".equalsIgnoreCase(assetType.asText())) {
+            issues.add(new ContentIssue(path, "dataset", Severity.ERROR, message));
+            return;
+        }
+        if (recordDatasets != null) {
+            UUID target = UUID.fromString(value.get("uuid").asText());
+            if (!recordDatasets.datasetUidOf(target).map(dataset::equals).orElse(false)) {
+                issues.add(new ContentIssue(path, "dataset", Severity.ERROR, message));
+            }
         }
     }
 

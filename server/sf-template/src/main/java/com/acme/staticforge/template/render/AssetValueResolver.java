@@ -23,6 +23,9 @@ import java.util.UUID;
  *   <li>{@code media} — a flat object: {@code altText, caption, copyright, fileName, mimeType,
  *       width, height, …}.
  *   <li>{@code page_reference} — {@code {label, …}}.
+ *   <li>{@code record} — the record's item: its values plus {@code _uuid}, {@code _uid},
+ *       {@code _displayName}, {@code _folderPath}, {@code _changedAt} (M19.3.2), the same object a
+ *       dataset loop binds.
  *   <li>template and folder types — no values: an object holding only the reserved {@code _meta}
  *       sub-object below.
  * </ul>
@@ -48,4 +51,16 @@ public interface AssetValueResolver {
      *     deleted
      */
     JsonNode valueOf(String assetType, UUID uuid);
+
+    /**
+     * The live records of a dataset (M19.3.2), in any order: the source of
+     * {@code $CMS_FOR(x : dataset:uid, …)$}, which applies the loop's query to them. Generation
+     * answers from an index built once per snapshot, preview from the records valid at the preview
+     * revision. Without an implementation a dataset loop renders nothing.
+     *
+     * @param datasetUuid the dataset UUID resolved at compile time
+     */
+    default java.util.List<com.acme.staticforge.template.query.RecordView> datasetRecords(UUID datasetUuid) {
+        return java.util.List.of();
+    }
 }

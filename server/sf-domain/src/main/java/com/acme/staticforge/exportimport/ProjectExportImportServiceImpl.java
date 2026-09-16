@@ -120,6 +120,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             AssetType.PAGE_TEMPLATE,
             AssetType.MEDIA,
             AssetType.GLOBAL_SET,
+            // A record's validation and its template_asset_id need its dataset (M19.1.3).
+            AssetType.DATASET,
+            AssetType.RECORD,
             AssetType.PAGE,
             AssetType.PAGE_REFERENCE);
 
@@ -321,9 +324,21 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
         }
 
-        // Always include every ancestor folder up to the project root.
+        // A record is meaningless without its schema (M19.1.3): its dataset joins the archive as an
+        // implicit pick, exactly like an ancestor folder, so an import can reuse an existing copy.
         Set<Long> ancestors = new HashSet<>();
-        for (Long id : included) {
+        for (Long id : List.copyOf(included)) {
+            AssetVersion version = versionByAssetId.get(id);
+            Long datasetId = version.getAsset().getAssetType() == AssetType.RECORD ? version.getTemplateAssetId() : null;
+            if (datasetId != null && !included.contains(datasetId) && versionByAssetId.containsKey(datasetId)) {
+                ancestors.add(datasetId);
+            }
+        }
+
+        // Always include every ancestor folder up to the project root.
+        Set<Long> withImplicit = new HashSet<>(included);
+        withImplicit.addAll(ancestors);
+        for (Long id : withImplicit) {
             Long folderId = versionByAssetId.get(id).getFolderId();
             while (folderId != null && !included.contains(folderId) && ancestors.add(folderId)) {
                 AssetVersion folderVersion = versionByAssetId.get(folderId);
@@ -458,6 +473,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 findFixedFolderByUid(assets, FolderScope.GLOBALS_ROOT_UID),
                 assetService.ensureGlobalsRootFolder(targetProjectId, ctx),
                 targetProjectId, remap, idMaps));
+        fixedFolderKeys.addAll(resolveFixedFolder(
+                findFixedFolderByUid(assets, FolderScope.CONTENT_ROOT_UID),
+                assetService.ensureContentRootFolder(targetProjectId, ctx),
+                targetProjectId, remap, idMaps));
 
         // Pre-populate idMaps for every skipped asset with the *existing* target asset's real
         // (assetId, folderPath) — not a to-be-created one — so descendants still explicitly
@@ -583,7 +602,15 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 boolean satisfied = archiveUuids.contains(templateUuid.toLowerCase(Locale.ROOT))
                         || assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(templateUuid))
                                 .isPresent();
-                if (!satisfied) {
+                if (!satisfied && AssetType.RECORD.name().equals(asset.type())) {
+                    conflicts.add(ImportConflict.of(
+                            ConflictType.RECORD_DATASET_MISSING,
+                            asset.uuid(),
+                            label,
+                            "Belongs to dataset " + templateUuid
+                                    + ", which is not in this archive and does not exist in the target project.",
+                            asset.isExplicit()));
+                } else if (!satisfied) {
                     // Deliberately no UID-based fallback lookup here: once the missing template is
                     // excluded from the archive, its human-assigned UID isn't derivable from what
                     // remains — scope limitation, not an oversight.
@@ -755,6 +782,13 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 ? pathService.childPath(parentPath, uid)
                 : pathService.contentPath(parentPath);
         Long templateAssetId = idMaps.idOf(asset.templateUuid());
+        if (templateAssetId == null && asset.templateUuid() != null && !asset.templateUuid().isBlank()) {
+            // The template (or a record's dataset, M19.1.3) is not in the archive but already exists in
+            // the target project: link to it, since a record without template_asset_id drops out of
+            // every dataset query.
+            UUID targetTemplate = remap.getOrDefault(asset.templateUuid().toLowerCase(), UUID.fromString(asset.templateUuid()));
+            templateAssetId = assetRepository.findByProjectIdAndUuid(projectId, targetTemplate).map(Asset::getId).orElse(null);
+        }
 
         JsonNode remapped = UuidRemapper.remap(asset.payload(), remap);
         ObjectNode payload = JsonUtil.object(remapped).deepCopy();
@@ -867,6 +901,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 found.put(AssetType.PAGE_TEMPLATE, asset);
             } else if (FolderScope.SECTION_TEMPLATES_UID.equals(asset.uid())) {
                 found.put(AssetType.SECTION_TEMPLATE, asset);
+            } else if (FolderScope.DATASETS_UID.equals(asset.uid())) {
+                found.put(AssetType.DATASET, asset);
             }
         }
         return found;

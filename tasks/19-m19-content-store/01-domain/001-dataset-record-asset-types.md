@@ -1,6 +1,6 @@
 ---
 id: M19.1.1
-status: todo
+status: done
 depends: []
 epic: m19-content-store
 feature: domain
@@ -43,16 +43,16 @@ revision.
 
 ## Acceptance criteria
 
-- [ ] Creating a project still yields exactly one revision; its `summary.assets` now also lists
+- [x] Creating a project still yields exactly one revision; its `summary.assets` now also lists
       `content_root` and `datasets` (update the `M15.6` assertion accordingly).
-- [ ] An existing project without the new folders gets them on first dataset/record creation, inside
+- [x] An existing project without the new folders gets them on first dataset/record creation, inside
       that creation's revision.
-- [ ] Creating a `RECORD` outside the Content store, or a `DATASET` outside `datasets`, fails with the
+- [x] Creating a `RECORD` outside the Content store, or a `DATASET` outside `datasets`, fails with the
       same error shape `FolderScope` violations use today.
-- [ ] Protected folders cannot be renamed, moved or deleted (existing protection applies).
-- [ ] `template_asset_id` (or the chosen alternative) is populated for records and covered by a
+- [x] Protected folders cannot be renamed, moved or deleted (existing protection applies).
+- [x] `template_asset_id` (or the chosen alternative) is populated for records and covered by a
       repository test for current and revision-pinned reads.
-- [ ] `./gradlew :server:sf-domain:test` and ArchUnit module/`@RevisionAware` gates green.
+- [x] `./gradlew :server:sf-domain:test` and ArchUnit module/`@RevisionAware` gates green.
 
 ## Out of scope
 
@@ -69,3 +69,17 @@ revision.
   (e.g. "pages using template X" must filter `asset_type = PAGE`).
 - `M17.1.1` adds `GLOBALS` the same way; if it landed first, align naming/ordering of the stores
   (nav rail order, export `fullStores`) with it.
+
+## Implementation notes (2026-09-16)
+
+- `AssetType.DATASET`/`RECORD`; `FolderScope.CONTENT` (`content_root`, "All Content") and the fixed `datasets`
+  folder (`templateKind DATASET`) under `templates_root`; both uids reserved in `UidGenerator`. Project creation is
+  still one revision, now 11 summary entries (10 folders) — `ProjectApiIntegrationTests` updated.
+- Lazy provisioning: `AssetService.ensureContentRootFolder` and `ensureTemplateFolders` run inside the creating
+  batch (`DatasetServiceImpl` joins or begins the batch first), so a pre-M19 project gets the folders in its first
+  dataset/record revision.
+- **Decision:** record → dataset is `payload.datasetRef`, mirrored into `asset_version.template_asset_id` via
+  `CreateAssetCommand.templateUuid`. Repository queries: `findCurrentRecordsOfDataset`,
+  `searchCurrentRecordsOfDataset(q, folderPattern)`, `findRecordsOfDatasetAt`, `countCurrentRecordsOfDataset`.
+- Tests: `DatasetRecordIntegrationTest` (provisioning, lazy folders, scope errors, protected folders, current and
+  revision-pinned link reads), `TemplateFolderIntegrationTest` (three kind folders).

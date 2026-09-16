@@ -9,4 +9,5 @@ dependencies {
     api(libs.jackson.databind)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.jqwik)
 }

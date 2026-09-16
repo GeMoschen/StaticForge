@@ -17,11 +17,20 @@ final class ReferenceUseCollector {
     private static final String NAV = "nav";
 
     private final Map<String, Set<ReferenceUse>> uses = new LinkedHashMap<>();
+    private final Map<OctlNode.For, com.acme.staticforge.template.query.DatasetQuery> datasetQueries;
 
-    private ReferenceUseCollector() {}
+    private ReferenceUseCollector(Map<OctlNode.For, com.acme.staticforge.template.query.DatasetQuery> datasetQueries) {
+        this.datasetQueries = datasetQueries;
+    }
 
     static Map<String, Set<ReferenceUse>> collect(List<OctlNode> nodes) {
-        ReferenceUseCollector collector = new ReferenceUseCollector();
+        return collect(nodes, Map.of());
+    }
+
+    /** Also records the asset references inside dataset loops' {@code where} expressions (M19.3.2). */
+    static Map<String, Set<ReferenceUse>> collect(
+            List<OctlNode> nodes, Map<OctlNode.For, com.acme.staticforge.template.query.DatasetQuery> datasetQueries) {
+        ReferenceUseCollector collector = new ReferenceUseCollector(datasetQueries);
         collector.nodes(nodes);
         return collector.uses;
     }
@@ -45,6 +54,10 @@ final class ReferenceUseCollector {
                 }
                 case OctlNode.For f -> {
                     record(f.accessor(), NAV.equals(f.accessor().assetType()) ? ReferenceUse.REF : ReferenceUse.VALUE);
+                    var query = datasetQueries.get(f);
+                    if (query != null && query.where() != null) {
+                        expr(query.where());
+                    }
                     nodes(f.body());
                 }
                 case OctlNode.Set st -> expr(st.expr());

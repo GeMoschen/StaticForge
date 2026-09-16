@@ -60,7 +60,7 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 
 | Method | Path |
 |---|---|
-| `GET`/`POST` | `/projects/{projectKey}/folders` (`scope` = `PAGES`, `MEDIA`, `NAVIGATION`, `TEMPLATES` or `GLOBALS`) |
+| `GET`/`POST` | `/projects/{projectKey}/folders` (`scope` = `PAGES`, `MEDIA`, `NAVIGATION`, `TEMPLATES`, `GLOBALS` or `CONTENT`) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/folders/{uuid}` |
 | `POST` | `/projects/{projectKey}/folders/{uuid}/move` |
 
@@ -80,6 +80,36 @@ Global property sets. Schema and values are separate endpoints because they need
 A uuid that belongs to another project or isn't a property set is `404`. CDL errors are `422` with `diagnostics` (`SF-CDL-*`, including `SF-CDL-0107` for a `body` or `catalog`).
 
 Everything that isn't specific to property sets uses the generic endpoints: folders are `/folders` with `scope=GLOBALS`; moving a set is `POST /assets/{uuid}/move`; its uid, usages, history and restore are under `/assets/{uuid}` (§4). Validate draft CDL with `POST /cdl/validate?kind=GLOBAL_SET`, which adds the property-set restrictions.
+
+### 6.2 Datasets and records (M19)
+
+A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder of the Templates store; its **records** live in the Content store (folder scope `CONTENT`). Every single-asset response carries `ETag: "rev-{n}"`, and the `PUT`s require `If-Match`.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `GET` | `/projects/{projectKey}/datasets` | `VIEWER` | summaries with `titleEditor`, `description` and live `recordCount` |
+| `GET` | `/projects/{projectKey}/datasets/{uuid}` | `VIEWER` | adds `contentDefinition`, `compiledDefinition`, `deleted`; `?revision=` for time travel |
+| `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, titleEditor?, description?, comment?}` → `201`; the parent defaults to `datasets` |
+| `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentDefinition, titleEditor?, description?, comment?}`; `renamedFrom` rewrites the key in every record, in the same revision |
+| `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount` while it has live records, even with `?force=true` |
+| `POST` | `/projects/{projectKey}/datasets/{uuid}/restore` | `DEVELOPER` | |
+| `GET` | `/projects/{projectKey}/datasets/{uuid}/records` | `VIEWER` | paged listing, see below |
+| `POST` | `/projects/{projectKey}/datasets/{uuid}/records` | `EDITOR` | `{folderUuid?, displayName?, content, comment?}` → `201`; `folderUuid` defaults to the Content store root; when the dataset has a `titleEditor`, that editor's value names the record and `displayName` is only the fallback while it is empty |
+| `GET` | `/projects/{projectKey}/records/{uuid}` | `VIEWER` | `{uuid, uid, displayName, datasetUuid, datasetUid, folderUuid, folderPath, content, revision, changedBy, changedAt, deleted, issues}`; `?revision=` |
+| `PUT` | `/projects/{projectKey}/records/{uuid}` | `EDITOR` | `{content, displayName?, comment?}`; the dataset can't change |
+
+**Listing records.** `GET …/datasets/{uuid}/records?page=0&size=50` (size 1–500) returns `{content: [row…], page: {size, number, totalElements, totalPages}}`; a row is `{uuid, uid, displayName, folderPath, changedAt, changedBy, values}` where `values` holds only the scalar editors, for grid columns. Filters combine:
+
+- `q` — a case-insensitive substring of the display name;
+- `folder` — a Content folder path prefix, relative to the store (`/team/leads/`);
+- `where` — the OCTL expression of a template's dataset loop, over **bare** field names: `role == 'lead' && joined > '2022-01-01'` (template developer guide §2.9 has the comparison rules);
+- `sort` — repeatable `field` / `field,asc` / `field,desc`, including `_displayName`, `_uid`, `_folderPath` and `_changedAt`. After the given keys rows order by display name, then uid.
+
+A malformed `where` is `400` with `column` (1-based, inside the expression); an unknown field in `where` or `sort`, a sort by a list/rich text/media/reference field, or a malformed `sort` parameter is `400` too.
+
+**Validation.** Structural findings (wrong value shape, an option outside `options`, a `reference` with `dataset "uid"` pointing outside that dataset — code `dataset`) are `422 SF-API-0422` with `issues`. Completeness findings (`required`, `min`, …) don't block the save; they come back in the response's `issues`. A record doesn't publish anything itself, so they don't hold a page back.
+
+Everything else is generic (§4): delete, restore, move, uid change, history and usages of a record are under `/assets/{uuid}`; a record's usages are the pages and templates that read it, a dataset's usages are the templates that loop it (not its own records). Validate draft CDL with `POST /cdl/validate?kind=DATASET`.
 
 ## 7. Media
 
@@ -130,7 +160,7 @@ with the diagnostic in `X-SF-Render-Error`.
 | `GET`/`POST` | `/projects/{projectKey}/structures` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/structures/{uuid}` |
 | `GET` | `/projects/{projectKey}/structures/{uuid}/preview` |
-| `POST` | `/projects/{projectKey}/cdl/validate` (`?kind=GLOBAL_SET` adds the property-set restrictions) |
+| `POST` | `/projects/{projectKey}/cdl/validate` (`?kind=GLOBAL_SET` adds the property-set restrictions, `?kind=DATASET` the dataset-schema ones) |
 | `POST` | `/projects/{projectKey}/octl/validate` |
 
 ## 9. Channels & targets
@@ -208,6 +238,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0103` | 422 | folder depth limit exceeded — `PathService.MAX_DEPTH` — *implemented addition* |
 | `SF-DOM-0110` | 409 | folder not empty — `FolderService` |
 | `SF-DOM-0120` | 409 | asset still referenced by an open edge from a non-deleted asset (delete without `force`) — `AssetServiceImpl` |
+| `SF-DOM-0121` | 409 | dataset still has live records (delete, with or without `force`); the problem carries `recordCount` — `AssetServiceImpl` |
 | `SF-DOM-0130` | 422 | page reference folder target has no page in its subtree — `PageReferenceServiceImpl` (a section template outside a body's `allow` list is `SF-API-0422` with an `allow` issue) |
 | `SF-DOM-0140` | 409 | project key already exists — *implemented addition* |
 

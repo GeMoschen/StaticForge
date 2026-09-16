@@ -37,6 +37,12 @@ public interface RevisionService {
     /** Appends a touched-asset entry to the revision's denormalized summary. */
     void appendSummary(long projectId, long revisionId, AssetChange change);
 
+    /**
+     * Appends several touched-asset entries in one summary write — for a compound revision touching
+     * many assets (M19.1.2), where one write per entry would rewrite the growing summary each time.
+     */
+    void appendSummaries(long projectId, long revisionId, List<AssetChange> changes);
+
     List<Revision> findRecent(long projectId, Pageable pageable);
 
     /**

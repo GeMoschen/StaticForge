@@ -47,7 +47,10 @@ import org.springframework.stereotype.Service;
  *   <li>{@code MEDIA} with {@code processCms} on (M18.2.1): the OCTL references of the source blob,
  *       compiled with the text media profile, as {@code OCTL_*} edges with source path {@code source}.
  *       Unprocessed media has none, so switching the flag off closes them.</li>
- *   <li>{@code FOLDER}: none.</li>
+ *   <li>{@code GLOBAL_SET}: its values' content references.</li>
+ *   <li>{@code RECORD} (M19.1.2): {@code datasetRef} as {@link ReferenceKind#TEMPLATE} plus its values'
+ *       content references.</li>
+ *   <li>{@code FOLDER}, {@code DATASET}: none.</li>
  * </ul>
  *
  * <p>The write is a per-edge diff rather than close-all-then-insert-all: an edge present in both
@@ -119,8 +122,9 @@ public class ReferenceMaterializer {
             case PAGE_REFERENCE -> navigationReferences(payload);
             case PAGE_TEMPLATE, SECTION_TEMPLATE -> templateReferences(projectId, payload);
             case GLOBAL_SET -> contentReferences.extract(payload.get("content"), "content");
+            case RECORD -> recordReferences(payload);
             case MEDIA -> mediaReferences(projectId, payload);
-            case FOLDER -> List.of();
+            case FOLDER, DATASET -> List.of();
         };
         if (found.isEmpty()) {
             return Set.of();
@@ -163,6 +167,18 @@ public class ReferenceMaterializer {
                 }
             });
         }
+        return found;
+    }
+
+    /**
+     * A record's edges (M19.1.2): its {@code datasetRef} as {@link ReferenceKind#TEMPLATE} (so the
+     * dataset's usages and the planner can walk from a record to the templates looping its dataset)
+     * plus the references in its values, exactly like a page's content.
+     */
+    private List<ExtractedReference> recordReferences(JsonNode payload) {
+        List<ExtractedReference> found = new ArrayList<>();
+        addTemplate(found, payload.get("datasetRef"), "datasetRef");
+        found.addAll(contentReferences.extract(payload.get("content"), "content"));
         return found;
     }
 

@@ -1,0 +1,16 @@
+{
+  "team": {
+    "uuid": "d0000000-0000-0000-0000-000000000001",
+    "records": [
+      { "uuid": "e0000000-0000-0000-0000-00000000000a", "uid": "ada", "displayName": "Ada", "folderPath": "/team/leads/",
+        "content": { "name": "Ada", "role": "lead", "level": 3, "joined": "2021-03-01", "tags": ["vip", "founder"] } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000b", "uid": "bob", "displayName": "bob", "folderPath": "/team/",
+        "content": { "name": "bob <b>", "role": "dev", "level": 1.5, "joined": "2023-07-15", "tags": [] } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000c", "uid": "cy", "displayName": "Cy", "folderPath": "/team/",
+        "content": { "name": "Cy", "role": "dev", "level": 2, "joined": "2022-11-30",
+                     "mentor": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-00000000000a", "assetType": "RECORD" } } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000d", "uid": "dee", "displayName": "Dee", "folderPath": "/alumni/",
+        "content": { "name": "Dee", "role": "lead", "joined": "2019-05-05" } }
+    ]
+  }
+}

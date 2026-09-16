@@ -2,13 +2,16 @@ package com.acme.staticforge.generate.plan;
 
 import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.ReferenceEdge;
+import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.template.query.RecordView;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -32,6 +35,9 @@ import org.springframework.stereotype.Service;
 public class BuildPlanner {
 
     private static final Set<String> DEFAULT_CHANNELS = Set.of("html");
+
+    /** Asset ids per {@code IN} query, well below any database's bind-parameter limit. */
+    private static final int ID_CHUNK = 1000;
 
     private final AssetVersionRepository versions;
     private final AssetReferenceRepository references;
@@ -58,7 +64,7 @@ public class BuildPlanner {
         Set<UUID> processedMedia = Set.of();
         if (incremental) {
             changedAssets = changedAssets(snapshot, lastSuccessfulRevision);
-            Affected affected = affected(snapshot, changedAssets);
+            Affected affected = affected(snapshot, changedAssets, lastSuccessfulRevision);
             pageUuids = affected.pages();
             processedMedia = affected.processedMedia();
         } else {
@@ -126,13 +132,22 @@ public class BuildPlanner {
      * to it only carries its URL, which a change of its dependencies never moves. A changed processed
      * file keeps walking, exactly like any changed media.
      *
+     * <p>Datasets (M19.3.2): a template that loops {@code dataset:team} has an {@code OCTL_VALUE} edge to
+     * the dataset, a record a {@code TEMPLATE} edge to it. The walk never goes from a dataset back into
+     * its records, so a record change doesn't rebuild the pages that reference its siblings. Every record
+     * the walk visits — changed, or reached because it references a changed asset that its loop items
+     * may dereference — continues to the templates looping its dataset, but only to those with a loop
+     * whose {@code folder}/{@code where} may select the record before or after the change
+     * ({@link DatasetLoopImpact}): a record a loop filters out in both versions leaves that loop's output
+     * untouched. A changed dataset (its schema) still reaches every referrer.
+     *
      * <p>Render-time-only dependencies are not covered by persisted rows. A template's
      * {@code $CMS_NAVIGATION(nav:…)$} or {@code $CMS_FOR(x : nav:…)$} renders the folder's whole
      * subtree, but only the folder itself is an edge target, so a changed page reference deep in that
      * subtree does not reach the template. Expanding that is {@code M22.1.1}'s job (§18.2 navigation
      * rule); do not bring back generation-time reference inserts to cover it.
      */
-    private Affected affected(Snapshot snapshot, Set<UUID> changedAssets) {
+    private Affected affected(Snapshot snapshot, Set<UUID> changedAssets, long lastSuccessfulRevision) {
         Map<Long, Set<Long>> referrers = new HashMap<>();
         for (ReferenceEdge edge : references.findValidAtByProject(snapshot.projectId(), snapshot.revision())) {
             referrers.computeIfAbsent(edge.toAssetId(), k -> new HashSet<>()).add(edge.fromAssetId());
@@ -147,6 +162,8 @@ public class BuildPlanner {
         }
 
         Deque<Long> frontier = new ArrayDeque<>(changedIds);
+        Map<Long, RecordView> recordsBefore = recordsBefore(snapshot, changedIds, lastSuccessfulRevision);
+        DatasetLoopImpact loops = new DatasetLoopImpact();
         Set<UUID> affected = new LinkedHashSet<>();
         Set<UUID> processedMedia = new LinkedHashSet<>();
         Set<Long> visited = new HashSet<>();
@@ -167,13 +184,91 @@ public class BuildPlanner {
                     continue;
                 }
             }
+            if (asset != null && asset.type() == AssetType.RECORD) {
+                enqueueLoopsSelecting(asset, recordsBefore.get(id), snapshot, referrers, changedIds, visited, frontier, loops);
+            }
+            boolean dataset = asset != null && asset.type() == AssetType.DATASET;
             for (long fromId : referrers.getOrDefault(id, Set.of())) {
-                if (!visited.contains(fromId)) {
-                    frontier.add(fromId);
+                if (visited.contains(fromId)) {
+                    continue;
                 }
+                // A dataset's records reference it by datasetRef; walking back into them would rebuild
+                // every page that reads any sibling record. Pages depend on the dataset through the
+                // templates that loop it, which are the dataset's other referrers.
+                if (dataset && isRecord(snapshot, fromId)) {
+                    continue;
+                }
+                frontier.add(fromId);
             }
         }
         return new Affected(affected, processedMedia);
+    }
+
+    /**
+     * Queues the readers of {@code record}'s dataset that may render it: templates with a loop that may
+     * select the record's current or previous version, and processed text media (its source isn't in
+     * the snapshot, so it can't be analysed). The dataset's other referrers — its records, content
+     * references to it — read no records.
+     */
+    private static void enqueueLoopsSelecting(
+            SnapshotAsset record,
+            RecordView before,
+            Snapshot snapshot,
+            Map<Long, Set<Long>> referrers,
+            Set<Long> changedIds,
+            Set<Long> visited,
+            Deque<Long> frontier,
+            DatasetLoopImpact loops) {
+        UUID datasetUuid = RecordValues.datasetRef(record.payload());
+        SnapshotAsset dataset = datasetUuid == null ? null : snapshot.assetByUuid(datasetUuid);
+        if (dataset == null || changedIds.contains(dataset.assetId())) {
+            return; // a changed dataset walks to all of its readers itself
+        }
+        List<RecordView> versions = new ArrayList<>(2);
+        if (!record.deleted()) {
+            versions.add(RecordValues.view(
+                    record.uuid(), record.uid(), record.displayName(), record.folderPath(), record.changedAt(), record.payload()));
+        }
+        if (before != null) {
+            versions.add(before);
+        }
+        for (long readerId : referrers.getOrDefault(dataset.assetId(), Set.of())) {
+            SnapshotAsset reader = snapshot.assetById(readerId);
+            if (reader == null || visited.contains(readerId)) {
+                continue;
+            }
+            boolean reads = switch (reader.type()) {
+                case SECTION_TEMPLATE, PAGE_TEMPLATE -> loops.affects(reader, dataset, versions);
+                case MEDIA -> true;
+                default -> false;
+            };
+            if (reads) {
+                frontier.add(readerId);
+            }
+        }
+    }
+
+    /** The versions the changed records had at {@code revision}; absent when created since or deleted then. */
+    private Map<Long, RecordView> recordsBefore(Snapshot snapshot, Set<Long> changedIds, long revision) {
+        List<Long> recordIds = changedIds.stream().filter(id -> isRecord(snapshot, id)).sorted().toList();
+        Map<Long, RecordView> before = new HashMap<>();
+        for (int from = 0; from < recordIds.size(); from += ID_CHUNK) {
+            List<Long> chunk = recordIds.subList(from, Math.min(from + ID_CHUNK, recordIds.size()));
+            for (AssetVersion version : versions.findValidAtRevisionByAssetIdIn(chunk, revision)) {
+                SnapshotAsset record = snapshot.assetById(version.getAssetId());
+                if (record != null && !version.isDeleted()) {
+                    before.put(version.getAssetId(), RecordValues.view(
+                            record.uuid(), record.uid(), version.getDisplayName(), version.getFolderPath(),
+                            version.getChangedAt(), version.getPayload()));
+                }
+            }
+        }
+        return before;
+    }
+
+    private static boolean isRecord(Snapshot snapshot, long assetId) {
+        SnapshotAsset asset = snapshot.assetById(assetId);
+        return asset != null && asset.type() == AssetType.RECORD;
     }
 
     private static boolean inScope(SnapshotAsset page, String scopeFolderPath, Set<UUID> scopeAssetUuids) {

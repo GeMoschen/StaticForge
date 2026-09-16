@@ -26,6 +26,16 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             """)
     Optional<AssetVersion> findValidAtRevision(@Param("assetId") Long assetId, @Param("revision") long revision);
 
+    /** {@link #findValidAtRevision} for several assets in one query; assets that didn't exist yet are absent. */
+    @Query("""
+            SELECT v FROM AssetVersion v
+            WHERE v.assetId IN :assetIds
+              AND v.validFromRevision <= :revision
+              AND (v.validToRevision IS NULL OR v.validToRevision > :revision)
+            """)
+    List<AssetVersion> findValidAtRevisionByAssetIdIn(
+            @Param("assetIds") java.util.Collection<Long> assetIds, @Param("revision") long revision);
+
     /** Current (open) versions within a project, filtered by type, folder-path prefix and a display-name substring. */
     @Query("""
             SELECT v FROM AssetVersion v
@@ -97,6 +107,85 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
               AND v.deleted = false
             """)
     List<AssetVersion> findCurrentSnapshot(@Param("projectId") Long projectId);
+
+    /**
+     * Current, non-deleted records of a dataset (M19.1.1), asset joined. The record → dataset link is
+     * {@code template_asset_id} (mirrored from {@code payload.datasetRef}), so this is a column query.
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.templateAssetId = :datasetAssetId
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findCurrentRecordsOfDataset(
+            @Param("projectId") long projectId, @Param("datasetAssetId") long datasetAssetId);
+
+    /**
+     * Current, non-deleted records of a dataset whose display name contains {@code q}
+     * (case-insensitive, {@code null} for any) and whose folder path matches {@code folderPattern}
+     * ({@code LIKE} with {@code !} escapes, {@code null} for any) — the SQL half of the record listing.
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.templateAssetId = :datasetAssetId
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+              AND (:q IS NULL OR LOWER(v.displayName) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '!')
+              AND (:folderPattern IS NULL OR v.folderPath LIKE :folderPattern ESCAPE '!')
+            """)
+    List<AssetVersion> searchCurrentRecordsOfDataset(
+            @Param("projectId") long projectId,
+            @Param("datasetAssetId") long datasetAssetId,
+            @Param("q") String q,
+            @Param("folderPattern") String folderPattern);
+
+    /** Records of a dataset that are live (not deleted) at revision {@code R}, asset joined. */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.templateAssetId = :datasetAssetId
+              AND v.validFromRevision <= :revision
+              AND (v.validToRevision IS NULL OR v.validToRevision > :revision)
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findRecordsOfDatasetAt(
+            @Param("projectId") long projectId,
+            @Param("datasetAssetId") long datasetAssetId,
+            @Param("revision") long revision);
+
+    /** Ids of the current, non-deleted record versions of a dataset (a rename migration walks them in chunks). */
+    @Query("""
+            SELECT v.id FROM AssetVersion v
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.templateAssetId = :datasetAssetId
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            ORDER BY v.id
+            """)
+    List<Long> findCurrentRecordVersionIdsOfDataset(
+            @Param("projectId") long projectId, @Param("datasetAssetId") long datasetAssetId);
+
+    /** Versions by id, asset joined. */
+    @Query("SELECT v FROM AssetVersion v JOIN FETCH v.asset WHERE v.id IN :ids")
+    List<AssetVersion> findWithAssetByIdIn(@Param("ids") java.util.Collection<Long> ids);
+
+    /** How many current, non-deleted records a dataset has. */
+    @Query("""
+            SELECT COUNT(v) FROM AssetVersion v
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.templateAssetId = :datasetAssetId
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            """)
+    long countCurrentRecordsOfDataset(@Param("projectId") long projectId, @Param("datasetAssetId") long datasetAssetId);
 
     /** Distinct asset ids with a version opened after {@code sinceRevision} (deletions included). */
     @Query("""

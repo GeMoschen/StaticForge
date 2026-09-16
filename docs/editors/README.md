@@ -89,13 +89,13 @@ on `number`/`list`/`catalog`, etc.) — those are the commonly-used path; `valid
 
 ### When content is validated (§10.5)
 
-The server validates page, section and catalog-card content against these definitions
+The server validates page, section, catalog-card and record content against these definitions
 (`ContentValidator`, `PageContentValidator`). Every finding (`ContentIssue`) has a `path` such as
 `content.headline` or `bodies.main[2].content.links[0].target`, and one of two `kind`s:
 
 | Kind | Codes | Effect |
 |---|---|---|
-| `STRUCTURAL` | `type` (wrong JSON type or malformed `link`/`media`/`reference`/`catalog`/list-item shape), `option` (value outside `options`), `allow` (section or card template outside the body's/editor's `allow` list), `template` (card template not found) | the save is rejected with `422 SF-API-0422`, listing the findings under `issues` |
+| `STRUCTURAL` | `type` (wrong JSON type or malformed `link`/`media`/`reference`/`catalog`/list-item shape), `option` (value outside `options`), `allow` (section or card template outside the body's/editor's `allow` list), `template` (card template not found), `dataset` (a `reference` with `dataset "uid"` pointing outside that dataset, M19) | the save is rejected with `422 SF-API-0422`, listing the findings under `issues` |
 | `COMPLETENESS` | `required`, `min`, `max`, `maxLength`, `maxChars`, `pattern`, `mimeType` | the save succeeds and the page view lists the findings under `issues`; `ERROR` findings keep the page from being published (`SF-GEN-0120`), while other pages still publish (run `PARTIAL`) |
 
 Editors hidden by `visibleWhen` are skipped. An untouched `media`/`reference`/`link` value (no

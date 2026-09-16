@@ -11,7 +11,7 @@
           <span class="sf-reference__label">{{ resolvedLabel() ?? u }}</span>
         }
         @if (assetType(); as t) {
-          <span class="sf-reference__type">{{ t }}</span>
+          <span class="sf-reference__type">{{ t === 'RECORD' && definition().dataset ? definition().dataset : t }}</span>
         }
       } @else {
         <span class="sf-reference__empty">No asset selected</span>
@@ -40,6 +40,7 @@
     [projectKey]="projectKey()!"
     [initialType]="assetType()"
     [allowedTypes]="definition().assetTypes ?? null"
+    [dataset]="definition().dataset ?? null"
     (picked)="onPicked($event)"
     (closed)="closePicker()"
   />

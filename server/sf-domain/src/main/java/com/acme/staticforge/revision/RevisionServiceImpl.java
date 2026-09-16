@@ -87,6 +87,23 @@ public class RevisionServiceImpl implements RevisionService {
     }
 
     @Override
+    @Transactional
+    public void appendSummaries(long projectId, long revisionId, List<AssetChange> changes) {
+        if (changes.isEmpty()) {
+            return;
+        }
+        Revision revision = revisionRepository
+                .findByProjectIdAndRevisionId(projectId, revisionId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No revision " + revisionId + " for project " + projectId));
+
+        ObjectNode summary = (ObjectNode) revision.getSummary();
+        changes.forEach(change -> change.appendTo(summary));
+        revision.setSummary(summary);
+        revisionRepository.save(revision);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<Revision> findRecent(long projectId, Pageable pageable) {
         return revisionRepository.findByProjectIdOrderByRevisionIdDesc(projectId, pageable);

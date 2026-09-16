@@ -1,0 +1,110 @@
+:host {
+  display: block;
+}
+
+.dataset-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-4);
+}
+
+.dataset-editor__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sf-3);
+}
+
+.dataset-editor__head h3 {
+  margin: 0;
+}
+
+.dataset-editor__meta,
+.dataset-editor__hint {
+  margin: 0;
+  color: var(--sf-muted);
+  font-size: var(--sf-text-xs);
+}
+
+.dataset-editor__records {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  font-size: var(--sf-text-sm);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+}
+
+.panel input,
+.panel select,
+.dataset-editor__description {
+  width: 100%;
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+}
+
+.dataset-editor__description {
+  min-height: 4rem;
+  resize: vertical;
+}
+
+.dataset-editor__cdl {
+  width: 100%;
+  min-height: 16rem;
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-sm);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.dataset-editor__cdl[aria-invalid='true'] {
+  border-color: var(--sf-rust);
+}
+
+.dataset-editor__snippet {
+  margin: 0;
+  padding: var(--sf-1) var(--sf-2);
+  border: 1px dashed var(--sf-line);
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+  overflow-x: auto;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  flex-wrap: wrap;
+}
+
+.diagnostic {
+  display: flex;
+  gap: var(--sf-2);
+  padding: var(--sf-1) var(--sf-2);
+  margin-bottom: var(--sf-1);
+  border-radius: var(--sf-radius-sm);
+  font-size: var(--sf-text-xs);
+}
+
+.diagnostic--error {
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+}
+
+.diagnostic--warning {
+  background: color-mix(in srgb, var(--sf-amber, #9c7a2e) 14%, transparent);
+  color: var(--sf-ink);
+}

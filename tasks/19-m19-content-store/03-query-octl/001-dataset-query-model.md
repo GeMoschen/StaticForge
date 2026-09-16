@@ -1,6 +1,6 @@
 ---
 id: M19.3.1
-status: todo
+status: done
 depends: []
 epic: m19-content-store
 feature: query-octl
@@ -47,13 +47,13 @@ through a common fixture file. `$CMS_FOR` today accepts `var : accessor [, named
 
 ## Acceptance criteria
 
-- [ ] Unit tests cover each operator × type, `&&`/`||`/`!`/groups, nulls, `in`, date comparison,
+- [x] Unit tests cover each operator × type, `&&`/`||`/`!`/groups, nulls, `in`, date comparison,
       multi-key sort with ties, offset beyond size, `limit=0`, invalid inputs → diagnostics with
       line/column.
-- [ ] Property test: `apply` is deterministic (same input → same order) and `limit`/`offset` never
+- [x] Property test: `apply` is deterministic (same input → same order) and `limit`/`offset` never
       exceed bounds.
-- [ ] No dependency from `template.query` on sf-domain/Spring (module layering gate green).
-- [ ] `ExpressionEvaluator` and the `visibleWhen` fixture file are untouched.
+- [x] No dependency from `template.query` on sf-domain/Spring (module layering gate green).
+- [x] `ExpressionEvaluator` and the `visibleWhen` fixture file are untouched.
 
 ## Out of scope
 
@@ -69,3 +69,14 @@ through a common fixture file. `$CMS_FOR` today accepts `var : accessor [, named
   `$CMS_…$` lexer (`$$` escapes, nested quotes). Add explicit parser tests for quotes inside `where`.
 - `M21.2.1` (pagination) needs the item **count** before rendering: expose a
   `count(records, query-without-limit-offset)` path so the planner does not re-implement filtering.
+
+## Implementation notes (2026-09-16)
+
+- `sf-template` `template.query`: `DatasetQuery`, `DatasetQueryParser` (args → query, `SF-TPL-0140`; `validateFields`
+  → `SF-TPL-0141`/`0142`), `DatasetQueryEvaluator` (folder → where → sort → offset → limit), `RecordView`,
+  `SortKey`. `where` is parsed by the new strict `octl.OctlExpressions.parse` (the `$CMS_IF` grammar).
+- Semantics: numbers numeric, ISO dates/date-times chronological (UTC), other strings case-sensitive, references as
+  uuid, missing = null, cross-type ordering false; sort stable with precomputed keys, missing last both directions,
+  locale-independent case-insensitive collation, tie-break `_displayName`, `_uid`.
+- Tests: `DatasetQueryParserTest`, `DatasetQueryEvaluatorTest`, `DatasetQueryPropertiesTest` (jqwik: determinism,
+  bounds). `ExpressionEvaluator` and the `visibleWhen` fixture are untouched.

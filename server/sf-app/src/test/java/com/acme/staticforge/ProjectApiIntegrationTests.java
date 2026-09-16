@@ -70,12 +70,12 @@ class ProjectApiIntegrationTests {
         assertThat(project.getKey()).isEqualTo("demo");
 
         // Project creation is one user-facing action that bootstraps the project itself plus
-        // eight fixed folders: the implicit hidden root, the fixed "All Templates" wrapper root,
-        // the two fixed "Page Templates" / "Section Templates" folders nested inside it (spec
-        // M13.1.2, generalized), and the fixed "All Navigation" / "All Pages" / "All Media" /
-        // "All Globals" roots — every store (Pages, Media, Navigation, Templates, Globals)
-        // provisions its own fixed wrapper root upfront. M15 folds all 9 creations into exactly
-        // one compound revision instead of fragmenting them across 9.
+        // ten fixed folders: the implicit hidden root, the fixed "All Templates" wrapper root,
+        // the three fixed "Page Templates" / "Section Templates" / "Datasets" folders nested inside
+        // it (spec M13.1.2, generalized; M19.1.1), and the fixed "All Navigation" / "All Pages" /
+        // "All Media" / "All Globals" / "All Content" roots — every store (Pages, Media, Navigation,
+        // Templates, Globals, Content) provisions its own fixed wrapper root upfront. M15 folds all
+        // 11 creations into exactly one compound revision instead of fragmenting them across 11.
         List<Revision> revisions = revisionRepository.findByProjectIdOrderByRevisionIdDesc(project.getId());
         assertThat(revisions).hasSize(1);
         Revision projectCreateRevision = revisions.get(0);
@@ -84,9 +84,9 @@ class ProjectApiIntegrationTests {
 
         List<String> touchedTypes = new java.util.ArrayList<>();
         projectCreateRevision.getSummary().get("assets").forEach(entry -> touchedTypes.add(entry.get("type").asText()));
-        assertThat(touchedTypes).hasSize(9);
+        assertThat(touchedTypes).hasSize(11);
         assertThat(touchedTypes).containsOnlyOnce("PROJECT");
-        assertThat(touchedTypes.stream().filter("FOLDER"::equals).count()).isEqualTo(8);
+        assertThat(touchedTypes.stream().filter("FOLDER"::equals).count()).isEqualTo(10);
 
         Optional<ProjectMember> member =
                 projectMemberRepository.findByProjectIdAndUserId(project.getId(), admin.getId());

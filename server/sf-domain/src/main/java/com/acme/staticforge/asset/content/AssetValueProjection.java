@@ -24,7 +24,10 @@ import java.util.List;
  *   <li>{@code GLOBAL_SET} — the property set's values ({@code payload.content}), exactly like a
  *       page; {@code contentDefinition}/{@code compiledDefinition} stay hidden so a template
  *       reads a set's values, never its schema (M17.3.1);
- *   <li>templates and folders — no values.
+ *   <li>{@code RECORD} — the record's values ({@code payload.content}), exactly like a page (M19.3.2).
+ *       Renderers read records through {@code RecordValues}, which adds the record meta fields
+ *       ({@code _uid}, {@code _folderPath}, …) on top;
+ *   <li>templates, datasets and folders — no values.
  * </ul>
  *
  * <p>Every projection carries the reserved {@code _meta} object ({@code uid}, {@code displayName}).
@@ -50,7 +53,7 @@ public final class AssetValueProjection {
         ObjectNode root = JsonNodeFactory.instance.objectNode();
         JsonNode data = payload == null ? MissingNode.getInstance() : payload;
         switch (type) {
-            case PAGE, GLOBAL_SET -> {
+            case PAGE, GLOBAL_SET, RECORD -> {
                 JsonNode content = data.path("content");
                 if (content.isObject()) {
                     root.setAll((ObjectNode) content);

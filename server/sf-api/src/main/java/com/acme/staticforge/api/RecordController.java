@@ -1,0 +1,184 @@
+package com.acme.staticforge.api;
+
+import com.acme.staticforge.api.dto.CreateRecordRequest;
+import com.acme.staticforge.api.dto.RecordDetailView;
+import com.acme.staticforge.api.dto.RecordPageView;
+import com.acme.staticforge.api.dto.RecordRowView;
+import com.acme.staticforge.api.dto.UpdateRecordRequest;
+import com.acme.staticforge.asset.content.ContentIssue;
+import com.acme.staticforge.asset.dataset.CreateRecordCommand;
+import com.acme.staticforge.asset.dataset.RecordDetail;
+import com.acme.staticforge.asset.dataset.RecordPage;
+import com.acme.staticforge.asset.dataset.RecordService.RecordListQuery;
+import com.acme.staticforge.asset.dataset.RecordService;
+import com.acme.staticforge.asset.dataset.RecordWriteResult;
+import com.acme.staticforge.common.ProblemFactory;
+import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.template.query.SortKey;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Dataset record endpoints (M19.2.1, spec §20.2): {@code EDITOR} writes, {@code VIEWER} reads.
+ *
+ * <p>The listing is paged, sortable and filterable on the server, so a grid never downloads a
+ * dataset: {@code q} matches display names, {@code folder} is a Content folder prefix
+ * ({@code /team/}), {@code where} is an OCTL expression over bare field names
+ * ({@code role == 'lead' && joined > '2022-01-01'}) and {@code sort} is repeatable
+ * ({@code sort=role,asc&sort=_displayName,desc}). An invalid {@code where} or an unknown or
+ * unsortable sort field is a {@code 400} (with {@code column} for a syntax error).
+ *
+ * <p>Delete, restore, move, uid change, usages and history are the generic
+ * {@link AssetController} endpoints.
+ */
+@RestController
+@RequestMapping("/api/v1/projects/{projectKey}")
+public class RecordController {
+
+    private final ProjectService projectService;
+    private final RecordService recordService;
+    private final SecuritySupport securitySupport;
+
+    public RecordController(ProjectService projectService, RecordService recordService, SecuritySupport securitySupport) {
+        this.projectService = projectService;
+        this.recordService = recordService;
+        this.securitySupport = securitySupport;
+    }
+
+    @GetMapping("/datasets/{datasetUuid}/records")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public RecordPageView list(
+            @PathVariable String projectKey,
+            @PathVariable UUID datasetUuid,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(value = "sort", required = false) List<String> sort,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "where", required = false) String where,
+            @RequestParam(value = "folder", required = false) String folder,
+            HttpServletRequest request) {
+        // The raw values, not the bound list: Spring splits a single "field,desc" at the comma.
+        String[] rawSort = request.getParameterValues("sort");
+        RecordPage result = recordService.list(
+                projectId(projectKey),
+                datasetUuid,
+                new RecordListQuery(q, folder, where, sortKeys(rawSort == null ? List.of() : List.of(rawSort))),
+                page,
+                size);
+        List<RecordRowView> rows = result.rows().stream()
+                .map(r -> new RecordRowView(
+                        r.uuid(), r.uid(), r.displayName(), r.folderPath(), r.changedAt(), r.changedBy(), r.values()))
+                .toList();
+        return new RecordPageView(
+                rows,
+                new RecordPageView.PageMeta(result.size(), result.page(), result.totalElements(), result.totalPages()));
+    }
+
+    @PostMapping("/datasets/{datasetUuid}/records")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<RecordDetailView> create(
+            @PathVariable String projectKey, @PathVariable UUID datasetUuid, @RequestBody CreateRecordRequest body) {
+        RecordWriteResult result = recordService.create(
+                new CreateRecordCommand(projectId(projectKey), datasetUuid, body.folderUuid(), body.displayName(), body.content()),
+                ctx(projectKey, comment(body.comment(), "create record")));
+        return ResponseEntity.status(201)
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.record().revision()))
+                .body(toDetail(result.record(), result.issues()));
+    }
+
+    @GetMapping("/records/{uuid}")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public ResponseEntity<RecordDetailView> detail(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestParam(value = "revision", required = false) Long revision) {
+        RecordDetail record = recordService.find(projectId(projectKey), uuid, revision)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record not found.")));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(record.revision()))
+                .body(toDetail(record, List.of()));
+    }
+
+    @PutMapping("/records/{uuid}")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<RecordDetailView> update(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestBody UpdateRecordRequest body) {
+        long expected = RevisionHeaders.expectedRevision(ifMatch);
+        RecordWriteResult result = recordService.update(
+                uuid, body.content(), body.displayName(), expected, ctx(projectKey, comment(body.comment(), "update record")));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.record().revision()))
+                .body(toDetail(result.record(), result.issues()));
+    }
+
+    /** {@code field}, {@code field,asc} or {@code field,desc}; anything else is a {@code 400}. */
+    static List<SortKey> sortKeys(List<String> params) {
+        List<SortKey> keys = new ArrayList<>();
+        if (params == null) {
+            return keys;
+        }
+        for (String param : params) {
+            if (param == null || param.isBlank()) {
+                continue;
+            }
+            String[] parts = param.split(",", -1);
+            String field = parts[0].trim();
+            String direction = parts.length > 1 ? parts[1].trim().toLowerCase(Locale.ROOT) : "asc";
+            if (field.isEmpty() || parts.length > 2 || !(direction.equals("asc") || direction.equals("desc"))) {
+                throw new SfException(ProblemFactory.badRequest("Invalid sort '" + param + "': expected field,asc|desc."));
+            }
+            keys.add(direction.equals("desc") ? SortKey.desc(field) : SortKey.asc(field));
+        }
+        return keys;
+    }
+
+    private static RecordDetailView toDetail(RecordDetail r, List<ContentIssue> issues) {
+        return new RecordDetailView(
+                r.uuid(),
+                r.uid(),
+                r.displayName(),
+                r.datasetUuid(),
+                r.datasetUid(),
+                r.folderUuid(),
+                r.folderPath(),
+                r.content(),
+                r.revision(),
+                r.changedBy(),
+                r.changedAt(),
+                r.deleted(),
+                issues);
+    }
+
+    private static String comment(String supplied, String fallback) {
+        return supplied == null || supplied.isBlank() ? fallback : supplied;
+    }
+
+    private long projectId(String key) {
+        return projectService.requireByKey(key).getId();
+    }
+
+    private RevisionContext ctx(String key, String comment) {
+        return RevisionContext.of(projectId(key), securitySupport.currentUserId(), comment);
+    }
+}

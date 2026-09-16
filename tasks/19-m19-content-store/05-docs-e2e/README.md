@@ -16,9 +16,9 @@ template loop → generation → incremental rebuild → export/import — end-t
 
 ## Feature exit criteria
 
-- [ ] Template developer guide, user guide, editor docs, API docs and architecture map describe
+- [x] Template developer guide, user guide, editor docs, API docs and architecture map describe
       datasets/records accurately against the shipped code.
-- [ ] A Playwright journey and a backend integration journey cover the end-to-end flow.
+- [x] A Playwright journey and a backend integration journey cover the end-to-end flow.
 
 ## Dependencies
 

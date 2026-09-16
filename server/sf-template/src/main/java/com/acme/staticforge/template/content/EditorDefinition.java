@@ -31,7 +31,9 @@ public record EditorDefinition(
         List<String> allow,
         String visibleWhen,
         String renamedFrom,
-        List<EditorDefinition> items) {
+        List<EditorDefinition> items,
+        /** For REFERENCE editors (M19.3.2): restricts picking to records of this dataset UID; {@code null} for none. */
+        String dataset) {
 
     public EditorDefinition {
         items = items == null ? List.of() : items;

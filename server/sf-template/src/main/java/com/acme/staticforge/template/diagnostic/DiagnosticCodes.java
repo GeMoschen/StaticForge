@@ -19,6 +19,12 @@ public final class DiagnosticCodes {
     /** {@code $CMS_BODY}, {@code $CMS_INCLUDE}, leaf {@code $CMS_NAVIGATION} or {@code CMS_PAGE} in a processed text media file (M18.2.1). */
     public static final String OCTL_NOT_ALLOWED_IN_TEXT_MEDIA = "SF-TPL-0121";
     public static final String OCTL_UNKNOWN_NAV_VARIABLE = "SF-TPL-0134";
+    /** A dataset loop's query arguments are invalid: unknown argument, bad {@code where}/{@code sort}, negative {@code limit} (M19.3.1). */
+    public static final String OCTL_DATASET_QUERY = "SF-TPL-0140";
+    /** A dataset loop's {@code where}/{@code sort} names a field the dataset does not declare (M19.3.1; checked on template save). */
+    public static final String OCTL_DATASET_UNKNOWN_FIELD = "SF-TPL-0141";
+    /** A dataset loop sorts by an editor with no natural order (list, richtext, reference, …) (M19.3.1). */
+    public static final String OCTL_DATASET_UNSORTABLE_FIELD = "SF-TPL-0142";
 
     // OCTL render limits (§16.10) — carried by RenderLimitException, fail only the affected file
     public static final String OCTL_INCLUDE_DEPTH = "SF-TPL-0130";
@@ -48,5 +54,7 @@ public final class DiagnosticCodes {
     public static final String CDL_INVALID_EXPRESSION = "SF-CDL-0105";
     public static final String CDL_INVALID_NAME = "SF-CDL-0106";
     public static final String CDL_NOT_ALLOWED_IN_GLOBAL_SET = "SF-CDL-0107";
+    /** A dataset schema declares bodies: records have values only, no sections (M19.1.2). */
+    public static final String CDL_NOT_ALLOWED_IN_DATASET = "SF-CDL-0108";
     public static final String CDL_SYNTAX = "SF-CDL-0200";
 }

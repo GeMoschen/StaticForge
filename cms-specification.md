@@ -101,9 +101,11 @@ Because rendering is fully separated from content, the same content can be emitt
 | Term | Definition |
 |---|---|
 | **Project** | Top-level isolation unit. Owns assets, revisions, members, channels. |
-| **Asset** | Anything managed by the CMS with an identity: page, media, section template, page template, structure, folder, page reference, global property set. |
-| **Asset type** | Discriminator: `PAGE`, `MEDIA`, `SECTION_TEMPLATE`, `PAGE_TEMPLATE`, `STRUCTURE`, `FOLDER`, `PAGE_REFERENCE`, `GLOBAL_SET`. |
+| **Asset** | Anything managed by the CMS with an identity: page, media, section template, page template, structure, folder, page reference, global property set, dataset, record. |
+| **Asset type** | Discriminator: `PAGE`, `MEDIA`, `SECTION_TEMPLATE`, `PAGE_TEMPLATE`, `STRUCTURE`, `FOLDER`, `PAGE_REFERENCE`, `GLOBAL_SET`, `DATASET`, `RECORD`. |
 | **Property set** | A `GLOBAL_SET` asset in the Globals store: a named group of site-wide values (site title, logo, social links) whose fields are declared in CDL and whose values editors fill in. Templates read it as `CMS_GLOBAL.<set>.<editor>`. |
+| **Dataset** | A `DATASET` asset in the Templates store's fixed `datasets` folder: a CDL record schema (no bodies) for a list many pages show — team members, products, FAQs. Templates loop it as `$CMS_FOR(x : dataset:<uid>, where=…, sort=…, limit=…, offset=…, folder=…)$` (M19). |
+| **Record** | A `RECORD` asset in the Content store: one entry of a dataset, holding editor values only and no page of its own. Read as `record:<uid>.<editor>` or by following a `reference` editor (M19). |
 | **UID** | Human-readable identifier, unique per (project, asset type), derived from the display name. |
 | **Revision** | Monotonic `long` per project describing one atomic change set. |
 | **Body** | Named content area on a page that holds an ordered list of section instances. |
@@ -1081,6 +1083,8 @@ Creating channel `markdown` immediately makes a new tab appear in every template
 | `$CMS_NAV(structure:uid)$` | Renders a navigation |
 | `$CMS_IF(expr)$ … $CMS_ELSEIF(expr)$ … $CMS_ELSE$ … $CMS_END_IF$` | Conditional |
 | `$CMS_FOR(item : listEditor)$ … $CMS_END_FOR$` | Iteration over `list` editors and nav nodes |
+| `$CMS_FOR(item : dataset:uid, where="…", sort="…", limit=n, offset=n, folder="…")$ … $CMS_END_FOR$` | Iteration over a dataset's records (M19): `where` is an OCTL expression over `item.<field>` and the render scope, `sort` a comma list of fields with `-` for descending; all arguments optional, applied folder → where → sort → offset → limit (`SF-TPL-0140`–`0142`) |
+| `$CMS_VALUE(record:uid.editorName)$` | A record's value; a `reference` editor value pointing at a record dereferences the same way (`author.name`) |
 | `$CMS_SET(name = expr)$` | Local variable in the current scope |
 | `$CMS_META(key)$` | Page/system metadata (`uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey`) |
 | `$CMS_COMMENT$ … $CMS_END_COMMENT$` | Not emitted |
@@ -2682,7 +2686,7 @@ Same content. Two channels. No duplication.
 | Q4 | Retention policy for revisions on large projects — is unlimited history acceptable at 50,000 assets? | Ops | M7 | **Deferred** | Unlimited in v1; compaction is a documented escape hatch reserved by §7.7 (`revision.compacted` flag reserved). Revisit before 50,000-asset scale. |
 | Q5 | Should `PROJECT_ADMIN` be able to add members who are not yet instance users (invite flow with email)? | Product | M6 | **Resolved** | No invite flow in v1. Membership is restricted to existing instance users: `PUT/DELETE /projects/{key}/members/{userId}` operate by `userId`, not email. |
 | Q6 | Preferred publish target for the pilot customer: filesystem+Nginx, or S3+CDN? Affects M4 priorities. | Ops | M4 | **Resolved** | Filesystem + Nginx first. `FilesystemBlobStore` is the default backend, `FilesystemTargetWriter` the default target, and `infra/nginx/default.conf` + `infra/docker/docker-compose.yml` deliver the site. S3 (`S3BlobStore`, `S3TargetWriter`) ships as an optional backend for later. |
-| Q7 | Does any pilot template need loops over *pages* (a listing section) beyond what `structure` provides? If yes, `$CMS_FOR(page : query(...))$` needs a scoped query grammar. | Tech lead | M5 | **Resolved** | No. The `structure` asset's `list`/`navigation`/`breadcrumb` kinds (§17.3) cover v1 listing needs; the scoped page-query loop grammar is deferred (recorded as a post-v1 candidate). |
+| Q7 | Does any pilot template need loops over *pages* (a listing section) beyond what `structure` provides? If yes, `$CMS_FOR(page : query(...))$` needs a scoped query grammar. | Tech lead | M5 | **Resolved in M19** | For pages, no: the `structure` asset's `list`/`navigation`/`breadcrumb` kinds (§17.3) cover v1 listing needs. Lists of structured entries that are not pages are **datasets** (M19): `$CMS_FOR(x : dataset:uid, where=…, sort=…, limit=…, offset=…, folder=…)$` with the scoped query grammar (the OCTL expression grammar plus sort/paging/folder arguments), shared by templates and the REST record listing. A page-query loop remains a post-v1 candidate. |
 
 ### Resolutions (notes)
 

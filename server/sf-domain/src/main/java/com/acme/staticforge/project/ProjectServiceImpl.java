@@ -126,6 +126,10 @@ public class ProjectServiceImpl implements ProjectService {
         // root that every property set and Globals folder nests under.
         assetService.ensureGlobalsRootFolder(project.getId(), creationCtx);
 
+        // The Content store (M19.1.1): a fixed, protected "All Content" root for dataset records and
+        // their folders. The dataset schema folder comes with ensureTemplateFolders above.
+        assetService.ensureContentRootFolder(project.getId(), creationCtx);
+
         return project;
     }
 

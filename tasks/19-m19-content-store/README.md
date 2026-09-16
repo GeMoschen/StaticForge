@@ -41,30 +41,30 @@ and single records with `$CMS_VALUE(record:jane_doe.name)$` (cross-asset value r
 
 ## Exit criteria (epic is done when)
 
-- [ ] A developer can create a `DATASET` with a CDL schema in the Templates store; CDL errors are
+- [x] A developer can create a `DATASET` with a CDL schema in the Templates store; CDL errors are
       reported with the existing `SF-CDL-*` diagnostics, and a schema that declares `body` is
       rejected with a dedicated diagnostic.
-- [ ] An editor can create, edit, move (between Content folders), soft-delete, restore and diff
+- [x] An editor can create, edit, move (between Content folders), soft-delete, restore and diff
       `RECORD`s; every mutation is one revision; record content is validated server-side against the
       dataset's compiled definition (`M16.5.2` validator).
-- [ ] Renaming an editor in a dataset schema with `renamedFrom` migrates **every** record of that
+- [x] Renaming an editor in a dataset schema with `renamedFrom` migrates **every** record of that
       dataset inside **one compound revision** (`M15` batch), mirroring
       `TemplateServiceImpl.migrateRenames` for pages.
-- [ ] `$CMS_FOR(x : dataset:uid, where=…, sort=…, limit=…, offset=…, folder=…)$` renders in both
+- [x] `$CMS_FOR(x : dataset:uid, where=…, sort=…, limit=…, offset=…, folder=…)$` renders in both
       generation and preview with identical output; invalid query arguments are compile-time
       diagnostics at template save, not render-time surprises.
-- [ ] `$CMS_VALUE(record:uid.field)$` and dereferenced `reference` values to records render in
+- [x] `$CMS_VALUE(record:uid.field)$` and dereferenced `reference` values to records render in
       generation and preview.
-- [ ] Incremental generation rebuilds exactly the pages that depend on a changed record — via a
+- [x] Incremental generation rebuilds exactly the pages that depend on a changed record — via a
       direct reference to the record, or via a template that loops the record's dataset — proven by
       a `BuildPlanner` test, not by inspection.
-- [ ] Records and datasets participate in selective export/import (`M10`/`M11`/`M14`) with
+- [x] Records and datasets participate in selective export/import (`M10`/`M11`/`M14`) with
       implicit-provenance handling for a record's dataset, and in usages/diff.
-- [ ] The Content store UI offers a folder tree, a per-dataset record grid (server-side paging,
+- [x] The Content store UI offers a folder tree, a per-dataset record grid (server-side paging,
       sorting, filtering) and a record editor built on `sf-content-form`, read-only in time travel.
-- [ ] A 5,000-record dataset looped by 500 pages generates within the §18.6/§26.1 budget (no
+- [x] A 5,000-record dataset looped by 500 pages generates within the §18.6/§26.1 budget (no
       per-page full scan of the snapshot).
-- [ ] `./gradlew build` and `ui` `npm run build` green; new golden-file cases green.
+- [x] `./gradlew build` and `ui` `npm run build` green; new golden-file cases green.
 
 ## Features (dependency order)
 
@@ -107,10 +107,11 @@ precedent for adding a store end-to-end). `M17` is **not** a hard dependency, bu
   deliberately tiny and shared with the Angular form engine through one fixture file. Do not extend
   the `visibleWhen` grammar or its fixture for this epic. The record grid's filter is evaluated
   server-side, so no TypeScript port of the query evaluator is needed.
-- **Dependency granularity (accepted v1 trade-off).** A page that loops `dataset:team` depends on
-  the *dataset*, so any record add/change/delete in that dataset rebuilds it, even if `where=` would
-  exclude that record. Query-aware pruning is out of scope; `M22` build insight should show the
-  reason as "record X of dataset team changed".
+- **Dependency granularity.** Originally accepted as a v1 trade-off (any record change rebuilds every
+  page looping the dataset); implemented after the epic landed: the planner rebuilds a looping page
+  only if the loop's `folder`/`where` may select the changed record before or after the change (see
+  the `M19.3.2` notes). `M22` build insight should show the reason as "record X of dataset team
+  changed".
 - **Not in scope:** localizable record values (`M24.3.3`), paginating over a dataset (`M21` —
   consumes `M19.3.1`'s query model), search indexing of records (`M23.1.2`), relations with
   referential actions (cascade delete), computed fields, a record import from CSV.

@@ -1,6 +1,6 @@
 ---
 id: M19.2.1
-status: todo
+status: done
 depends: [M19.1.2, M19.3.1]
 epic: m19-content-store
 feature: api
@@ -37,15 +37,15 @@ do not copy that. `If-Match: "rev-{n}"` is the concurrency token (§7.5). OpenAP
 
 ## Acceptance criteria
 
-- [ ] API tests: role matrix (VIEWER read-only, EDITOR records only, DEVELOPER schemas), unknown
+- [x] API tests: role matrix (VIEWER read-only, EDITOR records only, DEVELOPER schemas), unknown
       project vs. no membership (404 vs 403 per §8.4).
-- [ ] Listing: paging metadata correct; `sort=name,desc&sort=_displayName,asc` works; `where` filters;
+- [x] Listing: paging metadata correct; `sort=name,desc&sort=_displayName,asc` works; `where` filters;
       invalid `where` → 400 with position.
-- [ ] `If-Match` stale → 409 with the existing conflict problem shape; missing → 428 if that is the
+- [x] `If-Match` stale → 409 with the existing conflict problem shape; missing → 428 if that is the
       current convention (match `PageController`).
-- [ ] Listing a 5,000-record dataset page of 50 does not load all record payloads into the response
+- [x] Listing a 5,000-record dataset page of 50 does not load all record payloads into the response
       and completes within an agreed budget (record timing in Notes).
-- [ ] `docs/api.md` endpoint list updated; `schema.d.ts` regenerated and committed.
+- [x] `docs/api.md` endpoint list updated; `schema.d.ts` regenerated and committed.
 
 ## Out of scope
 
@@ -58,3 +58,16 @@ do not copy that. `If-Match: "rev-{n}"` is the concurrency token (§7.5). OpenAP
   (`template_asset_id` + `folder_path` prefix) first, then evaluate `where` over that reduced set.
   Pushing `where` into SQL/jsonb is out of scope and would break H2 portability.
 - Sorting on a non-scalar editor (list, catalog, richtext) → 400, not arbitrary JSON ordering.
+
+## Implementation notes (2026-09-16)
+
+- `DatasetController` (`/datasets`, DEVELOPER writes) and `RecordController` (`/datasets/{uuid}/records`,
+  `/records/{uuid}`, EDITOR writes); VIEWER reads; ETag/`If-Match` as for pages (missing → 412, stale → 409).
+  Delete/restore/move/uid/usages/history of records are the generic `/assets` endpoints.
+- Listing reads the raw `sort` parameter values: Spring's list binding splits a single `field,desc` at the comma.
+  Page size 1–500. SQL narrows by dataset, `q` and folder; `where`/`sort` then run through the shared query model.
+  An invalid `where` is `400` with `column`.
+- Another project's dataset or record, or a non-member, is `404` (§8.4).
+- **Timing:** `DatasetBenchmark` (5,000 records, page of 50 sorted and filtered): 135 ms. `DatasetApiTest` asserts a
+  page of 50 from 600 records carries only 50 rows of scalar values.
+- `docs/api.md` §6.2; `schema.d.ts` regenerated.

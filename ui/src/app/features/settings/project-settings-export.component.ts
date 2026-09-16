@@ -19,9 +19,9 @@ type AssetSummaryView = components['schemas']['AssetSummaryView'];
  * just happens to have two fixed top-level folders ("Page Templates"/"Section Templates"),
  * structurally no different from any other scope having multiple top-level folders — so it
  * needs no special-casing anywhere below. */
-type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE' | 'TEMPLATES' | 'GLOBAL_SET';
+type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE' | 'TEMPLATES' | 'GLOBAL_SET' | 'RECORD';
 /** The `FolderScope`/`ExportSelectionRequest.fullStores` string for each tree scope. */
-type StoreScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'TEMPLATES' | 'GLOBALS';
+type StoreScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'TEMPLATES' | 'GLOBALS' | 'CONTENT';
 
 const STORE_SCOPE_FOR: Record<TreeScope, StoreScope> = {
   PAGE: 'PAGES',
@@ -29,6 +29,7 @@ const STORE_SCOPE_FOR: Record<TreeScope, StoreScope> = {
   PAGE_REFERENCE: 'NAVIGATION',
   TEMPLATES: 'TEMPLATES',
   GLOBAL_SET: 'GLOBALS',
+  RECORD: 'CONTENT',
 };
 
 /** The `ApiClient.listAssets` `type` filter(s) backing each tree scope — `TEMPLATES` needs two
@@ -37,8 +38,10 @@ const ASSET_TYPES_FOR: Record<TreeScope, string[]> = {
   PAGE: ['PAGE'],
   MEDIA: ['MEDIA'],
   PAGE_REFERENCE: ['PAGE_REFERENCE'],
-  TEMPLATES: ['PAGE_TEMPLATE', 'SECTION_TEMPLATE'],
+  // The "Datasets" folder (M19.4.1) lives in the templates tree, so its schemas are leaves there.
+  TEMPLATES: ['PAGE_TEMPLATE', 'SECTION_TEMPLATE', 'DATASET'],
   GLOBAL_SET: ['GLOBAL_SET'],
+  RECORD: ['RECORD'],
 };
 
 /** Bucket key used for items with no folder — i.e. living directly at the store's hidden root. */
@@ -153,7 +156,7 @@ export class ProjectSettingsExportComponent {
 
   private loadAllAssets(key: string): void {
     this.loadingAssets.set(true);
-    const scopes: TreeScope[] = ['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'TEMPLATES', 'GLOBAL_SET'];
+    const scopes: TreeScope[] = ['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'TEMPLATES', 'GLOBAL_SET', 'RECORD'];
     forkJoin(
       scopes.map((scope) =>
         forkJoin(
@@ -377,6 +380,8 @@ export class ProjectSettingsExportComponent {
         return 'perm_media';
       case 'GLOBAL_SET':
         return 'tune';
+      case 'RECORD':
+        return 'dataset';
       default:
         return 'description';
     }
@@ -428,6 +433,8 @@ export class ProjectSettingsExportComponent {
         return this.store.templateFolderTree();
       case 'GLOBAL_SET':
         return this.store.globalsFolderTree();
+      case 'RECORD':
+        return this.store.contentFolderTree();
     }
   }
 
