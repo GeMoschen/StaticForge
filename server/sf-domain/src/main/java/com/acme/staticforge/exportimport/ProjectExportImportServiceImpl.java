@@ -16,6 +16,7 @@ import com.acme.staticforge.asset.media.Blob;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.BlobStore;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
+import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.channel.OutputChannel;
 import com.acme.staticforge.channel.OutputChannelRepository;
 import com.acme.staticforge.common.JsonUtil;
@@ -335,6 +336,26 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
         }
 
+        // A page template that extends another can't render without its chain (M20.2.2): every ancestor
+        // template joins as an implicit pick, like a record's dataset.
+        Map<UUID, AssetVersion> byUuid = new HashMap<>();
+        versions.forEach(version -> byUuid.put(version.getAsset().getUuid(), version));
+        for (Long id : List.copyOf(included)) {
+            AssetVersion version = versionByAssetId.get(id);
+            if (version.getAsset().getAssetType() != AssetType.PAGE_TEMPLATE) {
+                continue;
+            }
+            Set<UUID> seen = new HashSet<>();
+            UUID parent = TemplateHierarchy.TemplateVersion.parentTemplateRef(version.getPayload());
+            while (parent != null && seen.add(parent) && byUuid.containsKey(parent)) {
+                AssetVersion ancestor = byUuid.get(parent);
+                if (!included.contains(ancestor.getAssetId())) {
+                    ancestors.add(ancestor.getAssetId());
+                }
+                parent = TemplateHierarchy.TemplateVersion.parentTemplateRef(ancestor.getPayload());
+            }
+        }
+
         // Always include every ancestor folder up to the project root.
         Set<Long> withImplicit = new HashSet<>(included);
         withImplicit.addAll(ancestors);
@@ -622,6 +643,21 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                                     + ", which is not in this archive and does not exist in the target project.",
                             asset.isExplicit()));
                 }
+            }
+
+            UUID parentTemplate = AssetType.PAGE_TEMPLATE.name().equals(asset.type())
+                    ? TemplateHierarchy.TemplateVersion.parentTemplateRef(asset.payload())
+                    : null;
+            if (parentTemplate != null
+                    && !archiveUuids.contains(parentTemplate.toString().toLowerCase(Locale.ROOT))
+                    && assetRepository.findByProjectIdAndUuid(targetProjectId, parentTemplate).isEmpty()) {
+                conflicts.add(ImportConflict.of(
+                        ConflictType.PARENT_TEMPLATE_MISSING,
+                        asset.uuid(),
+                        label,
+                        "Extends page template " + parentTemplate
+                                + ", which is not in this archive and does not exist in the target project.",
+                        asset.isExplicit()));
             }
 
             String parentFolderUuid = asset.parentFolderUuid();

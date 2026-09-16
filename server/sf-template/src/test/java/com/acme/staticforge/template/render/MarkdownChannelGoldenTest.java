@@ -63,7 +63,7 @@ class MarkdownChannelGoldenTest {
                     ? null
                     : (assetType, uid) -> Optional.ofNullable(uuids.get(assetType + ":" + uid));
 
-            OctlResult result = compiler.compile(octl, "markdown", references);
+            OctlResult result = GoldenFileRenderTest.compile(compiler, dir, octl, "markdown", references);
             List<Diagnostic> errors = result.diagnostics().stream()
                     .filter(d -> d.severity() == Severity.ERROR)
                     .toList();

@@ -105,6 +105,9 @@ final class OctlParser {
             case "IF" -> out.add(parseIf(token, line, col));
             case "FOR" -> out.add(parseFor(token, line, col));
             case "COMMENT" -> parseComment(line, col);
+            case "EXTENDS" -> out.add(new OctlNode.Extends(parseAccessor(cursor(token)), line, col));
+            case "BLOCK" -> out.add(parseBlock(token, line, col));
+            case "PARENT" -> out.add(new OctlNode.Parent(token.text().indexOf('(') >= 0, line, col));
             default -> diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.OCTL_UNKNOWN_INSTRUCTION,
                     "Unknown instruction: " + keyword, line, col));
@@ -188,6 +191,20 @@ final class OctlParser {
                     "Unbalanced block: $CMS_NAVIGATION$ without $CMS_END_NAVIGATION$", line, col));
         }
         return new OctlNode.Navigation(accessor, args, variable, body, line, col);
+    }
+
+    /** {@code $CMS_BLOCK(name)$ … $CMS_END_BLOCK$}; blocks may nest. The name is checked by the compiler. */
+    private OctlNode.Block parseBlock(OctlLexer.Token token, int line, int col) {
+        Cursor c = cursor(token);
+        c.skipWs();
+        String name = c.readIdent();
+        List<OctlNode> body = parseSequence(Set.of("END_BLOCK"));
+        if (!consumeInstruction("END_BLOCK")) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_UNBALANCED_BLOCK,
+                    "Unbalanced block: $CMS_BLOCK(" + name + ")$ without $CMS_END_BLOCK$", line, col));
+        }
+        return new OctlNode.Block(name, body, line, col);
     }
 
     private void parseComment(int line, int col) {

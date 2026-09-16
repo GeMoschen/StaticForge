@@ -1,6 +1,6 @@
 ---
 id: M20.4.1
-status: todo
+status: done
 depends: [M20.2.2, M20.3.1]
 epic: m20-template-inheritance
 feature: ui
@@ -49,19 +49,19 @@ area: fullstack
 
 ## Acceptance criteria
 
-- [ ] `OctlValidateController` API test: a `templateUuid` child using a parent-only editor returns no
+- [x] `OctlValidateController` API test: a `templateUuid` child using a parent-only editor returns no
       0103, the same source without `templateUuid` returns 0103, and a cycle returns 0144.
-- [ ] Component specs:
-  - [ ] Abstract toggle and 422 handling.
-  - [ ] Breadcrumb from a three-level chain.
-  - [ ] Inherited editors grouped by ancestor.
-  - [ ] OCTL diagnostics rendered from a mocked validate response.
-  - [ ] Broken-descendant 422 rendering.
-  - [ ] Abstract templates filtered from the create-page dialog.
-- [ ] Verified in the running app, per the `run` skill or memory notes: build `base` (abstract) →
+- [x] Component specs:
+  - [x] Abstract toggle and 422 handling.
+  - [x] Breadcrumb from a three-level chain.
+  - [x] Inherited editors grouped by ancestor.
+  - [x] OCTL diagnostics rendered from a mocked validate response.
+  - [x] Broken-descendant 422 rendering.
+  - [x] Abstract templates filtered from the create-page dialog.
+- [x] Verified in the running app, per the `run` skill or memory notes: build `base` (abstract) →
       `docs_layout` (abstract) → `article` in the UI, create a page on `article`, and preview shows the
       layered output. A typo'd block name shows the `SF-TPL-0147` warning live.
-- [ ] `ui` `npm run build` is green. `npm test` is green except for the known `templateUrl` runner
+- [x] `ui` `npm run build` is green. `npm test` is green except for the known `templateUrl` runner
       issue; record which specs could not run.
 
 ## Out of scope

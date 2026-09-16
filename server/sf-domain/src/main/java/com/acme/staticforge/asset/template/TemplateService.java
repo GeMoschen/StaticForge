@@ -1,8 +1,9 @@
 package com.acme.staticforge.asset.template;
 
-import com.acme.staticforge.asset.AssetSummary;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.diagnostic.Diagnostic;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,7 +17,11 @@ import org.springframework.data.domain.Pageable;
  */
 public interface TemplateService {
 
-    /** Creates a template, compiling the CDL and each channel template before persisting. */
+    /**
+     * Creates a template, compiling the CDL and each channel template before persisting. A page template's
+     * channels compile against their {@code $CMS_EXTENDS} chain and {@code parentTemplateRef} is derived from them
+     * (M20).
+     */
     TemplateView create(CreateTemplateCommand cmd, RevisionContext ctx);
 
     /**
@@ -40,7 +45,15 @@ public interface TemplateService {
      * self-heals the project's fixed template folders and reparents any pre-M13 template still
      * sitting at the hidden root (spec M13.1.4) before listing.
      */
-    Page<AssetSummary> list(long projectId, AssetType kind, Pageable pageable, RevisionContext ctx);
+    Page<TemplateListItem> list(long projectId, AssetType kind, Pageable pageable, RevisionContext ctx);
+
+    /**
+     * The diagnostics saving {@code source} as the template's {@code channelKey} would produce (M20.4.1), without
+     * saving: references resolve against the project, a page template's chain links against the live templates,
+     * and names are checked against its effective definition. {@code cdlSource} replaces the stored CDL when not
+     * {@code null}, so unsaved editors count.
+     */
+    List<Diagnostic> validateChannel(long projectId, UUID uuid, String channelKey, String source, String cdlSource);
 
     /** Soft-deletes the template via the asset service. */
     void delete(UUID uuid, RevisionContext ctx);

@@ -1,3 +1,71 @@
+# M20 implementation — Plan
+
+## Approach
+Sequential on branch `m20-template-inheritance` (off `master` at the M16–M19 merge). Layer order per the epic:
+language (parser → chain compiler + renderer walk, goldens) → domain (abstract, derived parent, effective
+definition, descendant validation, rename cascade, edges, export) → rendering (snapshot/live loaders, cache,
+pipeline validation) → API/UI → docs/journeys. No fan-out: every feature touches `OctlCompiler`/`CompiledTemplate`.
+
+## Design (from reading the code)
+- **Diagnostic numbers (deviation):** M19 already took `SF-TPL-0140–0142` and `SF-CDL-0107/0108`. M20 uses
+  `SF-TPL-0150–0162` and `SF-CDL-0109`:
+  0150 extends not first/repeated · 0151 content outside a top-level block · 0152 duplicate block · 0153
+  `$CMS_PARENT$` misuse · 0154 cycle · 0155 depth > 8 · 0156 extends target not `page_template:` (and extends
+  in a section template) · 0157 (warning) override of a block no ancestor defines · 0158 ancestor lacks the
+  channel · 0159 channels extend different parents · 0160 ancestor has compile errors · 0161 parent can't be
+  loaded (no loader / not a live page template) · 0162 block contains itself (through nesting or overrides) ·
+  `SF-CDL-0109` own editor/body name collides with an inherited one. `0130`/`0131` are already constants.
+- **Linked `CompiledTemplate`:** `nodes()` stays the template's own AST; new `layoutNodes()` (root layer's AST,
+  = `nodes()` without a chain), `blocks()` (name → definitions most-derived → root, nested blocks included),
+  `setupNodes()` (top-level `$CMS_SET`s of extending layers, root-most first, evaluated before the layout: the
+  most-derived value wins), `ancestors()` (UUID/uid per layer), `effectiveDefinition()`. `references`/
+  `datasetQueries` are unions (same project resolver → same keys map to the same UUIDs). Hash without a chain
+  is unchanged (`sha256(channel\0source)`), with a chain `sha256(channel\0source\0uuid\0source…)`.
+- **Renderer:** starts with `setupNodes` then `layoutNodes`; `Block` renders `blocks[name][0]`, with a stack of
+  (name, depth) so `$CMS_PARENT$` renders `blocks[name][depth+1]` (empty past the root). Inner blocks are
+  looked up globally by name. Ancestor UUIDs are render dependencies.
+- **Effective definition:** one pure helper in `sf-template` (`EffectiveDefinitions.merge`, root first; a
+  colliding descendant name is dropped with `SF-CDL-0109`), used by the compiler and by the domain
+  `EffectiveDefinitionService` (walks `payload.parentTemplateRef` at a revision).
+- **Loaders:** `ParentTemplateLoader` SPI in `sf-template`; one live/revision implementation in `sf-domain`
+  (`ParentTemplates`, also with an unsaved-payload overlay for save/validate) and one snapshot implementation in
+  `sf-generate`. Cross-request cache entries record every load and re-check (uid, source, definition) on a hit,
+  exactly like recorded reference resolutions; the build memo needs no check (snapshot is pinned).
+- **Domain:** `abstract` + derived `parentTemplateRef` in the template payload (no Liquibase); descendants via
+  open reverse `TEMPLATE` edges with source path `parentTemplateRef`; parent save validates descendants with an
+  overlay loader + per-request compile memo, 422 `SF-API-0422` with `descendants[]`; warnings returned on the
+  view. Page-template `renamedFrom` migrates `content` of pages on the template and every descendant in one
+  batch revision (today page templates have no content migration at all; section templates keep theirs).
+
+## Steps
+- [x] M20.1.1 parser/AST/structural diagnostics + tests
+- [x] M20.1.2 chain compiler, effective definition, loader SPI, chain hash + tests; renderer block walk (M20.3.1
+      renderer part) + golden cases incl. `parents/`
+- [x] M20.2.1 abstract, derived parent, effective definition service, page validation, API fields, export/import
+- [x] M20.2.2 descendant validation, rename cascade, TEMPLATE edge, planner/usages/delete/export
+- [x] M20.3.1 snapshot + live loaders, cache, pipeline validation, preview, integration tests
+- [x] M20.4.1 validate endpoint + template IDE + pickers
+- [x] M20.5.1 docs, spec, journey, live verification, review
+
+## Review
+- **Branch:** `m20-template-inheritance` (off `master`). Not committed.
+- **Verification:**
+  - `./gradlew build` green: 730 backend tests (677 at M19), 0 failures, 2 skipped (the gated benchmarks); spotless clean.
+  - New backend tests: `OctlInheritanceSyntaxTest`, `OctlChainCompileTest`, `InheritanceRenderTest`, golden cases
+    `extends-default-blocks`, `extends-override-parent`, `extends-multilevel`, `extends-nested-blocks`,
+    `render-md/extends-markdown`; `DocsGoldenSnippetsTest` now also fails when a `DiagnosticCodes` constant has no
+    catalogue row; `TemplateInheritanceIntegrationTest` (13), `TemplateInheritanceRenderIntegrationTest`,
+    `TemplateInheritanceApiTest` (3).
+  - `ng build` green (initial 814 kB, was 812). Vitest: the same 19 `templateUrl` spec files fail as before; 19 logic
+    spec files pass (new `inheritance.util.spec.ts`, 10 tests). The new component specs can't run here.
+  - Live (dev backend + `ng serve`): `m20-journeys` 1/1 (steps 1–6, generated files read), `m16`–`m19` journeys 16/16.
+    Two UI issues found in the screenshots and fixed: a missing space in the descendant notice, and the tree hiding a
+    long display name next to the Abstract badge.
+- **Deviations** are listed in `tasks/20-m20-template-inheritance/README.md` → Implementation notes (code numbers,
+  one `TemplateHierarchy` instead of three loaders, page-template `renamedFrom` added, no filtered pages list).
+
+---
+
 # M19 implementation — Plan
 
 ## Approach

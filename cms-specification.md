@@ -819,6 +819,7 @@ A page template declares the frame of a page: the surrounding HTML, the `<head>`
 | Rendered standalone | ❌ (always inside a page) | ✅ (produces the output file) |
 | Output path rule | n/a | `outputPath` expression |
 | Usable inside another template | ✅ (`$CMS_INCLUDE`) | ❌ |
+| Inheritance (M20) | ❌ (`$CMS_EXTENDS` is `SF-TPL-0156`) | ✅ extends another page template, may be `abstract` (§13.3) |
 
 ### 13.2 Payload
 
@@ -834,11 +835,23 @@ A page template declares the frame of a page: the surrounding HTML, the `<head>`
     { "name": "sidebar", "label": "Sidebar",      "allow": ["teaser","cta_box"],  "min": 0, "max": 4 }
   ],
   "outputPath": { "html": "{folder}{uid}.html", "markdown": "{folder}{uid}.md" },
-  "category": "Standard"
+  "category": "Standard",
+  "abstract": false,
+  "parentTemplateRef": "7f0c…-uuid-of-docs_layout"
 }
 ```
 
 `bodies` is authored explicitly (not only inferred from OCTL) so that allow-lists and cardinality can be declared; the compiler cross-checks it against the `$CMS_BODY` occurrences in every channel template and reports mismatches.
+
+`abstract` and `parentTemplateRef` were added by M20 and are absent (`false`/`null`) in data saved before it. `contentDefinition`, `compiledDefinition` and `bodies` are always the template's **own** definition; the inherited parts are computed (§13.3).
+
+### 13.3 Inheritance (M20)
+
+- **Layouts.** A channel source that starts with `$CMS_EXTENDS(page_template:uid)$` renders its parent's layout, replacing the parent's `$CMS_BLOCK(name)$` regions with its own top-level blocks; `$CMS_PARENT$` inside an override renders the parent's definition (§16.2). Rendering starts at the root layout. Chains are at most 8 ancestors deep; cycles are compile errors. Each channel links its own chain.
+- **`parentTemplateRef`** is derived on every save from the channel sources, which must all extend the same parent (`SF-TPL-0159`); clients can't write it. It is also the child → parent `TEMPLATE` reference edge (source path `parentTemplateRef`, §5.4), so usages list a layout's children, a layout with live children can't be deleted (`SF-DOM-0120`, naming them), exporting a template includes its ancestors as implicit picks, and an incremental build reaches every page of every descendant of a changed layout (§18.1). Importing a template whose parent is neither in the archive nor in the target project is the blocking conflict `PARENT_TEMPLATE_MISSING`.
+- **`abstract`** templates are layouts: pages can't be created on or switched to them (`SF-DOM-0123`), and a template that pages use can't become abstract (`SF-DOM-0122`, with `pageCount`, `pageUids`, `pageUuids`). Pickers leave them out; the template list exposes the flag.
+- **Effective definition.** The union of the own definitions along `parentTemplateRef`, root first. A name a template declares that an ancestor already declares is `SF-CDL-0109`. The page form, server-side content validation (§10.5), generation's completeness check and every OCTL editor/body name check use it. It is computed at read and render time against the same revision, never copied into descendants. The template read model returns it as `effectiveDefinition` with `inheritedFrom` (name → ancestor uid) and `ancestors` (parent first).
+- **Parent changes.** Saving a page template recompiles every descendant against the proposed version before anything is written; an error rejects the save with `422 SF-DOM-0124` and `descendants[]` (uid, channel, diagnostics), warnings come back as `descendantWarnings`. A `renamedFrom` hop on the template's editors migrates the `content` of the pages of the template and of every descendant in the template save's revision. A descendant saved concurrently against the old parent can slip past the check; the next save of either template re-validates it, and generation's VALIDATE stage reports it.
 
 ---
 
@@ -1088,6 +1101,9 @@ Creating channel `markdown` immediately makes a new tab appear in every template
 | `$CMS_SET(name = expr)$` | Local variable in the current scope |
 | `$CMS_META(key)$` | Page/system metadata (`uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey`) |
 | `$CMS_COMMENT$ … $CMS_END_COMMENT$` | Not emitted |
+| `$CMS_EXTENDS(page_template:uid)$` | This page template extends a layout (§13.3). First instruction (whitespace and comments may precede it), once; outside its top-level blocks a template that extends may contain only `$CMS_SET` and comments |
+| `$CMS_BLOCK(name)$ … $CMS_END_BLOCK$` | A named region. Renders its most-derived definition along the inheritance chain; without a chain, its own body. Blocks may nest and are looked up by name |
+| `$CMS_PARENT$` | Inside a block of a template that extends: the next less-derived definition of that block; empty at the root |
 | `$$` | Literal `$` |
 
 ### 16.3 Filters
@@ -1249,13 +1265,17 @@ $CMS_END_FOR$
 
 ```ebnf
 template      = { text | instruction } ;
-instruction   = "$CMS_" , ( value | ref | body | include | nav | control | meta | set | comment ) , "$" ;
+instruction   = "$CMS_" , ( value | ref | body | include | nav | control | meta | set | comment
+                          | extends | block | parent ) , "$" ;
 
 value         = "VALUE(" , accessor , { "|" , filter } , [ "," , namedArgs ] , ")" ;
 ref           = "REF("   , accessor , [ "," , namedArgs ] , ")" ;
 body          = "BODY("  , identifier , ")" ;
 include       = "INCLUDE(" , assetRef , [ "," , namedArgs ] , ")" ;
 nav           = "NAV("   , assetRef , [ "," , namedArgs ] , ")" ;
+extends       = "EXTENDS(" , "page_template" , ":" , uid , ")" ;
+block         = "BLOCK(" , identifier , ")$" , template , "$CMS_END_BLOCK" ;
+parent        = "PARENT" ;
 
 accessor      = assetRef | path ;
 assetRef      = assetType , ":" , uid , [ "." , path ] ;
@@ -1292,6 +1312,7 @@ OCTL source ──lex──▶ tokens ──parse──▶ AST ──resolve ref
 - Cycle guard: rendering a template that is already being rendered further up the chain (`a → b → a`, through an include, a body section or a catalog card) fails with `SF-TPL-0135` and the chain in the message. The check runs before the depth check. The same template rendered twice side by side is not a cycle.
 - Exceeding a limit fails only that page in generation: the diagnostic names the page and channel, the other pages render and are published, and the run ends `PARTIAL` (the same as a page held back with `SF-GEN-0120`, and as `SF-GEN-0203` oversized file and `SF-GEN-0205` per-page timeout). Run-level errors still fail the run: template VALIDATE errors, `SF-GEN-0110` path collisions, `SF-GEN-0204` and `SF-GEN-0206`. Preview returns a `422` problem carrying the diagnostic's code.
 - Rendering is side-effect free and thread-safe → pages render in parallel on virtual threads.
+- Inheritance (M20): `OctlCompiler.compile(source, channel, resolver, ownDefinition, Inheritance)` loads each ancestor through a `ParentTemplateLoader` (snapshot-backed in generation, live or revision-pinned in save, validate and preview), compiles it once per build or request (`ChainCompileMemo`), and links a `CompiledTemplate` whose layout nodes are the root's, with a block table (name → definitions, most-derived first), the chain's child-level `$CMS_SET`s, the union of references, and a hash over every layer. The compile cache re-checks each ancestor's version on a hit, so a parent edit never serves a stale layout. Ancestor UUIDs are render dependencies.
 
 ### 16.11 Diagnostics
 
@@ -1312,6 +1333,19 @@ OCTL source ──lex──▶ tokens ──parse──▶ AST ──resolve ref
 | `SF-TPL-0132` | error (render) | Output above 32 MB in one page render |
 | `SF-TPL-0133` | error (render) | Page render exceeded the 5 s time budget |
 | `SF-TPL-0135` | error (render) | Include cycle (`a → b → a`) |
+| `SF-TPL-0150` | error | `$CMS_EXTENDS` not first, nested, or repeated |
+| `SF-TPL-0151` | error | Content outside top-level blocks in a template that extends |
+| `SF-TPL-0152` | error | Invalid or duplicate block name |
+| `SF-TPL-0153` | error | `$CMS_PARENT$` outside a block, without `$CMS_EXTENDS`, or with arguments |
+| `SF-TPL-0154` | error | Inheritance cycle (`a → b → a`) |
+| `SF-TPL-0155` | error | Inheritance chain deeper than 8 |
+| `SF-TPL-0156` | error | `$CMS_EXTENDS` target isn't `page_template:`, or used in a section template |
+| `SF-TPL-0157` | warning | Override of a block no ancestor defines ("did you mean") |
+| `SF-TPL-0158` | error | Ancestor has no template for the channel |
+| `SF-TPL-0159` | error | Channels extend different parents |
+| `SF-TPL-0160` | error | Ancestor has compile errors (reported once with its uid) |
+| `SF-TPL-0161` | error | Parent can't be loaded (not a live page template, or no loader in this context) |
+| `SF-TPL-0162` | error | Block contains itself through nesting or overrides |
 | `SF-TPL-0201` | warning | Body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | Editor declared in CDL but never used in any channel template |
@@ -2660,11 +2694,15 @@ Same content. Two channels. No duplication.
 | `SF-DOM-0101` | 422 | UID already taken (after probe exhaustion) |
 | `SF-DOM-0102` | 422 | Reserved UID |
 | `SF-DOM-0110` | 409 | Folder not empty |
-| `SF-DOM-0120` | 409 | Asset still referenced (delete without `force`) |
+| `SF-DOM-0120` | 409 | Asset still referenced (delete without `force`); for a page template that others extend, the detail and `children` name them |
+| `SF-DOM-0122` | 422 | Page template still used by pages can't become abstract (`pageCount`, `pageUids`, `pageUuids`, §13.3) |
+| `SF-DOM-0123` | 422 | A page can't use an abstract page template |
+| `SF-DOM-0124` | 422 | A page template save would break templates that extend it (`descendants[]`, §13.3) |
 | `SF-DOM-0130` | 422 | Page reference folder target has no page in its subtree (a section template outside the body's `allow` list is `SF-API-0422` with an `allow` issue, §10.5) |
 | `SF-TPL-01xx` | 422 | CDL/OCTL compile errors (§16.11) |
 | `SF-TPL-0111` | — | Cross-asset value without an editor path (compile warning) |
 | `SF-TPL-0112` | — | Cross-asset value target missing or soft-deleted (render warning) |
+| `SF-TPL-0150`–`0162`, `SF-CDL-0109` | 422 | Template inheritance compile errors (§16.11); `SF-TPL-0157` is a warning |
 | `SF-TPL-0130`–`0133`, `SF-TPL-0135` | 422 (preview) | Render limit exceeded: depth, loop iterations, output size, time budget, include cycle (§16.10); fails only that page in generation (run `PARTIAL`) |
 | `SF-GEN-0110` | — | Output path collision (build error) |
 | `SF-GEN-0120` | — | Content incomplete: page held back, run `PARTIAL` (§10.5) |

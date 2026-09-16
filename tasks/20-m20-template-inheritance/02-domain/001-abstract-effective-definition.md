@@ -1,6 +1,6 @@
 ---
 id: M20.2.1
-status: todo
+status: done
 depends: [M20.1.2, M16.5.2]
 epic: m20-template-inheritance
 feature: domain
@@ -61,22 +61,22 @@ forms from the template's `compiledDefinition`.
 
 ## Acceptance criteria
 
-- [ ] Integration tests:
-  - [ ] Pages can't be created with an abstract template, or switched to one (422).
-  - [ ] A template in use can't be made abstract (422 with the count).
-  - [ ] `$CMS_EXTENDS` in a section template is rejected (422 + `SF-TPL-0146`).
-  - [ ] Channels extending different parents are rejected (`SF-TPL-0149`).
-  - [ ] A child editor colliding with an inherited one is rejected (`SF-CDL-0107`).
-- [ ] A child template whose channel source uses an editor that only its parent declares saves
+- [x] Integration tests:
+  - [x] Pages can't be created with an abstract template, or switched to one (422).
+  - [x] A template in use can't be made abstract (422 with the count).
+  - [x] `$CMS_EXTENDS` in a section template is rejected (422 + `SF-TPL-0146`).
+  - [x] Channels extending different parents are rejected (`SF-TPL-0149`).
+  - [x] A child editor colliding with an inherited one is rejected (`SF-CDL-0107`).
+- [x] A child template whose channel source uses an editor that only its parent declares saves
       successfully. The same source on a template without the parent fails with `SF-TPL-0103`, so
       the effective definition is genuinely used.
-- [ ] `GET` template returns `abstract`, `parentTemplateRef` and `effectiveDefinition` with
+- [x] `GET` template returns `abstract`, `parentTemplateRef` and `effectiveDefinition` with
       `inheritedFrom`. The OpenAPI schema and `schema.d.ts` are regenerated.
-- [ ] Page save validates content against the effective definition, e.g. a required editor inherited
+- [x] Page save validates content against the effective definition, e.g. a required editor inherited
       from the parent is enforced (per `M16.5.2`'s semantics).
-- [ ] Export → import round-trips a three-level chain, with `abstract` flags and parent refs intact
+- [x] Export → import round-trips a three-level chain, with `abstract` flags and parent refs intact
       (extend `ProjectExportImportIntegrationTest`).
-- [ ] `./gradlew build` is green.
+- [x] `./gradlew build` is green.
 
 ## Out of scope
 

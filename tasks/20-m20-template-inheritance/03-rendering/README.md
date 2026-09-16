@@ -18,10 +18,10 @@ page template, because the effective definition makes inherited editors ordinary
 
 ## Feature exit criteria
 
-- [ ] `OctlRenderer` walks the block table and renders `$CMS_PARENT$` correctly at every depth.
-- [ ] `GenerationRenderer` and `PageRenderService` compile page templates chain-aware, from the snapshot
+- [x] `OctlRenderer` walks the block table and renders `$CMS_PARENT$` correctly at every depth.
+- [x] `GenerationRenderer` and `PageRenderService` compile page templates chain-aware, from the snapshot
       or live data, through the compile cache, and produce identical output for the same revision.
-- [ ] `RenderPipeline.validate` reports chain errors per (template, channel) before rendering.
+- [x] `RenderPipeline.validate` reports chain errors per (template, channel) before rendering.
 
 ## Dependencies
 

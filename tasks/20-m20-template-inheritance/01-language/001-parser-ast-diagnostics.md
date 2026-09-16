@@ -1,6 +1,6 @@
 ---
 id: M20.1.1
-status: todo
+status: done
 depends: []
 epic: m20-template-inheritance
 feature: language
@@ -53,15 +53,15 @@ These files are under `server/sf-template/src/main/java/com/acme/staticforge/tem
 
 ## Acceptance criteria
 
-- [ ] Parser unit tests cover every new instruction, nested blocks, an unbalanced
+- [x] Parser unit tests cover every new instruction, nested blocks, an unbalanced
       `$CMS_BLOCK` (0102), and each of 0140/0141/0142/0143/0146.
-- [ ] `OctlNode` has the three new records. The module compiles, so every exhaustive switch
+- [x] `OctlNode` has the three new records. The module compiles, so every exhaustive switch
       handles them.
-- [ ] A template with blocks but no `$CMS_EXTENDS` renders each block's body in place
+- [x] A template with blocks but no `$CMS_EXTENDS` renders each block's body in place
       (a parent/base template rendered on its own). Covered by a unit test.
-- [ ] New constants are in `DiagnosticCodes`. The existing `SF-TPL-0130`/`0131` literals in
+- [x] New constants are in `DiagnosticCodes`. The existing `SF-TPL-0130`/`0131` literals in
       `OctlRenderer` also move there, so the catalogue is complete in one place.
-- [ ] `./gradlew :server:sf-template:test` is green, and every existing golden file is unchanged.
+- [x] `./gradlew :server:sf-template:test` is green, and every existing golden file is unchanged.
 
 ## Out of scope
 

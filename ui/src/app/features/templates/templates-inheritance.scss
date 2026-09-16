@@ -1,0 +1,86 @@
+// Template inheritance on the template screen (M20.4.1): chain breadcrumb, inherited editors, save outcomes.
+
+.inheritance__chain,
+.inheritance__children {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-1);
+  margin-top: var(--sf-1);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.inheritance__crumb {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sf-signal);
+  font: inherit;
+  font-family: var(--sf-font-mono, monospace);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.inheritance__crumb--current {
+  color: var(--sf-ink);
+  text-decoration: none;
+  cursor: default;
+}
+
+.inheritance__sep {
+  color: var(--sf-slate);
+}
+
+.inheritance__notice {
+  margin: var(--sf-3) 0;
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  font-size: var(--sf-text-sm);
+
+  p {
+    margin: 0 0 var(--sf-2);
+  }
+}
+
+.inheritance__notice--error {
+  border-color: var(--sf-rust);
+}
+
+.inheritance__notice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-2);
+}
+
+.inheritance__descendant {
+  margin-top: var(--sf-2);
+}
+
+.inheritance__where {
+  margin-left: var(--sf-2);
+}
+
+.inheritance__inherited {
+  margin-bottom: var(--sf-3);
+  font-size: var(--sf-text-sm);
+
+  h4 {
+    margin: 0 0 var(--sf-2);
+    font-size: var(--sf-text-sm);
+    color: var(--sf-slate);
+  }
+}
+
+.inheritance__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-3);
+  margin-bottom: var(--sf-1);
+}
+
+.inheritance__from {
+  color: var(--sf-slate);
+}

@@ -15,8 +15,8 @@ generate → change-parent → incremental-rebuild loop end to end.
 
 ## Feature exit criteria
 
-- [ ] Docs updated, and the diagnostic catalogue matches `DiagnosticCodes`.
-- [ ] The E2E journey exists, collects, and runs (or its execution caveat is recorded, as in M15.6).
+- [x] Docs updated, and the diagnostic catalogue matches `DiagnosticCodes`.
+- [x] The E2E journey exists, collects, and runs (or its execution caveat is recorded, as in M15.6).
 
 ## Dependencies
 

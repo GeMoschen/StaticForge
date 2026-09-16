@@ -23,7 +23,7 @@ Make inheritance visible and safe to author in the existing template screen
 
 ## Feature exit criteria
 
-- [ ] A developer can build a three-level chain entirely in the UI, seeing inherited editors and live
+- [x] A developer can build a three-level chain entirely in the UI, seeing inherited editors and live
       diagnostics, and an editor can only create pages on non-abstract templates.
 
 ## Dependencies

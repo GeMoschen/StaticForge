@@ -29,30 +29,30 @@ This epic adds layout inheritance for **page templates only**:
 
 ## Exit criteria (epic is done when)
 
-- [ ] `$CMS_EXTENDS`, `$CMS_BLOCK`/`$CMS_END_BLOCK` and `$CMS_PARENT` lex, parse and compile, with a
+- [x] `$CMS_EXTENDS`, `$CMS_BLOCK`/`$CMS_END_BLOCK` and `$CMS_PARENT` lex, parse and compile, with a
       catalogued diagnostic for every misuse: extends not first or repeated, content outside blocks
       in an extending template, duplicate block names, `$CMS_PARENT` outside a block, a cycle,
       depth over the cap, a non-page-template parent, or a parent missing the channel.
-- [ ] A three-level chain (abstract `base` → abstract `docs_layout` → `article`) renders correctly
+- [x] A three-level chain (abstract `base` → abstract `docs_layout` → `article`) renders correctly
       in **generation and preview** for HTML and Markdown. Golden-file cases cover default blocks,
       overrides, `$CMS_PARENT$` at every level, and nested blocks.
-- [ ] Pages cannot be created with, or switched to, an abstract template (422). A template that is
+- [x] Pages cannot be created with, or switched to, an abstract template (422). A template that is
       in use by pages cannot be marked abstract (422 naming the usage count).
-- [ ] A child's effective content definition (editors + bodies inherited along the chain) drives the
+- [x] A child's effective content definition (editors + bodies inherited along the chain) drives the
       page editor form, server-side content validation (`M16.5.2`) and `$CMS_BODY`/editor-name
       checks in OCTL compilation.
-- [ ] Changing a parent template:
+- [x] Changing a parent template:
       - (a) is rejected with 422 listing the broken descendants if it would break one (e.g. a new
         parent editor collides with a child editor name);
       - (b) runs a `renamedFrom` page-content migration on the pages of **every descendant** in one
         compound revision;
       - (c) causes an incremental build to re-render every page of every descendant.
-- [ ] `asset_reference` holds a `TEMPLATE` edge child → parent, so usages of an abstract template
+- [x] `asset_reference` holds a `TEMPLATE` edge child → parent, so usages of an abstract template
       list its children, and export of a child pulls its ancestor chain in implicitly (M11
       provenance).
-- [ ] The template IDE shows the abstract toggle, the parent chain and the inherited (read-only)
+- [x] The template IDE shows the abstract toggle, the parent chain and the inherited (read-only)
       editors, and shows OCTL diagnostics live per channel from a context-aware validate endpoint.
-- [ ] `./gradlew build` and `ui` `npm run build` + `npm test` are green (with the known
+- [x] `./gradlew build` and `ui` `npm run build` + `npm test` are green (with the known
       `templateUrl` spec-runner caveat noted in `M15`).
 
 ## Features (dependency order)
@@ -104,3 +104,35 @@ This epic adds layout inheritance for **page templates only**:
 - **No Monaco in the UI.** `ui/src/app/features/templates/templates.component.html` edits CDL and
   channel OCTL in plain `<textarea>`s, and the UI never calls `POST /octl/validate` today. M20.4.1
   adds diagnostics to the existing textareas. A Monaco/OCTL language mode is not part of this epic.
+
+## Implementation notes (2026-09-16)
+
+Evidence and deviations; the code is the source of truth where they differ from the task files.
+
+- **Diagnostic numbers.** M19 had already taken `SF-TPL-0140`–`0142` and `SF-CDL-0107`/`0108`. M20 uses
+  `SF-TPL-0150` extends position, `0151` content outside blocks, `0152` block name (invalid or duplicate), `0153`
+  `$CMS_PARENT$` misuse, `0154` cycle, `0155` depth, `0156` extends target / section template, `0157` unknown
+  override (warning), `0158` ancestor lacks channel, `0159` channels extend different parents, plus `0160` ancestor
+  has compile errors, `0161` parent can't be loaded, `0162` block contains itself, and `SF-CDL-0109` inherited name
+  collision. `SF-TPL-0130`/`0131` were already constants. Domain problems: `SF-DOM-0122` template in use can't be
+  abstract, `SF-DOM-0123` page on an abstract template, `SF-DOM-0124` descendants would break; `SF-DOM-0120` names
+  the children. Import conflict: `PARENT_TEMPLATE_MISSING`.
+- **Loaders.** Instead of three loader implementations there is one domain view, `asset.template.TemplateHierarchy`
+  (lookup + ancestors + effective definition + chain compile), built live/at a revision by `TemplateHierarchies` and
+  over the snapshot by `SnapshotTemplateHierarchy`. `CompiledTemplateCache` records each chain compile's template
+  lookups (version keys) and re-checks them on a hit, like reference resolutions.
+- **A channel that doesn't extend** still inherits the parent's CDL (`Inheritance.inheritedDefinitions`).
+- **Page-template `renamedFrom`.** Before M20 page templates had no content migration at all (only section
+  templates did); it was added for the template and all descendants, in the template save's revision.
+- **"Pages list filtered by template"** doesn't exist in the UI; the `SF-DOM-0122` notice links each listed page
+  (the problem carries `pageUuids`). There is no "change template" picker in the page editor, so only the
+  create-page dialog filters abstract templates.
+- **Include inside a block** renders through the same `OctlRenderer` state and `RenderBudget` as any other node, so
+  the depth/cycle counters are not reset; covered by reasoning, not by a dedicated test.
+
+**Verification.** `./gradlew build` (see `tasks/todo.md` review); new tests: `OctlInheritanceSyntaxTest`,
+`OctlChainCompileTest`, `InheritanceRenderTest`, five golden cases, `DocsGoldenSnippetsTest` catalogue check,
+`TemplateInheritanceIntegrationTest` (13), `TemplateInheritanceRenderIntegrationTest`, `TemplateInheritanceApiTest`
+(3); UI `inheritance.util.spec.ts` (10). Component specs were added but can't run here (known `templateUrl` runner
+issue). `e2e/m20-journeys.spec.ts` passed against a live dev backend + `ng serve`, including the generated files;
+m16–m19 journeys still pass.

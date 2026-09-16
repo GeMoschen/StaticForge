@@ -40,7 +40,7 @@
           <sf-field label="Template">
             <select formControlName="templateUuid">
               <option value="" disabled>Select a template</option>
-              @for (tpl of templates(); track tpl.uuid) {
+              @for (tpl of templateOptions(); track tpl.uuid) {
                 <option [value]="tpl.uuid">{{ tpl.displayName ?? tpl.uid }}</option>
               }
             </select>

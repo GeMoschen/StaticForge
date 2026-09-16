@@ -48,7 +48,14 @@ public final class OctlRenderer implements Renderer {
     public RenderResult render(CompiledTemplate template, RenderContext context) {
         RenderBudget budget = context.budget() != null ? context.budget() : new RenderBudget();
         State s = new State(template, context, budget);
-        renderNodes(template.nodes(), s);
+        for (CompiledTemplate.Ancestor ancestor : template.ancestors()) {
+            if (ancestor.uuid() != null) {
+                s.deps.add(ancestor.uuid());
+            }
+        }
+        // A template that extends renders its root layout (M20), after its chain's child-level $CMS_SETs.
+        renderNodes(template.setupNodes(), s);
+        renderNodes(template.layoutNodes(), s);
         return new RenderResult(s.out.toString(), s.deps, s.warnings);
     }
 
@@ -72,7 +79,53 @@ public final class OctlRenderer implements Renderer {
                 case OctlNode.Set st -> renderSet(st, s);
                 case OctlNode.Meta m -> renderMeta(m, s);
                 case OctlNode.Comment c -> { /* discarded */ }
+                case OctlNode.Extends e -> { /* linked at compile time */ }
+                case OctlNode.Block b -> renderBlock(b, s);
+                case OctlNode.Parent p -> renderParent(s);
             }
+        }
+    }
+
+    /**
+     * {@code $CMS_BLOCK(name)$} renders the block's most-derived definition along the chain (M20); without a
+     * chain that is the block's own body. Blocks are looked up by name wherever they appear, so an inner
+     * block inside an outer block's inherited definition still renders its own override. A block that is
+     * already rendering is skipped: the compiler rejects such tables ({@code SF-TPL-0162}), and this keeps
+     * a render finite whatever it is handed.
+     */
+    private void renderBlock(OctlNode.Block block, State s) {
+        List<List<OctlNode>> definitions = s.template.blocks().get(block.name());
+        if (definitions == null || definitions.isEmpty()) {
+            renderNodes(block.body(), s);
+            return;
+        }
+        for (BlockFrame frame : s.blocks) {
+            if (frame.name.equals(block.name())) {
+                return;
+            }
+        }
+        renderDefinition(block.name(), 0, definitions, s);
+    }
+
+    /** {@code $CMS_PARENT$}: the next less-derived definition of the innermost rendering block; empty at the root. */
+    private void renderParent(State s) {
+        BlockFrame current = s.blocks.peek();
+        if (current == null) {
+            return;
+        }
+        List<List<OctlNode>> definitions = s.template.blocks().get(current.name);
+        int next = current.depth + 1;
+        if (definitions != null && next < definitions.size()) {
+            renderDefinition(current.name, next, definitions, s);
+        }
+    }
+
+    private void renderDefinition(String name, int depth, List<List<OctlNode>> definitions, State s) {
+        s.blocks.push(new BlockFrame(name, depth));
+        try {
+            renderNodes(definitions.get(depth), s);
+        } finally {
+            s.blocks.pop();
         }
     }
 
@@ -681,6 +734,9 @@ public final class OctlRenderer implements Renderer {
         }
     }
 
+    /** A block being rendered, and which of its definitions (0 = most derived). */
+    private record BlockFrame(String name, int depth) {}
+
     private static final class State {
         final CompiledTemplate template;
         final RenderContext context;
@@ -691,6 +747,7 @@ public final class OctlRenderer implements Renderer {
         final Set<String> missingTargets = new HashSet<>();
         final Deque<LoopFrame> loops = new ArrayDeque<>();
         final Deque<Map<String, JsonNode>> vars = new ArrayDeque<>();
+        final Deque<BlockFrame> blocks = new ArrayDeque<>();
         final RenderBudget budget;
 
         State(CompiledTemplate template, RenderContext context, RenderBudget budget) {

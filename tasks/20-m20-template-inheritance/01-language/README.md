@@ -30,11 +30,11 @@ where the sources came from.
 
 ## Feature exit criteria
 
-- [ ] Parser and AST support the three instructions. Single-template structural diagnostics are
+- [x] Parser and AST support the three instructions. Single-template structural diagnostics are
       emitted by `OctlCompiler.compile(...)` with no loader.
-- [ ] Chain compilation with a `ParentTemplateLoader` detects cycles and depth overflow, merges
+- [x] Chain compilation with a `ParentTemplateLoader` detects cycles and depth overflow, merges
       blocks, and exposes a combined hash and references.
-- [ ] `GoldenFileRenderTest` supports inheritance fixtures, and the new golden cases pass.
+- [x] `GoldenFileRenderTest` supports inheritance fixtures, and the new golden cases pass.
 
 ## Dependencies
 

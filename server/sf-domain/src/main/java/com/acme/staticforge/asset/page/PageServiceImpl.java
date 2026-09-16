@@ -10,6 +10,7 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentIssue;
+import com.acme.staticforge.asset.template.TemplateHierarchies;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -38,30 +39,34 @@ public class PageServiceImpl implements PageService {
     private final AssetService assetService;
     private final BodyService bodyService;
     private final PageContentValidation contentValidation;
+    private final TemplateHierarchies hierarchies;
 
     public PageServiceImpl(
             AssetRepository assetRepository,
             AssetVersionRepository assetVersionRepository,
             AssetService assetService,
             BodyService bodyService,
-            PageContentValidation contentValidation) {
+            PageContentValidation contentValidation,
+            TemplateHierarchies hierarchies) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.bodyService = bodyService;
         this.contentValidation = contentValidation;
+        this.hierarchies = hierarchies;
     }
 
     @Override
     @Transactional
     public AssetVersionView create(CreatePageCommand cmd, RevisionContext ctx) {
         Template template = resolveTemplate(cmd.templateUuid(), ctx.projectId(), AssetType.PAGE_TEMPLATE);
+        requireConcrete(template);
 
         ObjectNode payload = JsonUtil.object(null);
         payload.put("templateRef", cmd.templateUuid().toString());
         payload.putObject("content");
         ObjectNode bodies = payload.putObject("bodies");
-        declaredBodies(template).forEach(name -> bodies.putArray(name));
+        declaredBodies(ctx.projectId(), cmd.templateUuid()).forEach(name -> bodies.putArray(name));
         ObjectNode nav = payload.putObject("nav");
         nav.put("visible", true);
         nav.put("position", 0);
@@ -255,7 +260,9 @@ public class PageServiceImpl implements PageService {
     private void validatePagePayload(ObjectNode payload, long projectId) {
         String templateRef = JsonUtil.text(payload, "templateRef").orElseThrow(
                 () -> new SfException(ProblemFactory.unprocessableEntity("Page payload requires templateRef.")));
-        resolveTemplate(UUID.fromString(templateRef), projectId, AssetType.PAGE_TEMPLATE);
+        UUID templateUuid = UUID.fromString(templateRef);
+        Template template = resolveTemplate(templateUuid, projectId, AssetType.PAGE_TEMPLATE);
+        requireConcrete(template);
 
         JsonNode bodies = payload.get("bodies");
         if (bodies != null && bodies.isObject()) {
@@ -289,23 +296,25 @@ public class PageServiceImpl implements PageService {
         }
         return new Template(
                 template.getId(),
-                new TemplateRefView(template.getUuid(), template.getUid(), version.getDisplayName()));
+                new TemplateRefView(template.getUuid(), template.getUid(), version.getDisplayName()),
+                version.getPayload().path("abstract").asBoolean(false));
     }
 
-    private List<String> declaredBodies(Template template) {
-        JsonNode payload = requireOpen(template.id()).getPayload();
-        JsonNode bodies = payload.get("bodies");
-        if (bodies == null || !bodies.isArray()) {
-            return List.of();
+    /** 422 {@code SF-DOM-0123}: an abstract page template is a layout for other templates, never for pages (M20). */
+    private static void requireConcrete(Template template) {
+        if (template.abstractTemplate()) {
+            throw new SfException(ProblemFactory.other(
+                    422, "SF-DOM-0123", "Validation Failed",
+                    "Template '" + template.view().uid() + "' is abstract: it is a layout for other templates and can't be"
+                            + " used by pages. Choose a template that extends it."));
         }
-        java.util.ArrayList<String> names = new java.util.ArrayList<>();
-        bodies.forEach(b -> {
-            String name = b.path("name").asText();
-            if (!name.isBlank()) {
-                names.add(name);
-            }
-        });
-        return names;
+    }
+
+    /** The bodies of the page template's effective definition, inherited ones first (M20). */
+    private List<String> declaredBodies(long projectId, UUID templateUuid) {
+        return hierarchies.live(projectId).effectiveDefinition(templateUuid)
+                .map(effective -> effective.definition().bodies().stream().map(body -> body.name()).toList())
+                .orElse(List.of());
     }
 
     private Asset requirePage(UUID uuid, long projectId) {
@@ -360,5 +369,5 @@ public class PageServiceImpl implements PageService {
                 version.getChangedAt());
     }
 
-    private record Template(Long id, TemplateRefView view) {}
+    private record Template(Long id, TemplateRefView view, boolean abstractTemplate) {}
 }

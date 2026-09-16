@@ -1,6 +1,6 @@
 ---
 id: M20.1.2
-status: todo
+status: done
 depends: [M20.1.1, M16.1.1]
 epic: m20-template-inheritance
 feature: language
@@ -67,15 +67,15 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] `ParentTemplateLoader` and the chain-aware compile entry point exist. The loader-less `compile`
+- [x] `ParentTemplateLoader` and the chain-aware compile entry point exist. The loader-less `compile`
       behaves as before, and every existing golden test is unchanged.
-- [ ] Unit tests cover 0144 (2- and 3-cycles), 0145 (depth cap + 1), 0147, 0148, SF-CDL-0107, an
+- [x] Unit tests cover 0144 (2- and 3-cycles), 0145 (depth cap + 1), 0147, 0148, SF-CDL-0107, an
       ancestor compile error surfacing once, and editor/body names resolved through the effective
       definition.
-- [ ] The chain hash changes when **any** layer's source changes, and is stable otherwise. Tested,
+- [x] The chain hash changes when **any** layer's source changes, and is stable otherwise. Tested,
       and documented as the key `M16.1.1`'s cache must use for templates with a chain.
-- [ ] The golden runner supports `parents/`, and the five new golden cases pass.
-- [ ] `./gradlew :server:sf-template:test` is green.
+- [x] The golden runner supports `parents/`, and the five new golden cases pass.
+- [x] `./gradlew :server:sf-template:test` is green.
 
 ## Out of scope
 

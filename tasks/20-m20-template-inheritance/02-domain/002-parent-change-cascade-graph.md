@@ -1,6 +1,6 @@
 ---
 id: M20.2.2
-status: todo
+status: done
 depends: [M20.2.1, M16.3.2, M16.3.3]
 epic: m20-template-inheritance
 feature: domain
@@ -53,22 +53,22 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Integration tests:
-  - [ ] A parent save that introduces a collision in a grandchild is rejected (422 listing the
+- [x] Integration tests:
+  - [x] A parent save that introduces a collision in a grandchild is rejected (422 listing the
         grandchild), and nothing is written: no revision is allocated (verify the counter), and
         parent and child are unchanged.
-  - [ ] A parent save that only produces descendant warnings succeeds and returns the warnings.
-  - [ ] A parent editor rename with `renamedFrom` migrates pages of the parent, child and grandchild
+  - [x] A parent save that only produces descendant warnings succeeds and returns the warnings.
+  - [x] A parent editor rename with `renamedFrom` migrates pages of the parent, child and grandchild
         in **one** revision whose `summary.assets` lists every migrated page plus the parent.
-- [ ] A `TEMPLATE` edge is written on save and closed when the parent is removed (or the child
+- [x] A `TEMPLATE` edge is written on save and closed when the parent is removed (or the child
       re-parented), with the revision interval per `M16.3.3`.
-- [ ] `BuildPlanner` test: a change to the root layout in an incremental plan includes every page of
+- [x] `BuildPlanner` test: a change to the root layout in an incremental plan includes every page of
       every descendant, and nothing else.
-- [ ] Usages of an abstract template list its children. Deleting a template that has children is
+- [x] Usages of an abstract template list its children. Deleting a template that has children is
       blocked, with a message naming them.
-- [ ] Exporting only a grandchild template includes child + root as implicit entries, and it
+- [x] Exporting only a grandchild template includes child + root as implicit entries, and it
       imports cleanly into an empty project.
-- [ ] `./gradlew build` is green, and `RevisionInvariantsTest` still holds.
+- [x] `./gradlew build` is green, and `RevisionInvariantsTest` still holds.
 
 ## Out of scope
 

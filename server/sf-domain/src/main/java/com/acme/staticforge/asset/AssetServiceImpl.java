@@ -287,6 +287,18 @@ public class AssetServiceImpl implements AssetService {
             }
         }
         if (!force && isReferencedByLiveAssets(asset)) {
+            List<String> children = asset.getAssetType() == AssetType.PAGE_TEMPLATE ? liveChildTemplates(asset) : List.of();
+            if (!children.isEmpty()) {
+                throw new SfException(Problem.builder()
+                        .type("https://cms.example.com/problems/sf-dom-0120")
+                        .title("Conflict")
+                        .status(409)
+                        .detail("Page template is extended by " + String.join(", ", children)
+                                + ". Change those templates to extend another one first.")
+                        .property("code", "SF-DOM-0120")
+                        .property("children", children)
+                        .build());
+            }
             throw new SfException(ProblemFactory.other(
                     409, "SF-DOM-0120", "Conflict", "Asset is still referenced by other assets."));
         }
@@ -557,6 +569,22 @@ public class AssetServiceImpl implements AssetService {
      * current version is not deleted block deletion. Closed edges (a page that dropped the
      * reference) and self-references never do.
      */
+    /** The uids of the live page templates that extend {@code template} (M20): its open parent edges. */
+    private List<String> liveChildTemplates(Asset template) {
+        List<Long> childIds = assetReferenceRepository.findIncomingOpen(template.getId()).stream()
+                .filter(ref -> ref.getKind() == ReferenceKind.TEMPLATE && "parentTemplateRef".equals(ref.getSourcePath()))
+                .map(AssetReference::getFromAssetId)
+                .distinct()
+                .toList();
+        return assetRepository.findAllById(childIds).stream()
+                .filter(child -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(child.getId())
+                        .map(version -> !version.isDeleted())
+                        .orElse(false))
+                .map(Asset::getUid)
+                .sorted()
+                .toList();
+    }
+
     private boolean isReferencedByLiveAssets(Asset asset) {
         return assetReferenceRepository.findIncomingOpen(asset.getId()).stream()
                 .map(AssetReference::getFromAssetId)

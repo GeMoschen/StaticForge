@@ -3,13 +3,16 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   inject,
   input,
   signal,
   untracked,
 } from '@angular/core';
-import { forkJoin } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RouterLink } from '@angular/router';
+import { catchError, debounceTime, forkJoin, of, Subject, switchMap } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -26,6 +29,20 @@ import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ContentService } from '../content/content.service';
 import { DatasetSchemaEditorComponent } from '../content/dataset-schema-editor.component';
 import { TemplateFolderNodeComponent } from './template-folder-node.component';
+import {
+  childTemplates,
+  descendantProblemsOf,
+  diagnosticsOf,
+  inheritanceBreadcrumb,
+  inheritedGroups,
+  normalizeDescendants,
+  sortDiagnostics,
+  templateInUseOf,
+  type DescendantProblem,
+  type TemplateInUse,
+  type TemplateRef,
+  type UsageLike,
+} from './inheritance.util';
 import {
   DATASETS_ROOT_UID,
   PAGE_TEMPLATES_ROOT_UID,
@@ -54,6 +71,17 @@ interface ChannelTemplateValue {
 
 const NEW_CONTENT_DEFINITION = '';
 
+/** How long channel typing pauses before the source is validated against the template's context (M20.4.1). */
+const OCTL_VALIDATE_DEBOUNCE_MS = 300;
+
+interface OctlValidation {
+  key: string;
+  templateUuid: string;
+  channelKey: string;
+  source: string;
+  contentDefinition: string;
+}
+
 /** What a new dataset starts with: one field, so its first record already has something to fill in. */
 const NEW_DATASET_DEFINITION = `content {
   editor text name { label "Name" required }
@@ -73,9 +101,10 @@ const NEW_DATASET_DEFINITION = `content {
     SfUidRenameComponent,
     TemplateFolderNodeComponent,
     DatasetSchemaEditorComponent,
+    RouterLink,
   ],
   templateUrl: './templates.component.html',
-  styleUrl: './templates.component.scss',
+  styleUrls: ['./templates.component.scss', './templates-inheritance.scss'],
 })
 export class TemplatesComponent {
   readonly projectKey = input.required<string>();
@@ -89,6 +118,7 @@ export class TemplatesComponent {
   private readonly toast = inject(ToastService);
   private readonly api = inject(ApiClient);
   private readonly timeTravel = inject(TimeTravelStore);
+  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly readOnly = this.timeTravel.isTimeTravel;
 
@@ -185,6 +215,26 @@ export class TemplatesComponent {
 
   readonly confirmDelete = signal(false);
 
+  // ---- Inheritance (M20.4.1) ----
+  /** A page template's `abstract` flag as edited: a layout other templates extend, never used by pages. */
+  readonly abstractTemplate = signal(false);
+  /** Diagnostics of the selected channel's source, validated live as that template's channel. */
+  readonly octlDiagnostics = signal<Diagnostic[]>([]);
+  /** Descendants a rejected save would have broken (`422 SF-DOM-0124`). */
+  readonly descendantProblems = signal<DescendantProblem[]>([]);
+  /** Warnings a successful save produced on descendants; dismissible. */
+  readonly descendantWarnings = signal<DescendantProblem[]>([]);
+  /** Pages still using the template when making it abstract was refused (`422 SF-DOM-0122`). */
+  readonly templateInUse = signal<TemplateInUse | null>(null);
+  /** Templates extending the selected one, from its usages. */
+  readonly childTemplates = signal<TemplateRef[]>([]);
+  /** `base › docs_layout › article`: root first, ending at the selected template. */
+  readonly breadcrumb = computed(() => inheritanceBreadcrumb(this.detail()));
+  /** Inherited editors and bodies, grouped by the ancestor declaring them (read-only). */
+  readonly inheritedGroups = computed(() => inheritedGroups(this.detail()));
+
+  private readonly octlValidation = new Subject<OctlValidation>();
+
   readonly channelKeys = computed<string[]>(() => {
     const templates = this.channelTemplatesOf(this.detail());
     return Object.keys(templates ?? {});
@@ -196,6 +246,28 @@ export class TemplatesComponent {
   });
 
   constructor() {
+    // Live OCTL diagnostics: debounced, and a newer keystroke cancels the request still in flight.
+    this.octlValidation
+      .pipe(
+        debounceTime(OCTL_VALIDATE_DEBOUNCE_MS),
+        switchMap((request) =>
+          this.service
+            .validateOctl(request.key, {
+              source: request.source,
+              channelKey: request.channelKey,
+              templateUuid: request.templateUuid,
+              contentDefinition: request.contentDefinition,
+            })
+            .pipe(catchError(() => of(null))),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((response) => {
+        if (response) {
+          this.octlDiagnostics.set(sortDiagnostics(response.diagnostics ?? []) as Diagnostic[]);
+        }
+      });
+
     effect(() => {
       const key = this.projectKey();
       if (!key) {
@@ -431,6 +503,64 @@ export class TemplatesComponent {
 
   onContentDefinitionInput(event: Event): void {
     this.contentDefinition.set((event.target as HTMLTextAreaElement).value);
+    // Unsaved editors change what the channel may use.
+    this.requestOctlValidation();
+  }
+
+  onAbstractChange(event: Event): void {
+    this.abstractTemplate.set((event.target as HTMLInputElement).checked);
+    this.templateInUse.set(null);
+  }
+
+  /** Opens another template of the chain (breadcrumb, "Extended by", a broken descendant). */
+  openTemplate(uuid: string | null | undefined): void {
+    if (uuid) {
+      this.selectedUuid.set(uuid);
+    }
+  }
+
+  dismissDescendantWarnings(): void {
+    this.descendantWarnings.set([]);
+  }
+
+  /** Queues a context-aware validation of the selected channel's current (unsaved) source. */
+  private requestOctlValidation(): void {
+    const key = this.projectKey();
+    const uuid = this.selectedUuid();
+    const channelKey = this.selectedChannel();
+    if (!key || !uuid || !channelKey || this.datasetSelected()) {
+      this.octlDiagnostics.set([]);
+      return;
+    }
+    this.octlValidation.next({
+      key,
+      templateUuid: uuid,
+      channelKey,
+      source: this.channelSource(),
+      contentDefinition: this.contentDefinition(),
+    });
+  }
+
+  /** The descendants a rejected save names, or its compile diagnostics; `true` when the error was one of those. */
+  private showSaveProblems(err: unknown, diagnosticsTarget: (d: Diagnostic[]) => void): boolean {
+    const descendants = descendantProblemsOf(err);
+    if (descendants) {
+      this.descendantProblems.set(descendants);
+      this.toast.show('Not saved: the change would break templates that extend this one — see below.', 'error');
+      return true;
+    }
+    const inUse = templateInUseOf(err);
+    if (inUse) {
+      this.templateInUse.set(inUse);
+      this.toast.show('Not saved: pages still use this template, so it can\'t be abstract.', 'error');
+      return true;
+    }
+    const diagnostics = diagnosticsOf(err) as Diagnostic[];
+    if (diagnostics.length > 0) {
+      diagnosticsTarget(diagnostics);
+      return true;
+    }
+    return false;
   }
 
   validateCdl(): void {
@@ -473,7 +603,7 @@ export class TemplatesComponent {
           category: this.category(),
           deprecated: this.deprecated(),
           channelSources: this.channelSourcesOf(detail),
-          ...(this.isSection() ? {} : { outputPath: this.outputPathOf(detail) }),
+          ...(this.isSection() ? {} : { outputPath: this.outputPathOf(detail), abstract: this.abstractTemplate() }),
         },
         this.etag(detail),
       )
@@ -483,17 +613,22 @@ export class TemplatesComponent {
           this.toast.show('Template saved', 'success');
           this.saving.set(false);
           this.cdlDiagnostics.set([]);
+          this.descendantProblems.set([]);
+          this.templateInUse.set(null);
+          this.descendantWarnings.set(normalizeDescendants(updated.descendantWarnings));
           this.refreshTemplateStore();
+          // Ancestors and inherited editors are derived on save; reload to show them.
+          this.reloadDetail(key, uuid, false);
         },
         error: (err) => {
-          const diagnostics = this.diagnosticsOf(err);
-          if (diagnostics.length > 0) {
+          const shown = this.showSaveProblems(err, (diagnostics) => {
             this.cdlDiagnostics.set(diagnostics);
             this.toast.show(
               'Template has compile errors — see diagnostics below. Removing content used by a channel template will break that channel until it is updated too.',
               'error',
             );
-          } else {
+          });
+          if (!shown) {
             this.toast.show('Could not save template — someone may have edited it, try reloading.', 'error');
           }
           this.saving.set(false);
@@ -512,21 +647,16 @@ export class TemplatesComponent {
     this.refreshTemplateStore();
   }
 
-  private diagnosticsOf(err: unknown): Diagnostic[] {
-    if (!(err instanceof HttpErrorResponse)) {
-      return [];
-    }
-    const body = err.error as { diagnostics?: Diagnostic[] } | null;
-    return Array.isArray(body?.diagnostics) ? body.diagnostics : [];
-  }
-
   selectChannel(channelKey: string): void {
     this.selectedChannel.set(channelKey);
     this.channelSource.set(this.readChannelSource(channelKey));
+    this.octlDiagnostics.set([]);
+    this.requestOctlValidation();
   }
 
   onChannelInput(event: Event): void {
     this.channelSource.set((event.target as HTMLTextAreaElement).value);
+    this.requestOctlValidation();
   }
 
   onAddChannel(event: Event): void {
@@ -579,13 +709,21 @@ export class TemplatesComponent {
         this.etag(detail),
       )
       .subscribe({
-        next: () => {
+        next: (saved) => {
           this.toast.show(`Channel ${channel} saved`, 'success');
           this.channelSaving.set(false);
-          this.reloadDetail(key, uuid);
+          this.descendantProblems.set([]);
+          this.descendantWarnings.set(normalizeDescendants(saved?.descendantWarnings));
+          this.reloadDetail(key, uuid, false);
         },
-        error: () => {
-          this.toast.show(`Could not save channel ${channel} — check the OCTL source compiles.`, 'error');
+        error: (err) => {
+          const shown = this.showSaveProblems(err, (diagnostics) => {
+            this.octlDiagnostics.set(sortDiagnostics(diagnostics) as Diagnostic[]);
+            this.toast.show(`Channel ${channel} has compile errors — see diagnostics below.`, 'error');
+          });
+          if (!shown) {
+            this.toast.show(`Could not save channel ${channel} — check the OCTL source compiles.`, 'error');
+          }
           this.channelSaving.set(false);
         },
       });
@@ -610,8 +748,10 @@ export class TemplatesComponent {
           this.channelSource.set('');
           this.reloadDetail(key, uuid);
         },
-        error: () => {
-          this.toast.show(`Could not remove channel ${channel} — try again in a moment.`, 'error');
+        error: (err) => {
+          if (!this.showSaveProblems(err, () => undefined)) {
+            this.toast.show(`Could not remove channel ${channel} — try again in a moment.`, 'error');
+          }
           this.channelSaving.set(false);
         },
       });
@@ -643,8 +783,9 @@ export class TemplatesComponent {
         this.reloadList(key);
         this.refreshTemplateStore();
       },
-      error: () => {
-        this.toast.show('Could not delete template — it may still be in use by a page.', 'error');
+      error: (err) => {
+        const detail = err instanceof HttpErrorResponse ? (err.error as { detail?: string } | null)?.detail : undefined;
+        this.toast.show(detail ?? 'Could not delete template — it may still be in use by a page.', 'error');
         this.confirmDelete.set(false);
       },
     });
@@ -739,15 +880,24 @@ export class TemplatesComponent {
     });
   }
 
-  private reloadDetail(key: string, uuid: string): void {
+  /** @param resetOutcomes whether to clear the last save's descendant outcomes (not when reloading after that save) */
+  private reloadDetail(key: string, uuid: string, resetOutcomes = true): void {
     this.service.get(this.kind(), key, uuid).subscribe({
       next: (detail) => {
         this.detail.set(detail);
         this.displayName.set(detail.displayName ?? '');
         this.category.set(detail.category ?? '');
         this.deprecated.set(detail.deprecated ?? false);
+        this.abstractTemplate.set(detail.abstract ?? false);
         this.contentDefinition.set(detail.contentDefinition ?? '');
         this.cdlDiagnostics.set([]);
+        this.octlDiagnostics.set([]);
+        this.templateInUse.set(null);
+        if (resetOutcomes) {
+          this.descendantProblems.set([]);
+          this.descendantWarnings.set([]);
+        }
+        this.reloadChildTemplates(key, detail);
         const keys = this.channelKeys();
         const selected = this.selectedChannel();
         if (selected && keys.includes(selected)) {
@@ -759,8 +909,26 @@ export class TemplatesComponent {
           this.selectedChannel.set('');
           this.channelSource.set('');
         }
+        this.requestOctlValidation();
       },
       error: () => this.toast.show('Could not load template — check your connection and try again.', 'error'),
+    });
+  }
+
+  /** "Extended by": a page template's usages recorded from its children's `parentTemplateRef`. */
+  private reloadChildTemplates(key: string, detail: TemplateDetail): void {
+    this.childTemplates.set([]);
+    if (detail.assetType !== 'PAGE_TEMPLATE' || !detail.uuid) {
+      return;
+    }
+    const uuid = detail.uuid;
+    this.api.assetUsages(key, uuid).subscribe({
+      next: (usages) => {
+        if (this.detail()?.uuid === uuid) {
+          this.childTemplates.set(childTemplates(usages as UsageLike[]));
+        }
+      },
+      error: () => this.childTemplates.set([]),
     });
   }
 
@@ -783,6 +951,8 @@ export class TemplatesComponent {
       // next full reload even though it was never actually moved.
       folderPath: detail.folderPath,
       revision: detail.revision,
+      abstract: detail.abstract,
+      parentTemplateRef: detail.parentTemplateRef,
     };
   }
 }

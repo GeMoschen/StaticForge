@@ -1,0 +1,2 @@
+$CMS_EXTENDS(page_template:base)$
+$CMS_BLOCK(sidebar)$<aside class="wide">$CMS_PARENT$</aside>$CMS_END_BLOCK$

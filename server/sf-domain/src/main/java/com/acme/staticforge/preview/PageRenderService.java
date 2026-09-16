@@ -20,6 +20,8 @@ import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
 import com.acme.staticforge.asset.navigation.NavigationService;
 import com.acme.staticforge.asset.navigation.NavigationTreeJson;
 import com.acme.staticforge.asset.template.CompiledTemplateCache;
+import com.acme.staticforge.asset.template.TemplateHierarchies;
+import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.Project;
@@ -77,6 +79,7 @@ public class PageRenderService {
     private final CompiledTemplateCache compiledTemplates;
     private final BlobStore blobStore;
     private final TextMediaCompiler textMediaCompiler;
+    private final TemplateHierarchies templateHierarchies;
 
     private final Renderer renderer = new OctlRenderer();
     private final TextMediaRenderer textMediaRenderer = new TextMediaRenderer();
@@ -93,7 +96,8 @@ public class PageRenderService {
             UrlRegistryService urlRegistryService,
             CompiledTemplateCache compiledTemplates,
             BlobStore blobStore,
-            TextMediaCompiler textMediaCompiler) {
+            TextMediaCompiler textMediaCompiler,
+            TemplateHierarchies templateHierarchies) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
@@ -106,6 +110,7 @@ public class PageRenderService {
         this.compiledTemplates = compiledTemplates;
         this.blobStore = blobStore;
         this.textMediaCompiler = textMediaCompiler;
+        this.templateHierarchies = templateHierarchies;
     }
 
     /**
@@ -249,7 +254,7 @@ public class PageRenderService {
             String baseUrl,
             Long revision) {
         AssetVersionView pageTemplate = templateAt(projectId, page.pageTemplateUuid(), revision);
-        CompiledTemplate compiled = compileChannel(pageTemplate, channel, projectId);
+        CompiledTemplate compiled = compilePageTemplateChannel(pageTemplate, channel, projectId, revision);
         if (compiled == null) {
             return ""; // missing channel template degrades gracefully to an empty body
         }
@@ -293,6 +298,37 @@ public class PageRenderService {
         return assetService
                 .findAt(projectId, templateUuid, revision)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Template not found at revision " + revision + ".")));
+    }
+
+    /**
+     * A page template's channel, compiled against its inheritance chain as of {@code revision} (M20): the
+     * ancestors are the versions valid then, so time travel renders the layout the page had.
+     */
+    private CompiledTemplate compilePageTemplateChannel(AssetVersionView template, String channel, long projectId, Long revision) {
+        JsonNode templatePayload = template.payload();
+        if (templatePayload == null) {
+            return null;
+        }
+        JsonNode channelNode = templatePayload.path("channelTemplates").path(channel);
+        if (channelNode.isMissingNode() || channelNode.isNull()) {
+            return null;
+        }
+        TemplateHierarchy hierarchy = templateHierarchies.at(projectId, revision);
+        TemplateHierarchy.TemplateVersion version = hierarchy.version(template.uuid())
+                .filter(found -> found.versionKey() == template.validFromRevision())
+                .orElse(null);
+        return compiledTemplates
+                .compile(
+                        projectId,
+                        template.uuid(),
+                        template.validFromRevision(),
+                        channel,
+                        templatePayload.path("contentDefinition").asText(""),
+                        channelNode.path("source").asText(),
+                        referenceResolver(projectId),
+                        version == null ? null : hierarchy,
+                        version)
+                .template();
     }
 
     /**

@@ -53,7 +53,29 @@
         <div class="detail__head">
           <div>
             <h3>{{ d.displayName ?? d.uid }}</h3>
-            <div class="detail__meta">{{ d.uid ?? '' }} · rev {{ d.revision ?? '' }}</div>
+            <div class="detail__meta">{{ d.uid ?? '' }} · rev {{ d.revision ?? '' }}@if (d.abstract) { · abstract }</div>
+            @if (breadcrumb().length > 0) {
+              <nav class="inheritance__chain" aria-label="Inheritance chain">
+                @for (item of breadcrumb(); track item.uuid; let last = $last) {
+                  @if (item.current) {
+                    <span class="inheritance__crumb inheritance__crumb--current" aria-current="page">{{ item.uid }}</span>
+                  } @else {
+                    <button type="button" class="inheritance__crumb" (click)="openTemplate(item.uuid)">{{ item.uid }}</button>
+                  }
+                  @if (!last) {
+                    <span class="inheritance__sep" aria-hidden="true">›</span>
+                  }
+                }
+              </nav>
+            }
+            @if (childTemplates().length > 0) {
+              <div class="inheritance__children">
+                Extended by:
+                @for (child of childTemplates(); track child.uuid; let last = $last) {
+                  <button type="button" class="inheritance__crumb" (click)="openTemplate(child.uuid)">{{ child.uid }}</button>@if (!last) {<span>, </span>}
+                }
+              </div>
+            }
           </div>
           <div class="actions">
             <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete()">Delete</sf-button>
@@ -85,8 +107,32 @@
                 />
                 Deprecated
               </label>
+            } @else {
+              <label title="A layout other page templates extend. Pages can't use an abstract template.">
+                <input
+                  type="checkbox"
+                  [checked]="abstractTemplate()"
+                  [disabled]="readOnly()"
+                  (change)="onAbstractChange($event)"
+                />
+                Abstract
+              </label>
             }
           </div>
+          @if (templateInUse(); as inUse) {
+            <div class="inheritance__notice inheritance__notice--error" role="alert">
+              {{ inUse.pageCount }} {{ inUse.pageCount === 1 ? 'page uses' : 'pages use' }} this template, so it can't be made
+              abstract. Move {{ inUse.pageCount === 1 ? 'it' : 'them' }} to another template first:
+              @for (uid of inUse.pageUids; track uid; let i = $index; let last = $last) {
+                @if (inUse.pageUuids[i]; as pageUuid) {
+                  <a [routerLink]="['/p', projectKey(), 'pages', pageUuid]">{{ uid }}</a>
+                } @else {
+                  <span>{{ uid }}</span>
+                }@if (!last) {<span>, </span>}
+              }
+              @if (inUse.pageCount > inUse.pageUids.length) { <span>…</span> }
+            </div>
+          }
           <sf-uid-rename
             [projectKey]="projectKey()"
             [uuid]="d.uuid ?? ''"
@@ -95,7 +141,65 @@
           />
         </div>
 
+        @if (descendantProblems().length > 0) {
+          <div class="inheritance__notice inheritance__notice--error" role="alert">
+            <p>Not saved: this change would break {{ descendantProblems().length === 1 ? 'a template that extends' : 'templates that extend' }} this one.</p>
+            @for (problem of descendantProblems(); track $index) {
+              <div class="inheritance__descendant">
+                <button type="button" class="inheritance__crumb" (click)="openTemplate(problem.uuid)">{{ problem.uid }}</button>
+                <span class="detail__meta inheritance__where">{{ problem.channel ? 'channel ' + problem.channel : 'content definition' }}</span>
+                @for (diag of problem.diagnostics; track $index) {
+                  <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+                    {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+        @if (descendantWarnings().length > 0) {
+          <div class="inheritance__notice" role="status">
+            <div class="inheritance__notice-head">
+              <p>Saved. Templates that extend this one have warnings:</p>
+              <sf-button variant="ghost" (click)="dismissDescendantWarnings()">Dismiss</sf-button>
+            </div>
+            @for (warning of descendantWarnings(); track $index) {
+              <div class="inheritance__descendant">
+                <button type="button" class="inheritance__crumb" (click)="openTemplate(warning.uuid)">{{ warning.uid }}</button>
+                <span class="detail__meta inheritance__where">{{ warning.channel ? 'channel ' + warning.channel : 'content definition' }}</span>
+                @for (diag of warning.diagnostics; track $index) {
+                  <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+                    {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
         <div class="panel">
+          @if (inheritedGroups().length > 0) {
+            <section class="inheritance__inherited" aria-label="Inherited editors and bodies">
+              <h4>Inherited (read-only — edit them on the template that declares them)</h4>
+              @for (group of inheritedGroups(); track group.uid) {
+                <div class="inheritance__group">
+                  <span class="inheritance__from">from
+                    @if (group.uuid) {
+                      <button type="button" class="inheritance__crumb" (click)="openTemplate(group.uuid)">{{ group.uid }}</button>
+                    } @else {
+                      <span>{{ group.uid }}</span>
+                    }
+                  </span>
+                  @if (group.editors.length > 0) {
+                    <span>Editors: <code>{{ group.editors.join(', ') }}</code></span>
+                  }
+                  @if (group.bodies.length > 0) {
+                    <span>Bodies: <code>{{ group.bodies.join(', ') }}</code></span>
+                  }
+                </div>
+              }
+            </section>
+          }
           <sf-field
             label="Content definition (CDL)"
             hint="Declares the editors this template exposes."
@@ -143,7 +247,15 @@
                 [value]="channelSource()"
                 (input)="onChannelInput($event)"
                 spellcheck="false"
+                aria-describedby="octl-diagnostics"
               ></textarea>
+              <div id="octl-diagnostics" class="diagnostics" aria-live="polite">
+                @for (diag of octlDiagnostics(); track $index) {
+                  <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+                    {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
+                  </div>
+                }
+              </div>
               <div class="actions">
                 <sf-button
                   variant="primary"

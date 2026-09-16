@@ -1,0 +1,3 @@
+$CMS_EXTENDS(page_template:docs_layout)$
+$CMS_SET(crumb = "Articles")$
+$CMS_BLOCK(content)$<article>$CMS_PARENT$<em>$CMS_VALUE(section)$ / $CMS_VALUE(crumb)$</em></article>$CMS_END_BLOCK$

@@ -20,6 +20,7 @@ import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.template.content.ContentDefinition;
+import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.render.RenderLimitException;
@@ -137,7 +138,7 @@ public class RenderPipeline {
             if (template == null) {
                 continue;
             }
-            ContentDefinition definition = definitionOf(memo, template);
+            ContentDefinition definition = definitionOf(memo, template, snapshot);
             List<ContentIssue> blocking = contentValidator.validatePage(definition, page.payload(), sections).stream()
                     .filter(issue -> issue.kind() == ContentIssue.Kind.COMPLETENESS)
                     .filter(issue -> issue.severity() == Severity.ERROR)
@@ -163,14 +164,23 @@ public class RenderPipeline {
             try {
                 return Optional.ofNullable(snapshot.assetByUuid(UUID.fromString(ref)))
                         .filter(asset -> asset.type() == AssetType.SECTION_TEMPLATE && !asset.deleted())
-                        .map(asset -> new SectionTemplate(asset.uid(), definitionOf(memo, asset)));
+                        .map(asset -> new SectionTemplate(asset.uid(), definitionOf(memo, asset, snapshot)));
             } catch (IllegalArgumentException e) {
                 return Optional.empty();
             }
         });
     }
 
-    private static ContentDefinition definitionOf(TemplateCompileMemo memo, SnapshotAsset template) {
+    /** A section template's own definition; a page template's effective one, own and inherited (M20). */
+    private static ContentDefinition definitionOf(TemplateCompileMemo memo, SnapshotAsset template, Snapshot snapshot) {
+        if (template.type() == AssetType.PAGE_TEMPLATE) {
+            Optional<ContentDefinition> effective = SnapshotTemplateHierarchy.of(snapshot, memo)
+                    .effectiveDefinition(template.uuid())
+                    .map(EffectiveDefinition::definition);
+            if (effective.isPresent()) {
+                return effective.get();
+            }
+        }
         return memo.definition(template.uuid(), template.payload().path("contentDefinition").asText(""));
     }
 

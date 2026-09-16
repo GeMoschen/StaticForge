@@ -1,6 +1,6 @@
 ---
 id: M20.5.1
-status: todo
+status: done
 depends: [M20.4.1]
 epic: m20-template-inheritance
 feature: docs-e2e
@@ -45,13 +45,13 @@ area: qa
 
 ## Acceptance criteria
 
-- [ ] Guide, spec and user guide updated. Every code in `DiagnosticCodes` added by M20 appears in the
+- [x] Guide, spec and user guide updated. Every code in `DiagnosticCodes` added by M20 appears in the
       catalogue with severity and meaning.
-- [ ] `m20-journeys.spec.ts` covers steps 1–6 and collects (`npx playwright test --list`).
-- [ ] The journey was run against a live dev backend and passed. If it couldn't run in this
+- [x] `m20-journeys.spec.ts` covers steps 1–6 and collects (`npx playwright test --list`).
+- [x] The journey was run against a live dev backend and passed. If it couldn't run in this
       environment, the reason and the manual verification steps performed instead are recorded here
       (as `M15.6.1` did).
-- [ ] The M20 epic README exit criteria are ticked, with evidence.
+- [x] The M20 epic README exit criteria are ticked, with evidence.
 
 ## Out of scope
 

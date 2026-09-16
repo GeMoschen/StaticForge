@@ -12,7 +12,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Function;
+import java.util.Map;
+import java.util.function.BiFunction;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -41,6 +42,11 @@ import org.springframework.stereotype.Component;
  *       than lex + parse + validate, and a stale mapping can never be served. {@code projectId} is
  *       part of every key: UUIDs are only unique per project, and resolution is project-scoped.
  * </ul>
+ *
+ * <p>A page template that extends (M20) also depends on its ancestors' versions. Its entry records every page
+ * template the chain compile looked up in the caller's {@link TemplateHierarchy} with the version it found; a hit
+ * re-checks them the way it re-checks references, so a parent edit or a time-travel request for an older parent
+ * never serves a stale layout. That is the chain-hash contract of {@code OctlCompiler}, checked without compiling.
  *
  * <p>Size ({@code sf.cache.compiled-templates.max-size}, default 2000) and idle expiry
  * ({@code sf.cache.compiled-templates.idle}, default 30m) bound the cross-request tier. Two
@@ -78,14 +84,13 @@ public class CompiledTemplateCache {
         return buildMemos.get(Objects.requireNonNull(build, "build"), b -> new TemplateCompileMemo(compiler));
     }
 
-    /**
-     * Cross-request compile of one template version's channel (see the class Javadoc for the
-     * validation strategy).
-     *
-     * @param templateValidFromRevision the {@code validFromRevision} of the template version whose
-     *     sources are passed
-     * @param resolver the current, project-scoped {@code assetType:uid} resolver
-     */
+    /** The compiled CDL of one template version, cached by {@code (projectId, templateUuid, validFromRevision)}. */
+    public ContentDefinition definition(long projectId, UUID templateUuid, long templateValidFromRevision, String cdlSource) {
+        return definitions.get(
+                new DefinitionKey(projectId, templateUuid, templateValidFromRevision), key -> compiler.definition(cdlSource));
+    }
+
+    /** A section template's channel: no inheritance chain (see the full overload). */
     public CompiledChannel compile(
             long projectId,
             UUID templateUuid,
@@ -94,13 +99,40 @@ public class CompiledTemplateCache {
             String cdlSource,
             String octlSource,
             ReferenceResolver resolver) {
-        ContentDefinition definition = definitions.get(
-                new DefinitionKey(projectId, templateUuid, templateValidFromRevision), key -> compiler.definition(cdlSource));
-        return cached(
-                channels,
-                new ChannelKey(projectId, templateUuid, templateValidFromRevision, channel),
-                resolver,
-                recording -> new CompiledChannel(compiler.channel(octlSource, channel, recording, definition), definition));
+        return compile(projectId, templateUuid, templateValidFromRevision, channel, cdlSource, octlSource, resolver, null, null);
+    }
+
+    /**
+     * Cross-request compile of one template version's channel (see the class Javadoc for the
+     * validation strategy).
+     *
+     * @param templateValidFromRevision the {@code validFromRevision} of the template version whose
+     *     sources are passed
+     * @param resolver the current, project-scoped {@code assetType:uid} resolver
+     * @param hierarchy the page templates as of the request (live, or at its revision) that a page template's chain
+     *     is linked from, or {@code null} for a section template
+     * @param template the page template version itself as {@code hierarchy} sees it, or {@code null}
+     */
+    public CompiledChannel compile(
+            long projectId,
+            UUID templateUuid,
+            long templateValidFromRevision,
+            String channel,
+            String cdlSource,
+            String octlSource,
+            ReferenceResolver resolver,
+            TemplateHierarchy hierarchy,
+            TemplateHierarchy.TemplateVersion template) {
+        ContentDefinition definition = definition(projectId, templateUuid, templateValidFromRevision, cdlSource);
+        ChannelKey key = new ChannelKey(projectId, templateUuid, templateValidFromRevision, channel);
+        if (hierarchy == null || template == null) {
+            return cached(channels, key, resolver, null, (recording, lookups) ->
+                    new CompiledChannel(compiler.channel(octlSource, channel, recording, definition), definition));
+        }
+        return cached(channels, key, resolver, hierarchy, (recording, lookups) -> new CompiledChannel(
+                compiler.chain(lookups, templateUuid, template.uid(), octlSource, channel, recording, definition,
+                        template.parentTemplateRef(), null),
+                definition));
     }
 
     /**
@@ -120,19 +152,25 @@ public class CompiledTemplateCache {
                 textMedia,
                 new ChannelKey(projectId, mediaUuid, mediaValidFromRevision, channel),
                 resolver,
-                recording -> compiler.textMedia(source, channel, recording, scriptLike));
+                null,
+                (recording, lookups) -> compiler.textMedia(source, channel, recording, scriptLike));
     }
 
     private static <T> T cached(
-            Cache<ChannelKey, Entry<T>> cache, ChannelKey key, ReferenceResolver resolver,
-            Function<ReferenceResolver, T> compile) {
+            Cache<ChannelKey, Entry<T>> cache, ChannelKey key, ReferenceResolver resolver, TemplateHierarchy hierarchy,
+            BiFunction<ReferenceResolver, TemplateHierarchy, T> compile) {
         Entry<T> cached = cache.getIfPresent(key);
-        if (cached != null && cached.stillResolves(resolver)) {
+        if (cached != null && cached.stillResolves(resolver) && (hierarchy == null || hierarchy.matches(cached.templates))) {
             return cached.compiled;
         }
         RecordingResolver recording = resolver == null ? null : new RecordingResolver(resolver);
-        T compiled = compile.apply(recording);
-        Entry<T> fresh = new Entry<>(compiled, recording == null ? List.of() : List.copyOf(recording.resolutions));
+        // A fresh view records exactly the page templates this compile looks up.
+        TemplateHierarchy lookups = hierarchy == null ? null : hierarchy.fresh();
+        T compiled = compile.apply(recording, lookups);
+        Entry<T> fresh = new Entry<>(
+                compiled,
+                recording == null ? List.of() : List.copyOf(recording.resolutions),
+                lookups == null ? Map.of() : lookups.lookups());
         cache.put(key, fresh);
         return fresh.compiled;
     }
@@ -144,7 +182,8 @@ public class CompiledTemplateCache {
     /** One {@code assetType:uid} lookup the compiler made, and its answer ({@code null} = unresolvable). */
     private record Resolution(String assetType, String uid, UUID uuid) {}
 
-    private record Entry<T>(T compiled, List<Resolution> resolutions) {
+    /** @param templates every page template a chain compile looked up → the version key it found */
+    private record Entry<T>(T compiled, List<Resolution> resolutions, Map<UUID, Long> templates) {
 
         boolean stillResolves(ReferenceResolver resolver) {
             if (resolver == null) {

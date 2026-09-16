@@ -15,6 +15,7 @@ import com.acme.staticforge.asset.navigation.NavigationServiceImpl;
 import com.acme.staticforge.asset.navigation.NavigationTreeJson;
 import com.acme.staticforge.asset.template.CompiledChannel;
 import com.acme.staticforge.asset.template.TemplateCompileMemo;
+import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
@@ -302,9 +303,23 @@ final class GenerationRenderer {
         return compile(template, channel).template();
     }
 
-    /** Compiles through the build memo: once per (template, channel) for the whole build. */
+    /**
+     * Compiles through the build memo: once per (template, channel) for the whole build. A page template compiles
+     * against its inheritance chain in the snapshot (M20).
+     */
     private CompiledChannel compile(SnapshotAsset template, String channel) {
         JsonNode payload = template.payload();
+        if (template.type() == AssetType.PAGE_TEMPLATE) {
+            return compiledTemplates.compilePageTemplate(
+                    template.uuid(),
+                    template.uid(),
+                    channel,
+                    payload.path("contentDefinition").asText(""),
+                    payload.path("channelTemplates").path(channel).path("source").asText(),
+                    referenceResolver(),
+                    SnapshotTemplateHierarchy.of(snapshot, compiledTemplates),
+                    TemplateHierarchy.TemplateVersion.parentTemplateRef(payload));
+        }
         return compiledTemplates.compile(
                 template.uuid(),
                 channel,

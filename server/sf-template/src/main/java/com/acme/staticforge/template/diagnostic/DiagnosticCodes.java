@@ -26,6 +26,34 @@ public final class DiagnosticCodes {
     /** A dataset loop sorts by an editor with no natural order (list, richtext, reference, …) (M19.3.1). */
     public static final String OCTL_DATASET_UNSORTABLE_FIELD = "SF-TPL-0142";
 
+    // OCTL template inheritance (M20). The epic proposed 0140–0149, which M19 had already taken.
+    /** {@code $CMS_EXTENDS} is not the template's first instruction, is nested, or appears more than once. */
+    public static final String OCTL_EXTENDS_POSITION = "SF-TPL-0150";
+    /** A template that extends has text or an instruction other than a block, {@code $CMS_SET} or a comment outside its top-level blocks. */
+    public static final String OCTL_CONTENT_OUTSIDE_BLOCK = "SF-TPL-0151";
+    /** A block name is not an identifier, or is declared twice in one template (nested blocks included). */
+    public static final String OCTL_BLOCK_NAME = "SF-TPL-0152";
+    /** {@code $CMS_PARENT$} outside a block, in a template that does not extend, or with arguments. */
+    public static final String OCTL_PARENT_MISUSE = "SF-TPL-0153";
+    /** The {@code $CMS_EXTENDS} chain returns to a template already in it. */
+    public static final String OCTL_INHERITANCE_CYCLE = "SF-TPL-0154";
+    /** The {@code $CMS_EXTENDS} chain is deeper than {@code OctlCompiler.MAX_INHERITANCE_DEPTH}. */
+    public static final String OCTL_INHERITANCE_DEPTH = "SF-TPL-0155";
+    /** {@code $CMS_EXTENDS} names something other than a {@code page_template:uid}, or is used in a section template. */
+    public static final String OCTL_EXTENDS_TARGET = "SF-TPL-0156";
+    /** Warning: a template overrides a block that no ancestor defines (usually a typo). */
+    public static final String OCTL_UNKNOWN_BLOCK_OVERRIDE = "SF-TPL-0157";
+    /** An ancestor has no template for the channel being compiled. */
+    public static final String OCTL_ANCESTOR_MISSING_CHANNEL = "SF-TPL-0158";
+    /** A page template's channels extend different parents. */
+    public static final String OCTL_CHANNELS_EXTEND_DIFFERENT_PARENTS = "SF-TPL-0159";
+    /** An ancestor's own source has compile errors (reported once on the descendant). */
+    public static final String OCTL_ANCESTOR_INVALID = "SF-TPL-0160";
+    /** The parent can't be loaded here: no loader in this context, or it is not a live page template. */
+    public static final String OCTL_PARENT_UNAVAILABLE = "SF-TPL-0161";
+    /** A block contains itself, through nested blocks or overrides along the chain. */
+    public static final String OCTL_BLOCK_RECURSION = "SF-TPL-0162";
+
     // OCTL render limits (§16.10) — carried by RenderLimitException, fail only the affected file
     public static final String OCTL_INCLUDE_DEPTH = "SF-TPL-0130";
     public static final String OCTL_LOOP_LIMIT = "SF-TPL-0131";
@@ -56,5 +84,7 @@ public final class DiagnosticCodes {
     public static final String CDL_NOT_ALLOWED_IN_GLOBAL_SET = "SF-CDL-0107";
     /** A dataset schema declares bodies: records have values only, no sections (M19.1.2). */
     public static final String CDL_NOT_ALLOWED_IN_DATASET = "SF-CDL-0108";
+    /** A template's own editor or body name collides with one it inherits from an ancestor (M20). */
+    public static final String CDL_INHERITED_NAME_COLLISION = "SF-CDL-0109";
     public static final String CDL_SYNTAX = "SF-CDL-0200";
 }

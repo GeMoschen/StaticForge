@@ -13,6 +13,7 @@ import com.acme.staticforge.asset.template.TemplateView;
 import com.acme.staticforge.asset.template.UpdateTemplateCommand;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.security.SecuritySupport;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,8 +36,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectKey}/page-templates")
 public class PageTemplateController extends AbstractTemplateController {
 
-    public PageTemplateController(ProjectService projectService, TemplateService templateService, SecuritySupport securitySupport) {
-        super(projectService, templateService, securitySupport);
+    public PageTemplateController(
+            ProjectService projectService, TemplateService templateService, SecuritySupport securitySupport,
+            ObjectMapper objectMapper) {
+        super(projectService, templateService, securitySupport, objectMapper);
     }
 
     @GetMapping
@@ -63,7 +66,8 @@ public class PageTemplateController extends AbstractTemplateController {
                         body.category(),
                         Boolean.TRUE.equals(body.deprecated()),
                         body.outputPath(),
-                        body.parentFolderUuid()),
+                        body.parentFolderUuid(),
+                        Boolean.TRUE.equals(body.abstractTemplate())),
                 ctx(projectKey, "create page template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
@@ -94,7 +98,8 @@ public class PageTemplateController extends AbstractTemplateController {
                         body.channelSources(),
                         body.category(),
                         Boolean.TRUE.equals(body.deprecated()),
-                        body.outputPath()),
+                        body.outputPath(),
+                        Boolean.TRUE.equals(body.abstractTemplate())),
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, "update page template"));
         return ResponseEntity.ok()
@@ -121,7 +126,7 @@ public class PageTemplateController extends AbstractTemplateController {
                 uuid, channelKey, body.source(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "set channel template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toChannel(channelKey, view.payload().path("channelTemplates").path(channelKey)));
+                .body(toChannel(channelKey, view));
     }
 
     @DeleteMapping("/{uuid}/channels/{channelKey}")

@@ -36,6 +36,11 @@ import org.junit.jupiter.api.Test;
  * {@code {uuid, records: [{uuid, uid, displayName, folderPath, changedAt, content}]}}. Each dataset
  * resolves as {@code dataset:<uid>} and lists its records to loops; each record resolves as
  * {@code record:<uid>} and reads as its loop item, also when reached by dereferencing a reference.
+ *
+ * <p>An optional {@code parents/} folder holds the ancestors of a template that extends (M20): each
+ * {@code parents/<uid>.octl} (with an optional {@code parents/<uid>.cdl}) is a page template that resolves as
+ * {@code page_template:<uid>}, and the case compiles through the chain. An optional {@code template.cdl} is the
+ * case template's own definition.
  */
 class GoldenFileRenderTest {
 
@@ -79,7 +84,7 @@ class GoldenFileRenderTest {
                     ? null
                     : (assetType, uid) -> Optional.ofNullable(uuids.get(assetType + ":" + uid));
 
-            OctlResult result = compiler.compile(octl, "html", references);
+            OctlResult result = GoldenFileRenderTest.compile(compiler, dir, octl, "html", references);
             List<com.acme.staticforge.template.diagnostic.Diagnostic> errors =
                     result.diagnostics().stream()
                             .filter(d -> d.severity() == Severity.ERROR)
@@ -107,6 +112,40 @@ class GoldenFileRenderTest {
                     .as("case %s\n--- actual ---\n%s\n--- expected ---\n%s", dir.getFileName(), actual, expected)
                     .isEqualTo(normalize(expected));
         }
+    }
+
+    /**
+     * Compiles a case: through its chain when it has a {@code parents/} folder (M20), otherwise exactly as
+     * before. Parent UUIDs derive from their uid.
+     */
+    static OctlResult compile(OctlCompiler compiler, Path dir, String octl, String channel, ReferenceResolver references)
+            throws java.io.IOException {
+        Path parents = dir.resolve("parents");
+        com.acme.staticforge.template.cdl.CdlCompiler cdl = new com.acme.staticforge.template.cdl.CdlCompiler();
+        com.acme.staticforge.template.content.ContentDefinition own = Files.exists(dir.resolve("template.cdl"))
+                ? cdl.compile(read(dir.resolve("template.cdl"))).definition()
+                : null;
+        if (!Files.isDirectory(parents)) {
+            return compiler.compile(octl, channel, references, own);
+        }
+        Map<UUID, com.acme.staticforge.template.octl.ParentSource> byUuid = new HashMap<>();
+        Map<String, UUID> byUid = new HashMap<>();
+        try (Stream<Path> files = Files.list(parents)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".octl")).toList()) {
+                String uid = file.getFileName().toString().replace(".octl", "");
+                UUID uuid = UUID.nameUUIDFromBytes(("page_template:" + uid).getBytes());
+                Path cdlFile = parents.resolve(uid + ".cdl");
+                byUid.put(uid, uuid);
+                byUuid.put(uuid, new com.acme.staticforge.template.octl.ParentSource(
+                        uuid, uid, read(file), Files.exists(cdlFile) ? cdl.compile(read(cdlFile)).definition() : null));
+            }
+        }
+        ReferenceResolver chainReferences = (assetType, uid) -> "page_template".equals(assetType)
+                ? Optional.ofNullable(byUid.get(uid))
+                : references == null ? Optional.empty() : references.resolve(assetType, uid);
+        return compiler.compile(
+                octl, channel, chainReferences, (uuid, ch) -> Optional.ofNullable(byUuid.get(uuid)),
+                own == null ? new com.acme.staticforge.template.content.ContentDefinition(null, null) : own);
     }
 
     /** Registers each dataset and record of a {@code records.json} fixture with the stub resolvers. */

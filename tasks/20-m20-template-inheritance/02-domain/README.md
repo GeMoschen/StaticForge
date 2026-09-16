@@ -26,12 +26,12 @@ Make inheritance a first-class property of page-template assets:
 
 ## Feature exit criteria
 
-- [ ] Abstract templates are enforced in `PageServiceImpl` and `TemplateServiceImpl`.
-- [ ] `parentTemplateRef` is derived and validated on save. The effective definition is served by the
+- [x] Abstract templates are enforced in `PageServiceImpl` and `TemplateServiceImpl`.
+- [x] `parentTemplateRef` is derived and validated on save. The effective definition is served by the
       template API and used by validation and compile-on-save.
-- [ ] A parent save that breaks a descendant is rejected. `renamedFrom` migrations cover descendants'
+- [x] A parent save that breaks a descendant is rejected. `renamedFrom` migrations cover descendants'
       pages in one revision.
-- [ ] A `TEMPLATE` edge exists child → parent. Planner, usages and export honor it.
+- [x] A `TEMPLATE` edge exists child → parent. Planner, usages and export honor it.
 
 ## Dependencies
 

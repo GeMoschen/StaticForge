@@ -45,6 +45,9 @@ OCTL renders content into a channel. One template per (template asset, channel).
 | `$CMS_SET(name = expr)$` | local variable |
 | `$CMS_META(key)$` | `uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey` |
 | `$CMS_COMMENT$ … $CMS_END_COMMENT$` | not emitted |
+| `$CMS_EXTENDS(page_template:uid)$` | this template extends a layout (page templates, first instruction; see §2.10) |
+| `$CMS_BLOCK(name)$ … $CMS_END_BLOCK$` | a named, overridable region (§2.10) |
+| `$CMS_PARENT$` | inside a block override: the parent's definition of that block (§2.10) |
 | `$$` | literal `$` |
 
 ### 2.2 Filters (§16.3)
@@ -460,6 +463,105 @@ by 500 pages generates in about 2.6 s (full) on the development machine.
 `visibleWhen` attribute has its own, deliberately tiny grammar shared with the editor UI (§14.4) — no
 filters, no `in`, no dates — and the two are not interchangeable.
 
+### 2.10 Layouts and inheritance (M20)
+
+A page template can extend another page template and replace only the regions that differ. Put the
+site chrome (`<html>`, `<head>`, header, footer, navigation) in one **layout** and let every page template
+extend it, instead of copying the skeleton into each.
+
+| Instruction | Where | Meaning |
+|---|---|---|
+| `$CMS_EXTENDS(page_template:uid)$` | the first instruction of a channel source | this channel renders the parent's layout |
+| `$CMS_BLOCK(name)$ … $CMS_END_BLOCK$` | anywhere; top level in a template that extends | a named region: its default content in a layout, a replacement in a template that extends |
+| `$CMS_PARENT$` | inside a block, in a template that extends | the next less-derived definition of the enclosing block |
+
+**How it renders.** Rendering starts at the **root** layout's source. Each `$CMS_BLOCK(name)$` renders the
+most-derived definition of `name` along the chain; inside it, `$CMS_PARENT$` renders the definition one level
+up, and at the root it renders nothing. Blocks are found by name wherever they appear, so overriding an inner
+block works even when the outer block around it isn't overridden, and an override may declare new inner blocks
+for its own descendants. A template with blocks that doesn't extend anything renders each block in place, so a
+layout is still an ordinary template. Chains may be up to 8 templates deep above the page's template
+(`SF-TPL-0155`); a template can't extend itself, directly or through others (`SF-TPL-0154`).
+
+**Rules for a template that extends.**
+
+- `$CMS_EXTENDS` comes first; only whitespace and `$CMS_COMMENT$` may precede it, and it appears once
+  (`SF-TPL-0150`). The target must be a `page_template:` (`SF-TPL-0156`). Section templates can't extend.
+- Outside its top-level blocks it may contain only `$CMS_SET` and `$CMS_COMMENT$` (`SF-TPL-0151`): text there
+  would have no place in the layout.
+- Overriding a block no ancestor defines is a warning with a suggestion (`SF-TPL-0157`); the override never
+  renders.
+- Block names follow the editor naming rule and are unique within a template, nested blocks included
+  (`SF-TPL-0152`). Block names and editor names are separate namespaces.
+- `$CMS_SET` outside blocks sets a variable before the layout renders. The chain's sets run root-most first,
+  so the most-derived template's value wins, and every block definition along the chain sees it. A `$CMS_SET`
+  inside the layout itself runs where it stands, after them.
+
+**Abstract templates.** Tick **Abstract** on a page template that only exists to be extended. Pages can't use
+it (`SF-DOM-0123`), and it isn't offered when creating a page. A template that pages already use can't become
+abstract until they move to another template (`SF-DOM-0122` lists them). Any page template may be extended,
+abstract or not.
+
+**Editors and bodies are inherited.** A template's *effective* content definition is its ancestors' editors
+and bodies followed by its own. The page form, content validation and the editor-name checks all use it, so an
+article's channel source can read `$CMS_VALUE(title)$` that only the layout declares. Declaring an editor or
+body with a name an ancestor already uses is `SF-CDL-0109`. The template screen lists inherited editors
+read-only, grouped by the ancestor that declares them; change them on that ancestor.
+
+**Channels.** Every channel is its own chain: if `article`'s `html` source extends `docs_layout`, then
+`docs_layout` needs an `html` source too (`SF-TPL-0158`). All channels of a template that extend must name the
+same parent (`SF-TPL-0159`), which the template records as `parentTemplateRef` on save. A channel source that
+doesn't extend renders standalone but still uses the inherited editors.
+
+**Changing a layout.** Saving a template recompiles every template that extends it, at any depth, against the
+new version first. If one would break (a new editor name one of them already declares, a removed channel), the
+save is rejected (`SF-DOM-0124`) and names each broken template with its diagnostics; nothing is written.
+Warnings (an override whose block the layout removed) don't block the save and are shown after it. A
+`renamedFrom` on a layout's editor migrates the stored content of the pages of the layout and of every template
+that extends it, in one revision. An incremental build rebuilds every page of every template that extends a
+changed layout. A layout that other templates extend can't be deleted (`SF-DOM-0120` names them), and exporting
+a template brings its ancestors along.
+
+**Worked example.** `base` holds the page frame and a header block reading the inherited `title` editor:
+
+<!-- golden: render/extends-multilevel/parents/base.octl -->
+```html
+<body>$CMS_BLOCK(header)$<h1>$CMS_VALUE(title)$</h1>$CMS_END_BLOCK$
+$CMS_BLOCK(content)$<p>base</p>$CMS_END_BLOCK$</body>
+```
+
+`docs_layout` extends it, sets a child-level variable, adds navigation above the header and wraps the content:
+
+<!-- golden: render/extends-multilevel/parents/docs_layout.octl -->
+```html
+$CMS_EXTENDS(page_template:base)$
+$CMS_SET(crumb = "Guides")$
+$CMS_BLOCK(header)$<nav>$CMS_VALUE(crumb)$</nav>$CMS_PARENT$$CMS_END_BLOCK$
+$CMS_BLOCK(content)$<div class="docs">$CMS_PARENT$</div>$CMS_END_BLOCK$
+```
+
+`article` extends `docs_layout`, overrides the variable and wraps the content once more. It declares no editors
+of its own: `section` comes from `docs_layout` and `title` from `base`.
+
+<!-- golden: render/extends-multilevel/template.octl -->
+```html
+$CMS_EXTENDS(page_template:docs_layout)$
+$CMS_SET(crumb = "Articles")$
+$CMS_BLOCK(content)$<article>$CMS_PARENT$<em>$CMS_VALUE(section)$ / $CMS_VALUE(crumb)$</em></article>$CMS_END_BLOCK$
+```
+
+A page on `article` with `title = "Levels"` and `section = "Intro"` renders:
+
+<!-- golden: render/extends-multilevel/expected.html -->
+```html
+<body><nav>Articles</nav><h1>Levels</h1>
+<article><div class="docs"><p>base</p></div><em>Intro / Articles</em></article></body>
+```
+
+`$CMS_VALUE(crumb)$` in `docs_layout`'s header block prints `Articles`: `article`'s set ran last. The golden
+cases `extends-default-blocks`, `extends-override-parent`, `extends-nested-blocks` and
+`render-md/extends-markdown` show the other rules.
+
 ## Part 3 — Diagnostics
 
 ### 3.1 OCTL (`SF-TPL-*`) — `template.diagnostic.DiagnosticCodes`
@@ -478,6 +580,18 @@ filters, no `in`, no dates — and the two are not interchangeable.
 | `SF-TPL-0141` | error | dataset loop: `where` or `sort` names a field the dataset's schema doesn't declare (checked when the template is saved) |
 | `SF-TPL-0142` | error | dataset loop: `sort` by a field with no order — `list`, `richtext`, `media`, `reference` and other structured editors |
 | `SF-TPL-0134` | error | `$CMS_NAVIGATION_RECURSE(name)$` references a variable not bound by an enclosing `$CMS_NAVIGATION(...) as name$` |
+| `SF-TPL-0150` | error | inheritance (§2.10): `$CMS_EXTENDS` is not the first instruction, is nested in another instruction, or appears twice |
+| `SF-TPL-0151` | error | text or an instruction other than `$CMS_BLOCK`, `$CMS_SET` or `$CMS_COMMENT$` outside the top-level blocks of a template that extends |
+| `SF-TPL-0152` | error | a block name that isn't an identifier, or a block name declared twice in one template (nested blocks included) |
+| `SF-TPL-0153` | error | `$CMS_PARENT$` outside a block, in a template that doesn't extend, or with arguments |
+| `SF-TPL-0154` | error | inheritance cycle; the message lists the chain (`a → b → a`) |
+| `SF-TPL-0155` | error | inheritance chain deeper than 8 templates |
+| `SF-TPL-0156` | error | `$CMS_EXTENDS` names something other than a `page_template:uid`, or is used in a section template |
+| `SF-TPL-0158` | error | an ancestor has no template for the channel being compiled |
+| `SF-TPL-0159` | error | a page template's channels extend different parents |
+| `SF-TPL-0160` | error | an ancestor's own source doesn't compile for this channel; reported once, with the ancestor's uid and its first error |
+| `SF-TPL-0161` | error | the parent can't be loaded: it isn't a live page template, or the source was compiled without templates to load (for example `POST /octl/validate` without `templateUuid`) |
+| `SF-TPL-0162` | error | a block contains itself through nested blocks or overrides along the chain |
 | `SF-TPL-0130` | error (render) | include depth exceeded: more than 32 nested section/include/catalog-card levels below the page template |
 | `SF-TPL-0131` | error (render) | loop iteration limit (100,000) exceeded |
 | `SF-TPL-0132` | error (render) | output size limit (32 MB) exceeded |
@@ -485,11 +599,14 @@ filters, no `in`, no dates — and the two are not interchangeable.
 | `SF-TPL-0135` | error (render) | include cycle: a template is rendered inside itself (`a → b → a`), via `$CMS_INCLUDE`, a body section or a catalog card |
 | `SF-TPL-0111` | warning | cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
 | `SF-TPL-0112` | warning | render time: a cross-asset value's target is missing or soft-deleted (renders empty) |
+| `SF-TPL-0157` | warning | a template overrides a block no ancestor defines, so the override never renders; carries a "did you mean" suggestion |
 | `SF-TPL-0201` | warning | body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | editor declared but never used in any channel template |
 | `SF-TPL-0320` | warning | processed text media: `$$` is output as a single `$` (one per occurrence outside `$CMS_COMMENT$`, with its position) |
 | `SF-TPL-0321` | warning | processed JavaScript/JSON: `$CMS_VALUE` without an escaping filter (`js`, `json`, `attr`, `url`, `html`, `raw`) |
+
+The M20 numbers start at `0150` because `0140`–`0142` were already taken by dataset loops. `SF-TPL-0130` and `0131` are `DiagnosticCodes` constants like every other code.
 
 The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected page in generation (the other pages render and are published, the run ends `PARTIAL`, and the diagnostic names the page) and return a `422` problem with the diagnostic's code in preview. They apply to the **whole page render**: loop iterations, output size and time are counted across the page template and every section, include and catalog card rendered inside it, not per nested template.
 
@@ -505,6 +622,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-CDL-0106` | error | invalid editor name |
 | `SF-CDL-0107` | error | not allowed in a global property set: a `body` declaration or a `catalog` editor (`POST /cdl/validate?kind=GLOBAL_SET` and property-set saves only) |
 | `SF-CDL-0108` | error | not allowed in a dataset schema: a `body` declaration (`POST /cdl/validate?kind=DATASET` and dataset saves only) |
+| `SF-CDL-0109` | error | a page template's own editor or body name is already declared by an ancestor (§2.10); the message names the ancestor |
 | `SF-CDL-0200` | error | CDL syntax error |
 
 ### 3.3 Generation (`SF-GEN-*`) — `generate.GenerationDiagnosticCodes` + `generate.GenerationService`

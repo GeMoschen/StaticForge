@@ -41,6 +41,24 @@ describe('SfCreateAssetDialogComponent', () => {
     expect(screen.queryByText('Target page')).toBeFalsy();
   });
 
+  it('never offers an abstract page template for a new page (M20)', async () => {
+    await render(SfCreateAssetDialogComponent, {
+      componentInputs: {
+        kind: 'PAGE',
+        open: true,
+        projectKey: 'proj',
+        templates: [
+          { uuid: 'tpl-base', displayName: 'Base layout', abstract: true },
+          { uuid: 'tpl-article', displayName: 'Article', abstract: false },
+        ],
+      },
+      providers: [{ provide: ApiClient, useValue: apiStub() }],
+    });
+
+    expect(screen.getByText('Article')).toBeTruthy();
+    expect(screen.queryByText('Base layout')).toBeFalsy();
+  });
+
   it('shows the name, target, and label fields for PAGE_REFERENCE', async () => {
     await render(SfCreateAssetDialogComponent, {
       componentInputs: { kind: 'PAGE_REFERENCE', open: true, projectKey: 'proj' },
