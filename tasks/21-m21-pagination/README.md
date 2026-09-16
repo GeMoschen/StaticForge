@@ -36,28 +36,28 @@ $CMS_IF(CMS_PAGINATION.nextHref)$<a rel="next" href="$CMS_VALUE(CMS_PAGINATION.n
 
 ## Exit criteria (epic is done when)
 
-- [ ] A page template can declare exactly one `editor pagination <name> { … }`. CDL validation
+- [x] A page template can declare exactly one `editor pagination <name> { … }`. CDL validation
       rejects a second one, and rejects it in a section template.
-- [ ] A page whose pagination value points at a navigation folder with `k` eligible items and
+- [x] A page whose pagination value points at a navigation folder with `k` eligible items and
       page size `s` generates `max(1, ceil(k / s))` output files per enabled channel. Page 1 is
       written to the page's **normal** output path (unchanged from today). Pages 2..N go to the
       paths produced by the template's pagination path pattern (`{pageNumber}` placeholder).
-- [ ] The same works for a dataset source once `M19` is done. The navigation source does not
+- [x] The same works for a dataset source once `M19` is done. The navigation source does not
       depend on `M19`.
-- [ ] `$CMS_PAGINATION.items / current / total / pageSize / itemCount / firstHref / prevHref /
+- [x] `$CMS_PAGINATION.items / current / total / pageSize / itemCount / firstHref / prevHref /
       nextHref / lastHref / pages[]$` render correctly on every page. All hrefs are relative to
       the page being rendered (`GenerationRenderer.relativeUrl`, see `tasks/lessons.md`).
-- [ ] A paginated output path that collides with another page's path fails the run with
+- [x] A paginated output path that collides with another page's path fails the run with
       `SF-GEN-0110`, the same as a normal collision.
-- [ ] Render dependencies are recorded per plan entry, not overwritten per page (today
+- [x] Render dependencies are recorded per plan entry, not overwritten per page (today
       `RenderPipeline` does `dependencies.put(entry.pageUuid(), …)`). An item added to or
       removed from the source rebuilds the paginated page in an incremental run, including
       when the page count changes.
-- [ ] Sitemap and search index list every paginated output. Pages 2..N carry
+- [x] Sitemap and search index list every paginated output. Pages 2..N carry
       `rel="prev"/"next"` data and a self-referencing canonical, so templates can emit them.
-- [ ] Preview renders any page number (`?page=n`), and the page editor offers a page selector
+- [x] Preview renders any page number (`?page=n`), and the page editor offers a page selector
       for paginated pages.
-- [ ] Golden-file render tests cover first, middle, last, single and empty pages. `./gradlew build`
+- [x] Golden-file render tests cover first, middle, last, single and empty pages. `./gradlew build`
       and `ui` `npm run build` are green; the M21 E2E journey passes against a running app.
 
 ## Features (dependency order)
@@ -115,3 +115,53 @@ $CMS_IF(CMS_PAGINATION.nextHref)$<a rel="next" href="$CMS_VALUE(CMS_PAGINATION.n
 - Out of scope for the whole epic: infinite scroll / client-side paging, pagination of section
   templates, more than one pagination editor per page template, and "load more" JSON
   endpoints.
+
+## Implementation notes (2026-09-16)
+
+Evidence and deviations; the code is the source of truth where they differ from the task files.
+
+- **Default paths (user decision).** Pages 2..N are sibling files in every channel (`news/blog.html` →
+  `news/blog-2.html`, pretty `news/blog/index.html` → `news/blog/index-2.html`), not `page/N/index.html`. A page
+  template's `paginationPath.<channel>` overrides it with `{pageNumber}` (required) and `{pagePath}` (page 1's path
+  without extension). Pagination paths are never prettified.
+- **Diagnostic codes.** `SF-CDL-0110` placement (list/group, section template, property set, dataset schema),
+  `SF-CDL-0111` second pagination editor (own or inherited), `SF-TPL-0163` `CMS_PAGINATION` read-only,
+  `SF-GEN-0412` warning for a dangling reference in a navigation source.
+- **No per-page dependency map.** `RenderPipeline` no longer stores `dependencies.put(pageUuid, …)` (incremental builds
+  walk `asset_reference` since M16.3), so the "overwrite bug" doesn't exist any more. Incremental correctness is in
+  `BuildPlanner`: a visited page reference queues the pages paginating its current and previous folder, a record the
+  pages paginating its dataset, and the source itself reaches them over the `CONTENT_REF` edge. Each run stages a fresh
+  build directory, so a shrunk pagination leaves no stale page (tested).
+- **One model.** `pagination.PaginationValue`/`PaginationSource`/`PaginationScope` in sf-domain, used by the planner
+  (`SnapshotPagination`), `GenerationRenderer` (slices the planner's items from `PlanEntry.Pagination`) and
+  `PageRenderService`. `LiveOutputPathResolver` wasn't extended: preview links go to preview URLs and the URL registry
+  only ever targets page 1.
+- **`nav.visible`.** Pagination skips target pages with `nav.visible=false`; `$CMS_NAVIGATION` doesn't read the flag
+  (documented).
+- **Pre-existing bug fixed:** a build failure raised as a problem (the `SF-GEN-0110` collision) was reported as
+  `SF-GEN-0501 "Build Failed"`, dropping the code and the colliding paths; the run report now keeps both.
+- **Golden cases.** `pagination-first/middle/last/single/empty` and `render-md/pagination-markdown`. Section inheritance
+  can't be a golden case (the harness has no block resolver); `PaginationIntegrationTest` renders the items through an
+  included section template.
+- **UI.** The source is picked in `sf-asset-picker-dialog`, which gained two types offered only when asked for by name:
+  *Navigation folders* (the store's tree, loaded fresh, searchable with ancestors kept) and *Datasets*. The editor shows
+  "N items → M pages" from `GET /pagination/count` (a new endpoint: the same `PaginationSource` and live resolvers as
+  the preview; it reports skipped dangling references too). A disabled control (time travel, visual diff) shows a
+  summary line (`Source: Blog · 10 per page · Date ↓`); this read-only path is covered by a component spec that can't
+  run here and was not exercised live. The template IDE has a **Pagination paths** section (per channel, shown when the
+  template declares or inherits a pagination editor, `{pageNumber}` checked inline and on the server).
+- **Layout fix (pre-existing).** At a 1280 px window the page editor was wider than its column: the pages screen's
+  `router-outlet + *` rule can't reach the routed host through style encapsulation, and `sf-preview-frame` couldn't
+  shrink below its 1280 px desktop preset. The page editor host and the preview frame now set `min-width: 0` themselves
+  (fieldsets also need `min-inline-size: 0`); the journey asserts the editor title, the pagination field, the page
+  selector and Refresh are all on screen at 1280 px.
+- **Limits.** `pagination-editor.component.spec.ts` can't run: the vitest JIT setup doesn't see signal `input()`s
+  (`NG0303`/`NG0950`), the same environment issue as the 19 known `templateUrl` spec files. The initial bundle is
+  about 832 kB (814 kB at M20), over the 819 kB warning budget, far under the error budget.
+
+**Verification.** `./gradlew test spotlessCheck` (see `tasks/todo.md` review); new tests `PaginationCdlTest`,
+`PaginationScopeRenderTest`, `PaginationValueValidationTest`, `PaginationSourceTest`, `PaginationScopeTest`,
+`PaginationPathTest`, `PaginatedSitePagesTest`, `OutputPathResolverTest#paginatedOutputsAreOwnedByPageAndPageNumber`,
+`PaginationIntegrationTest` (3: save validation, FULL/INCREMENTAL generation with a link check, sitemap/search index,
+preview + `X-SF-Total-Pages`, collision, dataset source); UI util specs (9). `e2e/m21-journeys.spec.ts` passed against a
+live dev backend + `ng serve` including the generated files and link check; m16–m20 journeys 16/16.

@@ -67,7 +67,8 @@ public class PageTemplateController extends AbstractTemplateController {
                         Boolean.TRUE.equals(body.deprecated()),
                         body.outputPath(),
                         body.parentFolderUuid(),
-                        Boolean.TRUE.equals(body.abstractTemplate())),
+                        Boolean.TRUE.equals(body.abstractTemplate()),
+                        body.paginationPath()),
                 ctx(projectKey, "create page template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
@@ -99,7 +100,8 @@ public class PageTemplateController extends AbstractTemplateController {
                         body.category(),
                         Boolean.TRUE.equals(body.deprecated()),
                         body.outputPath(),
-                        Boolean.TRUE.equals(body.abstractTemplate())),
+                        Boolean.TRUE.equals(body.abstractTemplate()),
+                        body.paginationPath()),
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, "update page template"));
         return ResponseEntity.ok()

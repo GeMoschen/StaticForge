@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 /**
  * Derives content references (spec §5.4, §14.3). {@link #extract} is a pure scanner: it walks a
  * content value for {@code MEDIA_REF}, {@code ASSET_REF} and internal or media {@code link} values
- * plus CATALOG card {@code templateRef}s. Persisting the resulting edges is
+ * plus CATALOG card {@code templateRef}s and a pagination value's source folder or dataset (M21.1.1). Persisting the resulting edges is
  * {@code ReferenceMaterializer}'s job, on the version write path.
  */
 @Service
@@ -32,6 +32,14 @@ public class ContentReferenceService {
             return;
         }
         if (node.isObject()) {
+            if ("PAGINATION".equals(text(node, "type"))) {
+                // {type:"PAGINATION", source:{kind, uuid}}: the page depends on the folder or dataset it paginates.
+                String source = text(node.path("source"), "uuid");
+                if (source != null) {
+                    add(out, ReferenceKind.CONTENT_REF, source, path + ".source");
+                }
+                return;
+            }
             ReferenceKind kind = referenceKind(node);
             String uuid = text(node, "uuid");
             if (kind != null && uuid != null) {

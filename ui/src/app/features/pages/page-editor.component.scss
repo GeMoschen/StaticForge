@@ -1,8 +1,12 @@
 @use '../../design/forms';
 
+// A routed flex item of the pages screen: it must shrink to the space beside the tree. The screen's own
+// `router-outlet + *` rule can't reach this host through style encapsulation, so the host says it itself.
 :host {
   display: block;
+  flex: 1;
   height: 100%;
+  min-width: 0;
 }
 
 .page-editor {

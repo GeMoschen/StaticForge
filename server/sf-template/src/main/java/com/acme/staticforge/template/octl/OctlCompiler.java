@@ -38,6 +38,9 @@ public final class OctlCompiler {
     /** How many ancestors a page template may have (M20): {@code SF-TPL-0155} beyond. */
     public static final int MAX_INHERITANCE_DEPTH = 8;
 
+    /** The read-only root of a paginated page's current slice and page links (M21.3.1). */
+    public static final String PAGINATION_ROOT = "CMS_PAGINATION";
+
     /** The {@code assetType:uid} prefix of a dataset loop source (M19.3.2). */
     private static final String DATASET_PREFIX = "dataset";
 
@@ -493,6 +496,7 @@ public final class OctlCompiler {
                                 nav.col()));
                     }
                     resolveReference(nav.accessor(), nav.line(), nav.col(), ctx);
+                    checkNotPaginationRoot(nav.variable(), nav.line(), nav.col(), ctx);
                     if (nav.variable() != null) {
                         Set<String> inner = new HashSet<>(shadowed);
                         inner.add(nav.variable());
@@ -520,12 +524,14 @@ public final class OctlCompiler {
                     if (f.accessor().isAssetReference() && DATASET_PREFIX.equals(f.accessor().assetType())) {
                         compileDatasetLoop(f, shadowed, ctx);
                     }
+                    checkNotPaginationRoot(f.variable(), f.line(), f.col(), ctx);
                     Set<String> inner = new HashSet<>(shadowed);
                     inner.add(f.variable());
                     validate(f.body(), inner, ctx);
                 }
                 case OctlNode.Set st -> {
                     validateExpr(st.expr(), shadowed, ctx);
+                    checkNotPaginationRoot(st.name(), st.line(), st.col(), ctx);
                     shadowed.add(st.name());
                 }
                 case OctlNode.Meta m -> checkFilters(m.filters(), m.line(), m.col(), ctx);
@@ -601,9 +607,9 @@ public final class OctlCompiler {
         if (shadowed.contains(name)) {
             return;
         }
-        if ("CMS_PAGE".equals(name)) {
+        if ("CMS_PAGE".equals(name) || PAGINATION_ROOT.equals(name)) {
             if (ctx.textMedia != null) {
-                notInTextMedia("CMS_PAGE", line, col, ctx.diagnostics);
+                notInTextMedia(name, line, col, ctx.diagnostics);
             }
             return;
         }
@@ -707,6 +713,17 @@ public final class OctlCompiler {
             ctx.diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.OCTL_UNRESOLVABLE_REF,
                     "Unresolvable asset reference: " + key, line, col));
+        }
+    }
+
+    /** {@code CMS_PAGINATION} is read-only (M21.3.1): no {@code $CMS_SET} or loop variable may take its name. */
+    private static void checkNotPaginationRoot(String name, int line, int col, ValidateCtx ctx) {
+        if (PAGINATION_ROOT.equals(name)) {
+            ctx.diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_PAGINATION_READ_ONLY,
+                    PAGINATION_ROOT + " is read-only: pick another variable name",
+                    line,
+                    col));
         }
     }
 

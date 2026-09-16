@@ -28,11 +28,11 @@ Non-paginated pages see `CMS_PAGINATION` as missing (so `$CMS_IF(CMS_PAGINATION)
 
 ## Feature exit criteria
 
-- [ ] Generation renders each paginated entry with the correct slice and hrefs.
-- [ ] Preview renders page `n` via `?page=n` (clamped to `1..total`), with links between preview
+- [x] Generation renders each paginated entry with the correct slice and hrefs.
+- [x] Preview renders page `n` via `?page=n` (clamped to `1..total`), with links between preview
       pages working in rewrite-links mode.
-- [ ] The OCTL compiler accepts `CMS_PAGINATION.*` accessors without `SF-TPL-0103`.
-- [ ] Golden-file tests (`server/sf-template/src/test/resources/render/pagination-*`) cover first,
+- [x] The OCTL compiler accepts `CMS_PAGINATION.*` accessors without `SF-TPL-0103`.
+- [x] Golden-file tests (`server/sf-template/src/test/resources/render/pagination-*`) cover first,
       middle, last, single and empty pages.
 
 ## Dependencies

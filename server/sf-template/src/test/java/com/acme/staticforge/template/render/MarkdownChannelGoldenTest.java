@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
  * {@code content.json} (optional) and {@code expected.md}. Compilation targets {@code channel =
  * "markdown"} with {@link Escaping#MARKDOWN}, so markdown source is emitted as-is and the
  * {@code md}/{@code plain} filters' HTML output passes through unescaped. Mirrors
- * {@link GoldenFileRenderTest}, including its optional {@code records.json} dataset stub.
+ * {@link GoldenFileRenderTest}, including its optional {@code records.json} dataset stub and {@code pagination.json}.
  */
 class MarkdownChannelGoldenTest {
 
@@ -70,6 +70,9 @@ class MarkdownChannelGoldenTest {
             assertThat(errors).as("compile errors in %s", dir.getFileName()).isEmpty();
 
             RenderContext.Builder builder = RenderContext.builder()
+                    .pagination(Files.exists(dir.resolve("pagination.json"))
+                            ? mapper.readTree(Files.readString(dir.resolve("pagination.json")))
+                            : null)
                     .channel("markdown")
                     .escaping(Escaping.MARKDOWN)
                     .values(content);

@@ -60,6 +60,7 @@ abstract class AbstractTemplateController {
                 payload.path("deprecated").asBoolean(false),
                 payload.get("bodies"),
                 payload.get("outputPath"),
+                payload.get("paginationPath"),
                 v.folderUuid(),
                 v.folderPath(),
                 v.isAbstract(),

@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
  * Emits {@code search-index.json} (spec §18.2 POST), an array of {@code {uid, path, channel,
  * title, text}} entries built from {@code ctx.pages()} with a crude text snippet extracted by
  * stripping tags from the matching HTML file for each page. Enabled by default but cheap.
+ *
+ * <p>Every output of a paginated page is an entry (M21.2.2) with the page's uid and a {@code pageNumber}, so a client
+ * can collapse them; pages 2..N get the title suffix {@code " – page n"}. The field is omitted for other pages.
  */
 @Service
 public final class SearchIndexPostProcessor implements PostProcessor {
@@ -32,7 +35,12 @@ public final class SearchIndexPostProcessor implements PostProcessor {
             node.put("uid", page.uid());
             node.put("path", page.path());
             node.put("channel", page.channel());
-            node.put("title", page.title());
+            node.put("title", page.pageNumber() != null && page.pageNumber() > 1
+                    ? page.title() + " – page " + page.pageNumber()
+                    : page.title());
+            if (page.pageNumber() != null) {
+                node.put("pageNumber", page.pageNumber());
+            }
             node.put("text", html == null ? "" : extractText(html.bytes()));
             arr.add(node);
         }

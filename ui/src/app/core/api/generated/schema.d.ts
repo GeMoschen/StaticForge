@@ -1156,6 +1156,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/pagination/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/navigation/tree": {
         parameters: {
             query?: never;
@@ -1491,6 +1507,9 @@ export interface components {
             outputPath?: {
                 [key: string]: string;
             };
+            paginationPath?: {
+                [key: string]: string;
+            };
             abstract?: boolean;
         };
         DescendantIssueDto: {
@@ -1533,6 +1552,7 @@ export interface components {
             deprecated?: boolean;
             bodies?: components["schemas"]["JsonNode"];
             outputPath?: components["schemas"]["JsonNode"];
+            paginationPath?: components["schemas"]["JsonNode"];
             /** Format: uuid */
             folderUuid?: string;
             folderPath?: string;
@@ -1814,6 +1834,9 @@ export interface components {
             };
             /** Format: uuid */
             parentFolderUuid?: string;
+            paginationPath?: {
+                [key: string]: string;
+            };
             abstract?: boolean;
         };
         ProjectRestoreRequest: {
@@ -2126,8 +2149,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -2137,18 +2158,20 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
             unpaged?: boolean;
             /** Format: int32 */
             pageSize?: number;
             /** Format: int32 */
             pageNumber?: number;
+            paged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -2162,8 +2185,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -2173,6 +2194,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -2229,6 +2252,12 @@ export interface components {
             token?: string;
             url?: string;
         };
+        PaginationCountView: {
+            /** Format: int32 */
+            itemCount?: number;
+            /** Format: int32 */
+            skipped?: number;
+        };
         AssetSummaryView: {
             /** Format: uuid */
             uuid?: string;
@@ -2276,8 +2305,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -2287,6 +2314,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -2376,8 +2405,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -2387,6 +2414,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -4955,6 +4984,7 @@ export interface operations {
             query: {
                 t: string;
                 channel?: string;
+                page?: number;
             };
             header?: never;
             path: {
@@ -4981,6 +5011,7 @@ export interface operations {
                 revision?: number;
                 channel?: string;
                 rewriteLinks?: boolean;
+                page?: number;
             };
             header?: never;
             path: {
@@ -5024,6 +5055,31 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PreviewShareLink"];
+                };
+            };
+        };
+    };
+    count: {
+        parameters: {
+            query: {
+                kind: string;
+                source: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PaginationCountView"];
                 };
             };
         };

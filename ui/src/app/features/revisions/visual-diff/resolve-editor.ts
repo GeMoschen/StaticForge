@@ -22,6 +22,7 @@ export const READONLY_EDITOR_TYPES = new Set<EditorType>([
   'MARKDOWN',
   'JSON',
   'CATALOG',
+  'PAGINATION',
 ]);
 
 /**
@@ -65,7 +66,7 @@ function walk(
 }
 
 /** Object-typed editors whose values the server differ recurses into (emitting sub-paths). */
-export const OBJECT_EDITOR_TYPES = new Set<EditorType>(['REFERENCE', 'LINK', 'MEDIA', 'CATALOG']);
+export const OBJECT_EDITOR_TYPES = new Set<EditorType>(['REFERENCE', 'LINK', 'MEDIA', 'CATALOG', 'PAGINATION']);
 
 /**
  * Finds the object-typed editor whose field path is a prefix of `path`

@@ -20,7 +20,7 @@ import { SfIconComponent } from './sf-icon.component';
 import { SfSpinnerComponent } from './sf-spinner.component';
 import { SfAssetPickerFolderNodeComponent } from './sf-asset-picker-folder-node.component';
 import { ContentService, type DatasetSummaryView } from '../../features/content/content.service';
-import { pickerDatasets, pickerTypeOptions, type PickerType } from './asset-picker.util';
+import { folderRows, matchingDatasets, pickerDatasets, pickerTypeOptions, type PickerType } from './asset-picker.util';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type FolderView = components['schemas']['FolderView'];
@@ -32,6 +32,10 @@ interface PickerItem {
   displayName?: string;
   type?: string;
   dataset?: string;
+  /** Indentation of a folder row (Navigation folders). */
+  depth?: number;
+  /** The row's detail line; the uid when absent. */
+  meta?: string;
 }
 
 export interface AssetPicked {
@@ -47,6 +51,9 @@ export interface AssetPicked {
  * server-paged record listing, with a dataset switch unless a `dataset`
  * restriction pins it. Used by `sf-reference-editor` to fill an ASSET_REF
  * value, but generic enough for anything that needs to point at an asset.
+ *
+ * Asked for by name (`allowedTypes`), it also picks a pagination source (M21.4.1): a folder of the Navigation store,
+ * listed as its tree, or a dataset. Both are loaded fresh when the dialog opens.
  */
 @Component({
   selector: 'sf-asset-picker-dialog',
@@ -83,6 +90,24 @@ export class SfAssetPickerDialogComponent {
   protected readonly folderPath = signal('');
   protected readonly items = signal<PickerItem[]>([]);
   protected readonly loading = signal(false);
+  /** Pagination sources only: the dialog then picks a source, not an asset. */
+  protected readonly picksSources = computed(() =>
+    this.typeOptions().every((option) => option.value === 'NAV_FOLDER' || option.value === 'DATASET'),
+  );
+  protected readonly title = computed(() => (this.picksSources() ? 'Choose a source' : 'Choose an asset'));
+  protected readonly emptyTitle = computed(() => {
+    switch (this.type()) {
+      case 'RECORD':
+        return 'No records found';
+      case 'NAV_FOLDER':
+        return 'No navigation folders found';
+      case 'DATASET':
+        return 'No datasets found';
+      default:
+        return 'No assets found';
+    }
+  });
+  private navigationTree: FolderView[] | null = null;
 
   protected readonly hasFolders = computed(() => this.type() === 'PAGE' || this.type() === 'MEDIA');
   /** Raw scope tree — for PAGE/MEDIA this is always a single-entry array holding the fixed,
@@ -169,6 +194,14 @@ export class SfAssetPickerDialogComponent {
       this.reloadRecords(key);
       return;
     }
+    if (this.type() === 'NAV_FOLDER') {
+      this.reloadNavigationFolders(key);
+      return;
+    }
+    if (this.type() === 'DATASET') {
+      this.reloadDatasets(key);
+      return;
+    }
     this.loading.set(true);
     this.api
       .listAssets(key, {
@@ -188,6 +221,66 @@ export class SfAssetPickerDialogComponent {
           this.loading.set(false);
         },
       });
+  }
+
+  /** The Navigation store's folders as an indented tree, filtered by the search (loaded once per dialog). */
+  private reloadNavigationFolders(key: string): void {
+    const show = (tree: FolderView[]) =>
+      this.items.set(
+        folderRows(tree, this.search()).map((row) => ({
+          uuid: row.uuid,
+          uid: row.uid,
+          displayName: row.displayName,
+          type: 'NAV_FOLDER',
+          depth: row.depth,
+          meta: row.path ?? row.uid,
+        })),
+      );
+    if (this.navigationTree) {
+      show(this.navigationTree);
+      return;
+    }
+    this.loading.set(true);
+    this.api.listFolders(key, 'NAVIGATION', 10).subscribe({
+      next: (tree) => {
+        this.navigationTree = tree ?? [];
+        show(this.navigationTree);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.items.set([]);
+        this.loading.set(false);
+      },
+    });
+  }
+
+  /** The project's datasets, filtered by the search. */
+  private reloadDatasets(key: string): void {
+    const show = () =>
+      this.items.set(
+        matchingDatasets(this.allDatasets(), this.search()).map((d) => ({
+          uuid: d.uuid,
+          uid: d.uid,
+          displayName: d.displayName,
+          type: 'DATASET',
+        })),
+      );
+    if (this.allDatasets().length > 0) {
+      show();
+      return;
+    }
+    this.loading.set(true);
+    this.content.listDatasets(key).subscribe({
+      next: (datasets) => {
+        this.allDatasets.set(datasets ?? []);
+        show();
+        this.loading.set(false);
+      },
+      error: () => {
+        this.items.set([]);
+        this.loading.set(false);
+      },
+    });
   }
 
   /** Records of the chosen dataset, searched by name through the paged record listing. */

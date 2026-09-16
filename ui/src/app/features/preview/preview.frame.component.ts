@@ -14,6 +14,7 @@ import {
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { ApiClient } from '../../core/api/api.client';
 import { previewErrorDocument, previewProblem } from './preview-error';
+import { pageNumbers, readPageHeaders, requestedPage } from './preview-pagination.util';
 
 type ViewportPreset = 'mobile' | 'tablet' | 'desktop' | 'full';
 
@@ -55,6 +56,18 @@ const HIGHLIGHT_SCRIPT = `<script>
       }
       el = el.parentElement;
     }
+  }, true);
+  // A pagination link (M21.3.1) asks the editor for that page instead of navigating the frame away.
+  document.addEventListener('click', function (e) {
+    var el = e.target;
+    while (el && el !== document && el.tagName !== 'A') { el = el.parentElement; }
+    if (!el || el === document) { return; }
+    var href = el.getAttribute('href') || '';
+    // No backslashes here: this script lives in a template literal, which would swallow them.
+    var match = (href.indexOf('/preview/share?') >= 0 || href.charAt(0) === '?') ? /[?&]page=([0-9]+)/.exec(href) : null;
+    if (!match) { return; }
+    e.preventDefault();
+    try { window.parent.postMessage({ type: 'sf-preview-page', page: Number(match[1]) }, '*'); } catch (err) {}
   }, true);
   var focused = null;
   window.addEventListener('message', function (e) {
@@ -110,12 +123,19 @@ export class SfPreviewFrameComponent implements OnDestroy {
   protected readonly html = signal('');
   protected readonly viewport = signal<ViewportPreset>('desktop');
   protected readonly shareUrl = signal<string | null>(null);
+  /** The page of a paginated page (M21.3.1): requested, rendered and total. Hidden while there is one page. */
+  protected readonly page = signal(1);
+  protected readonly totalPages = signal(1);
+  protected readonly pages = computed(() => pageNumbers(this.totalPages()));
+  private requestedPage = 1;
+  private lastPageUuid: string | null = null;
 
   private readonly frameRef = viewChild<ElementRef<HTMLIFrameElement>>('frame');
 
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly onKeydownRef = (event: KeyboardEvent) => this.onKeydown(event);
+  private readonly onMessageRef = (event: MessageEvent) => this.onMessage(event);
 
   /**
    * The rendered page as the frame's document. Binding a plain string to `[srcdoc]` runs Angular's
@@ -138,10 +158,18 @@ export class SfPreviewFrameComponent implements OnDestroy {
     if (typeof document !== 'undefined') {
       document.addEventListener('keydown', this.onKeydownRef);
     }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('message', this.onMessageRef);
+    }
 
     effect(() => {
       this.projectKey();
-      this.pageUuid();
+      const uuid = this.pageUuid();
+      if (uuid !== this.lastPageUuid) {
+        // Another page starts at its first page; a save of the same page keeps the page being looked at.
+        this.lastPageUuid = uuid;
+        this.requestedPage = 1;
+      }
       this.revision();
       this.refreshKey();
       this.scheduleDebounced();
@@ -156,6 +184,22 @@ export class SfPreviewFrameComponent implements OnDestroy {
     if (typeof document !== 'undefined') {
       document.removeEventListener('keydown', this.onKeydownRef);
     }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('message', this.onMessageRef);
+    }
+  }
+
+  /** Shows page `number` of a paginated page (clamped by the server). */
+  goToPage(number: number): void {
+    if (number < 1 || number === this.page()) {
+      return;
+    }
+    this.requestedPage = number;
+    this.refreshManually();
+  }
+
+  protected onPageSelect(event: Event): void {
+    this.goToPage(Number((event.target as HTMLSelectElement).value));
   }
 
   /** Focus (outline) a section inside the preview iframe by instance id. */
@@ -195,6 +239,18 @@ export class SfPreviewFrameComponent implements OnDestroy {
     });
   }
 
+  /** A pagination link clicked inside the frame; only messages from this frame's own document count. */
+  private onMessage(event: MessageEvent): void {
+    const frameWindow = this.frameRef()?.nativeElement.contentWindow;
+    if (!frameWindow || event.source !== frameWindow) {
+      return;
+    }
+    const number = requestedPage(event.data);
+    if (number !== null) {
+      this.goToPage(number);
+    }
+  }
+
   private onKeydown(event: KeyboardEvent): void {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'enter') {
       event.preventDefault();
@@ -218,8 +274,14 @@ export class SfPreviewFrameComponent implements OnDestroy {
     if (!key || !uuid) {
       return;
     }
-    this.api.previewSavedPage(key, uuid, this.revision() ?? undefined, CHANNEL).subscribe({
-      next: (html) => this.html.set(html),
+    this.api.previewSavedPageResponse(key, uuid, this.revision() ?? undefined, CHANNEL, this.requestedPage).subscribe({
+      next: (response) => {
+        const { page, total } = readPageHeaders(response.headers);
+        this.page.set(page);
+        this.totalPages.set(total);
+        this.requestedPage = page;
+        this.html.set(response.body ?? '');
+      },
       // Show why the page can't render (e.g. 422 SF-TPL-0135 include cycle) instead of a blank frame.
       error: (err: unknown) => this.html.set(previewErrorDocument(previewProblem(err))),
     });

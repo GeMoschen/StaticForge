@@ -17,10 +17,10 @@ then run an incremental rebuild.
 
 ## Feature exit criteria
 
-- [ ] Template developer guide, editor reference, user guide and spec sections updated.
-- [ ] M21 E2E journey implemented and run against a live backend, or the execution caveat recorded
+- [x] Template developer guide, editor reference, user guide and spec sections updated.
+- [x] M21 E2E journey implemented and run against a live backend, or the execution caveat recorded
       with evidence.
-- [ ] Epic exit criteria in `../README.md` ticked with evidence.
+- [x] Epic exit criteria in `../README.md` ticked with evidence.
 
 ## Dependencies
 

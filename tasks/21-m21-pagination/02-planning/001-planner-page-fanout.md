@@ -1,6 +1,6 @@
 ---
 id: M21.2.1
-status: todo
+status: done
 depends: [M21.1.1, M16.4.1, M16.3.3]
 epic: m21-pagination
 feature: planning
@@ -98,20 +98,20 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] A nav source with 23 eligible items and page size 10 plans 3 entries per enabled channel;
+- [x] A nav source with 23 eligible items and page size 10 plans 3 entries per enabled channel;
       page 1's path equals the unpaginated path of the same page; pages 2–3 match the pattern.
-- [ ] An empty source plans exactly 1 entry (`totalPages=1`) at the page's normal path.
-- [ ] Items with equal sort keys always land on the same page across repeated plans of the same
+- [x] An empty source plans exactly 1 entry (`totalPages=1`) at the page's normal path.
+- [x] Items with equal sort keys always land on the same page across repeated plans of the same
       snapshot (deterministic tiebreak test).
-- [ ] A paginated output colliding with another page's output fails with `SF-GEN-0110`, and the
+- [x] A paginated output colliding with another page's output fails with `SF-GEN-0110`, and the
       message names both pages and the page number.
-- [ ] `dependenciesByPage()` for a page rendered in `html` and `markdown` contains the union of
+- [x] `dependenciesByPage()` for a page rendered in `html` and `markdown` contains the union of
       both renders' dependencies (the overwrite bug is covered by a test that fails before the fix).
-- [ ] Incremental: adding a page reference to the source folder rebuilds all page numbers of the
+- [x] Incremental: adding a page reference to the source folder rebuilds all page numbers of the
       paginated page; shrinking from 3 to 2 pages leaves no `page/3/` in the published output.
-- [ ] Non-paginated projects produce byte-identical plans and outputs to before (existing
+- [x] Non-paginated projects produce byte-identical plans and outputs to before (existing
       generation integration tests pass unchanged).
-- [ ] `./gradlew :server:sf-generate:test :server:sf-domain:test` green.
+- [x] `./gradlew :server:sf-generate:test :server:sf-domain:test` green.
 
 ## Out of scope
 

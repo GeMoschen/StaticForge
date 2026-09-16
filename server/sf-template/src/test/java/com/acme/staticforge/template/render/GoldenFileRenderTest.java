@@ -41,6 +41,9 @@ import org.junit.jupiter.api.Test;
  * {@code parents/<uid>.octl} (with an optional {@code parents/<uid>.cdl}) is a page template that resolves as
  * {@code page_template:<uid>}, and the case compiles through the chain. An optional {@code template.cdl} is the
  * case template's own definition.
+ *
+ * <p>An optional {@code pagination.json} (M21.3.1) is the {@code CMS_PAGINATION} value of a paginated page, in the shape
+ * {@code PaginationScope} builds; the render context gets it as the page's pagination.
  */
 class GoldenFileRenderTest {
 
@@ -92,6 +95,9 @@ class GoldenFileRenderTest {
             assertThat(errors).as("compile errors in %s", dir.getFileName()).isEmpty();
 
             RenderContext.Builder builder = RenderContext.builder().channel("html").escaping(Escaping.HTML).values(content);
+            if (Files.exists(dir.resolve("pagination.json"))) {
+                builder.pagination(mapper.readTree(read(dir.resolve("pagination.json"))));
+            }
             if (!assetValues.isEmpty()) {
                 builder.assetValueResolver(new AssetValueResolver() {
                     @Override

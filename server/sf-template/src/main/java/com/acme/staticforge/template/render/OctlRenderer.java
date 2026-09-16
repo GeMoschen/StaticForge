@@ -4,6 +4,7 @@ import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.octl.Accessor;
 import com.acme.staticforge.template.octl.CompiledTemplate;
+import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.Expr;
 import com.acme.staticforge.template.octl.FilterNode;
 import com.acme.staticforge.template.octl.NamedArg;
@@ -415,6 +416,9 @@ public final class OctlRenderer implements Renderer {
         String first = path.get(0);
         if ("CMS_PAGE".equals(first)) {
             return resolveSub(s.context.pageValues(), path, 1, s);
+        }
+        if (OctlCompiler.PAGINATION_ROOT.equals(first)) {
+            return resolveSub(s.context.pagination(), path, 1, s);
         }
         LoopFrame loop = s.findLoop(first);
         if (loop != null) {

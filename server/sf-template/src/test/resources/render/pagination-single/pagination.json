@@ -1,0 +1,56 @@
+{
+  "items": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000001",
+      "uid": "alpha",
+      "displayName": "Alpha",
+      "label": "Alpha",
+      "href": "posts/alpha.html",
+      "date": "2026-09-01",
+      "position": 0,
+      "content": {
+        "teaser": "First"
+      }
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000002",
+      "uid": "beta",
+      "displayName": "Beta",
+      "label": "Beta",
+      "href": "posts/beta.html",
+      "date": "2026-09-02",
+      "position": 0,
+      "content": {
+        "teaser": "Second"
+      }
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000003",
+      "uid": "gamma",
+      "displayName": "Gamma",
+      "label": "Gamma",
+      "href": "posts/gamma.html",
+      "date": "2026-09-03",
+      "position": 0,
+      "content": {
+        "teaser": "Third"
+      }
+    }
+  ],
+  "current": 1,
+  "total": 1,
+  "pageSize": 10,
+  "itemCount": 3,
+  "firstHref": "blog.html",
+  "prevHref": "",
+  "nextHref": "",
+  "lastHref": "blog.html",
+  "canonicalHref": "blog.html",
+  "pages": [
+    {
+      "number": 1,
+      "href": "blog.html",
+      "current": true
+    }
+  ]
+}

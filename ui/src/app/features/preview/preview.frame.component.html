@@ -12,6 +12,38 @@
     }
   </div>
 
+  @if (totalPages() > 1) {
+    <div class="preview-toolbar__group preview-pages" role="group" aria-label="Preview page">
+      <button
+        type="button"
+        class="preview-toolbar__button"
+        [disabled]="page() <= 1"
+        aria-label="Previous page"
+        (click)="goToPage(page() - 1)"
+      >
+        ‹
+      </button>
+      <label class="preview-pages__label">
+        <span class="preview-pages__visually-hidden">Page</span>
+        <select class="preview-pages__select" [value]="page()" (change)="onPageSelect($event)">
+          @for (number of pages(); track number) {
+            <option [value]="number" [selected]="number === page()">Page {{ number }} of {{ totalPages() }}</option>
+          }
+        </select>
+      </label>
+      <button
+        type="button"
+        class="preview-toolbar__button"
+        [disabled]="page() >= totalPages()"
+        aria-label="Next page"
+        (click)="goToPage(page() + 1)"
+      >
+        ›
+      </button>
+      <span class="preview-pages__visually-hidden" aria-live="polite">Page {{ page() }} of {{ totalPages() }}</span>
+    </div>
+  }
+
   <div class="preview-toolbar__group">
     <button type="button" class="preview-toolbar__button" (click)="refreshManually()">
       Refresh

@@ -19,5 +19,6 @@ public enum EditorType {
     LIST,
     GROUP,
     JSON,
-    CATALOG
+    CATALOG,
+    PAGINATION
 }

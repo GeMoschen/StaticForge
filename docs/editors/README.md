@@ -31,8 +31,9 @@ diagnostic codes), see `../template-developer-guide.md`.
 | `group` | [group.md](group.md) | nested object (transparent wrapper) |
 | `json` | [json.md](json.md) | arbitrary JSON |
 | `catalog` | [catalog.md](catalog.md) | `{type:"CATALOG", cards:[…]}` |
+| `pagination` | [pagination.md](pagination.md) | `{type:"PAGINATION", source:{kind, uuid}, pageSize, sort:{key, direction}}` |
 
-All 18 are `EditorType` enum constants (`template/content/EditorType.java`); the CDL keyword
+All 19 are `EditorType` enum constants (`template/content/EditorType.java`); the CDL keyword
 (lowercase, e.g. `editor text headline { … }`) maps to one via `CdlValidator.TYPES`.
 
 ## Attributes common to every editor type

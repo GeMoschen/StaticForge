@@ -1,6 +1,6 @@
 ---
 id: M21.2.2
-status: todo
+status: done
 depends: [M21.2.1]
 epic: m21-pagination
 feature: planning
@@ -43,14 +43,14 @@ duplicate `uid`s with different paths and no page-number information.
 
 ## Acceptance criteria
 
-- [ ] A 3-page paginated `blog` page appears 3× in `sitemap.xml` (per channel the sitemap covers),
+- [x] A 3-page paginated `blog` page appears 3× in `sitemap.xml` (per channel the sitemap covers),
       with correct absolute URLs built from the target `baseUrl`.
-- [ ] `search-index.json` holds 3 entries for it, carrying `pageNumber` 1/2/3; page 1's entry is
+- [x] `search-index.json` holds 3 entries for it, carrying `pageNumber` 1/2/3; page 1's entry is
       unchanged in shape apart from the added field.
-- [ ] Navigation hrefs and `$CMS_REF(page:blog)$` resolve to page 1 on every page (test).
-- [ ] Non-paginated projects produce the same sitemap and search index as before (except the added
+- [x] Navigation hrefs and `$CMS_REF(page:blog)$` resolve to page 1 on every page (test).
+- [x] Non-paginated projects produce the same sitemap and search index as before (except the added
       nullable field, which is omitted when null).
-- [ ] `./gradlew :server:sf-generate:test` green.
+- [x] `./gradlew :server:sf-generate:test` green.
 
 ## Out of scope
 

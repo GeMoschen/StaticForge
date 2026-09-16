@@ -944,6 +944,7 @@ content {
 | `list` | `array` of item objects | repeatable rows, drag-reorder |
 | `group` | nested object | visual grouping, collapsible |
 | `json` | arbitrary JSON | Monaco (json mode), schema-validated |
+| `pagination` | `{type:"PAGINATION", source:{kind:"NAV"\|"DATASET", uuid}, pageSize, sort:{key, direction}}` or `null` | source picker (Navigation folder / dataset), page size, sort + direction (M21; page templates only, at most one; `docs/editors/pagination.md`) |
 
 ### 14.4 Common attributes
 
@@ -1166,6 +1167,8 @@ A `$CMS_REF` on another asset *with* a value path (`$CMS_REF(page:about.heroImag
 | List loop | `item.<itemEditorName>`, `item._index`, `item._first`, `item._last`, `item._count` |
 
 `$CMS_PAGE.headline$` inside a section reads the enclosing page's `headline` editor — a controlled, read-only upward reference; sections never write.
+
+`CMS_PAGINATION.*` (M21) is available in the page and section channel templates of a paginated page: `items`, `current`, `total`, `pageSize`, `itemCount`, `firstHref`, `prevHref`, `nextHref`, `lastHref`, `canonicalHref`, `pages[]`. It is read-only (`SF-TPL-0163` for a `$CMS_SET`/loop variable of that name), missing on any other page, and not available in text media. `$CMS_META(pageNumber|totalPages)$` mirror `current`/`total`.
 
 `CMS_GLOBAL.<set>.<path>` is available in every channel template scope and reads a global property set. It is an accessor root used inside `$CMS_VALUE`, `$CMS_IF`, `$CMS_SET`, `$CMS_FOR` and `$CMS_REF`, not an instruction: `$CMS_VALUE(CMS_GLOBAL.site.title)$`. The compiler treats it as exactly `global:<set>.<path>` (§16.4). `CMS_GLOBAL` without a set is `SF-TPL-0105`.
 
@@ -1509,6 +1512,8 @@ Index handling (per channel, §15.2): for a page whose UID equals the channel's 
 
 Path collisions between two pages are a **build error** (`SF-GEN-0110`) listing both assets.
 
+**Paginated pages (M21).** A page whose template has a `pagination` editor with a value is planned as `max(1, ceil(items / pageSize))` outputs per channel, counted from the source at the snapshot revision. Page 1 is the path above. Pages 2..N use the page template's `paginationPath[c]` pattern when set — `{pageNumber}` (required), `{pagePath}` (page 1's path without its extension) plus the placeholders above — and otherwise sit next to page 1 with `-N` before the extension in every channel (`news/blog.html` → `news/blog-2.html`, `news/blog/index.html` → `news/blog/index-2.html`); pagination paths are never prettified. An output is owned by its page and page number, so a collision names the page number (`blog (page 2)`). Sitemap and search index list every output (search entries carry `pageNumber`; pages 2..N get the title suffix ` – page n`); navigation and `$CMS_REF(page:…)` always target page 1.
+
 ### 18.4 Targets and atomic publish
 
 ```
@@ -1564,6 +1569,7 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 | **Revision preview** | Renders any past revision | `GET …?revision=1841` |
 | **Section preview** | Renders one section instance in isolation with sample surroundings | `POST /projects/{p}/preview/section` |
 | **Channel preview** | Any of the above in a non-default channel; non-HTML channels render as syntax-highlighted text | `?channel=markdown` |
+| **Paginated page** | Page *n* of a paginated page (M21), clamped to `1..total`; `X-SF-Total-Pages`/`X-SF-Page` response headers; also on the share route, as a plain parameter outside the token | `?page=2` |
 
 ### 19.2 Mechanics
 
@@ -2724,7 +2730,7 @@ Same content. Two channels. No duplication.
 | Q4 | Retention policy for revisions on large projects — is unlimited history acceptable at 50,000 assets? | Ops | M7 | **Deferred** | Unlimited in v1; compaction is a documented escape hatch reserved by §7.7 (`revision.compacted` flag reserved). Revisit before 50,000-asset scale. |
 | Q5 | Should `PROJECT_ADMIN` be able to add members who are not yet instance users (invite flow with email)? | Product | M6 | **Resolved** | No invite flow in v1. Membership is restricted to existing instance users: `PUT/DELETE /projects/{key}/members/{userId}` operate by `userId`, not email. |
 | Q6 | Preferred publish target for the pilot customer: filesystem+Nginx, or S3+CDN? Affects M4 priorities. | Ops | M4 | **Resolved** | Filesystem + Nginx first. `FilesystemBlobStore` is the default backend, `FilesystemTargetWriter` the default target, and `infra/nginx/default.conf` + `infra/docker/docker-compose.yml` deliver the site. S3 (`S3BlobStore`, `S3TargetWriter`) ships as an optional backend for later. |
-| Q7 | Does any pilot template need loops over *pages* (a listing section) beyond what `structure` provides? If yes, `$CMS_FOR(page : query(...))$` needs a scoped query grammar. | Tech lead | M5 | **Resolved in M19** | For pages, no: the `structure` asset's `list`/`navigation`/`breadcrumb` kinds (§17.3) cover v1 listing needs. Lists of structured entries that are not pages are **datasets** (M19): `$CMS_FOR(x : dataset:uid, where=…, sort=…, limit=…, offset=…, folder=…)$` with the scoped query grammar (the OCTL expression grammar plus sort/paging/folder arguments), shared by templates and the REST record listing. A page-query loop remains a post-v1 candidate. |
+| Q7 | Does any pilot template need loops over *pages* (a listing section) beyond what `structure` provides? If yes, `$CMS_FOR(page : query(...))$` needs a scoped query grammar. | Tech lead | M5 | **Resolved in M19** | For pages, no: the `structure` asset's `list`/`navigation`/`breadcrumb` kinds (§17.3) cover v1 listing needs. Lists of structured entries that are not pages are **datasets** (M19): `$CMS_FOR(x : dataset:uid, where=…, sort=…, limit=…, offset=…, folder=…)$` with the scoped query grammar (the OCTL expression grammar plus sort/paging/folder arguments), shared by templates and the REST record listing. A page-query loop remains a post-v1 candidate. Listing slices over many output files are **pagination** (M21): a `pagination` editor picks a Navigation folder or a dataset, and `CMS_PAGINATION` exposes the current page; the scoped query grammar stays M19's. |
 
 ### Resolutions (notes)
 

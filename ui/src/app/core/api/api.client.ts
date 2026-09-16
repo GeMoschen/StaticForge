@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import type { components } from './generated/schema.d.ts';
@@ -120,7 +120,7 @@ export class ApiClient {
 
   // ── Folders ─────────────────────────────────────────────────────────────
 
-  listFolders(projectKey: string, scope: 'PAGES' | 'MEDIA', depth?: number): Observable<S['FolderView'][]> {
+  listFolders(projectKey: string, scope: 'PAGES' | 'MEDIA' | 'NAVIGATION', depth?: number): Observable<S['FolderView'][]> {
     return this.http.get<S['FolderView'][]>(`${BASE}/projects/${projectKey}/folders`, {
       withCredentials: true,
       params: this.params({ scope, depth }),
@@ -528,6 +528,37 @@ export class ApiClient {
       withCredentials: true,
       params: this.params({ revision, channel }),
       responseType: 'text',
+    });
+  }
+
+  /**
+   * A saved page's preview with its response headers (M21.3.1): `page` renders that page of a paginated page, and
+   * `X-SF-Total-Pages`/`X-SF-Page` tell how many pages there are and which one was rendered.
+   */
+  previewSavedPageResponse(
+    projectKey: string,
+    uuid: string,
+    revision?: number,
+    channel?: string,
+    page?: number,
+  ): Observable<HttpResponse<string>> {
+    return this.http.get(`${BASE}/projects/${projectKey}/preview/pages/${uuid}`, {
+      withCredentials: true,
+      params: this.params({ revision, channel, page }),
+      responseType: 'text',
+      observe: 'response',
+    });
+  }
+
+  /** How many items a pagination source holds now (M21.4.1): the page editor's "N items → M pages" hint. */
+  paginationCount(
+    projectKey: string,
+    kind: 'NAV' | 'DATASET',
+    source: string,
+  ): Observable<{ itemCount: number; skipped: number }> {
+    return this.http.get<{ itemCount: number; skipped: number }>(`${BASE}/projects/${projectKey}/pagination/count`, {
+      withCredentials: true,
+      params: this.params({ kind, source }),
     });
   }
 

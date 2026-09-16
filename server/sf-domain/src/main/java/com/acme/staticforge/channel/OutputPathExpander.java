@@ -69,6 +69,46 @@ public final class OutputPathExpander {
         return slash >= 0 ? path.substring(0, slash + 1) : "./";
     }
 
+    /**
+     * The (not-yet-syntax-normalized) output path of page {@code pageNumber} ≥ 2 of a paginated page (M21.2.1). The page
+     * template's {@code paginationPath.<channel>} pattern when set, expanded with {@code {pageNumber}}, {@code {pagePath}}
+     * (page 1's path without its extension) and every page placeholder; otherwise a sibling of page 1 with {@code -N}
+     * before the extension ({@code news/blog.html} → {@code news/blog-2.html}, {@code blog/index.html} →
+     * {@code blog/index-2.html}), in every channel. Never prettified: the pattern is the file name.
+     *
+     * @param firstPagePath page 1's resolved path ({@link #resolvePath})
+     */
+    public static String resolvePaginationPath(
+            PageContext page, String channel, ChannelOutputSettings settings, String firstPagePath, int pageNumber) {
+        String pagePath = withoutExtension(firstPagePath);
+        JsonNode pattern = page.templatePayload() == null
+                ? null
+                : page.templatePayload().path("paginationPath").path(channel);
+        if (pattern == null || !pattern.isTextual() || pattern.asText().isBlank()) {
+            return pagePath + "-" + pageNumber + firstPagePath.substring(pagePath.length());
+        }
+        String expression = pattern.asText()
+                .replace("{pageNumber}", String.valueOf(pageNumber))
+                .replace("{pagePath}", pagePath);
+        return expand(expression, page, channel, settings);
+    }
+
+    /**
+     * The URL of a pagination page's path: the directory form when the channel uses directory URLs and the file is the
+     * channel's index file (as for page 1), otherwise the path itself ({@code blog/index-2.html} stays a file link).
+     */
+    public static String urlForPaginationPath(String path, ChannelOutputSettings settings) {
+        String leaf = path.substring(path.lastIndexOf('/') + 1);
+        return settings.directoryUrls() && leaf.equals(settings.indexFileName()) ? urlForPath(path, settings) : path;
+    }
+
+    /** {@code news/blog.html} → {@code news/blog}; a leaf without a dot is returned unchanged. */
+    private static String withoutExtension(String path) {
+        int slash = path.lastIndexOf('/');
+        int dot = path.lastIndexOf('.');
+        return dot > slash + 1 ? path.substring(0, dot) : path;
+    }
+
     // ------------------------------------------------------------------
     // Resolution order and placeholder expansion
     // ------------------------------------------------------------------

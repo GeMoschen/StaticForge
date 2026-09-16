@@ -78,6 +78,26 @@ public final class OutputPathResolver {
     }
 
     /**
+     * Resolves the output path of page {@code pageNumber} ≥ 2 of a paginated page (M21.2.1): the page template's
+     * {@code paginationPath} pattern, or {@code name-N.ext} next to page 1 ({@link OutputPathExpander#resolvePaginationPath}).
+     *
+     * @param firstPagePath page 1's path, as {@link #resolvePagePath} returned it
+     */
+    public String resolvePaginationPath(UUID pageUuid, String channel, String firstPagePath, int pageNumber) {
+        SnapshotAsset page = snapshot.assetByUuid(pageUuid);
+        if (page == null) {
+            throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
+        }
+        return OutputFile.normalize(OutputPathExpander.resolvePaginationPath(
+                toPageContext(page), channel, settingsFor(channel), firstPagePath, pageNumber));
+    }
+
+    /** The URL (href, relative to the site root) of a pagination page's output path in {@code channel}. */
+    public String paginationUrl(String path, String channel) {
+        return OutputPathExpander.urlForPaginationPath(path, settingsFor(channel));
+    }
+
+    /**
      * Resolves the URL (href) a {@code $CMS_REF(page:...)} should emit for a page, relative to the
      * site root. With {@code urlStrategy=PRETTY} and {@code trailingSlash} this is the directory
      * form ({@code products/hammer/}, the site root as {@code ./}); otherwise it matches the
@@ -93,25 +113,36 @@ public final class OutputPathResolver {
     }
 
     /**
-     * Detects output-path collisions among resolved entries: two distinct pages mapping to the
-     * same path. Records first-path ownership and returns one {@link Collision} per colliding
-     * path (each naming the first two distinct asset UIDs).
+     * Detects output-path collisions among resolved entries: two distinct outputs mapping to the same path. An
+     * output is owned by its page and page number (M21.2.1), so two page numbers of one paginated page on one path
+     * collide too; the same page in two channels on one path does not. Records first-path ownership and returns one
+     * {@link Collision} per colliding path, naming the first two owners by uid ({@code blog (page 2)} past page 1).
      */
     public List<Collision> findCollisions(List<PlanEntry> entries) {
-        Map<String, UUID> owners = new HashMap<>();
+        Map<String, Owner> owners = new HashMap<>();
         List<Collision> collisions = new ArrayList<>();
         for (PlanEntry entry : entries == null ? List.<PlanEntry>of() : entries) {
-            UUID previous = owners.putIfAbsent(entry.outputPath(), entry.pageUuid());
-            if (previous != null && !previous.equals(entry.pageUuid())) {
-                collisions.add(new Collision(entry.outputPath(), uidOf(previous), uidOf(entry.pageUuid())));
+            Owner owner = new Owner(entry.pageUuid(), entry.pageNumber());
+            Owner previous = owners.putIfAbsent(entry.outputPath(), owner);
+            if (previous != null && !previous.equals(owner)) {
+                collisions.add(new Collision(entry.outputPath(), describe(previous), describe(owner)));
             }
         }
-        this.collisionOwners = Map.copyOf(owners);
+        Map<String, UUID> pages = new HashMap<>();
+        owners.forEach((path, owner) -> pages.put(path, owner.pageUuid()));
+        this.collisionOwners = Map.copyOf(pages);
         return List.copyOf(collisions);
     }
 
-    /** A single output-path collision between two distinct pages. */
+    /** A single output-path collision between two distinct outputs. */
     public record Collision(String path, String uidA, String uidB) {}
+
+    private record Owner(UUID pageUuid, int pageNumber) {}
+
+    private String describe(Owner owner) {
+        String uid = uidOf(owner.pageUuid());
+        return owner.pageNumber() == 1 ? uid : uid + " (page " + owner.pageNumber() + ")";
+    }
 
     // ------------------------------------------------------------------
     // Snapshot adaptation

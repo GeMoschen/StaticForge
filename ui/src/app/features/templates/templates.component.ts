@@ -60,6 +60,13 @@ import {
   type TemplateKind,
   type TemplateSummary,
 } from './templates.service';
+import {
+  DEFAULT_PAGINATION_PATH,
+  declaresPagination,
+  paginationPathError,
+  paginationPathsForSave,
+  readPaginationPaths,
+} from './pagination-path.util';
 
 type ChannelView = components['schemas']['ChannelView'];
 type FolderView = components['schemas']['FolderView'];
@@ -104,7 +111,7 @@ const NEW_DATASET_DEFINITION = `content {
     RouterLink,
   ],
   templateUrl: './templates.component.html',
-  styleUrls: ['./templates.component.scss', './templates-inheritance.scss'],
+  styleUrls: ['./templates.component.scss', './templates-inheritance.scss', './templates-pagination.scss'],
 })
 export class TemplatesComponent {
   readonly projectKey = input.required<string>();
@@ -218,6 +225,29 @@ export class TemplatesComponent {
   // ---- Inheritance (M20.4.1) ----
   /** A page template's `abstract` flag as edited: a layout other templates extend, never used by pages. */
   readonly abstractTemplate = signal(false);
+  /** A page template's per-channel path patterns of pages 2..N of a paginated page, as edited (M21). */
+  readonly paginationPaths = signal<Record<string, string>>({});
+  /** Whether the pagination paths apply: the template declares or inherits a pagination editor, or has patterns. */
+  readonly showPaginationPaths = computed(
+    () =>
+      !this.isSection() &&
+      (declaresPagination(
+        (this.detail()?.effectiveDefinition as { editors?: { type?: string }[] } | null | undefined)?.editors,
+        this.contentDefinition(),
+      ) ||
+        Object.keys(paginationPathsForSave(this.paginationPaths())).length > 0),
+  );
+  readonly paginationPathErrors = computed<Record<string, string>>(() => {
+    const errors: Record<string, string> = {};
+    for (const [channel, pattern] of Object.entries(this.paginationPaths())) {
+      const error = paginationPathError(pattern);
+      if (error) {
+        errors[channel] = error;
+      }
+    }
+    return errors;
+  });
+  protected readonly defaultPaginationPath = DEFAULT_PAGINATION_PATH;
   /** Diagnostics of the selected channel's source, validated live as that template's channel. */
   readonly octlDiagnostics = signal<Diagnostic[]>([]);
   /** Descendants a rejected save would have broken (`422 SF-DOM-0124`). */
@@ -507,6 +537,11 @@ export class TemplatesComponent {
     this.requestOctlValidation();
   }
 
+  onPaginationPathInput(channel: string, event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.paginationPaths.update((paths) => ({ ...paths, [channel]: value }));
+  }
+
   onAbstractChange(event: Event): void {
     this.abstractTemplate.set((event.target as HTMLInputElement).checked);
     this.templateInUse.set(null);
@@ -591,6 +626,10 @@ export class TemplatesComponent {
     if (!key || !uuid || !detail || this.readOnly()) {
       return;
     }
+    if (Object.keys(this.paginationPathErrors()).length > 0) {
+      this.toast.show('A pagination path is missing {pageNumber} — fix it before saving.', 'error');
+      return;
+    }
     this.saving.set(true);
     this.service
       .update(
@@ -603,7 +642,14 @@ export class TemplatesComponent {
           category: this.category(),
           deprecated: this.deprecated(),
           channelSources: this.channelSourcesOf(detail),
-          ...(this.isSection() ? {} : { outputPath: this.outputPathOf(detail), abstract: this.abstractTemplate() }),
+          ...(this.isSection()
+            ? {}
+            : {
+                outputPath: this.pathMapOf(detail.outputPath),
+                // Edited under "Pagination paths"; blank channels use the default sibling-file path (M21).
+                paginationPath: paginationPathsForSave(this.paginationPaths()),
+                abstract: this.abstractTemplate(),
+              }),
         },
         this.etag(detail),
       )
@@ -621,6 +667,12 @@ export class TemplatesComponent {
           this.reloadDetail(key, uuid, false);
         },
         error: (err) => {
+          const problem = (err as { error?: { field?: string; detail?: string } }).error;
+          if (problem?.field?.startsWith('paginationPath') && problem.detail) {
+            this.toast.show(problem.detail, 'error');
+            this.saving.set(false);
+            return;
+          }
           const shown = this.showSaveProblems(err, (diagnostics) => {
             this.cdlDiagnostics.set(diagnostics);
             this.toast.show(
@@ -804,8 +856,9 @@ export class TemplatesComponent {
     return out;
   }
 
-  private outputPathOf(detail: TemplateDetail): Record<string, string> {
-    const raw = detail.outputPath as Record<string, string> | null | undefined;
+  /** A per-channel path map of the detail (`outputPath`, `paginationPath`) as the update request sends it. */
+  private pathMapOf(value: unknown): Record<string, string> {
+    const raw = value as Record<string, string> | null | undefined;
     if (!raw) {
       return {};
     }
@@ -889,6 +942,7 @@ export class TemplatesComponent {
         this.category.set(detail.category ?? '');
         this.deprecated.set(detail.deprecated ?? false);
         this.abstractTemplate.set(detail.abstract ?? false);
+        this.paginationPaths.set(readPaginationPaths(detail.paginationPath));
         this.contentDefinition.set(detail.contentDefinition ?? '');
         this.cdlDiagnostics.set([]);
         this.octlDiagnostics.set([]);

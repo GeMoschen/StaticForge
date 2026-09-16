@@ -11,6 +11,8 @@ import java.util.UUID;
  * nullable (spec M13.1.3): when {@code null}, the template lands under the project's fixed
  * folder matching its {@code kind} (the "Page Templates" / "Section Templates" root).
  * {@code abstractTemplate} (M20, page templates only) makes the template a layout pages can't use.
+ * {@code paginationPath} (M21.2.1, page templates only) is the per-channel path pattern of pages 2..N of a paginated
+ * page; a channel without one writes {@code name-N.ext} next to page 1.
  */
 public record CreateTemplateCommand(
         long projectId,
@@ -22,11 +24,29 @@ public record CreateTemplateCommand(
         boolean deprecated,
         Map<String, String> outputPath,
         UUID parentFolderUuid,
-        boolean abstractTemplate) {
+        boolean abstractTemplate,
+        Map<String, String> paginationPath) {
 
     public CreateTemplateCommand {
         channelSources = channelSources == null ? Map.of() : channelSources;
         outputPath = outputPath == null ? Map.of() : outputPath;
+        paginationPath = paginationPath == null ? Map.of() : paginationPath;
+    }
+
+    /** A template without pagination path patterns, the only kind before M21. */
+    public CreateTemplateCommand(
+            long projectId,
+            AssetType kind,
+            String displayName,
+            String contentDefinition,
+            Map<String, String> channelSources,
+            String category,
+            boolean deprecated,
+            Map<String, String> outputPath,
+            UUID parentFolderUuid,
+            boolean abstractTemplate) {
+        this(projectId, kind, displayName, contentDefinition, channelSources, category, deprecated, outputPath, parentFolderUuid,
+                abstractTemplate, Map.of());
     }
 
     /** A concrete (non-abstract) template, the only kind before M20. */

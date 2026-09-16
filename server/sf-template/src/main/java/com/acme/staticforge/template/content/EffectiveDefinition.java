@@ -64,6 +64,7 @@ public record EffectiveDefinition(
         Map<String, String> editorsInheritedFrom = new LinkedHashMap<>();
         Map<String, String> bodiesInheritedFrom = new LinkedHashMap<>();
         List<Diagnostic> diagnostics = new ArrayList<>();
+        String paginationOwner = null;
 
         int last = rootFirst.size() - 1;
         for (int index = 0; index <= last; index++) {
@@ -83,6 +84,20 @@ public record EffectiveDefinition(
                                 0, 0));
                     }
                     continue;
+                }
+                if (editor.isPagination()) {
+                    if (paginationOwner != null) {
+                        // At most one per page (M21.1.1): the inherited one wins, like a colliding name.
+                        if (own) {
+                            diagnostics.add(Diagnostic.error(
+                                    DiagnosticCodes.CDL_PAGINATION_DUPLICATE,
+                                    "Pagination editor '" + editor.name() + "' is a second one: ancestor template '"
+                                            + paginationOwner + "' already declares a pagination editor",
+                                    0, 0));
+                        }
+                        continue;
+                    }
+                    paginationOwner = layer.uid();
                 }
                 names.forEach(name -> editorOwners.put(name, layer.uid()));
                 EditorDefinition added = own ? editor : uniqueGroupNames(editor, layer.uid());
@@ -138,7 +153,8 @@ public record EffectiveDefinition(
                 name, editor.type(), editor.label(), editor.help(), editor.required(), editor.readOnly(), editor.hidden(),
                 editor.defaultValue(), editor.min(), editor.max(), editor.maxLength(), editor.maxChars(), editor.pattern(),
                 editor.patternMessage(), editor.mimeTypes(), editor.assetTypes(), editor.options(), editor.features(),
-                editor.allow(), editor.visibleWhen(), editor.renamedFrom(), items, editor.dataset());
+                editor.allow(), editor.visibleWhen(), editor.renamedFrom(), items, editor.dataset(),
+                editor.pagination());
     }
 
     private static ContentDefinition empty() {

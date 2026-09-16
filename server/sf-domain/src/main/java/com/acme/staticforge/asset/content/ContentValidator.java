@@ -3,8 +3,11 @@ package com.acme.staticforge.asset.content;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorDefinition;
 import com.acme.staticforge.template.content.EditorType;
+import com.acme.staticforge.template.content.PaginationOptions;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.expression.ExpressionEvaluator;
+import com.acme.staticforge.template.query.DatasetQueryParser;
+import com.acme.staticforge.template.query.RecordView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import java.util.ArrayList;
@@ -26,6 +29,7 @@ public final class ContentValidator {
 
     private final ExpressionEvaluator evaluator;
     private final RecordDatasetLookup recordDatasets;
+    private final PaginationSourceLookup paginationSources;
 
     /** Creates a validator with a fresh expression evaluator. */
     public ContentValidator() {
@@ -43,8 +47,19 @@ public final class ContentValidator {
      * such a reference points at a record.
      */
     public ContentValidator(ExpressionEvaluator evaluator, RecordDatasetLookup recordDatasets) {
+        this(evaluator, recordDatasets, null);
+    }
+
+    /**
+     * Creates a validator that also checks a pagination value's source through {@code paginationSources} (M21.1.1):
+     * a live navigation folder or dataset, and a dataset sort key the schema declares. {@code null} checks the
+     * value's shape and its editor's declaration only.
+     */
+    public ContentValidator(
+            ExpressionEvaluator evaluator, RecordDatasetLookup recordDatasets, PaginationSourceLookup paginationSources) {
         this.evaluator = evaluator;
         this.recordDatasets = recordDatasets;
+        this.paginationSources = paginationSources;
     }
 
     /**
@@ -134,6 +149,8 @@ public final class ContentValidator {
                 validateList(editor, scope, value, path, sections, issues);
             } else if (editor.isCatalog()) {
                 validateCatalog(editor, value, path, sections, issues);
+            } else if (editor.isPagination()) {
+                validatePagination(editor, value, path, issues);
             } else {
                 validateScalar(editor, value, path, issues);
             }
@@ -252,6 +269,102 @@ public final class ContentValidator {
                 issues.addAll(validateInstance(card, cardPath, editor.allow(), "Editor '" + editor.name() + "'", sections));
             }
         }
+    }
+
+    /**
+     * A pagination value (M21.1.1): {@code {type:"PAGINATION", source:{kind, uuid}, pageSize, sort:{key, direction}}},
+     * or {@code null} for a page that isn't paginated. Findings are structural ({@code type} for a malformed object,
+     * {@code pagination} otherwise): a page must never store a source the planner can't count.
+     */
+    private void validatePagination(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
+        if (value == null || value.isNull() || value.isMissingNode()) {
+            if (editor.required()) {
+                issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
+            }
+            return;
+        }
+        if (!isPaginationShape(value)) {
+            issues.add(new ContentIssue(path, "type", Severity.ERROR, "Editor '" + editor.name() + "' has an invalid value shape."));
+            return;
+        }
+        PaginationOptions options = editor.pagination() != null
+                ? editor.pagination()
+                : new PaginationOptions(null, PaginationOptions.DEFAULT_PAGE_SIZE, null, null);
+        String kind = value.path("source").path("kind").asText();
+        UUID uuid = UUID.fromString(value.path("source").path("uuid").asText());
+        boolean nav = "NAV".equals(kind);
+        if (!(nav || "DATASET".equals(kind)) || !options.allows(kind)) {
+            issues.add(new ContentIssue(
+                    path + ".source.kind", "pagination", Severity.ERROR,
+                    "Editor '" + editor.name() + "' does not allow source kind '" + kind + "' (allowed: "
+                            + String.join(", ", options.sources()) + ")."));
+            return;
+        }
+        int pageSize = value.path("pageSize").asInt();
+        if (pageSize < 1 || pageSize > options.effectiveMaxPageSize()) {
+            issues.add(new ContentIssue(
+                    path + ".pageSize", "pagination", Severity.ERROR,
+                    "Editor '" + editor.name() + "' needs a page size between 1 and " + options.effectiveMaxPageSize() + "."));
+        }
+        JsonNode sort = value.get("sort");
+        String sortKey = sort == null || sort.isNull() ? null : sort.path("key").asText();
+        if (sortKey != null && !options.sort().contains(sortKey)) {
+            issues.add(new ContentIssue(
+                    path + ".sort.key", "pagination", Severity.ERROR,
+                    "Editor '" + editor.name() + "' does not offer sort key '" + sortKey + "'."));
+            return;
+        }
+        if (nav && sortKey != null && !PaginationOptions.NAV_SORT_KEYS.contains(sortKey)) {
+            issues.add(new ContentIssue(
+                    path + ".sort.key", "pagination", Severity.ERROR,
+                    "A navigation source can't sort by '" + sortKey + "': use "
+                            + String.join(", ", PaginationOptions.NAV_SORT_KEYS) + "."));
+        }
+        if (paginationSources == null) {
+            return;
+        }
+        if (nav) {
+            if (!paginationSources.isNavigationFolder(uuid)) {
+                issues.add(new ContentIssue(
+                        path + ".source.uuid", "pagination", Severity.ERROR,
+                        "Editor '" + editor.name() + "' must point at a folder of the Navigation store."));
+            }
+            return;
+        }
+        Optional<ContentDefinition> schema = paginationSources.datasetSchema(uuid);
+        if (schema.isEmpty()) {
+            issues.add(new ContentIssue(
+                    path + ".source.uuid", "pagination", Severity.ERROR,
+                    "Editor '" + editor.name() + "' must point at a dataset."));
+        } else if (sortKey != null && !isSortableField(schema.get(), sortKey)) {
+            issues.add(new ContentIssue(
+                    path + ".sort.key", "pagination", Severity.ERROR,
+                    "The dataset has no sortable field '" + sortKey + "'."));
+        }
+    }
+
+    /** {@code type}, a {@code source} with a text {@code kind} and a UUID, an integer {@code pageSize}, an optional {@code sort}. */
+    private static boolean isPaginationShape(JsonNode value) {
+        JsonNode source = value.path("source");
+        if (!isTyped(value, "PAGINATION") || !source.path("kind").isTextual() || !isUuid(source.get("uuid"))
+                || !value.path("pageSize").isIntegralNumber()) {
+            return false;
+        }
+        JsonNode sort = value.get("sort");
+        if (sort == null || sort.isNull()) {
+            return true;
+        }
+        JsonNode direction = sort.path("direction");
+        return sort.isObject()
+                && sort.path("key").isTextual()
+                && (direction.isMissingNode() || direction.isNull()
+                        || "ASC".equals(direction.asText()) || "DESC".equals(direction.asText()));
+    }
+
+    /** A record meta field, or a declared editor with a natural order (the dataset loop's sort rule, M19.3.1). */
+    private static boolean isSortableField(ContentDefinition schema, String field) {
+        return RecordView.META_FIELDS.contains(field)
+                || schema.findEditor(field).map(editor -> DatasetQueryParser.SCALAR_TYPES.contains(editor.type())).orElse(false);
     }
 
     private static void validateTextConstraints(
@@ -411,6 +524,7 @@ public final class ContentValidator {
             case REFERENCE -> isTyped(value, "ASSET_REF") && isUuid(value.get("uuid")) && optionalText(value, "assetType");
             case LIST -> value.isArray();
             case CATALOG -> isTyped(value, "CATALOG");
+            case PAGINATION -> isTyped(value, "PAGINATION");
             case JSON -> true;
         };
     }

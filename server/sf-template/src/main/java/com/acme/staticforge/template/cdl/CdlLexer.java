@@ -19,7 +19,8 @@ final class CdlLexer {
             "content", "editor", "group", "item", "label", "help", "required", "default",
             "readOnly", "hidden", "visibleWhen", "validate", "pattern", "message", "min",
             "max", "maxLength", "maxChars", "mimeTypes", "assetTypes", "folder", "options",
-            "format", "features", "renamedFrom", "bodies", "body", "allow", "dataset");
+            "format", "features", "renamedFrom", "bodies", "body", "allow", "dataset",
+            "sources", "pageSize", "maxPageSize", "sort");
 
     enum TokenType {
         LBRACE, RBRACE, LBRACKET, RBRACKET, COLON, COMMA, IDENT, STRING, NUMBER, BOOLEAN, EOF

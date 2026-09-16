@@ -1,6 +1,6 @@
 ---
 id: M21.1.1
-status: todo
+status: done
 depends: [M16.5.2, M16.3.1]
 epic: m21-pagination
 feature: cdl
@@ -59,18 +59,18 @@ Page templates declare bodies. `$CMS_BODY` in a section template is already a va
 
 ## Acceptance criteria
 
-- [ ] `editor pagination posts { sources ["nav"] pageSize 10 sort ["navigation","date"] }`
+- [x] `editor pagination posts { sources ["nav"] pageSize 10 sort ["navigation","date"] }`
       compiles into an `EditorDefinition` with type `PAGINATION` and the declared attributes.
-- [ ] Declaring it in a section template, twice in a page template, or inside a list item
+- [x] Declaring it in a section template, twice in a page template, or inside a list item
       produces the new error diagnostics. The template save (`TemplateServiceImpl`) returns 422
       with them.
-- [ ] Page save rejects an invalid pagination value (wrong kind, missing/wrong-type source,
+- [x] Page save rejects an invalid pagination value (wrong kind, missing/wrong-type source,
       out-of-range size, unoffered sort key) with a field-addressed issue. A `null` value is accepted.
-- [ ] A saved page with a nav-source pagination value shows up in the nav folder's usages
+- [x] A saved page with a nav-source pagination value shows up in the nav folder's usages
       (`GET /assets/{uuid}/usages`) as `CONTENT_REF`.
-- [ ] `docs/editors/pagination.md` exists and the editor count in `docs/editors/README.md` and
+- [x] `docs/editors/pagination.md` exists and the editor count in `docs/editors/README.md` and
       `docs/template-developer-guide.md` is updated.
-- [ ] `./gradlew :server:sf-template:test :server:sf-domain:test` green.
+- [x] `./gradlew :server:sf-template:test :server:sf-domain:test` green.
 
 ## Out of scope
 

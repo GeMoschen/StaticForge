@@ -20,9 +20,12 @@ import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
+import com.acme.staticforge.generate.plan.PaginatedPage;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.pagination.PaginationItem;
+import com.acme.staticforge.pagination.PaginationScope;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
@@ -41,6 +44,7 @@ import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.micrometer.core.instrument.Metrics;
 import java.nio.charset.StandardCharsets;
@@ -176,9 +180,11 @@ final class GenerationRenderer {
         // One budget for the page and every section/include/catalog card rendered inside it.
         RenderBudget budget = new RenderBudget();
         UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath(), warnings);
-        BlockResolver blocks = blockResolver(content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), deps, warnings, budget);
+        JsonNode pagination = paginationScope(entry, deps, warnings);
+        BlockResolver blocks = blockResolver(
+                content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), pagination, deps, warnings, budget);
 
-        RenderContext context = RenderContext.builder()
+        RenderContext.Builder builder = RenderContext.builder()
                 .channel(entry.channel())
                 .escaping(escapingFor(entry.channel()))
                 .values(content)
@@ -190,11 +196,16 @@ final class GenerationRenderer {
                 .meta("revision", TextNode.valueOf(String.valueOf(snapshot.revision())))
                 .meta("channel", TextNode.valueOf(emptyIfNull(entry.channel())))
                 .meta("projectKey", TextNode.valueOf(projectKey))
+                .pagination(pagination)
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
                 .assetValueResolver(assetValues)
-                .budget(budget)
-                .build();
+                .budget(budget);
+        if (entry.pagination() != null) {
+            builder.meta("pageNumber", IntNode.valueOf(entry.pagination().pageNumber()))
+                    .meta("totalPages", IntNode.valueOf(entry.pagination().totalPages()));
+        }
+        RenderContext context = builder.build();
 
         RenderResult result = budget.withTemplate(template.uuid(), template.uid(), () -> renderer.render(compiled, context));
         deps.addAll(result.dependencies());
@@ -202,6 +213,41 @@ final class GenerationRenderer {
 
         return new RenderedFile(
                 entry.outputPath(), result.output().getBytes(StandardCharsets.UTF_8), deps, warnings);
+    }
+
+    /**
+     * The {@code CMS_PAGINATION} value of a paginated entry (M21.3.1), or {@code null}: the slice of the items the
+     * planner resolved, with page and item links relative to this entry's output path. The source and every item
+     * (not only this page's) are dependencies, and the source's warnings are reported with page 1.
+     */
+    private JsonNode paginationScope(PlanEntry entry, Set<UUID> deps, List<Diagnostic> warnings) {
+        if (entry.pagination() == null) {
+            return null;
+        }
+        PaginatedPage page = entry.pagination().page();
+        deps.add(page.sourceUuid());
+        page.items().forEach(item -> deps.add(item.uuid()));
+        if (entry.pagination().pageNumber() == 1) {
+            warnings.addAll(page.warnings());
+        }
+        String channel = entry.channel();
+        return PaginationScope.build(
+                page.items(),
+                page.pageSize(),
+                entry.pagination().pageNumber(),
+                new PaginationScope.Links() {
+                    @Override
+                    public String page(int number) {
+                        String path = page.path(number);
+                        return relativeUrl(entry.outputPath(), paths == null ? path : paths.paginationUrl(path, channel));
+                    }
+
+                    @Override
+                    public String item(PaginationItem item) {
+                        return paths == null ? "" : relativeUrl(entry.outputPath(), paths.resolvePageUrl(item.uuid(), channel));
+                    }
+                },
+                item -> assetValues.valueOf("page", item.uuid()));
     }
 
     /**
@@ -479,6 +525,7 @@ final class GenerationRenderer {
             String channel,
             UUID activePageUuid,
             String pagePath,
+            JsonNode pagination,
             Set<UUID> deps,
             List<Diagnostic> warnings,
             RenderBudget budget) {
@@ -491,7 +538,8 @@ final class GenerationRenderer {
                 }
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
-                    out.append(renderSectionInstance(pageContent, section, channel, activePageUuid, pagePath, deps, warnings, budget));
+                    out.append(renderSectionInstance(
+                            pageContent, section, channel, activePageUuid, pagePath, pagination, deps, warnings, budget));
                 }
                 return out.toString();
             }
@@ -503,7 +551,8 @@ final class GenerationRenderer {
                 }
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
-                    out.append(renderSectionInstance(pageContent, card, channel, activePageUuid, pagePath, deps, warnings, budget));
+                    out.append(renderSectionInstance(
+                            pageContent, card, channel, activePageUuid, pagePath, pagination, deps, warnings, budget));
                 }
                 return out.toString();
             }
@@ -514,7 +563,9 @@ final class GenerationRenderer {
                 if (uuid == null) {
                     return "";
                 }
-                return renderSection(uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, deps, warnings, budget);
+                return renderSection(
+                        uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, pagination, deps,
+                        warnings, budget);
             }
 
             @Override
@@ -632,6 +683,7 @@ final class GenerationRenderer {
             String channel,
             UUID activePageUuid,
             String pagePath,
+            JsonNode pagination,
             Set<UUID> deps,
             List<Diagnostic> warnings,
             RenderBudget budget) {
@@ -647,7 +699,8 @@ final class GenerationRenderer {
         }
         JsonNode values = section.path("content");
         String instanceId = section.path("instanceId").asText();
-        return renderSection(sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, deps, warnings, budget);
+        return renderSection(
+                sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, pagination, deps, warnings, budget);
     }
 
     private String renderSection(
@@ -658,6 +711,7 @@ final class GenerationRenderer {
             UUID activePageUuid,
             String pagePath,
             String instanceId,
+            JsonNode pagination,
             Set<UUID> deps,
             List<Diagnostic> warnings,
             RenderBudget budget) {
@@ -681,8 +735,9 @@ final class GenerationRenderer {
                 .pageValues(pageValues != null ? pageValues : mapper.createObjectNode())
                 .meta("uid", TextNode.valueOf(emptyIfNull(template.uid())))
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
+                .pagination(pagination)
                 .urlResolver(urlResolver(channel, pagePath, warnings))
-                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, deps, warnings, budget))
+                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, pagination, deps, warnings, budget))
                 .assetValueResolver(assetValues)
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {

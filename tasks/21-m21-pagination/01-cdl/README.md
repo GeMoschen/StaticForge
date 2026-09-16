@@ -39,13 +39,13 @@ Stored value:
 
 ## Feature exit criteria
 
-- [ ] `EditorType.PAGINATION` exists, parses, compiles into `EditorDefinition`, and is rejected
+- [x] `EditorType.PAGINATION` exists, parses, compiles into `EditorDefinition`, and is rejected
       in section templates and when declared twice in one page template.
-- [ ] The stored `PAGINATION` value is validated on page save (source kind allowed, source asset
+- [x] The stored `PAGINATION` value is validated on page save (source kind allowed, source asset
       exists with the right type/scope, `1 ≤ pageSize ≤ maxPageSize`, sort key offered).
-- [ ] The source asset is materialized as a `CONTENT_REF` reference from the page (usages view
+- [x] The source asset is materialized as a `CONTENT_REF` reference from the page (usages view
       shows the page under the nav folder / dataset).
-- [ ] `docs/editors/pagination.md` exists and `docs/editors/README.md` lists 19 types.
+- [x] `docs/editors/pagination.md` exists and `docs/editors/README.md` lists 19 types.
 
 ## Dependencies
 

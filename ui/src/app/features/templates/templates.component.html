@@ -210,6 +210,37 @@
               spellcheck="false"
             ></textarea>
           </sf-field>
+          @if (showPaginationPaths()) {
+            <fieldset class="pagination-paths" aria-describedby="pagination-paths-help">
+              <legend class="pagination-paths__legend">Pagination paths</legend>
+              <p id="pagination-paths-help" class="detail__meta pagination-paths__help">
+                Where pages 2, 3, … of a paginated page are written, per channel. Leave blank to write them next to the
+                first page (<code>blog.html</code> → <code>blog-2.html</code>). Placeholders: <code>{{ '{' }}pageNumber{{ '}' }}</code>
+                (required), <code>{{ '{' }}pagePath{{ '}' }}</code> (the first page's path without extension),
+                <code>{{ '{' }}folder{{ '}' }}</code>, <code>{{ '{' }}uid{{ '}' }}</code>, <code>{{ '{' }}ext{{ '}' }}</code>.
+              </p>
+              @for (key of channelKeys(); track key) {
+                <label class="pagination-paths__row">
+                  <span class="pagination-paths__channel">{{ key }}</span>
+                  <input
+                    type="text"
+                    spellcheck="false"
+                    [attr.aria-label]="'Pagination path for channel ' + key"
+                    [attr.aria-invalid]="paginationPathErrors()[key] ? 'true' : null"
+                    [placeholder]="defaultPaginationPath"
+                    [value]="paginationPaths()[key] ?? ''"
+                    [disabled]="readOnly()"
+                    (input)="onPaginationPathInput(key, $event)"
+                  />
+                </label>
+                @if (paginationPathErrors()[key]; as error) {
+                  <span class="diagnostic diagnostic--error" role="alert">{{ key }}: {{ error }}</span>
+                }
+              } @empty {
+                <p class="detail__meta">Add a channel to set its pagination path.</p>
+              }
+            </fieldset>
+          }
           <div class="actions">
             <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>
             <sf-button variant="primary" [disabled]="saving() || readOnly()" (click)="saveDefinition()">

@@ -49,6 +49,13 @@ final class CdlParser {
         String dataset;
         int datasetLine = -1;
         int datasetCol = -1;
+        /** Pagination attributes (M21.1.1); {@code paginationLine} is the first one's position, -1 when none. */
+        List<String> sources;
+        Integer pageSize;
+        Integer maxPageSize;
+        List<String> sort;
+        int paginationLine = -1;
+        int paginationCol = -1;
         final List<String> mimeTypes = new ArrayList<>();
         final List<String> assetTypes = new ArrayList<>();
         final List<SelectOption> options = new ArrayList<>();
@@ -215,6 +222,22 @@ final class CdlParser {
                 node.datasetCol = attrTok.column();
                 node.dataset = expectString(attrTok);
             }
+            case "sources" -> {
+                markPagination(node, attrTok);
+                node.sources = expectStringArray(attrTok);
+            }
+            case "pageSize" -> {
+                markPagination(node, attrTok);
+                node.pageSize = expectInt(attrTok);
+            }
+            case "maxPageSize" -> {
+                markPagination(node, attrTok);
+                node.maxPageSize = expectInt(attrTok);
+            }
+            case "sort" -> {
+                markPagination(node, attrTok);
+                node.sort = expectStringArray(attrTok);
+            }
             case "options" -> node.options.addAll(parseOptions(attrTok));
             case "features" -> node.features.addAll(expectIdentArray(attrTok));
             case "allow" -> node.allow.addAll(expectStringArray(attrTok));
@@ -226,6 +249,13 @@ final class CdlParser {
                 error(DiagnosticCodes.CDL_INVALID_ATTRIBUTE, "Unknown attribute '" + attr + "'", attrTok);
                 skipValue();
             }
+        }
+    }
+
+    private static void markPagination(EditorNode node, Token attrTok) {
+        if (node.paginationLine < 0) {
+            node.paginationLine = attrTok.line();
+            node.paginationCol = attrTok.column();
         }
     }
 
