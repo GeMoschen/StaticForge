@@ -17,12 +17,12 @@ page selector in the preview pane, so an editor can check page 2..N before publi
 
 ## Feature exit criteria
 
-- [ ] A `pagination` editor renders in `sf-content-form` via `EDITOR_REGISTRY`, is keyboard-complete,
+- [x] A `pagination` editor renders in `sf-content-form` via `EDITOR_REGISTRY`, is keyboard-complete,
       and round-trips the stored value through autosave.
-- [ ] The preview pane shows "Page n of N" with prev/next controls for paginated pages and nothing
+- [x] The preview pane shows "Page n of N" with prev/next controls for paginated pages and nothing
       for others.
-- [ ] Both are read-only in time travel (`TimeTravelStore.isTimeTravel`, readonly interceptor).
-- [ ] The visual diff (`features/revisions/visual-diff/resolve-editor.ts`) shows a readable summary of
+- [x] Both are read-only in time travel (`TimeTravelStore.isTimeTravel`, readonly interceptor).
+- [x] The visual diff (`features/revisions/visual-diff/resolve-editor.ts`) shows a readable summary of
       a `PAGINATION` value change.
 
 ## Dependencies

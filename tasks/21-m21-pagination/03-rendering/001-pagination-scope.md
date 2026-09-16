@@ -1,6 +1,6 @@
 ---
 id: M21.3.1
-status: todo
+status: done
 depends: [M21.2.1, M21.2.2, M16.1.1, M16.2.2]
 epic: m21-pagination
 feature: rendering
@@ -71,18 +71,18 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] `$CMS_FOR(post : CMS_PAGINATION.items)$…$CMS_END_FOR$` renders exactly items 11–20 on page 2
+- [x] `$CMS_FOR(post : CMS_PAGINATION.items)$…$CMS_END_FOR$` renders exactly items 11–20 on page 2
       of a size-10 pagination, in the planned order.
-- [ ] `prevHref`/`nextHref` are empty strings on page 1/last page respectively.
+- [x] `prevHref`/`nextHref` are empty strings on page 1/last page respectively.
       `$CMS_IF(CMS_PAGINATION.nextHref)$` behaves accordingly.
-- [ ] Every generated pagination href resolves to an existing output file. A link-checker style
+- [x] Every generated pagination href resolves to an existing output file. A link-checker style
       test resolves each href against its page path (per `tasks/lessons.md`).
-- [ ] A template using `CMS_PAGINATION.*` compiles without `SF-TPL-0103` in both page and section
+- [x] A template using `CMS_PAGINATION.*` compiles without `SF-TPL-0103` in both page and section
       templates; on a non-paginated page the accessors render empty.
-- [ ] `GET /preview/pages/{uuid}?page=2` renders page 2; `?page=99` renders the last page;
+- [x] `GET /preview/pages/{uuid}?page=2` renders page 2; `?page=99` renders the last page;
       `X-SF-Total-Pages` is set.
-- [ ] All new golden cases pass; existing golden cases are unchanged.
-- [ ] `./gradlew :server:sf-template:test :server:sf-generate:test :server:sf-domain:test :server:sf-api:test` green.
+- [x] All new golden cases pass; existing golden cases are unchanged.
+- [x] `./gradlew :server:sf-template:test :server:sf-generate:test :server:sf-domain:test :server:sf-api:test` green.
 
 ## Out of scope
 

@@ -47,6 +47,7 @@ public final class GlobalSetCdlRules {
                     0, 0));
         }
         checkEditors(definition.editors(), diagnostics);
+        diagnostics.addAll(PaginationCdlRules.notAllowedIn(definition, "a global property set"));
         return diagnostics;
     }
 

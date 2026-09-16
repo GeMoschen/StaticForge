@@ -54,6 +54,10 @@ public final class DiagnosticCodes {
     /** A block contains itself, through nested blocks or overrides along the chain. */
     public static final String OCTL_BLOCK_RECURSION = "SF-TPL-0162";
 
+    // Pagination (M21.3.1)
+    /** {@code CMS_PAGINATION} is read-only: a {@code $CMS_SET} or loop variable can't take its name. */
+    public static final String OCTL_PAGINATION_READ_ONLY = "SF-TPL-0163";
+
     // OCTL render limits (§16.10) — carried by RenderLimitException, fail only the affected file
     public static final String OCTL_INCLUDE_DEPTH = "SF-TPL-0130";
     public static final String OCTL_LOOP_LIMIT = "SF-TPL-0131";
@@ -86,5 +90,9 @@ public final class DiagnosticCodes {
     public static final String CDL_NOT_ALLOWED_IN_DATASET = "SF-CDL-0108";
     /** A template's own editor or body name collides with one it inherits from an ancestor (M20). */
     public static final String CDL_INHERITED_NAME_COLLISION = "SF-CDL-0109";
+    /** A {@code pagination} editor inside a {@code list}/{@code group}, or in a section template, property set or dataset schema (M21.1.1). */
+    public static final String CDL_PAGINATION_PLACEMENT = "SF-CDL-0110";
+    /** A page template declares, or declares and inherits, more than one {@code pagination} editor (M21.1.1). */
+    public static final String CDL_PAGINATION_DUPLICATE = "SF-CDL-0111";
     public static final String CDL_SYNTAX = "SF-CDL-0200";
 }

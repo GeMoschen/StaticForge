@@ -10,7 +10,7 @@ import java.util.Map;
  * The inputs to a single render (spec §16.5): the channel + escaping mode, the asset's
  * editor values, the {@code $CMS_META} values, the enclosing page for {@code $CMS_PAGE.*}
  * read-only access, an optional {@link UrlResolver} for {@code $CMS_REF}, and an optional
- * {@link AssetValueResolver} for cross-asset values. Built via
+ * {@link AssetValueResolver} for cross-asset values, and the {@code CMS_PAGINATION} value of a paginated page (M21.3.1). Built via
  * {@link Builder} and immutable once built; never shared across concurrent renders.
  *
  * <p>The optional {@link RenderBudget} is the one mutable part: it is deliberately shared by a
@@ -24,6 +24,7 @@ public final class RenderContext {
     private final JsonNode values;
     private final Map<String, JsonNode> meta;
     private final JsonNode pageValues;
+    private final JsonNode pagination;
     private final UrlResolver urlResolver;
     private final BlockResolver blockResolver;
     private final AssetValueResolver assetValueResolver;
@@ -35,6 +36,7 @@ public final class RenderContext {
             JsonNode values,
             Map<String, JsonNode> meta,
             JsonNode pageValues,
+            JsonNode pagination,
             UrlResolver urlResolver,
             BlockResolver blockResolver,
             AssetValueResolver assetValueResolver,
@@ -44,6 +46,7 @@ public final class RenderContext {
         this.values = values;
         this.meta = meta;
         this.pageValues = pageValues;
+        this.pagination = pagination;
         this.urlResolver = urlResolver;
         this.blockResolver = blockResolver;
         this.assetValueResolver = assetValueResolver;
@@ -80,6 +83,14 @@ public final class RenderContext {
         return pageValues;
     }
 
+    /**
+     * The read-only {@code CMS_PAGINATION} value of a paginated page (M21.3.1), built by the caller; a missing node on
+     * every other page, so {@code $CMS_IF(CMS_PAGINATION)$} is false there.
+     */
+    public JsonNode pagination() {
+        return pagination;
+    }
+
     /** The URL resolver, or {@code null} when {@code $CMS_REF} has no target resolver. */
     public UrlResolver urlResolver() {
         return urlResolver;
@@ -107,6 +118,7 @@ public final class RenderContext {
         private JsonNode values = JsonNodeFactory.instance.objectNode();
         private final Map<String, JsonNode> meta = new LinkedHashMap<>();
         private JsonNode pageValues = MissingNode.getInstance();
+        private JsonNode pagination = MissingNode.getInstance();
         private UrlResolver urlResolver;
         private BlockResolver blockResolver;
         private AssetValueResolver assetValueResolver;
@@ -142,6 +154,12 @@ public final class RenderContext {
             return this;
         }
 
+        /** Sets the {@code CMS_PAGINATION} value of a paginated page; {@code null} means not paginated. */
+        public Builder pagination(JsonNode paginationScope) {
+            this.pagination = paginationScope == null ? MissingNode.getInstance() : paginationScope;
+            return this;
+        }
+
         /** Sets the URL resolver used by {@code $CMS_REF}. */
         public Builder urlResolver(UrlResolver resolver) {
             this.urlResolver = resolver;
@@ -168,7 +186,7 @@ public final class RenderContext {
 
         /** Builds an immutable {@link RenderContext}. */
         public RenderContext build() {
-            return new RenderContext(channel, escaping, values, Map.copyOf(meta), pageValues, urlResolver, blockResolver, assetValueResolver, budget);
+            return new RenderContext(channel, escaping, values, Map.copyOf(meta), pageValues, pagination, urlResolver, blockResolver, assetValueResolver, budget);
         }
     }
 }

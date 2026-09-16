@@ -1,0 +1,9 @@
+<ul>
+$CMS_FOR(post : CMS_PAGINATION.items)$<li><a href="$CMS_VALUE(post.href)$">$CMS_VALUE(post.label)$</a> $CMS_VALUE(post.content.teaser)$</li>
+$CMS_END_FOR$</ul>
+<p>Page $CMS_VALUE(CMS_PAGINATION.current)$ of $CMS_VALUE(CMS_PAGINATION.total)$, $CMS_VALUE(CMS_PAGINATION.itemCount)$ posts, $CMS_VALUE(CMS_PAGINATION.pageSize)$ per page</p>
+<link rel="canonical" href="$CMS_VALUE(CMS_PAGINATION.canonicalHref)$">
+$CMS_IF(CMS_PAGINATION.prevHref)$<a rel="prev" href="$CMS_VALUE(CMS_PAGINATION.prevHref)$">Previous</a>
+$CMS_END_IF$$CMS_FOR(p : CMS_PAGINATION.pages)$$CMS_IF(p.current)$<strong>$CMS_VALUE(p.number)$</strong>$CMS_ELSE$<a href="$CMS_VALUE(p.href)$">$CMS_VALUE(p.number)$</a>$CMS_END_IF$
+$CMS_END_FOR$$CMS_IF(CMS_PAGINATION.nextHref)$<a rel="next" href="$CMS_VALUE(CMS_PAGINATION.nextHref)$">Next</a>
+$CMS_END_IF$<a href="$CMS_VALUE(CMS_PAGINATION.firstHref)$">First</a> <a href="$CMS_VALUE(CMS_PAGINATION.lastHref)$">Last</a>

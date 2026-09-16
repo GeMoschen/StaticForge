@@ -33,7 +33,9 @@ public record EditorDefinition(
         String renamedFrom,
         List<EditorDefinition> items,
         /** For REFERENCE editors (M19.3.2): restricts picking to records of this dataset UID; {@code null} for none. */
-        String dataset) {
+        String dataset,
+        /** For PAGINATION editors (M21.1.1): sources, page size and sort keys; {@code null} for every other type. */
+        PaginationOptions pagination) {
 
     public EditorDefinition {
         items = items == null ? List.of() : items;
@@ -54,5 +56,9 @@ public record EditorDefinition(
 
     public boolean isCatalog() {
         return type == EditorType.CATALOG;
+    }
+
+    public boolean isPagination() {
+        return type == EditorType.PAGINATION;
     }
 }

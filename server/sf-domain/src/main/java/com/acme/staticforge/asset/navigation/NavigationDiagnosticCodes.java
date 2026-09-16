@@ -30,4 +30,10 @@ public final class NavigationDiagnosticCodes {
      * rather than silently emitting a broken (non-linked) nav entry.
      */
     public static final String NAV_DANGLING_PAGE_REFERENCE = "SF-GEN-0411";
+
+    /**
+     * Warning: a paginated page's navigation source holds a reference that resolves to no page (M21.2.1). The item is
+     * skipped and the page still renders, unlike {@link #NAV_DANGLING_PAGE_REFERENCE} for {@code $CMS_NAVIGATION}.
+     */
+    public static final String NAV_PAGINATION_DANGLING_ITEM = "SF-GEN-0412";
 }

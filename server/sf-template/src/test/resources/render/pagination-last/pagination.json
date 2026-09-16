@@ -1,0 +1,42 @@
+{
+  "items": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000005",
+      "uid": "epsilon",
+      "displayName": "Epsilon",
+      "label": "Epsilon",
+      "href": "posts/epsilon.html",
+      "date": "2026-09-05",
+      "position": 0,
+      "content": {
+        "teaser": "Fifth"
+      }
+    }
+  ],
+  "current": 3,
+  "total": 3,
+  "pageSize": 2,
+  "itemCount": 5,
+  "firstHref": "blog.html",
+  "prevHref": "blog-2.html",
+  "nextHref": "",
+  "lastHref": "blog-3.html",
+  "canonicalHref": "blog-3.html",
+  "pages": [
+    {
+      "number": 1,
+      "href": "blog.html",
+      "current": false
+    },
+    {
+      "number": 2,
+      "href": "blog-2.html",
+      "current": false
+    },
+    {
+      "number": 3,
+      "href": "blog-3.html",
+      "current": true
+    }
+  ]
+}

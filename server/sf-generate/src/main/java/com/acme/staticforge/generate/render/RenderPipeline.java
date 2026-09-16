@@ -286,7 +286,7 @@ public class RenderPipeline {
                     futures.get(i).cancel(true);
                     pageErrors.add(Diagnostic.error(
                             "SF-GEN-0205",
-                            "Render timed out for page '" + entry.pageUuid() + "' (" + entry.channel() + ").",
+                            "Render timed out for page '" + entry.pageUuid() + pageSuffix(entry) + "' (" + entry.channel() + ").",
                             0,
                             0));
                     continue;
@@ -362,12 +362,19 @@ public class RenderPipeline {
      */
     private static Diagnostic renderLimitDiagnostic(Snapshot snapshot, PlanEntry entry, Diagnostic limit) {
         SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
-        String pageName = page != null && page.uid() != null ? page.uid() : entry.pageUuid().toString();
+        String pageName = (page != null && page.uid() != null ? page.uid() : entry.pageUuid().toString()) + pageSuffix(entry);
         String prefix = "Page '" + pageName + "' (" + entry.channel() + "): ";
         if (limit == null) {
             return Diagnostic.error("SF-GEN-0204", prefix + "render limit exceeded for '" + entry.outputPath() + "'.", 0, 0);
         }
         return new Diagnostic(limit.severity(), limit.code(), prefix + limit.message(), limit.line(), limit.column());
+    }
+
+    /** {@code " (2/5)"} for page 2 of a paginated page (M21.2.2), so the report tells its outputs apart; else empty. */
+    static String pageSuffix(PlanEntry entry) {
+        return entry.pagination() == null
+                ? ""
+                : " (" + entry.pagination().pageNumber() + "/" + entry.pagination().totalPages() + ")";
     }
 
     /** A zero-output file whose only findings are SF-GEN-0210 skips emitting (spec §15.4). */

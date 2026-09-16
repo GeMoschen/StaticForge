@@ -30,6 +30,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
+import com.acme.staticforge.template.cdl.PaginationCdlRules;
 import com.acme.staticforge.template.content.BodyDefinition;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EffectiveDefinition;
@@ -88,6 +89,9 @@ public class TemplateServiceImpl implements TemplateService {
     /** The source path of a page template's {@code TEMPLATE} edge to its parent (M20.2.2). */
     public static final String PARENT_SOURCE_PATH = "parentTemplateRef";
 
+    /** The page template payload's per-channel path patterns of pages 2..N of a paginated page (M21.2.1). */
+    public static final String PAGINATION_PATH = "paginationPath";
+
     /** How many page uids a "template in use" problem lists. */
     private static final int LISTED_PAGES = 10;
 
@@ -131,13 +135,13 @@ public class TemplateServiceImpl implements TemplateService {
         ensureFoldersAndMigrate(cmd.projectId(), ctx);
         UUID parentFolderUuid = resolveTemplateParentFolder(cmd, ctx);
 
-        ContentDefinition definition = compileDefinition(cmd.contentDefinition());
+        ContentDefinition definition = compileDefinition(cmd.contentDefinition(), cmd.kind());
         CompiledChannels compiled = compileChannels(
                 cmd.projectId(), cmd.kind(), null, null, cmd.channelSources(), cmd.channelSources().keySet(), definition,
                 hierarchies.live(cmd.projectId()));
         ObjectNode payload = buildPayload(
                 cmd.kind(), cmd.contentDefinition(), compiled, cmd.category(), cmd.deprecated(), cmd.outputPath(), definition,
-                cmd.abstractTemplate());
+                cmd.abstractTemplate(), cmd.paginationPath());
 
         AssetVersionView created = assetService.create(
                 new CreateAssetCommand(cmd.projectId(), cmd.kind(), cmd.displayName(), parentFolderUuid, payload, null), ctx);
@@ -177,13 +181,13 @@ public class TemplateServiceImpl implements TemplateService {
     @Transactional
     public TemplateView update(UUID uuid, UpdateTemplateCommand cmd, long expectedRevision, RevisionContext ctx) {
         Asset template = requireTemplate(ctx.projectId(), uuid);
-        ContentDefinition definition = compileDefinition(cmd.contentDefinition());
+        ContentDefinition definition = compileDefinition(cmd.contentDefinition(), template.getAssetType());
         CompiledChannels compiled = compileChannels(
                 template.getProjectId(), template.getAssetType(), uuid, template.getUid(), cmd.channelSources(),
                 cmd.channelSources().keySet(), definition, hierarchies.live(template.getProjectId()));
         ObjectNode payload = buildPayload(
                 template.getAssetType(), cmd.contentDefinition(), compiled, cmd.category(), cmd.deprecated(), cmd.outputPath(),
-                definition, cmd.abstractTemplate());
+                definition, cmd.abstractTemplate(), cmd.paginationPath());
 
         if (template.getAssetType() == AssetType.SECTION_TEMPLATE) {
             AssetVersionView updated = assetService.update(
@@ -333,6 +337,18 @@ public class TemplateServiceImpl implements TemplateService {
         return result.definition();
     }
 
+    /** Compiles a definition being saved: a section template also rejects a pagination editor (M21.1.1). */
+    private ContentDefinition compileDefinition(String source, AssetType kind) {
+        ContentDefinition definition = compileDefinition(source);
+        if (kind == AssetType.SECTION_TEMPLATE) {
+            List<Diagnostic> placement = PaginationCdlRules.notAllowedIn(definition, "a section template");
+            if (!placement.isEmpty()) {
+                throw diagnosticsError("CDL", placement);
+            }
+        }
+        return definition;
+    }
+
     /** The channel sources, those compiled on save, and the parent they extend (page templates; {@code null} for none). */
     private record CompiledChannels(Map<String, String> sources, Map<String, OctlResult> results, UUID parent) {}
 
@@ -450,7 +466,8 @@ public class TemplateServiceImpl implements TemplateService {
             boolean deprecated,
             Map<String, String> outputPath,
             ContentDefinition definition,
-            boolean abstractTemplate) {
+            boolean abstractTemplate,
+            Map<String, String> paginationPath) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("contentDefinition", contentDefinition == null ? "" : contentDefinition);
         payload.set("compiledDefinition", objectMapper.valueToTree(definition));
@@ -488,6 +505,19 @@ public class TemplateServiceImpl implements TemplateService {
 
             ObjectNode output = payload.putObject("outputPath");
             outputPath.forEach(output::put);
+            ObjectNode pagination = payload.putObject(PAGINATION_PATH);
+            paginationPath.forEach((channel, pattern) -> {
+                if (pattern == null || pattern.isBlank()) {
+                    return;
+                }
+                if (!pattern.contains("{pageNumber}")) {
+                    throw new SfException(ProblemFactory.unprocessableEntity(
+                            "The pagination path of channel '" + channel + "' must contain {pageNumber}, or every page would"
+                                    + " be written to the same file.",
+                            "field", PAGINATION_PATH + "." + channel));
+                }
+                pagination.put(channel, pattern);
+            });
             payload.put("abstract", abstractTemplate);
             setParent(payload, compiled.parent());
         }

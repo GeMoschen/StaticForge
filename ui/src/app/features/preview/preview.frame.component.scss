@@ -1,13 +1,18 @@
+// A flex item of the page editor's preview pane: without min-width 0 the desktop viewport preset (1280px frame)
+// sets the pane's minimum width and pushes it, toolbar included, past the window. The stage scrolls instead.
 :host {
   display: flex;
   flex-direction: column;
+  flex: 1;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   background: var(--sf-surface);
 }
 
 .preview-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sf-3);
   justify-content: space-between;
@@ -32,6 +37,25 @@
   cursor: pointer;
 }
 
+.preview-toolbar__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.preview-pages__select {
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-xs);
+}
+
+.preview-pages__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .preview-toolbar__button--active {
   background: var(--sf-signal);
   border-color: var(--sf-signal);
@@ -43,7 +67,8 @@
   min-height: 0;
   overflow: auto;
   display: flex;
-  justify-content: center;
+  // "safe": a frame wider than the stage starts at the left edge and scrolls, instead of overflowing on both sides.
+  justify-content: safe center;
   padding: var(--sf-3);
   background: var(--sf-slate);
 }

@@ -6,6 +6,7 @@ import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
 import com.acme.staticforge.template.cdl.DatasetCdlRules;
 import com.acme.staticforge.template.cdl.GlobalSetCdlRules;
+import com.acme.staticforge.template.cdl.PaginationCdlRules;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>{@code kind=GLOBAL_SET} additionally applies the property-set restrictions (M17.2.1), so the
  * Globals schema editor gets exactly the diagnostics its save will enforce. {@code kind=DATASET}
- * does the same for dataset schemas (M19.2.1). A second endpoint
+ * does the same for dataset schemas (M19.2.1), and {@code kind=SECTION_TEMPLATE} for section templates (M21.1.1:
+ * no pagination editor). A second endpoint
  * would have meant a second place for the two to drift apart.
  */
 @RestController
@@ -35,6 +37,8 @@ public class CdlValidateController {
     private static final String GLOBAL_SET_KIND = "GLOBAL_SET";
 
     private static final String DATASET_KIND = "DATASET";
+
+    private static final String SECTION_TEMPLATE_KIND = "SECTION_TEMPLATE";
 
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
@@ -51,6 +55,8 @@ public class CdlValidateController {
             diagnostics.addAll(GlobalSetCdlRules.check(result.definition()));
         } else if (DATASET_KIND.equalsIgnoreCase(requested)) {
             diagnostics.addAll(DatasetCdlRules.check(result.definition()));
+        } else if (SECTION_TEMPLATE_KIND.equalsIgnoreCase(requested)) {
+            diagnostics.addAll(PaginationCdlRules.notAllowedIn(result.definition(), "a section template"));
         }
         return new CdlValidateResponse(diagnostics);
     }

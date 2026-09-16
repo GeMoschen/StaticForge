@@ -154,7 +154,7 @@ with the diagnostic in `X-SF-Render-Error`.
 |---|---|
 | `GET`/`POST` | `/projects/{projectKey}/section-templates` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/section-templates/{uuid}` |
-| `GET`/`POST` | `/projects/{projectKey}/page-templates` (list items carry `abstract` and `parentTemplateRef`; create accepts `abstract`) |
+| `GET`/`POST` | `/projects/{projectKey}/page-templates` (list items carry `abstract` and `parentTemplateRef`; create accepts `abstract` and `paginationPath`, a channel → pattern map for pages 2..N of a paginated page that must contain `{pageNumber}`) |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/page-templates/{uuid}` (M20: `abstract` on read and update; read-only `parentTemplateRef`, `ancestors`, `effectiveDefinition`, `inheritedFrom`; a save returns `descendantWarnings`; `422 SF-DOM-0122` making a used template abstract, `422 SF-DOM-0124` with `descendants[]` when descendants would break) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/{templateKind}/{uuid}/channels/{channelKey}` |
 | `GET`/`POST` | `/projects/{projectKey}/structures` |
@@ -197,10 +197,11 @@ with the diagnostic in `X-SF-Render-Error`.
 
 | Method | Path |
 |---|---|
-| `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data |
+| `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`, `?page=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data. `page` (M21) renders that page of a paginated page, clamped to its page count; the response carries `X-SF-Total-Pages` and `X-SF-Page` |
 | `POST` | `/projects/{projectKey}/preview/section` |
 | `GET` | `/projects/{projectKey}/preview/pages/{uuid}/share` (issue a share link) |
-| `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token) |
+| `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token; `?page=` as above, not part of the token) |
+| `GET` | `/projects/{projectKey}/pagination/count` (`?kind=NAV\|DATASET&source=uuid`) — M21: `{itemCount, skipped}` of a pagination source now, counted like generation does; `404` when the source isn't a live Navigation folder or dataset, `422` for another `kind` |
 
 ## 13. System
 

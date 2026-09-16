@@ -9,7 +9,7 @@ Normative reference: `cms-specification.md` §14 and §16. This guide is a worki
 CDL declares the editors a template exposes. It lives in a section template's or page template's `contentDefinition`. You edit it in the template IDE (Monaco) and can validate it live with `POST /projects/{p}/cdl/validate`.
 
 Full per-type reference — attributes, stored-value shape, and a rendering example for each of the
-18 editor types — lives in [`editors/`](editors/README.md), one file per type (`editors/text.md`,
+19 editor types — lives in [`editors/`](editors/README.md), one file per type (`editors/text.md`,
 `editors/richtext.md`, `editors/media.md`, `editors/list.md`, `editors/catalog.md`, …); start at
 [`editors/README.md`](editors/README.md) for the index, the attributes common to every type,
 grouping, validation, and the full worked example (§14.2). Bodies (page templates only, §14.6) and
@@ -43,7 +43,7 @@ OCTL renders content into a channel. One template per (template asset, channel).
 | `$CMS_IF(expr)$ … $CMS_ELSEIF(expr)$ … $CMS_ELSE$ … $CMS_END_IF$` | conditional |
 | `$CMS_FOR(item : listEditor)$ … $CMS_END_FOR$` | iteration over lists/nav nodes |
 | `$CMS_SET(name = expr)$` | local variable |
-| `$CMS_META(key)$` | `uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey` |
+| `$CMS_META(key)$` | `uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey`; `pageNumber`, `totalPages` on a paginated page (§2.11) |
 | `$CMS_COMMENT$ … $CMS_END_COMMENT$` | not emitted |
 | `$CMS_EXTENDS(page_template:uid)$` | this template extends a layout (page templates, first instruction; see §2.10) |
 | `$CMS_BLOCK(name)$ … $CMS_END_BLOCK$` | a named, overridable region (§2.10) |
@@ -116,6 +116,8 @@ $CMS_END_FOR$
 ### 2.5 Scopes (§16.5)
 
 `$CMS_PAGE.headline$` inside a section reads the enclosing page's `headline` editor (read-only upward reference). Loop scope exposes `item.<editor>`, `item._index`, `item._first`, `item._last`, `item._count`.
+
+`CMS_PAGINATION.*` reads the current page of a paginated page: its items and page links (§2.11).
 
 `CMS_GLOBAL.<set>.<editor>` reads a global property set from any template (§2.7). Like `CMS_PAGE` it is an *accessor root* used inside an instruction — `$CMS_VALUE(CMS_GLOBAL.site.title)$`, `$CMS_IF(CMS_GLOBAL.site.showBanner)$` — not an instruction of its own; there is no `$CMS_GLOBAL.site.title$` form.
 
@@ -562,6 +564,79 @@ A page on `article` with `title = "Levels"` and `section = "Intro"` renders:
 cases `extends-default-blocks`, `extends-override-parent`, `extends-nested-blocks` and
 `render-md/extends-markdown` show the other rules.
 
+### 2.11 Pagination (M21)
+
+A page template with a [`pagination`](editors/pagination.md) editor turns each of its pages into a listing over
+several output files. The editor picks a source (a Navigation folder or a dataset), a page size and a sort; the page
+count is known before rendering, so every page is planned, collision-checked, listed in the sitemap and search index
+and rebuilt incrementally like any page. Page 1 keeps the page's own path; pages 2..N sit next to it
+(`news/blog.html`, `news/blog-2.html`, …) unless the page template sets a pattern under **Pagination paths** on the Templates screen (`paginationPath`)
+(`{pagePath}/page/{pageNumber}/index.{ext}`, see the editor reference).
+
+Every page of it reads the read-only `CMS_PAGINATION` root, and so do the sections, catalog cards and includes rendered
+inside it. On any other page it is missing: `$CMS_IF(CMS_PAGINATION)$` is false and its accessors render empty. A
+`$CMS_SET` or loop variable named `CMS_PAGINATION` is `SF-TPL-0163`; text media can't use it (`SF-TPL-0121`).
+
+| Accessor | Meaning |
+|---|---|
+| `CMS_PAGINATION.items` | this page's items, in order |
+| `CMS_PAGINATION.current` / `.total` | 1-based page number / page count (at least 1: an empty source is one empty page) |
+| `CMS_PAGINATION.pageSize` / `.itemCount` | the page size / all eligible items |
+| `CMS_PAGINATION.firstHref` / `.prevHref` / `.nextHref` / `.lastHref` | page links; `prevHref` is empty on the first page, `nextHref` on the last |
+| `CMS_PAGINATION.canonicalHref` | this page's own link |
+| `CMS_PAGINATION.pages` | `{number, href, current}` for a numbered pager |
+
+A navigation item is `{uuid, uid, displayName, label, href, date?, position, content}`: the target page's identity,
+its navigation label, a link to it, its `nav.date`/`publishedOn`, `nav.position`, and its editor values under
+`content` (`post.content.teaser`). A dataset item is the record's fields, exactly as a dataset loop sees them, plus
+`uuid` and `uid`. `$CMS_META(pageNumber)$` and `$CMS_META(totalPages)$` repeat `current` and `total` (empty on other
+pages).
+
+Every href is relative to the page being rendered, like any generated link: from `news/blog-2.html`, page 1 is
+`blog.html` and a post in `posts/` is `../posts/post-3.html`. In the editor's preview they point at the preview's
+own pages instead.
+
+Pages 2..N are **self-canonical**: `canonicalHref` is the page itself, not page 1, which is what search engines
+recommend for paginated listings (canonicalising everything to page 1 hides the items further back). The CMS injects
+no markup; emit the `<link rel>` tags yourself.
+
+**Worked example: a blog index.** Five posts, two per page; page 2 of the golden case `render/pagination-middle`
+(its `pagination.json` is the `CMS_PAGINATION` value):
+
+<!-- golden: render/pagination-middle/template.octl -->
+```html
+<ul>
+$CMS_FOR(post : CMS_PAGINATION.items)$<li><a href="$CMS_VALUE(post.href)$">$CMS_VALUE(post.label)$</a> $CMS_VALUE(post.content.teaser)$</li>
+$CMS_END_FOR$</ul>
+<p>Page $CMS_VALUE(CMS_PAGINATION.current)$ of $CMS_VALUE(CMS_PAGINATION.total)$, $CMS_VALUE(CMS_PAGINATION.itemCount)$ posts, $CMS_VALUE(CMS_PAGINATION.pageSize)$ per page</p>
+<link rel="canonical" href="$CMS_VALUE(CMS_PAGINATION.canonicalHref)$">
+$CMS_IF(CMS_PAGINATION.prevHref)$<a rel="prev" href="$CMS_VALUE(CMS_PAGINATION.prevHref)$">Previous</a>
+$CMS_END_IF$$CMS_FOR(p : CMS_PAGINATION.pages)$$CMS_IF(p.current)$<strong>$CMS_VALUE(p.number)$</strong>$CMS_ELSE$<a href="$CMS_VALUE(p.href)$">$CMS_VALUE(p.number)$</a>$CMS_END_IF$
+$CMS_END_FOR$$CMS_IF(CMS_PAGINATION.nextHref)$<a rel="next" href="$CMS_VALUE(CMS_PAGINATION.nextHref)$">Next</a>
+$CMS_END_IF$<a href="$CMS_VALUE(CMS_PAGINATION.firstHref)$">First</a> <a href="$CMS_VALUE(CMS_PAGINATION.lastHref)$">Last</a>
+```
+
+renders:
+
+<!-- golden: render/pagination-middle/expected.html -->
+```html
+<ul>
+<li><a href="posts/gamma.html">Gamma</a> Third</li>
+<li><a href="posts/delta.html">Delta</a> Fourth</li>
+</ul>
+<p>Page 2 of 3, 5 posts, 2 per page</p>
+<link rel="canonical" href="blog-2.html">
+<a rel="prev" href="blog.html">Previous</a>
+<a href="blog.html">1</a>
+<strong>2</strong>
+<a href="blog-3.html">3</a>
+<a rel="next" href="blog-3.html">Next</a>
+<a href="blog.html">First</a> <a href="blog-3.html">Last</a>
+```
+
+The cases `pagination-first`, `pagination-last`, `pagination-single`, `pagination-empty` and
+`render-md/pagination-markdown` show the other pages.
+
 ## Part 3 — Diagnostics
 
 ### 3.1 OCTL (`SF-TPL-*`) — `template.diagnostic.DiagnosticCodes`
@@ -592,6 +667,7 @@ cases `extends-default-blocks`, `extends-override-parent`, `extends-nested-block
 | `SF-TPL-0160` | error | an ancestor's own source doesn't compile for this channel; reported once, with the ancestor's uid and its first error |
 | `SF-TPL-0161` | error | the parent can't be loaded: it isn't a live page template, or the source was compiled without templates to load (for example `POST /octl/validate` without `templateUuid`) |
 | `SF-TPL-0162` | error | a block contains itself through nested blocks or overrides along the chain |
+| `SF-TPL-0163` | error | `CMS_PAGINATION` is read-only: a `$CMS_SET` or loop variable can't take its name (§2.11) |
 | `SF-TPL-0130` | error (render) | include depth exceeded: more than 32 nested section/include/catalog-card levels below the page template |
 | `SF-TPL-0131` | error (render) | loop iteration limit (100,000) exceeded |
 | `SF-TPL-0132` | error (render) | output size limit (32 MB) exceeded |
@@ -623,6 +699,8 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-CDL-0107` | error | not allowed in a global property set: a `body` declaration or a `catalog` editor (`POST /cdl/validate?kind=GLOBAL_SET` and property-set saves only) |
 | `SF-CDL-0108` | error | not allowed in a dataset schema: a `body` declaration (`POST /cdl/validate?kind=DATASET` and dataset saves only) |
 | `SF-CDL-0109` | error | a page template's own editor or body name is already declared by an ancestor (§2.10); the message names the ancestor |
+| `SF-CDL-0110` | error | a `pagination` editor inside a `list` or `group`, or in a section template, property set or dataset schema (§2.11) |
+| `SF-CDL-0111` | error | more than one `pagination` editor in a page template, counting inherited ones (§2.11) |
 | `SF-CDL-0200` | error | CDL syntax error |
 
 ### 3.3 Generation (`SF-GEN-*`) — `generate.GenerationDiagnosticCodes` + `generate.GenerationService`
@@ -636,6 +714,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-GEN-0230` | error (per file) | a processed text media file's source blob can't be read; the file is not published and the run ends `PARTIAL`. A processed file that fails to compile or render keeps its own `SF-TPL-*` code, with `Media '<uid>': ` in the message |
 | `SF-GEN-0410` | warning | navigation cycle truncated |
 | `SF-GEN-0411` | error | `$CMS_NAVIGATION` tree contains a dangling `PAGE_REFERENCE` (target missing/deleted, or an empty folder subtree) |
+| `SF-GEN-0412` | warning | a paginated page's navigation source holds a `PAGE_REFERENCE` that resolves to no page; the item is skipped and the page still renders (§2.11) |
 | `SF-GEN-0500` | 409 | a generation run is already active |
 
 ### 3.4 Errors carry the fix

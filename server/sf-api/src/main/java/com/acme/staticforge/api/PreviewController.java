@@ -2,6 +2,7 @@ package com.acme.staticforge.api;
 
 import com.acme.staticforge.api.dto.PreviewSectionRequest;
 import com.acme.staticforge.api.dto.PreviewShareLink;
+import com.acme.staticforge.preview.PagePreview;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
 import com.acme.staticforge.project.ProjectService;
@@ -27,6 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
  * allow-same-origin} with a per-request nonce, {@code X-Frame-Options: SAMEORIGIN} and
  * {@code X-Content-Type-Options: nosniff}. Non-HTML channels (for example {@code markdown})
  * are served as {@code text/plain}.
+ *
+ * <p>Page previews take an optional {@code page} (M21.3.1): the page number of a paginated page, clamped to its page
+ * count. It is a plain query parameter, not part of a share token, so a share link opens page 1 and the page links
+ * inside it carry their own {@code page}. {@value #TOTAL_PAGES_HEADER} and {@value #PAGE_HEADER} tell the editor how
+ * many pages there are and which one was rendered.
  */
 @RestController
 @RequestMapping("/api/v1/projects/{projectKey}/preview")
@@ -37,6 +43,12 @@ public class PreviewController {
     private final PreviewTokenService previewTokenService;
 
     private static final SecureRandom NONCE = new SecureRandom();
+
+    /** The page count of the previewed page ({@code 1} when not paginated). */
+    static final String TOTAL_PAGES_HEADER = "X-SF-Total-Pages";
+
+    /** The page number rendered, after clamping. */
+    static final String PAGE_HEADER = "X-SF-Page";
 
     public PreviewController(
             ProjectService projectService, PageRenderService pageRenderService, PreviewTokenService previewTokenService) {
@@ -59,10 +71,11 @@ public class PreviewController {
             @RequestParam(required = false) Long revision,
             @RequestParam(defaultValue = "html") String channel,
             @RequestParam(defaultValue = "true") boolean rewriteLinks,
+            @RequestParam(required = false) Integer page,
             HttpServletRequest request) {
-        String output = pageRenderService.renderPage(
-                projectId(projectKey), uuid, revision, channel, rewriteLinks, apiBase(request));
-        return respond(output, channel);
+        PagePreview preview = pageRenderService.renderPage(
+                projectId(projectKey), uuid, revision, channel, rewriteLinks, apiBase(request), page);
+        return respond(preview, channel);
     }
 
     /** Creates a signed, expiring share link for a saved page (spec §19.3). */
@@ -92,15 +105,16 @@ public class PreviewController {
             @PathVariable String projectKey,
             @RequestParam("t") String token,
             @RequestParam(defaultValue = "html") String channel,
+            @RequestParam(required = false) Integer page,
             HttpServletRequest request) {
         PreviewTokenService.ShareTarget target = previewTokenService.verifyShareToken(token);
         if (target.projectKey() != null && !target.projectKey().equals(projectKey)) {
             return respond("", channel);
         }
         String resolvedChannel = target.channel() != null ? target.channel() : channel;
-        String output = pageRenderService.renderPage(
-                projectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request));
-        return respond(output, resolvedChannel);
+        PagePreview preview = pageRenderService.renderPage(
+                projectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request), page);
+        return respond(preview, resolvedChannel);
     }
 
     /** Section template preview against sample content (spec §19.1). */
@@ -118,6 +132,15 @@ public class PreviewController {
     // ------------------------------------------------------------------
     // Response assembly
     // ------------------------------------------------------------------
+
+    private ResponseEntity<String> respond(PagePreview preview, String channel) {
+        ResponseEntity<String> response = respond(preview.html(), channel);
+        return ResponseEntity.status(response.getStatusCode())
+                .headers(response.getHeaders())
+                .header(TOTAL_PAGES_HEADER, String.valueOf(preview.totalPages()))
+                .header(PAGE_HEADER, String.valueOf(preview.pageNumber()))
+                .body(response.getBody());
+    }
 
     private ResponseEntity<String> respond(String output, String channel) {
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes());

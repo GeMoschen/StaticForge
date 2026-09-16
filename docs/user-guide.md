@@ -28,6 +28,26 @@ Templates are owned by **template developers** (see the [template-developer guid
    - A page often also shows values from **Globals** (below), such as the site title. Those aren't fields of the page — change them in Globals.
 5. Preview updates live as you type (debounced), and the viewport switcher (mobile / tablet / desktop) resizes the preview.
 
+#### Listing pages (pagination)
+
+Some page templates turn a page into a listing spread over several pages, such as a blog index. Such a page has a
+**pagination** field:
+
+1. **Choose source…** opens a picker: a folder of the Navigation store (the pages it links to are listed), or a dataset
+   (its records are listed), if the template allows both. Search narrows the list. Until you pick one, the page is not
+   paginated.
+2. Set **Items per page** (the template may cap it) and **Sort by**, with the direction button for ascending or
+   descending. The field shows what that makes, for example **5 items → 3 pages**; entries that point to a deleted page
+   are counted as skipped.
+3. **Change source…** picks another one; **Clear** turns pagination off again.
+
+The page's first page keeps its usual address; the others are published next to it (`blog-2.html`, `blog-3.html`, …).
+Pages hidden from navigation (`nav.visible` off) are not listed, and a navigation entry whose page was deleted is
+skipped, with a warning in the generation log.
+
+When the page has more than one page, the preview toolbar shows **‹ Page n of N ›**: switch pages there, or click a
+pagination link inside the preview. The selector also works in time travel, where the field itself is read-only.
+
 ### Sections
 
 - A page body holds an ordered list of sections. Use the **+ Section** picker (a filtered palette showing only templates allowed for that body).

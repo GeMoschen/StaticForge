@@ -10,7 +10,8 @@ import org.springframework.stereotype.Service;
 /**
  * Emits {@code sitemap.xml} (spec §18.2 POST) as a new {@link OutputFile}, listing one
  * {@code <url><loc>} entry per HTML page. Enabled by default; only emits when the context has a
- * {@code baseUrl} and at least one page.
+ * {@code baseUrl} and at least one page. Each output of a paginated page is its own entry (M21.2.2): pages 2..N are
+ * self-canonical, so search engines index the items they list.
  */
 @Service
 public final class SitemapPostProcessor implements PostProcessor {

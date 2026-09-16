@@ -31,15 +31,15 @@ Shape of the change:
 
 ## Feature exit criteria
 
-- [ ] A paginated page yields `max(1, ceil(items / pageSize))` plan entries per channel. Page 1
+- [x] A paginated page yields `max(1, ceil(items / pageSize))` plan entries per channel. Page 1
       uses the page's normal output path.
-- [ ] `OutputPathResolver.findCollisions` detects collisions between paginated outputs and any
+- [x] `OutputPathResolver.findCollisions` detects collisions between paginated outputs and any
       other page's outputs (`SF-GEN-0110`).
-- [ ] Render dependencies are merged per page across all its entries and channels; nothing is
+- [x] Render dependencies are merged per page across all its entries and channels; nothing is
       overwritten.
-- [ ] Incremental runs rebuild a paginated page when its source folder / dataset or any item in
+- [x] Incremental runs rebuild a paginated page when its source folder / dataset or any item in
       it changes, and remove no-longer-produced page-N outputs from the published build.
-- [ ] Sitemap, search index and generation report include every paginated output, with prev/next
+- [x] Sitemap, search index and generation report include every paginated output, with prev/next
       and canonical data available.
 
 ## Dependencies

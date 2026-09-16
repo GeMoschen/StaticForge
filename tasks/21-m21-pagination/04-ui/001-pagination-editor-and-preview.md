@@ -1,6 +1,6 @@
 ---
 id: M21.4.1
-status: todo
+status: done
 depends: [M21.1.1, M21.3.1]
 epic: m21-pagination
 feature: ui
@@ -55,15 +55,15 @@ area: frontend
 
 ## Acceptance criteria
 
-- [ ] A page whose template declares `editor pagination posts {…}` shows the editor. Choosing a nav
+- [x] A page whose template declares `editor pagination posts {…}` shows the editor. Choosing a nav
       folder, size 5 and sort `date DESC` autosaves the exact stored value shape from `M21.1.1`.
-- [ ] Only offered sources and sort keys are selectable; page size can't exceed `maxPageSize`.
-- [ ] The preview pane shows the page selector for a paginated page with >1 pages, and switching to
+- [x] Only offered sources and sort keys are selectable; page size can't exceed `maxPageSize`.
+- [x] The preview pane shows the page selector for a paginated page with >1 pages, and switching to
       page 2 renders page 2.
-- [ ] In time travel, the editor and the Clear action are disabled; the page selector still works
+- [x] In time travel, the editor and the Clear action are disabled; the page selector still works
       (it is read-only navigation).
-- [ ] The visual diff of a revision that changed page size shows a readable before/after.
-- [ ] `ui` `npm run build` green; new specs pass (or, if the known `templateUrl` spec-runner
+- [x] The visual diff of a revision that changed page size shows a readable before/after.
+- [x] `ui` `npm run build` green; new specs pass (or, if the known `templateUrl` spec-runner
       environment issue persists, the specs are written with inline templates or the limitation is
       recorded with evidence as in `M15`).
 

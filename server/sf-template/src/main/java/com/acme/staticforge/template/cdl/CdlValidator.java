@@ -7,6 +7,7 @@ import com.acme.staticforge.template.content.BodyDefinition;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorDefinition;
 import com.acme.staticforge.template.content.EditorType;
+import com.acme.staticforge.template.content.PaginationOptions;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.expression.ExpressionEvaluator;
@@ -45,7 +46,8 @@ final class CdlValidator {
             Map.entry("list", EditorType.LIST),
             Map.entry("group", EditorType.GROUP),
             Map.entry("json", EditorType.JSON),
-            Map.entry("catalog", EditorType.CATALOG));
+            Map.entry("catalog", EditorType.CATALOG),
+            Map.entry("pagination", EditorType.PAGINATION));
 
     private final ExpressionEvaluator expressionEvaluator = new ExpressionEvaluator();
     private int groupCounter;
@@ -55,6 +57,7 @@ final class CdlValidator {
     Result validate(ContentNode content) {
         List<Diagnostic> diagnostics = new ArrayList<>();
         checkNames(content.editors, new HashSet<>(), diagnostics);
+        checkPaginationPlacement(content.editors, diagnostics);
         List<EditorDefinition> editors = buildEditors(content.editors, diagnostics);
         List<BodyDefinition> bodies = buildBodies(content.bodies, diagnostics);
         return new Result(new ContentDefinition(editors, bodies), diagnostics);
@@ -111,6 +114,7 @@ final class CdlValidator {
         }
         checkExpression(node, diagnostics);
         checkDataset(node, type, diagnostics);
+        PaginationOptions pagination = paginationOptions(node, type, diagnostics);
         List<EditorDefinition> items = buildEditors(node.items, diagnostics);
         String name = node.groupWrapper ? syntheticGroupName() : node.name;
         return new EditorDefinition(
@@ -136,7 +140,101 @@ final class CdlValidator {
                 node.visibleWhen,
                 node.renamedFrom,
                 items,
-                node.dataset);
+                node.dataset,
+                pagination);
+    }
+
+    /**
+     * A pagination editor is page-level (M21.1.1): it may not sit inside a {@code list} item or a group, and a
+     * definition holds at most one. Section templates, property sets and datasets reject it in their own overlays.
+     */
+    private static void checkPaginationPlacement(List<EditorNode> topLevel, List<Diagnostic> diagnostics) {
+        boolean seen = false;
+        for (EditorNode node : topLevel) {
+            if ("pagination".equals(node.typeKeyword)) {
+                if (seen) {
+                    diagnostics.add(Diagnostic.error(
+                            DiagnosticCodes.CDL_PAGINATION_DUPLICATE,
+                            "Only one pagination editor is allowed per page template: '" + node.name + "' is a second one",
+                            node.typeLine, node.typeCol));
+                }
+                seen = true;
+            }
+            checkNestedPagination(node.items, diagnostics);
+        }
+    }
+
+    private static void checkNestedPagination(List<EditorNode> nested, List<Diagnostic> diagnostics) {
+        for (EditorNode node : nested) {
+            if ("pagination".equals(node.typeKeyword)) {
+                diagnostics.add(Diagnostic.error(
+                        DiagnosticCodes.CDL_PAGINATION_PLACEMENT,
+                        "Pagination editor '" + node.name + "' must be declared at the top level of the content block,"
+                                + " not inside a list or group",
+                        node.typeLine, node.typeCol));
+            }
+            checkNestedPagination(node.items, diagnostics);
+        }
+    }
+
+    /**
+     * The {@code sources}/{@code pageSize}/{@code maxPageSize}/{@code sort} attributes (M21.1.1): only valid on a
+     * {@code pagination} editor, which always gets options (defaults for the absent ones). Sort keys of a
+     * navigation-only editor must be navigation keys; dataset field names are checked when a page picks a dataset.
+     */
+    private static PaginationOptions paginationOptions(EditorNode node, EditorType type, List<Diagnostic> diagnostics) {
+        if (type != EditorType.PAGINATION) {
+            if (node.paginationLine >= 0) {
+                diagnostics.add(Diagnostic.error(
+                        DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
+                        "'sources', 'pageSize', 'maxPageSize' and 'sort' are only valid on a 'pagination' editor",
+                        node.paginationLine, node.paginationCol));
+            }
+            return null;
+        }
+        int line = node.paginationLine >= 0 ? node.paginationLine : node.typeLine;
+        int col = node.paginationLine >= 0 ? node.paginationCol : node.typeCol;
+        List<String> sources = node.sources == null ? List.of() : node.sources;
+        for (String source : sources) {
+            if (!PaginationOptions.SOURCE_KINDS.contains(source)) {
+                diagnostics.add(Diagnostic.error(
+                        DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
+                        "Unknown pagination source '" + source + "': use \"nav\" or \"dataset\"", line, col));
+            }
+        }
+        if (node.sources != null && sources.isEmpty()) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_INVALID_ATTRIBUTE, "'sources' needs at least one source kind", line, col));
+        }
+        int pageSize = node.pageSize == null ? PaginationOptions.DEFAULT_PAGE_SIZE : node.pageSize;
+        if (pageSize < 1 || pageSize > PaginationOptions.MAX_PAGE_SIZE) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
+                    "'pageSize' must be between 1 and " + PaginationOptions.MAX_PAGE_SIZE, line, col));
+        }
+        if (node.maxPageSize != null
+                && (node.maxPageSize < pageSize || node.maxPageSize > PaginationOptions.MAX_PAGE_SIZE)) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
+                    "'maxPageSize' must be at least 'pageSize' (" + pageSize + ") and at most "
+                            + PaginationOptions.MAX_PAGE_SIZE,
+                    line, col));
+        }
+        PaginationOptions options = new PaginationOptions(
+                sources.stream().filter(PaginationOptions.SOURCE_KINDS::contains).distinct().toList(),
+                pageSize, node.maxPageSize, node.sort);
+        boolean navOnly = !options.sources().contains(PaginationOptions.DATASET);
+        for (String key : options.sort()) {
+            if (navOnly ? !PaginationOptions.NAV_SORT_KEYS.contains(key) : !key.matches("[A-Za-z_][A-Za-z0-9_]{0,63}")) {
+                diagnostics.add(Diagnostic.error(
+                        DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
+                        "Unknown sort key '" + key + "'" + (navOnly
+                                ? ": a navigation source sorts by " + String.join(", ", PaginationOptions.NAV_SORT_KEYS)
+                                : ""),
+                        line, col));
+            }
+        }
+        return options;
     }
 
     /**

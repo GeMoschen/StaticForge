@@ -1,0 +1,5 @@
+# Posts, page $CMS_VALUE(CMS_PAGINATION.current)$ of $CMS_VALUE(CMS_PAGINATION.total)$
+
+$CMS_FOR(post : CMS_PAGINATION.items)$- [$CMS_VALUE(post.label)$]($CMS_VALUE(post.href)$)
+$CMS_END_FOR$
+$CMS_IF(CMS_PAGINATION.prevHref)$[Previous]($CMS_VALUE(CMS_PAGINATION.prevHref)$) $CMS_END_IF$$CMS_IF(CMS_PAGINATION.nextHref)$[Next]($CMS_VALUE(CMS_PAGINATION.nextHref)$)$CMS_END_IF$

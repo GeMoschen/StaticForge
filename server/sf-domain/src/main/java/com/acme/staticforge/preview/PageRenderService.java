@@ -24,9 +24,14 @@ import com.acme.staticforge.asset.template.TemplateHierarchies;
 import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.pagination.PaginationItem;
+import com.acme.staticforge.pagination.PaginationScope;
+import com.acme.staticforge.pagination.PaginationSource;
+import com.acme.staticforge.pagination.PaginationValue;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.OctlResult;
@@ -44,6 +49,7 @@ import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.ArrayList;
 import java.util.List;
@@ -134,8 +140,38 @@ public class PageRenderService {
      */
     public String renderPage(
             long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl) {
-        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl);
+        return renderPage(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, null).html();
     }
+
+    /**
+     * Renders page {@code pageNumber} of a saved page (M21.3.1): clamped to {@code 1..totalPages} of a paginated page,
+     * ignored for any other. The page count and slices come from the same {@link PaginationSource} generation uses,
+     * against live data (templates and values at {@code revision}, like the rest of the preview).
+     *
+     * @param pageNumber the 1-based page; {@code null} for the first
+     */
+    public PagePreview renderPage(
+            long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
+            Integer pageNumber) {
+        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber);
+    }
+
+    /**
+     * How many items a pagination source holds right now and how many entries it skips (M21.4.1): the count behind the
+     * page editor's "N items → M pages" hint. Same {@link PaginationSource} and live resolvers as a paginated preview,
+     * so the hint and the preview agree. The caller checks that {@code source} is a live navigation folder or dataset.
+     */
+    public PaginationCount countPaginationSource(long projectId, PaginationValue.Kind kind, UUID source) {
+        // Only the source matters for eligibility; size and sort don't change the count.
+        PaginationValue value = new PaginationValue("count", kind, source, 1,
+                kind == PaginationValue.Kind.NAV ? "navigation" : "_displayName", false);
+        PaginationSource.Result result = PaginationSource.items(
+                projectId, value, navigationService, navigationLookup, assetValues(projectId, null)::datasetRecords);
+        return new PaginationCount(result.items().size(), result.warnings().size());
+    }
+
+    /** The eligible items of a pagination source and the entries it skipped (dangling navigation references). */
+    public record PaginationCount(int itemCount, int skipped) {}
 
     /**
      * Renders a section template alone against sample content (spec §19.1).
@@ -146,8 +182,8 @@ public class PageRenderService {
      */
     public String renderSection(long projectId, UUID sectionTemplateUuid, JsonNode sampleContent, String channel) {
         return withRenderLimitsAsProblem(() -> renderSectionTemplate(
-                projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, channel, false, null,
-                null, new RenderBudget()));
+                projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, null, channel, false,
+                null, null, new RenderBudget()));
     }
 
     /**
@@ -208,8 +244,9 @@ public class PageRenderService {
     // Saved + live entry points
     // ------------------------------------------------------------------
 
-    private String doRender(
-            long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl) {
+    private PagePreview doRender(
+            long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
+            Integer pageNumber) {
         String projectKey = projectKeyOf(projectId);
 
         PageView page;
@@ -221,7 +258,8 @@ public class PageRenderService {
                     .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found at revision " + revision + ".")));
             page = PageView.from(view);
         }
-        return withRenderLimitsAsProblem(() -> renderPage(projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision));
+        PageView view = page;
+        return withRenderLimits(() -> renderPage(projectId, projectKey, view, channel, rewriteLinks, baseUrl, revision, pageNumber));
     }
 
     /**
@@ -230,6 +268,10 @@ public class PageRenderService {
      * generation failing just the affected file — instead of surfacing as a 500.
      */
     private static String withRenderLimitsAsProblem(Supplier<String> render) {
+        return withRenderLimits(render);
+    }
+
+    private static <T> T withRenderLimits(Supplier<T> render) {
         try {
             return render.get();
         } catch (RenderLimitException e) {
@@ -245,27 +287,31 @@ public class PageRenderService {
     // ------------------------------------------------------------------
 
     /** @param revision the time-travel revision templates are read at, or {@code null} for the current state */
-    private String renderPage(
+    private PagePreview renderPage(
             long projectId,
             String projectKey,
             PageView page,
             String channel,
             boolean rewriteLinks,
             String baseUrl,
-            Long revision) {
+            Long revision,
+            Integer requestedPage) {
         AssetVersionView pageTemplate = templateAt(projectId, page.pageTemplateUuid(), revision);
         CompiledTemplate compiled = compilePageTemplateChannel(pageTemplate, channel, projectId, revision);
         if (compiled == null) {
-            return ""; // missing channel template degrades gracefully to an empty body
+            return new PagePreview("", 1, 1); // missing channel template degrades gracefully to an empty body
         }
 
         // One budget for the page and every section/include/catalog card rendered inside it.
         RenderBudget budget = new RenderBudget();
         UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision);
-        BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision, budget);
         AssetValueResolver assetValues = assetValues(projectId, revision);
+        Pagination pagination = pagination(
+                projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision, requestedPage, urlResolver, assetValues);
+        PageView paginated = page.withPagination(pagination.scope());
+        BlockResolver blocks = blockResolver(projectId, projectKey, paginated, channel, rewriteLinks, baseUrl, revision, budget);
 
-        RenderContext context = RenderContext.builder()
+        RenderContext.Builder builder = RenderContext.builder()
                 .channel(channel)
                 .escaping(escapingFor(channel))
                 .values(page.content())
@@ -277,14 +323,76 @@ public class PageRenderService {
                 .meta("revision", TextNode.valueOf(emptyIfNull(page.revision())))
                 .meta("channel", TextNode.valueOf(emptyIfNull(channel)))
                 .meta("projectKey", TextNode.valueOf(emptyIfNull(projectKey)))
+                .pagination(pagination.scope())
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
                 .assetValueResolver(assetValues)
-                .budget(budget)
-                .build();
+                .budget(budget);
+        if (pagination.scope() != null) {
+            builder.meta("pageNumber", IntNode.valueOf(pagination.pageNumber()))
+                    .meta("totalPages", IntNode.valueOf(pagination.totalPages()));
+        }
+        RenderContext context = builder.build();
 
-        return budget.withTemplate(page.pageTemplateUuid(), pageTemplate.uid(), () -> renderer.render(compiled, context))
+        String html = budget.withTemplate(page.pageTemplateUuid(), pageTemplate.uid(), () -> renderer.render(compiled, context))
                 .output();
+        return new PagePreview(html, pagination.pageNumber(), pagination.totalPages());
+    }
+
+    /** The preview's page of a paginated page; {@code scope} is {@code null} (page 1 of 1) for any other page. */
+    private record Pagination(JsonNode scope, int pageNumber, int totalPages) {}
+
+    /**
+     * Resolves the page's pagination against live data (M21.3.1), with the same {@link PaginationSource} and
+     * {@link PaginationScope} generation uses. Page links point at this preview: with {@code rewriteLinks}, the signed
+     * share route of the same page and revision with {@code &page=n} (the iframe follows them without a session);
+     * otherwise just {@code ?page=n}. Items link like any page link of the preview.
+     */
+    private Pagination pagination(
+            long projectId,
+            String projectKey,
+            PageView page,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl,
+            Long revision,
+            Integer requestedPage,
+            UrlResolver urlResolver,
+            AssetValueResolver assetValues) {
+        PaginationValue value = templateHierarchies.at(projectId, revision)
+                .effectiveDefinition(page.pageTemplateUuid())
+                .map(EffectiveDefinition::definition)
+                .flatMap(definition -> PaginationValue.of(definition, page.content()))
+                .orElse(null);
+        if (value == null) {
+            return new Pagination(null, 1, 1);
+        }
+        List<PaginationItem> items = PaginationSource
+                .items(projectId, value, navigationService, navigationLookup, assetValues::datasetRecords)
+                .items();
+        int total = PaginationSource.totalPages(items.size(), value.pageSize());
+        int number = Math.max(1, Math.min(requestedPage == null ? 1 : requestedPage, total));
+        String shareBase = rewriteLinks
+                ? (baseUrl == null ? "" : baseUrl) + "/projects/" + projectKey + "/preview/share?t="
+                        + previewTokenService.issueShareToken(page.uuid(), revision, channel, projectKey)
+                : null;
+        JsonNode scope = PaginationScope.build(
+                items,
+                value.pageSize(),
+                number,
+                new PaginationScope.Links() {
+                    @Override
+                    public String page(int target) {
+                        return shareBase == null ? "?page=" + target : shareBase + "&page=" + target;
+                    }
+
+                    @Override
+                    public String item(PaginationItem item) {
+                        return urlResolver.resolve("page", item.uid(), item.uuid(), Map.of());
+                    }
+                },
+                item -> assetValues.valueOf("page", item.uuid()));
+        return new Pagination(scope, number, total);
     }
 
     /**
@@ -379,7 +487,8 @@ public class PageRenderService {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
                     out.append(renderSectionInstance(
-                            projectId, projectKey, page.content(), section, channel, rewriteLinks, baseUrl, revision, budget));
+                            projectId, projectKey, page.content(), page.pagination(), section, channel, rewriteLinks, baseUrl,
+                            revision, budget));
                 }
                 return out.toString();
             }
@@ -392,7 +501,8 @@ public class PageRenderService {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
                     out.append(renderSectionInstance(
-                            projectId, projectKey, page.content(), card, channel, rewriteLinks, baseUrl, revision, budget));
+                            projectId, projectKey, page.content(), page.pagination(), card, channel, rewriteLinks, baseUrl,
+                            revision, budget));
                 }
                 return out.toString();
             }
@@ -404,8 +514,8 @@ public class PageRenderService {
                     return "";
                 }
                 return renderSectionTemplate(
-                        projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, channel, rewriteLinks, baseUrl,
-                        revision, budget);
+                        projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, page.pagination(), channel,
+                        rewriteLinks, baseUrl, revision, budget);
             }
 
             @Override
@@ -530,6 +640,7 @@ public class PageRenderService {
             long projectId,
             String projectKey,
             JsonNode pageContent,
+            JsonNode pagination,
             JsonNode section,
             String channel,
             boolean rewriteLinks,
@@ -545,7 +656,7 @@ public class PageRenderService {
         String instanceId = section.path("instanceId").asText();
         return renderSectionTemplate(
                 projectId, projectKey, sectionTemplateUuid, null, instanceId,
-                content, pageContent, channel, rewriteLinks, baseUrl, revision, budget);
+                content, pageContent, pagination, channel, rewriteLinks, baseUrl, revision, budget);
     }
 
     private String renderSectionTemplate(
@@ -556,6 +667,7 @@ public class PageRenderService {
             String instanceId,
             JsonNode values,
             JsonNode pageValues,
+            JsonNode pagination,
             String channel,
             boolean rewriteLinks,
             String baseUrl,
@@ -576,9 +688,11 @@ public class PageRenderService {
                 .pageValues(pageValues != null ? pageValues : objectMapper.createObjectNode())
                 .meta("uid", TextNode.valueOf(uid))
                 .meta("uuid", TextNode.valueOf(sectionTemplateUuid.toString()))
+                .pagination(pagination)
                 .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision))
                 .blockResolver(blockResolver(
-                        projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl, revision, budget))
+                        projectId, projectKey, PageView.contextOnly(pageValues, pagination), channel, rewriteLinks, baseUrl,
+                        revision, budget))
                 .assetValueResolver(assetValues(projectId, revision))
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
@@ -685,7 +799,10 @@ public class PageRenderService {
     // Page view + helpers
     // ------------------------------------------------------------------
 
-    /** Immutable snapshot of the page fields the renderer needs, decoupled from the version row. */
+    /**
+     * Immutable snapshot of the page fields the renderer needs, decoupled from the version row. {@code pagination} is
+     * the page's {@code CMS_PAGINATION} value, which its sections inherit; {@code null} when not paginated.
+     */
     private record PageView(
             UUID uuid,
             String uid,
@@ -694,7 +811,12 @@ public class PageRenderService {
             String revision,
             UUID pageTemplateUuid,
             JsonNode content,
-            JsonNode bodies) {
+            JsonNode bodies,
+            JsonNode pagination) {
+
+        PageView withPagination(JsonNode scope) {
+            return new PageView(uuid, uid, displayName, path, revision, pageTemplateUuid, content, bodies, scope);
+        }
 
         JsonNode body(String name) {
             return bodies == null ? null : bodies.path(name);
@@ -711,11 +833,12 @@ public class PageRenderService {
                     String.valueOf(view.validFromRevision()),
                     templateRef.isBlank() ? null : UUID.fromString(templateRef),
                     payload == null ? null : payload.get("content"),
-                    payload == null ? null : payload.get("bodies"));
+                    payload == null ? null : payload.get("bodies"),
+                    null);
         }
 
-        static PageView contextOnly(JsonNode pageContent) {
-            return new PageView(null, "", "", "", "", null, pageContent, null);
+        static PageView contextOnly(JsonNode pageContent, JsonNode pagination) {
+            return new PageView(null, "", "", "", "", null, pageContent, null, pagination);
         }
     }
 }

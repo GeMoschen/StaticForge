@@ -161,6 +161,38 @@ class OutputPathResolverTest {
         assertThat(collisions).containsExactly(new OutputPathResolver.Collision("dupe.html", "a", "b"));
     }
 
+    @Test
+    void paginatedOutputsAreOwnedByPageAndPageNumber() {
+        SnapshotAsset blog = page(PAGE, "blog", "Blog", "/", "{}", null);
+        SnapshotAsset other = page(PAGE_B, "b", "b", "/", "{}", null);
+        OutputPathResolver resolver = OutputPathResolver.forSnapshot(snapshot(blog, other), Map.of());
+        com.acme.staticforge.generate.plan.PaginatedPage paginated = new com.acme.staticforge.generate.plan.PaginatedPage(
+                UUID.randomUUID(), 1, items(2), List.of("blog.html", "blog-2.html"), List.of());
+
+        assertThat(resolver.resolvePaginationPath(PAGE, "html", "blog.html", 2)).isEqualTo("blog-2.html");
+        assertThat(resolver.findCollisions(List.of(
+                        new PlanEntry(PAGE, "html", "blog-2.html", new PlanEntry.Pagination(2, paginated)),
+                        new PlanEntry(PAGE_B, "html", "blog-2.html"))))
+                .containsExactly(new OutputPathResolver.Collision("blog-2.html", "blog (page 2)", "b"));
+        // Two page numbers of one page on one path collide too; the same page in two channels does not.
+        assertThat(resolver.findCollisions(List.of(
+                        new PlanEntry(PAGE, "html", "same.html", new PlanEntry.Pagination(1, paginated)),
+                        new PlanEntry(PAGE, "html", "same.html", new PlanEntry.Pagination(2, paginated)))))
+                .containsExactly(new OutputPathResolver.Collision("same.html", "blog", "blog (page 2)"));
+        assertThat(resolver.findCollisions(List.of(
+                        new PlanEntry(PAGE, "html", "blog.html"), new PlanEntry(PAGE, "md", "blog.html"))))
+                .isEmpty();
+    }
+
+    private static List<com.acme.staticforge.pagination.PaginationItem> items(int count) {
+        List<com.acme.staticforge.pagination.PaginationItem> items = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            items.add(new com.acme.staticforge.pagination.PaginationItem(
+                    UUID.randomUUID(), "p" + i, "P" + i, "P" + i, null, 0, UUID.randomUUID(), null));
+        }
+        return items;
+    }
+
     // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------

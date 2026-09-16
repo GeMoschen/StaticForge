@@ -19,6 +19,7 @@ import { SfReferenceEditor } from './editors/reference-editor.component';
 import { SfListEditor } from './editors/list-editor.component';
 import { SfGroupEditor } from './editors/group-editor.component';
 import { SfCatalogEditor } from './editors/catalog-editor.component';
+import { SfPaginationEditor } from './editors/pagination-editor.component';
 
 /**
  * The contract every editor component exposes. Editors declare these as
@@ -54,6 +55,7 @@ export const EDITOR_REGISTRY: Map<EditorType, Type<unknown>> = new Map<
   ['GROUP', SfGroupEditor],
   ['JSON', SfJsonEditor],
   ['CATALOG', SfCatalogEditor],
+  ['PAGINATION', SfPaginationEditor],
 ]);
 
 /** Provider list for a hosting route — add these to the route's `imports`. */

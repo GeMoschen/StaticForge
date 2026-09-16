@@ -1,6 +1,6 @@
 ---
 id: M21.5.1
-status: todo
+status: done
 depends: [M21.2.2, M21.3.1, M21.4.1]
 epic: m21-pagination
 feature: docs-e2e
@@ -48,12 +48,12 @@ journeys since `M5` often could not run against a live backend in the sandbox.
 
 ## Acceptance criteria
 
-- [ ] All listed doc sections are updated; examples compile, verified by pasting them into the
+- [x] All listed doc sections are updated; examples compile, verified by pasting them into the
       golden/integration test fixtures or the running app.
-- [ ] `m21-journeys.spec.ts` exists and collects; it passes against a running backend, or the
+- [x] `m21-journeys.spec.ts` exists and collects; it passes against a running backend, or the
       inability to run is recorded with evidence as in `M15.6.1`.
-- [ ] A link check of the generated output from step 5 reports zero broken hrefs.
-- [ ] The epic README exit criteria are ticked with evidence references.
+- [x] A link check of the generated output from step 5 reports zero broken hrefs.
+- [x] The epic README exit criteria are ticked with evidence references.
 
 ## Out of scope
 

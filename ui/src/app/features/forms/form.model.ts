@@ -25,7 +25,28 @@ export type EditorType =
   | 'LIST'
   | 'GROUP'
   | 'JSON'
-  | 'CATALOG';
+  | 'CATALOG'
+  | 'PAGINATION';
+
+/** The declaration of a PAGINATION editor (M21.1.1), mirroring `PaginationOptions`. */
+export interface PaginationOptions {
+  /** Allowed source kinds, lowercase: `nav` and/or `dataset`. */
+  sources: string[];
+  pageSize: number;
+  maxPageSize?: number | null;
+  /** Offered sort keys; the first is the default. */
+  sort: string[];
+}
+
+export type PaginationSourceKind = 'NAV' | 'DATASET';
+
+/** Value shape of a PAGINATION editor; `null` means the page is not paginated. */
+export interface PaginationValue {
+  type: 'PAGINATION';
+  source: { kind: PaginationSourceKind; uuid: string };
+  pageSize: number;
+  sort?: { key: string; direction: 'ASC' | 'DESC' } | null;
+}
 
 export interface SelectOption {
   value: string;
@@ -59,6 +80,8 @@ export interface EditorDefinition {
   visibleWhen?: string;
   renamedFrom?: string;
   items?: EditorDefinition[];
+  /** For PAGINATION editors (M21.1.1): sources, page size and sort keys. */
+  pagination?: PaginationOptions | null;
 }
 
 export interface BodyDefinition {

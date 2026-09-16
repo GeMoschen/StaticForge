@@ -30,11 +30,13 @@ public record ContentIssue(String path, String code, Severity severity, String m
          * Codes that describe a malformed value: {@code type} (wrong JSON type or ref/link/catalog
          * shape), {@code option} (a value outside the declared options), {@code allow} (a section
          * or catalog card whose template is not allowed there), {@code template} (a card whose
-         * template does not resolve) and {@code dataset} (a reference outside its dataset, M19.3.2). Every other code ({@code required}, {@code min},
+         * template does not resolve), {@code dataset} (a reference outside its dataset, M19.3.2) and {@code pagination} (a
+         * pagination value with an unknown or disallowed source, page size or sort key, M21.1.1). Every other code ({@code required}, {@code min},
          * {@code max}, {@code maxLength}, {@code maxChars}, {@code pattern}, {@code mimeType},
          * {@code visibleWhen}) is a completeness finding.
          */
-        private static final Set<String> STRUCTURAL_CODES = Set.of("type", "option", "allow", "template", "dataset");
+        private static final Set<String> STRUCTURAL_CODES = Set.of(
+                "type", "option", "allow", "template", "dataset", "pagination");
 
         public static Kind of(String code) {
             return STRUCTURAL_CODES.contains(code) ? STRUCTURAL : COMPLETENESS;

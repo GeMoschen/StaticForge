@@ -14,6 +14,7 @@ import java.util.UUID;
  * first); {@code effectiveDefinition}, the own and inherited editors and bodies a page form uses, with
  * {@code inheritedFrom} naming the ancestor of each inherited one; {@code descendantWarnings} from the save that
  * returned this representation. {@code compiledDefinition} stays the template's own definition.
+ * {@code paginationPath} (M21.2.1): per-channel path patterns of pages 2..N of a paginated page.
  */
 public record TemplateDetail(
         UUID uuid,
@@ -28,6 +29,7 @@ public record TemplateDetail(
         boolean deprecated,
         JsonNode bodies,
         JsonNode outputPath,
+        JsonNode paginationPath,
         UUID folderUuid,
         String folderPath,
         @JsonProperty("abstract") boolean abstractTemplate,

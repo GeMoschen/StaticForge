@@ -360,7 +360,12 @@ public class GenerationService {
             List<Diagnostic> warnings, Exception unexpected) {
         sample.stop(timer);
         List<Diagnostic> effectiveErrors = new ArrayList<>(errors);
-        if (unexpected != null) {
+        if (unexpected instanceof SfException problem && problem.getProblem().getExtensions().get("code") instanceof String code) {
+            // A build failure the pipeline reports as a problem (an output path collision, SF-GEN-0110) keeps its code
+            // and detail, so the report names what collided rather than just the problem's title.
+            String detail = problem.getProblem().getDetail();
+            effectiveErrors.add(Diagnostic.error(code, detail == null ? problem.getMessage() : detail, 0, 0));
+        } else if (unexpected != null) {
             String message = unexpected.getMessage() == null
                     ? unexpected.getClass().getSimpleName()
                     : unexpected.getMessage();
@@ -427,7 +432,11 @@ public class GenerationService {
             if (page == null) {
                 continue;
             }
-            pages.add(new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName()));
+            pages.add(entry.pagination() == null
+                    ? new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName())
+                    : new SitePage(
+                            page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
+                            entry.pagination().pageNumber(), entry.pagination().totalPages()));
         }
         return pages;
     }

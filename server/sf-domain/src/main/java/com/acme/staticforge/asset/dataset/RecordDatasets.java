@@ -5,13 +5,20 @@ import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.content.ContentValidator;
+import com.acme.staticforge.asset.content.PaginationSourceLookup;
+import com.acme.staticforge.asset.content.TemplateContentDefinitions;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.content.RecordDatasetLookup;
+import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.expression.ExpressionEvaluator;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
  * The repository-backed {@link RecordDatasetLookup} of a project (M19.3.2): save paths validate a
- * {@code reference} editor's {@code dataset "uid"} restriction against the live records.
+ * {@code reference} editor's {@code dataset "uid"} restriction against the live records. Also the project's
+ * {@link PaginationSourceLookup} (M21.1.1), so every content save checks a pagination value's source.
  */
 @Component
 public class RecordDatasets {
@@ -35,8 +42,34 @@ public class RecordDatasets {
                 .map(Asset::getUid);
     }
 
-    /** A content validator that checks dataset restrictions against this project's records. */
+    /** The pagination source lookup for one project: live navigation folders and live datasets. */
+    public PaginationSourceLookup paginationSources(long projectId) {
+        return new PaginationSourceLookup() {
+            @Override
+            public boolean isNavigationFolder(UUID uuid) {
+                return live(projectId, uuid, AssetType.FOLDER)
+                        .map(payload -> FolderScope.fromPayload(payload) == FolderScope.NAVIGATION)
+                        .orElse(false);
+            }
+
+            @Override
+            public Optional<ContentDefinition> datasetSchema(UUID uuid) {
+                return live(projectId, uuid, AssetType.DATASET).map(TemplateContentDefinitions::of);
+            }
+        };
+    }
+
+    /** The payload of the live, non-deleted asset {@code uuid} of {@code type}. */
+    private Optional<com.fasterxml.jackson.databind.JsonNode> live(long projectId, UUID uuid, AssetType type) {
+        return assetRepository.findByProjectIdAndUuid(projectId, uuid)
+                .filter(asset -> asset.getAssetType() == type)
+                .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
+                .filter(version -> !version.isDeleted())
+                .map(version -> version.getPayload());
+    }
+
+    /** A content validator that checks dataset restrictions and pagination sources against this project's assets. */
     public ContentValidator validator(long projectId) {
-        return new ContentValidator(new ExpressionEvaluator(), forProject(projectId));
+        return new ContentValidator(new ExpressionEvaluator(), forProject(projectId), paginationSources(projectId));
     }
 }

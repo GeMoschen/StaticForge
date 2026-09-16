@@ -35,6 +35,7 @@ public final class DatasetCdlRules {
                             + " and a record has values only.",
                     0, 0));
         }
+        diagnostics.addAll(PaginationCdlRules.notAllowedIn(definition, "a dataset schema"));
         return diagnostics;
     }
 }
