@@ -25,11 +25,11 @@ rendering is feature 3.
 
 ## Feature exit criteria
 
-- [ ] `processCms` is stored in the media payload, can be toggled through the API for text
+- [x] `processCms` is stored in the media payload, can be toggled through the API for text
       MIME types only, and survives replace, metadata update, export/import and restore.
-- [ ] `MediaPaths.extensionFor` maps every allow-listed text MIME type to the right extension
+- [x] `MediaPaths.extensionFor` maps every allow-listed text MIME type to the right extension
       (no `bin` fallback for JSON/XML).
-- [ ] `GET`/`PUT /media/{uuid}/text` read and write UTF-8 text content with `If-Match`
+- [x] `GET`/`PUT /media/{uuid}/text` read and write UTF-8 text content with `If-Match`
       concurrency. A write creates one revision and one new blob, and SVG writes go through
       `SvgSanitizer`.
 

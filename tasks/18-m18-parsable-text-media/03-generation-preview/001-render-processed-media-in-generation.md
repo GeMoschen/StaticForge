@@ -1,6 +1,6 @@
 ---
 id: M18.3.1
-status: todo
+status: done
 depends: [M18.2.1, M16.1.1, M16.2.2, M16.3.3, M17.3.1]
 epic: m18-parsable-text-media
 feature: generation-preview
@@ -79,26 +79,26 @@ resolution for page renders is `GenerationRenderer.urlResolver(channel, pagePath
 
 ## Acceptance criteria
 
-- [ ] Golden-style integration test: global set `site` with `brandColor=#c00`, processed
+- [x] Golden-style integration test: global set `site` with `brandColor=#c00`, processed
       `main.css` containing `a{color:$CMS_VALUE(global:site.brandColor)$}` and
       `background:url($CMS_REF(media:bg)$)`, and a page linking `$CMS_REF(media:main)$`. A full
       generation writes `assets/media/main.css` with `a{color:#c00}` and
       `background:url(bg.png)`, a correct relative path next to the CSS, and copies `bg.png`.
-- [ ] The same project with `processCms=false` writes `main.css` byte-identical to the blob.
-- [ ] A processed JSON that uses `$CMS_REF(page:about)$` resolves to the default channel's
+- [x] The same project with `processCms=false` writes `main.css` byte-identical to the blob.
+- [x] A processed JSON that uses `$CMS_REF(page:about)$` resolves to the default channel's
       page path, relative to `assets/media/`.
-- [ ] Two processed CSS files that reference each other both render, and the run terminates.
-- [ ] A processed SVG whose global value contains `<script>` produces sanitized output.
-- [ ] Incremental: after a successful run, changing only `site.brandColor` produces a plan
+- [x] Two processed CSS files that reference each other both render, and the run terminates.
+- [x] A processed SVG whose global value contains `<script>` produces sanitized output.
+- [x] Incremental: after a successful run, changing only `site.brandColor` produces a plan
       with `main.css` in the media set and **zero** page entries, unless some page depends on
       the global itself. The run output contains the re-rendered CSS.
-- [ ] Incremental: changing an unrelated page does not re-render `main.css`.
-- [ ] A render error in processed media shows up in run diagnostics with the media UID and the
+- [x] Incremental: changing an unrelated page does not re-render `main.css`.
+- [x] A render error in processed media shows up in run diagnostics with the media UID and the
       agreed run status.
-- [ ] Existing generation tests (`GenerationIntegrationTest`, navigation/URL-registry
+- [x] Existing generation tests (`GenerationIntegrationTest`, navigation/URL-registry
       journeys, the 5,000-page benchmark if it runs in CI) are unaffected. The benchmark
       stays within the §18.6 targets.
-- [ ] `./gradlew :server:sf-generate:test :server:sf-domain:test` is green.
+- [x] `./gradlew :server:sf-generate:test :server:sf-domain:test` is green.
 
 ## Out of scope
 
@@ -126,3 +126,32 @@ resolution for page renders is `GenerationRenderer.urlResolver(channel, pagePath
   resolver: the lessons file records that links are relative to the current output file.
 - Thread safety: rendering runs on virtual threads. The copy set is computed before the
   parallel part, and the fixed-point iteration must not mutate shared sets concurrently.
+
+## Review (2026-09-16)
+
+- **Render failures → PARTIAL** (decision confirmed with the user): the file is left out, nothing previous is
+  substituted, and the diagnostic keeps its own code (`SF-TPL-0110`, a render limit, …) with `Media '<uid>': ` in
+  the message, exactly like a page held back by a render limit. `SF-GEN-0230` is only for an unreadable source blob.
+- **Shared render logic:** `asset.media.TextMediaRenderer` (sf-domain) fixes the context (escaping `NONE`, meta
+  incl. `mimeType`, navigation-only block resolver, SVG sanitized after rendering). Generation calls it from
+  `GenerationRenderer.renderMedia` with the snapshot resolvers; preview from `PageRenderService.renderMedia`.
+- **ASSETS stage:** `RenderPipeline.mediaSession` → `MediaRenderSession` (same snapshot resolvers, output paths and
+  build compile memo as the pages); `stage.MediaRenderStage` reads the blob and turns failures into diagnostics;
+  `AssetCopyStage.copy` walks the copy set to a fixed point (queue + visited set, dependencies enqueued in sorted
+  order for determinism). The walk is sequential: only a render reveals the next dependencies, and a project has
+  few processed files.
+- **Compile cache:** `TemplateCompileMemo.textMedia` (per build) and `CompiledTemplateCache.compileTextMedia` (across
+  requests, re-validated like templates). Compile *warnings* are not repeated in run diagnostics; they were shown
+  at save, and a JS file with intentional `$$` would otherwise make every run PARTIAL.
+- **Planner:** `BuildPlan.processedMedia` (entries stay page-only). **Deviation from the task text:** a processed
+  file that was merely *reached* does not keep walking reverse edges; only a *changed* one does, like any changed
+  media. Walking on would re-render every page that links the stylesheet when only a global it reads changed,
+  which contradicts this task's own acceptance criterion ("zero page entries"); a page's link to the file is its
+  URL, which a dependency change never moves.
+- **Dependency recording:** generation writes no reference rows since `M16.3.3`, and the save-time rows come from
+  the materializer, so there is nothing to duplicate.
+- **Incremental publish gap** confirmed as described (only the run's files are staged; owned by `M22.4.1`). Planned
+  media is part of the run's files.
+- Tests: `ProcessedMediaGenerationIntegrationTest` (7: golden CSS + transitive image, unprocessed byte-identical,
+  JSON page link `../../about.html`, CSS cycle, SVG sanitized, incremental global-only change with an empty page
+  plan and the unrelated-page case, compile failure → PARTIAL), `GenerationServiceTest` updated.

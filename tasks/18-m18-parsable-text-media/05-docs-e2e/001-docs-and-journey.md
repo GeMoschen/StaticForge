@@ -1,6 +1,6 @@
 ---
 id: M18.5.1
-status: todo
+status: done
 depends: [M18.3.1, M18.3.2, M18.4.1]
 epic: m18-parsable-text-media
 feature: docs-e2e
@@ -47,14 +47,14 @@ backend. `M15.6.1` records how that gap was handled.
 
 ## Acceptance criteria
 
-- [ ] Docs sections above exist, and every new diagnostic code appears in the guide's catalogue.
-- [ ] Spec sections updated. No contradictions remain with §11.5's "sanitize SVG on upload"
+- [x] Docs sections above exist, and every new diagnostic code appears in the guide's catalogue.
+- [x] Spec sections updated. No contradictions remain with §11.5's "sanitize SVG on upload"
       wording (now: on upload and after rendering).
-- [ ] `m18-journeys.spec.ts` exists and passes against a live dev backend. If it can't be run
+- [x] `m18-journeys.spec.ts` exists and passes against a live dev backend. If it can't be run
       in this environment, the reason is recorded here, with the same rigor as `M15.6.1`.
-- [ ] Regression: an existing media-related journey still passes (or is read-through
+- [x] Regression: an existing media-related journey still passes (or is read-through
       verified with the same caveat).
-- [ ] All boxes in `tasks/18-m18-parsable-text-media/README.md` Exit criteria are ticked with
+- [x] All boxes in `tasks/18-m18-parsable-text-media/README.md` Exit criteria are ticked with
       evidence notes.
 
 ## Out of scope
@@ -68,3 +68,17 @@ backend. `M15.6.1` records how that gap was handled.
 - Step 7 depends on how incremental builds carry unchanged files forward (see the hazard in
   `M18.3.1`). If `M22.4.1` hasn't landed, assert only on the re-rendered CSS file, not on the
   completeness of the whole site.
+
+## What was run (2026-09-16)
+
+- **Docs:** developer guide §2.8 "CMS syntax in text media" (types, render context, allowed/forbidden, `$$`,
+  JS/JSON escaping, relative links, worked example, generation/preview behaviour) and the new codes in Part 3;
+  user guide (Media: Source, Process CMS syntax, Rendered, time travel); `api.md` §7.1; `architecture.md`; spec
+  §11.3/§11.4/§11.5 (SVG sanitized on upload, on text writes and after rendering), new §16.12, §16.11 codes,
+  §18.2 PLAN/ASSETS, §19.2.
+- **Playwright, run live** (dev backend on 8081 with `SF_OUTPUT_ROOT`, `ng serve` on 4300):
+  `m18-journeys.spec.ts` 2/2. Journey 1 covers all seven steps (the incremental step asserts on the stylesheet
+  only, because of the `M22.4.1` carry-forward gap). Journey 2: unsaved-changes guard, time travel read-only
+  with the historical source.
+- **Regression, live:** `m16-journeys.spec.ts` 5/5 and `m17-journeys.spec.ts` 4/4 (both drive the preview frame
+  whose sandbox changed, and journey 2 of M16 the media library).

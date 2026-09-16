@@ -27,14 +27,14 @@ Make processed media produce **rendered** output wherever the site is materializ
 
 ## Feature exit criteria
 
-- [ ] A full generation writes rendered bytes for processed media. Unprocessed media is still
+- [x] A full generation writes rendered bytes for processed media. Unprocessed media is still
       byte-identical to the blob.
-- [ ] Media referenced only from a processed file (e.g. a font or image in CSS) is copied too.
-- [ ] An incremental run re-renders a processed file when a dependency changed, and doesn't
+- [x] Media referenced only from a processed file (e.g. a font or image in CSS) is copied too.
+- [x] An incremental run re-renders a processed file when a dependency changed, and doesn't
       when nothing it depends on changed.
-- [ ] Preview renders processed media at the preview revision, with links relative to the
+- [x] Preview renders processed media at the preview revision, with links relative to the
       preview share URLs.
-- [ ] Rendered SVG is sanitized after rendering, in both generation and preview.
+- [x] Rendered SVG is sanitized after rendering, in both generation and preview.
 
 ## Dependencies
 

@@ -16,6 +16,7 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.render.RenderPipeline;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
 import com.acme.staticforge.generate.stage.AssetCopyStage;
+import com.acme.staticforge.generate.stage.MediaRenderStage;
 import com.acme.staticforge.generate.stage.PostProcessStage;
 import com.acme.staticforge.generate.target.TargetWriter;
 import com.acme.staticforge.generate.target.TargetWriterSelector;
@@ -58,7 +59,8 @@ class GenerationServiceTest {
         assetsStage = mock(AssetCopyStage.class);
         postStage = mock(PostProcessStage.class);
         writers = mock(TargetWriterSelector.class);
-        service = new GenerationService(runs, targets, projects, mock(ChannelService.class), snapshots, planner, renderer, assetsStage, postStage,
+        service = new GenerationService(runs, targets, projects, mock(ChannelService.class), snapshots, planner, renderer, assetsStage,
+                mock(MediaRenderStage.class), postStage,
                 writers, new ObjectMapper(), new SimpleMeterRegistry());
 
         Project project = project(1L);

@@ -69,6 +69,13 @@ public interface AssetService {
     /** Applies a full state change, closing the current version and opening a new one. Optimistic-concurrency-checked. */
     AssetVersionView update(UUID uuid, UpdateAssetCommand cmd, long expectedRevision, RevisionContext ctx);
 
+    /**
+     * Throws the standard {@code 409 SF-API-0409} conflict problem {@link #update} throws when the
+     * asset's current version is not {@code expectedRevision}. For a write that turns out to change
+     * nothing, and so allocates no revision, but must still reject a stale client.
+     */
+    void requireRevision(long projectId, UUID uuid, long expectedRevision);
+
     /** Marks the asset deleted via a {@code deleted=true} version row (nothing physically removed). */
     void softDelete(UUID uuid, boolean force, RevisionContext ctx);
 

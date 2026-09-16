@@ -4,6 +4,7 @@ import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.ReferenceEdge;
+import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.Snapshot;
@@ -54,9 +55,12 @@ public class BuildPlanner {
 
         Set<UUID> changedAssets = Set.of();
         Set<UUID> pageUuids;
+        Set<UUID> processedMedia = Set.of();
         if (incremental) {
             changedAssets = changedAssets(snapshot, lastSuccessfulRevision);
-            pageUuids = affectedPages(snapshot, changedAssets);
+            Affected affected = affected(snapshot, changedAssets);
+            pageUuids = affected.pages();
+            processedMedia = affected.processedMedia();
         } else {
             pageUuids = new LinkedHashSet<>(snapshot.pages().stream().map(SnapshotAsset::uuid).toList());
         }
@@ -78,7 +82,7 @@ public class BuildPlanner {
         }
         entries.sort(Comparator.comparing(PlanEntry::outputPath).thenComparing(PlanEntry::pageUuid));
 
-        return new BuildPlan(incremental, snapshot.revision(), entries, changedAssets);
+        return new BuildPlan(incremental, snapshot.revision(), entries, changedAssets, processedMedia);
     }
 
     // ------------------------------------------------------------------
@@ -98,6 +102,9 @@ public class BuildPlanner {
         return changed;
     }
 
+    /** What an incremental build re-renders: pages, and processed media outside any page render. */
+    private record Affected(Set<UUID> pages, Set<UUID> processedMedia) {}
+
     /**
      * Expands changed assets to the affected pages over the reverse edges of {@code asset_reference}
      * (spec §5.4, §18.2), loaded once per plan as an in-memory reverse index. Page → page-template
@@ -113,13 +120,19 @@ public class BuildPlanner {
      * page that was merely reached: a page's output depends on what it references, not on who
      * references it.
      *
+     * <p>Processed text media (M18.3.1) is the one kind of media with outgoing edges (its source's
+     * {@code OCTL_*} references). Every processed media file the walk reaches, changed or reached, is
+     * collected for re-rendering. Like a page, it stops the walk when it was merely reached: what links
+     * to it only carries its URL, which a change of its dependencies never moves. A changed processed
+     * file keeps walking, exactly like any changed media.
+     *
      * <p>Render-time-only dependencies are not covered by persisted rows. A template's
      * {@code $CMS_NAVIGATION(nav:…)$} or {@code $CMS_FOR(x : nav:…)$} renders the folder's whole
      * subtree, but only the folder itself is an edge target, so a changed page reference deep in that
      * subtree does not reach the template. Expanding that is {@code M22.1.1}'s job (§18.2 navigation
      * rule); do not bring back generation-time reference inserts to cover it.
      */
-    private Set<UUID> affectedPages(Snapshot snapshot, Set<UUID> changedAssets) {
+    private Affected affected(Snapshot snapshot, Set<UUID> changedAssets) {
         Map<Long, Set<Long>> referrers = new HashMap<>();
         for (ReferenceEdge edge : references.findValidAtByProject(snapshot.projectId(), snapshot.revision())) {
             referrers.computeIfAbsent(edge.toAssetId(), k -> new HashSet<>()).add(edge.fromAssetId());
@@ -135,6 +148,7 @@ public class BuildPlanner {
 
         Deque<Long> frontier = new ArrayDeque<>(changedIds);
         Set<UUID> affected = new LinkedHashSet<>();
+        Set<UUID> processedMedia = new LinkedHashSet<>();
         Set<Long> visited = new HashSet<>();
         while (!frontier.isEmpty()) {
             long id = frontier.poll();
@@ -143,8 +157,12 @@ public class BuildPlanner {
             }
             SnapshotAsset asset = snapshot.assetById(id);
             boolean page = asset != null && asset.type() == AssetType.PAGE;
-            if (page) {
-                affected.add(asset.uuid());
+            boolean processed = asset != null
+                    && asset.type() == AssetType.MEDIA
+                    && !asset.deleted()
+                    && TextMediaTypes.isProcessed(asset.payload());
+            if (page || processed) {
+                (page ? affected : processedMedia).add(asset.uuid());
                 if (!changedIds.contains(id)) {
                     continue;
                 }
@@ -155,7 +173,7 @@ public class BuildPlanner {
                 }
             }
         }
-        return affected;
+        return new Affected(affected, processedMedia);
     }
 
     private static boolean inScope(SnapshotAsset page, String scopeFolderPath, Set<UUID> scopeAssetUuids) {

@@ -132,6 +132,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/media/{uuid}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["readText"];
+        put: operations["writeText"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/media/{uuid}/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setProcessCms"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/globals/{uuid}/schema": {
         parameters: {
             query?: never;
@@ -446,6 +478,22 @@ export interface paths {
         get: operations["list_7"];
         put?: never;
         post: operations["upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/media/{uuid}/text/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validateText"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1099,7 +1147,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["binary"];
+        get: operations["binary_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1472,6 +1520,29 @@ export interface components {
             copyright?: string;
             focalPoint?: components["schemas"]["FocalPointView"];
             variants?: components["schemas"]["MediaVariantView"][];
+            processCms?: boolean;
+            textEditable?: boolean;
+        };
+        MediaTextRequest: {
+            text?: string;
+        };
+        Diagnostic: {
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING";
+            code?: string;
+            message?: string;
+            /** Format: int32 */
+            line?: number;
+            /** Format: int32 */
+            column?: number;
+        };
+        MediaSaveResponse: {
+            media?: components["schemas"]["MediaView"];
+            warnings?: components["schemas"]["Diagnostic"][];
+            processCmsCleared?: boolean;
+        };
+        MediaProcessRequest: {
+            processCms?: boolean;
         };
         UpdateGlobalSetSchemaRequest: {
             contentDefinition?: string;
@@ -1630,16 +1701,6 @@ export interface components {
             source?: string;
             channelKey?: string;
             templateUuid?: string;
-        };
-        Diagnostic: {
-            /** @enum {string} */
-            severity?: "ERROR" | "WARNING";
-            code?: string;
-            message?: string;
-            /** Format: int32 */
-            line?: number;
-            /** Format: int32 */
-            column?: number;
         };
         OctlValidateResponse: {
             diagnostics?: components["schemas"]["Diagnostic"][];
@@ -1883,10 +1944,10 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -1905,9 +1966,9 @@ export interface components {
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
             /** Format: int32 */
-            pageNumber?: number;
-            /** Format: int32 */
             pageSize?: number;
+            /** Format: int32 */
+            pageNumber?: number;
             paged?: boolean;
             unpaged?: boolean;
         };
@@ -1919,10 +1980,10 @@ export interface components {
             ignoreCase?: boolean;
         };
         PageTemplateSummary: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -1973,8 +2034,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            add?: boolean;
             remove?: boolean;
+            add?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -2026,12 +2087,14 @@ export interface components {
             folderPath?: string;
             /** Format: int64 */
             revision?: number;
+            processCms?: boolean;
+            textEditable?: boolean;
         };
         PageMediaSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -2044,6 +2107,13 @@ export interface components {
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
+        };
+        MediaTextView: {
+            text?: string;
+            mimeType?: string;
+            /** Format: int64 */
+            revision?: number;
+            utf8?: boolean;
         };
         GlobalSetSummaryView: {
             /** Format: uuid */
@@ -2080,10 +2150,10 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -2543,6 +2613,89 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MediaView"];
+                };
+            };
+        };
+    };
+    readText: {
+        parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaTextView"];
+                };
+            };
+        };
+    };
+    writeText: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaTextRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaSaveResponse"];
+                };
+            };
+        };
+    };
+    setProcessCms: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaProcessRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaSaveResponse"];
                 };
             };
         };
@@ -3322,6 +3475,33 @@ export interface operations {
             };
         };
     };
+    validateText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaTextRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OctlValidateResponse"];
+                };
+            };
+        };
+    };
     replace: {
         parameters: {
             query?: never;
@@ -3347,7 +3527,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["MediaView"];
+                    "*/*": components["schemas"]["MediaSaveResponse"];
                 };
             };
         };
@@ -4461,10 +4641,11 @@ export interface operations {
             };
         };
     };
-    binary: {
+    binary_1: {
         parameters: {
             query?: {
                 variant?: string;
+                revision?: number;
             };
             header?: never;
             path: {

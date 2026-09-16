@@ -23,4 +23,11 @@ public final class GenerationDiagnosticCodes {
      * target report {@code SF-TPL-0112} instead.
      */
     public static final String GEN_DELETED_REFERENCE = "SF-GEN-0220";
+
+    /**
+     * A processed text media file's source blob can't be read (M18.3.1): the file is not published,
+     * the run is PARTIAL. Compile and render failures of processed media keep their own
+     * {@code SF-TPL-*} code, with the media uid in the message.
+     */
+    public static final String GEN_MEDIA_SOURCE_MISSING = "SF-GEN-0230";
 }

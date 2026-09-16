@@ -15,6 +15,8 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.diagnostic.Diagnostic;
+import com.acme.staticforge.template.octl.OctlResult;
 import com.drew.imaging.ImageMetadataReader;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.exif.ExifIFD0Directory;
@@ -74,6 +76,7 @@ public class MediaServiceImpl implements MediaService {
     private final BlobStore blobStore;
     private final MediaProperties properties;
     private final ProjectRepository projectRepository;
+    private final TextMediaCompiler textMediaCompiler;
     private final SvgSanitizer svgSanitizer = new SvgSanitizer();
     private final ObjectMapper mapper = new ObjectMapper();
     private final Tika tika = new Tika();
@@ -82,7 +85,7 @@ public class MediaServiceImpl implements MediaService {
     public MediaServiceImpl(AssetService assetService, AssetRepository assetRepository,
             MediaVersionRepository mediaVersionRepository, BlobRepository blobRepository,
             BlobStore blobStore, MediaProperties properties, ProjectRepository projectRepository,
-            MeterRegistry meterRegistry) {
+            TextMediaCompiler textMediaCompiler, MeterRegistry meterRegistry) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.mediaVersionRepository = mediaVersionRepository;
@@ -90,6 +93,7 @@ public class MediaServiceImpl implements MediaService {
         this.blobStore = blobStore;
         this.properties = properties;
         this.projectRepository = projectRepository;
+        this.textMediaCompiler = textMediaCompiler;
         this.uploadBytesCounter = Counter.builder("sf.media.upload.bytes")
                 .description("Bytes of media uploaded (spec §26.4).")
                 .register(meterRegistry);
@@ -125,7 +129,7 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     @Transactional
-    public AssetVersionView replace(UUID uuid, String fileName, String suppliedMimeType,
+    public MediaWriteResult replace(UUID uuid, String fileName, String suppliedMimeType,
             byte[] bytes, RevisionContext ctx) {
         AssetVersionView current = require(ctx.projectId(), uuid);
         long projectId = assetRepository.findByProjectIdAndUuid(ctx.projectId(), uuid)
@@ -138,22 +142,119 @@ public class MediaServiceImpl implements MediaService {
         BufferedImage image = decode(bytes, mimeType);
         checkDimensions(image);
         byte[] finalBytes = strip(bytes, image, mimeType);
+
+        JsonNode old = current.payload();
+        boolean wasProcessed = TextMediaTypes.isProcessed(old);
+        boolean processCms = wasProcessed && TextMediaTypes.isText(mimeType);
+        List<Diagnostic> warnings = processCms
+                ? compileOrThrow(ctx.projectId(), TextMediaCompiler.decode(finalBytes).text(), mimeType)
+                : List.of();
+
         String sha = sha256(finalBytes);
         storeBlob(sha, finalBytes, mimeType);
 
-        JsonNode old = current.payload();
         String altText = JsonUtil.text(old, "altText").orElse(null);
         String caption = JsonUtil.text(old, "caption").orElse(null);
         String copyright = JsonUtil.text(old, "copyright").orElse(null);
         FocalPoint focalPoint = readFocalPoint(old);
 
         ObjectNode payload = buildPayload(sha, trimFileName(fileName), mimeType, finalBytes.length, image, orientation,
-                altText, caption, copyright, focalPoint, generateVariants(finalBytes, image, mimeType));
+                altText, caption, copyright, focalPoint, generateVariants(finalBytes, image, mimeType), processCms);
 
         AssetVersionView updated = assetService.update(uuid,
                 new UpdateAssetCommand(current.displayName(), payload), current.validFromRevision(), ctx);
         setMediaColumns(ctx.projectId(), uuid, mimeType, finalBytes.length);
-        return updated;
+        return new MediaWriteResult(updated, warnings, wasProcessed && !processCms);
+    }
+
+    @Override
+    @Transactional
+    public MediaWriteResult setProcessCms(UUID uuid, boolean processCms, long expectedRevision, RevisionContext ctx) {
+        AssetVersionView current = require(ctx.projectId(), uuid);
+        String mimeType = requireTextMime(current);
+        List<Diagnostic> warnings = processCms
+                ? compileOrThrow(ctx.projectId(), readText(current).text(), mimeType)
+                : List.of();
+        if (current.payload().path(TextMediaTypes.PROCESS_FLAG).asBoolean(false) == processCms) {
+            assetService.requireRevision(ctx.projectId(), uuid, expectedRevision);
+            return new MediaWriteResult(current, warnings, false);
+        }
+        ObjectNode payload = JsonUtil.object(current.payload()).deepCopy();
+        payload.put(TextMediaTypes.PROCESS_FLAG, processCms);
+        AssetVersionView updated = assetService.update(
+                uuid, new UpdateAssetCommand(current.displayName(), payload), expectedRevision, ctx);
+        return new MediaWriteResult(updated, warnings, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MediaText readText(long projectId, UUID uuid, Long revision) {
+        AssetVersionView view = requireAt(projectId, uuid, revision);
+        String mimeType = requireTextMime(view);
+        TextMediaCompiler.DecodedText decoded = readText(view);
+        return new MediaText(decoded.text(), mimeType, view.validFromRevision(), decoded.utf8());
+    }
+
+    @Override
+    @Transactional
+    public MediaWriteResult writeText(UUID uuid, String text, long expectedRevision, RevisionContext ctx) {
+        AssetVersionView current = require(ctx.projectId(), uuid);
+        String mimeType = requireTextMime(current);
+        byte[] bytes = (text == null ? "" : text).getBytes(StandardCharsets.UTF_8);
+        checkSize(bytes);
+        byte[] finalBytes = strip(bytes, null, mimeType);
+
+        JsonNode old = current.payload();
+        List<Diagnostic> warnings = TextMediaTypes.isProcessed(old)
+                ? compileOrThrow(ctx.projectId(), new String(finalBytes, StandardCharsets.UTF_8), mimeType)
+                : List.of();
+
+        String sha = sha256(finalBytes);
+        if (sha.equals(JsonUtil.text(old, "blobSha256").orElse(null))) {
+            // Content-addressed: identical bytes are the version already stored, so no revision.
+            assetService.requireRevision(ctx.projectId(), uuid, expectedRevision);
+            return new MediaWriteResult(current, warnings, false);
+        }
+        storeBlob(sha, finalBytes, mimeType);
+
+        ObjectNode payload = JsonUtil.object(old).deepCopy();
+        payload.put("blobSha256", sha);
+        payload.put("sizeBytes", finalBytes.length);
+        AssetVersionView updated = assetService.update(
+                uuid, new UpdateAssetCommand(current.displayName(), payload), expectedRevision, ctx);
+        setMediaColumns(ctx.projectId(), uuid, mimeType, finalBytes.length);
+        return new MediaWriteResult(updated, warnings, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Diagnostic> validateText(long projectId, UUID uuid, String text) {
+        String mimeType = requireTextMime(require(projectId, uuid));
+        return textMediaCompiler.compile(projectId, text == null ? "" : text, mimeType).diagnostics();
+    }
+
+    /** The version's MIME type, or a {@code 400} when it is not text media. */
+    private static String requireTextMime(AssetVersionView view) {
+        String mimeType = JsonUtil.text(view.payload(), "mimeType").orElse(null);
+        if (!TextMediaTypes.isText(mimeType)) {
+            throw new SfException(ProblemFactory.badRequest(
+                    "Only text media (CSS, JavaScript, JSON, SVG, XML, plain text) can be edited or processed;"
+                            + " this file is '" + mimeType + "'."));
+        }
+        return mimeType;
+    }
+
+    private TextMediaCompiler.DecodedText readText(AssetVersionView view) {
+        String sha = JsonUtil.text(view.payload(), "blobSha256")
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Media blob is missing.")));
+        return TextMediaCompiler.decode(blobStore.get(sha));
+    }
+
+    /** Compiles processed source: errors are a {@code 422}, the (warning) diagnostics are returned. */
+    private List<Diagnostic> compileOrThrow(long projectId, String source, String mimeType) {
+        OctlResult result = textMediaCompiler.compile(projectId, source, mimeType);
+        TextMediaCompiler.requireNoErrors(result);
+        return result.diagnostics();
     }
 
     @Override
@@ -196,7 +297,27 @@ public class MediaServiceImpl implements MediaService {
     @Override
     @Transactional(readOnly = true)
     public MediaBinary binary(long projectId, UUID uuid, String variantName) {
-        AssetVersionView view = require(projectId, uuid);
+        return binary(projectId, uuid, variantName, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AssetVersionView requireAt(long projectId, UUID uuid, Long revision) {
+        if (revision == null) {
+            return require(projectId, uuid);
+        }
+        AssetVersionView view = assetService.findAt(projectId, uuid, revision)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Media not found at revision " + revision + ".")));
+        if (view.type() != AssetType.MEDIA) {
+            throw new SfException(ProblemFactory.unprocessableEntity("Asset is not media."));
+        }
+        return view;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MediaBinary binary(long projectId, UUID uuid, String variantName, Long revision) {
+        AssetVersionView view = requireAt(projectId, uuid, revision);
         JsonNode payload = view.payload();
         String fileName = JsonUtil.text(payload, "fileName").orElse(view.displayName());
 
@@ -262,7 +383,7 @@ public class MediaServiceImpl implements MediaService {
         storeBlob(sha, finalBytes, mimeType);
 
         ObjectNode payload = buildPayload(sha, trimFileName(fileName), mimeType, finalBytes.length, image, orientation,
-                altText, caption, null, FocalPoint.CENTER, generateVariants(finalBytes, image, mimeType));
+                altText, caption, null, FocalPoint.CENTER, generateVariants(finalBytes, image, mimeType), false);
 
         AssetVersionView created = assetService.create(
                 new CreateAssetCommand(projectId, AssetType.MEDIA, displayName(fileName), folderUuid, payload, null), ctx);
@@ -514,7 +635,7 @@ public class MediaServiceImpl implements MediaService {
 
     private ObjectNode buildPayload(String sha, String fileName, String mimeType, long sizeBytes, BufferedImage image,
             int orientation, String altText, String caption, String copyright, FocalPoint focalPoint,
-            List<ObjectNode> variants) {
+            List<ObjectNode> variants, boolean processCms) {
         ObjectNode root = mapper.createObjectNode();
         root.put("blobSha256", sha);
         root.put("fileName", fileName);
@@ -538,6 +659,7 @@ public class MediaServiceImpl implements MediaService {
         fp.put("y", focalPoint == null ? 0.5 : focalPoint.y());
         ArrayNode arr = root.putArray("variants");
         variants.forEach(arr::add);
+        root.put(TextMediaTypes.PROCESS_FLAG, processCms);
         return root;
     }
 

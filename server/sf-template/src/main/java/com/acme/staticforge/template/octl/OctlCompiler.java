@@ -28,6 +28,12 @@ public final class OctlCompiler {
 
     private static final String HASH_ALGORITHM = "SHA-256";
 
+    /** A text media file has no editors and no bodies: every bare name is unknown. */
+    private static final ContentDefinition NO_EDITORS = new ContentDefinition(List.of(), List.of());
+
+    /** Filters after which a JS/JSON value can no longer break out of a string literal. */
+    private static final Set<String> TEXT_MEDIA_ESCAPING_FILTERS = Set.of("js", "json", "attr", "url", "html", "raw");
+
     /** Creates a compiler. Stateless; a single instance may compile any number of templates. */
     public OctlCompiler() {}
 
@@ -51,6 +57,36 @@ public final class OctlCompiler {
      */
     public OctlResult compile(
             String source, String channelKey, ReferenceResolver references, ContentDefinition contentDef) {
+        return compile(source, channelKey, references, contentDef, null);
+    }
+
+    /**
+     * Compiles the source of a processed text media file (CSS, JS, JSON, SVG, …; M18.2.1). The file
+     * belongs to no page, so on top of the template checks (against a definition with no editors,
+     * which makes every bare name an unknown editor):
+     *
+     * <ul>
+     *   <li>{@code $CMS_BODY}, {@code $CMS_INCLUDE}, the leaf form of {@code $CMS_NAVIGATION} (which
+     *       emits HTML) and {@code CMS_PAGE} are {@code SF-TPL-0121} errors;
+     *   <li>every {@code $$} outside a {@code $CMS_COMMENT$} block is an {@code SF-TPL-0320} warning,
+     *       because the output then contains a single {@code $};
+     *   <li>when {@code scriptLike} (JS/JSON), a {@code $CMS_VALUE} without an escaping filter is an
+     *       {@code SF-TPL-0321} warning.
+     * </ul>
+     *
+     * @param scriptLike whether the file's MIME type is JavaScript or JSON
+     */
+    public OctlResult compileTextMedia(
+            String source, String channelKey, ReferenceResolver references, boolean scriptLike) {
+        return compile(source, channelKey, references, NO_EDITORS, new TextMedia(scriptLike));
+    }
+
+    private OctlResult compile(
+            String source,
+            String channelKey,
+            ReferenceResolver references,
+            ContentDefinition contentDef,
+            TextMedia textMedia) {
         String text = source == null ? "" : source;
         String channel = channelKey == null ? "html" : channelKey;
 
@@ -61,10 +97,13 @@ public final class OctlCompiler {
         diagnostics.addAll(parsed.diagnostics());
 
         Map<String, UUID> refMap = new LinkedHashMap<>();
-        ValidateCtx ctx = new ValidateCtx(references, contentDef, refMap, diagnostics);
+        ValidateCtx ctx = new ValidateCtx(references, contentDef, refMap, diagnostics, textMedia);
         validate(parsed.nodes(), new HashSet<>(), ctx);
 
         ctx.emitDeclaredNeverUsed();
+        if (textMedia != null) {
+            warnDollarEscapes(lexed, diagnostics);
+        }
 
         String hash = sha256(channel + '\u0000' + text);
         CompiledTemplate template = new CompiledTemplate(
@@ -85,14 +124,35 @@ public final class OctlCompiler {
                     checkCrossAssetPath(v.accessor(), v.line(), v.col(), ctx);
                     checkFilters(v.filters(), v.line(), v.col(), ctx);
                     checkRaw(v.accessor(), v.filters(), v.line(), v.col(), ctx);
+                    checkTextMediaEscaping(v, ctx);
                 }
                 case OctlNode.Ref r -> {
                     checkAccessorRoot(r.accessor(), shadowed, r.line(), r.col(), ctx);
                     checkGlobalRefPath(r.accessor(), r.line(), r.col(), ctx);
                 }
-                case OctlNode.Body b -> checkBody(b, ctx);
-                case OctlNode.Include i -> resolveReference(i.accessor(), i.line(), i.col(), ctx);
+                case OctlNode.Body b -> {
+                    if (ctx.textMedia != null) {
+                        notInTextMedia("$CMS_BODY", b.line(), b.col(), ctx);
+                    } else {
+                        checkBody(b, ctx);
+                    }
+                }
+                case OctlNode.Include i -> {
+                    if (ctx.textMedia != null) {
+                        notInTextMedia("$CMS_INCLUDE", i.line(), i.col(), ctx);
+                    } else {
+                        resolveReference(i.accessor(), i.line(), i.col(), ctx);
+                    }
+                }
                 case OctlNode.Navigation nav -> {
+                    if (ctx.textMedia != null && nav.variable() == null) {
+                        ctx.diagnostics.add(Diagnostic.error(
+                                DiagnosticCodes.OCTL_NOT_ALLOWED_IN_TEXT_MEDIA,
+                                "$CMS_NAVIGATION without 'as item' renders HTML and is not available in text media;"
+                                        + " use $CMS_FOR(item : " + nav.accessor().referenceKey() + ")$ instead",
+                                nav.line(),
+                                nav.col()));
+                    }
                     resolveReference(nav.accessor(), nav.line(), nav.col(), ctx);
                     if (nav.variable() != null) {
                         Set<String> inner = new HashSet<>(shadowed);
@@ -188,7 +248,13 @@ public final class OctlCompiler {
                     line, col));
             return;
         }
-        if ("CMS_PAGE".equals(name) || shadowed.contains(name)) {
+        if (shadowed.contains(name)) {
+            return;
+        }
+        if ("CMS_PAGE".equals(name)) {
+            if (ctx.textMedia != null) {
+                notInTextMedia("CMS_PAGE", line, col, ctx);
+            }
             return;
         }
         if (ctx.contentDef.findEditor(name).isPresent()) {
@@ -246,6 +312,62 @@ public final class OctlCompiler {
         }
     }
 
+    private static void notInTextMedia(String what, int line, int col, ValidateCtx ctx) {
+        ctx.diagnostics.add(Diagnostic.error(
+                DiagnosticCodes.OCTL_NOT_ALLOWED_IN_TEXT_MEDIA,
+                what + " is not available in text media: the file belongs to no page",
+                line,
+                col));
+    }
+
+    /** JS/JSON text media: a value without an escaping filter can break out of a string literal. */
+    private static void checkTextMediaEscaping(OctlNode.Value value, ValidateCtx ctx) {
+        if (ctx.textMedia == null || !ctx.textMedia.scriptLike()) {
+            return;
+        }
+        boolean escaped = value.filters().stream().anyMatch(f -> TEXT_MEDIA_ESCAPING_FILTERS.contains(f.name()));
+        if (!escaped) {
+            ctx.diagnostics.add(Diagnostic.warning(
+                    DiagnosticCodes.OCTL_TEXT_MEDIA_UNESCAPED_VALUE,
+                    "$CMS_VALUE without an escaping filter in a JavaScript/JSON file; add | js or | json"
+                            + " (or | raw when the value is meant to be code)",
+                    value.line(),
+                    value.col()));
+        }
+    }
+
+    /**
+     * One {@code SF-TPL-0320} warning per {@code $$} escape, except inside a {@code $CMS_COMMENT$}
+     * block, whose content never reaches the output. Comment spans come from the token stream the
+     * parser consumes: a comment runs from {@code $CMS_COMMENT$} to the first
+     * {@code $CMS_END_COMMENT$}, or to the end of the source.
+     */
+    private static void warnDollarEscapes(OctlLexer.LexResult lexed, List<Diagnostic> diagnostics) {
+        List<OctlLexer.Position> commentBounds = new ArrayList<>();
+        boolean inComment = false;
+        for (OctlLexer.Token token : lexed.tokens()) {
+            if (!token.isInstruction()) {
+                continue;
+            }
+            String keyword = OctlParser.keyword(token.text());
+            if (keyword.equals(inComment ? "END_COMMENT" : "COMMENT")) {
+                commentBounds.add(new OctlLexer.Position(token.line(), token.col()));
+                inComment = !inComment;
+            }
+        }
+        for (OctlLexer.Position escape : lexed.escapes()) {
+            // An odd number of comment bounds before the escape means it sits inside a comment.
+            long boundsBefore = commentBounds.stream().filter(bound -> bound.isBefore(escape)).count();
+            if (boundsBefore % 2 == 0) {
+                diagnostics.add(Diagnostic.warning(
+                        DiagnosticCodes.OCTL_TEXT_MEDIA_DOLLAR_ESCAPE,
+                        "$$ is output as a single $ when CMS processing is on",
+                        escape.line(),
+                        escape.col()));
+            }
+        }
+    }
+
     private void checkBody(OctlNode.Body body, ValidateCtx ctx) {
         boolean isSection = ctx.contentDef == null || ctx.contentDef.bodies().isEmpty();
         if (isSection) {
@@ -291,6 +413,9 @@ public final class OctlCompiler {
         }
     }
 
+    /** The compile profile of a processed text media file. */
+    private record TextMedia(boolean scriptLike) {}
+
     private static final class ValidateCtx {
         final ReferenceResolver references;
         final ContentDefinition contentDef;
@@ -298,16 +423,20 @@ public final class OctlCompiler {
         final List<Diagnostic> diagnostics;
         final Set<String> usedEditors = new HashSet<>();
         final Set<String> usedBodies = new HashSet<>();
+        /** The text media profile, or {@code null} when compiling a template. */
+        final TextMedia textMedia;
 
         ValidateCtx(
                 ReferenceResolver references,
                 ContentDefinition contentDef,
                 Map<String, UUID> refMap,
-                List<Diagnostic> diagnostics) {
+                List<Diagnostic> diagnostics,
+                TextMedia textMedia) {
             this.references = references;
             this.contentDef = contentDef;
             this.refMap = refMap;
             this.diagnostics = diagnostics;
+            this.textMedia = textMedia;
         }
 
         void emitDeclaredNeverUsed() {

@@ -1,5 +1,6 @@
 @if (selectedMedia(); as media) {
   <sf-media-detail-drawer
+    #detailDrawer
     [projectKey]="projectKey()"
     [media]="media"
     (closed)="closeDetail()"
@@ -193,7 +194,12 @@
                   <sf-icon [name]="mediaIconFor(item.mimeType)" />
                 </div>
               }
-              <span class="cell__name">{{ item.displayName }}</span>
+              <span class="cell__name">
+                {{ item.displayName }}
+                @if (item.processCms) {
+                  <span class="cell__badge" title="CMS syntax is processed when the site is generated">CMS</span>
+                }
+              </span>
               <span class="cell__meta">
                 {{ item.mimeType }} · {{ item.sizeBytes | sfFileSize }}
               </span>

@@ -710,9 +710,17 @@ Backends behind a `BlobStore` interface: `FilesystemBlobStore` (default, `sf.med
   "variants": [
     { "name": "w800",  "blobSha256": "1a4b…", "width": 800,  "format": "webp" },
     { "name": "w1600", "blobSha256": "7c8d…", "width": 1600, "format": "webp" }
-  ]
+  ],
+  "processCms": false
 }
 ```
+
+`processCms` (M18) opts a **text** media file into OCTL processing (§16.12). It can only be `true`
+for the text MIME types (`text/css`, `application/javascript`, `text/javascript`, `application/json`,
+`application/manifest+json`, `image/svg+xml`, `text/plain`, `application/xml`, `text/xml`); a
+payload without the key reads as `false`. `replace` keeps it while the new file is text and clears
+it otherwise. The blob stays the file's **source**: rendered output is produced per generation run
+and per preview request and never written back to blob storage.
 
 ### 11.4 Upload flow
 
@@ -737,10 +745,18 @@ variants:
 
 5. Blob `ref_count` incremented; asset version written; revision created.
 
+**Editing text media (M18).** `GET /media/{uuid}/text` returns a text file's content (decoded as
+UTF-8, with a flag when the bytes aren't valid UTF-8); `PUT /media/{uuid}/text` stores new content as
+a new content-addressed blob in one revision, keeping the MIME type, file name, metadata and
+`processCms`. The upload rules apply (size cap, SVG sanitizing); line endings are stored as sent, and
+content identical to the stored blob writes no revision. Switching `processCms` on, a text write to a
+processed file and a replace of a processed file compile the source first: errors are a `422` with
+`diagnostics` and nothing is stored (§16.12).
+
 ### 11.5 Constraints & safety
 
 - Default max upload 100 MB (configurable), default max image dimension 12,000 px.
-- Allow-list by MIME family; SVG uploads are sanitized (script/foreignObject/event attributes stripped) or rejected per project setting.
+- Allow-list by MIME family; SVG is sanitized (script/foreignObject/event attributes stripped) or rejected per project setting — on upload, on every text write, and, for a processed SVG (M18), again **after rendering**, so a rendered value can't reintroduce script.
 - Uploaded files are served from a **separate origin/path** with `Content-Disposition: attachment` for non-renderable types and a strict `Content-Security-Policy` for previews.
 - Media referenced by any non-deleted asset cannot be hard-deleted without confirmation; the UI shows the usage list first.
 
@@ -1286,6 +1302,7 @@ OCTL source ──lex──▶ tokens ──parse──▶ AST ──resolve ref
 | `SF-TPL-0111` | warning | Cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
 | `SF-TPL-0112` | warning (render) | Cross-asset value target missing or soft-deleted; renders empty |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
+| `SF-TPL-0121` | error | Processed text media: `$CMS_BODY`, `$CMS_INCLUDE`, leaf `$CMS_NAVIGATION` or `CMS_PAGE` (§16.12) |
 | `SF-TPL-0130` | error (render) | Nesting depth above 32 below the page template |
 | `SF-TPL-0131` | error (render) | Loop iterations above 100,000 in one page render |
 | `SF-TPL-0132` | error (render) | Output above 32 MB in one page render |
@@ -1294,6 +1311,28 @@ OCTL source ──lex──▶ tokens ──parse──▶ AST ──resolve ref
 | `SF-TPL-0201` | warning | Body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | Editor declared in CDL but never used in any channel template |
+| `SF-TPL-0320` | warning | Processed text media: `$$` is output as `$` (per occurrence outside `$CMS_COMMENT$`) |
+| `SF-TPL-0321` | warning | Processed JS/JSON: `$CMS_VALUE` without an escaping filter |
+
+### 16.12 Text media context (M18)
+
+A media file with `processCms` (§11.3) is OCTL source rendered in a context that belongs to no page:
+
+- **Compile.** Against a content definition with no editors or bodies. `$CMS_BODY`, `$CMS_INCLUDE`,
+  the leaf form of `$CMS_NAVIGATION` (it emits HTML) and `CMS_PAGE` are `SF-TPL-0121`; `$CMS_VALUE`,
+  `$CMS_REF`, `$CMS_IF`, `$CMS_FOR` (including `nav:` sources), `$CMS_SET`, `$CMS_META`,
+  `$CMS_COMMENT` and the block form of `$CMS_NAVIGATION` are allowed. Every `$$` outside a comment is
+  an `SF-TPL-0320` warning, and a JS/JSON `$CMS_VALUE` without `js`, `json`, `attr`, `url`, `html` or
+  `raw` is an `SF-TPL-0321` warning. Warnings never block a save.
+- **Render.** Once per generation run, in the project's **default channel**, with escaping `NONE`;
+  `$CMS_META` offers `uid`, `uuid`, `displayName`, `path` (the media output path), `revision`,
+  `channel`, `projectKey` and `mimeType`; cross-asset values and globals resolve as for pages. Links
+  are relative to the media file's own output path (§18.3 rule for pages). Output goes to the media's
+  normal path `assets/media/{uid}.{ext}`.
+- **References.** The source's resolved references are `OCTL_*` edges of the media asset with
+  source path `source`, written in the save's revision (§5.4) and closed when the flag goes off, so
+  usages, delete protection and incremental planning cover them. The UID-change report scans processed
+  sources for the old uid literally, like template sources.
 
 ---
 
@@ -1394,7 +1433,11 @@ Request body:
                incremental → changed assets since last successful run,
                              expanded over asset_reference reverse edges
                              (transitive; navigation-affecting changes expand to
-                             all pages that render that structure)
+                             all pages that render that structure). Processed
+                             text media reached by the walk is planned for
+                             re-rendering even when no planned page links it
+                             (§16.12); like a page, a merely reached one stops
+                             the walk.
 3  VALIDATE    Compile every needed template and resolve refs.
                ERROR-severity findings abort before any file is written.
                Pages with ERROR completeness findings are held back (SF-GEN-0120,
@@ -1404,6 +1447,10 @@ Request body:
                from save (§5.4); rendering does not write them.
 5  ASSETS      Copy referenced media (and requested variants) to the target.
                Content-addressed: unchanged blobs are skipped.
+               Processed text media (§16.12) is rendered instead of copied, to
+               the same path; the media it references joins the set
+               transitively (a visited set ends cycles). A file that fails to
+               compile or render is left out and the run is PARTIAL.
 6  POST        Optional per-channel post-processors: prettify/minify HTML,
                sitemap.xml, robots.txt, redirect map, search index JSON.
 7  WRITE       Atomic publish into the target (§18.4).
@@ -1485,7 +1532,8 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 - Preview uses the **same** render engine and the same compiled templates as generation. There is no second code path — a preview that renders is a build that renders.
 - Preview output is served from a dedicated, sandboxed route: `Content-Security-Policy: sandbox allow-scripts allow-same-origin`, `X-Frame-Options` allowing only the app origin, and a per-request nonce.
 - `$CMS_REF` targets are rewritten to preview URLs (`/api/v1/projects/{p}/preview/pages/{uuid}`) so navigation inside the preview iframe stays inside the CMS. A "preview link rewriting" toggle lets developers inspect raw output paths.
-- Media references resolve to the live media endpoint, so unpublished images appear immediately.
+- Media references resolve to the live media endpoint, so unpublished images appear immediately. The link is a signed share URL pinned to the preview's revision; a processed text media file (§16.12) is served **rendered** at that revision, with its own media links rewritten the same way and `Cache-Control: no-store`. If it doesn't compile or render, its source is served with the diagnostic in `X-SF-Render-Error`, so one broken stylesheet doesn't break the preview.
+- The editor's preview frame loads the server-rendered document as `srcdoc` in a sandbox **without** `allow-same-origin` (M18): stylesheets and scripts of the page run, but in an opaque origin that can't reach the application.
 - The client never sends rendered data (content, bodies, or meta) to preview a page — only the page's `uuid` and, optionally, a `revision` to pin to. The server resolves everything else from the database, the same way it would for generation, so there is exactly one source of truth for what a page currently contains. In the split-view editor this means the preview pane reflects the page's state as of its last autosave, not literally-unsaved keystrokes; it is debounced (400 ms) and refetches whenever autosave completes.
 
 ### 19.3 In-app affordances

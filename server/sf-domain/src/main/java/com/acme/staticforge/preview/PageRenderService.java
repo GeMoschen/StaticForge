@@ -7,6 +7,11 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.media.MediaPaths;
+import com.acme.staticforge.asset.media.TextMediaCompiler;
+import com.acme.staticforge.asset.media.TextMediaRenderer;
+import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
@@ -21,6 +26,7 @@ import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
+import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.acme.staticforge.template.render.AssetValueResolver;
 import com.acme.staticforge.template.render.BlockResolver;
@@ -67,8 +73,11 @@ public class PageRenderService {
     private final LiveNavigationLookup navigationLookup;
     private final UrlRegistryService urlRegistryService;
     private final CompiledTemplateCache compiledTemplates;
+    private final BlobStore blobStore;
+    private final TextMediaCompiler textMediaCompiler;
 
     private final Renderer renderer = new OctlRenderer();
+    private final TextMediaRenderer textMediaRenderer = new TextMediaRenderer();
 
     public PageRenderService(
             AssetService assetService,
@@ -79,7 +88,9 @@ public class PageRenderService {
             NavigationService navigationService,
             LiveNavigationLookup navigationLookup,
             UrlRegistryService urlRegistryService,
-            CompiledTemplateCache compiledTemplates) {
+            CompiledTemplateCache compiledTemplates,
+            BlobStore blobStore,
+            TextMediaCompiler textMediaCompiler) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.projectRepository = projectRepository;
@@ -89,6 +100,8 @@ public class PageRenderService {
         this.navigationLookup = navigationLookup;
         this.urlRegistryService = urlRegistryService;
         this.compiledTemplates = compiledTemplates;
+        this.blobStore = blobStore;
+        this.textMediaCompiler = textMediaCompiler;
     }
 
     /**
@@ -126,6 +139,60 @@ public class PageRenderService {
         return withRenderLimitsAsProblem(() -> renderSectionTemplate(
                 projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, channel, false, null,
                 null, new RenderBudget()));
+    }
+
+    /**
+     * Renders a processed text media file for preview (M18.3.2) through the same
+     * {@link TextMediaRenderer} generation uses, with live resolvers at {@code revision}: values and
+     * globals as of that revision (current when {@code null}), and media links rewritten to preview
+     * share URLs pinned to the same revision, so a font referenced by a processed stylesheet loads in
+     * a time-travel preview too.
+     *
+     * @param media the media version to render, the one valid at {@code revision}
+     * @param baseUrl the API base the page preview used, so links survive a reverse proxy
+     * @throws SfException {@code 422} with {@code diagnostics} when the source doesn't compile, or with
+     *     the limit's code when a render limit is hit
+     */
+    public String renderMedia(long projectId, AssetVersionView media, Long revision, String baseUrl) {
+        String projectKey = projectKeyOf(projectId);
+        JsonNode payload = media.payload();
+        String mimeType = payload.path("mimeType").asText(null);
+        String sha = payload.path("blobSha256").asText(null);
+        if (sha == null) {
+            throw new SfException(ProblemFactory.notFound("Media blob is missing."));
+        }
+        String channel = textMediaCompiler.defaultChannelKey(projectId);
+        OctlResult compiled = compiledTemplates.compileTextMedia(
+                projectId,
+                media.uuid(),
+                media.validFromRevision(),
+                channel,
+                TextMediaCompiler.decode(blobStore.get(sha)).text(),
+                TextMediaTypes.isScriptLike(mimeType),
+                referenceResolver(projectId));
+        TextMediaCompiler.requireNoErrors(compiled);
+
+        String uid = emptyIfNull(media.uid());
+        TextMediaRenderer.Target target = new TextMediaRenderer.Target(
+                media.uuid(),
+                uid,
+                media.displayName(),
+                mimeType,
+                MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mimeType)),
+                media.validFromRevision(),
+                channel,
+                projectKey);
+        return withRenderLimitsAsProblem(() -> textMediaRenderer.render(
+                        compiled.template(),
+                        target,
+                        urlResolver(projectKey, channel, true, baseUrl, revision),
+                        assetValues(projectId, revision),
+                        (navFolderUuid, args) -> {
+                            JsonNode json = navigationTreeJson(
+                                    navFolderUuid, args, projectId, projectKey, null, channel, true, baseUrl);
+                            return json == null ? null : json.path("children");
+                        })
+                .output());
     }
 
     // ------------------------------------------------------------------
@@ -185,7 +252,7 @@ public class PageRenderService {
 
         // One budget for the page and every section/include/catalog card rendered inside it.
         RenderBudget budget = new RenderBudget();
-        UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl);
+        UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision);
         BlockResolver blocks = blockResolver(projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision, budget);
         AssetValueResolver assetValues = assetValues(projectId, revision);
 
@@ -402,7 +469,8 @@ public class PageRenderService {
             RevisionContext ctx = RevisionContext.of(projectId, null, "preview");
             return urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.PREVIEW, ctx);
         }
-        return urlResolver(projectKey, channel, rewriteLinks, baseUrl).resolve("page", null, resolvedPageUuid, Map.of());
+        // Page links are never revision-pinned, so the media revision doesn't matter here.
+        return urlResolver(projectKey, channel, rewriteLinks, baseUrl, null).resolve("page", null, resolvedPageUuid, Map.of());
     }
 
     /** {@code depth} named arg → int, {@code -1} (unlimited, still hard-capped) when absent/invalid. */
@@ -468,7 +536,7 @@ public class PageRenderService {
                 .pageValues(pageValues != null ? pageValues : objectMapper.createObjectNode())
                 .meta("uid", TextNode.valueOf(uid))
                 .meta("uuid", TextNode.valueOf(sectionTemplateUuid.toString()))
-                .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl))
+                .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision))
                 .blockResolver(blockResolver(
                         projectId, projectKey, PageView.contextOnly(pageValues), channel, rewriteLinks, baseUrl, revision, budget))
                 .assetValueResolver(assetValues(projectId, revision))
@@ -527,8 +595,11 @@ public class PageRenderService {
      * route (not the Bearer-only {@code /preview/pages/{uuid}}) — this HTML is loaded into the
      * browser's own iframe navigation (not Angular's authenticated {@code HttpClient}) whenever
      * the viewer clicks a link inside the preview, so the auth has to travel in the URL itself.
+     *
+     * @param revision the time-travel revision media share links are pinned to (M18.3.2), so a
+     *     processed file renders with that revision's values; {@code null} for the current state
      */
-    private UrlResolver urlResolver(String projectKey, String channel, boolean rewriteLinks, String baseUrl) {
+    private UrlResolver urlResolver(String projectKey, String channel, boolean rewriteLinks, String baseUrl, Long revision) {
         if (!rewriteLinks) {
             return (kind, uid, uuid, args) -> uid != null && !uid.isBlank() ? uid : (uuid == null ? "" : uuid.toString());
         }
@@ -542,7 +613,7 @@ public class PageRenderService {
                 // `/media/{uuid}/binary` route is Bearer-only, and this HTML's `<img src>`/link
                 // is fetched by the browser directly, without the app's session.
                 String variant = args == null ? null : args.get("variant");
-                String mediaToken = previewTokenService.issueMediaShareToken(uuid, projectKey);
+                String mediaToken = previewTokenService.issueMediaShareToken(uuid, revision, projectKey);
                 String query = variant == null || variant.isBlank() ? "" : "&variant=" + variant;
                 return base + "/projects/" + projectKey + "/media/" + uuid + "/share?t=" + mediaToken + query;
             }

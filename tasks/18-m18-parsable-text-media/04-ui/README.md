@@ -23,10 +23,10 @@ since `M15.5`.
 
 ## Feature exit criteria
 
-- [ ] Toggle, Source editor and Rendered tab work end to end against the real backend.
-- [ ] Diagnostics from save and from live validation are shown with line/column, and errors
+- [x] Toggle, Source editor and Rendered tab work end to end against the real backend.
+- [x] Diagnostics from save and from live validation are shown with line/column, and errors
       block Save.
-- [ ] Time travel disables toggle and Save. 409 conflicts use the existing conflict UX.
+- [x] Time travel disables toggle and Save. 409 conflicts use the existing conflict UX.
 
 ## Dependencies
 

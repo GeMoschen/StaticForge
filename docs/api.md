@@ -91,6 +91,32 @@ Everything that isn't specific to property sets uses the generic endpoints: fold
 | `POST` | `/projects/{projectKey}/media/{uuid}/replace` |
 | `GET` | `/projects/{projectKey}/media/{uuid}/binary` (`?variant=`) |
 | `GET` | `/projects/{projectKey}/media/{uuid}/thumbnail` |
+| `GET` | `/projects/{projectKey}/media/{uuid}/share?t=` (public, token-gated; see §12) |
+
+### 7.1 Text media and CMS processing (M18)
+
+Text media (`text/css`, `application/javascript`, `text/javascript`, `application/json`,
+`application/manifest+json`, `image/svg+xml`, `text/plain`, `application/xml`, `text/xml`) can be
+edited as text and opted into CMS syntax processing (`processCms`). Media views carry `processCms`
+and `textEditable`; list summaries carry both too. Other types get `400` from every endpoint below.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `PUT` | `/projects/{projectKey}/media/{uuid}/process` | `EDITOR` | `{processCms}`, `If-Match` required. Switching on compiles the file: errors → `422` with `diagnostics`, flag unchanged. One revision; setting the current value writes none |
+| `GET` | `/projects/{projectKey}/media/{uuid}/text` | `VIEWER` | `?revision=` for time travel → `{text, mimeType, revision, utf8}` + `ETag`. `utf8: false` when the bytes aren't valid UTF-8 (decoded with replacement characters) |
+| `PUT` | `/projects/{projectKey}/media/{uuid}/text` | `EDITOR` | `{text}`, `If-Match` required. One revision, new blob; MIME type, file name, metadata and `processCms` unchanged. Size cap and SVG sanitizing as on upload (`413 SF-MEDIA-0413`). A processed file compiles first (`422` with `diagnostics`). Identical content writes no revision |
+| `POST` | `/projects/{projectKey}/media/{uuid}/text/validate` | `EDITOR` | `{text}` → `{diagnostics}`; nothing is saved |
+| `GET` | `/projects/{projectKey}/media/{uuid}/binary?rendered=true` | `EDITOR` | processed files only (`400` otherwise); `?revision=` for time travel. The rendered output as preview serves it, `Cache-Control: no-store`; compile or render errors → `422` |
+
+The write endpoints (`process`, `text`, `replace`) answer with `{media, warnings, processCmsCleared}`:
+`warnings` are the processed source's non-blocking diagnostics (`SF-TPL-0320` for `$$`,
+`SF-TPL-0321` for an unescaped value in JS/JSON), and `processCmsCleared` is `true` when a `replace`
+with a non-text file switched processing off.
+
+`GET /binary` without `rendered` always returns the stored source. The media share route
+(`/share?t=`), which page previews link to, serves a processed file rendered at the token's
+revision with `Cache-Control: no-store`; when the file doesn't compile or render it serves the source
+with the diagnostic in `X-SF-Render-Error`.
 
 ## 8. Templates (section, page) & structures
 
@@ -202,6 +228,7 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | `SF-GEN-0120` | error (per page) | content incomplete; page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.incompletePages`) |
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
 | `SF-GEN-0220` | warning | reference to a deleted asset (`$CMS_REF`, `$CMS_INCLUDE`, body section); renders empty | `GenerationRenderer` |
+| `SF-GEN-0230` | error (per file) | a processed text media file's source blob is missing; the file isn't published, run `PARTIAL` | `GenerationDiagnosticCodes` (`MediaRenderStage`) |
 | `SF-GEN-0301` | warning | `raw` filter on a plain-text editor | (spec §16.3 — raised via `SF-TPL-0301` at compile time) |
 | `SF-GEN-0410` | warning | navigation cycle truncated | `GenerationDiagnosticCodes` |
 | `SF-GEN-0500` | 409 | a generation run is already active | `GenerationService` (`CONFLICT_CODE`) |

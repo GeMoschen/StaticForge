@@ -9,9 +9,12 @@ import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.ReferenceKind;
 import com.acme.staticforge.asset.content.ContentReferenceService;
 import com.acme.staticforge.asset.content.ExtractedReference;
+import com.acme.staticforge.asset.media.TextMediaCompiler;
+import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.OctlCompiler;
+import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.acme.staticforge.template.octl.ReferenceUse;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,7 +44,10 @@ import org.springframework.stereotype.Service;
  *       as {@code OCTL_VALUE}/{@code OCTL_REF}/{@code OCTL_INCLUDE}, with source path
  *       {@code channelTemplates.<channel>}. Sections placed in page bodies are not duplicated here;
  *       those are the pages' {@code TEMPLATE} edges.</li>
- *   <li>{@code MEDIA}, {@code FOLDER}: none.</li>
+ *   <li>{@code MEDIA} with {@code processCms} on (M18.2.1): the OCTL references of the source blob,
+ *       compiled with the text media profile, as {@code OCTL_*} edges with source path {@code source}.
+ *       Unprocessed media has none, so switching the flag off closes them.</li>
+ *   <li>{@code FOLDER}: none.</li>
  * </ul>
  *
  * <p>The write is a per-edge diff rather than close-all-then-insert-all: an edge present in both
@@ -56,21 +62,27 @@ import org.springframework.stereotype.Service;
 @RevisionAware
 public class ReferenceMaterializer {
 
+    /** The source path of every edge a processed media file's source makes. */
+    public static final String MEDIA_SOURCE_PATH = "source";
+
     private final AssetReferenceRepository references;
     private final AssetRepository assets;
     private final ContentReferenceService contentReferences;
     private final ProjectReferenceResolver projectReferences;
+    private final TextMediaCompiler textMediaCompiler;
     private final OctlCompiler octlCompiler = new OctlCompiler();
 
     public ReferenceMaterializer(
             AssetReferenceRepository references,
             AssetRepository assets,
             ContentReferenceService contentReferences,
-            ProjectReferenceResolver projectReferences) {
+            ProjectReferenceResolver projectReferences,
+            TextMediaCompiler textMediaCompiler) {
         this.references = references;
         this.assets = assets;
         this.contentReferences = contentReferences;
         this.projectReferences = projectReferences;
+        this.textMediaCompiler = textMediaCompiler;
     }
 
     /**
@@ -107,7 +119,8 @@ public class ReferenceMaterializer {
             case PAGE_REFERENCE -> navigationReferences(payload);
             case PAGE_TEMPLATE, SECTION_TEMPLATE -> templateReferences(projectId, payload);
             case GLOBAL_SET -> contentReferences.extract(payload.get("content"), "content");
-            case MEDIA, FOLDER -> List.of();
+            case MEDIA -> mediaReferences(projectId, payload);
+            case FOLDER -> List.of();
         };
         if (found.isEmpty()) {
             return Set.of();
@@ -172,13 +185,31 @@ public class ReferenceMaterializer {
                 return;
             }
             CompiledTemplate compiled = octlCompiler.compile(source.asText(), channel.getKey(), resolver).template();
-            String path = "channelTemplates." + channel.getKey();
-            compiled.referenceUses().forEach((key, uses) -> {
-                UUID target = compiled.references().get(key);
-                uses.forEach(use -> found.add(new ExtractedReference(referenceKind(use), target, path)));
-            });
+            addOctlReferences(found, compiled, "channelTemplates." + channel.getKey());
         });
         return found;
+    }
+
+    /** OCTL edges of a processed text media file's source blob; none for unprocessed media. */
+    private List<ExtractedReference> mediaReferences(long projectId, JsonNode payload) {
+        if (!TextMediaTypes.isProcessed(payload)) {
+            return List.of();
+        }
+        OctlResult result = textMediaCompiler.compilePayload(projectId, payload);
+        if (result == null) {
+            return List.of();
+        }
+        List<ExtractedReference> found = new ArrayList<>();
+        addOctlReferences(found, result.template(), MEDIA_SOURCE_PATH);
+        return found;
+    }
+
+    /** One edge per resolved reference per use, addressed by {@code path}. */
+    private static void addOctlReferences(List<ExtractedReference> found, CompiledTemplate compiled, String path) {
+        compiled.referenceUses().forEach((key, uses) -> {
+            UUID target = compiled.references().get(key);
+            uses.forEach(use -> found.add(new ExtractedReference(referenceKind(use), target, path)));
+        });
     }
 
     private static ReferenceKind referenceKind(ReferenceUse use) {

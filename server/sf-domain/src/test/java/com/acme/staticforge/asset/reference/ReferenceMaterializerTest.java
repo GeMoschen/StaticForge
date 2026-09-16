@@ -17,8 +17,12 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.ReferenceKind;
 import com.acme.staticforge.asset.content.ContentReferenceService;
+import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.media.TextMediaCompiler;
+import com.acme.staticforge.channel.OutputChannelRepository;
 import com.acme.staticforge.common.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -38,17 +42,21 @@ class ReferenceMaterializerTest {
 
     private AssetRepository assets;
     private AssetReferenceRepository references;
+    private BlobStore blobs;
     private ReferenceMaterializer materializer;
 
     @BeforeEach
     void setUp() {
         assets = mock(AssetRepository.class);
         references = mock(AssetReferenceRepository.class);
+        blobs = mock(BlobStore.class);
+        ProjectReferenceResolver projectReferences = new ProjectReferenceResolver(assets, mock(AssetVersionRepository.class));
         materializer = new ReferenceMaterializer(
                 references,
                 assets,
                 new ContentReferenceService(),
-                new ProjectReferenceResolver(assets, mock(AssetVersionRepository.class)));
+                projectReferences,
+                new TextMediaCompiler(projectReferences, mock(OutputChannelRepository.class), blobs));
         List<Asset> targets = List.of(
                 asset(pageTemplate, 11L), asset(sectionTemplate, 12L), asset(media, 13L), asset(page, 14L));
         when(assets.findByProjectIdAndUuidIn(eq(PROJECT), any())).thenReturn(targets);
@@ -105,12 +113,39 @@ class ReferenceMaterializerTest {
     }
 
     @Test
-    void mediaAndFoldersHaveNoEdgesAndNeedNoLookup() {
-        JsonNode payload = JsonUtil.parse("{\"blobSha256\":\"abc\"}");
+    void unprocessedMediaAndFoldersHaveNoEdgesAndNeedNoLookup() {
+        JsonNode payload = JsonUtil.parse("{\"blobSha256\":\"abc\",\"mimeType\":\"text/css\"}");
 
         assertThat(materializer.extract(PROJECT, AssetType.MEDIA, payload)).isEmpty();
         assertThat(materializer.extract(PROJECT, AssetType.FOLDER, payload)).isEmpty();
         verify(assets, never()).findByProjectIdAndUuidIn(anyLong(), any());
+        verify(blobs, never()).get(any());
+    }
+
+    @Test
+    void derivesOctlEdgesFromAProcessedMediaFilesSource() {
+        Asset about = asset(page, 14L);
+        Asset bg = asset(media, 13L);
+        when(assets.findByProjectIdAndAssetTypeAndUid(PROJECT, AssetType.PAGE, "about")).thenReturn(java.util.Optional.of(about));
+        when(assets.findByProjectIdAndAssetTypeAndUid(PROJECT, AssetType.MEDIA, "bg")).thenReturn(java.util.Optional.of(bg));
+        when(blobs.exists("abc")).thenReturn(true);
+        when(blobs.get("abc")).thenReturn(
+                "a{background:url($CMS_REF(media:bg)$)} /* $CMS_VALUE(page:about.title)$ $CMS_REF(page:nope)$ */"
+                        .getBytes(StandardCharsets.UTF_8));
+        JsonNode payload = JsonUtil.parse("{\"blobSha256\":\"abc\",\"mimeType\":\"text/css\",\"processCms\":true}");
+
+        assertThat(materializer.extract(PROJECT, AssetType.MEDIA, payload)).containsExactlyInAnyOrder(
+                new ReferenceEdge(13L, ReferenceKind.OCTL_REF, "source"),
+                new ReferenceEdge(14L, ReferenceKind.OCTL_VALUE, "source"));
+    }
+
+    @Test
+    void aProcessedFlagOnABinaryTypeOrAMissingBlobDerivesNothing() {
+        assertThat(materializer.extract(PROJECT, AssetType.MEDIA,
+                JsonUtil.parse("{\"blobSha256\":\"abc\",\"mimeType\":\"image/png\",\"processCms\":true}"))).isEmpty();
+        assertThat(materializer.extract(PROJECT, AssetType.MEDIA,
+                JsonUtil.parse("{\"blobSha256\":\"gone\",\"mimeType\":\"text/css\",\"processCms\":true}"))).isEmpty();
+        verify(blobs, never()).get(any());
     }
 
     @Test

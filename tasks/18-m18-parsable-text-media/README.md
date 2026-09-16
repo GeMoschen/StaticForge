@@ -36,31 +36,32 @@ Media without the flag keeps today's behaviour byte-for-byte.
 
 ## Exit criteria (epic is done when)
 
-- [ ] A text media file (CSS/JS/JSON/SVG/TXT/XML) can have `processCms` switched on/off. The
+- [x] A text media file (CSS/JS/JSON/SVG/TXT/XML) can have `processCms` switched on/off. The
       flag is rejected (400) for any other MIME type, and flipping it creates exactly one
       revision.
-- [ ] A text media file's content can be edited in the media drawer. Each save creates a new
+- [x] A text media file's content can be edited in the media drawer. Each save creates a new
       blob and one revision, and the diff/restore of that revision works like any other media
       change.
-- [ ] Saving processed content whose OCTL has errors is rejected with 422 and diagnostics.
+- [x] Saving processed content whose OCTL has errors is rejected with 422 and diagnostics.
       Warnings (`$$` occurrences, unescaped `$CMS_VALUE` in JS/JSON) are returned but don't
       block the save.
-- [ ] Generation writes the **rendered** output of a referenced processed media file to its
+- [x] Generation writes the **rendered** output of a referenced processed media file to its
       normal `assets/media/{uid}.{ext}` path. `$CMS_VALUE(global:…)$`, `$CMS_REF(page:…)$` and
       `$CMS_REF(media:…)$` resolve, with links relative to the media file's own path.
       Unprocessed media output is byte-identical to before.
-- [ ] Rendered SVG output is sanitized again after rendering, so injected content can't
+- [x] Rendered SVG output is sanitized again after rendering, so injected content can't
       reintroduce script.
-- [ ] An incremental run after changing only a global value that a processed CSS file
+- [x] An incremental run after changing only a global value that a processed CSS file
       references re-renders and rewrites that CSS file, without re-rendering unrelated pages.
-- [ ] Preview (page preview links and the media share endpoint) serves the rendered output of
+- [x] Preview (page preview links and the media share endpoint) serves the rendered output of
       processed media at the preview revision.
-- [ ] Media referenced by a processed file is copied into the build even when no page
+- [x] Media referenced by a processed file is copied into the build even when no page
       references it directly.
-- [ ] Docs (`user-guide.md`, `template-developer-guide.md`) describe the flag, the render
+- [x] Docs (`user-guide.md`, `template-developer-guide.md`) describe the flag, the render
       context and the `$$` rule. The E2E journey passes.
-- [ ] `./gradlew build` and `ui` `npm run build` are green. `npm test` has no new failures
+- [x] `./gradlew build` and `ui` `npm run build` are green. `npm test` has no new failures
       beyond the known `templateUrl` spec-runner issue.
+  - *Verified 2026-09-16:* `./gradlew build` green, 601 backend tests (510 at M17), 0 failures, 1 skipped (benchmark; run separately: 500 pages full 2.1 s, incremental 0.12 s). `ng build` green once the media route was made lazy (initial bundle 841 kB). vitest: 19 failing files, all the known `templateUrl` component specs; the new `text-media.util.spec.ts` (10) passes. Live Playwright: `m18-journeys` 2/2, `m16` 5/5, `m17` 4/4.
 
 ## Features (dependency order)
 

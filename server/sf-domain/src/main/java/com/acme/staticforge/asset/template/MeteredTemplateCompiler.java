@@ -37,4 +37,10 @@ final class MeteredTemplateCompiler {
         octlCompiles.increment();
         return octlCompiler.compile(octlSource, channel, resolver, definition);
     }
+
+    /** Compiles a processed text media source (M18); counted as an {@code octl} compile. */
+    OctlResult textMedia(String source, String channel, ReferenceResolver resolver, boolean scriptLike) {
+        octlCompiles.increment();
+        return octlCompiler.compileTextMedia(source, channel, resolver, scriptLike);
+    }
 }

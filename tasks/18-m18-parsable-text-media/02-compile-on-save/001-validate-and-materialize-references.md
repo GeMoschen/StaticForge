@@ -1,6 +1,6 @@
 ---
 id: M18.2.1
-status: todo
+status: done
 depends: [M18.1.2, M16.3.1]
 epic: m18-parsable-text-media
 feature: compile-on-save
@@ -56,19 +56,19 @@ lists the resolved reference UUIDs. After `M16.3.1`, saving an asset writes its 
 
 ## Acceptance criteria
 
-- [ ] Switching on a CSS file that contains `$CMS_VALUE(global:site.brandColor)$` for a
+- [x] Switching on a CSS file that contains `$CMS_VALUE(global:site.brandColor)$` for a
       non-existent global set returns 422 with `SF-TPL-0110` and leaves the flag off.
-- [ ] A text write containing `$CMS_BODY(main)$` or `$CMS_INCLUDE(section_template:x)$`
+- [x] A text write containing `$CMS_BODY(main)$` or `$CMS_INCLUDE(section_template:x)$`
       returns 422 with the new text-media-policy error.
-- [ ] A JS file with `const all = $$('a');` saves successfully with a `$$` warning at the
+- [x] A JS file with `const all = $$('a');` saves successfully with a `$$` warning at the
       right line/column.
-- [ ] A JSON file with `"title": "$CMS_VALUE(global:site.title)$"` saves with the
+- [x] A JSON file with `"title": "$CMS_VALUE(global:site.title)$"` saves with the
       unescaped-value warning. `"$CMS_VALUE(global:site.title | json)$"` produces no warning.
-- [ ] After saving, `GET /assets/{uuid}/usages` on the referenced page/media/global set
+- [x] After saving, `GET /assets/{uuid}/usages` on the referenced page/media/global set
       lists the processed media file (verifies the rows were written in the save's revision).
-- [ ] Switching the flag off closes the rows, and usages no longer list the file.
-- [ ] The validate endpoint returns diagnostics for draft text and creates no revision.
-- [ ] Unit tests cover the instruction policy and both warnings. Integration tests cover
+- [x] Switching the flag off closes the rows, and usages no longer list the file.
+- [x] The validate endpoint returns diagnostics for draft text and creates no revision.
+- [x] Unit tests cover the instruction policy and both warnings. Integration tests cover
       422-with-no-revision and reference rows per revision.
 
 ## Out of scope
@@ -88,3 +88,28 @@ lists the resolved reference UUIDs. After `M16.3.1`, saving an asset writes its 
   lexer's token stream, not a raw `indexOf`.
 - Don't block saves on warnings. The user explicitly chose opt-in over automatic parsing so
   authors stay in control.
+
+## Implementation notes (2026-09-16)
+
+- **One compile entry point:** `OctlCompiler.compileTextMedia(source, channel, resolver, scriptLike)`. It runs
+  the normal validation walk against a content definition with no editors or bodies (so a bare name is
+  `SF-TPL-0103` and `CMS_GLOBAL` misuse is `SF-TPL-0105`) plus the text media profile. No parser fork.
+- **Codes:** `SF-TPL-0121` (error: `$CMS_BODY`, `$CMS_INCLUDE`, leaf `$CMS_NAVIGATION`, `CMS_PAGE`),
+  `SF-TPL-0320` (warning: `$$`), `SF-TPL-0321` (warning: unescaped `$CMS_VALUE` in JS/JSON).
+- The `$$` warning uses positions the lexer now records for every escape, and skips `$CMS_COMMENT$` spans
+  taken from the same token stream the parser consumes (an unclosed comment runs to the end).
+- **Bug found and fixed:** the lexer didn't count the 5 characters of `$CMS_` when advancing the column, so every
+  diagnostic after an instruction on the same line was 5 columns too far left.
+- `asset.media.TextMediaCompiler` (save time: project resolver, default channel, `requireNoErrors` →
+  `422 SF-API-0422` with `diagnostics` through `ProblemFactory.unprocessableEntity`).
+- **Reference edges** (decision confirmed with the user): `ReferenceMaterializer.extract(MEDIA, payload)` compiles
+  a processed payload's blob and returns its `OCTL_*` edges with source path `source`. Every version write
+  already calls the materializer, so save, flag off, soft delete, restore and import are all covered without a
+  media-only mechanism.
+- `POST /media/{uuid}/text/validate` (EDITOR) returns `OctlValidateResponse`.
+- **UID rename scan:** processed media sources are scanned from their blobs (entries carry channel key `source`).
+  **Bug found and fixed:** the scan's regex had no `global:` prefix, so a set rename never flagged a template that
+  used the explicit `global:<uid>` form (its Javadoc claimed both spellings were matched).
+- Tests: `OctlCompilerTextMediaTest` (policy, both warnings, positions, comments), `ReferenceMaterializerTest`
+  (+2), `ProcessedMediaIntegrationTest` (422 with no revision, warnings, usages per revision, flag off closes rows,
+  validate, uid scan), `MediaTextApiTest`.

@@ -187,6 +187,108 @@ These snippets are exercised by the `global-value` golden file (`server/sf-templ
 - **Unknown sets fail at save time** (`SF-TPL-0110`), a deleted set renders empty with `SF-TPL-0112`, and a set that templates or pages still read cannot be deleted.
 - `CMS_GLOBAL` on its own, or `$CMS_REF` on a set without an editor path (`$CMS_REF(CMS_GLOBAL.site)$`), is `SF-TPL-0105`: name the set, and for `$CMS_REF` name the editor that holds the link.
 
+### 2.8 CMS syntax in text media (M18)
+
+A stylesheet, script or data file can use the same OCTL as a template: the brand color from a global
+set in `site.css`, the logo URL in a web manifest, page URLs in a JSON config. Processing is
+**opt-in per file**: switch on **Process CMS syntax** in the media drawer (or
+`PUT /media/{uuid}/process`). A file without the flag is published byte for byte, as before.
+
+**Which files.** Text media only, by the MIME type detected on upload (from the file name):
+
+| Type | Detected for | Published as |
+|---|---|---|
+| `text/css` | `.css` | `.css` |
+| `application/javascript`, `text/javascript` | `.js` | `.js` |
+| `application/json` | `.json` | `.json` |
+| `application/manifest+json` | `.webmanifest` | `.webmanifest` |
+| `image/svg+xml` | `.svg` | `.svg` |
+| `application/xml`, `text/xml` | `.xml` | `.xml` |
+| `text/plain` | `.txt`, and anything text that has no more specific type (for example `.mjs`) | `.txt` |
+
+Any other file (images, PDFs, fonts) is rejected with `400`. The **Source** tab of the drawer edits
+a text file in place; every save is a new revision.
+
+**The render context.** A processed file belongs to no page and is rendered **once per generation**:
+
+- in the project's **default channel**: `$CMS_META(channel)$` is its key, and `$CMS_REF(page:…)$`
+  links to the page's path in that channel;
+- with **escaping `NONE`**, whatever the channel's default: values are written as stored;
+- with `$CMS_META` keys `uid`, `uuid`, `displayName`, `path` (the file's own output path, for
+  example `assets/media/site_css.css`), `revision`, `channel`, `projectKey` and `mimeType`;
+- with every cross-asset value (`page:`, `media:`, `global:`/`CMS_GLOBAL`) and `nav:` iteration.
+
+The output goes to the file's normal path, `assets/media/{uid}.{ext}`, so every existing
+`$CMS_REF(media:…)$` keeps working. Media the file references (a background image, a font, another
+processed stylesheet) is published too, even when no page references it; two stylesheets may
+reference each other.
+
+**Allowed and forbidden instructions.**
+
+| Allowed | Not available in text media (`SF-TPL-0121`) |
+|---|---|
+| `$CMS_VALUE`, `$CMS_REF`, `$CMS_IF`, `$CMS_FOR` (also `$CMS_FOR(item : nav:main)$`), `$CMS_SET`, `$CMS_META`, `$CMS_COMMENT`, `$CMS_NAVIGATION(nav:…) as item$ … $CMS_END_NAVIGATION$` | `$CMS_BODY`, `$CMS_INCLUDE`, the leaf form `$CMS_NAVIGATION(nav:…)$` (it emits HTML), `CMS_PAGE` |
+
+A bare name such as `$CMS_VALUE(title)$` is an unknown editor (`SF-TPL-0103`): the file has no
+editors of its own, so read values through `global:`, `page:` or `media:`.
+
+**The `$$` rule.** With processing on, `$$` in the file is output as a single `$`, and every
+`$CMS_…$` is an instruction. Plenty of JavaScript contains `$$` (DevTools helpers, minified bundles),
+which is why processing is off by default. Every `$$` outside a `$CMS_COMMENT$` block is reported as
+`SF-TPL-0320` with its line and column when you switch processing on or save, so you see the change
+before the next build. Write `$$$$` where the output needs `$$`.
+
+**Escaping in JS and JSON.** Escaping `NONE` is right for CSS and plain text, but in JavaScript or
+JSON a value containing a quote breaks the string it is written into. Use a filter:
+
+```
+const title = '$CMS_VALUE(global:site.title | js)$';
+{ "title": $CMS_VALUE(global:site.title | json)$ }
+```
+
+(`| json` writes the quotes itself.) A `$CMS_VALUE` without `js`, `json`, `attr`, `url`, `html` or
+`raw` in a JS/JSON file is warned about with `SF-TPL-0321`; use `| raw` when the value is meant to be
+code. The warning never blocks a save.
+
+**Relative links.** `$CMS_REF` in a processed file is relative to the **file's own path**, just as a
+page's links are relative to the page. That is exactly what CSS needs: `url()` resolves against the
+stylesheet. A script is different: a URL the script *uses at runtime* (`fetch`, `location`) resolves
+against the **document** that loaded it, not against the script, so a relative URL written into a
+script points somewhere else on every page that loads it. Use root-relative or absolute URLs for
+those, and keep `$CMS_REF` in scripts for URLs that are resolved relative to the script itself.
+
+**Worked example.**
+
+```
+/* site.css — Process CMS syntax: on */
+:root { --brand: $CMS_VALUE(global:site.brandColor)$; }
+body { background: url($CMS_REF(media:paper_png)$); }
+$CMS_COMMENT$ $$ in here is not reported $CMS_END_COMMENT$
+```
+
+generates `assets/media/site_css.css`:
+
+```
+:root { --brand: #c00; }
+body { background: url(paper_png.png); }
+```
+
+and copies `assets/media/paper_png.png` next to it.
+
+**When it is checked.** Switching processing on, saving the source and replacing the file of a
+processed file all compile it: errors are a `422` with `diagnostics` and nothing changes; warnings
+come back with the saved file. The references the source makes are recorded like a template's, so
+the usages of `site` list `site.css`, an **incremental** generation re-renders `site.css` when only
+`brandColor` changed (without re-rendering pages that merely link it), and renaming the set's uid
+lists `site.css` among the sources that still spell the old uid.
+
+**At generation**, a processed file that no longer compiles or hits a render limit is not published:
+the run ends `PARTIAL` and the diagnostic keeps its own code with `Media '<uid>': ` in the message.
+**In preview**, a page's link to a processed file serves the rendered output at the preview's
+revision; a broken file is served as its source with the diagnostic in the `X-SF-Render-Error`
+response header, so one bad stylesheet doesn't break the preview. An SVG is sanitized again after
+rendering, so a value can't bring back `<script>` or event handlers.
+
 ## Part 3 — Diagnostics
 
 ### 3.1 OCTL (`SF-TPL-*`) — `template.diagnostic.DiagnosticCodes`
@@ -200,6 +302,7 @@ These snippets are exercised by the `global-value` golden file (`server/sf-templ
 | `SF-TPL-0105` | error | `CMS_GLOBAL` without a property set (`$CMS_VALUE(CMS_GLOBAL)$`), or `$CMS_REF` on a property set without an editor path (`$CMS_REF(CMS_GLOBAL.site)$`) |
 | `SF-TPL-0110` | error | unresolvable asset reference |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
+| `SF-TPL-0121` | error | processed text media (§2.8): `$CMS_BODY`, `$CMS_INCLUDE`, the leaf `$CMS_NAVIGATION(nav:…)$` or `CMS_PAGE`, none of which exist outside a page |
 | `SF-TPL-0134` | error | `$CMS_NAVIGATION_RECURSE(name)$` references a variable not bound by an enclosing `$CMS_NAVIGATION(...) as name$` |
 | `SF-TPL-0130` | error (render) | include depth exceeded: more than 32 nested section/include/catalog-card levels below the page template |
 | `SF-TPL-0131` | error (render) | loop iteration limit (100,000) exceeded |
@@ -211,6 +314,8 @@ These snippets are exercised by the `global-value` golden file (`server/sf-templ
 | `SF-TPL-0201` | warning | body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
 | `SF-TPL-0310` | warning | editor declared but never used in any channel template |
+| `SF-TPL-0320` | warning | processed text media: `$$` is output as a single `$` (one per occurrence outside `$CMS_COMMENT$`, with its position) |
+| `SF-TPL-0321` | warning | processed JavaScript/JSON: `$CMS_VALUE` without an escaping filter (`js`, `json`, `attr`, `url`, `html`, `raw`) |
 
 The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected page in generation (the other pages render and are published, the run ends `PARTIAL`, and the diagnostic names the page) and return a `422` problem with the diagnostic's code in preview. They apply to the **whole page render**: loop iterations, output size and time are counted across the page template and every section, include and catalog card rendered inside it, not per nested template.
 
@@ -235,13 +340,14 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-GEN-0120` | error (per page) | content incomplete: the page has `ERROR` completeness findings (an empty required editor, a count or length out of bounds) and is not published; the message lists `path (message)`, other pages are written and the run ends `PARTIAL` |
 | `SF-GEN-0210` | warning | no channel template for an enabled channel |
 | `SF-GEN-0220` | warning | reference to a deleted asset: a `$CMS_REF`, `$CMS_INCLUDE` or body section target is soft-deleted and renders empty |
+| `SF-GEN-0230` | error (per file) | a processed text media file's source blob can't be read; the file is not published and the run ends `PARTIAL`. A processed file that fails to compile or render keeps its own `SF-TPL-*` code, with `Media '<uid>': ` in the message |
 | `SF-GEN-0410` | warning | navigation cycle truncated |
 | `SF-GEN-0411` | error | `$CMS_NAVIGATION` tree contains a dangling `PAGE_REFERENCE` (target missing/deleted, or an empty folder subtree) |
 | `SF-GEN-0500` | 409 | a generation run is already active |
 
 ### 3.4 Errors carry the fix
 
-The UI copies this philosophy (§24.6): a diagnostic includes "did you mean?" suggestions and click-to-insert links. When you change a UID, the UID-change response (`UidChangeResult`) lists affected templates whose source still references the old UID literally (§6.4).
+The UI copies this philosophy (§24.6): a diagnostic includes "did you mean?" suggestions and click-to-insert links. When you change a UID, the UID-change response (`UidChangeResult`) lists affected templates, and processed text media files (channel key `source`), whose source still references the old UID literally (§6.4).
 
 ## Part 4 — Worked end-to-end
 

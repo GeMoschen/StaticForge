@@ -4,7 +4,12 @@
   </header>
 
   <p class="conflict-drawer__summary">
-    This page changed since you loaded it. Pick a value for each changed field.
+    This {{ subject() }} changed since you loaded it.
+    @if (fields().length > 0) {
+      Pick a value for each changed field.
+    } @else {
+      Keep your version or take the current one.
+    }
   </p>
 
   <dl class="conflict-drawer__meta">

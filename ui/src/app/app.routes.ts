@@ -7,7 +7,6 @@ import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { ProjectShellComponent } from './features/dashboard/project-shell.component';
 import { PagesListComponent } from './features/pages/pages-list.component';
 import { PageEditorComponent } from './features/pages/page-editor.component';
-import { MediaLibraryComponent } from './features/media/media-library.component';
 import { NavigationComponent } from './features/navigation/navigation.component';
 import { GlobalsComponent } from './features/globals/globals.component';
 import { TemplatesComponent } from './features/templates/templates.component';
@@ -57,7 +56,10 @@ export const routes: Routes = [
       },
       {
         path: 'media',
-        component: MediaLibraryComponent,
+        // Lazy: the library, its drawer and the text media editor (M18) are the largest single
+        // feature and only needed on this route, which keeps the initial bundle under its budget.
+        loadComponent: () =>
+          import('./features/media/media-library.component').then((m) => m.MediaLibraryComponent),
       },
       {
         path: 'navigation',

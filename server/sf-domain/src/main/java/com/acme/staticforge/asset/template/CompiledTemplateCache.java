@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -52,7 +53,8 @@ public class CompiledTemplateCache {
 
     private final MeteredTemplateCompiler compiler;
     private final Cache<DefinitionKey, ContentDefinition> definitions;
-    private final Cache<ChannelKey, Entry> channels;
+    private final Cache<ChannelKey, Entry<CompiledChannel>> channels;
+    private final Cache<ChannelKey, Entry<OctlResult>> textMedia;
     private final Cache<Object, TemplateCompileMemo> buildMemos;
 
     public CompiledTemplateCache(
@@ -62,6 +64,7 @@ public class CompiledTemplateCache {
         this.compiler = new MeteredTemplateCompiler(meterRegistry);
         this.definitions = Caffeine.newBuilder().maximumSize(maxSize).expireAfterAccess(idle).build();
         this.channels = Caffeine.newBuilder().maximumSize(maxSize).expireAfterAccess(idle).build();
+        this.textMedia = Caffeine.newBuilder().maximumSize(maxSize).expireAfterAccess(idle).build();
         // Weak, identity-compared keys: a build's memo lives exactly as long as its snapshot object.
         this.buildMemos = Caffeine.newBuilder().weakKeys().build();
     }
@@ -93,26 +96,55 @@ public class CompiledTemplateCache {
             ReferenceResolver resolver) {
         ContentDefinition definition = definitions.get(
                 new DefinitionKey(projectId, templateUuid, templateValidFromRevision), key -> compiler.definition(cdlSource));
-        ChannelKey key = new ChannelKey(projectId, templateUuid, templateValidFromRevision, channel);
-        Entry cached = channels.getIfPresent(key);
+        return cached(
+                channels,
+                new ChannelKey(projectId, templateUuid, templateValidFromRevision, channel),
+                resolver,
+                recording -> new CompiledChannel(compiler.channel(octlSource, channel, recording, definition), definition));
+    }
+
+    /**
+     * Cross-request compile of one processed text media version's source (M18.3.2), validated on
+     * every hit exactly like {@link #compile}. The media version pins the blob, so
+     * {@code mediaValidFromRevision} identifies the source.
+     */
+    public OctlResult compileTextMedia(
+            long projectId,
+            UUID mediaUuid,
+            long mediaValidFromRevision,
+            String channel,
+            String source,
+            boolean scriptLike,
+            ReferenceResolver resolver) {
+        return cached(
+                textMedia,
+                new ChannelKey(projectId, mediaUuid, mediaValidFromRevision, channel),
+                resolver,
+                recording -> compiler.textMedia(source, channel, recording, scriptLike));
+    }
+
+    private static <T> T cached(
+            Cache<ChannelKey, Entry<T>> cache, ChannelKey key, ReferenceResolver resolver,
+            Function<ReferenceResolver, T> compile) {
+        Entry<T> cached = cache.getIfPresent(key);
         if (cached != null && cached.stillResolves(resolver)) {
             return cached.compiled;
         }
-        RecordingResolver recording = new RecordingResolver(resolver);
-        OctlResult result = compiler.channel(octlSource, channel, resolver == null ? null : recording, definition);
-        Entry fresh = new Entry(new CompiledChannel(result, definition), List.copyOf(recording.resolutions));
-        channels.put(key, fresh);
+        RecordingResolver recording = resolver == null ? null : new RecordingResolver(resolver);
+        T compiled = compile.apply(recording);
+        Entry<T> fresh = new Entry<>(compiled, recording == null ? List.of() : List.copyOf(recording.resolutions));
+        cache.put(key, fresh);
         return fresh.compiled;
     }
 
     private record DefinitionKey(long projectId, UUID templateUuid, long validFromRevision) {}
 
-    private record ChannelKey(long projectId, UUID templateUuid, long validFromRevision, String channel) {}
+    private record ChannelKey(long projectId, UUID assetUuid, long validFromRevision, String channel) {}
 
     /** One {@code assetType:uid} lookup the compiler made, and its answer ({@code null} = unresolvable). */
     private record Resolution(String assetType, String uid, UUID uuid) {}
 
-    private record Entry(CompiledChannel compiled, List<Resolution> resolutions) {
+    private record Entry<T>(T compiled, List<Resolution> resolutions) {
 
         boolean stillResolves(ReferenceResolver resolver) {
             if (resolver == null) {

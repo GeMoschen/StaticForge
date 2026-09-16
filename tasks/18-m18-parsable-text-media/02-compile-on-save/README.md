@@ -26,12 +26,12 @@ incremental planner (`M18.3.1`) the edges it needs.
 
 ## Feature exit criteria
 
-- [ ] Saves that produce OCTL errors return 422 with diagnostics and create no revision.
-- [ ] Warnings (`$$` occurrences, `$CMS_VALUE` in JS/JSON without an escaping filter) are
+- [x] Saves that produce OCTL errors return 422 with diagnostics and create no revision.
+- [x] Warnings (`$$` occurrences, `$CMS_VALUE` in JS/JSON without an escaping filter) are
       returned on a successful save.
-- [ ] Instructions that make no sense outside a page (`$CMS_BODY`, `$CMS_INCLUDE`, the HTML
+- [x] Instructions that make no sense outside a page (`$CMS_BODY`, `$CMS_INCLUDE`, the HTML
       leaf form of `$CMS_NAVIGATION`) are compile errors in the text media context.
-- [ ] Each processed media save writes its outgoing reference rows and closes the previous
+- [x] Each processed media save writes its outgoing reference rows and closes the previous
       ones, in the same revision. Switching the flag off closes them all.
 
 ## Dependencies

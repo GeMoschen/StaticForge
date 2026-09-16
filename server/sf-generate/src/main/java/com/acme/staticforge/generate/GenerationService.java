@@ -18,6 +18,7 @@ import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
 import com.acme.staticforge.generate.stage.AssetCopyResult;
 import com.acme.staticforge.generate.stage.AssetCopyStage;
+import com.acme.staticforge.generate.stage.MediaRenderStage;
 import com.acme.staticforge.generate.stage.PostProcessContext;
 import com.acme.staticforge.generate.stage.PostProcessStage;
 import com.acme.staticforge.generate.target.TargetWriter;
@@ -87,6 +88,7 @@ public class GenerationService {
     private final BuildPlanner buildPlanner;
     private final RenderPipeline renderPipeline;
     private final AssetCopyStage assetCopyStage;
+    private final MediaRenderStage mediaRenderStage;
     private final PostProcessStage postProcessStage;
     private final TargetWriterSelector targetWriterSelector;
     private final ObjectMapper mapper;
@@ -106,6 +108,7 @@ public class GenerationService {
             BuildPlanner buildPlanner,
             RenderPipeline renderPipeline,
             AssetCopyStage assetCopyStage,
+            MediaRenderStage mediaRenderStage,
             PostProcessStage postProcessStage,
             TargetWriterSelector targetWriterSelector,
             ObjectMapper mapper,
@@ -118,6 +121,7 @@ public class GenerationService {
         this.buildPlanner = buildPlanner;
         this.renderPipeline = renderPipeline;
         this.assetCopyStage = assetCopyStage;
+        this.mediaRenderStage = mediaRenderStage;
         this.postProcessStage = postProcessStage;
         this.targetWriterSelector = targetWriterSelector;
         this.mapper = mapper;
@@ -302,7 +306,14 @@ public class GenerationService {
             }
 
             emit(runId, STAGE_ASSETS, "Copying media", 0, 0, 0, null);
-            AssetCopyResult assets = assetCopyStage.copy(snapshot, mediaUuids(outcome, snapshot));
+            Set<UUID> media = mediaUuids(outcome, snapshot);
+            media.addAll(plan.processedMedia());
+            AssetCopyResult assets = assetCopyStage.copy(
+                    snapshot, media, mediaRenderStage.open(snapshot, paths, run.getStartedBy()));
+            List<Diagnostic> warnings = new ArrayList<>(outcome.warnings());
+            warnings.addAll(assets.warnings());
+            List<Diagnostic> fileErrors = new ArrayList<>(outcome.pageErrors());
+            fileErrors.addAll(assets.fileErrors());
 
             List<OutputFile> allFiles = new ArrayList<>();
             for (RenderedFile file : outcome.files()) {
@@ -310,25 +321,26 @@ public class GenerationService {
             }
             allFiles.addAll(assets.files());
 
-            emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, outcome.warnings().size(), null);
+            emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
             PostProcessContext ctx = new PostProcessContext(
                     projectId, projectKey, baseUrl(target), channels, sitePages(snapshot, plan, channels));
             allFiles = postProcessStage.apply(ctx, allFiles);
 
-            emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, outcome.warnings().size(), null);
+            emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, warnings.size(), null);
             TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
             writer.stage(runId, allFiles);
             writer.publish(runId);
 
             long bytes = allFiles.stream().mapToLong(f -> f.bytes().length).sum();
-            boolean partial = !outcome.warnings().isEmpty() || !outcome.pageErrors().isEmpty();
+            // A page or processed media file held back makes the run PARTIAL; the rest is published.
+            boolean partial = !warnings.isEmpty() || !fileErrors.isEmpty();
             run.setStatus(partial ? RunStatus.PARTIAL : RunStatus.SUCCESS);
             run.setFilesWritten(allFiles.size());
             run.setFilesSkipped(assets.filesSkipped());
             run.setBytesWritten(bytes);
-            run.setErrorCount(outcome.pageErrors().size());
-            run.setWarningCount(outcome.warnings().size());
-            run.setDiagnostics(diagnosticsJson(outcome.pageErrors(), outcome.warnings()));
+            run.setErrorCount(fileErrors.size());
+            run.setWarningCount(warnings.size());
+            run.setDiagnostics(diagnosticsJson(fileErrors, warnings));
             run.setFinishedAt(Instant.now());
             runs.save(run);
 

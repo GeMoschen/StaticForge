@@ -26,6 +26,8 @@ import type { ConflictInfo, ResolveMode } from './types';
 export class ConflictDrawerComponent {
   readonly conflict = input.required<ConflictInfo>();
   readonly changedKeys = input<string[]>([]);
+  /** What changed, for the summary line: the page editor's default, or e.g. a media `file`. */
+  readonly subject = input('page');
 
   readonly keepMine = output<void>();
   readonly takeTheirs = output<void>();

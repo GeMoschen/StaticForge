@@ -1,6 +1,6 @@
 ---
 id: M18.1.1
-status: todo
+status: done
 depends: []
 epic: m18-parsable-text-media
 feature: domain
@@ -44,20 +44,20 @@ the payload from scratch and copies only the four metadata fields over.
 
 ## Acceptance criteria
 
-- [ ] Toggling `processCms` on a CSS media file stores `payload.processCms=true` and creates
+- [x] Toggling `processCms` on a CSS media file stores `payload.processCms=true` and creates
       one revision. The revision diff shows the single field change.
-- [ ] Toggling it on a PNG/PDF returns 400 and creates no revision.
-- [ ] `replace` of a processed CSS with another CSS keeps the flag. `replace` with a PNG
+- [x] Toggling it on a PNG/PDF returns 400 and creates no revision.
+- [x] `replace` of a processed CSS with another CSS keeps the flag. `replace` with a PNG
       clears it and the response says so.
-- [ ] Export → import round-trip keeps `processCms` (verify in
+- [x] Export → import round-trip keeps `processCms` (verify in
       `ProjectExportImportIntegrationTest`, or a new focused test).
-- [ ] Restoring an older media revision restores the older flag value.
-- [ ] `MediaPaths.extensionFor("application/json")` is `json`, the XML types are `xml`, and
+- [x] Restoring an older media revision restores the older flag value.
+- [x] `MediaPaths.extensionFor("application/json")` is `json`, the XML types are `xml`, and
       every previously mapped type is unchanged (unit test).
-- [ ] Tika sniffing is checked with real sample files (`.css`, `.js`, `.json`, `.svg`,
+- [x] Tika sniffing is checked with real sample files (`.css`, `.js`, `.json`, `.svg`,
       `.txt`, `.xml`, plus a minified `.js`), and the allow-list covers what Tika actually
       returns. Any mismatch is fixed or documented in the test.
-- [ ] `./gradlew :server:sf-domain:test :server:sf-generate:test :server:sf-api:test` is green.
+- [x] `./gradlew :server:sf-domain:test :server:sf-generate:test :server:sf-api:test` is green.
 
 ## Out of scope
 
@@ -74,3 +74,20 @@ the payload from scratch and copies only the four metadata fields over.
   Liquibase data migration for this.
 - Keep the flag in the payload (ADR-0003), not as a new `asset_version` column. Nothing needs
   to query it.
+
+## Implementation notes (2026-09-16)
+
+- `asset.media.TextMediaTypes` holds the allow-list plus `isText`, `isScriptLike` (JS/JSON) and `isProcessed`
+  (flag on *and* text type). `MediaView` and `MediaSummaryView` expose `processCms` and `textEditable`.
+- **Tika, checked with real samples** (`TextMediaTypesTest`, `src/test/resources/text-media/`): detection is
+  name-driven. `.css`, `.js` (also minified), `.json`, `.svg`, `.txt`, `.xml` map as listed. Two findings:
+  `.webmanifest` is `application/manifest+json`, which was **added** to the allow-list (a manifest is the epic's
+  own example) and maps to `webmanifest`; `.mjs` is `text/plain` and is published as `.txt` (documented in the
+  test and the developer guide, not fixed).
+- `MediaPaths` moved from `sf-generate` to `sf-domain` (`asset.media`) so preview computes the same media path
+  for `$CMS_META(path)$`. Its test pins every previous mapping.
+- `PUT /media/{uuid}/process` (`MediaProcessRequest`) → `MediaSaveResponse {media, warnings, processCmsCleared}`;
+  `replace` answers with the same shape. Setting the value the flag already has writes no revision (a stale
+  `If-Match` still 409s through the new `AssetService.requireRevision`).
+- Tests: `ProcessedMediaIntegrationTest` (flag, PNG 400, replace keeps/clears, restore, export/import incl.
+  edges), `MediaTextApiTest` (HTTP shapes), `MediaPathsTest`, `TextMediaTypesTest`.

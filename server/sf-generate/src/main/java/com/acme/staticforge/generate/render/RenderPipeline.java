@@ -224,6 +224,20 @@ public class RenderPipeline {
 
     }
 
+    /**
+     * Opens the processed media renderer of a build (M18.3.1), sharing the render stage's snapshot
+     * resolvers, output paths and compile memo.
+     *
+     * @param channel the project's default channel key
+     */
+    public MediaRenderSession mediaSession(Snapshot snapshot, OutputPathResolver paths, Long userId, String channel) {
+        String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
+        return new MediaRenderSession(
+                new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId,
+                        compiledTemplates.buildMemo(snapshot)),
+                channel);
+    }
+
     // ------------------------------------------------------------------
     // Parallel render
     // ------------------------------------------------------------------

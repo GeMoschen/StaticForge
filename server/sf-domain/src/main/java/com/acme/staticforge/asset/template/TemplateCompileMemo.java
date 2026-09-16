@@ -1,6 +1,7 @@
 package com.acme.staticforge.asset.template;
 
 import com.acme.staticforge.template.content.ContentDefinition;
+import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Map;
@@ -22,6 +23,7 @@ public final class TemplateCompileMemo {
     private final MeteredTemplateCompiler compiler;
     private final Map<UUID, ContentDefinition> definitions = new ConcurrentHashMap<>();
     private final Map<ChannelKey, CompiledChannel> channels = new ConcurrentHashMap<>();
+    private final Map<ChannelKey, OctlResult> textMedia = new ConcurrentHashMap<>();
 
     /** A memo counting its compiles in {@code meterRegistry}. */
     public TemplateCompileMemo(MeterRegistry meterRegistry) {
@@ -52,6 +54,17 @@ public final class TemplateCompileMemo {
      */
     public ContentDefinition definition(UUID templateUuid, String cdlSource) {
         return definitions.computeIfAbsent(templateUuid, uuid -> compiler.definition(cdlSource));
+    }
+
+    /**
+     * Returns a processed text media file's compiled source, compiling it only on the first request
+     * for this media file in this build (M18.3.1). The snapshot pins the media version, and so its
+     * blob, exactly like a template's sources.
+     */
+    public OctlResult textMedia(
+            UUID mediaUuid, String channel, String source, boolean scriptLike, ReferenceResolver resolver) {
+        return textMedia.computeIfAbsent(
+                new ChannelKey(mediaUuid, channel), key -> compiler.textMedia(source, channel, resolver, scriptLike));
     }
 
     private record ChannelKey(UUID templateUuid, String channel) {}

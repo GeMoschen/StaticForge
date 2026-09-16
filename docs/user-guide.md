@@ -40,6 +40,34 @@ Templates are owned by **template developers** (see the [template-developer guid
 3. Reference media from a `media` or `link` editor using the picker.
 4. The drawer shows **usages** ("where is this used?") before you delete anything. Usages are current as soon as a page or template is saved; you don't need to run a generation. Once you remove the media from every page that used it (or delete those pages), it can be deleted without forcing.
 
+#### Stylesheets, scripts and other text files
+
+Text files (CSS, JavaScript, JSON, SVG, XML, plain text, web manifests) get two more tabs in the
+media drawer, next to **Details**:
+
+- **Source** shows the file's content. Edit it and choose **Save**: every save is a revision, with
+  history, diff and restore like any other change, so you don't need to download and re-upload the
+  file. Tab inserts a tab, and the file keeps its line endings. Very large files (over 1 MB) open
+  read-only; use **Replace file** for those. If someone else saved the file since you opened it, you
+  choose between keeping your version and taking theirs. Closing the drawer or opening another file
+  with unsaved changes asks first.
+- **Process CMS syntax** (a switch at the top) lets a developer use template instructions in the
+  file, for example the brand color from Globals in a stylesheet. When it's on:
+  - errors are listed as you type (click one to jump to it) and **Save** stays disabled until
+    they're fixed;
+  - switching it on lists every place where the file's content will change, for example each `$$`,
+    which is published as a single `$`;
+  - the **Rendered** tab shows what the file turns into with the current values;
+  - page previews and generated sites use the rendered file; a **CMS** badge marks the file in the
+    library.
+
+  Leave it off for files that should be published exactly as uploaded, such as third-party scripts.
+  Replacing a processed file with a file that isn't text switches processing off, and the drawer
+  tells you.
+
+During time travel the switch, the editor and **Save** are disabled, and **Source** shows the file as
+it was at that revision.
+
 ### Globals
 
 Site-wide values — the site title, the logo, the social links, the footer copyright line — live in **Globals**, not on any single page. Change one there and every page that shows it picks the change up.

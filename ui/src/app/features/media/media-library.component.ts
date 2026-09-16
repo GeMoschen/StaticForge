@@ -110,6 +110,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   readonly dragCounter = signal(0);
 
   readonly sentinel = viewChild<ElementRef<HTMLElement>>('sentinel');
+  private readonly detailDrawer = viewChild<MediaDetailDrawerComponent>('detailDrawer');
 
   private readonly thumbUrls = signal<Record<string, string>>({});
   private readonly thumbRequested = new Set<string>();
@@ -285,7 +286,15 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const item = this.items().find((i) => i.uuid === uuid) ?? null;
+    if (item?.uuid !== this.selectedMediaUuid() && !this.canLeaveDetail()) {
+      return;
+    }
     this.selectedMedia.set(item);
+  }
+
+  /** The open drawer may hold unsaved source edits (M18.4.1): switching files asks first. */
+  private canLeaveDetail(): boolean {
+    return this.detailDrawer()?.confirmDiscard() ?? true;
   }
 
   /** A tree leaf (`sf-media-nav-node`) was clicked — opens its detail drawer even when the item
@@ -293,6 +302,9 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
    * clearing any active filter first (mirrors `openDetail`, but sourced from `allMedia` — the
    * unfiltered project-wide list — instead of the grid's own `items()`). */
   protected onSelectMediaLeaf(uuid: string): void {
+    if (uuid !== this.selectedMediaUuid() && !this.canLeaveDetail()) {
+      return;
+    }
     const existing = this.items().find((i) => i.uuid === uuid);
     if (existing) {
       this.selectedMedia.set(existing);

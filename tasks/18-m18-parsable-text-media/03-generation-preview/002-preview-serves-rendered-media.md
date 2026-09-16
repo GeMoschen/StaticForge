@@ -1,6 +1,6 @@
 ---
 id: M18.3.2
-status: todo
+status: done
 depends: [M18.3.1]
 epic: m18-parsable-text-media
 feature: generation-preview
@@ -41,19 +41,19 @@ stylesheet is a processed CSS file loads the unrendered `$CMS_…$` source.
 
 ## Acceptance criteria
 
-- [ ] Previewing a page that links a processed CSS file loads rendered CSS: the global value
+- [x] Previewing a page that links a processed CSS file loads rendered CSS: the global value
       is substituted, and the `url()` points at a working share URL.
-- [ ] Preview at an older revision (time travel) renders the CSS using that revision's global
+- [x] Preview at an older revision (time travel) renders the CSS using that revision's global
       values.
-- [ ] `GET /media/{uuid}/binary` still returns the source. `?rendered=true` returns the
+- [x] `GET /media/{uuid}/binary` still returns the source. `?rendered=true` returns the
       rendered output for EDITOR and 403 for VIEWER, unless VIEWER is judged acceptable
       (decide and document).
-- [ ] Unprocessed media responses (bytes, headers, `Content-Disposition`) are unchanged.
-- [ ] A share token for media A can't be used to render media B: token scope is checked
+- [x] Unprocessed media responses (bytes, headers, `Content-Disposition`) are unchanged.
+- [x] A share token for media A can't be used to render media B: token scope is checked
       exactly as today.
-- [ ] A render error in preview returns the source plus the error header, and the drawer
+- [x] A render error in preview returns the source plus the error header, and the drawer
       endpoint returns 422 with diagnostics.
-- [ ] Integration tests for all of the above. `./gradlew :server:sf-api:test :server:sf-domain:test` is green.
+- [x] Integration tests for all of the above. `./gradlew :server:sf-api:test :server:sf-domain:test` is green.
 
 ## Out of scope
 
@@ -71,3 +71,24 @@ stylesheet is a processed CSS file loads the unrendered `$CMS_…$` source.
 - Rendering on every share request can be expensive for large pages with many stylesheets.
   Use the compile cache. If profiling shows a problem, add an in-memory cache keyed by
   (media uuid, revision). Rendered output must not outlive the revision it was rendered for.
+
+## Implementation notes (2026-09-16)
+
+- Media share tokens now carry the preview revision (`issueMediaShareToken(uuid, revision, projectKey)`); tokens
+  without the claim still mean "current". `PageRenderService.urlResolver` passes the page preview's revision.
+- `shareBinary` serves a processed file through `PageRenderService.renderMedia` (live resolvers at the token's
+  revision, media links rewritten to share URLs with the same revision, `Cache-Control: no-store`). A compile or
+  render failure serves the source with `X-SF-Render-Error: <code> <line>:<col> <message>` (ASCII, ≤ 500 chars).
+  The base URL comes from the share request itself, which is the base the page preview used.
+- `GET /binary?rendered=true` is a separate mapping (`params = "rendered=true"`) gated **EDITOR** (decision
+  confirmed with the user), with `?revision=`; `400` for an unprocessed file, `422` with diagnostics on failure.
+  `GET /binary` still returns the source.
+- **Behaviour change to note:** a time-travel page preview now serves *every* media file (not only processed ones)
+  at the viewed revision, because the token carries it. Before, the share route always served the current blob.
+- **Bug found by the live journey and fixed (UI):** `sf-preview-frame` bound the rendered HTML to `[srcdoc]` as a
+  plain string, and Angular's HTML sanitizer stripped every `<link>`, `<style>`, `<script>` and `id`: no page
+  preview ever loaded a stylesheet, and the injected highlight script never ran. The frame now binds a trusted
+  value and its sandbox is `allow-scripts` **without** `allow-same-origin`, so preview scripts run in an opaque
+  origin that can't reach the app or its in-memory session. Nothing depended on same-origin access.
+- Tests: `ProcessedMediaPreviewIntegrationTest` (6: page preview → rendered CSS → working image share URL, time
+  travel values, `/binary` vs `?rendered=true` roles, unprocessed media unchanged, token scope, broken file).

@@ -1,3 +1,75 @@
+# M18 implementation — Plan
+
+## Approach
+Sequential on branch `m18-parsable-text-media` (off `m17-global-store`, master untouched). The features are a
+strict chain (domain → compile-on-save → generation/preview → UI → docs/E2E), so no worktree fan-out.
+
+## Design (from reading the code)
+- **One compile entry point.** `OctlCompiler.compileTextMedia(source, channel, resolver, mimeType)` in `sf-template`:
+  compiles against an *empty* content definition (bare names are unknown editors, `CMS_GLOBAL` misuse is checked) plus
+  a text-media profile inside the existing validation walk: `$CMS_BODY`, `$CMS_INCLUDE` and leaf `$CMS_NAVIGATION` →
+  new error; `$$` → warning (positions recorded by the lexer, skipped inside `$CMS_COMMENT$`); unescaped
+  `$CMS_VALUE` in JS/JSON → warning. No parser fork.
+- **`TextMediaTypes`** (`sf-domain`, `asset.media`): the allow-list, `isText(mime)`, `isProcessed(payload)`.
+- **Reference edges via `ReferenceMaterializer.extract(MEDIA, payload)`**: a processed media payload's edges come from
+  compiling its blob (source path `source`). Every version write already calls the materializer, so save, flag off,
+  soft delete, restore and import stay correct with no media-only copy.
+- **`TextMediaRenderer`** (`sf-domain`): compile (cache) + render with escaping `NONE`, default channel, media meta,
+  caller-supplied URL/value/nav resolvers, SVG re-sanitize. Used by generation (snapshot resolvers) and by preview
+  (live resolvers at the token's revision).
+- **Generation:** `MediaRenderStage` used by `AssetCopyStage`; copy set closed transitively over processed media
+  dependencies; `BuildPlan.processedMedia` filled by the planner's BFS.
+- **Preview:** media share tokens carry an optional revision; `shareBinary` renders processed media;
+  `GET /binary?rendered=true`.
+
+## Decisions
+Confirmed with the user (all the task files' recommendations):
+- A processed media render error makes the run **PARTIAL**; the file is not written and no previous content is substituted.
+- A text save whose bytes equal the stored blob creates **no revision** (a stale `If-Match` still 409s).
+- `GET /binary?rendered=true` is **EDITOR+**.
+- Processed media edges are derived in **`ReferenceMaterializer`** from the compiled blob.
+
+## Steps
+- [x] M18.1.1 `processCms` flag, `TextMediaTypes`, `MediaPaths` json/xml, DTO fields, Tika sample check
+- [x] M18.1.2 `GET`/`PUT /media/{uuid}/text`
+- [x] M18.2.1 text-media compile profile + diagnostics, compile on flag/text/replace, validate endpoint, reference edges, uid-literal scan
+- [x] M18.3.1 render processed media in generation, transitive copy set, incremental plan
+- [x] M18.3.2 preview/share + `?rendered=true`
+- [x] M18.4.1 media drawer: toggle, Source, Rendered, library badge; `schema.d.ts`
+- [x] M18.5.1 docs, spec, API doc, `m18-journeys.spec.ts` run live
+- [x] Full `./gradlew build` + `ng build`, review section
+
+## Review
+- **Branch:** `m18-parsable-text-media` (off `m17-global-store`; master untouched). Not committed.
+- **Verification:**
+  - `./gradlew build` green: 601 backend tests (510 at M17), 0 failures, 1 skipped (benchmark). Benchmark run
+    separately: 500 pages, full 2.1 s, incremental 0.12 s (§18.6: < 20 s / < 2 s).
+  - `ng build` green; vitest has only the 19 known `templateUrl` spec failures.
+  - Live, against a dev backend + `ng serve`: `m18-journeys` 2/2, `m16-journeys` 5/5, `m17-journeys` 4/4.
+- **Design in one line each:** `OctlCompiler.compileTextMedia` (profile in the existing walk); `TextMediaTypes`
+  and `MediaPaths` in `asset.media`; edges from `ReferenceMaterializer`; one `TextMediaRenderer` for generation
+  and preview; `MediaRenderStage` + a fixed-point copy set; `BuildPlan.processedMedia`; revision-pinned media
+  share tokens.
+- **Changes beyond the task files (found during implementation/verification):**
+  - **Bug:** the OCTL lexer skipped the 5 characters of `$CMS_` when counting columns, so diagnostics after an
+    instruction on the same line pointed 5 columns too far left.
+  - **Bug:** the UID-rename literal scan had no `global:` prefix (its Javadoc said both spellings were matched).
+  - **Bug, pre-existing, found by the live journey:** the editor preview's `[srcdoc]` went through Angular's HTML
+    sanitizer, which stripped `<link>`, `<style>`, `<script>` and `id`: no preview ever loaded a stylesheet. The
+    frame now binds a trusted value and its sandbox dropped `allow-same-origin` (scripts run in an opaque origin).
+  - `application/manifest+json` added to the text allow-list (Tika's type for `.webmanifest`).
+  - `MediaPaths` moved from `sf-generate` to `sf-domain` so preview shares it.
+  - The media route is lazy-loaded: the drawer growth broke the 900 kB initial bundle error budget.
+  - Planner: a merely *reached* processed file stops the reverse walk (a changed one continues), otherwise a
+    global-only change would re-render every page linking the stylesheet (see `M18.3.1` Review).
+  - Time-travel page previews now serve every media file at the viewed revision (the token carries it).
+- **Open / not done:**
+  - Incremental builds still don't carry unchanged files forward (`M22.4.1`); processed media is part of the run.
+  - `.mjs` is detected as `text/plain` and published as `.txt`.
+  - The drawer's component spec can't run (`templateUrl` runner issue).
+
+---
+
 # M17 implementation — Plan
 
 ## Approach

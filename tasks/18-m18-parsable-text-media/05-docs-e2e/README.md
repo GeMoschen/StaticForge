@@ -17,10 +17,10 @@ path: upload → enable → edit → preview → generate.
 
 ## Feature exit criteria
 
-- [ ] Docs and spec updated.
-- [ ] Journey spec added and run against a live backend (or the execution gap recorded, as
+- [x] Docs and spec updated.
+- [x] Journey spec added and run against a live backend (or the execution gap recorded, as
       `M15.6` did).
-- [ ] Epic exit criteria in `../README.md` ticked, with evidence.
+- [x] Epic exit criteria in `../README.md` ticked, with evidence.
 
 ## Dependencies
 

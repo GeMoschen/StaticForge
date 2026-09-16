@@ -11,6 +11,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { ApiClient } from '../../core/api/api.client';
 import { previewErrorDocument, previewProblem } from './preview-error';
 
@@ -85,6 +86,7 @@ const HIGHLIGHT_SCRIPT = `<script>
 })
 export class SfPreviewFrameComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
+  private readonly sanitizer = inject(DomSanitizer);
 
   readonly projectKey = input.required<string>();
   readonly pageUuid = input.required<string>();
@@ -115,7 +117,17 @@ export class SfPreviewFrameComponent implements OnDestroy {
 
   private readonly onKeydownRef = (event: KeyboardEvent) => this.onKeydown(event);
 
-  protected readonly srcdoc = computed(() => this.wrap(this.html()));
+  /**
+   * The rendered page as the frame's document. Binding a plain string to `[srcdoc]` runs Angular's
+   * HTML sanitizer, which strips every `<link>`, `<style>`, `<script>` and `id` — so the preview
+   * never loaded a stylesheet (M18: a processed CSS file served by the media share route) and the
+   * highlight script never ran. The document is the server's render of the project's own templates,
+   * and the frame's sandbox (`allow-scripts` without `allow-same-origin`) gives it an opaque origin:
+   * its scripts cannot reach this app, its storage or its in-memory session.
+   */
+  protected readonly srcdoc = computed<SafeHtml>(() =>
+    this.sanitizer.bypassSecurityTrustHtml(this.wrap(this.html())),
+  );
 
   protected readonly viewportWidth = computed<string>(() => {
     const preset = VIEWPORTS.find((v) => v.key === this.viewport());

@@ -3,6 +3,8 @@ package com.acme.staticforge.generate.render;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.media.TextMediaRenderer;
+import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
@@ -15,7 +17,7 @@ import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
-import com.acme.staticforge.generate.pipeline.MediaPaths;
+import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
@@ -74,6 +76,7 @@ final class GenerationRenderer {
     private final SnapshotAssetValueResolver assetValues;
 
     private final Renderer renderer = new OctlRenderer();
+    private final TextMediaRenderer textMediaRenderer = new TextMediaRenderer();
 
     // NavigationServiceImpl is pure/stateless (no dependencies) — instantiated directly, same as
     // renderer above, rather than threaded in as a Spring bean.
@@ -193,6 +196,53 @@ final class GenerationRenderer {
 
         return new RenderedFile(
                 entry.outputPath(), result.output().getBytes(StandardCharsets.UTF_8), deps, warnings);
+    }
+
+    /**
+     * Renders a processed text media file (M18.3.1) to its canonical media path, through the shared
+     * {@link TextMediaRenderer} with this build's snapshot resolvers: links are relative to the media
+     * file's own output path, values and globals come from the snapshot, {@code nav:} iteration uses
+     * the snapshot navigation. The source compiles once per build through the compile memo.
+     * Compile-time warnings were shown when the file was saved and are not repeated here; render-time
+     * warnings (a deleted target, a missing value) are returned like a page's.
+     *
+     * @param source the media file's source text (its blob, decoded)
+     * @param channel the project's default channel, the only one media renders in
+     * @throws RenderLimitException when the source no longer compiles against the snapshot (e.g. a
+     *     referenced uid was renamed after the save) or a render limit is hit: this file fails, the
+     *     rest of the build does not
+     */
+    RenderedFile renderMedia(SnapshotAsset media, String source, String channel) {
+        JsonNode payload = media.payload();
+        String mimeType = payload == null ? null : payload.path("mimeType").asText(null);
+        String uid = emptyIfNull(media.uid());
+        String outputPath = MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mimeType));
+
+        OctlResult compiled = compiledTemplates.textMedia(
+                media.uuid(), channel, source, TextMediaTypes.isScriptLike(mimeType), referenceResolver());
+        Optional<Diagnostic> error = compiled.diagnostics().stream()
+                .filter(d -> d.severity() == com.acme.staticforge.template.diagnostic.Severity.ERROR)
+                .findFirst();
+        if (error.isPresent()) {
+            throw new RenderLimitException(error.get());
+        }
+
+        Set<UUID> deps = new LinkedHashSet<>();
+        List<Diagnostic> warnings = new ArrayList<>();
+        TextMediaRenderer.Target target = new TextMediaRenderer.Target(
+                media.uuid(), uid, media.displayName(), mimeType, outputPath, snapshot.revision(), channel, projectKey);
+        RenderResult result = textMediaRenderer.render(
+                compiled.template(),
+                target,
+                urlResolver(channel, outputPath, warnings),
+                assetValues,
+                (navFolderUuid, args) -> {
+                    JsonNode json = navigationTreeJson(navFolderUuid, args, channel, null, outputPath, deps, warnings);
+                    return json == null ? null : json.path("children");
+                });
+        deps.addAll(result.dependencies());
+        warnings.addAll(result.warnings());
+        return new RenderedFile(outputPath, result.output().getBytes(StandardCharsets.UTF_8), deps, warnings);
     }
 
     /** Compiles the template's channel and returns ERROR-severity diagnostics (empty when clean). */

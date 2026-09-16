@@ -1,4 +1,4 @@
-package com.acme.staticforge.generate.pipeline;
+package com.acme.staticforge.asset.media;
 
 import java.util.Locale;
 
@@ -47,6 +47,9 @@ public final class MediaPaths {
             case "font/woff" -> "woff";
             case "font/woff2" -> "woff2";
             case "text/plain" -> "txt";
+            case "application/json" -> "json";
+            case "application/manifest+json" -> "webmanifest";
+            case "application/xml", "text/xml" -> "xml";
             default -> "bin";
         };
     }

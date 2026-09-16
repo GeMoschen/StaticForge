@@ -2,6 +2,9 @@ package com.acme.staticforge.asset;
 
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
+import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.media.TextMediaCompiler;
+import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.Problem;
@@ -49,6 +52,7 @@ public class AssetServiceImpl implements AssetService {
     private final PathService pathService;
     private final UrlRegistryRepository urlRegistryRepository;
     private final ReferenceMaterializer referenceMaterializer;
+    private final BlobStore blobStore;
 
     public AssetServiceImpl(
             AssetRepository assetRepository,
@@ -59,7 +63,8 @@ public class AssetServiceImpl implements AssetService {
             RevisionService revisionService,
             PathService pathService,
             UrlRegistryRepository urlRegistryRepository,
-            ReferenceMaterializer referenceMaterializer) {
+            ReferenceMaterializer referenceMaterializer,
+            BlobStore blobStore) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetReferenceRepository = assetReferenceRepository;
@@ -69,6 +74,7 @@ public class AssetServiceImpl implements AssetService {
         this.pathService = pathService;
         this.urlRegistryRepository = urlRegistryRepository;
         this.referenceMaterializer = referenceMaterializer;
+        this.blobStore = blobStore;
     }
 
     @Override
@@ -236,6 +242,12 @@ public class AssetServiceImpl implements AssetService {
                 current.isDeleted());
         appendSummary(asset, revision, "UPDATE", List.of("payload"));
         return toView(next);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void requireRevision(long projectId, UUID uuid, long expectedRevision) {
+        checkExpectedRevision(requireOpen(require(projectId, uuid).getId()), expectedRevision);
     }
 
     @Override
@@ -410,10 +422,13 @@ public class AssetServiceImpl implements AssetService {
      * <p>A global property set has two spellings (M17.3.1) — the explicit {@code global:<uid>}
      * reference and the {@code CMS_GLOBAL.<uid>} accessor-root shorthand the parser desugars into
      * it — so both are matched; flagging only one would leave the other silently stale.
+     *
+     * <p>A processed text media file's source (its blob, M18.2.1) is OCTL too and is scanned the same
+     * way; its entry carries the channel key {@code source}.
      */
     private List<UidLiteralReference> findUidLiteralReferences(long projectId, String oldUid) {
         Pattern pattern = Pattern.compile(
-                "\\b(?:(?:page|media|section_template|page_template|folder|nav):|CMS_GLOBAL\\.)"
+                "\\b(?:(?:page|media|section_template|page_template|folder|nav|global):|CMS_GLOBAL\\.)"
                         + Pattern.quote(oldUid) + "\\b");
         List<UidLiteralReference> found = new java.util.ArrayList<>();
         for (AssetType type : List.of(AssetType.SECTION_TEMPLATE, AssetType.PAGE_TEMPLATE)) {
@@ -434,6 +449,19 @@ public class AssetServiceImpl implements AssetService {
                                 from.getUuid(), from.getUid(), from.getAssetType(), version.getDisplayName(), entry.getKey()));
                     }
                 });
+            }
+        }
+        for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.MEDIA)) {
+            JsonNode payload = version.getPayload();
+            String sha = payload == null ? null : payload.path("blobSha256").asText(null);
+            if (!TextMediaTypes.isProcessed(payload) || sha == null || !blobStore.exists(sha)) {
+                continue;
+            }
+            if (pattern.matcher(TextMediaCompiler.decode(blobStore.get(sha)).text()).find()) {
+                Asset from = version.getAsset();
+                found.add(new UidLiteralReference(
+                        from.getUuid(), from.getUid(), from.getAssetType(), version.getDisplayName(),
+                        ReferenceMaterializer.MEDIA_SOURCE_PATH));
             }
         }
         return found;
