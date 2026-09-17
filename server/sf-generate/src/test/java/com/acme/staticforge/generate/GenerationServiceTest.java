@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.generate.insight.RunPlanStore;
 import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.render.RenderPipeline;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
@@ -61,7 +62,7 @@ class GenerationServiceTest {
         writers = mock(TargetWriterSelector.class);
         service = new GenerationService(runs, targets, projects, mock(ChannelService.class), snapshots, planner, renderer, assetsStage,
                 mock(MediaRenderStage.class), postStage,
-                writers, new ObjectMapper(), new SimpleMeterRegistry());
+                writers, mock(RunPlanStore.class), new GenerationProperties(), new ObjectMapper(), new SimpleMeterRegistry());
 
         Project project = project(1L);
         when(projects.requireByKey("p")).thenReturn(project);

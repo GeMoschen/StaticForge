@@ -1,6 +1,6 @@
 ---
 id: M22.1.1
-status: todo
+status: done
 depends: [M16.3.3, M22.4.1]
 epic: m22-build-insight
 feature: planner
@@ -93,19 +93,19 @@ that happen to have a reference row to the changed asset itself.
 
 ## Acceptance criteria
 
-- [ ] Every entry in every `BuildPlan` has a non-null `RebuildReason`.
-- [ ] Change-driven reasons are the shortest chain, deterministic across repeated
+- [x] Every entry in every `BuildPlan` has a non-null `RebuildReason`.
+- [x] Change-driven reasons are the shortest chain, deterministic across repeated
       planning of the same snapshot/baseline (asserted by test).
-- [ ] Deleted roots and fallback-to-FULL are reported as their own root kinds, not as
+- [x] Deleted roots and fallback-to-FULL are reported as their own root kinds, not as
       `FULL_BUILD`.
-- [ ] The navigation rule expands a relabelled `PAGE_REFERENCE` to every page rendering
+- [x] The navigation rule expands a relabelled `PAGE_REFERENCE` to every page rendering
       its navigation root, with edge `NAVIGATION`; covered by a test.
-- [ ] The expansion lives in exactly one class used by `BuildPlanner`; no BFS remains
+- [x] The expansion lives in exactly one class used by `BuildPlanner`; no BFS remains
       inline in `BuildPlanner`.
-- [ ] Existing planner/generation tests pass unchanged apart from the added reason
+- [x] Existing planner/generation tests pass unchanged apart from the added reason
       assertions; the set of planned entries is identical to before for every existing
       test, except where the navigation rule legitimately adds pages.
-- [ ] `./gradlew :server:sf-generate:test` green.
+- [x] `./gradlew :server:sf-generate:test` green.
 
 ## Out of scope
 

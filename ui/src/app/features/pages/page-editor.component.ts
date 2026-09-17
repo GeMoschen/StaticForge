@@ -16,6 +16,7 @@ import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { SfAssetImpactComponent } from '../generation/insight/sf-asset-impact.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -61,6 +62,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
     SfIconComponent,
     SfSpinnerComponent,
     SfPreviewFrameComponent,
+    SfAssetImpactComponent,
     SfUidRenameComponent,
   ],
   providers: [PageAutosaveService],

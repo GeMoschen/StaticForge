@@ -1,5 +1,6 @@
 package com.acme.staticforge.api;
 
+import com.acme.staticforge.api.dto.GenerationPlanView;
 import com.acme.staticforge.api.dto.GenerationRequestDto;
 import com.acme.staticforge.api.dto.GenerationRunView;
 import com.acme.staticforge.common.ProblemFactory;
@@ -8,6 +9,7 @@ import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
 import com.acme.staticforge.generate.GenerationService;
+import com.acme.staticforge.generate.insight.PlanEntryRecord;
 import com.acme.staticforge.security.SecuritySupport;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,6 +18,7 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -67,6 +71,57 @@ public class GenerationController {
         return ResponseEntity.accepted()
                 .location(location(projectKey, run.getId()))
                 .body(toView(run));
+    }
+
+    /**
+     * Dry run (M22.2.1): the plan a run started now with the same request would build, with every entry's reason. Nothing
+     * is rendered, written, stored or locked, so it also works while a run is active.
+     */
+    @PostMapping("/plan")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
+    public GenerationPlanView plan(
+            @PathVariable String projectKey,
+            @RequestBody GenerationRequestDto body,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String rootKind,
+            @RequestParam(required = false) String channel,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "false") boolean validate) {
+        GenerationService.DryRun dryRun = generationService.dryRun(projectKey, toRequest(body, null), validate);
+        Page<PlanEntryRecord> entries =
+                PlanViews.page(dryRun.entries(), PlanViews.filter(rootKind, channel, q), PlanViews.pageable(page, size));
+        return new GenerationPlanView(
+                null,
+                new GenerationPlanView.TargetRef(dryRun.build().target().getId(), dryRun.build().target().getName()),
+                PlanViews.summary(dryRun.summary()),
+                PlanViews.changedAssets(dryRun.summary()),
+                PlanViews.entries(entries),
+                dryRun.diagnostics());
+    }
+
+    /** The stored plan of a past run (M22.2.1); {@code entries} is {@code null} once retention pruned them. */
+    @GetMapping("/{runId}/plan")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public GenerationPlanView storedPlan(
+            @PathVariable String projectKey,
+            @PathVariable long runId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String rootKind,
+            @RequestParam(required = false) String channel,
+            @RequestParam(required = false) String q) {
+        GenerationService.StoredPlan stored = generationService.storedPlan(
+                projectKey, runId, PlanViews.filter(rootKind, channel, q), PlanViews.pageable(page, size));
+        return new GenerationPlanView(
+                runId,
+                stored.target() == null
+                        ? new GenerationPlanView.TargetRef(stored.run().getTargetId(), null)
+                        : new GenerationPlanView.TargetRef(stored.target().getId(), stored.target().getName()),
+                PlanViews.summary(stored.summary()),
+                PlanViews.changedAssets(stored.summary()),
+                stored.entries() == null ? null : PlanViews.entries(stored.entries()),
+                null);
     }
 
     @GetMapping("/{runId}")
@@ -149,7 +204,8 @@ public class GenerationController {
                 run.getBytesWritten(),
                 run.getErrorCount(),
                 run.getWarningCount(),
-                run.getDiagnostics());
+                run.getDiagnostics(),
+                PlanViews.summary(run.getPlanSummary()));
     }
 
     private List<String> parseChannels(String json) {

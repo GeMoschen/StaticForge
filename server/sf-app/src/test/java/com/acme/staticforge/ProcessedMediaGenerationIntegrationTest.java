@@ -223,7 +223,8 @@ class ProcessedMediaGenerationIntegrationTest {
         assertThat(unrelated.processedMedia()).isEmpty();
         GenerationRun afterUnrelated = generate(fx, target, GenerationMode.INCREMENTAL);
         assertThat(afterUnrelated.getStatus()).isEqualTo(RunStatus.SUCCESS);
-        assertThat(buildDir(fx, target, afterUnrelated).resolve("assets/media/main_css.css")).doesNotExist();
+        // Not re-rendered, but still published: carried forward from the previous build (M22.4.1).
+        assertThat(read(buildDir(fx, target, afterUnrelated), "assets/media/main_css.css")).isEqualTo("a{color:#00c}");
     }
 
     @Test

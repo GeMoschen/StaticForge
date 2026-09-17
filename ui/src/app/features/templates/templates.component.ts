@@ -26,6 +26,7 @@ import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.comp
 import { ChannelsService } from '../channels/channels.service';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { SfAssetImpactComponent } from '../generation/insight/sf-asset-impact.component';
 import { ContentService } from '../content/content.service';
 import { DatasetSchemaEditorComponent } from '../content/dataset-schema-editor.component';
 import { TemplateFolderNodeComponent } from './template-folder-node.component';
@@ -109,6 +110,7 @@ const NEW_DATASET_DEFINITION = `content {
     TemplateFolderNodeComponent,
     DatasetSchemaEditorComponent,
     RouterLink,
+    SfAssetImpactComponent,
   ],
   templateUrl: './templates.component.html',
   styleUrls: ['./templates.component.scss', './templates-inheritance.scss', './templates-pagination.scss'],

@@ -151,6 +151,14 @@ An invalid value is rejected with the field named. Changing the extension or URL
 2. A live log shows per-stage progress, error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5).
 3. Roll back to a previous build with **Promote** on a past run (the last few builds are retained).
 
+An incremental run renders only what changed and publishes the complete site: the pages it didn't touch are carried over from the build the target currently serves, pages you deleted or moved disappear from their old place, and the sitemap and search index always list every page. A run limited to some pages (a folder or a selection) works the same way: the rest of the site stays online as it was.
+
+#### Why is this rebuilding?
+
+- **Before a run.** In the generation dialog press **Preview plan** (`Alt+P`). It shows how many files would rebuild, how many assets changed (expand the list), the counts by reason and the largest groups ("412 via section_template:teaser"), and the revision the preview was computed at. The table lists every file with its reason; open a reason to read its chain from the page to the change, e.g. `page:about — places section` → `section_template:teaser`, with a link to the revision the change was made in ("+ 2 other changes" when several changes reach the same page). Tick **Validate templates** to also compile what the plan needs. If incremental can't be used — no previous complete build for this target, the build is gone, channel output settings changed — a warning says so: the run will be a full build. Changing the mode, target or channels marks the preview out of date; starting still works, and if content was saved after the preview you get a notice.
+- **After a run.** In the run history each run shows "Incremental · 37 pages (via 2 changes)" or "Full · 5,000 pages". **Details → Rebuilt pages** lists what the run rebuilt and why, with the same filters. Plans of older runs are removed after a while ("Plan details were pruned").
+- **While editing.** The **Impact** panel in the template editor, the media drawer (below **Referenced by**) and the page editor answers "if I change this, what rebuilds?": "Changing this rebuilds 12 pages (24 files)", by kind of dependency, and a table with each page's chain back to this asset (pages link to their editor). It loads when you open it, always reflects the current state (also while viewing an old revision), and reloads after you save. It counts the most a change could rebuild; a small edit may rebuild less. Navigation matters: renaming a page that a navigation lists, or editing the navigation, rebuilds every page showing that navigation.
+
 ### Revisions, spine, and time travel
 
 - The spine shows the latest ~40 revisions, densest at the top. Your own changes are filled; others' are hollow.

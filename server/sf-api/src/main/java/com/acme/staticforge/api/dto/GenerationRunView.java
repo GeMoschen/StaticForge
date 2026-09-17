@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 import java.util.List;
 
-/** Client-facing generation run summary (spec §18.5, §20.2). */
+/**
+ * Client-facing generation run summary (spec §18.5, §20.2). {@code planSummary} (M22.1.2) is the plan the run built, or
+ * {@code null} for a run that didn't get past PLAN.
+ */
 public record GenerationRunView(
         Long id,
         Long revisionId,
@@ -19,4 +22,5 @@ public record GenerationRunView(
         long bytesWritten,
         int errorCount,
         int warningCount,
-        JsonNode diagnostics) {}
+        JsonNode diagnostics,
+        PlanSummaryView planSummary) {}

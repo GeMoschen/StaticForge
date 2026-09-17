@@ -6,7 +6,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Filesystem target writer (spec §18.4). Stages a run into {@code {outputRoot}/builds/{runId}} and
@@ -19,6 +23,11 @@ import java.util.List;
  * elevated privileges — the writer falls back to writing the {@code runId} into a tiny {@code
  * current} marker file. Both variants are readable by {@link #currentRunId()}. A failed or
  * incomplete {@code stage} never touches {@code current}.
+ *
+ * <p><b>Carried builds (M22.4.1):</b> the base build's unchanged files are hard-linked into the new build directory
+ * (copied where the file store has no links), and the run's own files are written as new files, never into a linked
+ * one. The manifest is stored as {@code builds/{runId}.manifest.json}, outside the served directory, and pruned with
+ * its build.
  */
 public final class FilesystemTargetWriter implements TargetWriter {
 
@@ -38,6 +47,10 @@ public final class FilesystemTargetWriter implements TargetWriter {
         return buildsDir().resolve(String.valueOf(runId));
     }
 
+    private Path manifestFile(long runId) {
+        return buildsDir().resolve(runId + ".manifest.json");
+    }
+
     private Path current() {
         return outputRoot.resolve("current");
     }
@@ -54,6 +67,44 @@ public final class FilesystemTargetWriter implements TargetWriter {
             Path target = TargetIo.resolve(build, file.path());
             TargetIo.write(target, file.bytes());
         }
+    }
+
+    @Override
+    public void stage(long runId, long baseRunId, List<OutputFile> files, Set<String> removedPaths) {
+        Path base = buildDir(baseRunId);
+        if (!Files.isDirectory(base)) {
+            throw new IllegalStateException("Base build directory does not exist: " + base);
+        }
+        Path build = buildDir(runId);
+        Set<String> overlaid = new HashSet<>();
+        files.forEach(file -> overlaid.add(file.path()));
+        for (Map.Entry<String, Path> carried : TargetIo.listFiles(base).entrySet()) {
+            if (!overlaid.contains(carried.getKey()) && !removedPaths.contains(carried.getKey())) {
+                TargetIo.linkOrCopy(carried.getValue(), TargetIo.resolve(build, carried.getKey()));
+            }
+        }
+        stage(runId, files);
+    }
+
+    @Override
+    public void writeManifest(long runId, BuildManifest manifest) {
+        TargetIo.write(manifestFile(runId), manifest.toJson());
+    }
+
+    @Override
+    public Optional<BuildManifest> readManifest(long runId) {
+        if (runId < 0 || !Files.isDirectory(buildDir(runId))) {
+            return Optional.empty();
+        }
+        return TargetIo.readIfExists(manifestFile(runId)).flatMap(BuildManifest::parse);
+    }
+
+    @Override
+    public Optional<byte[]> readFile(long runId, String path) {
+        if (runId < 0) {
+            return Optional.empty();
+        }
+        return TargetIo.readIfExists(TargetIo.resolve(buildDir(runId), OutputFile.normalize(path)));
     }
 
     @Override
@@ -80,7 +131,8 @@ public final class FilesystemTargetWriter implements TargetWriter {
         return "filesystem target at " + outputRoot;
     }
 
-    /** Returns the runId {@code current} points at, or {@code -1} when unpublishes. */
+    /** Returns the runId {@code current} points at, or {@code -1} when unpublished. */
+    @Override
     public long currentRunId() {
         return TargetIo.readRunId(current());
     }
@@ -149,6 +201,11 @@ public final class FilesystemTargetWriter implements TargetWriter {
                 continue;
             }
             TargetIo.deleteRecursively(buildDir(id));
+            try {
+                Files.deleteIfExists(manifestFile(id));
+            } catch (IOException ignored) {
+                // best-effort cleanup
+            }
         }
     }
 }

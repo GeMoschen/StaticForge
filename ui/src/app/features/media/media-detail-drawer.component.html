@@ -275,6 +275,12 @@
             </ul>
           }
         </section>
+
+        @if (media().uuid; as mediaUuid) {
+          <section class="section">
+            <sf-asset-impact [projectKey]="projectKey()" [assetUuid]="mediaUuid" [refreshKey]="media().revision" />
+          </section>
+        }
       }
     }
   </div>

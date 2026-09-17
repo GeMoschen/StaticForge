@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,6 +23,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * <em>NEW or changed</em> keys (the invalidation set) on {@code publish} by diffing each key's
  * SHA-256 fingerprint against the previously published run's manifest. {@code promote} re-points
  * the {@code current} marker at a prior runId.
+ *
+ * <p>A carried build (M22.4.1) mirrors the base run's keys that are neither removed nor overwritten (hard links where
+ * possible) and takes their fingerprints from the base run's key manifest, so the new run's key manifest is complete
+ * and the invalidation set only names what actually changed. The build manifest is {@code {runId}.manifest.json}.
  */
 public final class S3TargetWriter implements TargetWriter {
 
@@ -42,20 +47,72 @@ public final class S3TargetWriter implements TargetWriter {
         return targetRoot.resolve(String.valueOf(runId) + ".keys");
     }
 
+    private Path buildManifest(long runId) {
+        return targetRoot.resolve(runId + ".manifest.json");
+    }
+
     private Path current() {
         return targetRoot.resolve("current");
     }
 
     @Override
     public void stage(long runId, List<OutputFile> files) {
-        Path dir = runDir(runId);
+        staged.put(runId, Map.copyOf(writeKeys(runId, files, new HashMap<>())));
+    }
+
+    @Override
+    public void stage(long runId, long baseRunId, List<OutputFile> files, Set<String> removedPaths) {
+        Path base = runDir(baseRunId);
+        if (!Files.isDirectory(base) || !Files.isRegularFile(manifest(baseRunId))) {
+            throw new IllegalStateException("No S3 mirror exists for base run " + baseRunId);
+        }
+        Set<String> overlaid = new HashSet<>();
+        files.forEach(file -> overlaid.add(file.path()));
         Map<String, String> fingerprints = new HashMap<>();
+        for (Map.Entry<String, String> key : loadManifest(baseRunId).entrySet()) {
+            if (overlaid.contains(key.getKey()) || removedPaths.contains(key.getKey())) {
+                continue;
+            }
+            TargetIo.linkOrCopy(TargetIo.resolve(base, key.getKey()), TargetIo.resolve(runDir(runId), key.getKey()));
+            fingerprints.put(key.getKey(), key.getValue());
+        }
+        staged.put(runId, Map.copyOf(writeKeys(runId, files, fingerprints)));
+    }
+
+    private Map<String, String> writeKeys(long runId, List<OutputFile> files, Map<String, String> fingerprints) {
+        Path dir = runDir(runId);
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException("Failed to create mirror directory " + dir, e);
+        }
         for (OutputFile file : files) {
             Path target = TargetIo.resolve(dir, file.path());
             TargetIo.write(target, file.bytes());
             fingerprints.put(file.path(), TargetIo.sha256(file.bytes()));
         }
-        staged.put(runId, Map.copyOf(fingerprints));
+        return fingerprints;
+    }
+
+    @Override
+    public void writeManifest(long runId, BuildManifest manifest) {
+        TargetIo.write(buildManifest(runId), manifest.toJson());
+    }
+
+    @Override
+    public Optional<BuildManifest> readManifest(long runId) {
+        if (runId < 0 || !Files.isDirectory(runDir(runId))) {
+            return Optional.empty();
+        }
+        return TargetIo.readIfExists(buildManifest(runId)).flatMap(BuildManifest::parse);
+    }
+
+    @Override
+    public Optional<byte[]> readFile(long runId, String path) {
+        if (runId < 0) {
+            return Optional.empty();
+        }
+        return TargetIo.readIfExists(TargetIo.resolve(runDir(runId), OutputFile.normalize(path)));
     }
 
     @Override
@@ -95,8 +152,14 @@ public final class S3TargetWriter implements TargetWriter {
     }
 
     /** Returns the runId the {@code current} marker points at, or {@code -1}. */
+    @Override
     public long currentRunId() {
         return TargetIo.readRunId(current());
+    }
+
+    /** The published keys of {@code runId} with their fingerprints; empty when the run has no key manifest. */
+    public Map<String, String> keys(long runId) {
+        return loadManifest(runId);
     }
 
     private Map<String, String> loadManifest(long runId) {

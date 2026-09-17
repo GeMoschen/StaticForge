@@ -1,6 +1,6 @@
 ---
 id: M22.5.1
-status: todo
+status: done
 depends: [M22.3.1, M22.3.2, M22.4.1]
 epic: m22-build-insight
 feature: docs-e2e
@@ -53,14 +53,14 @@ ports.
 
 ## Acceptance criteria
 
-- [ ] Backend journey test passes in `./gradlew build`.
-- [ ] Playwright journey exists and passes against a live backend, or its
+- [x] Backend journey test passes in `./gradlew build`.
+- [x] Playwright journey exists and passes against a live backend, or its
       non-execution is documented with the exact reason.
-- [ ] Published output check (all pages + complete sitemap after incremental) is part
+- [x] Published output check (all pages + complete sitemap after incremental) is part
       of both journeys.
-- [ ] Docs listed above updated and consistent with the shipped API (field names match
+- [x] Docs listed above updated and consistent with the shipped API (field names match
       `schema.d.ts`).
-- [ ] Benchmark numbers recorded; PLAN stage overhead < 10 %, §18.6 incremental targets
+- [x] Benchmark numbers recorded; PLAN stage overhead < 10 %, §18.6 incremental targets
       met.
 
 ## Out of scope

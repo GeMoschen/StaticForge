@@ -32,11 +32,11 @@ wrong.
 
 ## Feature exit criteria
 
-- [ ] Incremental output (files and bytes) equals full output at the same revision for
+- [x] Incremental output (files and bytes) equals full output at the same revision for
       every target type, apart from build metadata. Proven by an integration test per
       writer.
-- [ ] Sitemap and search index always cover the whole site.
-- [ ] Baseline is per target and only advanced by runs that cover the whole site for
+- [x] Sitemap and search index always cover the whole site.
+- [x] Baseline is per target and only advanced by runs that cover the whole site for
       the channels in question.
 
 ## Dependencies

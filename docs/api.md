@@ -1,6 +1,6 @@
 # StaticForge CMS — API reference
 
-Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (68 paths), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
+Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (95 paths), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
 
 ## 1. Conventions
 
@@ -183,6 +183,32 @@ with the diagnostic in `X-SF-Render-Error`.
 | `GET` | `/projects/{projectKey}/generations/{runId}/events` (SSE) |
 | `POST` | `/projects/{projectKey}/generations/{runId}/cancel` |
 | `POST` | `/projects/{projectKey}/generations/{runId}/promote` |
+| `POST` | `/projects/{projectKey}/generations/plan` (`DEVELOPER`; `?page=&size=&rootKind=&channel=&q=&validate=`) |
+| `GET` | `/projects/{projectKey}/generations/{runId}/plan` (`VIEWER`; `?page=&size=&rootKind=&channel=&q=`) |
+| `GET` | `/projects/{projectKey}/assets/{uuid}/impact` (`VIEWER`; `?channel=&page=&size=&q=`) |
+
+A run view carries `planSummary` (`null` for a run that never got past PLAN): `{mode, incremental, revision, fallbackCause, baselineRevision, baseRunId, scoped, channels, changedAssetCount, entryCount, pageCount, processedMediaCount, byRootKind, byFirstEdge, byChannel, via: [{edge, assetUuid, assetType, uid, count}], planAvailable}`.
+
+**Build insight (M22).** `POST /generations/plan` takes the body of `POST /generations` and returns the plan a run started now would build — same snapshot, baseline and planner — without rendering, writing, storing a run or taking the run lock (it works while a run is active). `GET /generations/{runId}/plan` returns what a past run planned; `404` for a run of another project or one that never got past PLAN. Both answer `GenerationPlanView`:
+
+```json
+{ "runId": null, "target": {"id": 3, "name": "Site"},
+  "summary": { "incremental": true, "baselineRevision": 1840, "entryCount": 3, "…": "…" },
+  "changedAssets": [ {"uuid": "…", "type": "SECTION_TEMPLATE", "uid": "teaser", "deleted": false, "revision": 1842} ],
+  "entries": { "content": [ {
+      "assetUuid": "…", "assetType": "PAGE", "uid": "about", "displayName": "About", "channel": "html",
+      "outputPath": "about.html", "pageNumber": null,
+      "reason": { "rootKind": "ASSET_CHANGED", "rootAsset": {"uuid": "…", "type": "SECTION_TEMPLATE", "uid": "teaser"},
+                  "rootRevision": 1842, "causeCount": 1, "fallbackCause": null,
+                  "steps": [ {"assetUuid": "…", "assetType": "PAGE", "uid": "about", "edge": "SECTION_TEMPLATE",
+                              "referenceKind": null, "sourcePath": "bodies.main[0].templateRef"} ] } } ],
+    "page": {"size": 50, "number": 0, "totalElements": 3, "totalPages": 1} },
+  "diagnostics": null }
+```
+
+`steps` run from the planned asset towards the root and exclude it; each step says how its asset depends on the next (`PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE`, `REFERENCE` with `referenceKind`, `NAVIGATION`, `DATASET_MEMBERSHIP`, `PAGINATION_SOURCE`). Root kinds are `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL`, `EXPLICIT_SCOPE`, `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD`; clients must tolerate names added later. `validate=true` adds `diagnostics` (the VALIDATE findings grouped by code, like a run's). A pruned stored plan has `summary.planAvailable: false` and `entries: null`. Entries of processed media re-rendered by an incremental plan have `channel: null`. `size` is 1–500 (`400` otherwise).
+
+`GET /assets/{uuid}/impact` answers what would rebuild if the asset changed, with the planner's own walk over the current state: `{asset: {uuid, type, uid}, revision, entryCount, pageCount, byFirstEdge, entries}` (entries as above, root = the asset, `rootRevision` null). It is an upper bound — every loop over a record's dataset, a page change counted as navigation-affecting — so a real edit rebuilds the same entries or fewer. `404` for an unknown or deleted asset.
 
 ## 11. Revisions & restore
 

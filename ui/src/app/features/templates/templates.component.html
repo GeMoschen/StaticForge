@@ -321,6 +321,12 @@
             </div>
           }
         </div>
+
+        @if (d.uuid; as templateUuid) {
+          <div class="panel">
+            <sf-asset-impact [projectKey]="projectKey()" [assetUuid]="templateUuid" [refreshKey]="d.revision" />
+          </div>
+        }
       </div>
       } @else {
         <sf-empty-state

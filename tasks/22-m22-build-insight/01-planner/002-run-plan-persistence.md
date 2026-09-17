@@ -1,6 +1,6 @@
 ---
 id: M22.1.2
-status: todo
+status: done
 depends: [M22.1.1]
 epic: m22-build-insight
 feature: planner
@@ -61,17 +61,17 @@ parent-pointer map per visited asset.
 
 ## Acceptance criteria
 
-- [ ] New changelog applies on PostgreSQL and H2 (`ddl-auto: validate` passes in every
+- [x] New changelog applies on PostgreSQL and H2 (`ddl-auto: validate` passes in every
       profile).
-- [ ] A SUCCESS run and a run failing after PLAN both have stored entries whose
+- [x] A SUCCESS run and a run failing after PLAN both have stored entries whose
       reconstructed reasons equal the in-memory `BuildPlan` reasons (asserted).
-- [ ] `generation_run.plan_summary` is populated for every run that reached PLAN.
-- [ ] Storage is normalized: entry rows ≤ entries, node rows ≤ visited assets (asserted
+- [x] `generation_run.plan_summary` is populated for every run that reached PLAN.
+- [x] Storage is normalized: entry rows ≤ entries, node rows ≤ visited assets (asserted
       for a fixture where 100 pages share one chain).
-- [ ] Retention keeps exactly the configured number of plans per project.
-- [ ] Persisting the plan for the 5,000-page benchmark fixture takes < 2 s on H2
+- [x] Retention keeps exactly the configured number of plans per project.
+- [x] Persisting the plan for the 5,000-page benchmark fixture takes < 2 s on H2
       (measured and noted in the task).
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 

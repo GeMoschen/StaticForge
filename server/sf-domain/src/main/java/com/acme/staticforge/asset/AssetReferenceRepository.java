@@ -44,14 +44,17 @@ public interface AssetReferenceRepository extends JpaRepository<AssetReference, 
     @Query("SELECT r FROM AssetReference r WHERE r.toAssetId = :toAssetId AND r.validToRevision IS NULL")
     List<AssetReference> findIncomingOpen(@Param("toAssetId") Long toAssetId);
 
-    /** Every edge of a project valid at revision {@code R} (one query, for in-memory reverse indexes). */
+    /**
+     * Every edge of a project valid at revision {@code R} with its kind and source path: one query, for in-memory
+     * reverse indexes that explain the edges they follow (M22.1.1).
+     */
     @Query("""
-            SELECT new com.acme.staticforge.asset.ReferenceEdge(r.fromAssetId, r.toAssetId)
+            SELECT new com.acme.staticforge.asset.ReferenceRow(r.fromAssetId, r.toAssetId, r.kind, r.sourcePath)
             FROM AssetReference r, Asset a
             WHERE a.id = r.fromAssetId
               AND a.projectId = :projectId
               AND r.validFromRevision <= :revision
               AND (r.validToRevision IS NULL OR r.validToRevision > :revision)
             """)
-    List<ReferenceEdge> findValidAtByProject(@Param("projectId") long projectId, @Param("revision") long revision);
+    List<ReferenceRow> findRowsValidAtByProject(@Param("projectId") long projectId, @Param("revision") long revision);
 }

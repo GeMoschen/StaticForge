@@ -37,6 +37,12 @@ public class GenerationProperties {
      */
     private boolean cleanupLegacyOutput = true;
 
+    /**
+     * How many of a project's newest runs keep their stored plan (M22.1.2). Older runs keep their plan summary;
+     * their entries and reason chains are deleted.
+     */
+    private int planRetentionRuns = 50;
+
     public int getParallelism() {
         return parallelism;
     }
@@ -83,6 +89,14 @@ public class GenerationProperties {
 
     public void setCleanupLegacyOutput(boolean cleanupLegacyOutput) {
         this.cleanupLegacyOutput = cleanupLegacyOutput;
+    }
+
+    public int getPlanRetentionRuns() {
+        return planRetentionRuns;
+    }
+
+    public void setPlanRetentionRuns(int planRetentionRuns) {
+        this.planRetentionRuns = planRetentionRuns;
     }
 
     /** Parsed render-time budget (default {@code 5s}). */

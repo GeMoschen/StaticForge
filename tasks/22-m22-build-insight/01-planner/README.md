@@ -31,12 +31,12 @@ typically share one chain suffix.
 
 ## Feature exit criteria
 
-- [ ] `BuildPlan` exposes a reason for every entry; FULL, fallback-to-FULL, explicit
+- [x] `BuildPlan` exposes a reason for every entry; FULL, fallback-to-FULL, explicit
       scope and change-driven entries are distinguishable.
-- [ ] Change-driven reasons reconstruct to the shortest chain, chosen deterministically
+- [x] Change-driven reasons reconstruct to the shortest chain, chosen deterministically
       (same snapshot + baseline ⇒ byte-identical reasons).
-- [ ] The §18.2 navigation-affecting rule is implemented with its own edge kind.
-- [ ] Plans are persisted per run and survive later edits; old plans are pruned by a
+- [x] The §18.2 navigation-affecting rule is implemented with its own edge kind.
+- [x] Plans are persisted per run and survive later edits; old plans are pruned by a
       retention rule.
 
 ## Dependencies

@@ -10,7 +10,14 @@ import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
+import com.acme.staticforge.generate.GenerationRunRepository;
 import com.acme.staticforge.generate.GenerationService;
+import com.acme.staticforge.generate.ImpactService;
+import com.acme.staticforge.generate.PlanInsight;
+import com.acme.staticforge.generate.PlannedBuild;
+import com.acme.staticforge.generate.insight.PlanEntryRecord;
+import com.acme.staticforge.generate.insight.RunPlanStore;
+import com.acme.staticforge.generate.snapshot.SnapshotService;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.RunStatus;
@@ -73,6 +80,10 @@ class GenerationBenchmark {
     @Autowired AssetService assetService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired GenerationRunRepository runs;
+    @Autowired SnapshotService snapshotService;
+    @Autowired RunPlanStore runPlanStore;
+    @Autowired ImpactService impactService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -117,12 +128,48 @@ class GenerationBenchmark {
 
         editPage(template.uuid(), editedPageUuid, editedDisplayName, editedValidFromRevision, ctx);
 
+        GenerationRequest incrementalRequest =
+                new GenerationRequest(GenerationMode.INCREMENTAL, null, List.of("html"), target.getId(), null, null, null, null);
+        long dryRunStart = System.nanoTime();
+        generationService.dryRun(project.getKey(), incrementalRequest, false);
+        long onePageDryRunMs = (System.nanoTime() - dryRunStart) / 1_000_000L;
+
         TimedRun incremental = run(project.getKey(), GenerationMode.INCREMENTAL, target.getId(), user.getId(), pages);
 
+        // M22: a template change reaches every page. Time planning with and without explaining it, storing the
+        // explained plan, and the template's and a page's impact.
+        editTemplate(template.uuid(), ctx);
+        long snapshotStart = System.nanoTime();
+        snapshotService.snapshot(project.getId(), null);
+        long snapshotMs = (System.nanoTime() - snapshotStart) / 1_000_000L;
+        long planStart = System.nanoTime();
+        PlannedBuild planned = generationService.planFor(project.getKey(), incrementalRequest);
+        long planMs = (System.nanoTime() - planStart) / 1_000_000L;
+        long insightStart = System.nanoTime();
+        List<PlanEntryRecord> entries = PlanInsight.entries(planned.snapshot(), planned.plan());
+        PlanInsight.summary(mapper, planned, incrementalRequest, entries);
+        long reasonsMs = (System.nanoTime() - insightStart) / 1_000_000L;
+        GenerationRun holder = runs.save(new GenerationRun(project.getId(), null, GenerationMode.INCREMENTAL, null,
+                target.getId(), RunStatus.SUCCESS, null, null, user.getId(), 0, 0, 0, 0, 0, null, null));
+        long persistStart = System.nanoTime();
+        runPlanStore.save(holder.getId(), entries);
+        long persistMs = (System.nanoTime() - persistStart) / 1_000_000L;
+        long templateImpactStart = System.nanoTime();
+        int templateImpact = impactService.impact(project.getKey(), template.uuid(), null).entries().size();
+        long templateImpactMs = (System.nanoTime() - templateImpactStart) / 1_000_000L;
+        long pageImpactStart = System.nanoTime();
+        impactService.impact(project.getKey(), editedPageUuid, null);
+        long pageImpactMs = (System.nanoTime() - pageImpactStart) / 1_000_000L;
+        TimedRun allChanged = run(project.getKey(), GenerationMode.INCREMENTAL, target.getId(), user.getId(), pages);
+
         String summary = String.format(
-                "pages=%d, fullMs=%d, incrementalMs=%d, filesWritten=%d, incrementalFilesWritten=%d, fixtureMs=%d",
+                "pages=%d, fullMs=%d, incrementalMs=%d, filesWritten=%d, incrementalFilesWritten=%d, fixtureMs=%d, "
+                        + "onePageDryRunMs=%d, snapshotMs=%d, allChangedPlanMs=%d, allChangedEntries=%d, reasonsMs=%d, "
+                        + "persistMs=%d, templateImpactMs=%d, templateImpactEntries=%d, pageImpactMs=%d, "
+                        + "allChangedIncrementalMs=%d",
                 pages, full.millis(), incremental.millis(), full.run().getFilesWritten(),
-                incremental.run().getFilesWritten(), fixtureMs);
+                incremental.run().getFilesWritten(), fixtureMs, onePageDryRunMs, snapshotMs, planMs, entries.size(),
+                reasonsMs, persistMs, templateImpactMs, templateImpact, pageImpactMs, allChanged.millis());
         System.out.println("SFP_BENCH " + summary);
         writeSummary(summary);
     }
@@ -142,6 +189,13 @@ class GenerationBenchmark {
         content.put("body", "Body text for benchmark page " + index + ".");
         return assetService.create(
                 new CreateAssetCommand(project.getId(), AssetType.PAGE, "Benchmark Page " + index, null, payload, null), ctx);
+    }
+
+    private void editTemplate(UUID templateUuid, RevisionContext ctx) {
+        AssetVersionView current = assetService.requireCurrent(ctx.projectId(), templateUuid);
+        ObjectNode payload = current.payload().deepCopy();
+        payload.with("channelTemplates").with("html").put("source", TEMPLATE_SOURCE.replace("benchmark page", "benchmark page v2"));
+        assetService.update(templateUuid, new UpdateAssetCommand(current.displayName(), payload), current.validFromRevision(), ctx);
     }
 
     private void editPage(UUID templateUuid, UUID pageUuid, String displayName, long expectedRevision, RevisionContext ctx) {

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M22.1.2: the plan of every generation run with the reason each entry was rebuilt.
+         plan_summary is a JSON column (counts by root kind / first edge / channel, the baseline and fallback),
+         declared per dialect like generation_run.diagnostics. Reasons are stored normalized: one node row per asset
+         on some stored chain (a parent pointer towards the root), one entry row per planned output pointing at its
+         node, so thousands of entries sharing a chain suffix store it once. -->
+    <changeSet id="016-generation-run-plan-summary-postgresql" author="sf" dbms="postgresql">
+        <comment>Plan summary per generation run (M22.1.2) — PostgreSQL (jsonb).</comment>
+        <addColumn tableName="generation_run">
+            <column name="plan_summary" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="016-generation-run-plan-summary-h2" author="sf" dbms="h2">
+        <comment>Plan summary per generation run (M22.1.2) — H2 (json).</comment>
+        <addColumn tableName="generation_run">
+            <column name="plan_summary" type="JSON"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="016-generation-run-plan-tables" author="sf">
+        <comment>Stored plan entries and reason chain nodes per generation run (M22.1.2).</comment>
+        <createTable tableName="generation_run_plan_node">
+            <column name="run_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_plan_node_run"
+                        referencedTableName="generation_run" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="asset_uuid" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="uid" type="VARCHAR(200)"/>
+            <column name="parent_asset_uuid" type="UUID"/>
+            <column name="edge_kind" type="VARCHAR(40)"/>
+            <column name="reference_kind" type="VARCHAR(30)"/>
+            <column name="source_path" type="VARCHAR(500)"/>
+            <column name="root_kind" type="VARCHAR(40)"/>
+            <column name="root_revision" type="BIGINT"/>
+        </createTable>
+        <addPrimaryKey tableName="generation_run_plan_node" columnNames="run_id, asset_uuid"
+                constraintName="pk_generation_run_plan_node"/>
+
+        <createTable tableName="generation_run_plan_entry">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="run_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_plan_entry_run"
+                        referencedTableName="generation_run" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="asset_uuid" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="uid" type="VARCHAR(200)"/>
+            <column name="display_name" type="VARCHAR(500)"/>
+            <column name="channel" type="VARCHAR(40)"/>
+            <column name="output_path" type="VARCHAR(1000)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="page_number" type="INT"/>
+            <column name="root_kind" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="node_asset_uuid" type="UUID"/>
+            <column name="cause_count" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="generation_run_plan_entry" indexName="idx_plan_entry_run_root_kind">
+            <column name="run_id"/>
+            <column name="root_kind"/>
+        </createIndex>
+        <createIndex tableName="generation_run_plan_entry" indexName="idx_plan_entry_run_channel">
+            <column name="run_id"/>
+            <column name="channel"/>
+        </createIndex>
+        <createIndex tableName="generation_run_plan_entry" indexName="idx_plan_entry_run_asset">
+            <column name="run_id"/>
+            <column name="asset_uuid"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,6 +1,6 @@
 ---
 id: M22.4.1
-status: todo
+status: done
 depends: []
 epic: m22-build-insight
 feature: incremental-correctness
@@ -83,18 +83,18 @@ sitemap/search index list only those pages.
 
 ## Acceptance criteria
 
-- [ ] Incremental output equals full output at the same revision for FILESYSTEM, ZIP
+- [x] Incremental output equals full output at the same revision for FILESYSTEM, ZIP
       and S3 writers (integration tests).
-- [ ] Deleted/moved pages don't leave stale files after an incremental run.
-- [ ] `sitemap.xml` and `search-index.json` are complete after incremental runs.
-- [ ] Baseline is per target, coverage-aware and promote-aware; dry run and real run use
+- [x] Deleted/moved pages don't leave stale files after an incremental run.
+- [x] `sitemap.xml` and `search-index.json` are complete after incremental runs.
+- [x] Baseline is per target, coverage-aware and promote-aware; dry run and real run use
       the same rule.
-- [ ] §18.6 incremental target still met on the 5,000-page benchmark (carry-forward
+- [x] §18.6 incremental target still met on the 5,000-page benchmark (carry-forward
       cost measured and noted here). If filesystem copy is too slow, use hard links or
       a reflink-friendly copy, not a skipped correctness step.
-- [ ] `docs/adrs/0005-generation-atomic-publish.md` gains a note on incremental staging;
+- [x] `docs/adrs/0005-generation-atomic-publish.md` gains a note on incremental staging;
       spec §18.2/§18.4 wording updated if the design adds a writer operation.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
