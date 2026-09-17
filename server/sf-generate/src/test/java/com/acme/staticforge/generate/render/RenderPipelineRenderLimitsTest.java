@@ -65,22 +65,61 @@ class RenderPipelineRenderLimitsTest {
     }
 
     @Test
-    void catalogCardWhoseTemplateRendersACatalogOfItselfFailsWith0135() {
+    void catalogCardsOfTheSameTemplateNestAsDeepAsTheContent() {
+        // A card whose catalog holds cards of its own template: the nesting follows the stored content, which is
+        // finite, so it renders instead of failing as an include cycle.
         String catalogCdl = "content { editor catalog related { label \"Related\" } }";
         UUID pageTpl = pageTemplate("with_cards", catalogCdl, "$CMS_VALUE(related)$");
         UUID card = sectionTemplate("card", catalogCdl, "card[$CMS_VALUE(related)$]");
-        ObjectNode innerCardContent = MAPPER.createObjectNode();
-        innerCardContent.set("related", catalog(card, MAPPER.createObjectNode()));
+        ObjectNode innermost = MAPPER.createObjectNode();
+        ObjectNode middle = MAPPER.createObjectNode();
+        middle.set("related", catalog(card, innermost));
+        ObjectNode outer = MAPPER.createObjectNode();
+        outer.set("related", catalog(card, middle));
         ObjectNode pageContent = MAPPER.createObjectNode();
-        pageContent.set("related", catalog(card, innerCardContent));
+        pageContent.set("related", catalog(card, outer));
         page("cards", pageTpl, pageContent);
 
         RenderOutcome outcome = execute();
 
         assertThat(outcome.errors()).isEmpty();
+        assertThat(outcome.pageErrors()).isEmpty();
+        assertThat(outcome.files()).extracting(RenderedFile::outputPath).containsExactly("cards.html");
+        assertThat(text(outcome.files().get(0))).isEqualTo("card[card[card[]]]");
+    }
+
+    @Test
+    void anIncludeOfItsOwnTemplateInsideACardIsStillACycle() {
+        String catalogCdl = "content { editor catalog related { label \"Related\" } }";
+        UUID pageTpl = pageTemplate("with_card", catalogCdl, "$CMS_VALUE(related)$");
+        UUID card = sectionTemplate("looping_card", "", "card[$CMS_INCLUDE(section_template:looping_card)$]");
+        ObjectNode pageContent = MAPPER.createObjectNode();
+        pageContent.set("related", catalog(card, MAPPER.createObjectNode()));
+        page("looping", pageTpl, pageContent);
+
+        RenderOutcome outcome = execute();
+
         assertThat(outcome.pageErrors()).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.OCTL_INCLUDE_CYCLE);
-        assertThat(outcome.pageErrors().get(0).message()).isEqualTo("Page 'cards' (html): Include cycle: card → card");
-        assertThat(outcome.files()).isEmpty();
+        assertThat(outcome.pageErrors().get(0).message())
+                .isEqualTo("Page 'looping' (html): Include cycle: looping_card → looping_card");
+    }
+
+    @Test
+    void cardsNestedDeeperThan32LevelsFailWith0130() {
+        String catalogCdl = "content { editor catalog related { label \"Related\" } }";
+        UUID pageTpl = pageTemplate("deep_cards", catalogCdl, "$CMS_VALUE(related)$");
+        UUID card = sectionTemplate("nested_card", catalogCdl, "c$CMS_VALUE(related)$");
+        ObjectNode content = MAPPER.createObjectNode();
+        for (int level = 0; level < 33; level++) {
+            ObjectNode outer = MAPPER.createObjectNode();
+            outer.set("related", catalog(card, content));
+            content = outer;
+        }
+        page("too_deep", pageTpl, content);
+
+        RenderOutcome outcome = execute();
+
+        assertThat(outcome.pageErrors()).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.OCTL_INCLUDE_DEPTH);
     }
 
     @Test

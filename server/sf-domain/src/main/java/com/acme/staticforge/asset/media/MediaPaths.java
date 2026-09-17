@@ -50,7 +50,30 @@ public final class MediaPaths {
             case "application/json" -> "json";
             case "application/manifest+json" -> "webmanifest";
             case "application/xml", "text/xml" -> "xml";
-            default -> "bin";
+            case "text/html" -> "html";
+            case "text/markdown", "text/x-web-markdown" -> "md";
+            case "text/csv" -> "csv";
+            case "text/x-yaml", "text/yaml", "application/yaml", "application/x-yaml" -> "yaml";
+            case "text/calendar" -> "ics";
+            case "text/vtt" -> "vtt";
+            case "application/rss+xml" -> "rss";
+            case "application/atom+xml" -> "atom";
+            default -> textFallback(m);
         };
+    }
+
+    /**
+     * Any other text media type still publishes with a text extension rather than {@code .bin}: {@code +json} as
+     * {@code json}, {@code +xml} as {@code xml}, other {@code text/*} (such as {@code text/x-robots}) as {@code txt}.
+     */
+    private static String textFallback(String mimeType) {
+        String bare = mimeType.contains(";") ? mimeType.substring(0, mimeType.indexOf(';')).trim() : mimeType;
+        if (bare.endsWith("+json")) {
+            return "json";
+        }
+        if (bare.endsWith("+xml")) {
+            return "xml";
+        }
+        return bare.startsWith("text/") ? "txt" : "bin";
     }
 }

@@ -54,6 +54,36 @@ class RenderBudgetTest {
     }
 
     @Test
+    void contentInstancesMayNestTheSameTemplateButIncludesInsideThemMayNot() {
+        RenderBudget budget = new RenderBudget();
+        UUID card = UUID.randomUUID();
+
+        String nested = budget.withInstance(card, "card", () -> budget.withInstance(card, "card", () -> "ok"));
+        assertThat(nested).isEqualTo("ok");
+
+        assertThatThrownBy(() -> budget.withInstance(card, "card", () -> budget.withTemplate(card, "card", () -> "loop")))
+                .isInstanceOfSatisfying(RenderLimitException.class, e -> {
+                    assertThat(e.diagnostic().code()).isEqualTo(DiagnosticCodes.OCTL_INCLUDE_CYCLE);
+                    assertThat(e.diagnostic().message()).isEqualTo("Include cycle: card → card");
+                });
+    }
+
+    @Test
+    void contentInstancesStillCountTowardsTheDepthLimit() {
+        RenderBudget budget = new RenderBudget();
+        UUID card = UUID.randomUUID();
+
+        assertThatThrownBy(() -> nestInstances(budget, card, RenderBudget.MAX_INCLUDE_DEPTH + 2))
+                .isInstanceOfSatisfying(RenderLimitException.class, e ->
+                        assertThat(e.diagnostic().code()).isEqualTo(DiagnosticCodes.OCTL_INCLUDE_DEPTH));
+        assertThat(nestInstances(new RenderBudget(), card, RenderBudget.MAX_INCLUDE_DEPTH + 1)).isEqualTo("deep");
+    }
+
+    private static String nestInstances(RenderBudget budget, UUID template, int levels) {
+        return levels == 0 ? "deep" : budget.withInstance(template, "card", () -> nestInstances(budget, template, levels - 1));
+    }
+
+    @Test
     void sameTemplateIncludedTwiceSideBySideIsNotACycle() {
         template("page", "$CMS_INCLUDE(section_template:x)$+$CMS_INCLUDE(section_template:x)$");
         template("x", "X");

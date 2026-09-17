@@ -199,7 +199,9 @@ set in `site.css`, the logo URL in a web manifest, page URLs in a JSON config. P
 **opt-in per file**: switch on **Process CMS syntax** in the media drawer (or
 `PUT /media/{uuid}/process`). A file without the flag is published byte for byte, as before.
 
-**Which files.** Text media only, by the MIME type detected on upload (from the file name):
+**Which files.** Text media only, by the MIME type detected on upload (from the file name and its content):
+every `text/*` type, every `+json` or `+xml` type, and `application/javascript`, `application/json`,
+`application/xml`, `application/yaml`. For example:
 
 | Type | Detected for | Published as |
 |---|---|---|
@@ -209,9 +211,16 @@ set in `site.css`, the logo URL in a web manifest, page URLs in a JSON config. P
 | `application/manifest+json` | `.webmanifest` | `.webmanifest` |
 | `image/svg+xml` | `.svg` | `.svg` |
 | `application/xml`, `text/xml` | `.xml` | `.xml` |
+| `text/html` | `.html`, `.htm` | `.html` |
+| `text/x-web-markdown` | `.md` | `.md` |
+| `text/csv` | `.csv` | `.csv` |
+| `text/x-yaml` | `.yaml`, `.yml` | `.yaml` |
+| `application/rss+xml`, `application/atom+xml` | `.rss`, `.atom` | `.rss`, `.atom` |
+| `text/x-robots` | `robots.txt` whose content starts with `User-agent:` | `.txt` |
 | `text/plain` | `.txt`, and anything text that has no more specific type (for example `.mjs`) | `.txt` |
 
-Any other file (images, PDFs, fonts) is rejected with `400`. The **Source** tab of the drawer edits
+Any other `text/*` type publishes as `.txt`, any other `+json`/`+xml` type as `.json`/`.xml`. Other files (images,
+PDFs, fonts) are rejected with `400`. The **Source** tab of the drawer edits
 a text file in place; every save is a new revision.
 
 **The render context.** A processed file belongs to no page and is rendered **once per generation**:
@@ -672,7 +681,7 @@ The cases `pagination-first`, `pagination-last`, `pagination-single`, `paginatio
 | `SF-TPL-0131` | error (render) | loop iteration limit (100,000) exceeded |
 | `SF-TPL-0132` | error (render) | output size limit (32 MB) exceeded |
 | `SF-TPL-0133` | error (render) | render time budget (5 s) exceeded |
-| `SF-TPL-0135` | error (render) | include cycle: a template is rendered inside itself (`a → b → a`), via `$CMS_INCLUDE`, a body section or a catalog card |
+| `SF-TPL-0135` | error (render) | include cycle: a template is `$CMS_INCLUDE`d while it is already rendering (`a → b → a`). Body sections and catalog cards nest by content and are not cycles: a card may hold cards of its own template, as deep as the content goes, bounded by `SF-TPL-0130` |
 | `SF-TPL-0111` | warning | cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
 | `SF-TPL-0112` | warning | render time: a cross-asset value's target is missing or soft-deleted (renders empty) |
 | `SF-TPL-0157` | warning | a template overrides a block no ancestor defines, so the override never renders; carries a "did you mean" suggestion |

@@ -125,9 +125,9 @@ Everything else is generic (§4): delete, restore, move, uid change, history and
 
 ### 7.1 Text media and CMS processing (M18)
 
-Text media (`text/css`, `application/javascript`, `text/javascript`, `application/json`,
-`application/manifest+json`, `image/svg+xml`, `text/plain`, `application/xml`, `text/xml`) can be
-edited as text and opted into CMS syntax processing (`processCms`). Media views carry `processCms`
+Text media (every `text/*` type, every `+json`/`+xml` type such as `image/svg+xml` or
+`application/manifest+json`, and `application/javascript`, `application/json`, `application/xml`,
+`application/yaml`) can be edited as text and opted into CMS syntax processing (`processCms`). Media views carry `processCms`
 and `textEditable`; list summaries carry both too. Other types get `400` from every endpoint below.
 
 | Method | Path | Role | Notes |

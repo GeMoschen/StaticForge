@@ -303,3 +303,37 @@ test('journey 2: time travel shows the old source read-only; closing with unsave
     await api.dispose();
   }
 });
+
+test('journey 3: a robots.txt (detected as text/x-robots) can be processed and is published as .txt', async ({ page }) => {
+  test.skip(!OUTPUT_ROOT, 'reads generated files: set SF_E2E_OUTPUT_ROOT');
+  const api = await Api.forNewProject('m18c');
+  try {
+    // Tika reads the content: a file starting with "User-agent:" is text/x-robots, not text/plain.
+    await api.globalSet('Site', SITE_CDL, { brandColor: 'https://example.com' });
+    const robots = await api.uploadText('robots.txt', 'text/plain', 'User-agent: *\nSitemap: $CMS_VALUE(global:site.brandColor)$/sitemap.xml\n');
+    expect(robots.mimeType).toBe('text/x-robots');
+    expect(robots.textEditable).toBe(true);
+    const tpl = await api.pageTemplate('Links robots', '<html><body><a id="r" href="$CMS_REF(media:robots_txt)$">robots</a></body></html>');
+    await api.page('Home', tpl.uuid);
+    const target = await api.target();
+
+    await login(page);
+    await openMedia(page, api.projectKey, 'robots.txt');
+    const toggle = drawer(page).getByRole('switch', { name: 'Process CMS syntax' });
+    await expect(toggle).toBeVisible();
+    const enabled = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/process'));
+    await toggle.check();
+    expect((await enabled).status()).toBe(200);
+    await expect(drawer(page).locator('.drawer__title .cms-badge')).toBeVisible();
+    await snap(page, 'j3-robots-processed');
+
+    const full = await api.generate('FULL', target.id);
+    expect(full.status, JSON.stringify(full.diagnostics)).toBe('SUCCESS');
+    expect(builtFile(api.projectKey, target.id, full.id, 'assets/media/robots_txt.txt')).toBe(
+      'User-agent: *\nSitemap: https://example.com/sitemap.xml\n',
+    );
+    expect(builtFile(api.projectKey, target.id, full.id, 'home.html')).toContain('href="assets/media/robots_txt.txt"');
+  } finally {
+    await api.dispose();
+  }
+});

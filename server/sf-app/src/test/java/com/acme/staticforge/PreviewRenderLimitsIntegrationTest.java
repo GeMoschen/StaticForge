@@ -81,6 +81,42 @@ class PreviewRenderLimitsIntegrationTest {
                         assertThat(e.getProblem().getExtensions()).containsEntry("code", DiagnosticCodes.OCTL_INCLUDE_CYCLE));
     }
 
+    @Test
+    void catalogCardsOfTheSameTemplateRenderNestedInPreview() {
+        AppUser user = userService.create("preview-cards", "preview-cards@example.com", "Preview Cards", "secret-password");
+        Project project = projectService.create(
+                new CreateProjectRequest("previewcards", "Preview Cards", null, "nested catalog preview"), user.getId());
+        RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "nested catalog preview");
+        String catalogCdl = "content { editor catalog related { label \"Related\" } }";
+        TemplateView card = templateService.create(
+                new CreateTemplateCommand(project.getId(), AssetType.SECTION_TEMPLATE, "Card", catalogCdl,
+                        Map.of("html", "card[$CMS_VALUE(related)$]"), null, false, null, null),
+                ctx);
+        TemplateView pageTemplate = templateService.create(
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Cards Page Template", catalogCdl,
+                        Map.of("html", "<main>$CMS_VALUE(related)$</main>"), null, false, null, null),
+                ctx);
+        ObjectNode innermost = mapper.createObjectNode();
+        ObjectNode middle = mapper.createObjectNode().set("related", catalog(card, innermost, "inner"));
+        ObjectNode payload = mapper.createObjectNode();
+        payload.put("templateRef", pageTemplate.uuid().toString());
+        payload.set("content", mapper.createObjectNode().set("related", catalog(card, middle, "outer")));
+        AssetVersionView page = assetService.create(
+                new CreateAssetCommand(project.getId(), AssetType.PAGE, "Cards Page", null, payload, null), ctx);
+
+        assertThat(pageRenderService.renderPage(project.getId(), page.uuid(), null, "html", false))
+                .isEqualTo("<main>card[card[]]</main>");
+    }
+
+    private ObjectNode catalog(TemplateView cardTemplate, ObjectNode cardContent, String instanceId) {
+        ObjectNode value = mapper.createObjectNode().put("type", "CATALOG");
+        ObjectNode card = value.putArray("cards").addObject();
+        card.put("instanceId", instanceId);
+        card.put("templateRef", cardTemplate.uuid().toString());
+        card.set("content", cardContent);
+        return value;
+    }
+
     private TemplateView section(Project project, RevisionContext ctx, String name, String html) {
         return templateService.create(
                 new CreateTemplateCommand(project.getId(), AssetType.SECTION_TEMPLATE, name, "",

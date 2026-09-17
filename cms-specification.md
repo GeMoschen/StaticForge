@@ -718,8 +718,9 @@ Backends behind a `BlobStore` interface: `FilesystemBlobStore` (default, `sf.med
 ```
 
 `processCms` (M18) opts a **text** media file into OCTL processing (§16.12). It can only be `true`
-for the text MIME types (`text/css`, `application/javascript`, `text/javascript`, `application/json`,
-`application/manifest+json`, `image/svg+xml`, `text/plain`, `application/xml`, `text/xml`); a
+for text MIME types: every `text/*` type, every `+json`/`+xml` type (`image/svg+xml`,
+`application/manifest+json`, `application/rss+xml`, …) and `application/javascript`, `application/json`,
+`application/xml`, `application/yaml`; a
 payload without the key reads as `false`. `replace` keeps it while the new file is text and clears
 it otherwise. The blob stays the file's **source**: rendered output is produced per generation run
 and per preview request and never written back to blob storage.

@@ -38,6 +38,41 @@ class TextMediaTypesTest {
         assertThat(TextMediaTypes.isText(detected)).isTrue();
     }
 
+    /**
+     * What Tika reports for other everyday text files, by name and by content: every one of them is text media, so the
+     * process toggle shows, and each publishes with a text extension (never {@code .bin}).
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "robots.txt, 'User-agent: *\nDisallow:\n', text/x-robots, txt",
+        "readme.md, '# Title\n', text/x-web-markdown, md",
+        "data.csv, 'a,b\n1,2\n', text/csv, csv",
+        "page.html, '<p>$CMS_VALUE(x)$</p>', text/html, html",
+        "data.yaml, 'key: value\n', text/x-yaml, yaml",
+        "feed.rss, '<rss></rss>', application/rss+xml, rss",
+        "feed.atom, '<feed></feed>', application/atom+xml, atom",
+        "track.vtt, 'WEBVTT\n', text/vtt, vtt",
+    })
+    void everydayTextFilesAreTextMedia(String file, String content, String expectedMime, String extension) {
+        String detected = tika.detect(content.replace("\\n", "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8), file);
+
+        assertThat(detected).isEqualTo(expectedMime);
+        assertThat(TextMediaTypes.isText(detected)).isTrue();
+        assertThat(MediaPaths.extensionFor(detected)).isEqualTo(extension);
+    }
+
+    @Test
+    void anyTextOrStructuredTypeIsTextAndPublishesWithATextExtension() {
+        assertThat(TextMediaTypes.isText("text/x-something")).isTrue();
+        assertThat(MediaPaths.extensionFor("text/x-something")).isEqualTo("txt");
+        assertThat(TextMediaTypes.isText("application/ld+json")).isTrue();
+        assertThat(TextMediaTypes.isScriptLike("application/ld+json")).isTrue();
+        assertThat(MediaPaths.extensionFor("application/ld+json")).isEqualTo("json");
+        assertThat(TextMediaTypes.isText("application/xhtml+xml")).isTrue();
+        assertThat(MediaPaths.extensionFor("application/xhtml+xml")).isEqualTo("xml");
+        assertThat(MediaPaths.extensionFor("application/octet-stream")).isEqualTo("bin");
+    }
+
     /** Known gap: Tika 2.9 doesn't know {@code .mjs}; it is still text, but published with a {@code .txt} extension. */
     @Test
     void mjsIsDetectedAsPlainText() throws IOException {
