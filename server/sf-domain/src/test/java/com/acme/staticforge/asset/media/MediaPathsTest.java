@@ -30,7 +30,12 @@ class MediaPathsTest {
 
     @Test
     void everyTextMediaTypeHasARealExtension() {
-        for (String mime : TextMediaTypes.ALL) {
+        for (String mime : java.util.List.of(
+                "text/css", "application/javascript", "text/javascript", "application/json", "application/manifest+json",
+                "image/svg+xml", "text/plain", "application/xml", "text/xml", "text/x-robots", "text/html",
+                "text/x-web-markdown", "text/csv", "text/x-yaml", "application/yaml", "text/calendar", "text/vtt",
+                "application/rss+xml", "application/atom+xml", "application/ld+json", "text/x-anything")) {
+            assertThat(TextMediaTypes.isText(mime)).as(mime).isTrue();
             assertThat(MediaPaths.extensionFor(mime)).as(mime).isNotEqualTo("bin");
         }
         assertThat(MediaPaths.extensionFor(null)).isEqualTo("bin");

@@ -199,7 +199,9 @@ set in `site.css`, the logo URL in a web manifest, page URLs in a JSON config. P
 **opt-in per file**: switch on **Process CMS syntax** in the media drawer (or
 `PUT /media/{uuid}/process`). A file without the flag is published byte for byte, as before.
 
-**Which files.** Text media only, by the MIME type detected on upload (from the file name):
+**Which files.** Text media only, by the MIME type detected on upload (from the file name and its content):
+every `text/*` type, every `+json` or `+xml` type, and `application/javascript`, `application/json`,
+`application/xml`, `application/yaml`. For example:
 
 | Type | Detected for | Published as |
 |---|---|---|
@@ -209,9 +211,16 @@ set in `site.css`, the logo URL in a web manifest, page URLs in a JSON config. P
 | `application/manifest+json` | `.webmanifest` | `.webmanifest` |
 | `image/svg+xml` | `.svg` | `.svg` |
 | `application/xml`, `text/xml` | `.xml` | `.xml` |
+| `text/html` | `.html`, `.htm` | `.html` |
+| `text/x-web-markdown` | `.md` | `.md` |
+| `text/csv` | `.csv` | `.csv` |
+| `text/x-yaml` | `.yaml`, `.yml` | `.yaml` |
+| `application/rss+xml`, `application/atom+xml` | `.rss`, `.atom` | `.rss`, `.atom` |
+| `text/x-robots` | `robots.txt` whose content starts with `User-agent:` | `.txt` |
 | `text/plain` | `.txt`, and anything text that has no more specific type (for example `.mjs`) | `.txt` |
 
-Any other file (images, PDFs, fonts) is rejected with `400`. The **Source** tab of the drawer edits
+Any other `text/*` type publishes as `.txt`, any other `+json`/`+xml` type as `.json`/`.xml`. Other files (images,
+PDFs, fonts) are rejected with `400`. The **Source** tab of the drawer edits
 a text file in place; every save is a new revision.
 
 **The render context.** A processed file belongs to no page and is rendered **once per generation**:
