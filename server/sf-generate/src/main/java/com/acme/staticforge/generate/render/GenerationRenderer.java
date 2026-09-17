@@ -745,7 +745,10 @@ final class GenerationRenderer {
         }
 
         RenderContext context = builder.build();
-        RenderResult result = budget.withTemplate(sectionUuid, template.uid(), () -> renderer.render(compiled, context));
+        // A body section or catalog card (instanceId set) nests by content; only an include can recurse forever.
+        RenderResult result = instanceId != null && !instanceId.isBlank()
+                ? budget.withInstance(sectionUuid, template.uid(), () -> renderer.render(compiled, context))
+                : budget.withTemplate(sectionUuid, template.uid(), () -> renderer.render(compiled, context));
         deps.addAll(result.dependencies());
         warnings.addAll(result.warnings());
         return result.output();

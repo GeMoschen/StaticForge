@@ -18,8 +18,11 @@ import java.util.function.Supplier;
  * <ul>
  *   <li>nesting depth — more than {@value #MAX_INCLUDE_DEPTH} levels of nested templates below the
  *       top-level one fails with {@code SF-TPL-0130};
- *   <li>cycles — a template already being rendered further up the chain fails with
- *       {@code SF-TPL-0135} (checked before the depth limit, so A → B → A is reported as a cycle);
+ *   <li>cycles — a template <em>included</em> ({@code $CMS_INCLUDE}) while it is already being rendered further up
+ *       the chain fails with {@code SF-TPL-0135} (checked before the depth limit, so A → B → A is reported as a
+ *       cycle). Body sections and catalog cards ({@link #withInstance}) are exempt: their nesting follows the page's
+ *       content, a finite tree, so a card of template {@code card} may hold cards of {@code card} again; the depth
+ *       limit still bounds them;
  *   <li>loop iterations ({@code SF-TPL-0131}), output size ({@code SF-TPL-0132}) and wall-clock
  *       time ({@code SF-TPL-0133}) — aggregated across all nested renders.
  * </ul>
@@ -57,7 +60,7 @@ public final class RenderBudget {
      *     further up the chain, {@code SF-TPL-0130} when nesting would exceed the depth limit
      */
     public <T> T withTemplate(UUID templateUuid, String label, Supplier<T> render) {
-        enter(templateUuid, label);
+        enter(templateUuid, label, true);
         try {
             return render.get();
         } finally {
@@ -65,9 +68,27 @@ public final class RenderBudget {
         }
     }
 
-    private void enter(UUID templateUuid, String label) {
+    /**
+     * Runs the render of a content instance — a body section or a catalog card — with {@code templateUuid} pushed onto
+     * the nesting stack. Unlike {@link #withTemplate} it doesn't treat the template being rendered further up as a
+     * cycle: instances nest as deep as the stored content does, which is finite, so a card template whose catalog holds
+     * cards of the same template renders. The depth limit still applies, and an {@code $CMS_INCLUDE} inside the card
+     * still sees the card's frame when it checks for a cycle.
+     *
+     * @throws RenderLimitException {@code SF-TPL-0130} when nesting would exceed the depth limit
+     */
+    public <T> T withInstance(UUID templateUuid, String label, Supplier<T> render) {
+        enter(templateUuid, label, false);
+        try {
+            return render.get();
+        } finally {
+            stack.pop();
+        }
+    }
+
+    private void enter(UUID templateUuid, String label, boolean checkCycle) {
         String name = label == null || label.isBlank() ? String.valueOf(templateUuid) : label;
-        for (Frame frame : stack) {
+        for (Frame frame : checkCycle ? stack : java.util.List.<Frame>of()) {
             if (frame.templateUuid.equals(templateUuid)) {
                 throw new RenderLimitException(Diagnostic.error(
                         DiagnosticCodes.OCTL_INCLUDE_CYCLE, "Include cycle: " + chainFrom(templateUuid) + " → " + name, 0, 0));

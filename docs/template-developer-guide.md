@@ -681,7 +681,7 @@ The cases `pagination-first`, `pagination-last`, `pagination-single`, `paginatio
 | `SF-TPL-0131` | error (render) | loop iteration limit (100,000) exceeded |
 | `SF-TPL-0132` | error (render) | output size limit (32 MB) exceeded |
 | `SF-TPL-0133` | error (render) | render time budget (5 s) exceeded |
-| `SF-TPL-0135` | error (render) | include cycle: a template is rendered inside itself (`a → b → a`), via `$CMS_INCLUDE`, a body section or a catalog card |
+| `SF-TPL-0135` | error (render) | include cycle: a template is `$CMS_INCLUDE`d while it is already rendering (`a → b → a`). Body sections and catalog cards nest by content and are not cycles: a card may hold cards of its own template, as deep as the content goes, bounded by `SF-TPL-0130` |
 | `SF-TPL-0111` | warning | cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
 | `SF-TPL-0112` | warning | render time: a cross-asset value's target is missing or soft-deleted (renders empty) |
 | `SF-TPL-0157` | warning | a template overrides a block no ancestor defines, so the override never renders; carries a "did you mean" suggestion |

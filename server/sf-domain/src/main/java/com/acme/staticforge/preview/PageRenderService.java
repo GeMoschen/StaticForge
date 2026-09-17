@@ -699,7 +699,11 @@ public class PageRenderService {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
         }
         RenderContext context = builder.build();
-        return budget.withTemplate(sectionTemplateUuid, uid, () -> renderer.render(compiled, context)).output();
+        // A body section or catalog card (instanceId set) nests by content; only an include can recurse forever.
+        return (instanceId != null && !instanceId.isBlank()
+                        ? budget.withInstance(sectionTemplateUuid, uid, () -> renderer.render(compiled, context))
+                        : budget.withTemplate(sectionTemplateUuid, uid, () -> renderer.render(compiled, context)))
+                .output();
     }
 
     // ------------------------------------------------------------------
