@@ -249,3 +249,10 @@
   font-family: var(--sf-font-mono, monospace);
   color: var(--sf-slate);
 }
+
+.page-editor__impact {
+  margin-top: var(--sf-4);
+  padding-top: var(--sf-3);
+  border-top: 1px solid var(--sf-line);
+  min-width: 0;
+}

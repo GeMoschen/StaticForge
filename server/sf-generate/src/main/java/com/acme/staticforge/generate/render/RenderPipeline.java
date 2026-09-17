@@ -218,11 +218,7 @@ public class RenderPipeline {
         Map<UUID, Diagnostic> incomplete = incompletePages(snapshot, plan);
         BuildPlan publishable = incomplete.isEmpty()
                 ? plan
-                : new BuildPlan(
-                        plan.incremental(),
-                        plan.revision(),
-                        plan.entries().stream().filter(e -> !incomplete.containsKey(e.pageUuid())).toList(),
-                        plan.changedAssets());
+                : plan.withEntries(plan.entries().stream().filter(e -> !incomplete.containsKey(e.pageUuid())).toList());
         RenderBatch batch = renderParallel(renderer, publishable, snapshot);
 
         List<RenderedFile> files = new ArrayList<>(batch.files);

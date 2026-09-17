@@ -200,11 +200,20 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
     List<AssetVersion> findCurrentPagesOfTemplates(
             @Param("projectId") long projectId, @Param("templateAssetIds") java.util.Collection<Long> templateAssetIds);
 
-    /** Distinct asset ids with a version opened after {@code sinceRevision} (deletions included). */
+    /**
+     * Assets with a version opened in revisions {@code (sinceRevision, untilRevision]} (deletions included), each with
+     * the newest such revision: the changes an incremental build pinned to {@code untilRevision} has to render.
+     */
     @Query("""
-            SELECT DISTINCT v.assetId FROM AssetVersion v
+            SELECT new com.acme.staticforge.asset.AssetChange(v.assetId, MAX(v.validFromRevision))
+            FROM AssetVersion v
             WHERE v.asset.projectId = :projectId
               AND v.validFromRevision > :sinceRevision
+              AND v.validFromRevision <= :untilRevision
+            GROUP BY v.assetId
             """)
-    List<Long> findAssetIdsChangedSince(@Param("projectId") Long projectId, @Param("sinceRevision") long sinceRevision);
+    List<AssetChange> findChangesBetween(
+            @Param("projectId") long projectId,
+            @Param("sinceRevision") long sinceRevision,
+            @Param("untilRevision") long untilRevision);
 }

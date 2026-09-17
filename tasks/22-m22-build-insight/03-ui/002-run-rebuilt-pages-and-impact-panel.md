@@ -1,6 +1,6 @@
 ---
 id: M22.3.2
-status: todo
+status: done
 depends: [M22.2.1, M22.2.2, M22.3.1]
 epic: m22-build-insight
 feature: ui
@@ -57,14 +57,14 @@ After `M22.2.*`: `GET /generations/{runId}/plan`, `GET /assets/{uuid}/impact`, a
 
 ## Acceptance criteria
 
-- [ ] Every finished run with a stored plan shows its rebuilt pages with reasons.
-- [ ] Impact panel appears in the template editor, media drawer and page editor, and
+- [x] Every finished run with a stored plan shows its rebuilt pages with reasons.
+- [x] Impact panel appears in the template editor, media drawer and page editor, and
       matches the endpoint result against a running backend (spot-checked with a media
       file used by 2 pages and a section template used by several pages).
-- [ ] Impact loads only on expand (no request on editor open), verified in a spec.
-- [ ] Keyboard-complete; chains readable by screen readers (ordered lists, text edge
+- [x] Impact loads only on expand (no request on editor open), verified in a spec.
+- [x] Keyboard-complete; chains readable by screen readers (ordered lists, text edge
       labels).
-- [ ] `npm run build` green; specs pass, or their failure is shown to be the known
+- [x] `npm run build` green; specs pass, or their failure is shown to be the known
       `templateUrl` tooling issue.
 
 ## Out of scope

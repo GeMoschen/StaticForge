@@ -1,6 +1,6 @@
 ---
 id: M22.2.1
-status: todo
+status: done
 depends: [M22.1.2, M22.4.1]
 epic: m22-build-insight
 feature: api
@@ -71,15 +71,15 @@ inline, so there is no reusable "plan only" method. After `M22.1.2`,
 
 ## Acceptance criteria
 
-- [ ] `executeRun` and the dry run share one planning method; no duplicated
+- [x] `executeRun` and the dry run share one planning method; no duplicated
       snapshot/baseline/plan code.
-- [ ] Parity integration test passes.
-- [ ] Dry run is side-effect free (asserted via row counts) and allowed during an
+- [x] Parity integration test passes.
+- [x] Dry run is side-effect free (asserted via row counts) and allowed during an
       active run.
-- [ ] Stored plan endpoint pages/filters correctly and handles pruned plans.
-- [ ] Role and cross-project checks covered by tests.
-- [ ] `docs/api.md` endpoint table updated; OpenAPI + `schema.d.ts` regenerated.
-- [ ] `./gradlew build` green.
+- [x] Stored plan endpoint pages/filters correctly and handles pruned plans.
+- [x] Role and cross-project checks covered by tests.
+- [x] `docs/api.md` endpoint table updated; OpenAPI + `schema.d.ts` regenerated.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 

@@ -16,10 +16,10 @@ semantics.
 
 ## Feature exit criteria
 
-- [ ] E2E journey covering preview → run → rebuilt pages → impact exists and passes
+- [x] E2E journey covering preview → run → rebuilt pages → impact exists and passes
       against a live backend, or its non-execution is documented with the exact reason
       (see `M15.6` precedent).
-- [ ] Spec, API reference, user guide and architecture docs describe the shipped
+- [x] Spec, API reference, user guide and architecture docs describe the shipped
       behavior.
 
 ## Dependencies

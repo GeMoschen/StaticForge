@@ -13,9 +13,11 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -51,6 +53,8 @@ public class AssetCopyStage {
         List<OutputFile> files = new ArrayList<>();
         List<Diagnostic> warnings = new ArrayList<>();
         List<Diagnostic> fileErrors = new ArrayList<>();
+        Map<String, UUID> owners = new HashMap<>();
+        Map<UUID, Set<UUID>> dependencies = new HashMap<>();
         long copied = 0;
         long skipped = 0;
 
@@ -75,6 +79,8 @@ public class AssetCopyStage {
                     continue;
                 }
                 files.add(rendered.file().toOutputFile());
+                owners.put(rendered.file().outputPath(), uuid);
+                dependencies.put(uuid, mediaOnly(snapshot, rendered.file().dependencies()));
                 copied++;
                 warnings.addAll(rendered.file().diagnostics());
                 // Deterministic order: a rendered file's dependency set is unordered.
@@ -90,7 +96,9 @@ public class AssetCopyStage {
                 String mime = text(payload, "mimeType");
                 byte[] bytes = readOrNull(primarySha);
                 if (bytes != null) {
-                    files.add(new OutputFile(MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mime)), bytes));
+                    OutputFile file = new OutputFile(MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mime)), bytes);
+                    files.add(file);
+                    owners.put(file.path(), uuid);
                     copied++;
                 } else {
                     skipped++;
@@ -107,8 +115,10 @@ public class AssetCopyStage {
                     }
                     byte[] bytes = readOrNull(sha);
                     if (bytes != null) {
-                        files.add(new OutputFile(
-                                MediaPaths.variantPath(uid, name, extensionForFormat(text(variant, "format"))), bytes));
+                        OutputFile file = new OutputFile(
+                                MediaPaths.variantPath(uid, name, extensionForFormat(text(variant, "format"))), bytes);
+                        files.add(file);
+                        owners.put(file.path(), uuid);
                         copied++;
                     } else {
                         skipped++;
@@ -117,7 +127,19 @@ public class AssetCopyStage {
             }
         }
 
-        return new AssetCopyResult(files, copied, skipped, warnings, fileErrors);
+        return new AssetCopyResult(files, copied, skipped, warnings, fileErrors, owners, dependencies);
+    }
+
+    /** The media among a rendered file's dependencies. */
+    static Set<UUID> mediaOnly(Snapshot snapshot, Set<UUID> dependencies) {
+        Set<UUID> media = new HashSet<>();
+        for (UUID dependency : dependencies) {
+            SnapshotAsset asset = snapshot.assetByUuid(dependency);
+            if (asset != null && asset.type() == AssetType.MEDIA) {
+                media.add(dependency);
+            }
+        }
+        return media;
     }
 
     private byte[] readOrNull(String sha) {

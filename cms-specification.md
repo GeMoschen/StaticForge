@@ -1466,20 +1466,24 @@ Request body:
 
 `revision: null` means "current". Passing a revision generates the site **as it was**, which is the mechanism behind reproducible republishing and rollback verification.
 
+`scope` limits the pages a run renders: pages in `folderPath` (and below) or listed in `assetUuids`; with both, either qualifies. A scoped run publishes its pages on top of the build the target serves, so the rest of the site stays online (§18.4).
+
 ### 18.2 Stages
 
 ```
 1  SNAPSHOT    Pin revision R. Load an immutable in-memory index of all assets at R.
 2  PLAN        Determine the file set:
                full        → every page × every enabled channel
-               incremental → changed assets since last successful run,
-                             expanded over asset_reference reverse edges
-                             (transitive; navigation-affecting changes expand to
-                             all pages that render that structure). Processed
-                             text media reached by the walk is planned for
-                             re-rendering even when no planned page links it
-                             (§16.12); like a page, a merely reached one stops
-                             the walk.
+               incremental → assets changed since the target's baseline
+                             (version or uid changes), expanded over
+                             asset_reference reverse edges (transitive;
+                             navigation-affecting changes expand to all pages
+                             that render that structure), plus any output the
+                             base build lacks. Processed text media reached by
+                             the walk is planned for re-rendering even when no
+                             planned page links it (§16.12); like a page, a
+                             merely reached one stops the walk.
+               Every planned output records why (reason chain, below).
 3  VALIDATE    Compile every needed template and resolve refs.
                ERROR-severity findings abort before any file is written.
                Pages with ERROR completeness findings are held back (SF-GEN-0120,
@@ -1495,9 +1499,19 @@ Request body:
                compile or render is left out and the run is PARTIAL.
 6  POST        Optional per-channel post-processors: prettify/minify HTML,
                sitemap.xml, robots.txt, redirect map, search index JSON.
-7  WRITE       Atomic publish into the target (§18.4).
+7  WRITE       Atomic publish into the target (§18.4). An incremental or scoped
+               run publishes the whole site: the base build's unchanged files
+               are carried forward, what went away is removed.
 8  REPORT      Persist GenerationRun with counts, timings, diagnostics.
 ```
+
+**Baseline (M22).** An `INCREMENTAL` request builds on the build its target currently serves (the last published or the promoted one) when that build's manifest shows it holds every page in every requested channel. Changes are counted from the build's *consistent revision*: its own revision, or for a scoped build published on top of another, that build's consistent revision, so a scoped run never advances the baseline and a build of another target never counts. Otherwise the request plans a full build and says why (`fallbackCause`): `NO_COMPLETE_BUILD_FOR_TARGET`, `BASE_BUILD_MISSING` (gone, or published before builds had manifests), `CHANNEL_SETTINGS_CHANGED` (every page of that channel may have moved) or `REVISION_BEFORE_BASELINE`.
+
+**Reason chains (M22).** The planner's walk (`RebuildExpansion`) is a breadth-first search seeded in UUID order over neighbours in a stable order, keeping the first edge each asset is reached by. Every planned asset therefore has a deterministic shortest chain back to the change that reached it — `page:about ← section_template:teaser (bodies.main[0].templateRef) ← media:hero (changed in r1842)` — and a `causeCount` of all changes reaching it. Root kinds: `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL` (with the cause), `EXPLICIT_SCOPE` (listed in `assetUuids`), `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD` (nothing it depends on changed, but the base build lacks the output, e.g. the page was held back). Edges: `PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE` (named `TEMPLATE` reference rows), `REFERENCE` (any other row, with its kind and source path), `NAVIGATION`, `DATASET_MEMBERSHIP` (a loop that may select the changed record), `PAGINATION_SOURCE`. Names are served as strings; clients tolerate names added later.
+
+**Walk rules.** A merely reached page stops the walk (its output depends on what it references, not on who references it) unless its output path moved since the base build (a template `outputPath` edit), in which case every page linking it is reached too.
+
+**Navigation rule.** `$CMS_NAVIGATION(nav:x)$` and `$CMS_FOR(i : nav:x)$` render `x`'s whole subtree, but only `x` is an edge target. So a navigation-affecting change reaches the Navigation folders that render it with edge `NAVIGATION`, and their template and media referrers walk as usual. Navigation-affecting: a changed page reference (created, moved, deleted, relabelled, reordered, retargeted: its ancestor folders now and at the baseline); a changed Navigation folder (its ancestors); a page reference pointing at a page, or at a pages folder containing a page, whose display name, uid, output path or existence changed. A page's body edit is not navigation-affecting.
 
 ### 18.3 Output paths
 
@@ -1533,6 +1547,8 @@ Filesystem publish is atomic via staged directories:
 
 Failed runs leave `current` untouched. The last *N* builds (default 5) are retained for instant rollback (`POST /generations/{runId}/promote`).
 
+**Build manifests and carried builds (M22).** Every published build has a manifest next to it (`{root}/builds/{runId}.manifest.json`, outside the served directory, pruned with the build): each file with the page (and channel, page number) or media asset that produced it and the media it depends on, plus the build's consistent revision and complete channels. An incremental or scoped run stages its build as the base build's files minus removed paths, overlaid with its own files (`TargetWriter.stage(runId, baseRunId, files, removedPaths)`), into its own staging area, and publishes with the same single flip. Filesystem builds hard-link unchanged files (copying where links aren't supported) and never write into a linked file; ZIP builds rewrite the archive from the base entries; the S3 mirror carries the base keys and fingerprints, so the invalidation set holds only what changed. A base output is kept when the run is responsible for it (page in scope, channel requested) and it still exists at the same path unplanned; outside the run's scope or channels it is kept only by a scoped run. Media is kept while a kept or re-rendered file still needs it. Site files (sitemap, robots, search index, redirects) are always written again from the full list of site outputs; the search index text of a carried page comes from the base build's index.
+
 S3 publish writes to a key prefix, then updates a CloudFront/Nginx origin path or invalidates the changed keys only (derived from the diff, not a wildcard).
 
 ### 18.5 Generation run record
@@ -1543,8 +1559,18 @@ generation_run
   status (QUEUED|RUNNING|SUCCESS|PARTIAL|FAILED|CANCELLED),
   started_at, finished_at, started_by,
   files_written, files_skipped, bytes_written,
-  error_count, warning_count, diagnostics json, log_blob_sha
+  error_count, warning_count, diagnostics json, log_blob_sha,
+  plan_summary json                         -- M22
+
+generation_run_plan_entry                   -- one row per planned output
+  run_id, asset_uuid, asset_type, uid, display_name, channel,
+  output_path, page_number, root_kind, node_asset_uuid, cause_count
+generation_run_plan_node                    -- one row per asset on a stored chain
+  run_id, asset_uuid, asset_type, uid, parent_asset_uuid,
+  edge_kind, reference_kind, source_path, root_kind, root_revision
 ```
+
+The plan is stored right after PLAN, so a run failing later is still explainable. `plan_summary` holds the requested mode, `incremental`, `fallbackCause`, `baselineRevision`, `baseRunId`, `coverage {scoped, channels}`, the changed assets (up to 200, with `changedAssetCount`), `entryCount`/`pageCount`/`processedMediaCount`, counts `byRootKind`/`byFirstEdge`/`byChannel`, the largest `via` groups and `planAvailable`. Chains are normalized: nodes are the parent-pointer tree of the walk, so entries sharing a chain suffix store it once. Plans of the newest `sf.generate.plan-retention-runs` (default 50) runs per project are kept; older runs keep their summary with `planAvailable: false`.
 
 Runs are queued per project (one active run per project; a second request returns `409` with the running run's id). Progress is streamed to the UI via Server-Sent Events on `GET /generations/{id}/events`.
 
@@ -1695,6 +1721,9 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 | `GET` | `/projects/{p}/generations/{id}/events` | SSE progress |
 | `POST` | `/projects/{p}/generations/{id}/cancel` | |
 | `POST` | `/projects/{p}/generations/{id}/promote` | Rollback to a previous build |
+| `POST` | `/projects/{p}/generations/plan` | Dry run: the plan and reasons a run started now would have (M22) |
+| `GET` | `/projects/{p}/generations/{id}/plan` | A run's stored plan and reasons (M22) |
+| `GET` | `/projects/{p}/assets/{uuid}/impact` | What would rebuild if the asset changed (M22) |
 | `GET`/`POST`/`PUT`/`DELETE` | `/projects/{p}/targets[/{id}]` | Target CRUD (PROJECT_ADMIN) |
 
 **Revisions**

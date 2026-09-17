@@ -16,12 +16,4 @@ public interface GenerationRunRepository extends JpaRepository<GenerationRun, Lo
               AND (r.status = 'QUEUED' OR r.status = 'RUNNING')
             """)
     Optional<GenerationRun> findActive(@Param("projectId") long projectId);
-
-    @Query("""
-            SELECT r FROM GenerationRun r
-            WHERE r.projectId = :projectId
-              AND r.status = 'SUCCESS'
-            ORDER BY r.id DESC
-            """)
-    List<GenerationRun> findRecentSuccesses(@Param("projectId") long projectId);
 }

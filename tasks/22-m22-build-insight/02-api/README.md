@@ -28,12 +28,12 @@ can't drift. The impact endpoint uses the same expansion component (`M22.1.1`).
 
 ## Feature exit criteria
 
-- [ ] Dry run and a real run started right after with the same request produce equal
+- [x] Dry run and a real run started right after with the same request produce equal
       entries + reasons (integration test).
-- [ ] Stored plans are readable, paged and filterable; pruned plans answer
+- [x] Stored plans are readable, paged and filterable; pruned plans answer
       `planAvailable: false`.
-- [ ] Impact is computed by the planner's expansion, not by a separate walk.
-- [ ] OpenAPI regenerated; `ui/src/app/core/api/generated/schema.d.ts` updated.
+- [x] Impact is computed by the planner's expansion, not by a separate walk.
+- [x] OpenAPI regenerated; `ui/src/app/core/api/generated/schema.d.ts` updated.
 
 ## Dependencies
 

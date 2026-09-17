@@ -1,11 +1,17 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import {
   GenerationRunEvent,
   streamGenerationEvents,
 } from './generation-sse';
+import {
+  entryQueryParams,
+  type AssetImpactView,
+  type GenerationPlanView,
+  type PlanEntryQuery,
+} from './insight/insight.util';
 
 type GenerationRunView = components['schemas']['GenerationRunView'];
 type GenerationRequestDto = components['schemas']['GenerationRequestDto'];
@@ -22,7 +28,7 @@ const BASE = '/api/v1';
 
 @Injectable({ providedIn: 'root' })
 export class GenerationService {
-  constructor(private readonly http: HttpClient) {}
+  private readonly http = inject(HttpClient);
 
   history(projectKey: string): Observable<GenerationRunView[]> {
     return this.http.get<GenerationRunView[]>(
@@ -43,6 +49,41 @@ export class GenerationService {
       `${BASE}/projects/${projectKey}/generations`,
       body,
       Object.keys(headers).length > 0 ? { headers } : undefined,
+    );
+  }
+
+  /**
+   * Dry run (M22.2.1): the plan a run started now with `req` would build, with every entry's reason. Nothing is
+   * rendered or stored; `validate` also compiles the templates the plan needs.
+   */
+  planGeneration(
+    projectKey: string,
+    req: StartGenerationRequest,
+    query: PlanEntryQuery,
+    validate = false,
+  ): Observable<GenerationPlanView> {
+    const body: StartGenerationRequest = { ...req };
+    delete body.idempotencyKey;
+    return this.http.post<GenerationPlanView>(
+      `${BASE}/projects/${projectKey}/generations/plan`,
+      body,
+      { params: entryQueryParams(query, validate ? { validate: true } : {}) },
+    );
+  }
+
+  /** A past run's stored plan (M22.2.1); `entries` is null once retention pruned it. */
+  getRunPlan(projectKey: string, runId: number, query: PlanEntryQuery): Observable<GenerationPlanView> {
+    return this.http.get<GenerationPlanView>(
+      `${BASE}/projects/${projectKey}/generations/${runId}/plan`,
+      { params: entryQueryParams(query) },
+    );
+  }
+
+  /** What would rebuild if the asset changed (M22.2.2), as of now. */
+  assetImpact(projectKey: string, assetUuid: string, query: PlanEntryQuery): Observable<AssetImpactView> {
+    return this.http.get<AssetImpactView>(
+      `${BASE}/projects/${projectKey}/assets/${assetUuid}/impact`,
+      { params: entryQueryParams(query) },
     );
   }
 

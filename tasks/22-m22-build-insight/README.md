@@ -39,38 +39,38 @@ successful revision" ignores the target.
 
 ## Exit criteria (epic is done when)
 
-- [ ] Every plan entry (dry run and real run) carries a reason: a root kind
+- [x] Every plan entry (dry run and real run) carries a reason: a root kind
       (`FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL`, `EXPLICIT_SCOPE`, `ASSET_CHANGED`,
       `ASSET_DELETED`, …) plus, for change-driven entries, the shortest ordered chain of
       edges back to the changed asset, including the change's revision.
-- [ ] The §18.2 navigation rule is implemented and explained: a navigation-affecting
+- [x] The §18.2 navigation rule is implemented and explained: a navigation-affecting
       change rebuilds every page that renders the affected navigation, with reason
       edge `NAVIGATION`.
-- [ ] The plan (entries + reasons) is stored per `GenerationRun` and readable via
+- [x] The plan (entries + reasons) is stored per `GenerationRun` and readable via
       `GET /generations/{runId}/plan` (paged, filterable by reason kind and channel)
       after the run finishes, including for FAILED runs that got past PLAN.
-- [ ] `POST /generations/plan` returns the same entries and reasons that a real run
+- [x] `POST /generations/plan` returns the same entries and reasons that a real run
       started immediately afterwards with the same request produces. This is proven by
       an integration test comparing the two, not by inspection.
-- [ ] `GET /assets/{uuid}/impact` lists the pages (× channels) that would rebuild if the
+- [x] `GET /assets/{uuid}/impact` lists the pages (× channels) that would rebuild if the
       asset changed, each with its chain, computed by the same expansion code the planner
       uses (one implementation, not a copy).
-- [ ] UI: the generation dialog previews the plan (counts by reason, expandable chains,
+- [x] UI: the generation dialog previews the plan (counts by reason, expandable chains,
       a visible warning when incremental falls back to full); run details show a
       "Rebuilt pages" tab; the template editor, media detail drawer and page editor show
       an "Impact" panel.
-- [ ] Incremental runs publish a complete site: unchanged outputs from the previous
+- [x] Incremental runs publish a complete site: unchanged outputs from the previous
       successful build for the same target are carried forward, and sitemap and search
       index are built from the full site page list, not from the incremental plan.
-- [ ] The incremental baseline ("last successful revision") is per target.
-- [ ] The reason model is open for the asset types and edges added by `M17`–`M21`
+- [x] The incremental baseline ("last successful revision") is per target.
+- [x] The reason model is open for the asset types and edges added by `M17`–`M21`
       (global sets, processed media, datasets/records, parent templates, pagination
       sources). Each of those epics adds its reason edges by extending the model, not
       by changing it.
-- [ ] `./gradlew build` and `ui` `npm run build` are green; affected `npm test` specs
+- [x] `./gradlew build` and `ui` `npm run build` are green; affected `npm test` specs
       pass, or their failure is shown to be the known `templateUrl` tooling issue
       (see `M15` exit criteria).
-- [ ] Performance: planning with reasons for the 5,000-page benchmark fixture adds
+- [x] Performance: planning with reasons for the 5,000-page benchmark fixture adds
       < 10 % to the PLAN stage and stays within §18.6 incremental targets.
 
 ## Features (dependency order)
@@ -136,3 +136,49 @@ has no dependencies and everything else builds on it.
 - Section templates rendered through `$CMS_INCLUDE` only reach a page via render
   dependencies (`OCTL_INCLUDE`/`OCTL_REF` rows). Once `M16.3.2` writes template→template
   include rows, the chain can show `page ← page_template:x ← (include) section_template:y`.
+
+## Implementation notes (2026-09-17)
+
+Evidence and deviations; the code is the source of truth where they differ from the task files.
+
+- **User decisions.** Scoped runs (`folderPath`/`assetUuids`) carry the rest of the site forward too, instead of
+  publishing only their scope; they never advance the baseline. Asset impact is an upper bound (every loop and
+  paginator over a record's dataset, a page change counts as navigation-affecting).
+- **Task files were partly outdated.** There are no payload indexes any more: page → template/section edges are
+  `TEMPLATE` reference rows, named `PAGE_TEMPLATE`/`SECTION_TEMPLATE`/`PARENT_TEMPLATE` by their source path. M18–M21
+  edges already exist in the walk and got their kinds here (`DATASET_MEMBERSHIP`, `PAGINATION_SOURCE`).
+- **Manifest instead of per-run request fields.** Coverage and carry-forward read a per-build `BuildManifest` stored
+  by the writer next to the build (`builds/{runId}.manifest.json`, pruned with it). The baseline is the target's
+  *current* build (promote-aware by construction) when its manifest is complete for the requested channels; changes
+  count from its consistent revision. Pre-M22 builds have no manifest → `BASE_BUILD_MISSING` once, then normal.
+- **Writer operation.** `TargetWriter.stage(runId, baseRunId, files, removedPaths)` + `writeManifest/readManifest/
+  readFile/currentRunId`; atomic publish unchanged (ADR-0005 note). Filesystem hard-links (copy fallback, tested that
+  the base is never written through); ZIP rewrites; S3 carries keys + fingerprints (invalidation set = real diff).
+- **Search index for carried pages** comes from the base build's `search-index.json` (the same bytes a full build
+  extracts from), not from stored text.
+- **Found and fixed (incremental correctness):** a uid change writes no asset version, so it never triggered a rebuild
+  (now read from `asset_uid_history`); a template `outputPath` edit moved pages without rebuilding the pages linking
+  them (a reached page whose path moved vs. the base build now keeps walking); changes after a pinned `revision` were
+  counted (now bounded, and a revision older than the baseline falls back with `REVISION_BEFORE_BASELINE`); the run
+  now stores its resolved target id. `ProcessedMediaGenerationIntegrationTest` had pinned the dropped-file bug
+  (a carried stylesheet asserted absent); it now asserts the file is published.
+- **Extra root kind `NOT_IN_BASE_BUILD`:** an output the base build lacks (a page held back by a PARTIAL base, a manually
+  broken build) is planned again, so incremental output always equals full output.
+- **Navigation rule** as documented in `RebuildExpansion` and spec §18.2: page body edits are not navigation-affecting;
+  display name, uid, output path and existence are, also through a pages folder a reference points at.
+- **Reason model placement:** `generate.insight` in sf-domain (records, enums, `PlanEntryRecord`, `RunPlanStore` with
+  JDBC batches), so stored plans rebuild reasons without sf-generate; planner, `PlanInsight` and `ImpactService` in
+  sf-generate; `AssetImpactController` in sf-api. Processed media re-rendered by an incremental plan are stored/served
+  as entries with `channel: null`.
+- **Changelog** `016-generation-run-plan.xml`; `plan_summary` JSON column (pg/h2 pair); retention
+  `sf.generate.plan-retention-runs` (50).
+- **Benchmark (5,000 pages, H2, local Windows):** full 9.4 s; 1-page incremental 4.6 s including carry-forward of 5,000
+  hard-linked files (§18.6 < 10 s); all-pages-changed incremental 4.4 s; plan for 5,000 entries 202 ms, reasons +19 ms
+  (9 %); plan persistence 184 ms (< 2 s); snapshot 98 ms; dry run 341 ms; impact of a template used by 5,000 pages
+  123 ms, of a page 71 ms — no snapshot cache needed.
+- **UI.** Logic in `insight.util.ts` + `generation.service.spec.ts` (22 tests in the generation folder: util, service, diagnostics, SSE); the three components use inline
+  templates with signal inputs, which the local vitest runner can't mount (known issue), so they're covered by the live
+  journey instead. `m22-journeys.spec.ts` ran live and passed (with generated files and sitemap checks), also exercising
+  the template editor and page editor panels and keyboard expansion of a chain; `m16`–`m21` journeys still pass (19/19).
+- **Not done:** no axe run (not installed). The dialog's "preview out of date" notice compares the preview revision with
+  the head revision after starting (a toast), rather than blocking.

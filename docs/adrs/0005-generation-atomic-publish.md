@@ -18,6 +18,8 @@ Generation must be reproducible (generate any past revision), predictable (5,000
 
 4. **Validate before write.** ERROR-severity findings (compile errors, output-path collisions `SF-GEN-0110`) abort before any file is written; warnings (`SF-GEN-0210` missing channel template, `SF-GEN-0410` nav cycle) degrade the affected files only.
 
+   **Incremental staging (M22.4.1).** An incremental or scoped run renders part of the site but must publish all of it. Rather than assembling every file in memory, the writer stages the new build from the base build: `TargetWriter.stage(runId, baseRunId, files, removedPaths)` writes base − removed + overlay into the run's own staging area (filesystem: hard links for unchanged files, copies where links aren't available, overlay files always written as new files so the base build is never modified; ZIP: a new archive from the base entries; S3 mirror: base keys and fingerprints carried, so the invalidation set stays the real diff). Publish is still the single flip, and the base build stays intact for promote. What the base holds and what to remove comes from a per-build manifest the writer stores next to the build and prunes with it; the manifest also defines the incremental baseline (the target's current build, when complete for the requested channels). A build without a manifest is not a baseline: the run falls back to FULL with `BASE_BUILD_MISSING`.
+
 5. **Generation runs outside the request transaction.** The snapshot is a read-only view of a pinned revision, so a long build never holds a lock (spec §21.4).
 
 ## Consequences

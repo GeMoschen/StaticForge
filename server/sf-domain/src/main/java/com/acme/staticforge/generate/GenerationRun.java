@@ -73,6 +73,11 @@ public class GenerationRun {
     @Column(name = "log_blob_sha", length = 64)
     private String logBlobSha;
 
+    /** The plan summary (M22.1.2): counts, baseline, fallback, coverage; {@code null} for a run that didn't get past PLAN. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "plan_summary")
+    private JsonNode planSummary;
+
     protected GenerationRun() {}
 
     public GenerationRun(long projectId, Long revisionId, GenerationMode mode, String channels, Long targetId,
@@ -227,5 +232,13 @@ public class GenerationRun {
 
     public void setLogBlobSha(String logBlobSha) {
         this.logBlobSha = logBlobSha;
+    }
+
+    public JsonNode getPlanSummary() {
+        return planSummary;
+    }
+
+    public void setPlanSummary(JsonNode planSummary) {
+        this.planSummary = planSummary;
     }
 }

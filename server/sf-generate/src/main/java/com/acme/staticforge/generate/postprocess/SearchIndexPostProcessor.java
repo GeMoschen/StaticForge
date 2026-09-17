@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>Every output of a paginated page is an entry (M21.2.2) with the page's uid and a {@code pageNumber}, so a client
  * can collapse them; pages 2..N get the title suffix {@code " – page n"}. The field is omitted for other pages.
+ *
+ * <p>A page carried forward from the base build (M22.4.1) isn't among the files; its text is the base build's entry for
+ * the same path ({@link PostProcessContext#carriedText()}), extracted from the very bytes the carried file holds.
  */
 @Service
 public final class SearchIndexPostProcessor implements PostProcessor {
@@ -41,7 +44,7 @@ public final class SearchIndexPostProcessor implements PostProcessor {
             if (page.pageNumber() != null) {
                 node.put("pageNumber", page.pageNumber());
             }
-            node.put("text", html == null ? "" : extractText(html.bytes()));
+            node.put("text", html == null ? ctx.carriedText().getOrDefault(page.path(), "") : extractText(html.bytes()));
             arr.add(node);
         }
         List<OutputFile> result = new ArrayList<>(files.size() + 1);

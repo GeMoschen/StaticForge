@@ -1,6 +1,6 @@
 ---
 id: M22.3.1
-status: todo
+status: done
 depends: [M22.2.1]
 epic: m22-build-insight
 feature: ui
@@ -52,14 +52,14 @@ happened only after the run, from counts and grouped diagnostics
 
 ## Acceptance criteria
 
-- [ ] Dialog shows an accurate preview (verified against a running backend: preview
+- [x] Dialog shows an accurate preview (verified against a running backend: preview
       counts equal the counts of the run started right after).
-- [ ] Fallback-to-full is visibly warned about before starting.
-- [ ] Reason and entries components render every root kind and an unknown edge kind
+- [x] Fallback-to-full is visibly warned about before starting.
+- [x] Reason and entries components render every root kind and an unknown edge kind
       without errors.
-- [ ] Keyboard: preview, expand/collapse chains, page through entries without a mouse;
+- [x] Keyboard: preview, expand/collapse chains, page through entries without a mouse;
       chains are announced as ordered lists.
-- [ ] `npm run build` green; new specs pass, or their failure is shown to be the known
+- [x] `npm run build` green; new specs pass, or their failure is shown to be the known
       `templateUrl` tooling issue (logic specs must pass regardless).
 
 ## Out of scope

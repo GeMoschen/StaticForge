@@ -40,7 +40,12 @@
         @for (run of runs(); track trackRun($index, run)) {
           <tr>
             <td class="num">#{{ run.id }}</td>
-            <td>{{ run.mode ?? '—' }}</td>
+            <td>
+              {{ run.mode ?? '—' }}
+              @if (run.planSummary) {
+                <span class="plan-line">{{ planLine(run) }}</span>
+              }
+            </td>
             <td>
               <span class="badge" [style.color]="statusColor(run.status)">
                 {{ run.status ?? 'UNKNOWN' }}
@@ -87,6 +92,55 @@
           @if (expandedRunId() === run.id) {
             <tr class="details-row">
               <td colspan="8">
+                <div class="tabs" role="tablist" aria-label="Run details">
+                  <button
+                    type="button"
+                    role="tab"
+                    class="tabs__tab"
+                    [id]="'run-' + run.id + '-summary-tab'"
+                    [attr.aria-selected]="detailsTab() === 'summary'"
+                    [attr.aria-controls]="'run-' + run.id + '-panel'"
+                    [attr.tabindex]="detailsTab() === 'summary' ? 0 : -1"
+                    (click)="detailsTab.set('summary')"
+                    (keydown.arrowRight)="detailsTab.set('pages')"
+                  >
+                    Summary
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="tabs__tab"
+                    [id]="'run-' + run.id + '-pages-tab'"
+                    [attr.aria-selected]="detailsTab() === 'pages'"
+                    [attr.aria-controls]="'run-' + run.id + '-panel'"
+                    [attr.tabindex]="detailsTab() === 'pages' ? 0 : -1"
+                    (click)="detailsTab.set('pages')"
+                    (keydown.arrowLeft)="detailsTab.set('summary')"
+                  >
+                    Rebuilt pages
+                  </button>
+                </div>
+                <div
+                  role="tabpanel"
+                  [id]="'run-' + run.id + '-panel'"
+                  [attr.aria-labelledby]="'run-' + run.id + (detailsTab() === 'summary' ? '-summary-tab' : '-pages-tab')"
+                >
+                @if (detailsTab() === 'pages') {
+                  @if (!run.planSummary) {
+                    <p class="details__empty">No plan is stored for this run.</p>
+                  } @else if (!run.planSummary.planAvailable) {
+                    <p class="details__empty">Plan details were pruned (retention). {{ planLine(run) }}.</p>
+                  } @else {
+                    <p class="details__plan">{{ planLine(run) }}</p>
+                    <sf-plan-entries-table
+                      [fetch]="runPlanFetch(run)"
+                      [projectKey]="projectKey()"
+                      [rootKinds]="rootKindsOf(run)"
+                      [channels]="run.planSummary.channels ?? []"
+                      emptyText="This run rebuilt nothing."
+                    />
+                  }
+                } @else {
                 <dl class="details">
                   <dt>Started</dt>
                   <dd>{{ run.startedAt ? (run.startedAt | date: 'medium') : '—' }}</dd>
@@ -118,6 +172,8 @@
                     }
                   </ul>
                 }
+                }
+                </div>
               </td>
             </tr>
           }

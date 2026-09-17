@@ -1,3 +1,105 @@
+# M22 implementation — Plan
+
+## Approach
+Sequential on branch `m22-build-insight` (off `master` at `0bbbbf6`). Order per the epic: M22.4.1 (carry-forward,
+baseline) → M22.1.1 (reasons, expansion, nav rule) → M22.1.2 (persistence) → M22.2.1 (dry run, stored plan) →
+M22.2.2 (impact) → M22.3.1/3.2 (UI) → M22.5.1 (docs, journeys, benchmark). No fan-out: everything goes through
+`GenerationService.executeRun` and `BuildPlanner`.
+
+## Design (from reading the code)
+- **Task files are partly outdated.** The planner no longer has payload indexes (`indexPages`): page → template and
+  page → section edges are `TEMPLATE` reference rows (`templateRef`, `bodies.<b>[i].templateRef`,
+  `parentTemplateRef`). The walk already has M18/M19/M21 special edges (processed media, dataset loops, paginators).
+  Edge kinds are derived from `(ReferenceKind, sourcePath)`; the reverse index projection gains kind + source path.
+- **Found gaps (in scope, incremental correctness):**
+  - `changeUid` writes no asset version, so `findAssetIdsChangedSince` never sees a uid rename (default paths use the
+    uid). Changed set = version changes ∪ `asset_uid_history` rows in (baseline, R].
+  - A template `outputPath` edit moves its pages, but pages linking to them aren't rebuilt (a reached page stops the
+    walk). A page whose output path differs from the base build's path now continues the walk like a changed one.
+  - Changes after a pinned `revision` were counted; the changed set is bounded by the snapshot revision, and a
+    revision older than the baseline falls back to FULL.
+- **Base build manifest.** Each published build gets a sidecar manifest written by its writer
+  (`builds/{runId}.manifest.json`, outside the served directory; pruned with the build): one row per output
+  `{path, kind: PAGE|MEDIA|SITE, asset, channel, pageNumber, deps[media uuids]}`. It lets an incremental run know
+  which outputs it can carry, which media carried pages need, and what to delete. Builds without one (pre-M22) →
+  `BASE_BUILD_MISSING` fallback.
+- **Baseline (one method, `GenerationService.baselineFor`)**: only for INCREMENTAL. Candidates = runs of the same
+  target (the resolved target id is now stored on the run), SUCCESS/PARTIAL, coverage complete (from
+  `plan_summary.coverage`: unscoped, channels ⊇ requested). Prefer the target's `current` run (promote-aware), else
+  the newest candidate. Fallback causes: `NO_COMPLETE_BUILD_FOR_TARGET`, `BASE_BUILD_MISSING`,
+  `CHANNEL_SETTINGS_CHANGED` (existing rule), `REVISION_BEFORE_BASELINE`.
+- **Planner output.** `BuildPlan` gains `siteOutputs` (every in-scope page × channel × page number, paths from the
+  same resolver; = entries for FULL), `reasons: Map<UUID, RebuildReason>` (per asset — all entries of one asset share
+  a chain, so `PlanEntry` stays the key), `fallbackCause`, `baselineRevision`. Incremental entries = affected ∪
+  site outputs the base build can't provide (root kind `NOT_IN_BASE_BUILD`, e.g. a page held back by a PARTIAL base).
+- **Carry-forward (writer operation, keeps atomic publish):** `TargetWriter.stage(runId, baseRunId, files,
+  removedPaths)` + `writeManifest/readManifest/readBuildFile/currentRunId`. Filesystem: hard-link base files not
+  overlaid/removed (copy fallback), then write the overlay (never into a linked inode). ZIP: rewrite from base
+  entries + overlay. S3 mirror: copy base + overlay, complete `.keys` manifest, invalidation set diffed as today.
+  `CarryForward` (sf-generate) computes: carried page outputs, needed media (carried deps ∪ fresh deps, closed over
+  processed media deps), removed paths = base paths − new paths, new manifest. Post-processing gets `siteOutputs`;
+  search-index text for carried pages comes from the base build's `search-index.json` (same bytes a full build
+  would extract from).
+- **Reason model** (sf-domain `com.acme.staticforge.generate.insight`, shared by planner and stored-plan reader):
+  `RebuildRootKind` (FULL_BUILD, INCREMENTAL_FALLBACK_FULL, EXPLICIT_SCOPE, ASSET_CHANGED, ASSET_DELETED,
+  NOT_IN_BASE_BUILD), `RebuildEdgeKind` (PAGE_TEMPLATE, SECTION_TEMPLATE, PARENT_TEMPLATE, REFERENCE, NAVIGATION,
+  DATASET_MEMBERSHIP, PAGINATION_SOURCE, OUTPUT_MOVED), `RebuildStep`, `RebuildReason(rootKind, rootAsset, rootRevision,
+  causeCount, fallbackCause, steps)`, all by name, unknown names read as `UNKNOWN`.
+- **`RebuildExpansion`** (sf-generate `generate.plan`): the existing walk moved out of `BuildPlanner` + parent pointers
+  at first discovery (BFS order, seeds and neighbours sorted), every discovered edge recorded so `causeCount` is the
+  number of roots reaching an entry (BitSet fixpoint over the explored subgraph). A `ChangeModel` gives it the
+  before-versions and moved outputs (real plan) or worst case (impact).
+- **§18.2 navigation rule:** nav-affecting = a changed `PAGE_REFERENCE`; a changed NAVIGATION folder; a page reference
+  targeting (directly or through a pages folder) a page whose displayName/uid/deleted state or output path changed.
+  Each expands to its NAVIGATION ancestor folders (current and before a move) with edge `NAVIGATION`; the folders'
+  referrers (`nav:` OCTL edges) then walk as usual.
+- **Persistence:** changelog `016-generation-run-plan.xml`: `generation_run.plan_summary` JSON (paired pg/h2),
+  `generation_run_plan_node`, `generation_run_plan_entry` (FK cascade, indexes), JDBC batch inserts, written right after
+  PLAN in its own transaction. `RunPlanService` (sf-domain) reads summary/entries/reasons; retention
+  `sf.generate.plan-retention-runs` (50) prunes rows and marks `planAvailable: false`.
+- **API:** `GenerationService.planFor(project, request)` is the only snapshot → baseline → plan path;
+  `POST /generations/plan` (DEVELOPER, no run/lock/SSE/idempotency/rows), `GET /generations/{runId}/plan` (VIEWER),
+  `GenerationRunView.planSummary`; `GET /assets/{uuid}/impact` on an sf-api controller backed by `ImpactService`
+  (sf-generate) over `RebuildExpansion`.
+- **UI:** `features/generation/insight/`: `sf-rebuild-reason`, `sf-plan-entries-table`, `sf-asset-impact`; logic in
+  `*.util.ts` with specs (component specs can't run here). Dialog preview (Alt+P, stale marking, fallback warning,
+  validate), run details tabs, impact panel in template editor, media drawer, page editor.
+
+## Decisions (confirmed with the user, 2026-09-17)
+- **Scoped runs carry forward too.** A run with `folderPath`/`assetUuids` renders its scope and publishes it on top of
+  the target's current build (its manifest describes the live site); outputs outside the scope or outside the run's
+  channels are carried as-is. Without a current build that has a manifest it publishes just the scope, as today.
+  Scoped runs never become the incremental baseline.
+- **Impact is an upper bound.** "Changing this can rebuild N pages": a record reaches every loop and paginator over
+  its dataset, a page counts as a navigation-affecting change. A real edit rebuilds the same entries or fewer.
+
+## Steps
+- [x] M22.4.1 manifest + writer carry-forward (fs/zip/s3), baseline rule, site outputs, search index, uid/revision gaps + tests
+- [x] M22.1.1 reason model, RebuildExpansion, causeCount, nav rule, moved outputs + tests
+- [x] M22.1.2 changelog, entities, batch write after PLAN, RunPlanService, retention + tests
+- [x] M22.2.1 planFor, dry run, stored plan endpoint, planSummary, parity test, OpenAPI + schema.d.ts
+- [x] M22.2.2 ImpactService + endpoint + consistency test
+- [x] M22.3.1 reason/entries components, dialog preview
+- [x] M22.3.2 run tabs, impact panel ×3
+- [x] M22.5.1 docs/spec/ADR, backend journey, Playwright journey live, benchmark, review
+
+## Review
+- **Branch:** `m22-build-insight` (off `master`). Not committed.
+- **Verification:**
+  - `./gradlew test spotlessCheck checkModuleLayers --rerun` green: 819 backend tests (771 at M21), 0 failures, 2 skipped
+    (the gated benchmarks).
+  - New backend tests: `CarriedBuildWritersTest` (12), `IncrementalPublishIntegrationTest` (5: incremental ≡ full for
+    FILESYSTEM/ZIP/S3, base untouched, baseline per target/scoped/promote/missing manifest), `RebuildReasonsIntegrationTest`
+    (7), `RunPlanPersistenceIntegrationTest` (4), `BuildInsightApiTest` (5: parity, no side effects, paging/roles/pruned,
+    impact), `M22BuildInsightJourneyIntegrationTest`.
+  - `ng build` green; vitest: new `insight.util.spec` and `generation.service.spec` pass; the same 20 known runner failures.
+  - Live (dev backend + `ng serve`): `m22-journeys` 1/1 with generated files and sitemap; `m16`–`m21` 18/18.
+  - Benchmark (5,000 pages): full 9.4 s, 1-page incremental 4.6 s, reasons +19 ms on a 202 ms plan, persist 184 ms,
+    impact 123 ms.
+- **Deviations and bugs found** are listed in `tasks/22-m22-build-insight/README.md` → Implementation notes.
+
+---
+
 # M21 implementation — Plan
 
 ## Approach

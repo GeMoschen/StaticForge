@@ -9,7 +9,7 @@ import {
   untracked,
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Observable, Subscription, map } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ToastService } from '../../core/ui/toast.service';
@@ -21,6 +21,8 @@ import { GenerationService } from './generation.service';
 import { GenerationDialogComponent } from './generation-dialog.component';
 import { DiagnosticGroup, parseDiagnostics } from './generation-diagnostics';
 import { GenerationRunEvent } from './generation-sse';
+import { planSummaryLine, rootKindRows, type EntryPage, type PlanEntryQuery } from './insight/insight.util';
+import { SfPlanEntriesTableComponent } from './insight/sf-plan-entries-table.component';
 
 type GenerationRunView = components['schemas']['GenerationRunView'];
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
@@ -50,6 +52,7 @@ interface LiveSummary {
     SfSpinnerComponent,
     SfRelativeTimePipe,
     GenerationDialogComponent,
+    SfPlanEntriesTableComponent,
   ],
   templateUrl: './generation.component.html',
   styleUrl: './generation.component.scss',
@@ -79,6 +82,9 @@ export class GenerationComponent implements OnDestroy {
   readonly liveDiagnostics = signal<DiagnosticGroup[]>([]);
 
   readonly expandedRunId = signal<number | null>(null);
+  /** The open tab of a run's details (M22.3.2). */
+  readonly detailsTab = signal<'summary' | 'pages'>('summary');
+  private readonly runPlanFetches = new Map<number, (query: PlanEntryQuery) => Observable<EntryPage | undefined>>();
 
   private liveSub: Subscription | null = null;
 
@@ -120,6 +126,25 @@ export class GenerationComponent implements OnDestroy {
       next: (targets) => this.targets.set(targets ?? []),
       error: () => this.targets.set([]),
     });
+  }
+
+  planLine(run: GenerationRunView): string {
+    return planSummaryLine(run.planSummary);
+  }
+
+  rootKindsOf(run: GenerationRunView): string[] {
+    return rootKindRows(run.planSummary).map((row) => row.key);
+  }
+
+  /** One stable loader per run, so the entries table doesn't reload on every change detection. */
+  runPlanFetch(run: GenerationRunView): (query: PlanEntryQuery) => Observable<EntryPage | undefined> {
+    const id = run.id ?? 0;
+    let fetch = this.runPlanFetches.get(id);
+    if (!fetch) {
+      fetch = (query) => this.api.getRunPlan(this.projectKey(), id, query).pipe(map((plan) => plan.entries ?? undefined));
+      this.runPlanFetches.set(id, fetch);
+    }
+    return fetch;
   }
 
   toggleDetails(run: GenerationRunView): void {

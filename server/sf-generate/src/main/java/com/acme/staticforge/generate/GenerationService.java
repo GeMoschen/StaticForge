@@ -4,12 +4,15 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.generate.insight.FallbackCause;
+import com.acme.staticforge.generate.insight.PlanEntryRecord;
+import com.acme.staticforge.generate.insight.RunPlanStore;
+import com.acme.staticforge.generate.plan.Baseline;
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.BuildPlanner;
-import com.acme.staticforge.generate.plan.PlanEntry;
+import com.acme.staticforge.generate.plan.PlanRequest;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
-import com.acme.staticforge.generate.postprocess.SitePage;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.RenderOutcome;
 import com.acme.staticforge.generate.render.RenderPipeline;
@@ -18,9 +21,11 @@ import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
 import com.acme.staticforge.generate.stage.AssetCopyResult;
 import com.acme.staticforge.generate.stage.AssetCopyStage;
+import com.acme.staticforge.generate.stage.CarryForward;
 import com.acme.staticforge.generate.stage.MediaRenderStage;
 import com.acme.staticforge.generate.stage.PostProcessContext;
 import com.acme.staticforge.generate.stage.PostProcessStage;
+import com.acme.staticforge.generate.target.BuildManifest;
 import com.acme.staticforge.generate.target.TargetWriter;
 import com.acme.staticforge.generate.target.TargetWriterSelector;
 import com.acme.staticforge.project.Project;
@@ -39,12 +44,17 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -65,6 +75,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Service
 public class GenerationService {
 
+    private static final Logger log = LoggerFactory.getLogger(GenerationService.class);
+
     /** Run status reported as PARTIAL when the render produced tolerated warnings. */
     static final String STAGE_SNAPSHOT = "SNAPSHOT";
     static final String STAGE_PLAN = "PLAN";
@@ -79,6 +91,7 @@ public class GenerationService {
     private static final String CONFLICT_CODE = "SF-GEN-0500";
     private static final String NO_TARGET_CODE = "SF-GEN-0502";
     private static final String UNEXPECTED_CODE = "SF-GEN-0501";
+    private static final String SEARCH_INDEX_PATH = "search-index.json";
 
     private final GenerationRunRepository runs;
     private final GenerationTargetRepository targets;
@@ -91,6 +104,8 @@ public class GenerationService {
     private final MediaRenderStage mediaRenderStage;
     private final PostProcessStage postProcessStage;
     private final TargetWriterSelector targetWriterSelector;
+    private final RunPlanStore runPlanStore;
+    private final GenerationProperties properties;
     private final ObjectMapper mapper;
     private final MeterRegistry meterRegistry;
 
@@ -111,6 +126,8 @@ public class GenerationService {
             MediaRenderStage mediaRenderStage,
             PostProcessStage postProcessStage,
             TargetWriterSelector targetWriterSelector,
+            RunPlanStore runPlanStore,
+            GenerationProperties properties,
             ObjectMapper mapper,
             MeterRegistry meterRegistry) {
         this.runs = runs;
@@ -124,6 +141,8 @@ public class GenerationService {
         this.mediaRenderStage = mediaRenderStage;
         this.postProcessStage = postProcessStage;
         this.targetWriterSelector = targetWriterSelector;
+        this.runPlanStore = runPlanStore;
+        this.properties = properties;
         this.mapper = mapper;
         this.meterRegistry = meterRegistry;
     }
@@ -242,6 +261,137 @@ public class GenerationService {
     // Pipeline execution
     // ------------------------------------------------------------------
 
+    /**
+     * Plans a build for {@code request} (M22.2.1): pins the snapshot, resolves the target, chooses the baseline and the
+     * base build to carry forward, and plans. The only snapshot → baseline → plan path: a run and a dry run of the same
+     * request against the same state plan identically. Reads only; nothing is written or locked.
+     */
+    public PlannedBuild planFor(String projectKey, GenerationRequest request) {
+        Project project = projectService.requireByKey(projectKey);
+        long projectId = project.getId();
+        GenerationTarget target = resolveTarget(projectId, request.targetId());
+        TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
+        Snapshot snapshot = snapshotService.snapshot(projectId, request.revision());
+        // Channel settings are live configuration (not revision-pinned), read once per run.
+        OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, channelService.outputSettings(projectId));
+        Set<String> channels = BuildPlanner.effectiveChannels(request.channels());
+        Set<UUID> scopeAssets = scopeAssets(request);
+        GenerationMode mode = request.mode() == null ? GenerationMode.FULL : request.mode();
+
+        long baseRunId = -1;
+        BuildManifest base = null;
+        Baseline baseline = null;
+        FallbackCause fallback = null;
+        if (mode == GenerationMode.INCREMENTAL) {
+            BaselineChoice choice = baselineFor(projectId, writer, channels, snapshot);
+            baseline = choice.baseline();
+            fallback = choice.fallbackCause();
+            if (baseline != null) {
+                baseRunId = choice.runId();
+                base = baseline.manifest();
+            }
+        }
+        PlanRequest planRequest = new PlanRequest(mode, baseline, fallback, channels, request.folderPath(), scopeAssets);
+        if (base == null && planRequest.scoped()) {
+            // A scoped run publishes on top of whatever the target serves now, complete or not.
+            long current = writer.currentRunId();
+            Optional<BuildManifest> manifest = writer.readManifest(current);
+            if (manifest.isPresent()) {
+                baseRunId = current;
+                base = manifest.get();
+            }
+        }
+        BuildPlan plan = buildPlanner.plan(snapshot, planRequest, paths);
+        return new PlannedBuild(project, target, writer, snapshot, paths, channels, baseRunId, base, plan);
+    }
+
+    /**
+     * A planned build explained without running it (M22.2.1).
+     *
+     * @param diagnostics the VALIDATE findings grouped by code, like a run's diagnostics; {@code null} unless requested
+     */
+    public record DryRun(PlannedBuild build, ObjectNode summary, List<PlanEntryRecord> entries, JsonNode diagnostics) {}
+
+    /**
+     * Plans {@code request} exactly as a run started now would, and explains the plan (M22.2.1). Nothing is rendered,
+     * written, stored or locked: no run row, no plan rows, no SSE, no idempotency key, so it works while a run is active.
+     *
+     * @param validate also compile every template the plan needs and return the findings (never renders)
+     */
+    public DryRun dryRun(String projectKey, GenerationRequest request, boolean validate) {
+        PlannedBuild build = planFor(projectKey, request);
+        List<PlanEntryRecord> entries = PlanInsight.entries(build.snapshot(), build.plan());
+        JsonNode diagnostics = validate
+                ? diagnosticsJson(renderPipeline.validate(build.snapshot(), build.plan()), List.of())
+                : null;
+        return new DryRun(build, PlanInsight.summary(mapper, build, request, entries), entries, diagnostics);
+    }
+
+    /**
+     * A past run's stored plan (M22.1.2).
+     *
+     * @param target the run's target; {@code null} when it was deleted since
+     * @param entries the requested page of entries; {@code null} when retention pruned them
+     */
+    public record StoredPlan(GenerationRun run, GenerationTarget target, JsonNode summary, Page<PlanEntryRecord> entries) {}
+
+    /**
+     * The stored plan of run {@code runId} of the project.
+     *
+     * @throws SfException 404 when the run belongs to another project or never got past PLAN
+     */
+    public StoredPlan storedPlan(String projectKey, long runId, PlanEntryRecord.Filter filter, Pageable pageable) {
+        GenerationRun run = requireRun(projectKey, runId);
+        JsonNode summary = run.getPlanSummary();
+        if (summary == null) {
+            throw new SfException(ProblemFactory.notFound("No plan is stored for this generation run."));
+        }
+        GenerationTarget target = run.getTargetId() == null
+                ? null
+                : targets.findById(run.getTargetId()).filter(t -> t.getProjectId() == run.getProjectId()).orElse(null);
+        Page<PlanEntryRecord> entries = RunPlanStore.available(summary) ? runPlanStore.entries(runId, filter, pageable) : null;
+        return new StoredPlan(run, target, summary, entries);
+    }
+
+    /** The baseline an incremental build of a target uses, or why it has none. */
+    record BaselineChoice(long runId, Baseline baseline, FallbackCause fallbackCause) {
+
+        static BaselineChoice none(FallbackCause cause) {
+            return new BaselineChoice(-1, null, cause);
+        }
+    }
+
+    /**
+     * The incremental baseline of a target (M22.4.1): the build the target currently serves — the last published or the
+     * promoted one — when its manifest shows it holds the whole site in every requested channel. Changes are counted
+     * from its consistent revision, so a scoped build (which keeps its base's consistent revision) never advances the
+     * baseline, and a build of another target never counts. Without such a build the request plans FULL, with the
+     * reason.
+     */
+    BaselineChoice baselineFor(long projectId, TargetWriter writer, Set<String> channels, Snapshot snapshot) {
+        long current = writer.currentRunId();
+        if (current < 0) {
+            return BaselineChoice.none(FallbackCause.NO_COMPLETE_BUILD_FOR_TARGET);
+        }
+        Optional<BuildManifest> manifest = writer.readManifest(current);
+        if (manifest.isEmpty()) {
+            return BaselineChoice.none(FallbackCause.BASE_BUILD_MISSING);
+        }
+        if (!manifest.get().completeFor(channels)) {
+            return BaselineChoice.none(FallbackCause.NO_COMPLETE_BUILD_FOR_TARGET);
+        }
+        long revision = manifest.get().consistentRevision();
+        if (snapshot.revision() < revision) {
+            return BaselineChoice.none(FallbackCause.REVISION_BEFORE_BASELINE);
+        }
+        // A channel output-settings change moves every page of that channel, which the incremental expansion (asset
+        // changes over references) cannot see: build FULL instead.
+        if (channelService.outputSettingsChangedSince(projectId, revision)) {
+            return BaselineChoice.none(FallbackCause.CHANNEL_SETTINGS_CHANGED);
+        }
+        return new BaselineChoice(current, new Baseline(revision, manifest.get()), null);
+    }
+
     private void executeRun(String projectKey, long runId, GenerationRequest request) {
         GenerationRun run = runs.findById(runId).orElse(null);
         if (run == null) {
@@ -250,46 +400,23 @@ public class GenerationService {
         Timer generationTimer = meterRegistry.timer("sf.generation.duration", "mode", run.getMode().name());
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            Project project = projectService.requireByKey(projectKey);
-            long projectId = project.getId();
-
             run.setStatus(RunStatus.RUNNING);
             run.setStartedAt(Instant.now());
             runs.save(run);
             emit(runId, STAGE_SNAPSHOT, "Snapshotting assets", 0, 0, 0, null);
 
-            Snapshot snapshot = snapshotService.snapshot(projectId, run.getRevisionId());
+            GenerationRequest planned = runRequest(run, request);
+            PlannedBuild build = planFor(projectKey, planned);
+            Snapshot snapshot = build.snapshot();
+            BuildPlan plan = build.plan();
+            // The plan is stored before anything renders: a run that fails later is still explainable.
+            List<PlanEntryRecord> planEntries = PlanInsight.entries(snapshot, plan);
             run.setRevisionId(snapshot.revision());
-            runs.save(run);
-
+            run.setTargetId(build.target().getId());
+            run.setPlanSummary(PlanInsight.summary(mapper, build, planned, planEntries));
+            run = runs.save(run);
+            runPlanStore.save(runId, planEntries);
             emit(runId, STAGE_PLAN, "Planning build", 0, 0, 0, null);
-            // Channel settings are live configuration (not revision-pinned), read once per run.
-            OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, channelService.outputSettings(projectId));
-            Long lastRevision = runs.findRecentSuccesses(projectId).stream()
-                    .findFirst()
-                    .map(GenerationRun::getRevisionId)
-                    .orElse(null);
-            // A channel output-settings change moves every page of that channel, which the
-            // incremental expansion (asset changes over references) cannot see: build FULL instead.
-            GenerationMode mode = run.getMode() == GenerationMode.INCREMENTAL
-                            && lastRevision != null
-                            && channelService.outputSettingsChangedSince(projectId, lastRevision)
-                    ? GenerationMode.FULL
-                    : run.getMode();
-            GenerationTarget target = resolveTarget(run);
-            List<String> channels = request.channels() == null
-                    ? parseChannels(run.getChannels())
-                    : request.channels();
-            BuildPlan plan = buildPlanner.plan(
-                    snapshot,
-                    mode,
-                    lastRevision,
-                    channels == null || channels.isEmpty() ? null : Set.copyOf(channels),
-                    request.folderPath(),
-                    request.assetUuids() == null || request.assetUuids().isEmpty()
-                            ? null
-                            : Set.copyOf(request.assetUuids()),
-                    paths);
 
             emit(runId, STAGE_VALIDATE, "Validating templates", 0, 0, 0, null);
             List<Diagnostic> validateErrors = renderPipeline.validate(snapshot, plan);
@@ -299,7 +426,7 @@ public class GenerationService {
             }
 
             emit(runId, STAGE_RENDER, "Rendering pages", 0, 0, 0, null);
-            RenderOutcome outcome = renderPipeline.execute(snapshot, plan, paths, run.getStartedBy());
+            RenderOutcome outcome = renderPipeline.execute(snapshot, plan, build.paths(), run.getStartedBy());
             if (!outcome.errors().isEmpty()) {
                 fail(run, sample, generationTimer, outcome.errors(), outcome.warnings(), null);
                 return;
@@ -309,7 +436,7 @@ public class GenerationService {
             Set<UUID> media = mediaUuids(outcome, snapshot);
             media.addAll(plan.processedMedia());
             AssetCopyResult assets = assetCopyStage.copy(
-                    snapshot, media, mediaRenderStage.open(snapshot, paths, run.getStartedBy()));
+                    snapshot, media, mediaRenderStage.open(snapshot, build.paths(), run.getStartedBy()));
             List<Diagnostic> warnings = new ArrayList<>(outcome.warnings());
             warnings.addAll(assets.warnings());
             List<Diagnostic> fileErrors = new ArrayList<>(outcome.pageErrors());
@@ -322,13 +449,29 @@ public class GenerationService {
             allFiles.addAll(assets.files());
 
             emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
+            TargetWriter writer = build.writer();
+            CarryForward carry = new CarryForward(
+                    snapshot,
+                    plan,
+                    build.channels(),
+                    request.folderPath(),
+                    scopeAssets(request),
+                    build.base(),
+                    build.carries() ? writer.readFile(build.baseRunId(), SEARCH_INDEX_PATH) : Optional.empty());
+            List<String> channels = request.channels() == null ? parseChannels(run.getChannels()) : request.channels();
             PostProcessContext ctx = new PostProcessContext(
-                    projectId, projectKey, baseUrl(target), channels, sitePages(snapshot, plan, channels));
+                    build.project().getId(), projectKey, baseUrl(build.target()), channels, carry.sitePages(),
+                    carry.carriedText());
             allFiles = postProcessStage.apply(ctx, allFiles);
 
             emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, warnings.size(), null);
-            TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
-            writer.stage(runId, allFiles);
+            CarryForward.Publication publication = carry.publication(runId, allFiles, outcome.files(), assets);
+            if (build.carries()) {
+                writer.stage(runId, build.baseRunId(), publication.files(), publication.removedPaths());
+            } else {
+                writer.stage(runId, publication.files());
+            }
+            writer.writeManifest(runId, publication.manifest());
             writer.publish(runId);
 
             long bytes = allFiles.stream().mapToLong(f -> f.bytes().length).sum();
@@ -348,11 +491,30 @@ public class GenerationService {
                     run.getDiagnostics());
 
             completeRun(runId);
+            prunePlans(run.getProjectId());
             sample.stop(generationTimer);
             meterRegistry.counter("sf.generation.files", "mode", run.getMode().name()).increment(allFiles.size());
         } catch (Exception e) {
             fail(run, sample, generationTimer, List.of(), List.of(), e);
         }
+    }
+
+    /** The request as the queued run recorded it: its revision, mode, target and channels. */
+    private GenerationRequest runRequest(GenerationRun run, GenerationRequest request) {
+        List<String> channels = request.channels() == null ? parseChannels(run.getChannels()) : request.channels();
+        return new GenerationRequest(
+                run.getMode(),
+                run.getRevisionId(),
+                channels,
+                run.getTargetId(),
+                request.folderPath(),
+                request.assetUuids(),
+                request.comment(),
+                request.idempotencyKey());
+    }
+
+    private static Set<UUID> scopeAssets(GenerationRequest request) {
+        return request.assetUuids() == null || request.assetUuids().isEmpty() ? null : Set.copyOf(request.assetUuids());
     }
 
     /** Marks a run FAILED with the given findings (or an unexpected exception) and closes emitters. */
@@ -386,6 +548,16 @@ public class GenerationService {
                 run.getWarningCount(),
                 run.getDiagnostics());
         completeRun(run.getId());
+        prunePlans(run.getProjectId());
+    }
+
+    /** Applies plan retention (M22.1.2) after a run; a failure to prune never fails the run. */
+    private void prunePlans(long projectId) {
+        try {
+            runPlanStore.prune(projectId, properties.getPlanRetentionRuns());
+        } catch (RuntimeException e) {
+            log.warn("Pruning stored plans of project {} failed", projectId, e);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -400,14 +572,19 @@ public class GenerationService {
     }
 
     private GenerationTarget resolveTarget(GenerationRun run) {
-        if (run.getTargetId() != null) {
-            return targets.findById(run.getTargetId())
-                    .filter(target -> target.getProjectId() == run.getProjectId())
+        return resolveTarget(run.getProjectId(), run.getTargetId());
+    }
+
+    /** The target {@code targetId} of the project, or the project's default target when {@code null}. */
+    private GenerationTarget resolveTarget(long projectId, Long targetId) {
+        if (targetId != null) {
+            return targets.findById(targetId)
+                    .filter(target -> target.getProjectId() == projectId)
                     .orElseThrow(() -> new SfException(
                             ProblemFactory.other(422, NO_TARGET_CODE, "Validation Failed", "Generation target not found.")));
         }
-        return targets.findByProjectIdAndDefaultTargetTrue(run.getProjectId())
-                .or(() -> targets.findByProjectId(run.getProjectId()).stream().findFirst())
+        return targets.findByProjectIdAndDefaultTargetTrue(projectId)
+                .or(() -> targets.findByProjectId(projectId).stream().findFirst())
                 .orElseThrow(() -> new SfException(ProblemFactory.other(
                         422, NO_TARGET_CODE, "Validation Failed", "No generation target configured.")));
     }
@@ -423,22 +600,6 @@ public class GenerationService {
             }
         }
         return media;
-    }
-
-    private static List<SitePage> sitePages(Snapshot snapshot, BuildPlan plan, List<String> channels) {
-        List<SitePage> pages = new ArrayList<>();
-        for (PlanEntry entry : plan.entries()) {
-            SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
-            if (page == null) {
-                continue;
-            }
-            pages.add(entry.pagination() == null
-                    ? new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName())
-                    : new SitePage(
-                            page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
-                            entry.pagination().pageNumber(), entry.pagination().totalPages()));
-        }
-        return pages;
     }
 
     private static String baseUrl(GenerationTarget target) {

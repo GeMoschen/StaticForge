@@ -157,6 +157,9 @@
                   [projectKey]="projectKey()"
                 />
               }
+              <div class="page-editor__impact">
+                <sf-asset-impact [projectKey]="projectKey()" [assetUuid]="uuid()" [refreshKey]="autosave.revision()" />
+              </div>
             }
           }
         }

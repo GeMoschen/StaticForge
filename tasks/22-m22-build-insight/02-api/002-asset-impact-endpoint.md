@@ -1,6 +1,6 @@
 ---
 id: M22.2.2
-status: todo
+status: done
 depends: [M22.1.1, M16.3.3]
 epic: m22-build-insight
 feature: api
@@ -51,13 +51,13 @@ parent pointers. That is exactly the transitive "impact" of a hypothetical chang
 
 ## Acceptance criteria
 
-- [ ] Endpoint returns transitive affected entries with shortest chains for every
+- [x] Endpoint returns transitive affected entries with shortest chains for every
       asset type the planner knows today.
-- [ ] Implemented on top of `RebuildExpansion`; no second traversal implementation
+- [x] Implemented on top of `RebuildExpansion`; no second traversal implementation
       exists (reviewed; grep for BFS over `findByToAssetId`).
-- [ ] Consistency test with the dry run passes.
-- [ ] OpenAPI + `schema.d.ts` regenerated; `docs/api.md` updated.
-- [ ] `./gradlew build` green.
+- [x] Consistency test with the dry run passes.
+- [x] OpenAPI + `schema.d.ts` regenerated; `docs/api.md` updated.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 

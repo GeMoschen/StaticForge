@@ -30,11 +30,11 @@ everywhere, e.g.
 
 ## Feature exit criteria
 
-- [ ] Dialog preview, run "Rebuilt pages" tab and Impact panel exist and share one
+- [x] Dialog preview, run "Rebuilt pages" tab and Impact panel exist and share one
       reason/chain component.
-- [ ] All three are keyboard-complete and meet the WCAG 2.2 AA baseline (§24.7):
+- [x] All three are keyboard-complete and meet the WCAG 2.2 AA baseline (§24.7):
       chains are readable as text, not only as icons or colors.
-- [ ] Time travel: the dialog stays disabled as today; stored plans and impact remain
+- [x] Time travel: the dialog stays disabled as today; stored plans and impact remain
       viewable read-only, and impact is labelled "as of now".
 
 ## Dependencies
