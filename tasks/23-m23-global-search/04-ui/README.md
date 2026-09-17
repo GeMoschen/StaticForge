@@ -31,15 +31,15 @@ query-param or child-route deep links for those, reusing the existing drawers/de
 
 ## Feature exit criteria
 
-- [ ] Ctrl/Cmd+K inside a project opens the palette. Typing shows grouped results within the
+- [x] Ctrl/Cmd+K inside a project opens the palette. Typing shows grouped results within the
       debounce window, and Enter opens the selected asset in its editor/drawer.
-- [ ] Every asset type returned by search has a working deep link (page editor, media drawer,
+- [x] Every asset type returned by search has a working deep link (page editor, media drawer,
       navigation reference/folder detail, template IDE, plus globals/records/datasets once those
       stores exist).
-- [ ] The search page state is fully URL-driven, so reload and back/forward restore it.
-- [ ] Keyboard-only and screen-reader use works: combobox/listbox ARIA pattern, visible focus,
+- [x] The search page state is fully URL-driven, so reload and back/forward restore it.
+- [x] Keyboard-only and screen-reader use works: combobox/listbox ARIA pattern, visible focus,
       announced result counts.
-- [ ] During time travel both surfaces show "Results reflect the current revision".
+- [x] During time travel both surfaces show "Results reflect the current revision".
 
 ## Dependencies
 

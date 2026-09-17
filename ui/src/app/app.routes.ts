@@ -23,6 +23,7 @@ import { ContentComponent } from './features/content/content.component';
 import { RecordEditorComponent } from './features/content/record-editor.component';
 import { MediaLibraryComponent } from './features/media/media-library.component';
 import { TemplatesComponent } from './features/templates/templates.component';
+import { SearchPageComponent } from './features/search/search-page.component';
 
 /**
  * Every route component is imported eagerly: the app ships as one bundle with no lazy chunks (decided 2026-09-16 after
@@ -88,6 +89,10 @@ export const routes: Routes = [
       {
         path: 'templates',
         component: TemplatesComponent,
+      },
+      {
+        path: 'search',
+        component: SearchPageComponent,
       },
       {
         path: 'settings',

@@ -45,9 +45,13 @@ services:
       # SF_JWT_KEYSTORE: ${SF_JWT_KEYSTORE:-}
       SF_MEDIA_ROOT: /var/lib/staticforge/media
       SF_OUTPUT_ROOT: /var/lib/staticforge/out
+      # Embedded search index (M23): derived from the database, rebuilt on start when missing. The volume only saves
+      # that rebuild on a container restart. One backend per index volume (Lucene write lock, deploy runbook).
+      SF_SEARCH_INDEX_ROOT: /var/lib/staticforge/search-index
     volumes:
       - media-data:/var/lib/staticforge/media
       - output-data:/var/lib/staticforge/out
+      - search-index:/var/lib/staticforge/search-index
     depends_on:
       db:
         condition: service_healthy
@@ -73,3 +77,4 @@ volumes:
   db-data:
   media-data:
   output-data:
+  search-index:

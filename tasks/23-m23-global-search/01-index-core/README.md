@@ -32,13 +32,13 @@ Build the embedded Lucene foundation that the lifecycle (feature 2) and query AP
 
 ## Feature exit criteria
 
-- [ ] Lucene is on `sf-domain`'s classpath only, pinned via the version catalog;
+- [x] Lucene is on `sf-domain`'s classpath only, pinned via the version catalog;
       `checkModuleLayers` is green.
-- [ ] `SearchIndexService` can upsert, delete and query documents per project, with directories
+- [x] `SearchIndexService` can upsert, delete and query documents per project, with directories
       isolated per project. Unit tests cover in-memory and filesystem directories.
-- [ ] An extractor exists for every current `AssetType`. Each has a unit test on a representative
+- [x] An extractor exists for every current `AssetType`. Each has a unit test on a representative
       payload, including a nested list/catalog page and a rich-text value with markup.
-- [ ] Nothing is wired to live writes yet. Lifecycle is feature 2.
+- [x] Nothing is wired to live writes yet. Lifecycle is feature 2.
 
 ## Dependencies
 

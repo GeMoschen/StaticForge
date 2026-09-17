@@ -13,6 +13,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * {@link RevisionServiceImpl} tests against mock collaborators (`M15.1.1`) — focuses on
@@ -28,13 +29,15 @@ class RevisionServiceImplTest {
     private RevisionCounterRepository counterRepository;
     private RevisionRepository revisionRepository;
     private RevisionServiceImpl service;
+    private ApplicationEventPublisher events;
 
     @BeforeEach
     void setUp() {
         counterRepository = mock(RevisionCounterRepository.class);
         revisionRepository = mock(RevisionRepository.class);
+        events = mock(ApplicationEventPublisher.class);
         service = new RevisionServiceImpl(
-                counterRepository, revisionRepository, new ObjectMapper(), new SimpleMeterRegistry());
+                counterRepository, revisionRepository, new ObjectMapper(), new SimpleMeterRegistry(), events);
 
         when(counterRepository.nextRevision(anyLong())).thenReturn(1L);
         when(revisionRepository.save(any(Revision.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -50,6 +53,7 @@ class RevisionServiceImplTest {
         assertThat(revision.getRevisionId()).isEqualTo(1L);
         assertThat(revision.getChangeType()).isEqualTo(ChangeType.CREATE);
         verify(counterRepository).nextRevision(PROJECT_ID);
+        verify(events).publishEvent(new RevisionCommittedEvent(PROJECT_ID, 1L));
     }
 
     @Test
@@ -64,6 +68,7 @@ class RevisionServiceImplTest {
         assertThat(joined.getChangeType()).isEqualTo(ChangeType.CREATE);
         verify(counterRepository, never()).nextRevision(anyLong());
         verify(revisionRepository, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test

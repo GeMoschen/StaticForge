@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { consumeQueryParam } from '../../shared/deep-link';
 import { forkJoin } from 'rxjs';
 import { AuthStore } from '../../core/auth/auth.store';
 import { roleRank } from '../../core/auth/auth.guard';
@@ -59,6 +60,9 @@ export class ContentComponent {
   readonly projectKey = input.required<string>();
   /** `?dataset=<uuid>` preselects a dataset chip (the dataset editor's "Open records" link). */
   readonly dataset = input<string | undefined>();
+  /** `?folder=<uuid>` selects that Content folder (search deep link, M23.4.1). */
+  readonly folder = input<string | undefined>();
+  private readonly route = inject(ActivatedRoute);
 
   private readonly content = inject(ContentService);
   private readonly toasts = inject(ToastService);
@@ -114,6 +118,16 @@ export class ContentComponent {
     effect(() => {
       const key = this.projectKey();
       untracked(() => this.reload(key));
+    });
+    effect(() => {
+      const uuid = this.folder();
+      if (!uuid || !findFolder(this.folders(), uuid)) {
+        return;
+      }
+      untracked(() => {
+        this.selectFolder(uuid);
+        consumeQueryParam(this.router, this.route, 'folder');
+      });
     });
     effect(
       () => {

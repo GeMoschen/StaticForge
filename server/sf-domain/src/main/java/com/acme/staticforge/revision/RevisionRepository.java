@@ -15,6 +15,9 @@ public interface RevisionRepository extends JpaRepository<Revision, Revision.Rev
 
     Optional<Revision> findByProjectIdAndRevisionId(Long projectId, Long revisionId);
 
+    /** Revisions {@code from..to} (both inclusive) of a project, oldest first (search catch-up, M23.2.2). */
+    List<Revision> findByProjectIdAndRevisionIdBetweenOrderByRevisionIdAsc(Long projectId, Long from, Long to);
+
     /** The project's newest committed revision id (empty for a project without revisions). */
     @Query("SELECT MAX(r.revisionId) FROM Revision r WHERE r.projectId = :projectId")
     Optional<Long> findHeadRevisionId(@Param("projectId") Long projectId);

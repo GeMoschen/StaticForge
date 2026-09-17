@@ -1,6 +1,6 @@
 # StaticForge CMS — API reference
 
-Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (95 paths), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
+Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (98 paths), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
 
 ## 1. Conventions
 
@@ -229,13 +229,57 @@ A run view carries `planSummary` (`null` for a run that never got past PLAN): `{
 | `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token; `?page=` as above, not part of the token) |
 | `GET` | `/projects/{projectKey}/pagination/count` (`?kind=NAV\|DATASET&source=uuid`) — M21: `{itemCount, skipped}` of a pagination source now, counted like generation does; `404` when the source isn't a live Navigation folder or dataset, `422` for another `kind` |
 
-## 13. System
+## 13. Search (M23)
+
+Editorial full-text search over a project's **current** assets, answered from an embedded per-project index that is
+kept up to date after each commit (see [architecture §11](architecture.md#11-search)). Time travel doesn't change
+what search returns.
+
+| Method | Path | Role |
+|---|---|---|
+| `GET` | `/projects/{projectKey}/search` | VIEWER |
+| `GET` | `/projects/{projectKey}/search/status` | VIEWER |
+| `POST` | `/projects/{projectKey}/search/reindex` | PROJECT_ADMIN |
+
+`GET /search?q=&type=&folder=&page=0&size=20&sort=relevance`:
+
+- `q` is required, 1–200 characters after trimming. It is never parsed as query syntax: words are matched in any of the
+  analyzed fields (German and English stemming, umlaut folding), `"quoted words"` as a phrase, the last word also as a
+  prefix while typing, the whole input as an exact uid or uid prefix. When nothing matches, words of five or more
+  letters also match with one typo.
+- `type` is repeatable (`type=PAGE&type=MEDIA`), `folder` a folder path prefix (`/pages_root/news/`), `size` 1–100,
+  `sort` only `relevance`, and a page may reach at most 10,000 hits. Anything else is `400 SF-SEARCH-0400`.
+
+```json
+{ "content": [
+    { "uuid": "…", "type": "PAGE", "uid": "harbour_notes", "displayName": "Harbour notes",
+      "folderPath": "/pages_root/", "templateUuid": "…", "score": 3.2, "matchedIn": "CONTENT",
+      "snippet": "Seen near the pier: a quokka.", "highlights": [ {"start": 22, "end": 28} ] } ],
+  "page": {"size": 20, "number": 0, "totalElements": 2, "totalPages": 1, "totalIsLowerBound": false},
+  "facets": {"types": {"MEDIA": 1, "PAGE": 1}},
+  "indexedRevision": 42, "latestRevision": 42 }
+```
+
+`matchedIn` is where the best match is: `UID`, `TITLE` (display name and uid), `CONTENT` (values, alt text, labels) or
+`SOURCE` (CDL, OCTL, processed text files). `snippet` is plain text, never HTML; `highlights` are `[start, end)` offsets
+into it. `facets.types` counts hits with every filter but `type` applied, so the counts of unselected types stay
+visible. `indexedRevision`/`latestRevision` show how current the answer is; `indexedRevision` is `null` while the
+project has no usable index yet.
+
+`GET /search/status` → `{indexedRevision, latestRevision, lag, state, lastRebuildAt}`, `state` one of `READY`,
+`CATCHING_UP` (behind the latest revision), `REBUILDING` (a full rebuild is queued or running; queries answer from the
+previous index until it is swapped in) and `UNAVAILABLE` (this instance can't open the index; search answers `503`).
+
+`POST /search/reindex` starts a full rebuild and returns `202` with the status (`REBUILDING`); `409 SF-SEARCH-0409`
+while one is queued or running, `503` when the index is unavailable.
+
+## 14. System
 
 | Method | Path |
 |---|---|
 | `GET` | `/api/v1/status` (liveness/readiness; in addition to `/actuator/health`) |
 
-## 14. Error catalogue
+## 15. Error catalogue
 
 Codes from `cms-specification.md` Appendix B, annotated with where they are raised in code. `ProblemFactory` (in `sf-common`) constructs the `problem+json` bodies.
 
@@ -278,6 +322,14 @@ Defined in `template.diagnostic.DiagnosticCodes` (see [template-developer guide]
 
 - OCTL (`SF-TPL-01xx` / `02xx` / `03xx`) — compile errors and warnings per §16.11.
 - CDL (`SF-CDL-01xx` / `02xx`) — CDL compile/validation errors; these are not enumerated in the spec but are stable, machine-readable codes.
+
+### Search (`SF-SEARCH-*`)
+
+| Code | HTTP | Raised by |
+|---|---|---|
+| `SF-SEARCH-0400` | 400 | invalid search parameters (`q`, `type`, `size`, `page`, `sort`) — `SearchService` |
+| `SF-SEARCH-0409` | 409 | a rebuild is already queued or running — `SearchService.reindex` |
+| `SF-SEARCH-0503` | 503 | the project's index can't be opened (write lock held by another instance) — `SearchIndexServiceImpl` |
 
 ### Generation (`SF-GEN-*`)
 

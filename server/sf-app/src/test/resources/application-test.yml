@@ -21,3 +21,7 @@ sf:
   media:
     store: filesystem
     root: ${java.io.tmpdir}/sf-test-media
+  # Each Spring context gets its own in-memory indexes; tests that need a directory set their own temp root.
+  search:
+    directory: memory
+    refresh-interval: 200ms

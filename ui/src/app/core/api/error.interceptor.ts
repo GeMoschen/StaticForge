@@ -1,7 +1,10 @@
-import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpContextToken, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { ToastService } from '../ui/toast.service';
+
+/** Set on a request whose caller presents its own errors (e.g. search shows an unavailable index inline). */
+export const SKIP_ERROR_TOAST = new HttpContextToken<boolean>(() => false);
 
 interface Problem {
   title?: string;
@@ -15,6 +18,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
     catchError((err: unknown) => {
       if (
         err instanceof HttpErrorResponse &&
+        !req.context.get(SKIP_ERROR_TOAST) &&
         err.status !== 401 &&
         !(err.url ?? '').includes('/auth/login')
       ) {

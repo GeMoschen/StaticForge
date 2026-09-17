@@ -13,6 +13,9 @@ sf:
     jwt:
       algorithm: HS256
       secret: dev-only-secret-please-change-0123456789
+  # The default filesystem index under ./build/search-index; set SF_SEARCH_LIVE_INDEXING=false to watch it lag.
+  search:
+    live-indexing: ${SF_SEARCH_LIVE_INDEXING:true}
 
 logging:
   level:

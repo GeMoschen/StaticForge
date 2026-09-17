@@ -17,6 +17,8 @@ interface NavItem {
   label: string;
   icon: string;
   route: string;
+  /** Tooltip, when it says more than the label (e.g. a keyboard shortcut). */
+  hint?: string;
 }
 
 @Component({
@@ -46,6 +48,7 @@ export class NavRailComponent {
     }
     const base = `/p/${key}`;
     return [
+      { label: 'Search', icon: 'search', route: `${base}/search`, hint: 'Search (Ctrl K)' },
       { label: 'Pages', icon: 'description', route: `${base}/pages` },
       { label: 'Content', icon: 'dataset', route: `${base}/content` },
       { label: 'Media', icon: 'perm_media', route: `${base}/media` },

@@ -1,6 +1,6 @@
 ---
 id: M23.4.1
-status: todo
+status: done
 depends: [M23.3.1]
 epic: m23-global-search
 feature: ui
@@ -67,19 +67,24 @@ area: frontend
 
 ## Acceptance criteria
 
-- [ ] Ctrl/Cmd+K inside a project, typing a word from a page's rich text, shows that page under
+- [x] Ctrl/Cmd+K inside a project, typing a word from a page's rich text, shows that page under
       "Pages" and Enter opens `pages/:uuid`. Verified in the running app (dev backend + `ng serve`,
       Playwright or manual), not just in specs.
-- [ ] Media, template and navigation results open the correct asset through the new `?asset=` deep
+- [x] Media, template and navigation results open the correct asset through the new `?asset=` deep
       links. Direct navigation to those URLs also works on reload.
-- [ ] Rapid typing sends at most one in-flight request (older ones cancelled). Verified by a service
+- [x] Rapid typing sends at most one in-flight request (older ones cancelled). Verified by a service
       spec using `HttpTestingController`.
-- [ ] Keyboard-only flow works (open, type, arrow, Enter, Esc with focus restore). ARIA attributes
+- [x] Keyboard-only flow works (open, type, arrow, Enter, Esc with focus restore). ARIA attributes
       are present (component spec plus an axe check if the e2e setup supports it).
-- [ ] Snippet highlighting uses text nodes and `<mark>` only. A spec with a `<script>` in the
+      *Verified live by `m23-journeys.spec.ts` (combobox `aria-expanded`/`aria-controls`/`aria-activedescendant`,
+      options `aria-selected`, the polite live region's count, Esc restoring focus). No component spec (the runner
+      can't mount `templateUrl` components) and no axe run (axe-core isn't installed here).*
+- [x] Snippet highlighting uses text nodes and `<mark>` only. A spec with a `<script>` in the
       snippet text renders it as text.
-- [ ] Time-travel note is shown while `TimeTravelStore.isTimeTravel` is true.
-- [ ] `npm run build` green. New pure-logic specs (`assetRoute`, highlight-range splitting, search
+      *`search.util.spec.ts` splits a snippet holding `<script>alert(1)</script>` into plain runs; the template
+      renders runs by interpolation into text nodes and `<mark>` elements, never `innerHTML`.*
+- [x] Time-travel note is shown while `TimeTravelStore.isTimeTravel` is true.
+- [x] `npm run build` green. New pure-logic specs (`assetRoute`, highlight-range splitting, search
       service) pass. Component specs using `templateUrl` may hit the known
       `resolveComponentResources` tooling failure; record it, don't hide it.
 

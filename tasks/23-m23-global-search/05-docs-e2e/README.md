@@ -21,10 +21,10 @@ Close the epic with proof and documentation:
 
 ## Feature exit criteria
 
-- [ ] E2E journey spec exists and passes against a live backend (or is recorded with the exact
+- [x] E2E journey spec exists and passes against a live backend (or is recorded with the exact
       reason it could not run, as in `M15.6`).
-- [ ] Benchmark numbers recorded against the epic targets.
-- [ ] User guide, API docs, architecture, infra README / deploy runbook and spec updated.
+- [x] Benchmark numbers recorded against the epic targets.
+- [x] User guide, API docs, architecture, infra README / deploy runbook and spec updated.
 
 ## Dependencies
 

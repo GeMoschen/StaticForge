@@ -1,6 +1,6 @@
 ---
 id: M23.3.1
-status: todo
+status: done
 depends: [M23.1.2]
 epic: m23-global-search
 feature: query-api
@@ -65,7 +65,7 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] API integration tests (`MockMvc`/`TestRestTemplate` like `TargetApiTest`):
+- [x] API integration tests (`MockMvc`/`TestRestTemplate` like `TargetApiTest`):
       - content-word match;
       - uid exact match ranks above a content-only match;
       - prefix-as-you-type (`tea` finds `teaser`);
@@ -75,17 +75,17 @@ area: backend
       - paging envelope fields;
       - `size>100` rejected;
       - an empty `q` gives `400`.
-- [ ] Adversarial inputs return `200` or `400` and never `500`: `"`, `*`, `?`, `title:foo`,
+- [x] Adversarial inputs return `200` or `400` and never `500`: `"`, `*`, `?`, `title:foo`,
       `AND OR NOT`, `\`, a 10,000-char string, and an emoji/RTL/combining-character string.
-- [ ] Authorization: VIEWER gets `200`, a non-member gets `404`, and an unauthenticated request
+- [x] Authorization: VIEWER gets `200`, a non-member gets `404`, and an unauthenticated request
       gets `401`. A test with two projects sharing a word shows that each project's search returns
       only its own asset.
-- [ ] Snippet offsets are within bounds of `snippet`. The snippet contains no HTML tags even when
+- [x] Snippet offsets are within bounds of `snippet`. The snippet contains no HTML tags even when
       the source value was rich text.
-- [ ] `503 SF-SEARCH-0503` when the index is unavailable (test by forcing state).
-- [ ] `docs/api.md` endpoint catalogue and Appendix B error catalogue in `cms-specification.md`
+- [x] `503 SF-SEARCH-0503` when the index is unavailable (test by forcing state).
+- [x] `docs/api.md` endpoint catalogue and Appendix B error catalogue in `cms-specification.md`
       list the endpoint and codes. OpenAPI regenerated; `schema.d.ts` updated.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 

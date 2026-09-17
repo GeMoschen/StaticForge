@@ -1726,6 +1726,15 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 | `GET` | `/projects/{p}/assets/{uuid}/impact` | What would rebuild if the asset changed (M22) |
 | `GET`/`POST`/`PUT`/`DELETE` | `/projects/{p}/targets[/{id}]` | Target CRUD (PROJECT_ADMIN) |
 
+**Search** (M23) — editorial full-text search over a project's *current* assets, from an embedded per-project index
+kept after commit (§21.4). Time travel doesn't change what it returns.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/projects/{p}/search` | `?q=` (required, 1–200 chars), `type` (repeatable), `folder` (path prefix), `page`, `size` (≤ 100), `sort=relevance` only. `{content: [{uuid, type, uid, displayName, folderPath, templateUuid, score, matchedIn, snippet, highlights: [{start, end}]}], page: {…, totalIsLowerBound}, facets: {types}, indexedRevision, latestRevision}`. Facet counts ignore the `type` filter. Snippets are plain text; highlights are offsets into them. VIEWER |
+| `GET` | `/projects/{p}/search/status` | `{indexedRevision, latestRevision, lag, state: READY\|CATCHING_UP\|REBUILDING\|UNAVAILABLE, lastRebuildAt}`. VIEWER |
+| `POST` | `/projects/{p}/search/reindex` | Full rebuild without query downtime; `202` with the status, `409` while one runs. PROJECT_ADMIN |
+
 **Revisions**
 
 | Method | Path |
@@ -2505,6 +2514,9 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 10. Non-member user cannot see the project (404) and cannot call its API.
 11. Editor role cannot open the template IDE (route hidden, API 403).
 12. Full keyboard journey: create and publish a page without touching the mouse.
+13. Find and fix (M23): a word only a page's rich text holds → Ctrl+K finds the page → Enter opens it → replace the word
+    and save → the old word no longer finds it, the new one does → the search page filters by type and keeps the facet
+    counts of the other types. A media file found by its alt text opens its drawer through the `?asset=` deep link.
 
 ### 25.7 Quality gates (CI)
 
@@ -2536,6 +2548,13 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 - Backend is stateless apart from the blob store → horizontal scaling behind a load balancer; sticky sessions unnecessary (JWT), SSE endpoints need connection affinity or a shared broker (Redis pub/sub in the multi-node profile).
 - Generation runs are claimed via a `FOR UPDATE SKIP LOCKED` queue row so exactly one node executes a run.
 - PostgreSQL: expected 30–80 GB at the top of the range; partitioning of `asset_version` by `project_id` is the documented escape hatch (not needed at v1 scale).
+- **Search is the exception to statelessness (M23).** Each project's search index is an embedded Lucene directory on the
+  application node's disk (`SF_SEARCH_INDEX_ROOT`), and Lucene allows one writer per directory. v1 runs a single
+  application instance; a second instance on the same index volume can't open the indexes and reports search as
+  unavailable (`503 SF-SEARCH-0503`) while the rest of the CMS keeps working. Multiple instances would need per-node
+  indexes, each catching up from the revision log with its own stamp, or a shared index service — both out of scope.
+  The index is derived data: deleting it is always safe, the next start rebuilds it (5,000 pages: see
+  `infra/scripts/README-benchmark.md`).
 
 ### 26.3 Security
 
@@ -2557,7 +2576,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 ### 26.4 Observability
 
 - Structured JSON logs with `traceId`, `projectKey`, `revision`, `userId`.
-- Micrometer metrics: `sf.revision.allocate`, `sf.render.duration{template,channel}`, `sf.generation.duration{mode}`, `sf.generation.files`, `sf.media.upload.bytes`, cache hit ratios, HTTP histograms.
+- Micrometer metrics: `sf.search.index.lag{project}`, `sf.search.index.duration`, `sf.search.index.failures`, `sf.search.index.events` (M23), `sf.revision.allocate`, `sf.render.duration{template,channel}`, `sf.generation.duration{mode}`, `sf.generation.files`, `sf.media.upload.bytes`, cache hit ratios, HTTP histograms.
 - OpenTelemetry tracing across request → service → render.
 - Health: `/actuator/health` with DB, blob store and Liquibase checks; `/actuator/info` exposes schema version.
 - Alerts: generation failure rate, p95 save latency, refresh-token reuse detections, disk headroom on the blob store.
@@ -2569,6 +2588,8 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 - Consistency: because blobs are written before commit, a DB restore to an earlier point never references a missing blob.
 - Quarterly restore drill, documented in the runbook.
 - Project export/import (`ZIP`: assets JSON + blobs + manifest) as a portability and migration path.
+- The search index (M23) is not backed up: it is rebuilt from the database on start, and a restored database with a
+  leftover index is detected (the index records the project it was built for) and rebuilt.
 
 ### 26.6 Operations
 
@@ -2747,6 +2768,9 @@ Same content. Two channels. No duplication.
 | `SF-GEN-0301` | — | `raw` filter on a plain-text editor (warning) |
 | `SF-GEN-0410` | — | Navigation cycle truncated (warning) |
 | `SF-GEN-0500` | 409 | A generation run is already active for this project |
+| `SF-SEARCH-0400` | 400 | Invalid search parameters: `q` missing, blank or over 200 characters, unknown `type`, `size` outside 1–100, `sort` other than `relevance`, page beyond 10,000 hits (M23) |
+| `SF-SEARCH-0409` | 409 | A search index rebuild is already running for this project (M23) |
+| `SF-SEARCH-0503` | 503 | The project's search index can't be opened by this instance, e.g. another instance holds its write lock (M23) |
 
 ---
 

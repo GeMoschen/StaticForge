@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
@@ -18,6 +19,7 @@ import { NavReferenceDetailComponent } from './nav-reference-detail.component';
 import { NavigationService, type NavigationFolderView, type NavTreeView, type PageReferenceView } from './navigation.service';
 import { sortNavTree } from '../../shared/tree-sort.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { consumeQueryParam } from '../../shared/deep-link';
 
 interface RawFolderPayload {
   scope?: string;
@@ -60,6 +62,11 @@ interface RawReferencePayload {
 })
 export class NavigationComponent {
   readonly projectKey = input.required<string>();
+  /** `?asset=<uuid>` selects that page reference or folder (search deep link, M23.4.1). */
+  readonly asset = input<string | undefined>();
+
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   private readonly nav = inject(NavigationService);
   private readonly api = inject(ApiClient);
@@ -118,6 +125,16 @@ export class NavigationComponent {
     effect(() => {
       const key = this.projectKey();
       untracked(() => this.reload(key));
+    });
+    effect(() => {
+      const uuid = this.asset();
+      if (!uuid) {
+        return;
+      }
+      untracked(() => {
+        this.select(uuid);
+        consumeQueryParam(this.router, this.route, 'asset');
+      });
     });
   }
 

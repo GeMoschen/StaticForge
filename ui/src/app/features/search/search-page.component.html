@@ -1,0 +1,187 @@
+<div class="search">
+  <h1 class="search__title">Search</h1>
+
+  <form class="search__form" role="search" (submit)="submit($event)">
+    <label class="sf-sr-only" for="sf-search-input">Search this project</label>
+    <sf-icon class="search__form-icon" name="search" />
+    <input
+      id="sf-search-input"
+      class="search__input"
+      type="search"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="Search pages, media, templates…"
+      [sfAutofocus]="true"
+      [value]="draft()"
+      (input)="onInput($event)"
+    />
+    <button type="submit" class="search__submit">Search</button>
+  </form>
+
+  <div class="search__status" aria-live="polite">
+    @if (timeTravel.isTimeTravel()) {
+      <span class="search__note"><sf-icon name="history" /> Results reflect the current revision.</span>
+    }
+    @if (status(); as s) {
+      @if (s.state === 'REBUILDING') {
+        <span class="search__banner search__banner--info" role="status">
+          <sf-icon name="autorenew" /> The search index is being rebuilt. Results come from the previous index until it
+          finishes.
+        </span>
+      } @else if (lagMessage()) {
+        <span class="search__banner search__banner--info">{{ lagMessage() }}</span>
+      }
+      @if (s.state !== 'UNAVAILABLE') {
+        <span class="search__revisions">
+          Indexed revision {{ s.indexedRevision ?? '—' }} of {{ s.latestRevision }}
+        </span>
+      }
+    }
+    @if (isAdmin()) {
+      <button
+        type="button"
+        class="search__rebuild"
+        [disabled]="rebuilding() || status()?.state === 'REBUILDING' || status()?.state === 'UNAVAILABLE'"
+        (click)="rebuild()"
+      >
+        <sf-icon name="autorenew" /> Rebuild index
+      </button>
+    }
+  </div>
+
+  <div class="search__layout">
+    <aside class="search__filters" [class.is-open]="filtersOpen()" aria-label="Filters">
+      <button
+        type="button"
+        class="search__filters-toggle"
+        [attr.aria-expanded]="filtersOpen()"
+        aria-controls="sf-search-filters"
+        (click)="filtersOpen.set(!filtersOpen())"
+      >
+        <sf-icon name="filter_list" /> Filters
+        @if (hasFilters()) {
+          <span class="search__filters-active">({{ state().types.length + (state().folder ? 1 : 0) }} active)</span>
+        }
+      </button>
+      <div id="sf-search-filters" class="search__filters-body">
+        <fieldset class="search__facets">
+          <legend>Type</legend>
+          @for (facet of facets(); track facet.type) {
+            <label class="search__facet">
+              <input type="checkbox" [checked]="facet.checked" (change)="toggleFacet(facet.type)" />
+              <sf-icon [name]="typeIcons[facet.type]" />
+              <span class="search__facet-label">{{ facet.label }}</span>
+              <span class="search__facet-count">{{ facet.count }}</span>
+            </label>
+          } @empty {
+            <p class="search__muted">Search to see types.</p>
+          }
+        </fieldset>
+
+        <div class="search__folder">
+          <label for="sf-search-folder">Folder</label>
+          <input
+            id="sf-search-folder"
+            type="text"
+            list="sf-search-folder-paths"
+            placeholder="/pages_root/news/"
+            [value]="state().folder"
+            (change)="onFolderChange($event)"
+          />
+          <datalist id="sf-search-folder-paths">
+            @for (path of folderPaths(); track path) {
+              <option [value]="path"></option>
+            }
+          </datalist>
+          <p class="search__muted">Only assets under this folder path.</p>
+        </div>
+
+        @if (hasFilters()) {
+          <button type="button" class="search__link" (click)="clearFilters()">Clear filters</button>
+        }
+      </div>
+    </aside>
+
+    <section class="search__results" aria-label="Results">
+      @switch (load().kind) {
+        @case ('empty') {
+          <sf-empty-state
+            icon="search"
+            title="Search this project"
+            description="Finds pages by their text and section content, media by file name, alt text, caption and copyright, templates and datasets by their source, navigation by label, and folders, globals and records by name and values. Search always reflects the current revision."
+          />
+        }
+        @case ('unavailable') {
+          <sf-empty-state
+            icon="cloud_off"
+            title="Search is unavailable"
+            description="The search index of this project can't be opened by this server. It needs exclusive access to its index directory; an operator should check that only one instance uses it."
+          />
+        }
+        @case ('error') {
+          <sf-empty-state icon="error" title="Search failed" description="Try again in a moment." />
+        }
+        @case ('results') {
+          <p class="search__count" role="status">
+            {{ total() }} {{ total() === 1 ? 'result' : 'results' }} for “{{ state().q }}”
+          </p>
+          @if (rows().length === 0) {
+            @if (hasFilters()) {
+              <div class="search__none">
+                <p>No results with the current filters.</p>
+                <button type="button" class="search__link" (click)="clearFilters()">Clear filters and search everything</button>
+              </div>
+            } @else if (lagMessage()) {
+              <sf-empty-state
+                icon="hourglass_top"
+                title="No results yet"
+                description="The search index is still catching up, so recent changes may not be searchable yet. Search again in a moment."
+              />
+            } @else {
+              <sf-empty-state
+                icon="search_off"
+                title="No results"
+                description="Check the spelling, or try fewer or different words. A word of five letters or more also matches with one typo."
+              />
+            }
+          } @else {
+            <ol class="search__list" [attr.start]="state().page * state().size + 1">
+              @for (row of rows(); track row.hit.uuid) {
+                <li class="search__hit">
+                  <sf-icon class="search__hit-icon" [name]="row.icon" />
+                  <div class="search__hit-body">
+                    <div class="search__hit-line">
+                      <a class="search__hit-name" [href]="href(row.hit)" (click)="onResultClick($event, row.hit)">{{
+                        row.hit.displayName || row.hit.uid
+                      }}</a>
+                      <span class="search__badge">{{ row.typeLabel }}</span>
+                      @if (row.matchedIn) {
+                        <span class="search__badge search__badge--match">{{ row.matchedIn }}</span>
+                      }
+                    </div>
+                    <div class="search__hit-meta">
+                      <span class="search__hit-uid">{{ row.hit.uid }}</span>
+                      <span class="search__hit-path">{{ row.hit.folderPath }}</span>
+                    </div>
+                    @if (row.parts.length > 0) {
+                      <p class="search__snippet">@for (part of row.parts; track $index) {@if (part.mark) {<mark>{{ part.text }}</mark>} @else {<span>{{ part.text }}</span>}}</p>
+                    }
+                  </div>
+                </li>
+              }
+            </ol>
+            @if (totalPages() > 1) {
+              <nav class="search__pager" aria-label="Result pages">
+                <button type="button" [disabled]="state().page === 0" (click)="goToPage(state().page - 1)">Previous</button>
+                <span>Page {{ state().page + 1 }} of {{ totalPages() }}</span>
+                <button type="button" [disabled]="state().page + 1 >= totalPages()" (click)="goToPage(state().page + 1)">
+                  Next
+                </button>
+              </nav>
+            }
+          }
+        }
+      }
+    </section>
+  </div>
+</div>

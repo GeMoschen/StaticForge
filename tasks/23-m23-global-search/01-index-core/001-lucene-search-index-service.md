@@ -1,6 +1,6 @@
 ---
 id: M23.1.1
-status: todo
+status: done
 depends: []
 epic: m23-global-search
 feature: index-core
@@ -67,26 +67,26 @@ The user chose an embedded Lucene index (2026-09-15).
 
 ## Acceptance criteria
 
-- [ ] `libs.versions.toml` pins one `lucene` version; only `sf-domain/build.gradle.kts` uses the
+- [x] `libs.versions.toml` pins one `lucene` version; only `sf-domain/build.gradle.kts` uses the
       Lucene libraries; `./gradlew checkModuleLayers` is green.
-- [ ] `sf.search.*` properties are bound and documented in `application.yml`. `application-dev.yml`
+- [x] `sf.search.*` properties are bound and documented in `application.yml`. `application-dev.yml`
       keeps the filesystem default under `./build/search-index`. The test profile/config uses
       `directory: memory`, or a JUnit temp dir per Spring context, so tests never share an index.
-- [ ] Unit tests (no Spring context) for `SearchIndexService`:
+- [x] Unit tests (no Spring context) for `SearchIndexService`:
       - upsert then search finds the document;
       - a second upsert with the same UUID replaces it (one hit);
       - delete removes it;
       - two projects' indexes are isolated;
       - `commit(…, rev)` then reopen returns `indexedRevision == rev`;
       - the filesystem directory survives a close/reopen.
-- [ ] Analyzer tests:
+- [x] Analyzer tests:
       - `text_de` matches `Häuser` ↔ `Haus`;
       - `text_en` matches `running` ↔ `run`;
       - neutral `text` matches `Häuser` ↔ `hauser`;
       - `uid` exact and prefix match are case-insensitive.
-- [ ] A path-escape attempt is rejected by the root guard (unit test with a crafted root/id
+- [x] A path-escape attempt is rejected by the root guard (unit test with a crafted root/id
       combination).
-- [ ] `./gradlew :server:sf-domain:test` is green.
+- [x] `./gradlew :server:sf-domain:test` is green.
 
 ## Out of scope
 
