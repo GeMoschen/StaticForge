@@ -19,7 +19,17 @@ import { RevisionDiffComponent } from './features/revisions/revision-diff.compon
 import { ProjectSettingsImportExportComponent } from './features/settings/project-settings-import-export.component';
 import { ProjectSettingsUrlRegistryComponent } from './features/settings/project-settings-url-registry.component';
 import { ProjectSettingsTargetsComponent } from './features/settings/project-settings-targets.component';
+import { ContentComponent } from './features/content/content.component';
+import { RecordEditorComponent } from './features/content/record-editor.component';
+import { MediaLibraryComponent } from './features/media/media-library.component';
+import { TemplatesComponent } from './features/templates/templates.component';
 
+/**
+ * Every route component is imported eagerly: the app ships as one bundle with no lazy chunks (decided 2026-09-16 after
+ * an "undefined ɵcmp" error opening a page with sections). The editor components import each other in a cycle
+ * (section editor → content form → editor registry → catalog editor → section editor), which chunk boundaries make
+ * fragile. The initial budget in `angular.json` is sized for the single bundle.
+ */
 export const routes: Routes = [
   {
     path: 'login',
@@ -55,22 +65,17 @@ export const routes: Routes = [
       },
       {
         path: 'content',
-        // Lazy like media: the grid and record editor are only needed in the Content store.
-        loadComponent: () => import('./features/content/content.component').then((m) => m.ContentComponent),
+        component: ContentComponent,
         children: [
           {
             path: 'records/:recordUuid',
-            loadComponent: () =>
-              import('./features/content/record-editor.component').then((m) => m.RecordEditorComponent),
+            component: RecordEditorComponent,
           },
         ],
       },
       {
         path: 'media',
-        // Lazy: the library, its drawer and the text media editor (M18) are the largest single
-        // feature and only needed on this route, which keeps the initial bundle under its budget.
-        loadComponent: () =>
-          import('./features/media/media-library.component').then((m) => m.MediaLibraryComponent),
+        component: MediaLibraryComponent,
       },
       {
         path: 'navigation',
@@ -82,8 +87,7 @@ export const routes: Routes = [
       },
       {
         path: 'templates',
-        // Lazy since M19: the dataset schema editor joined the templates screen.
-        loadComponent: () => import('./features/templates/templates.component').then((m) => m.TemplatesComponent),
+        component: TemplatesComponent,
       },
       {
         path: 'settings',

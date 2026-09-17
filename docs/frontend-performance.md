@@ -39,8 +39,11 @@ Note: the `anyComponentStyle` warnings already emitted for several component sty
   - Revision timeline (`revisions-list`) uses a hand-rolled windowed virtual scroll (spacer + translateY window, `slice()` on scroll).
   - Media grid uses lazy-loaded images (`loading="lazy"`) with an intersection-observer sentinel for incremental loading.
 
-## Route-level code splitting
+## One bundle, no code splitting
 
-All feature routes use `loadComponent` dynamic imports in `app.routes.ts`
-(login, dashboard, project shell, pages, media, generation, structures, channels, revisions),
-so Monaco/TipTap are only pulled into the routes that use them and are not in the initial bundle.
+Every route component is imported eagerly in `app.routes.ts`; there are no `loadComponent`/`loadChildren` dynamic
+imports, so the build emits a single `main-*.js` (about 1.03 MB raw, 190 kB transferred, M21). This was decided on
+2026-09-16: the form editors import each other in a cycle (section editor → content form → editor registry → catalog
+editor → section editor), which chunk boundaries make fragile, and an "undefined ɵcmp" error was reported opening a
+page with sections. The `initial` budget in `angular.json` is sized for the single bundle (warning 1.1 MB, error
+1.3 MB). Don't reintroduce lazy routes without resolving that cycle first.
