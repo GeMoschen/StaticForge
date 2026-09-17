@@ -11,7 +11,9 @@ import {
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { templateKindOfFolderPath } from '../../shared/asset-route.util';
+import { consumeQueryParam } from '../../shared/deep-link';
 import { catchError, debounceTime, forkJoin, of, Subject, switchMap } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
@@ -119,6 +121,11 @@ export class TemplatesComponent {
   readonly projectKey = input.required<string>();
   /** `?kind=DATASET` opens the store on the datasets folder (the Content store's empty state links here). */
   readonly kind$ = input<string | undefined>(undefined, { alias: 'kind' });
+  /** `?asset=<uuid>` selects that template or dataset, `?folder=<uuid>` that folder (search deep links, M23.4.1). */
+  readonly asset = input<string | undefined>();
+  readonly folder = input<string | undefined>();
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   private readonly service = inject(TemplatesService);
   private readonly contentService = inject(ContentService);
@@ -342,6 +349,29 @@ export class TemplatesComponent {
       },
       { allowSignalWrites: true },
     );
+
+    effect(() => {
+      const uuid = this.asset();
+      if (!uuid) {
+        return;
+      }
+      untracked(() => {
+        this.selectedUuid.set(uuid);
+        consumeQueryParam(this.router, this.route, 'asset');
+      });
+    });
+    effect(() => {
+      const uuid = this.folder();
+      const node = uuid ? findFolder(this.templateFolderTree(), uuid) : null;
+      if (!node?.uuid) {
+        return;
+      }
+      const folderUuid = node.uuid;
+      untracked(() => {
+        this.selectFolder({ uuid: folderUuid, templateKind: templateKindOfFolderPath(node.path) });
+        consumeQueryParam(this.router, this.route, 'folder');
+      });
+    });
 
     // Once the templates tree loads, default the selection to the "Page Templates" root so the
     // screen isn't blank on first load — mirrors `reloadList`'s existing "auto-select the first

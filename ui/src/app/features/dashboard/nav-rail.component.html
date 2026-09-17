@@ -19,7 +19,7 @@
           routerLinkActive="is-active"
           [ariaCurrentWhenActive]="'page'"
           [routerLinkActiveOptions]="{ exact: false }"
-          [attr.title]="item.label"
+          [attr.title]="item.hint ?? item.label"
           [attr.aria-label]="item.label"
         >
           <span class="rail__item-icon">

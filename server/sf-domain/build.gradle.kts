@@ -17,6 +17,9 @@ dependencies {
     implementation(libs.caffeine)
     implementation(libs.tika.core)
     implementation(libs.metadata.extractor)
+    implementation(libs.lucene.core)
+    implementation(libs.lucene.analysis.common)
+    implementation(libs.lucene.highlighter)
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.archunit)

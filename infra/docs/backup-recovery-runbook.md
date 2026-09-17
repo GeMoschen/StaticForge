@@ -9,6 +9,7 @@ Operational runbook for §26.5. Targets: PostgreSQL RPO **5 min** / RTO **1 h**,
 | PostgreSQL 16 | `db` service, volume `db-data` | nightly base backup + WAL archiving (PITR) |
 | Media blob store | `backend` volume `media-data` → `/var/lib/staticforge/media` | versioned bucket / rsync snapshot |
 | Generated output | `backend` volume `output-data` → `/var/lib/staticforge/out` | regenerable; backup optional (targets are rebuildable) |
+| Search index | `backend` volume `search-index` → `/var/lib/staticforge/search-index` | **exclude** — derived from the database and rebuilt on start (M23) |
 
 The blob store is **content-addressed** by SHA-256 (`sha/sh/sha` layout, spec §11.2), and bytes are written to the blob store *before* the transaction commits (§21.4). Consequences (§26.5):
 
@@ -77,6 +78,13 @@ Operations is expected to provide (and the runbook references):
 
 **Note:** `infra/scripts/` does not yet exist in the repository; create these as part of operationalizing this runbook. The runbook's commands are canonical regardless of where the helpers land.
 
-## 6. Consistency reminder
+## 6. Search index after a restore
+
+Don't back up or restore the search index. After a database restore, start the backend as usual: each project's index
+records the database state it was built from (project key and creation time) and its revision stamp, so an index that
+belongs to another database, is ahead of the restored database, or is missing is rebuilt in the background at start.
+To start clean anyway, delete the `search-index` volume before starting.
+
+## 7. Consistency reminder
 
 Order matters and is guaranteed by the code (§21.4): media bytes hit the blob store **before** commit, and orphaned blobs (from a failed commit) are collected by the nightly sweep — never the reverse. Never run the blob sweep against a restored database that points at revisions newer than the restore target; if in doubt, skip the sweep.

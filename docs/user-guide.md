@@ -131,6 +131,40 @@ During time travel a record opens read-only, as it was at that revision, and pag
 
 A dataset that still has records can't be deleted — delete its records first.
 
+### Search
+
+Search finds anything in the current project by what it contains, not only by its name.
+
+- **Quick open.** Press `Ctrl+K` (`Cmd+K` on a Mac) anywhere in a project and type. Results appear as you type, grouped
+  by kind (Pages, Records, Media, Globals, Navigation, Folders, Page templates, Section templates, Datasets), five per
+  group, each with its UID, folder and a line of text with your words highlighted. `↑`/`↓` move, `Enter` opens,
+  `Ctrl+Enter` opens the search page with your words, `Esc` closes and puts you back where you were. "See all 12 pages"
+  opens the search page filtered to that kind. Outside a project the palette only reminds you to open one.
+- **Search page.** **Search** in the navigation rail (or `Ctrl+Enter` from the palette) shows every result with paging,
+  a filter per kind with its count (the counts of the other kinds stay visible while you filter), and a folder filter
+  (a folder path such as `/pages_root/news/`). A badge says where a result matched: Title, UID, Content or Source. The
+  address holds your words, filters and page, so reload, back and forward, and shared links bring you to the same
+  results.
+- **What is searchable.**
+  - Pages: name, UID, every text, rich-text, Markdown and select value, list items, catalog cards and section content,
+    link titles, and the page's SEO title and description.
+  - Media: file name, alt text, caption, copyright, and the content of text files processed by the CMS.
+  - Page and section templates and datasets: name, UID, content definition and channel sources.
+  - Navigation page references: label. Folders: name. Global property sets and dataset records: their values.
+
+  References, media pickers, JSON, numbers, dates, colors and switches aren't searched.
+- **How words match.** Upper and lower case don't matter, and neither do accents: `Häuser`, `hauser` and `haeuser` find
+  the same pages. German and English words also match their other forms (`Häuser` finds `Haus`, `running` finds `run`).
+  The last word matches as the start of a word while you type (`tea` finds `teaser`). Put words in quotes for an exact
+  phrase. If nothing matches, words of five or more letters also match with one typo.
+- **Always current.** Search reflects the current state of the project, also while you view an old revision; the
+  palette and the search page say "Results reflect the current revision", and opening a result returns you to now. A
+  change you just saved is searchable within a second or two. If the search page says "Index is catching up", recent
+  changes aren't searchable yet.
+- **Rebuilding the index.** Project admins see **Rebuild index** on the search page. Search keeps working while it
+  rebuilds. If search says it is unavailable, the server can't open the project's search index — ask an operator (see
+  `infra/README.md`).
+
 ### Generate & publish
 
 First, in **Settings → Targets**, create at least one target (the first one becomes the default). Each target writes into its own folder, `{projectKey}/{output folder}` under the server's output root (`{projectKey}/target-{id}` when the folder is left empty); two targets of a project may not share or nest folders (an imported target whose folder is invalid or clashes is imported without it and uses its default folder; the import analysis warns about this). Set **Base URL** for correct sitemap and absolute links.
@@ -172,7 +206,7 @@ When two people edit the same asset, the second save shows a conflict drawer wit
 
 ## Keyboard
 
-Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` command palette, `g p` pages, `g m` media, `g t` templates, `g r` revisions, `Cmd/Ctrl+S` save, `Cmd/Ctrl+Enter` refresh preview, `Alt+↑/↓` move section, `?` shortcut sheet.
+Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` search (see [Search](#search)), `g p` pages, `g m` media, `g t` templates, `g r` revisions, `Cmd/Ctrl+S` save, `Cmd/Ctrl+Enter` refresh preview, `Alt+↑/↓` move section, `?` shortcut sheet.
 
 In the Globals tree and the other store trees, `Tab` reaches each item, `Enter` or `Space` opens it, and `→`/`←` expand and collapse a folder. The Values and Schema tabs are ordinary buttons you can `Tab` to.
 

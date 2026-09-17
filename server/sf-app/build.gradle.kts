@@ -25,6 +25,9 @@ dependencies {
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.security.test)
     testImplementation(libs.jqwik)
+    // Search recovery tests forge Lucene commits (outdated schema, foreign owner); production code reaches Lucene only
+    // through sf-domain.
+    testImplementation(libs.lucene.core)
 }
 
 tasks.named<Jar>("bootJar") {

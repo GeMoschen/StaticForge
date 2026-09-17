@@ -356,6 +356,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/search/reindex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reindex"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/restore": {
         parameters: {
             query?: never;
@@ -1076,6 +1092,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/search/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["status_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/revisions": {
         parameters: {
             query?: never;
@@ -1291,7 +1339,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["status_1"];
+        get: operations["status_2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1887,6 +1935,17 @@ export interface components {
             };
             abstract?: boolean;
         };
+        SearchStatusView: {
+            /** Format: int64 */
+            indexedRevision?: number;
+            /** Format: int64 */
+            latestRevision?: number;
+            /** Format: int64 */
+            lag?: number;
+            state?: string;
+            /** Format: date-time */
+            lastRebuildAt?: string;
+        };
         ProjectRestoreRequest: {
             /** Format: int64 */
             toRevision?: number;
@@ -2308,32 +2367,32 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
-            pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
+            paged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
-            paged?: boolean;
             unpaged?: boolean;
         };
         SortObject: {
@@ -2344,21 +2403,21 @@ export interface components {
             ignoreCase?: boolean;
         };
         PageTemplateSummary: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
-            pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         TemplateSummary: {
@@ -2373,6 +2432,52 @@ export interface components {
             /** Format: uuid */
             parentTemplateRef?: string;
             abstract?: boolean;
+        };
+        SearchFacets: {
+            types?: {
+                [key: string]: number;
+            };
+        };
+        SearchHighlight: {
+            /** Format: int32 */
+            start?: number;
+            /** Format: int32 */
+            end?: number;
+        };
+        SearchHitView: {
+            /** Format: uuid */
+            uuid?: string;
+            type?: string;
+            uid?: string;
+            displayName?: string;
+            folderPath?: string;
+            /** Format: uuid */
+            templateUuid?: string;
+            /** Format: float */
+            score?: number;
+            matchedIn?: string;
+            snippet?: string;
+            highlights?: components["schemas"]["SearchHighlight"][];
+        };
+        SearchPageMeta: {
+            /** Format: int32 */
+            size?: number;
+            /** Format: int32 */
+            number?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            totalIsLowerBound?: boolean;
+        };
+        SearchResultView: {
+            content?: components["schemas"]["SearchHitView"][];
+            page?: components["schemas"]["SearchPageMeta"];
+            facets?: components["schemas"]["SearchFacets"];
+            /** Format: int64 */
+            indexedRevision?: number;
+            /** Format: int64 */
+            latestRevision?: number;
         };
         Pageable: {
             /** Format: int32 */
@@ -2464,21 +2569,21 @@ export interface components {
             textEditable?: boolean;
         };
         PageMediaSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
-            pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         MediaTextView: {
@@ -2554,21 +2659,21 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
-            pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         UsageDto: {
@@ -3663,6 +3768,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["TemplateDetail"];
+                };
+            };
+        };
+    };
+    reindex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SearchStatusView"];
                 };
             };
         };
@@ -5105,6 +5232,57 @@ export interface operations {
             };
         };
     };
+    search: {
+        parameters: {
+            query?: {
+                q?: string;
+                type?: string[];
+                folder?: string;
+                page?: number;
+                size?: number;
+                sort?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SearchResultView"];
+                };
+            };
+        };
+    };
+    status_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SearchStatusView"];
+                };
+            };
+        };
+    };
     list_4: {
         parameters: {
             query: {
@@ -5451,7 +5629,7 @@ export interface operations {
             };
         };
     };
-    status_1: {
+    status_2: {
         parameters: {
             query?: never;
             header?: never;

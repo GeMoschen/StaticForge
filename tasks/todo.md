@@ -1,3 +1,78 @@
+# M23 implementation — Plan
+
+## Approach
+Sequential on branch `m23-global-search` (off `master` at `c7eacff`). Order per the epic: M23.1.1 (Lucene, service) →
+M23.1.2 (extraction) → M23.2.1 + M23.2.2 (one sync path) → M23.3.1 (query, endpoint) → M23.4.1/4.2 (UI) → M23.5.1
+(docs, benchmark, journeys). No fan-out: lifecycle, query and UI all build on the same `search` package.
+
+## Design (from reading the code)
+- **Package** `com.acme.staticforge.search` in sf-domain; `SearchController` + DTOs in sf-api; catch-up runner and
+  health indicator in sf-app. Lucene 10.5.1 (`lucene-core`, `-analysis-common`, `-queryparser`, `-highlighter`) on
+  sf-domain only.
+- **Fields.** `uuid`, `type` (+ `SortedSetDocValues`), `uid` + `uid_lower`, `folderPath` (keyword, prefix), stored
+  `displayName`/`templateUuid`/`revision`/`snippetSource`; `title` (neutral); prose in `text` (neutral), `text_de`,
+  `text_en`; code in `source` (neutral only). **Deviation:** code gets its own neutral field instead of sharing `text`,
+  so `matchedIn: SOURCE` is exact and German/English stemming never touches it.
+- **Neutral analyzer:** StandardTokenizer → LowerCase → GermanNormalization (`ae`→`a`, `ä`→`a`) → ASCIIFolding.
+- **Index handle per project:** `Directory` + lazily opened `IndexWriter` + `SearcherManager`, guarded by a per-project
+  read/write lock (searches/writes read, swap/close write). Commit user data: `sf.indexedRevision`, `sf.schemaVersion`.
+  `LockObtainFailedException` → project `UNAVAILABLE` (logged as the single-instance constraint), never a crash.
+- **One sync path (M23.2.1 + M23.2.2).** `RevisionServiceImpl.allocate` publishes `RevisionCommittedEvent`; an
+  `AFTER_COMMIT` listener only *requests a sync* of that project. Sync runs on a virtual-thread executor, serial and
+  coalesced per project (≤ 1 pending run, so the queue is bounded by construction). `SearchIndexer.sync`:
+  - no index / unreadable / schema mismatch / lag > `catch-up-max-revisions` → full rebuild into
+    `{root}/{id}.rebuild-{ts}`, stamped with the head captured before it started, swapped under the write lock, then
+    replay;
+  - otherwise replay `(stamp, head]`: touched = `summary.assets` uuids ∪ assets with a version opened in the range
+    (covers a `changeUid` without a version and folder-move descendants), plus template cascades; each is upserted
+    from its **current** version or deleted; stamp = highest revision R such that every revision ≤ R exists and had
+    no failed asset (gapless rule, the ADR-0002 counter).
+  - Startup (`SearchIndexCatchUpRunner`), live events, reindex and post-swap catch-up all call it. Archived project →
+    close its index, skip.
+- **Cascades:** a touched `PAGE_TEMPLATE`/`SECTION_TEMPLATE`/`DATASET` whose `contentDefinition`, `parentTemplateRef`
+  or deleted state differs from its version at the stamp reaches its dependents over open reverse edges (`TEMPLATE`,
+  catalog-card `CONTENT_REF …templateRef`), transitively through child templates. Compile caches are keyed by version,
+  so nothing needs invalidating.
+- **Extraction:** `SearchTextExtractor` per type + registry; `ContentTextWalker` walks values by definition
+  (page = effective definition via `TemplateHierarchies`, sections/cards/datasets via `CompiledTemplateCache`);
+  missing definition → every string leaf. HTML → text: one `HtmlText` helper in sf-common, `Filters.plain` delegates.
+- **Query:** programmatic only (no `QueryParser` on input), ≤ 32 words, quoted phrases, uid exact/prefix, title
+  phrase/terms+prefix, all words across `text`/`text_de`/`text_en`/`source`; fuzzy second pass for words ≥ 5 chars
+  on zero hits. Filters are `FILTER` clauses. Facets from a counting collector over the query without the type filter
+  (drill-sideways; `type` is single-valued, so `totalElements` is exact). `matchedIn` from the Matches API; snippets
+  from `UnifiedHighlighter.highlightWithoutSearcher` with an offsets formatter → plain text + `[{start,end}]`.
+- **UI:** `features/search/` (`search.service.ts`, `search-page.component`, `search.util.ts` for highlight splitting,
+  query-param state, grouping), `shared/asset-route.util.ts`, palette rewrite, `?asset=` deep links in media,
+  templates, navigation, globals, content.
+
+## Steps
+- [x] M23.1.1 Lucene deps, `sf.search` properties, `SearchIndexService`, analyzers + unit tests
+- [x] M23.1.2 `HtmlText`, extractors + registry + walker + unit tests
+- [x] M23.2.1 event, listener, `SearchIndexer` sync/replay, cascades, metrics + integration tests
+- [x] M23.2.2 rebuild/swap, startup runner, status/reindex endpoints, archive, lock, health + integration tests
+- [x] M23.3.1 query builder, highlighting, facets, `GET /search`, problems + API tests; OpenAPI + schema.d.ts
+- [x] M23.4.1 search service, `assetRoute`, palette, deep links + util specs
+- [x] M23.4.2 search page, nav rail entry, status/rebuild + util specs
+- [x] M23.5.1 docs/spec/infra, benchmark, Playwright journeys live, review
+
+## Review
+- **Branch:** `m23-global-search` (off `master`). Not committed.
+- **Verification:**
+  - `./gradlew test --rerun build` green: 887 backend tests (819 at M22), 0 failures, 3 skipped (gated benchmarks); new `SearchIndexServiceTest` (15),
+    `SearchAnalyzersTest` (5), `SearchTextExtractorsTest` (12), `HtmlTextTest` (6), `SearchIndexingIntegrationTest` (13),
+    `SearchIndexRecoveryIntegrationTest` (5), `SearchApiTest` (11); 0 failures; `checkModuleLayers`, spotless green.
+  - `ng build` green; vitest: new `search.util.spec` (11), `search.service.spec` (5), `asset-route.util.spec` (5) pass; the
+    same 20 known runner failures.
+  - Live (dev backend + `ng serve`): `m23-journeys` 4/4 (find and fix, media deep link, every type's deep link, time
+    travel + 400 px); `m16`–`m22` journeys all green (23/23 total); lagging index + admin rebuild checked with live
+    indexing off.
+  - Benchmark 5,000 pages: rebuild 1.6 s, query p50 19.5 ms / p95 34.6 ms, settle after 100-save burst 232 ms.
+- **Found and fixed during verification:** same-query submit didn't re-run; "1 results"; misleading empty state while
+  lagging; inline HTML tags split words; nested DTO schema names colliding in OpenAPI (`PageMeta`).
+- **Deviations** are listed in `tasks/23-m23-global-search/README.md` → Implementation notes.
+
+---
+
 # M22 implementation — Plan
 
 ## Approach

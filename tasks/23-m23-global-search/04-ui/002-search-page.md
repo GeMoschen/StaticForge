@@ -1,6 +1,6 @@
 ---
 id: M23.4.2
-status: todo
+status: done
 depends: [M23.3.1]
 epic: m23-global-search
 feature: ui
@@ -47,17 +47,17 @@ area: frontend
 
 ## Acceptance criteria
 
-- [ ] `p/:key/search?q=teaser&type=SECTION_TEMPLATE` loads with the query and filter applied. Toggling
+- [x] `p/:key/search?q=teaser&type=SECTION_TEMPLATE` loads with the query and filter applied. Toggling
       a facet updates results and URL; browser back restores the previous state.
-- [ ] Facet counts for unselected types remain visible when one type is selected.
-- [ ] Paging works and resets to page 0 when `q` or filters change.
-- [ ] Clicking a result uses `assetRoute` and opens the asset (same deep links as `M23.4.1`).
-- [ ] The Rebuild action is visible only for PROJECT_ADMIN (role from the project context store). It
+- [x] Facet counts for unselected types remain visible when one type is selected.
+- [x] Paging works and resets to page 0 when `q` or filters change.
+- [x] Clicking a result uses `assetRoute` and opens the asset (same deep links as `M23.4.1`).
+- [x] The Rebuild action is visible only for PROJECT_ADMIN (role from the project context store). It
       calls the endpoint, shows `REBUILDING`, and handles `409` with a toast.
-- [ ] Verified in the running app against the dev backend with a seeded project (see the project's
+- [x] Verified in the running app against the dev backend with a seeded project (see the project's
       local-run notes for ports/login), including a lagging-index state, which you can force by
       pausing the listener in dev if needed.
-- [ ] `npm run build` green; pure-logic specs (query-param ↔ state mapping) pass; `templateUrl`
+- [x] `npm run build` green; pure-logic specs (query-param ↔ state mapping) pass; `templateUrl`
       spec failures, if any, are the known tooling issue and recorded.
 
 ## Out of scope

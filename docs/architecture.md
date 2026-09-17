@@ -42,7 +42,7 @@ sf-app → sf-api → { sf-domain, sf-template, sf-generate } → sf-common
 | Module | Package roots (`com.acme.staticforge.*`) | Responsibility |
 |---|---|---|
 | `sf-common` | `common` | `Problem`/`ProblemFactory` (RFC 9457), `JsonUtil`, shared utilities |
-| `sf-domain` | `asset` (incl. `asset.globals`), `revision`, `project`, `user`, `channel`, `structure`, `preview`, `generate` | entities, repositories, domain services, transactions |
+| `sf-domain` | `asset` (incl. `asset.globals`), `revision`, `project`, `user`, `channel`, `structure`, `preview`, `generate`, `search` | entities, repositories, domain services, transactions; the embedded search index (Lucene is a dependency of this module only) |
 | `sf-template` | `template.cdl`, `.octl`, `.render`, `.content`, `.diagnostic`, `.expression` | CDL + OCTL lex/parse/compile/render |
 | `sf-generate` | `generate.plan`, `.snapshot`, `.render`, `.stage`, `.target`, `.nav`, `.postprocess` | build planning, rendering pipeline, writers, targets |
 | `sf-api` | `api`, `security` | REST controllers, DTOs, JWT/authorization |
@@ -126,3 +126,53 @@ Liquibase owns the schema (`ddl-auto: validate` in every profile); see `infra/RE
 ## 10. Frontend
 
 Angular 18+ standalone, zoneless + signals. The dynamic form engine (`sf-content-form` + `FormBuilderService` + `EDITOR_REGISTRY`) renders a form from the `ContentDefinition`; the revision spine is the signature UX element (§24.2). See the [user guide](user-guide.md) and `ui/src/app/features/` for the feature layout.
+
+## 11. Search
+
+Editorial full-text search (M23) over every **current** asset of a project, in `sf-domain` package `search`, with
+`SearchController` in sf-api and the startup catch-up and health indicator in sf-app. It is separate from the public
+site's `search-index.json` (`SearchIndexPostProcessor`), which generation writes.
+
+- **The database is the source of truth.** The index is a derived cache: nothing reads it to make a write decision, and
+  deleting the index directory and restarting is always safe.
+- **Index.** `SearchIndexServiceImpl` keeps one Lucene directory per project under `sf.search.index-root`
+  (`{root}/{projectId}`; `ByteBuffersDirectory` with `sf.search.directory=memory` in tests), with a lazily opened
+  `IndexWriter` and `SearcherManager`. Searches and writes hold the project's read lock; closing and the rebuild swap
+  hold its write lock, so no reader has files open while directories are renamed (Windows). Documents
+  (`SearchDocument`, fields in `SearchFields`): keyword `uuid`, `type` (+ doc values for facets), `uid`/`uid_lower`,
+  `folderPath`; `title` (display name + uid); prose in `text` (neutral: lowercase, German normalization, ASCII
+  folding), `text_de` and `text_en` (stemming); code in `source` (neutral only); a stored `snippetSource`.
+- **Extraction.** `extract.SearchTextExtractorRegistry` picks one `SearchTextExtractor` per type. `ContentTextWalker`
+  walks content by its definition — page templates' effective definitions (`TemplateHierarchies`), section templates
+  for sections and catalog cards, datasets for records, a global set's own CDL — and falls back to every string leaf
+  when a definition is gone. Rich text becomes plain text through `HtmlText` (sf-common), which the OCTL `plain`
+  filter shares. Definitions compile through `CompiledTemplateCache`, keyed by template version.
+- **Lifecycle, one path.** `RevisionServiceImpl.allocate` publishes a `RevisionCommittedEvent`; the after-commit
+  `SearchIndexingListener` only asks `SearchIndexer` to sync the project (a rolled-back transaction delivers nothing,
+  a joined batch publishes no second event). Syncs run on virtual threads, one at a time per project, coalesced to at
+  most one pending run. A sync compares the index's commit data — revision stamp, `SearchSchemaVersion`, owner
+  (project key + creation time) — with the database:
+  - no index, unreadable, other schema, other owner (a leftover index of another database), stamp ahead of the
+    database, or more than `sf.search.catch-up-max-revisions` behind: **rebuild** into `{id}.rebuild-{ts}` from the
+    current versions in batches, stamped with the head revision captured before it started, then swap under the write
+    lock;
+  - then **replay** the revisions after the stamp: assets in their `summary.assets` or with a version opened in them
+    (a uid change writes no version, a folder move changes descendants without summary entries), plus the pages,
+    records and child templates of a template or dataset whose CDL, parent or deleted state changed (reverse
+    `TEMPLATE` and catalog-card edges). Each is upserted from its current version or deleted.
+  - The stamp is written in the same Lucene commit as the documents and advances only to the highest revision R such
+    that every revision up to R exists and none of its assets failed, so it may lag but never runs ahead.
+  - Startup (`SearchIndexCatchUpRunner`) and `POST /search/reindex` request the same sync; archiving a project closes
+    its index.
+- **Queries.** `SearchQueryExecutor` never parses user input as query syntax: `SearchInput` tokenizes it (≤ 32 words,
+  quoted phrases), and the query is built from term, phrase and prefix clauses (uid exact 10, uid prefix 6, title
+  phrase 5, title terms 4, body 1; a fuzzy second pass on no hits). Filters don't score. Facets come from a collector
+  over the query without its type filter; `matchedIn` from the Matches API; snippets from
+  `UnifiedHighlighter.highlightWithoutSearcher` with a formatter that returns offsets.
+- **Single instance.** Lucene's `write.lock` allows one writer per directory. A project whose lock is held elsewhere is
+  `UNAVAILABLE` (logged, `503 SF-SEARCH-0503`, health detail `DEGRADED`); the application still starts. See
+  `infra/docs/deploy-runbook.md`.
+- **UI.** `features/search/` (search page, `SearchService` with the debounced, cancelling as-you-type stream) and the
+  command palette (`core/ui/command-palette`) share `shared/asset-route.util.ts`, which maps a hit to its screen
+  (`pages/:uuid`, `content/records/:uuid`, or `?asset=`/`?folder=` deep links that the stores apply once and clear).
+

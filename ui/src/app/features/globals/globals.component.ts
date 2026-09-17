@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
@@ -14,6 +15,7 @@ import {
 import { SfTreeComponent } from '../../shared/components/sf-tree.component';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { consumeQueryParam } from '../../shared/deep-link';
 import { GlobalSetDetailComponent } from './global-set-detail.component';
 import { GlobalsService, type FolderView, type GlobalSetSummaryView } from './globals.service';
 
@@ -52,6 +54,11 @@ const STARTER_CDL = `content {
 })
 export class GlobalsComponent {
   readonly projectKey = input.required<string>();
+  /** `?asset=<uuid>` selects that property set or folder (search deep link, M23.4.1). */
+  readonly asset = input<string | undefined>();
+
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   private readonly globals = inject(GlobalsService);
   private readonly toasts = inject(ToastService);
@@ -107,6 +114,16 @@ export class GlobalsComponent {
     effect(() => {
       const key = this.projectKey();
       untracked(() => this.reload(key));
+    });
+    effect(() => {
+      const uuid = this.asset();
+      if (!uuid) {
+        return;
+      }
+      untracked(() => {
+        this.select(uuid);
+        consumeQueryParam(this.router, this.route, 'asset');
+      });
     });
   }
 

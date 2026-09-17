@@ -17,6 +17,37 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
 
     List<AssetVersion> findByAssetIdOrderByValidFromRevisionDesc(Long assetId);
 
+    /** The open versions (tombstones included) of several assets, asset joined (search indexing, M23.2.1). */
+    @Query("SELECT v FROM AssetVersion v JOIN FETCH v.asset WHERE v.assetId IN :assetIds AND v.validToRevision IS NULL")
+    List<AssetVersion> findOpenWithAssetByAssetIdIn(@Param("assetIds") java.util.Collection<Long> assetIds);
+
+    /** Ids of a project's current, non-deleted versions in id order: a full search index rebuild pages through them. */
+    @Query("""
+            SELECT v.id FROM AssetVersion v
+            WHERE v.asset.projectId = :projectId
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            ORDER BY v.id
+            """)
+    List<Long> findCurrentVersionIdsByProject(@Param("projectId") long projectId);
+
+    /**
+     * Assets with a version opened in revisions {@code (sinceRevision, untilRevision]}, each with the <em>oldest</em>
+     * such revision (search catch-up keeps its stamp below the first revision an asset failed to index in).
+     */
+    @Query("""
+            SELECT new com.acme.staticforge.asset.AssetChange(v.assetId, MIN(v.validFromRevision))
+            FROM AssetVersion v
+            WHERE v.asset.projectId = :projectId
+              AND v.validFromRevision > :sinceRevision
+              AND v.validFromRevision <= :untilRevision
+            GROUP BY v.assetId
+            """)
+    List<AssetChange> findFirstChangesBetween(
+            @Param("projectId") long projectId,
+            @Param("sinceRevision") long sinceRevision,
+            @Param("untilRevision") long untilRevision);
+
     /** The single version valid at revision {@code R} (inclusive of {@code validFrom}, exclusive of {@code validTo}). */
     @Query("""
             SELECT v FROM AssetVersion v

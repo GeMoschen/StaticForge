@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link RevisionService} implementation. Allocation happens in the same transaction as
  * the write that triggered it, so a rollback leaves no gap (§7.3). The counter row lock
  * serializes writers per project only.
+ *
+ * <p>Every allocation publishes one {@link RevisionCommittedEvent}, delivered to after-commit listeners (search
+ * indexing, M23.2.1); joining an open batch publishes nothing.
  */
 @Service
 @RevisionAware
@@ -25,15 +29,18 @@ public class RevisionServiceImpl implements RevisionService {
     private final RevisionRepository revisionRepository;
     private final ObjectMapper objectMapper;
     private final Counter allocateCounter;
+    private final ApplicationEventPublisher events;
 
     public RevisionServiceImpl(
             RevisionCounterRepository counterRepository,
             RevisionRepository revisionRepository,
             ObjectMapper objectMapper,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            ApplicationEventPublisher events) {
         this.counterRepository = counterRepository;
         this.revisionRepository = revisionRepository;
         this.objectMapper = objectMapper;
+        this.events = events;
         this.allocateCounter = Counter.builder("sf.revision.allocate")
                 .description("Revisions allocated (spec §26.4).")
                 .register(meterRegistry);
@@ -54,7 +61,9 @@ public class RevisionServiceImpl implements RevisionService {
                 type,
                 comment,
                 summary);
-        return revisionRepository.save(revision);
+        Revision saved = revisionRepository.save(revision);
+        events.publishEvent(new RevisionCommittedEvent(projectId, saved.getRevisionId()));
+        return saved;
     }
 
     @Override

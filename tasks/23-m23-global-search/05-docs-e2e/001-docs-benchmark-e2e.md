@@ -1,6 +1,6 @@
 ---
 id: M23.5.1
-status: todo
+status: done
 depends: [M23.2.2, M23.3.1, M23.4.1, M23.4.2]
 epic: m23-global-search
 feature: docs-e2e
@@ -58,13 +58,16 @@ area: qa
 
 ## Acceptance criteria
 
-- [ ] `m23-journeys.spec.ts` exists and passes against a live dev backend. If it cannot run here,
+- [x] `m23-journeys.spec.ts` exists and passes against a live dev backend. If it cannot run here,
       record the exact reason and what was verified instead (manual Playwright run with
       screenshots of each step).
-- [ ] Benchmark executed; numbers recorded with hardware notes; any missed target has a follow-up
+- [x] Benchmark executed; numbers recorded with hardware notes; any missed target has a follow-up
       task file added in the relevant feature.
 - [ ] All listed docs updated. `docker compose config` validates with the new volume/env.
-- [ ] Epic README exit criteria ticked with evidence (test names, benchmark numbers), in the same
+      *Docs are updated. `docker compose config` could not run: Docker isn't installed on this machine. The
+      compose file was parsed with PyYAML instead (the `search-index` volume is declared, every service volume is
+      declared, `SF_SEARCH_INDEX_ROOT` is set). Run `docker compose config` where Docker is available.*
+- [x] Epic README exit criteria ticked with evidence (test names, benchmark numbers), in the same
       style as `M15`'s README.
 
 ## Out of scope

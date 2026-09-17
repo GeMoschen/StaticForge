@@ -75,3 +75,47 @@ never loaded.
   N this fixture-build phase can be slow; it is **not** part of the measured generation time.
   A lighter direct-insert bulk-feed path is a documented future escape hatch (§26.2) if the
   nightly job needs faster fixture construction.
+
+---
+
+# Search benchmark (M23.5.1)
+
+`infra/scripts/benchmark-search.sh [pages]` runs the perf-gated `SearchBenchmark` (same gating as above, `SF_PERF=true`)
+on a filesystem index. The fixture is built through the real services: a page template with a text intro, a rich-text
+body and a section body, a section template, and `N` pages (default 5,000, the generation benchmark's size), each with
+~110 words of German/English prose from a fixed vocabulary in its intro, body (paragraphs, bold, a list) and one
+section. Live indexing is on while the fixture is built, like in production.
+
+It measures:
+
+- **Full rebuild** of the project's index (`POST /search/reindex`'s path: `SearchIndexer.requestRebuild` until idle).
+- **200 queries** through `SearchService.search` (validation, index status, query, facets, snippets; no HTTP), 50 each of:
+  a uid prefix (`benchmark_page_42`), a single word, a two-word phrase, a word filtered by `type=PAGE` and
+  `folder=/pages_root/`. p50/p95/max over all, p95 per kind. 20 warm-up queries are not measured.
+- **Indexing lag** during a burst of 100 page saves (the largest `lag` seen, sampled every 10 saves) and the time the
+  index needs to catch up after the last save.
+
+## Results (2026-09-17)
+
+Intel Core i5-7600K (4 cores / 4 threads), 64 GB RAM, SATA SSD, Windows 10, OpenJDK 21.0.11, H2 in-memory (`test`
+profile), the same machine class as the generation benchmark runs.
+
+| Measure | Target (M23) | Result, 5,000 pages |
+|---|---|---|
+| Full rebuild (5,002 documents) | < 60 s | **1.6 s** |
+| Query p50 / p95 / max (200 queries) | p95 < 150 ms | **19.5 / 34.6 / 93.8 ms** |
+| p95 by kind: uid prefix / word / phrase / filtered | | 17.9 / 39.2 / 34.6 / 35.4 ms |
+| Burst of 100 saves | | 556 ms, index at most 72 revisions behind |
+| Catch-up after the burst | | 232 ms |
+| Index size on disk | | 4.9 MB |
+
+```
+pages=5000, fixtureMs=31576, rebuildMs=1604, queries=200, totalHits=477237, p50Ms=19.5, p95Ms=34.6, maxMs=93.8,
+uidPrefixP95Ms=17.9, wordP95Ms=39.2, phraseP95Ms=34.6, filteredP95Ms=35.4, burstSaves=100, burstMs=556,
+maxLagDuringBurst=72, settleAfterBurstMs=232, indexBytes=4893593
+```
+
+Both targets are met with a wide margin; no follow-up task was needed. The queries found 2,386 hits on average (the fixture
+draws from a 50-word vocabulary), so they count and rank far more hits than typical editorial searches.
+During the burst, syncs coalesce (at most one pending per project), which is why the lag rises while saving and drops to
+zero within a fraction of a second after.

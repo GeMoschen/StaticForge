@@ -6,8 +6,10 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
+import { consumeQueryParam } from '../../shared/deep-link';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
@@ -64,6 +66,10 @@ export class PagesListComponent {
   protected readonly readOnly = this.timeTravel.isTimeTravel;
 
   readonly projectKey = input.required<string>();
+  /** `?folder=<uuid>` selects that folder (search deep link, M23.4.1). */
+  readonly folder = input<string | undefined>();
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly tree = this.store.pageFolderTree;
   protected readonly pageTemplates = computed<TemplateSummary[]>(() => this.store.pageTemplates());
@@ -133,6 +139,17 @@ export class PagesListComponent {
         return;
       }
       this.store.loadFor(key).subscribe();
+    });
+
+    effect(() => {
+      const uuid = this.folder();
+      if (!uuid || !findFolder(this.tree(), uuid)) {
+        return;
+      }
+      untracked(() => {
+        this.selectFolder(uuid);
+        consumeQueryParam(this.router, this.route, 'folder');
+      });
     });
 
     effect(

@@ -20,9 +20,9 @@ UI can filter.
 
 ## Feature exit criteria
 
-- [ ] `GET /search` returns paged, ranked hits with snippets and type facets, VIEWER-authorized, and
+- [x] `GET /search` returns paged, ranked hits with snippets and type facets, VIEWER-authorized, and
       is documented in `docs/api.md` and the OpenAPI schema.
-- [ ] Malformed or adversarial input (unbalanced quotes, `*` alone, `field:` syntax, very long
+- [x] Malformed or adversarial input (unbalanced quotes, `*` alone, `field:` syntax, very long
       strings) yields a `200` with sensible results or a `400` problem, never a `500`.
 
 ## Dependencies

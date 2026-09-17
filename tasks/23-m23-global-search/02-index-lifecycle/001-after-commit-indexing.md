@@ -1,6 +1,6 @@
 ---
 id: M23.2.1
-status: todo
+status: done
 depends: [M23.1.2]
 epic: m23-global-search
 feature: index-lifecycle
@@ -65,25 +65,25 @@ touched.
 
 ## Acceptance criteria
 
-- [ ] Integration tests (Spring context, H2, `sf.search.directory=memory`), each asserting the
+- [x] Integration tests (Spring context, H2, `sf.search.directory=memory`), each asserting the
       index state after the async work settles (await with a timeout, not a sleep):
-  - [ ] Creating a page with a unique word in a rich-text value makes it searchable.
-  - [ ] Updating the word replaces it (the old word no longer matches).
-  - [ ] Soft delete removes the page; restore brings it back.
-  - [ ] Renaming a UID updates `uid` field matches.
-  - [ ] Project creation (one compound revision) indexes its assets without duplicates.
-  - [ ] Project rollback (`ProjectRestoreService.restoreTo`) reflects the restored content.
-  - [ ] Import (`ProjectExportImportServiceImpl`) makes imported pages searchable.
-  - [ ] A media metadata update (alt text) is searchable.
-  - [ ] A section-template CDL change that removes an editor re-extracts pages using it (the removed
+  - [x] Creating a page with a unique word in a rich-text value makes it searchable.
+  - [x] Updating the word replaces it (the old word no longer matches).
+  - [x] Soft delete removes the page; restore brings it back.
+  - [x] Renaming a UID updates `uid` field matches.
+  - [x] Project creation (one compound revision) indexes its assets without duplicates.
+  - [x] Project rollback (`ProjectRestoreService.restoreTo`) reflects the restored content.
+  - [x] Import (`ProjectExportImportServiceImpl`) makes imported pages searchable.
+  - [x] A media metadata update (alt text) is searchable.
+  - [x] A section-template CDL change that removes an editor re-extracts pages using it (the removed
         editor's text no longer matches).
-- [ ] A transaction that allocates a revision and then throws leaves the index unchanged, and the
+- [x] A transaction that allocates a revision and then throws leaves the index unchanged, and the
       listener is never invoked (test with a forced exception after `appendSummary`).
-- [ ] A compound revision (`beginBatch` + several `allocateOrJoin` joins) triggers exactly one
+- [x] A compound revision (`beginBatch` + several `allocateOrJoin` joins) triggers exactly one
       indexing pass (verified via spy/counter).
-- [ ] The request thread never waits on indexing. A test with a deliberately slow extractor shows
+- [x] The request thread never waits on indexing. A test with a deliberately slow extractor shows
       the save returns before indexing completes.
-- [ ] `./gradlew :server:sf-domain:test :server:sf-app:test` green; `ConcurrentWritersTest` and
+- [x] `./gradlew :server:sf-domain:test :server:sf-app:test` green; `ConcurrentWritersTest` and
       `RevisionInvariantsTest` unchanged and green (`ConcurrentWritersTest` is known to be flaky; rerun before attributing a failure).
 
 ## Out of scope

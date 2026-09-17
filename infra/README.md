@@ -112,4 +112,30 @@ npm test
 | `SF_JWT_SECRET`     | backend  | HS256 secret (dev/demo only)                                  |
 | `SF_JWT_KEYSTORE`   | backend  | RS256 keystore location (prod; provisioned in M1)             |
 | `SF_MEDIA_ROOT`     | backend  | Media blob store root (mounted volume in compose)             |
+| `SF_SEARCH_INDEX_ROOT` | backend | Root of the embedded search indexes, one directory per project (`search-index` volume in compose; default `./build/search-index`). Derived data: safe to delete, rebuilt on start. **One backend instance per index root** — see [Search: single-instance constraint](#search-single-instance-constraint) |
 | `SF_OUTPUT_ROOT`    | backend  | Generated output root; each target publishes to `{projectKey}/{path}/current` beneath it. Old shared-root output (`builds/`, `current`, `s3/`) is deleted at startup unless `sf.generate.cleanup-legacy-output=false` — repoint web servers first |
+
+## Search: single-instance constraint
+
+Editorial search (M23) keeps an embedded Apache Lucene index per project on the backend's disk
+(`SF_SEARCH_INDEX_ROOT`, the `search-index` volume). Lucene allows **one writer per index directory**, guarded by a
+`write.lock` file, so **one backend instance** may use an index root. This is a scaling limit of v1, next to the
+single-node generation queue.
+
+- **Why:** the index is updated after every commit by the instance that made the commit; a second instance would
+  neither receive those updates nor be allowed to write the same directory.
+- **Symptoms of a second instance on the same volume:** its log shows `Search index of project N is locked by another
+  process. Search supports a single application instance per index root`, `GET /search` answers `503 SF-SEARCH-0503`,
+  `GET /search/status` reports `UNAVAILABLE`, and `/actuator/health` stays `UP` with the detail `search: DEGRADED`.
+  Everything else keeps working.
+- **What multi-instance would need:** per-node index volumes (each instance catches up from the revision log with its
+  own revision stamp, and a load balancer would have to route a user's searches to a caught-up node), or a shared index
+  service. Neither is implemented.
+- **No backup needed:** the index is derived from the database. Exclude it from backups (see the backup runbook).
+- **Forcing a rebuild:** a project admin calls `POST /api/v1/projects/{key}/search/reindex` (or uses **Rebuild index**
+  on the search page); queries keep answering from the old index until the new one is swapped in. To rebuild
+  everything, stop the backend, delete the `search-index` volume (or the directory) and start it again. An index from
+  another database (e.g. after restoring a dump) is detected and rebuilt automatically.
+- `sf.search.live-indexing=false` (`SF_SEARCH_LIVE_INDEXING` in the dev profile) stops indexing after each commit; the
+  index then only catches up on start or reindex. Useful to demonstrate a lagging index, not for production.
+

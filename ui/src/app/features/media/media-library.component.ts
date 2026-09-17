@@ -14,6 +14,7 @@ import {
 } from '@angular/core';
 import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router } from '@angular/router';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -34,6 +35,7 @@ import { MediaFolderNodeComponent, FolderMoveEvent } from './media-folder-node.c
 import { MediaNavNodeComponent } from './media-nav-node.component';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { consumeQueryParam } from '../../shared/deep-link';
 
 type MediaView = components['schemas']['MediaView'];
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
@@ -72,7 +74,13 @@ const PAGE_SIZE = 40;
 })
 export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   readonly projectKey = input.required<string>();
+  /** `?asset=<uuid>` opens that media item's detail drawer (search deep link, M23.4.1). */
+  readonly asset = input<string | undefined>();
+  /** `?folder=<uuid>` selects that folder. */
+  readonly folder = input<string | undefined>();
 
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly api = inject(ApiClient);
   private readonly project = inject(ProjectContextStore);
   private readonly toasts = inject(ToastService);
@@ -188,6 +196,29 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
         this.search.set(q);
         this.reload();
       });
+
+    // Deep links apply once what they name has loaded, then clear themselves.
+    effect(() => {
+      const uuid = this.asset();
+      if (!uuid || !this.allMedia().some((item) => item.uuid === uuid)) {
+        return;
+      }
+      untracked(() => {
+        this.onSelectMediaLeaf(uuid);
+        consumeQueryParam(this.router, this.route, 'asset');
+      });
+    });
+    effect(() => {
+      const uuid = this.folder();
+      const node = uuid ? findFolder(this.tree(), uuid) : null;
+      if (!node) {
+        return;
+      }
+      untracked(() => {
+        this.selectFolder(node);
+        consumeQueryParam(this.router, this.route, 'folder');
+      });
+    });
 
     effect(() => {
       const key = this.projectKey();

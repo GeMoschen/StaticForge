@@ -1,6 +1,6 @@
 ---
 id: M23.2.2
-status: todo
+status: done
 depends: [M23.2.1]
 epic: m23-global-search
 feature: index-lifecycle
@@ -57,23 +57,23 @@ runs once the DB is up.
 
 ## Acceptance criteria
 
-- [ ] Integration test: index a project, then append revisions directly without the listener
+- [x] Integration test: index a project, then append revisions directly without the listener
       (disable it, or clear its queue to simulate a crash). Restarting the runner catches up; the
       new content is searchable and the stamp equals the latest revision.
-- [ ] Integration test: delete the index directory (filesystem directory in a temp root). The runner
+- [x] Integration test: delete the index directory (filesystem directory in a temp root). The runner
       rebuilds, and all current assets are searchable.
-- [ ] Integration test: a schema-version mismatch triggers a rebuild.
-- [ ] Integration test: queries succeed during `POST /search/reindex` and return the pre-rebuild
+- [x] Integration test: a schema-version mismatch triggers a rebuild.
+- [x] Integration test: queries succeed during `POST /search/reindex` and return the pre-rebuild
       index until the swap, then the rebuilt index. A concurrent second reindex returns `409`.
-- [ ] `GET /search/status` reflects `lag` and `state`. `reindex` requires PROJECT_ADMIN and returns
+- [x] `GET /search/status` reflects `lag` and `state`. `reindex` requires PROJECT_ADMIN and returns
       `403` for EDITOR/VIEWER members and `404` for non-members (§8.4).
-- [ ] Archiving a project closes its index (no open file handles; verified via the service's
+- [x] Archiving a project closes its index (no open file handles; verified via the service's
       open-index registry).
-- [ ] Startup with a locked index directory (a simulated second instance) logs the
+- [x] Startup with a locked index directory (a simulated second instance) logs the
       single-instance error, marks the search state `UNAVAILABLE`, and the app still starts.
-- [ ] OpenAPI regenerated; `ui/src/app/core/api/generated/schema.d.ts` updated
+- [x] OpenAPI regenerated; `ui/src/app/core/api/generated/schema.d.ts` updated
       (`npm run generate:api`).
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 

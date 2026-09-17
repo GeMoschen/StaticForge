@@ -30,14 +30,14 @@ write path:
 
 ## Feature exit criteria
 
-- [ ] Every mutation path that allocates a revision reaches the index after commit. This includes
+- [x] Every mutation path that allocates a revision reaches the index after commit. This includes
       import (`ProjectExportImportServiceImpl`), project rollback (`ProjectRestoreService`),
       channel template edits (`ChannelServiceImpl`) and template rename cascades
       (`TemplateServiceImpl`). Proven by integration tests, not by inspection alone.
-- [ ] Rolled-back transactions never change the index.
-- [ ] Deleting the index directory, or simulating a crash between the DB commit and the index
+- [x] Rolled-back transactions never change the index.
+- [x] Deleting the index directory, or simulating a crash between the DB commit and the index
       commit, recovers on the next start or the next indexing pass.
-- [ ] `POST /search/reindex` rebuilds while queries keep serving the previous index until the new
+- [x] `POST /search/reindex` rebuilds while queries keep serving the previous index until the new
       one is swapped in.
 
 ## Dependencies

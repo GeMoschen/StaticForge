@@ -1,6 +1,6 @@
 ---
 id: M23.1.2
-status: todo
+status: done
 depends: [M23.1.1]
 epic: m23-global-search
 feature: index-core
@@ -72,7 +72,7 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Unit tests per extractor on representative payloads:
+- [x] Unit tests per extractor on representative payloads:
       - a page with a rich-text editor containing `<p>Hello <strong>world</strong></p>` extracts
         `Hello world`;
       - a page with a nested list inside a catalog card extracts the inner text;
@@ -82,15 +82,15 @@ area: backend
       - a template's CDL and OCTL sources are included, OCTL in the neutral field only;
       - a page reference's label is included;
       - store root folders produce no document.
-- [ ] An unknown editor name in `content` (stale value after a CDL change) is ignored, not an
+- [x] An unknown editor name in `content` (stale value after a CDL change) is ignored, not an
       exception. A missing template definition falls back to "index every string leaf" with a
       debug log.
-- [ ] The HTML-to-text conversion reuses an existing utility (`HtmlBlockSplitter`,
+- [x] The HTML-to-text conversion reuses an existing utility (`HtmlBlockSplitter`,
       `Filters` stripTags/plain, or a shared helper extracted into `sf-common`). There are no
       duplicated regexes.
-- [ ] Extractors for `GLOBAL_SET`, processed text media and `DATASET`/`RECORD` exist with tests,
+- [x] Extractors for `GLOBAL_SET`, processed text media and `DATASET`/`RECORD` exist with tests,
       or the missing type is recorded as a follow-up task in the relevant epic.
-- [ ] `./gradlew :server:sf-domain:test` is green.
+- [x] `./gradlew :server:sf-domain:test` is green.
 
 ## Out of scope
 

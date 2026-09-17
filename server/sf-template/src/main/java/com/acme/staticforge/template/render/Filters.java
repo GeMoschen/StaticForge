@@ -1,5 +1,6 @@
 package com.acme.staticforge.template.render;
 
+import com.acme.staticforge.common.HtmlText;
 import com.acme.staticforge.common.Slugifier;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -304,14 +305,7 @@ public final class Filters {
     }
 
     private static String plain(String s) {
-        String out = TAGS.matcher(s).replaceAll(" ");
-        out = out.replace("&nbsp;", " ")
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&quot;", "\"")
-                .replace("&#39;", "'");
-        return out.replaceAll("\\s+", " ").trim();
+        return HtmlText.toPlainText(s);
     }
 
     private static String toJson(JsonNode node) {
