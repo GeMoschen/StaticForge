@@ -1,108 +1,89 @@
-# M24 implementation — Plan
+# Project settings — merge tabs
 
-Branch `m24-multi-language` (off `master` at `05639f8`). Baseline verified: `./gradlew build -x test` green.
+Collapse the nine project-settings tabs to five:
+
+- **General** = General + Channels + Languages + Media (in that order)
+- **Generation** = Targets + Generation (in that order)
+
+remaining tabs: General · Generation · Revisions · Navigation URLs · Import / Export.
 
 ## Approach
 
-Sequential, in the epic's dependency order. Each task is implemented, then its module tests are run before the
-next starts. One shared value helper (`L10nValues`) and one config value type (`LocaleConfig`) are introduced
-first so nothing pokes at L10N JSON ad hoc.
-
-## Design (from reading the code)
-
-- **`LocaleConfig`** — immutable record in `sf-domain` `project` package: `List<ProjectLocale(code,label)> locales`,
-  `String defaultLocale`, `Map<String,List<String>> fallbacks`, `boolean defaultWithoutPrefix`. `EMPTY`,
-  `isLocalized()`, `effectiveChain(locale)`, `normalize()`/`validate()` returning field errors. Stored on
-  `Project` as a JSON column `locale_config` (`@JdbcTypeCode(SqlTypes.JSON) JsonNode`), precedent
-  `output_channel.settings` (changelog `010`, dbms-paired postgresql JSONB / h2 JSON). Next free changelog: `017`.
-- **`L10nValues`** — in `sf-common` (depended on by template, domain, generate, api): `isL10n`, `get`,
-  `resolve(node, chain)`, `with`, `wrap`, `unwrap`, `locales(node)`. Wrapper shape
-  `{"type":"L10N","values":{...}}`, mirroring the existing typed-value convention.
-- **Render locale** stays primitive in `sf-template` (`String locale`, `List<String> localeChain`) so
-  `sf-template` keeps not depending on `sf-domain`.
-- Project settings are not versioned rows (epic Notes) — `updateLocales` overwrites in place and allocates one
-  `UPDATE` revision, exactly like `ProjectServiceImpl.update`.
+Composition, not code moves. Each existing tab component keeps its template, styles, state and API calls;
+two thin container components (`ProjectSettingsGeneralViewComponent`, `ProjectSettingsGenerationViewComponent`)
+stack them as sections and own the page scrolling. Only the section chrome changed — heading level and the
+`height: 100%` / `overflow: auto` the children used to need as route roots.
 
 ## Steps
 
-- [x] M24.1.1 `LocaleConfig`, `locale_config` column + changelog 017, `ProjectService.updateLocales/locales`,
-      `GET/PUT /projects/{key}/locales`, OpenAPI + `schema.d.ts`
-- [x] M24.1.2 Project Settings → Languages tab, `LocalesStore`, URL-change confirmation
-- [x] M24.2.1 `localizable` CDL attribute + `SF-CDL-0107`, `L10nValues`, per-locale `ContentValidator`,
-      reference materialization through `values`
-- [x] M24.2.2 localizable toggle migration (template-driven + project-driven), localizable media metadata and
-      navigation labels
-- [x] M24.3.1 locale in `RenderContext`, fallback resolution, `$CMS_META(locale|language)$`, locale-aware
-      `date`/`number`/`upper`/`lower`, `CMS_LOCALES` iterable, golden tests
-- [x] M24.3.2 plan fan-out page × channel × locale, `{locale}` placeholder + `SF-GEN-0111`, URL registry
-      `locale_key`, hreflang, locale-narrowed incremental, preview/share locale
-- [x] M24.3.3 locale-aware globals, datasets, pagination, search
-- [x] M24.4.1 editing-locale switcher, form engine L10N binding, fallback display, preview locale, diff labels
-- [x] M24.4.2 `TranslationStatusService` + missing-translation indicators
-- [x] M24.5.1 locale settings in archives, protocol bump, locale conflict analysis
-- [x] M24.6.1 docs, `m24-journeys.spec.ts`, regression pass
+- [x] `project-settings-general-view.component.{ts,html,scss}` — General, Channels, Languages, Media
+- [x] `project-settings-generation-view.component.{ts,html,scss}` — Targets, Generation
+- [x] Children become plain blocks: drop `height: 100%` / `overflow: auto` from `:host` and from the
+      top-level wrapper in `project-settings-{general,media,locales,targets}`, `channels`, `generation` SCSS
+- [x] Demote section titles `h1` → `h2` in locales / targets / channels / generation (one heading level
+      under the shell's sr-only `h1`)
+- [x] `app.routes.ts`: `general` and `generation` point at the containers; `media`, `locales`, `channels`
+      redirect to `general` and `targets` to `generation`, so old deep links (and the Playwright journeys)
+      still land on the content
+- [x] `project-settings-shell.component.html` + class doc: remove the Channels, Languages, Media, Targets tabs
 
 ## Review
 
-**Branch:** `m24-multi-language` (off `master` at `05639f8`). Not committed.
+- `npx ng build` green; only pre-existing warnings (NG8102 in globals/templates, SCSS budget).
+- `npx vitest run`: 20 spec files fail with `resolveComponentResources` — verified identical on a clean
+  `git stash`ed tree, i.e. the known broken `templateUrl` spec runner, not this change.
+- No e2e tests written or run (as requested). The `settings/channels`, `settings/locales` and
+  `settings/generation` journeys in `e2e/m16`, `m22`, `m24` keep working through the redirects.
+- Visual check in the running app skipped at the user's request (login form needs a password).
 
-### What shipped
+---
 
-Locale is a content dimension of one project, opt-in per project:
+# UI unit suite — fix the 85 failing vitest tests
 
-- **Configuration** — `LocaleConfig` on `project.locale_config` (changelog `017`), `GET/PUT
-  /projects/{key}/locales`, and a **Languages** settings tab that warns with a real before/after path of
-  one of the project's own pages before an edit that moves every URL.
-- **Storage** — the CDL flag `localizable` (`SF-CDL-0112` on containers), the
-  `{"type":"L10N","values":{…}}` wrapper behind the single `L10nValues` helper, per-language validation
-  (`required` on the default language only, an undeclared language is a warning), and one normalizing
-  migration for all four triggers, in one compound revision, refusing to discard translations unconfirmed.
-- **Rendering** — render locale + fallback chain in `RenderContext`, resolution done once at value lookup,
-  `$CMS_META(locale|language)$`, the `CMS_LOCALES` switcher, and language-aware `date`/`number`/`upper`/`lower`.
-- **Generation** — plan fan-out page × channel × language, the `{locale}` path placeholder with
-  "default language without prefix", `SF-GEN-0111`, per-language URL registry rows, `hreflang` +
-  `x-default` in the sitemap, and incremental runs narrowed to the language that actually changed.
-- **Stores** — dataset `where`/`sort` on resolved values with language collation, per-language search
-  fields and `?locale=`, globals and pagination following automatically.
-- **UI** — one editing-language switcher driving every content form, the preview, share links, media alt
-  text, navigation labels, the search palette and the diff labels; fallback hints with *Copy from …*;
-  missing-translation counts.
-- **Export/import** — protocol 6 carries the configuration, translations round-trip, mismatches are warnings.
+Started at `20 failed | 28 passed` files / `85 failed | 240 passed` tests; ended at **48 / 327 green**.
 
-### Verification
+## Root cause (one config bug, ~70 of the 85)
 
-- `./gradlew build` green (compile, Spotless, ~410 backend tests, frontend bundle).
-- `npm run build` green.
-- New backend coverage: `LocaleConfigTest`, `L10nValuesTest`, `LocalizableCdlTest`,
-  `LocalizableContentValidatorTest`, `LocalizationMigratorTest`, `LocaleRenderTest`,
-  `LocalizedDatasetQueryTest`, `ProjectLocalesApiTest`, `LocalizationMigrationIntegrationTest`,
-  `LocalizedGenerationIntegrationTest` (incl. a link check over the generated output),
-  `TranslationStatusIntegrationTest`, `LocalizedExportImportIntegrationTest`, plus three golden render cases.
-- UI unit tests, measured both ways against `master` at the same commit: `npx vitest run` is
-  **85 failed / 236 passed of 321** here and **85 failed / 222 passed of 307** on `master` — the same 85
-  files fail before and after (the pre-existing `templateUrl` / `resolveComponentResources()` runner
-  issue), and all 14 new specs pass. `project-settings-locales.util.spec.ts` runs for real because the
-  pure logic lives outside the component. One file I broke on the way — `search.service.spec.ts`, from
-  injecting a store into `SearchService` and so dragging `ApiClient` into its injector — is fixed: the
-  palette passes the language with the query instead.
-- `ui/e2e/m24-journeys.spec.ts` collects; **not executed** (no seeded dev backend here), as for every
-  journey since M5.
+`ui/vitest.config.ts` had no Angular plugin, so `templateUrl` / `styleUrl` were never inlined and every
+component with external resources died in JIT with
+`Component 'X' is not resolved … Did you run and wait for 'resolveComponentResources()'?`.
 
-### Deviations from the task files
+- [x] `vitest.config.ts` → `vitest.config.mts` with `@analogjs/vite-plugin-angular` (`jit: true`,
+      `inlineStylesExtension: 'scss'`). `.mts` because the plugin is ESM-only and a CJS-transpiled
+      `.ts` config cannot `require` it.
+- [x] Pin `@analogjs/vite-plugin-angular` to `1.13.1` — the floating `^1.9.0` had resolved to `1.22.5`,
+      which imports `defaultClientConditions` from Vite 6 while vitest 2.1.9 brings Vite 5.
+- [x] `src/test-setup.ts`: import `@angular/core/testing` at module scope instead of inside `beforeAll`.
+      It registers the global TestBed-reset `beforeEach`/`afterEach` as a load side effect; from a hook
+      that is too late, and every raw-TestBed spec failed with "test module has already been instantiated".
+- [x] `src/test-setup.ts`: jsdom shim for `URL.createObjectURL` / `revokeObjectURL` (missing in jsdom, and
+      `vi.spyOn` throws on an absent property).
 
-- The container diagnostic is **`SF-CDL-0112`**, not the proposed `SF-CDL-0107` (taken by M17).
-- Export protocol version is **6**, not 4 (M17/M19 had already bumped it).
-- `date` in a project without languages now formats with `Locale.ROOT` instead of the JVM default, so
-  `MMMM` renders `Oct` rather than the server's spelled-out month. This is the determinism fix the task
-  asked for; `date("d. MMMM yyyy", "en")` restores the long form. Documented in the developer guide.
-- Generating a **past** revision uses the **current** language configuration, because project settings
-  aren't versioned rows — the limitation the epic Notes called for rather than versioning settings here.
+## Per-spec fixes (stale specs the broken runner had been hiding)
 
-### Defects found and fixed while building this
+- [x] `global-set-detail`, `project-settings-import` — `provideHttpClient()` + `provideHttpClientTesting()`
+      for the `EditingLocaleStore → LocalesStore → ApiClient` chain M24 introduced
+- [x] `project-settings-export` — stub the `globalsFolderTree` / `contentFolderTree` signals the component reads
+- [x] `templates` — `provideRouter([])` (component now injects `ActivatedRoute`); flush `[]` rather than
+      `{ content: [] }` for the bare-array `/channels` and `/datasets` endpoints
+- [x] `navigation` — fixture wrapped in the fixed "All Navigation" root the tree endpoint always returns
+- [x] `nav-reference-detail` — expect the trailing `locale` argument M24 added to `updateReference`
+- [x] `pagination-editor` — a second `detectChanges()`: constructor effects read the control only after the
+      creation pass. Stale "can't run in this workspace" note dropped from the spec and the component doc.
+- [x] Query/change-detection hygiene across `sf-create-asset-dialog`, `sf-rename-asset-dialog`, `pages-list`,
+      `revision-diff`, `project-settings-url-registry`, `project-settings-import`: `getByRole('button', …)`
+      instead of `getByText` (which resolves to the inner `<button>`, so `.closest('button')` and
+      multiple-match errors both bite), and `fireEvent` / `findBy*` where an assertion needs the pass after
+      the event.
 
-- `default` interface methods bypass Spring's transactional proxy, so an unconfirmed save that threw to
-  roll itself back had already committed. All five affected services now declare both overloads abstract.
-- `CarryForward` keyed page outputs without the language, so an incremental run of a localized project
-  carried forward one language per page and silently dropped the others.
-- Two integration tests compared `Long` ids with `==`; that only worked while ids stayed inside the
-  `Long` cache, and the new fixtures broke it. Both are in `tasks/lessons.md`.
+## One implementation change (agreed with the user)
+
+`sf-create-asset-dialog.component.html` — the submit button was `[disabled]="form.invalid || submitting()"`,
+which made the `markAllAsTouched()` guard inside `submit()` unreachable: clicking Create with a blank name
+did nothing and explained nothing. Now `[disabled]="submitting()"`, matching `sf-rename-asset-dialog`.
+
+## Review
+
+- `npx vitest run` → **48 files / 327 tests, all passing**.
+- `npx ng build` → green, only the pre-existing NG8102 and SCSS-budget warnings.
+- No e2e run.

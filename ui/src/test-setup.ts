@@ -2,6 +2,16 @@ import '@testing-library/jest-dom/vitest';
 import 'zone.js';
 import 'zone.js/testing';
 
+// jsdom implements neither `URL.createObjectURL` nor `URL.revokeObjectURL`. Components that hand
+// the browser a generated file (export download, media previews) call them, and specs that assert
+// on the download need something to spy on — `vi.spyOn` throws on a missing property.
+if (typeof URL.createObjectURL !== 'function') {
+  URL.createObjectURL = () => 'blob:jsdom-stub';
+}
+if (typeof URL.revokeObjectURL !== 'function') {
+  URL.revokeObjectURL = () => undefined;
+}
+
 // Wire Angular's fakeAsync/ProxyZone machinery into Vitest so that TestBed,
 // @testing-library/angular and fakeAsync work (equivalent to what the
 // Analog setup-vitest shim does). This patching MUST happen before
@@ -84,15 +94,19 @@ for (const method of ['beforeEach', 'afterEach', 'beforeAll', 'afterAll']) {
   };
 }
 
-ambient['beforeAll'](async () => {
-  const { getTestBed } = await import('@angular/core/testing');
-  const {
-    BrowserDynamicTestingModule,
-    platformBrowserDynamicTesting,
-  } = await import('@angular/platform-browser-dynamic/testing');
+// Imported at module scope — *after* the patching above, but still while Vitest is collecting,
+// never from inside a hook: `@angular/core/testing` registers the global `beforeEach`/`afterEach`
+// that reset the TestBed between tests as a side effect of being loaded. Loading it from a
+// `beforeAll` callback happens too late for those hooks to be picked up, and every spec driving
+// TestBed directly then fails with "Cannot configure the test module when the test module has
+// already been instantiated".
+const { getTestBed } = await import('@angular/core/testing');
+const {
+  BrowserDynamicTestingModule,
+  platformBrowserDynamicTesting,
+} = await import('@angular/platform-browser-dynamic/testing');
 
-  getTestBed().initTestEnvironment(
-    BrowserDynamicTestingModule,
-    platformBrowserDynamicTesting(),
-  );
-});
+getTestBed().initTestEnvironment(
+  BrowserDynamicTestingModule,
+  platformBrowserDynamicTesting(),
+);

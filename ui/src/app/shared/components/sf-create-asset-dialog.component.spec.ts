@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/angular';
+import { fireEvent, render, screen } from '@testing-library/angular';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from './sf-create-asset-dialog.component';
@@ -79,10 +79,10 @@ describe('SfCreateAssetDialogComponent', () => {
       on: { create },
     });
 
-    screen.getByText('Create').click();
+    screen.getByRole('button', { name: 'Create' }).click();
 
     expect(create).not.toHaveBeenCalled();
-    expect(screen.getByText('A name is required')).toBeTruthy();
+    expect(await screen.findByText('A name is required')).toBeTruthy();
   });
 
   it('emits create with exactly {displayName, templateUuid} for PAGE', async () => {
@@ -98,15 +98,12 @@ describe('SfCreateAssetDialogComponent', () => {
       on: { create },
     });
 
-    const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
-    nameInput.value = 'My Page';
-    nameInput.dispatchEvent(new Event('input'));
+    // `fireEvent` from @testing-library/angular runs change detection after the event, so the
+    // template sees the filled-in form before Create is clicked.
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'My Page' } });
+    fireEvent.change(screen.getByLabelText('Template'), { target: { value: 'tpl-1' } });
 
-    const select = screen.getByLabelText('Template') as HTMLSelectElement;
-    select.value = 'tpl-1';
-    select.dispatchEvent(new Event('change'));
-
-    screen.getByText('Create').click();
+    screen.getByRole('button', { name: 'Create' }).click();
 
     expect(create).toHaveBeenCalledTimes(1);
     const payload = create.mock.calls[0][0] as CreateAssetFormValue;
@@ -138,7 +135,7 @@ describe('SfCreateAssetDialogComponent', () => {
     const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
     nameInput.value = 'A folder';
     nameInput.dispatchEvent(new Event('input'));
-    screen.getByText('Create').click();
+    screen.getByRole('button', { name: 'Create' }).click();
 
     expect(api.listAssets).not.toHaveBeenCalled();
     expect(api.createFolder).not.toHaveBeenCalled();

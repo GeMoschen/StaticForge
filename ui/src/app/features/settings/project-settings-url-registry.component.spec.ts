@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/angular';
+import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelsService } from '../channels/channels.service';
@@ -176,14 +176,20 @@ describe('ProjectSettingsUrlRegistryComponent', () => {
     await waitFor(() => expect(screen.getByText('Home')).toBeTruthy());
 
     const channelSelect = (await screen.findAllByRole('combobox'))[0] as HTMLSelectElement;
-    channelSelect.value = 'html';
-    channelSelect.dispatchEvent(new Event('change'));
+    fireEvent.change(channelSelect, { target: { value: 'html' } });
     await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
 
-    screen.getByText('Reset channel').click();
+    // The scoped reset stays `[disabled]` until the chosen channel has been rendered into the
+    // binding, so wait for that rather than clicking a still-disabled button.
+    const reset = await waitFor(() => {
+      const btn = screen.getByRole('button', { name: 'Reset channel' }) as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+      return btn;
+    });
+    reset.click();
     await waitFor(() => expect(screen.getByText('Reset channel URLs')).toBeTruthy());
 
-    const confirmButtons = screen.getAllByText(/Reset channel/);
+    const confirmButtons = screen.getAllByRole('button', { name: 'Reset channel' });
     confirmButtons[confirmButtons.length - 1].click();
 
     expect(api.reset).toHaveBeenCalledWith('proj', { channelKey: 'html' });
@@ -201,14 +207,18 @@ describe('ProjectSettingsUrlRegistryComponent', () => {
     await waitFor(() => expect(screen.getByText('Home')).toBeTruthy());
 
     const areaSelect = (await screen.findAllByRole('combobox'))[1] as HTMLSelectElement;
-    areaSelect.value = 'GENERATED';
-    areaSelect.dispatchEvent(new Event('change'));
+    fireEvent.change(areaSelect, { target: { value: 'GENERATED' } });
     await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
 
-    screen.getByText('Reset area').click();
+    const reset = await waitFor(() => {
+      const btn = screen.getByRole('button', { name: 'Reset area' }) as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+      return btn;
+    });
+    reset.click();
     await waitFor(() => expect(screen.getByText('Reset area URLs')).toBeTruthy());
 
-    const confirmButtons = screen.getAllByText(/Reset area/);
+    const confirmButtons = screen.getAllByRole('button', { name: 'Reset area' });
     confirmButtons[confirmButtons.length - 1].click();
 
     expect(api.reset).toHaveBeenCalledWith('proj', { area: 'GENERATED' });

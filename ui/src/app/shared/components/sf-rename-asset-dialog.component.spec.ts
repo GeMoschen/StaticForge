@@ -32,7 +32,7 @@ describe('SfRenameAssetDialogComponent', () => {
     nameInput.value = '  New name  ';
     nameInput.dispatchEvent(new Event('input'));
 
-    screen.getByText('Save').click();
+    screen.getByRole('button', { name: 'Save' }).click();
 
     expect(renameDisplayName).toHaveBeenCalledTimes(1);
     expect(renameDisplayName).toHaveBeenCalledWith('New name');
@@ -59,10 +59,10 @@ describe('SfRenameAssetDialogComponent', () => {
     nameInput.value = '   ';
     nameInput.dispatchEvent(new Event('input'));
 
-    screen.getByText('Save').click();
+    screen.getByRole('button', { name: 'Save' }).click();
 
     expect(renameDisplayName).not.toHaveBeenCalled();
-    expect(screen.getByText('A name is required')).toBeTruthy();
+    expect(await screen.findByText('A name is required')).toBeTruthy();
   });
 
   it('closes on Escape', async () => {
@@ -100,13 +100,15 @@ describe('SfRenameAssetDialogComponent', () => {
       on: { uidChanged },
     });
 
-    screen.getByText('Change UID').click();
-    const uidInput = screen.getByPlaceholderText('lowercase letters, numbers, underscores') as HTMLInputElement;
+    screen.getByRole('button', { name: 'Change UID' }).click();
+    const uidInput = (await screen.findByPlaceholderText(
+      'lowercase letters, numbers, underscores',
+    )) as HTMLInputElement;
     uidInput.value = 'new_uid';
     uidInput.dispatchEvent(new Event('input'));
     // Two "Save" buttons coexist once UID editing starts (displayName's own
     // Save, plus sf-uid-rename's) — the UID one renders after it in the DOM.
-    const saveButtons = screen.getAllByText('Save');
+    const saveButtons = screen.getAllByRole('button', { name: 'Save' });
     saveButtons[saveButtons.length - 1].click();
 
     expect(uidChanged).toHaveBeenCalledTimes(1);

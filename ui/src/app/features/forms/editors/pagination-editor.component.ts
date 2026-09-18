@@ -48,8 +48,6 @@ let nextId = 0;
  * generator's own rules. The stored value is written only once a source is chosen, so autosave never sends a
  * half-built value; Clear stores `null` (not paginated). A disabled control (time travel, visual diff) shows the
  * one-line summary instead of controls.
- *
- * Inline template: the spec runner in this workspace can't resolve `templateUrl` components.
  */
 @Component({
   selector: 'sf-pagination-editor',

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/angular';
+import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
@@ -77,12 +77,12 @@ describe('NavReferenceDetailComponent', () => {
       ],
     });
 
-    const labelInput = screen.getByPlaceholderText('Optional label') as HTMLInputElement;
-    labelInput.value = 'Custom label';
-    labelInput.dispatchEvent(new Event('input'));
+    fireEvent.input(screen.getByPlaceholderText('Optional label'), {
+      target: { value: 'Custom label' },
+    });
 
     const saveButton = await waitFor(() => {
-      const btn = screen.getByText('Save') as HTMLButtonElement;
+      const btn = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
       return btn;
     });
@@ -93,6 +93,8 @@ describe('NavReferenceDetailComponent', () => {
       'ref-uuid',
       { targetKind: 'PAGE', targetAssetUuid: 'page-uuid', label: 'Custom label' },
       '"rev-5"',
+      // The editing language (M24), `undefined` in a project without languages.
+      undefined,
     );
   });
 
@@ -108,10 +110,12 @@ describe('NavReferenceDetailComponent', () => {
     });
 
     screen.getByLabelText('Rename reference').click();
-    const input = screen.getByDisplayValue('Products Home') as HTMLInputElement;
-    input.value = 'New Name';
-    input.dispatchEvent(new Event('input'));
-    screen.getAllByText('Save')[0].click();
+    // `findBy*`/`fireEvent` run change detection — the rename field only renders on the pass
+    // after the click.
+    fireEvent.input(await screen.findByDisplayValue('Products Home'), {
+      target: { value: 'New Name' },
+    });
+    screen.getAllByRole('button', { name: 'Save' })[0].click();
 
     expect(api.renameAsset).toHaveBeenCalledWith('proj', 'ref-uuid', { displayName: 'New Name' }, 5);
   });
@@ -127,11 +131,11 @@ describe('NavReferenceDetailComponent', () => {
       ],
     });
 
-    screen.getByText('Change UID').click();
-    const uidInput = screen.getByDisplayValue('products_home') as HTMLInputElement;
-    uidInput.value = 'new_uid';
-    uidInput.dispatchEvent(new Event('input'));
-    screen.getAllByText('Save')[0].click();
+    screen.getByRole('button', { name: 'Change UID' }).click();
+    fireEvent.input(await screen.findByDisplayValue('products_home'), {
+      target: { value: 'new_uid' },
+    });
+    screen.getAllByRole('button', { name: 'Save' })[0].click();
 
     expect(api.changeUid).toHaveBeenCalledWith('proj', 'ref-uuid', { uid: 'new_uid' });
   });

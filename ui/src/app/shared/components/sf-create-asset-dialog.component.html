@@ -84,7 +84,12 @@
 
         <div class="dialog__actions">
           <sf-button type="button" variant="ghost" [disabled]="submitting()" (click)="cancel()">Cancel</sf-button>
-          <sf-button type="submit" variant="primary" [disabled]="form.invalid || submitting()">
+          <!--
+            Not disabled while the form is invalid: submitting an incomplete form is how the user
+            asks what is missing — `submit()` marks every control touched and the inline messages
+            appear. A disabled button would swallow that click and explain nothing.
+          -->
+          <sf-button type="submit" variant="primary" [disabled]="submitting()">
             @if (submitting()) {
               <sf-spinner label="Creating…" />
             } @else {

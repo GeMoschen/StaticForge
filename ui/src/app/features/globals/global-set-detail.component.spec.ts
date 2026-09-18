@@ -1,5 +1,6 @@
 import '@angular/compiler';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { render, screen, waitFor } from '@testing-library/angular';
 import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -40,6 +41,8 @@ function setup(role: string, globals: ReturnType<typeof globalsStub>, revision: 
   return render(GlobalSetDetailComponent, {
     componentInputs: { projectKey: 'proj', uuid: 'set-uuid' },
     providers: [
+      provideHttpClient(),
+      provideHttpClientTesting(),
       { provide: GlobalsService, useValue: globals },
       { provide: AuthStore, useValue: { roleFor: () => role } },
       { provide: TimeTravelStore, useValue: timeTravel },

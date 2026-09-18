@@ -2,9 +2,18 @@ import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { TemplatesComponent } from './templates.component';
+
+/**
+ * The store page loads a couple of bare-array endpoints (`/channels`, `/datasets`) alongside the
+ * paged folder listings, so a blanket `flush({ content: [] })` hands `.map`/`.filter` an object.
+ */
+function emptyBodyFor(url: string, paged: object = { content: [] }): object {
+  return url.endsWith('/channels') || url.endsWith('/datasets') ? [] : paged;
+}
 
 describe('TemplatesComponent (time travel read-only)', () => {
   let fixture: ComponentFixture<TemplatesComponent>;
@@ -15,7 +24,7 @@ describe('TemplatesComponent (time travel read-only)', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [TemplatesComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     fixture = TestBed.createComponent(TemplatesComponent);
     component = fixture.componentInstance;
@@ -31,7 +40,7 @@ describe('TemplatesComponent (time travel read-only)', () => {
     // signal directly) — this spec only asserts that *mutating* requests never fire while
     // read-only, not that every incidental load was consumed inline by each test.
     for (const pending of httpMock.match(() => true)) {
-      pending.flush({});
+      pending.flush(emptyBodyFor(pending.request.url, {}));
     }
     httpMock.verify();
   });
@@ -39,7 +48,7 @@ describe('TemplatesComponent (time travel read-only)', () => {
   function drain(): void {
     fixture.detectChanges();
     for (const req of httpMock.match(() => true)) {
-      req.flush({ content: [] });
+      req.flush(emptyBodyFor(req.request.url));
     }
   }
 
@@ -131,7 +140,7 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [TemplatesComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     fixture = TestBed.createComponent(TemplatesComponent);
     component = fixture.componentInstance;
@@ -142,14 +151,14 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
 
   afterEach(() => {
     for (const pending of httpMock.match(() => true)) {
-      pending.flush({});
+      pending.flush(emptyBodyFor(pending.request.url, {}));
     }
   });
 
   function flushAll(body: object): void {
     fixture.detectChanges();
     for (const req of httpMock.match(() => true)) {
-      req.flush(body);
+      req.flush(emptyBodyFor(req.request.url, body));
     }
   }
 

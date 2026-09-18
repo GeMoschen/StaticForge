@@ -1,5 +1,6 @@
 import '@angular/compiler';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { render, screen, waitFor } from '@testing-library/angular';
 import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -69,7 +70,11 @@ describe('ProjectSettingsImportComponent', () => {
     const api = makeApiStub({ analyzeImport: vi.fn().mockReturnValue(of(blockingReport)) });
     await render(ProjectSettingsImportComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [{ provide: ImportExportService, useValue: api }],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ImportExportService, useValue: api },
+      ],
     });
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -84,7 +89,7 @@ describe('ProjectSettingsImportComponent', () => {
     const warningIdx = sections.findIndex((h) => h.textContent?.includes('Warnings'));
     expect(blockingIdx).toBeLessThan(warningIdx);
 
-    const importBtn = screen.getByText('Import').closest('button') as HTMLButtonElement;
+    const importBtn = screen.getByRole('button', { name: 'Import' }) as HTMLButtonElement;
     expect(importBtn.disabled).toBe(true);
   });
 
@@ -92,14 +97,18 @@ describe('ProjectSettingsImportComponent', () => {
     const api = makeApiStub({ analyzeImport: vi.fn().mockReturnValue(of(cleanReport)) });
     await render(ProjectSettingsImportComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [{ provide: ImportExportService, useValue: api }],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ImportExportService, useValue: api },
+      ],
     });
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     selectFile(input, zipFile());
 
     await waitFor(() => expect(screen.getByText('No conflicts found')).toBeTruthy());
-    const importBtn = screen.getByText('Import').closest('button') as HTMLButtonElement;
+    const importBtn = screen.getByRole('button', { name: 'Import' }) as HTMLButtonElement;
     expect(importBtn.disabled).toBe(false);
   });
 
@@ -107,7 +116,11 @@ describe('ProjectSettingsImportComponent', () => {
     const api = makeApiStub({ analyzeImport: vi.fn().mockReturnValue(of(cleanReport)) });
     await render(ProjectSettingsImportComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [{ provide: ImportExportService, useValue: api }],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ImportExportService, useValue: api },
+      ],
     });
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -128,14 +141,18 @@ describe('ProjectSettingsImportComponent', () => {
     });
     await render(ProjectSettingsImportComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [{ provide: ImportExportService, useValue: api }],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ImportExportService, useValue: api },
+      ],
     });
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     selectFile(input, zipFile());
     await waitFor(() => expect(screen.getByText('No conflicts found')).toBeTruthy());
 
-    screen.getByText('Import').click();
+    screen.getByRole('button', { name: 'Import' }).click();
 
     expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false);
     await waitFor(() => expect(screen.getByText(/Imported 5 asset/)).toBeTruthy());
@@ -165,7 +182,11 @@ describe('ProjectSettingsImportComponent', () => {
     });
     await render(ProjectSettingsImportComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [{ provide: ImportExportService, useValue: api }],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ImportExportService, useValue: api },
+      ],
     });
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -179,7 +200,7 @@ describe('ProjectSettingsImportComponent', () => {
 
     await waitFor(() => expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), true));
 
-    screen.getByText('Import').click();
+    screen.getByRole('button', { name: 'Import' }).click();
     expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), true);
     vi.useRealTimers();
   });
@@ -207,14 +228,18 @@ describe('ProjectSettingsImportComponent', () => {
     });
     await render(ProjectSettingsImportComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [{ provide: ImportExportService, useValue: api }],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ImportExportService, useValue: api },
+      ],
     });
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     selectFile(input, zipFile());
     await waitFor(() => expect(screen.getByText('No conflicts found')).toBeTruthy());
 
-    screen.getByText('Import').click();
+    screen.getByRole('button', { name: 'Import' }).click();
 
     await waitFor(() =>
       expect(
@@ -223,7 +248,7 @@ describe('ProjectSettingsImportComponent', () => {
     );
     expect(screen.queryByText('Generic error')).toBeNull();
     expect(screen.getByText('Blocking issues')).toBeTruthy();
-    const importBtn = screen.getByText('Import').closest('button') as HTMLButtonElement;
+    const importBtn = screen.getByRole('button', { name: 'Import' }) as HTMLButtonElement;
     expect(importBtn.disabled).toBe(true);
   });
 });

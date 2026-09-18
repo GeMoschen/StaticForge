@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/angular';
+import { fireEvent, render, screen } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
@@ -55,7 +55,7 @@ describe('RevisionDiffComponent', () => {
 
     expect(api.revisionDiff).toHaveBeenCalledWith('proj', 1);
 
-    const restoreButtons = screen.getAllByText('Restore this asset');
+    const restoreButtons = await screen.findAllByRole('button', { name: 'Restore this asset' });
     expect(restoreButtons).toHaveLength(8);
 
     restoreButtons[3].click();
@@ -72,12 +72,14 @@ describe('RevisionDiffComponent', () => {
       providers: [{ provide: ApiClient, useValue: api }],
     });
 
-    screen.getByText('Roll back project').click();
-    const dialogInput = (await screen.findByPlaceholderText('Type ROLLBACK to confirm')) as HTMLInputElement;
-    dialogInput.value = 'ROLLBACK';
-    dialogInput.dispatchEvent(new Event('input'));
+    (await screen.findByRole('button', { name: 'Roll back project' })).click();
+    // `fireEvent` runs change detection after the event — the confirm button stays `[disabled]`
+    // until the typed token has been re-read into the template.
+    fireEvent.input(await screen.findByPlaceholderText('Type ROLLBACK to confirm'), {
+      target: { value: 'ROLLBACK' },
+    });
 
-    screen.getByText('Roll back').click();
+    (await screen.findByRole('button', { name: 'Roll back' })).click();
 
     expect(api.restoreProject).toHaveBeenCalledWith('proj', { toRevision: 1 });
   });

@@ -49,6 +49,8 @@ function makeStoreStub(overrides: Partial<Record<string, unknown>> = {}) {
     mediaFolderTree: vi.fn().mockReturnValue([]),
     navigationFolderTree: vi.fn().mockReturnValue([]),
     templateFolderTree: vi.fn().mockReturnValue([]),
+    globalsFolderTree: vi.fn().mockReturnValue([]),
+    contentFolderTree: vi.fn().mockReturnValue([]),
     ...overrides,
   };
 }

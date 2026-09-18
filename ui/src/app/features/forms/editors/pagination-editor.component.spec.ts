@@ -10,9 +10,6 @@ import { ContentService } from '../../content/content.service';
 import type { EditorDefinition } from '../form.model';
 import { SfPaginationEditor } from './pagination-editor.component';
 
-// Note: can't run in this workspace — the vitest JIT setup doesn't see signal inputs (NG0303); kept type-checked by
-// `ng build`. The logic it relies on is covered by `pagination-editor.util.spec.ts`.
-
 const definition: EditorDefinition = {
   name: 'posts',
   type: 'PAGINATION',
@@ -39,6 +36,9 @@ function render(control: FormControl) {
   fixture.componentRef.setInput('definition', definition);
   fixture.componentRef.setInput('control', control);
   fixture.componentRef.setInput('projectKey', 'p1');
+  // Twice: the first pass creates the view and only then flushes the constructor effects that read
+  // the control (value, disabled state) into the component's signals; the second renders those.
+  fixture.detectChanges();
   fixture.detectChanges();
   return fixture;
 }

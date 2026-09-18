@@ -10,16 +10,12 @@ import { PageEditorComponent } from './features/pages/page-editor.component';
 import { NavigationComponent } from './features/navigation/navigation.component';
 import { GlobalsComponent } from './features/globals/globals.component';
 import { ProjectSettingsShellComponent } from './features/settings/project-settings-shell.component';
-import { ProjectSettingsGeneralComponent } from './features/settings/project-settings-general.component';
-import { ProjectSettingsLocalesComponent } from './features/settings/project-settings-locales.component';
-import { ProjectSettingsMediaComponent } from './features/settings/project-settings-media.component';
-import { ChannelsComponent } from './features/channels/channels.component';
-import { GenerationComponent } from './features/generation/generation.component';
+import { ProjectSettingsGeneralViewComponent } from './features/settings/project-settings-general-view.component';
+import { ProjectSettingsGenerationViewComponent } from './features/settings/project-settings-generation-view.component';
 import { RevisionsListComponent } from './features/revisions/revisions-list.component';
 import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
 import { ProjectSettingsImportExportComponent } from './features/settings/project-settings-import-export.component';
 import { ProjectSettingsUrlRegistryComponent } from './features/settings/project-settings-url-registry.component';
-import { ProjectSettingsTargetsComponent } from './features/settings/project-settings-targets.component';
 import { ContentComponent } from './features/content/content.component';
 import { RecordEditorComponent } from './features/content/record-editor.component';
 import { MediaLibraryComponent } from './features/media/media-library.component';
@@ -102,28 +98,18 @@ export const routes: Routes = [
           { path: '', pathMatch: 'full', redirectTo: 'general' },
           {
             path: 'general',
-            component: ProjectSettingsGeneralComponent,
-          },
-          {
-            path: 'media',
-            component: ProjectSettingsMediaComponent,
-          },
-          {
-            path: 'locales',
-            component: ProjectSettingsLocalesComponent,
-          },
-          {
-            path: 'channels',
-            component: ChannelsComponent,
+            component: ProjectSettingsGeneralViewComponent,
           },
           {
             path: 'generation',
-            component: GenerationComponent,
+            component: ProjectSettingsGenerationViewComponent,
           },
-          {
-            path: 'targets',
-            component: ProjectSettingsTargetsComponent,
-          },
+          // The Channels, Languages and Media tabs are now sections of "General", and Targets a
+          // section of "Generation"; their old paths stay as redirects so existing links keep working.
+          { path: 'media', redirectTo: 'general' },
+          { path: 'locales', redirectTo: 'general' },
+          { path: 'channels', redirectTo: 'general' },
+          { path: 'targets', redirectTo: 'generation' },
           {
             path: 'revisions',
             component: RevisionsListComponent,

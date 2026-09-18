@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { render, screen } from '@testing-library/angular';
+import { fireEvent, render, screen } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
@@ -36,17 +36,14 @@ describe('PagesListComponent', () => {
       ],
     });
 
-    screen.getByText('New page').click();
+    screen.getByRole('button', { name: 'New page' }).click();
 
-    const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
-    nameInput.value = 'My Page';
-    nameInput.dispatchEvent(new Event('input'));
+    // `findBy*`/`fireEvent` run change detection: the dialog only renders on the pass after the
+    // click, and its submit button stays `[disabled]` until the form reads as valid.
+    fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'My Page' } });
+    fireEvent.change(screen.getByLabelText('Template'), { target: { value: 'tpl-1' } });
 
-    const select = screen.getByLabelText('Template') as HTMLSelectElement;
-    select.value = 'tpl-1';
-    select.dispatchEvent(new Event('change'));
-
-    screen.getByText('Create').click();
+    screen.getByRole('button', { name: 'Create' }).click();
 
     expect(api.createPage).toHaveBeenCalledWith('proj', {
       displayName: 'My Page',
@@ -69,11 +66,9 @@ describe('PagesListComponent', () => {
 
     screen.getByTitle('New folder').click();
 
-    const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
-    nameInput.value = 'Assets';
-    nameInput.dispatchEvent(new Event('input'));
+    fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Assets' } });
 
-    screen.getByText('Create').click();
+    screen.getByRole('button', { name: 'Create' }).click();
 
     expect(api.createFolder).toHaveBeenCalledWith('proj', {
       displayName: 'Assets',

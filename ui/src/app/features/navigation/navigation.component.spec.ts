@@ -5,21 +5,32 @@ import { ApiClient } from '../../core/api/api.client';
 import { NavigationComponent } from './navigation.component';
 import { NavigationService, type NavTreeView } from './navigation.service';
 
+// The tree endpoint always returns exactly one top-level entry — the fixed, protected
+// "All Navigation" wrapper root — which the component unwraps for display (`topLevelNodes`),
+// so "Main Menu" below is the first folder the page actually shows.
 const tree: NavTreeView[] = [
   {
-    uuid: 'main-uuid',
+    uuid: 'nav-root-uuid',
     type: 'FOLDER',
-    uid: 'main',
-    displayName: 'Main Menu',
+    uid: 'navigation_root',
+    displayName: 'All Navigation',
     children: [
       {
-        uuid: 'ref-uuid',
-        type: 'PAGE_REFERENCE',
-        uid: 'about',
-        displayName: 'About',
-        resolvedPageUuid: 'page-uuid',
-        resolvedPagePath: '/about/',
-        children: [],
+        uuid: 'main-uuid',
+        type: 'FOLDER',
+        uid: 'main',
+        displayName: 'Main Menu',
+        children: [
+          {
+            uuid: 'ref-uuid',
+            type: 'PAGE_REFERENCE',
+            uid: 'about',
+            displayName: 'About',
+            resolvedPageUuid: 'page-uuid',
+            resolvedPagePath: '/about/',
+            children: [],
+          },
+        ],
       },
     ],
   },
@@ -39,7 +50,8 @@ describe('NavigationComponent', () => {
 
     expect(nav.tree).toHaveBeenCalledWith('proj');
     await waitFor(() => expect(screen.getByText('Main Menu')).toBeTruthy());
-    expect(screen.getByText('About')).toBeTruthy();
+    screen.getByLabelText('Toggle folder').click();
+    expect(await screen.findByText('About')).toBeTruthy();
   });
 
   it('opens the reference detail drawer for a selected PageReference node', async () => {
@@ -66,6 +78,7 @@ describe('NavigationComponent', () => {
       ],
     });
 
+    await waitFor(() => screen.getByLabelText('Toggle folder').click());
     await waitFor(() => screen.getByText('About').click());
 
     await waitFor(() => expect(api.assetDetail).toHaveBeenCalledWith('proj', 'ref-uuid'));
