@@ -30,8 +30,20 @@ public interface UrlRegistryService {
      */
     String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, RevisionContext ctx);
 
+    /**
+     * As {@link #resolve(UUID, String, UrlArea, RevisionContext)}, for one language (M24.3.2): a
+     * localized site assigns one URL per language, so a German nav entry links to the German page.
+     * {@code null} means the project's default language (and, in a project without locales, the
+     * single URL every pre-M24 caller already got).
+     */
+    String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, RevisionContext ctx);
+
     /** Upserts the tuple with a manually-chosen URL, marking the entry {@code overridden}. */
     UrlRegistryEntry override(UUID pageReferenceUuid, String channelKey, UrlArea area, String url, RevisionContext ctx);
+
+    /** As {@link #override(UUID, String, UrlArea, String, RevisionContext)}, for one language (M24.3.2). */
+    UrlRegistryEntry override(
+            UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, String url, RevisionContext ctx);
 
     /**
      * Deletes every entry matching {@code scope} (see {@link ResetScope}). Does not eagerly

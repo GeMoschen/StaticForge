@@ -151,12 +151,24 @@ public class NavigationServiceImpl implements NavigationService {
     }
 
     @Override
-    public NavTreeNode tree(long projectId, UUID navFolderUuid, int depth, NavigationLookup lookup, List<Diagnostic> diagnostics) {
-        return buildNode(projectId, navFolderUuid, depth, lookup, diagnostics, 0);
+    public NavTreeNode tree(
+            long projectId,
+            UUID navFolderUuid,
+            int depth,
+            NavigationLookup lookup,
+            List<Diagnostic> diagnostics,
+            List<String> localeChain) {
+        return buildNode(projectId, navFolderUuid, depth, lookup, diagnostics, 0, localeChain);
     }
 
     private NavTreeNode buildNode(
-            long projectId, UUID uuid, int maxDepth, NavigationLookup lookup, List<Diagnostic> diagnostics, int level) {
+            long projectId,
+            UUID uuid,
+            int maxDepth,
+            NavigationLookup lookup,
+            List<Diagnostic> diagnostics,
+            int level,
+            List<String> localeChain) {
         NavigationAsset asset = lookup.byUuid(projectId, uuid).orElse(null);
         if (asset == null) {
             return null;
@@ -174,22 +186,27 @@ public class NavigationServiceImpl implements NavigationService {
             children = lookup.childrenOf(projectId, uuid).stream()
                     .filter(a -> a.type() == AssetType.FOLDER || a.type() == AssetType.PAGE_REFERENCE)
                     .sorted(FOLDER_ORDER)
-                    .map(a -> buildNode(projectId, a.uuid(), maxDepth, lookup, diagnostics, level + 1))
+                    .map(a -> buildNode(projectId, a.uuid(), maxDepth, lookup, diagnostics, level + 1, localeChain))
                     .filter(Objects::nonNull)
                     .toList();
         }
 
         return new NavTreeNode(
-                asset.uuid(), asset.type(), asset.uid(), asset.displayName(), label(projectId, asset, lookup),
+                asset.uuid(), asset.type(), asset.uid(), asset.displayName(), label(projectId, asset, lookup, localeChain),
                 resolvedPageUuid, FolderScope.isProtected(asset.payload()), children);
     }
 
-    private String label(long projectId, NavigationAsset asset, NavigationLookup lookup) {
+    private String label(
+            long projectId, NavigationAsset asset, NavigationLookup lookup, List<String> localeChain) {
         if (asset.type() != AssetType.PAGE_REFERENCE) {
             return asset.displayName();
         }
         JsonNode payload = asset.payload();
-        String label = JsonUtil.text(payload, "label").orElse(null);
+        // A PageReference label is language-dependent in a localized project (M24.2.2): resolve the
+        // wrapper for the render locale before falling back to the target page's display name.
+        JsonNode stored = payload == null ? null : payload.get("label");
+        JsonNode resolved = com.acme.staticforge.common.L10nValues.resolve(stored, localeChain);
+        String label = resolved != null && resolved.isTextual() ? resolved.asText() : null;
         if (label != null && !label.isBlank()) {
             return label;
         }

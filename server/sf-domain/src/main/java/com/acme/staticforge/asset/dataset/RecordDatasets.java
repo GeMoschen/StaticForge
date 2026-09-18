@@ -8,7 +8,9 @@ import com.acme.staticforge.asset.content.ContentValidator;
 import com.acme.staticforge.asset.content.PaginationSourceLookup;
 import com.acme.staticforge.asset.content.TemplateContentDefinitions;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.content.LocalizationContext;
 import com.acme.staticforge.asset.content.RecordDatasetLookup;
+import com.acme.staticforge.project.ProjectLocales;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.expression.ExpressionEvaluator;
 import java.util.Optional;
@@ -25,10 +27,15 @@ public class RecordDatasets {
 
     private final AssetRepository assetRepository;
     private final AssetVersionRepository assetVersionRepository;
+    private final ProjectLocales projectLocales;
 
-    public RecordDatasets(AssetRepository assetRepository, AssetVersionRepository assetVersionRepository) {
+    public RecordDatasets(
+            AssetRepository assetRepository,
+            AssetVersionRepository assetVersionRepository,
+            ProjectLocales projectLocales) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
+        this.projectLocales = projectLocales;
     }
 
     /** The lookup for one project: live records only, a deleted record belongs to no dataset. */
@@ -68,8 +75,16 @@ public class RecordDatasets {
                 .map(version -> version.getPayload());
     }
 
-    /** A content validator that checks dataset restrictions and pagination sources against this project's assets. */
+    /**
+     * A content validator that checks dataset restrictions and pagination sources against this
+     * project's assets, and enforces this project's locale rules on {@code localizable} editors
+     * (M24.2.1).
+     */
     public ContentValidator validator(long projectId) {
-        return new ContentValidator(new ExpressionEvaluator(), forProject(projectId), paginationSources(projectId));
+        return new ContentValidator(
+                new ExpressionEvaluator(),
+                forProject(projectId),
+                paginationSources(projectId),
+                LocalizationContext.of(projectLocales.forProject(projectId)));
     }
 }

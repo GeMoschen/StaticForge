@@ -41,6 +41,13 @@ public final class OctlCompiler {
     /** The read-only root of a paginated page's current slice and page links (M21.3.1). */
     public static final String PAGINATION_ROOT = "CMS_PAGINATION";
 
+    /**
+     * The reserved iterable of the project's content locales (M24.3.1):
+     * {@code $CMS_FOR(l : CMS_LOCALES)$} renders a language switcher from
+     * {@code {code, language, label, current, href}} items.
+     */
+    public static final String LOCALES_ROOT = "CMS_LOCALES";
+
     /** The {@code assetType:uid} prefix of a dataset loop source (M19.3.2). */
     private static final String DATASET_PREFIX = "dataset";
 
@@ -613,6 +620,11 @@ public final class OctlCompiler {
             }
             return;
         }
+        if (LOCALES_ROOT.equals(name)) {
+            // The language switcher is available everywhere, including processed text media:
+            // it reads project settings, not page structure.
+            return;
+        }
         if (ctx.contentDef.findEditor(name).isPresent()) {
             ctx.usedEditors.add(name);
             return;
@@ -716,8 +728,18 @@ public final class OctlCompiler {
         }
     }
 
-    /** {@code CMS_PAGINATION} is read-only (M21.3.1): no {@code $CMS_SET} or loop variable may take its name. */
+    /**
+     * {@code CMS_PAGINATION} (M21.3.1) and {@code CMS_LOCALES} (M24.3.1) are read-only: no
+     * {@code $CMS_SET} or loop variable may take their names.
+     */
     private static void checkNotPaginationRoot(String name, int line, int col, ValidateCtx ctx) {
+        if (LOCALES_ROOT.equals(name)) {
+            ctx.diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_PAGINATION_READ_ONLY,
+                    LOCALES_ROOT + " is read-only: pick another variable name",
+                    line, col));
+            return;
+        }
         if (PAGINATION_ROOT.equals(name)) {
             ctx.diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.OCTL_PAGINATION_READ_ONLY,

@@ -80,6 +80,7 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
     private final LiveOutputPathResolver outputPathResolver;
     private final RevisionService revisionService;
     private final ChannelService channelService;
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
 
     public UrlRegistryServiceImpl(
             UrlRegistryRepository repository,
@@ -87,32 +88,65 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
             LiveNavigationLookup navigationLookup,
             LiveOutputPathResolver outputPathResolver,
             RevisionService revisionService,
-            ChannelService channelService) {
+            ChannelService channelService,
+            com.acme.staticforge.project.ProjectLocales projectLocales) {
         this.repository = repository;
         this.navigationService = navigationService;
         this.navigationLookup = navigationLookup;
         this.outputPathResolver = outputPathResolver;
         this.revisionService = revisionService;
         this.channelService = channelService;
+        this.projectLocales = projectLocales;
     }
 
     @Override
     @Transactional
     public String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, RevisionContext ctx) {
-        return find(ctx.projectId(), channelKey, pageReferenceUuid, area)
-                .map(UrlRegistryEntry::getUrl)
-                .orElseGet(() -> computeAndPersist(pageReferenceUuid, channelKey, area, ctx).getUrl());
+        return resolve(pageReferenceUuid, channelKey, area, null, ctx);
     }
 
     @Override
     @Transactional
-    public UrlRegistryEntry override(UUID pageReferenceUuid, String channelKey, UrlArea area, String url, RevisionContext ctx) {
+    public String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, RevisionContext ctx) {
+        String localeKey = localeKey(ctx.projectId(), locale);
+        return find(ctx.projectId(), channelKey, pageReferenceUuid, area, localeKey)
+                .map(UrlRegistryEntry::getUrl)
+                .orElseGet(() -> computeAndPersist(pageReferenceUuid, channelKey, area, localeKey, ctx).getUrl());
+    }
+
+    /**
+     * The row's language key: the canonical tag in a localized project (the default language when
+     * the caller named none), and the empty string in a project without locales — which is what
+     * every pre-M24 row already carries (M24.3.2).
+     */
+    private String localeKey(long projectId, String locale) {
+        com.acme.staticforge.project.LocaleConfig config = projectLocales.forProject(projectId);
+        if (!config.isLocalized()) {
+            return "";
+        }
+        String declared = config.canonicalDeclared(locale);
+        return declared != null ? declared : config.defaultLocale();
+    }
+
+    @Override
+    @Transactional
+    public UrlRegistryEntry override(
+            UUID pageReferenceUuid, String channelKey, UrlArea area, String url, RevisionContext ctx) {
+        return override(pageReferenceUuid, channelKey, area, null, url, ctx);
+    }
+
+    @Override
+    @Transactional
+    public UrlRegistryEntry override(
+            UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, String url, RevisionContext ctx) {
         if (url == null || url.isBlank()) {
             throw new SfException(ProblemFactory.badRequest("url must not be blank."));
         }
-        UrlRegistryEntry entry = find(ctx.projectId(), channelKey, pageReferenceUuid, area)
+        String localeKey = localeKey(ctx.projectId(), locale);
+        UrlRegistryEntry entry = find(ctx.projectId(), channelKey, pageReferenceUuid, area, localeKey)
                 .orElseGet(() -> new UrlRegistryEntry(
-                        ctx.projectId(), channelKey, pageReferenceUuid, area, url, Instant.now(), currentRevision(ctx.projectId()), true));
+                        ctx.projectId(), channelKey, pageReferenceUuid, area, localeKey, url, Instant.now(),
+                        currentRevision(ctx.projectId()), true));
         entry.setUrl(url);
         entry.setOverridden(true);
         entry.setAssignedAt(Instant.now());
@@ -148,25 +182,44 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
 
     // ------------------------------------------------------------------
 
-    private Optional<UrlRegistryEntry> find(long projectId, String channelKey, UUID pageReferenceUuid, UrlArea area) {
-        return repository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(projectId, channelKey, pageReferenceUuid, area);
+    private Optional<UrlRegistryEntry> find(
+            long projectId, String channelKey, UUID pageReferenceUuid, UrlArea area, String localeKey) {
+        return repository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                projectId, channelKey, pageReferenceUuid, area, localeKey);
     }
 
-    private UrlRegistryEntry computeAndPersist(UUID pageReferenceUuid, String channelKey, UrlArea area, RevisionContext ctx) {
+    private UrlRegistryEntry computeAndPersist(
+            UUID pageReferenceUuid, String channelKey, UrlArea area, String localeKey, RevisionContext ctx) {
         UUID resolvedPageUuid = navigationService.resolve(ctx.projectId(), pageReferenceUuid, navigationLookup);
         if (resolvedPageUuid == null) {
             throw new SfException(ProblemFactory.notFound("Page reference does not resolve to a navigable page."));
         }
         String url = outputPathResolver
-                .resolveUrl(ctx.projectId(), resolvedPageUuid, channelKey, channelService.outputSettings(ctx.projectId(), channelKey))
+                .resolveUrl(
+                        ctx.projectId(),
+                        resolvedPageUuid,
+                        channelKey,
+                        channelService.outputSettings(ctx.projectId(), channelKey),
+                        localeContext(ctx.projectId(), localeKey))
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Resolved page not found.")));
         // Insert-if-absent, then read back: whether this call or a concurrent one inserted the row,
         // the read returns the single winner. A lost race is a no-op insert, never an exception.
         repository.insertIfAbsent(
-                ctx.projectId(), channelKey, pageReferenceUuid, area.name(), url, Instant.now(), currentRevision(ctx.projectId()));
-        return find(ctx.projectId(), channelKey, pageReferenceUuid, area)
+                ctx.projectId(), channelKey, pageReferenceUuid, area.name(), localeKey, url, Instant.now(),
+                currentRevision(ctx.projectId()));
+        return find(ctx.projectId(), channelKey, pageReferenceUuid, area, localeKey)
                 .orElseThrow(() -> new IllegalStateException(
                         "URL registry entry missing right after insert-if-absent for " + pageReferenceUuid));
+    }
+
+    /** How {@code {locale}} expands for a stored language key (M24.3.2). */
+    private OutputPathExpander.LocaleContext localeContext(long projectId, String localeKey) {
+        if (localeKey == null || localeKey.isEmpty()) {
+            return OutputPathExpander.LocaleContext.NONE;
+        }
+        com.acme.staticforge.project.LocaleConfig config = projectLocales.forProject(projectId);
+        boolean atRoot = config.defaultWithoutPrefix() && localeKey.equals(config.defaultLocale());
+        return new OutputPathExpander.LocaleContext(localeKey, atRoot ? "" : localeKey);
     }
 
     private long currentRevision(long projectId) {

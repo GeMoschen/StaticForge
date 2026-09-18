@@ -1,4 +1,16 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ToastService } from '../../core/ui/toast.service';
@@ -61,6 +73,10 @@ export class NavReferenceDetailComponent implements OnInit {
   protected readonly targetUuid = signal<string>('');
   protected readonly targetLabel = signal<string>('');
   protected readonly labelDraft = signal<string>('');
+  /** The label as stored for the language being edited — what "is this edited?" compares against. */
+  private readonly labelSeed = signal<string>('');
+  /** The language the label is edited in (M24.4.1); `null` in a project without languages. */
+  protected readonly editingLocale = inject(EditingLocaleStore);
   protected readonly pickerOpen = signal(false);
   protected readonly saving = signal(false);
   protected readonly deleting = signal(false);
@@ -80,9 +96,29 @@ export class NavReferenceDetailComponent implements OnInit {
     return (
       this.targetKind() !== (ref.targetKind ?? 'PAGE') ||
       this.targetUuid() !== (ref.targetAssetUuid ?? '') ||
-      this.labelDraft() !== (ref.label ?? '')
+      this.labelDraft() !== this.labelSeed()
     );
   });
+
+  /** The language the label draft currently holds; `null` before the first seed. */
+  private lastEditingLocale: string | null = null;
+
+  constructor() {
+    // The label is stored per language, so switching re-seeds the draft — otherwise the field keeps
+    // the previous language's words and saving would store them under the new one (M24.4.1). An
+    // unsaved draft of the language being left behind is dropped: this form saves one language
+    // explicitly, and a save made in another one would never have written it.
+    effect(() => {
+      const locale = this.editingLocale.locale();
+      untracked(() => {
+        if (locale === this.lastEditingLocale) {
+          return;
+        }
+        this.lastEditingLocale = locale;
+        this.resetLabelFromInput();
+      });
+    });
+  }
 
   ngOnInit(): void {
     this.resetFromInput();
@@ -95,7 +131,21 @@ export class NavReferenceDetailComponent implements OnInit {
     this.targetKind.set((ref.targetKind as TargetKind) ?? 'PAGE');
     this.targetUuid.set(ref.targetAssetUuid ?? '');
     this.targetLabel.set('');
-    this.labelDraft.set(ref.label ?? '');
+    this.resetLabelFromInput();
+  }
+
+  /**
+   * Seeds the label draft with the value stored for the language being edited. An untranslated
+   * label starts empty, so saving can't copy another language's words into this one; `label`
+   * itself is the value resolved for the requested language.
+   */
+  private resetLabelFromInput(): void {
+    const ref = this.reference();
+    const locale = this.editingLocale.locale();
+    this.lastEditingLocale = locale;
+    const stored = locale && ref.labelL10n ? (ref.labelL10n[locale] ?? '') : (ref.label ?? '');
+    this.labelSeed.set(stored);
+    this.labelDraft.set(stored);
   }
 
   protected onKindChange(event: Event): void {
@@ -145,6 +195,8 @@ export class NavReferenceDetailComponent implements OnInit {
           label: this.labelDraft().trim() || undefined,
         },
         this.etag(),
+        // The label belongs to the language being edited (M24.4.1).
+        this.editingLocale.locale() ?? undefined,
       )
       .subscribe({
         next: () => {

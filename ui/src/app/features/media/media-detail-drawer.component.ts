@@ -1,3 +1,4 @@
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -77,6 +78,23 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
   protected readonly dialog = inject(DialogService);
+  /** The language alt text and caption are edited in (M24.4.1); `null` without languages. */
+  protected readonly editingLocale = inject(EditingLocaleStore);
+
+  /**
+   * The value of the language being edited. An untranslated field shows empty rather than the
+   * inherited text, so saving it can't silently copy another language's words into this one.
+   */
+  private localizedMetadata(
+    byLocale: Record<string, string> | undefined | null,
+    resolved: string | undefined | null,
+  ): string {
+    const locale = this.editingLocale.locale();
+    if (!byLocale || !locale) {
+      return resolved ?? '';
+    }
+    return byLocale[locale] ?? '';
+  }
   private readonly timeTravel = inject(TimeTravelStore);
 
   protected readonly readOnly = this.timeTravel.isTimeTravel;
@@ -152,6 +170,8 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   private lastPreviewUuid: string | null = null;
   private lastTextUuid: string | null = null;
   private lastTimeTravelRevision: number | null = null;
+  /** The language the alt text and caption fields currently hold; `null` before the first seed. */
+  private lastEditingLocale: string | null = null;
 
   constructor() {
     effect(() => {
@@ -177,6 +197,25 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
         this.processCms.set(media.processCms ?? false);
       });
     });
+    // Alt text and caption are stored per language, so the two fields have to be re-seeded when
+    // the editing language changes — otherwise they keep showing (and would save) the previous
+    // language's words under the new one (M24.4.1). An unsaved draft of the language being left
+    // behind is dropped: this drawer saves one language explicitly, and it was never going to be
+    // written by a save made in another one.
+    effect(() => {
+      const locale = this.editingLocale.locale();
+      untracked(() => {
+        if (locale === this.lastEditingLocale) {
+          return;
+        }
+        this.lastEditingLocale = locale;
+        const media = this.media();
+        this.form.patchValue({
+          altText: this.localizedMetadata(media.altTextL10n, media.altText),
+          caption: this.localizedMetadata(media.captionL10n, media.caption),
+        });
+      });
+    });
     // Entering or leaving time travel shows the file at the viewed revision.
     effect(() => {
       const viewed = this.timeTravel.activeRevision();
@@ -194,9 +233,12 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const media = this.media();
     this.revision.set(media.revision ?? null);
+    this.lastEditingLocale = this.editingLocale.locale();
     this.form.reset({
-      altText: media.altText ?? '',
-      caption: media.caption ?? '',
+      // `altTextL10n` holds every language; the form edits the one being worked in, falling back to
+      // the resolved `altText` in a project without languages.
+      altText: this.localizedMetadata(media.altTextL10n, media.altText),
+      caption: this.localizedMetadata(media.captionL10n, media.caption),
       copyright: media.copyright ?? '',
       focalX: media.focalPoint?.x ?? null,
       focalY: media.focalPoint?.y ?? null,
@@ -307,6 +349,8 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
         uuid,
         payload,
         this.revision() ?? undefined,
+        // Alt text and caption belong to the language being edited (M24.4.1).
+        this.editingLocale.locale() ?? undefined,
       )
       .subscribe({
         next: (updated) => {

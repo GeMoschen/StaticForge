@@ -292,6 +292,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/locales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["locales"];
+        put: operations["updateLocales"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -331,7 +347,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_3"];
         put?: never;
         post: operations["create_1"];
         delete?: never;
@@ -347,7 +363,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
         post: operations["create_2"];
         delete?: never;
@@ -411,7 +427,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_6"];
         put?: never;
         post: operations["create_3"];
         delete?: never;
@@ -475,7 +491,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_6"];
+        get: operations["list_7"];
         put?: never;
         post: operations["create_4"];
         delete?: never;
@@ -523,7 +539,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_7"];
+        get: operations["list_8"];
         put?: never;
         post: operations["upload"];
         delete?: never;
@@ -619,7 +635,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_9"];
         put?: never;
         post: operations["create_5"];
         delete?: never;
@@ -747,7 +763,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_10"];
         put?: never;
         post: operations["create_7"];
         delete?: never;
@@ -779,7 +795,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_11"];
         put?: never;
         post: operations["create_8"];
         delete?: never;
@@ -795,7 +811,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_11"];
+        get: operations["list_12"];
         put?: never;
         post: operations["create_9"];
         delete?: never;
@@ -1092,6 +1108,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/translation-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/translation-status/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["one"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/search": {
         parameters: {
             query?: never;
@@ -1131,7 +1179,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_5"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1419,7 +1467,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_12"];
+        get: operations["list_13"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1435,7 +1483,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_13"];
+        get: operations["list_14"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1779,6 +1827,12 @@ export interface components {
             altText?: string;
             caption?: string;
             copyright?: string;
+            altTextL10n?: {
+                [key: string]: string;
+            };
+            captionL10n?: {
+                [key: string]: string;
+            };
             focalPoint?: components["schemas"]["FocalPointView"];
             variants?: components["schemas"]["MediaVariantView"][];
             processCms?: boolean;
@@ -1906,6 +1960,38 @@ export interface components {
             /** Format: int64 */
             grantedBy?: number;
         };
+        LocaleEntry: {
+            code?: string;
+            label?: string;
+        };
+        ProjectLocalesRequest: {
+            locales?: components["schemas"]["LocaleEntry"][];
+            defaultLocale?: string;
+            fallbacks?: {
+                [key: string]: string[];
+            };
+            defaultWithoutPrefix?: boolean;
+        };
+        ProjectLocaleView: {
+            code?: string;
+            label?: string;
+        };
+        ProjectLocalesView: {
+            locales?: components["schemas"]["ProjectLocaleView"][];
+            defaultLocale?: string;
+            fallbacks?: {
+                [key: string]: string[];
+            };
+            defaultWithoutPrefix?: boolean;
+            urlsWillChange?: boolean;
+            removedLocales?: string[];
+            /** Format: int32 */
+            retainedValueCount?: number;
+            confirmationRequired?: boolean;
+            /** Format: int32 */
+            discardedLocaleValues?: number;
+            affectedAssets?: string[];
+        };
         ProjectCreateRequest: {
             key: string;
             name: string;
@@ -2018,6 +2104,9 @@ export interface components {
             /** Format: uuid */
             targetAssetUuid?: string;
             label?: string;
+            labelL10n?: {
+                [key: string]: string;
+            };
         };
         MediaBulkItemResult: {
             fileName?: string;
@@ -2371,29 +2460,29 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
+            pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
+            unpaged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
-            unpaged?: boolean;
+            paged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -2402,22 +2491,35 @@ export interface components {
             property?: string;
             ignoreCase?: boolean;
         };
+        LocaleStatusView: {
+            locale?: string;
+            /** Format: int32 */
+            missing?: number;
+            /** Format: int32 */
+            total?: number;
+        };
+        TranslationStatusView: {
+            /** Format: uuid */
+            assetUuid?: string;
+            locales?: components["schemas"]["LocaleStatusView"][];
+            orphaned?: string[];
+        };
         PageTemplateSummary: {
             /** Format: int32 */
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
+            pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         TemplateSummary: {
@@ -2506,8 +2608,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            remove?: boolean;
             add?: boolean;
+            remove?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -2573,17 +2675,17 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
+            pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         MediaTextView: {
@@ -2663,17 +2765,17 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
+            pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         UsageDto: {
@@ -2799,7 +2901,9 @@ export interface operations {
     };
     update_1: {
         parameters: {
-            query?: never;
+            query?: {
+                confirmDiscard?: boolean;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -3062,7 +3166,9 @@ export interface operations {
     };
     update_4: {
         parameters: {
-            query?: never;
+            query?: {
+                confirmDiscard?: boolean;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -3166,7 +3272,9 @@ export interface operations {
     };
     updateMetadata: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: string;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -3278,7 +3386,9 @@ export interface operations {
     };
     updateSchema: {
         parameters: {
-            query?: never;
+            query?: {
+                confirmDiscard?: boolean;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -3413,7 +3523,9 @@ export interface operations {
     };
     update_5: {
         parameters: {
-            query?: never;
+            query?: {
+                confirmDiscard?: boolean;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -3605,6 +3717,56 @@ export interface operations {
             };
         };
     };
+    locales: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProjectLocalesView"];
+                };
+            };
+        };
+    };
+    updateLocales: {
+        parameters: {
+            query?: {
+                confirmDiscard?: boolean;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectLocalesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProjectLocalesView"];
+                };
+            };
+        };
+    };
     list: {
         parameters: {
             query?: never;
@@ -3673,7 +3835,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -3721,7 +3883,7 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query?: {
                 page?: number;
@@ -3848,7 +4010,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_6: {
         parameters: {
             query?: {
                 folder?: string;
@@ -3983,7 +4145,7 @@ export interface operations {
             };
         };
     };
-    list_6: {
+    list_7: {
         parameters: {
             query?: {
                 page?: number;
@@ -4086,7 +4248,7 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_8: {
         parameters: {
             query?: {
                 mimeType?: string;
@@ -4292,7 +4454,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
         parameters: {
             query?: {
                 folder?: string;
@@ -4577,7 +4739,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -4652,7 +4814,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_11: {
         parameters: {
             query?: {
                 page?: number;
@@ -4709,7 +4871,7 @@ export interface operations {
             };
         };
     };
-    list_11: {
+    list_12: {
         parameters: {
             query?: never;
             header?: never;
@@ -5070,7 +5232,9 @@ export interface operations {
     };
     updateReference: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: string;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -5232,6 +5396,54 @@ export interface operations {
             };
         };
     };
+    list_2: {
+        parameters: {
+            query?: {
+                type?: string;
+                locale?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TranslationStatusView"][];
+                };
+            };
+        };
+    };
+    one: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TranslationStatusView"];
+                };
+            };
+        };
+    };
     search: {
         parameters: {
             query?: {
@@ -5241,6 +5453,7 @@ export interface operations {
                 page?: number;
                 size?: number;
                 sort?: string;
+                locale?: string;
             };
             header?: never;
             path: {
@@ -5283,7 +5496,7 @@ export interface operations {
             };
         };
     };
-    list_4: {
+    list_5: {
         parameters: {
             query: {
                 since?: number;
@@ -5389,6 +5602,7 @@ export interface operations {
                 channel?: string;
                 rewriteLinks?: boolean;
                 page?: number;
+                locale?: string;
             };
             header?: never;
             path: {
@@ -5415,6 +5629,7 @@ export interface operations {
             query?: {
                 revision?: number;
                 channel?: string;
+                locale?: string;
             };
             header?: never;
             path: {
@@ -5465,6 +5680,7 @@ export interface operations {
         parameters: {
             query?: {
                 depth?: number;
+                locale?: string;
             };
             header?: never;
             path: {
@@ -5749,7 +5965,7 @@ export interface operations {
             };
         };
     };
-    list_12: {
+    list_13: {
         parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
@@ -5773,7 +5989,7 @@ export interface operations {
             };
         };
     };
-    list_13: {
+    list_14: {
         parameters: {
             query?: {
                 type?: string;

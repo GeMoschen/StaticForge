@@ -22,5 +22,19 @@ public interface PageReferenceService {
             long expectedRevision,
             RevisionContext ctx);
 
+    /**
+     * Updates the reference; in a project with locales the label is language-dependent (M24.2.2)
+     * and {@code locale} says which language this write sets, leaving the others untouched
+     * ({@code null} means the project's default language).
+     */
+    AssetVersionView update(
+            UUID uuid,
+            PageReferenceTargetKind targetKind,
+            UUID targetAssetUuid,
+            String label,
+            String locale,
+            long expectedRevision,
+            RevisionContext ctx);
+
     AssetVersionView find(long projectId, UUID uuid);
 }

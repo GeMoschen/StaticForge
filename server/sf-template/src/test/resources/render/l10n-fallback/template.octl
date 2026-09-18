@@ -1,0 +1,4 @@
+<p>$CMS_VALUE(street)$</p>
+<p>$CMS_VALUE(headline)$</p>
+<p>$CMS_IF(missing)$yes$CMS_ELSE$no$CMS_END_IF$</p>
+<p>$CMS_META(locale)$ / $CMS_META(language)$</p>

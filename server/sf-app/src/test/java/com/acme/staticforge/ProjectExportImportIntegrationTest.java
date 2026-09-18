@@ -1604,12 +1604,12 @@ class ProjectExportImportIntegrationTest {
         exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
 
         List<Asset> pageTemplateFolders = assetRepository.findAll().stream()
-                .filter(a -> a.getProjectId() == source.project().getId()
+                .filter(a -> java.util.Objects.equals(a.getProjectId(), source.project().getId())
                         && a.getAssetType() == AssetType.FOLDER
                         && FolderScope.PAGE_TEMPLATES_UID.equals(a.getUid()))
                 .toList();
         List<Asset> sectionTemplateFolders = assetRepository.findAll().stream()
-                .filter(a -> a.getProjectId() == source.project().getId()
+                .filter(a -> java.util.Objects.equals(a.getProjectId(), source.project().getId())
                         && a.getAssetType() == AssetType.FOLDER
                         && FolderScope.SECTION_TEMPLATES_UID.equals(a.getUid()))
                 .toList();
@@ -1657,7 +1657,7 @@ class ProjectExportImportIntegrationTest {
         exportImportService.importProject(target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT);
 
         List<Asset> pageTemplateFolders = assetRepository.findAll().stream()
-                .filter(a -> a.getProjectId() == target.project().getId()
+                .filter(a -> java.util.Objects.equals(a.getProjectId(), target.project().getId())
                         && a.getAssetType() == AssetType.FOLDER
                         && FolderScope.PAGE_TEMPLATES_UID.equals(a.getUid()))
                 .toList();
@@ -1796,12 +1796,14 @@ class ProjectExportImportIntegrationTest {
      * a clean conflict — and to {@code 5} in {@code M19.1.3} for {@code DATASET}/{@code RECORD}.
      */
     @Test
-    void manifestReportsProtocolVersionFive() {
+    void manifestReportsTheCurrentProtocolVersion() {
         Fixture source = newFixture("m141_manifest", "M14.1 Manifest Protocol Version");
         byte[] archive = exportImportService.exportProject(source.project().getId());
 
         ExportManifest manifest = parseManifest(archive);
-        assertThat(manifest.protocolVersion()).isEqualTo(5);
+        // Bumped to 6 by M24.5.1, which added the project's content languages to settings.json.
+        assertThat(manifest.protocolVersion()).isEqualTo(ProjectExportImportService.PROTOCOL_VERSION);
+        assertThat(manifest.protocolVersion()).isEqualTo(6);
     }
 
     /**
@@ -2088,7 +2090,7 @@ class ProjectExportImportIntegrationTest {
                         org.assertj.core.groups.Tuple.tuple(com.acme.staticforge.asset.ReferenceKind.TEMPLATE, teamId),
                         org.assertj.core.groups.Tuple.tuple(com.acme.staticforge.asset.ReferenceKind.CONTENT_REF, adaId));
         assertThat(assetRepository.findAll().stream()
-                        .filter(a -> a.getProjectId() == targetId && FolderScope.CONTENT_ROOT_UID.equals(a.getUid())))
+                        .filter(a -> java.util.Objects.equals(a.getProjectId(), targetId) && FolderScope.CONTENT_ROOT_UID.equals(a.getUid())))
                 .as("the archive's Content root remapped onto the target's own")
                 .hasSize(1);
     }
@@ -2341,7 +2343,7 @@ class ProjectExportImportIntegrationTest {
 
     private List<Asset> globalsRoots(long projectId) {
         return assetRepository.findAll().stream()
-                .filter(a -> a.getProjectId() == projectId
+                .filter(a -> java.util.Objects.equals(a.getProjectId(), projectId)
                         && a.getAssetType() == AssetType.FOLDER
                         && FolderScope.GLOBALS_ROOT_UID.equals(a.getUid()))
                 .toList();

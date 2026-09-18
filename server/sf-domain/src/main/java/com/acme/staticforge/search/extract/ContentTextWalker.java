@@ -77,16 +77,42 @@ final class ContentTextWalker {
         if (value == null || value.isNull()) {
             return;
         }
+        // A language-dependent value contributes each language's text to that language's field, so a
+        // German search stems German and an English one English (M24.3.3).
+        if (com.acme.staticforge.common.L10nValues.isL10n(value)) {
+            for (String locale : com.acme.staticforge.common.L10nValues.locales(value)) {
+                collect(editor, com.acme.staticforge.common.L10nValues.get(value, locale), context, out, depth, locale);
+            }
+            return;
+        }
+        collect(editor, value, context, out, depth, null);
+    }
+
+    /**
+     * The text of one editor value.
+     *
+     * @param locale the language it belongs to, or {@code null} for language-neutral text
+     */
+    private static void collect(
+            EditorDefinition editor,
+            JsonNode value,
+            ExtractionContext context,
+            TextBuilder out,
+            int depth,
+            String locale) {
+        if (value == null || value.isNull()) {
+            return;
+        }
         switch (editor.type()) {
-            case TEXT, TEXTAREA, MARKDOWN -> out.add(text(value));
-            case RICHTEXT -> out.add(HtmlText.toPlainText(richText(value)));
-            case SELECT -> out.add(label(editor, text(value)));
+            case TEXT, TEXTAREA, MARKDOWN -> out.add(locale, text(value));
+            case RICHTEXT -> out.add(locale, HtmlText.toPlainText(richText(value)));
+            case SELECT -> out.add(locale, label(editor, text(value)));
             case MULTISELECT -> {
                 if (value.isArray()) {
-                    value.forEach(option -> out.add(label(editor, text(option))));
+                    value.forEach(option -> out.add(locale, label(editor, text(option))));
                 }
             }
-            case LINK -> out.add(text(value.get("title")));
+            case LINK -> out.add(locale, text(value.get("title")));
             case LIST -> {
                 if (value.isArray()) {
                     ContentDefinition items = new ContentDefinition(editor.items(), List.of());

@@ -44,6 +44,11 @@ import org.junit.jupiter.api.Test;
  *
  * <p>An optional {@code pagination.json} (M21.3.1) is the {@code CMS_PAGINATION} value of a paginated page, in the shape
  * {@code PaginationScope} builds; the render context gets it as the page's pagination.
+ *
+ * <p>An optional {@code context.json} (M24.3.1) sets the render language:
+ * {@code {"locale": "de-CH", "localeChain": ["de-CH", "de", "en"], "locales": [{code,label}…]}}.
+ * {@code locales} builds the {@code CMS_LOCALES} switcher items; without the file the case renders
+ * as a project without locales, which is what every pre-M24 case still does.
  */
 class GoldenFileRenderTest {
 
@@ -98,6 +103,9 @@ class GoldenFileRenderTest {
             if (Files.exists(dir.resolve("pagination.json"))) {
                 builder.pagination(mapper.readTree(read(dir.resolve("pagination.json"))));
             }
+            if (Files.exists(dir.resolve("context.json"))) {
+                applyLocale(builder, mapper.readTree(read(dir.resolve("context.json"))));
+            }
             if (!assetValues.isEmpty()) {
                 builder.assetValueResolver(new AssetValueResolver() {
                     @Override
@@ -118,6 +126,38 @@ class GoldenFileRenderTest {
                     .as("case %s\n--- actual ---\n%s\n--- expected ---\n%s", dir.getFileName(), actual, expected)
                     .isEqualTo(normalize(expected));
         }
+    }
+
+    /** Applies a case's {@code context.json} language settings to the render context (M24.3.1). */
+    private static void applyLocale(RenderContext.Builder builder, JsonNode context) {
+        String locale = context.path("locale").asText(null);
+        List<String> chain = new java.util.ArrayList<>();
+        context.path("localeChain").forEach(node -> chain.add(node.asText()));
+        if (chain.isEmpty() && locale != null) {
+            chain.add(locale);
+        }
+        builder.locale(locale, chain);
+        builder.meta("locale", com.fasterxml.jackson.databind.node.TextNode.valueOf(locale == null ? "" : locale));
+        builder.meta(
+                "language",
+                com.fasterxml.jackson.databind.node.TextNode.valueOf(
+                        locale == null ? "" : (locale.contains("-") ? locale.substring(0, locale.indexOf('-')) : locale)));
+        JsonNode declared = context.path("locales");
+        if (!declared.isArray() || declared.isEmpty()) {
+            return;
+        }
+        com.fasterxml.jackson.databind.node.ArrayNode items =
+                com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode();
+        for (JsonNode entry : declared) {
+            String code = entry.path("code").asText();
+            com.fasterxml.jackson.databind.node.ObjectNode item = items.addObject();
+            item.put("code", code);
+            item.put("language", code.contains("-") ? code.substring(0, code.indexOf('-')) : code);
+            item.put("label", entry.path("label").asText(code));
+            item.put("current", code.equals(locale));
+            item.put("href", entry.path("href").asText(""));
+        }
+        builder.locales(items);
     }
 
     /**

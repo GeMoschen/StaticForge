@@ -359,3 +359,13 @@
   (create)="submitNewTemplate($event)"
   (closed)="closeNewTemplate()"
 />
+
+@if (pendingDiscard(); as message) {
+  <div class="templates__discard" role="alertdialog" aria-label="This change discards translations">
+    <p class="templates__discard-text">{{ message }}</p>
+    <div class="templates__discard-actions">
+      <sf-button variant="ghost" (click)="cancelDiscard()">Keep the translations</sf-button>
+      <sf-button variant="danger" (click)="confirmDiscardAndSave()">Discard and save</sf-button>
+    </div>
+  </div>
+}

@@ -29,6 +29,55 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 | `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN |
 | `GET` | `/projects/{key}/members` | VIEWER |
 | `PUT`/`DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN |
+| `GET` | `/projects/{key}/locales` | VIEWER |
+| `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |
+
+### 3.1 Content languages (M24)
+
+`GET /projects/{key}/locales` returns the project's content languages; a project that declares none answers
+`{"locales": [], "defaultLocale": null, "fallbacks": {}, "defaultWithoutPrefix": false}` and behaves exactly as
+before M24 everywhere else.
+
+```json
+{
+  "locales": [ {"code": "de", "label": "Deutsch"}, {"code": "en", "label": "English"} ],
+  "defaultLocale": "de",
+  "fallbacks": { "de-CH": ["de"] },
+  "defaultWithoutPrefix": false
+}
+```
+
+`PUT` replaces the whole configuration and allocates one `UPDATE` revision. Language tags must be well-formed
+BCP 47, unique, and the default must be one of them; a fallback must name a declared language and may not be
+cyclic. A violation is `400 SF-API-0400` with the findings under `errors` (`{field, message}`).
+
+The response adds what the caller has to warn about:
+
+| Field | Meaning |
+|---|---|
+| `urlsWillChange` | the edit moves every generated page (languages enabled/disabled, or the prefix setting flipped) |
+| `removedLocales` | languages this edit dropped; their stored values are **kept**, not deleted |
+| `retainedValueCount` | how many translations are still stored for those languages |
+| `confirmationRequired` | nothing was written: the change would discard translations — re-send with `?confirmDiscard=true` |
+| `discardedLocaleValues` / `affectedAssets` | how many translations, in how many assets, a confirmed change discards |
+
+### 3.2 Translation status (M24)
+
+| Method | Path | Role |
+|---|---|---|
+| `GET` | `/projects/{projectKey}/translation-status` (`?type=`, `?locale=`) | VIEWER |
+| `GET` | `/projects/{projectKey}/translation-status/{uuid}` | VIEWER |
+
+Per asset, how many language-dependent fields each language still owes: a field counts as missing when the
+default language fills it and that language does not (an inherited value is *not* a translation). `?locale=en`
+lists only the assets still missing an English translation — the "missing in en" filter. `orphaned` lists
+languages the asset still holds values for that the project no longer declares. A project without languages
+answers with an empty list.
+
+```json
+{ "assetUuid": "…", "locales": [ {"locale": "de", "missing": 0, "total": 4},
+                                 {"locale": "en", "missing": 1, "total": 4} ], "orphaned": [] }
+```
 
 ## 4. Assets (generic)
 
@@ -117,7 +166,7 @@ Everything else is generic (§4): delete, restore, move, uid change, history and
 |---|---|
 | `GET`/`POST` | `/projects/{projectKey}/media` |
 | `POST` | `/projects/{projectKey}/media/bulk` |
-| `PUT` | `/projects/{projectKey}/media/{uuid}` |
+| `PUT` | `/projects/{projectKey}/media/{uuid}` (`?locale=`) |
 | `POST` | `/projects/{projectKey}/media/{uuid}/replace` |
 | `GET` | `/projects/{projectKey}/media/{uuid}/binary` (`?variant=`) |
 | `GET` | `/projects/{projectKey}/media/{uuid}/thumbnail` |
@@ -162,6 +211,13 @@ with the diagnostic in `X-SF-Render-Error`.
 | `GET` | `/projects/{projectKey}/structures/{uuid}/preview` |
 | `POST` | `/projects/{projectKey}/cdl/validate` (`?kind=GLOBAL_SET` adds the property-set restrictions, `?kind=DATASET` the dataset-schema ones) |
 | `POST` | `/projects/{projectKey}/octl/validate` (body `source`, `channelKey`; with `templateUuid` and optional unsaved `contentDefinition` it returns the diagnostics a save of that template's channel would: references, inheritance chain, effective-definition names) |
+
+**Language-dependent editors (M24).** A CDL leaf editor may be `localizable`; a container (`group`, `list`,
+`catalog`, `pagination`) may not (`SF-CDL-0112`). Adding the flag migrates every stored value of that editor into
+the `{"type":"L10N","values":{…}}` wrapper, in the **same** revision as the template save. Removing it reduces each
+value to the default language, so the save is refused with `409 SF-API-0409` carrying `discardedLocaleValues`,
+`discardedLocales` and `affectedAssets`, and **nothing is written**; re-send with `?confirmDiscard=true` to go
+ahead. `PUT /globals/{uuid}/schema` and `PUT /datasets/{uuid}` take the same flag for the same reason.
 
 ## 9. Channels & targets
 
@@ -223,16 +279,16 @@ A run view carries `planSummary` (`null` for a run that never got past PLAN): `{
 
 | Method | Path |
 |---|---|
-| `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`, `?page=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data. `page` (M21) renders that page of a paginated page, clamped to its page count; the response carries `X-SF-Total-Pages` and `X-SF-Page` |
+| `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`, `?page=`, `?locale=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data. `page` (M21) renders that page of a paginated page, clamped to its page count; the response carries `X-SF-Total-Pages` and `X-SF-Page`. `locale` (M24) renders one content language; without it, the project's default |
 | `POST` | `/projects/{projectKey}/preview/section` |
-| `GET` | `/projects/{projectKey}/preview/pages/{uuid}/share` (issue a share link) |
-| `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token; `?page=` as above, not part of the token) |
+| `GET` | `/projects/{projectKey}/preview/pages/{uuid}/share` (`?locale=`, issue a share link; the language is bound into the token) |
+| `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token; `?page=` as above, not part of the token — the language is) |
 | `GET` | `/projects/{projectKey}/pagination/count` (`?kind=NAV\|DATASET&source=uuid`) — M21: `{itemCount, skipped}` of a pagination source now, counted like generation does; `404` when the source isn't a live Navigation folder or dataset, `422` for another `kind` |
 
 ## 13. Search (M23)
 
 Editorial full-text search over a project's **current** assets, answered from an embedded per-project index that is
-kept up to date after each commit (see [architecture §11](architecture.md#11-search)). Time travel doesn't change
+kept up to date after each commit (see [architecture §12](architecture.md#12-search)). Time travel doesn't change
 what search returns.
 
 | Method | Path | Role |
@@ -241,7 +297,7 @@ what search returns.
 | `GET` | `/projects/{projectKey}/search/status` | VIEWER |
 | `POST` | `/projects/{projectKey}/search/reindex` | PROJECT_ADMIN |
 
-`GET /search?q=&type=&folder=&page=0&size=20&sort=relevance`:
+`GET /search?q=&type=&folder=&page=0&size=20&sort=relevance&locale=`:
 
 - `q` is required, 1–200 characters after trimming. It is never parsed as query syntax: words are matched in any of the
   analyzed fields (German and English stemming, umlaut folding), `"quoted words"` as a phrase, the last word also as a
@@ -249,6 +305,9 @@ what search returns.
   letters also match with one typo.
 - `type` is repeatable (`type=PAGE&type=MEDIA`), `folder` a folder path prefix (`/pages_root/news/`), `size` 1–100,
   `sort` only `relevance`, and a page may reach at most 10,000 hits. Anything else is `400 SF-SEARCH-0400`.
+- `locale` (M24) searches one content language: text of a language-dependent value is indexed into that language's
+  field, so `locale=de` stems German and does not match a value that exists only in English. Without it every
+  language is searched, which is what a project without languages always does.
 
 ```json
 { "content": [
@@ -338,6 +397,7 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | Code | Severity | Meaning | Raised by |
 |---|---|---|---|
 | `SF-GEN-0110` | error | output path collision | `RenderPipeline` (`COLLISION_CODE`) |
+| `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several content languages, so two languages would write the same file (M24) | `RenderPipeline` (`NOT_LOCALE_DISTINCT_CODE`) |
 | `SF-GEN-0120` | error (per page) | content incomplete; page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.incompletePages`) |
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
 | `SF-GEN-0220` | warning | reference to a deleted asset (`$CMS_REF`, `$CMS_INCLUDE`, body section); renders empty | `GenerationRenderer` |

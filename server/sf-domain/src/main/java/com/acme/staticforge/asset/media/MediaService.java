@@ -37,9 +37,14 @@ public interface MediaService {
      */
     MediaWriteResult replace(UUID uuid, String fileName, String suppliedMimeType, byte[] bytes, RevisionContext ctx);
 
-    /** Updates alt text, caption, copyright and focal point (optimistic-concurrency-checked). */
+    /**
+     * Updates alt text, caption, copyright and focal point (optimistic-concurrency-checked). In a
+     * project with locales, {@code altText} and {@code caption} are language-dependent (M24.2.2):
+     * the write targets {@code locale} (the project default when {@code null}) and leaves the other
+     * languages untouched. {@code copyright} is single-valued.
+     */
     AssetVersionView updateMetadata(UUID uuid, String altText, String caption, String copyright,
-            FocalPoint focalPoint, long expectedRevision, RevisionContext ctx);
+            FocalPoint focalPoint, String locale, long expectedRevision, RevisionContext ctx);
 
     /**
      * Switches OCTL processing of a text media file on or off (M18.1.1) in one revision. Non-text

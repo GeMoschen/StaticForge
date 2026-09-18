@@ -55,13 +55,28 @@ public record BuildManifest(
      * @param asset the page or media asset; {@code null} for a site file
      * @param channel the page's channel; {@code null} for media and site files
      * @param pageNumber the page number of a paginated page's output; {@code null} otherwise
+     * @param locale the language a page output was rendered in (M24.3.2); {@code null} for a
+     *     project without locales and for media and site files. Absent from manifests written
+     *     before M24, which read back as {@code null} — exactly what they were.
      * @param dependencies the media the file's render linked or embedded (pages and processed media)
      */
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
-    public record Output(String path, Kind kind, UUID asset, String channel, Integer pageNumber, Set<UUID> dependencies) {
+    public record Output(
+            String path,
+            Kind kind,
+            UUID asset,
+            String channel,
+            Integer pageNumber,
+            String locale,
+            Set<UUID> dependencies) {
 
         public Output {
             dependencies = dependencies == null ? Set.of() : Set.copyOf(dependencies);
+        }
+
+        /** An output of a project without locales. */
+        public Output(String path, Kind kind, UUID asset, String channel, Integer pageNumber, Set<UUID> dependencies) {
+            this(path, kind, asset, channel, pageNumber, null, dependencies);
         }
 
         /** The 1-based page number; {@code 1} for an output that isn't a paginated page's. */

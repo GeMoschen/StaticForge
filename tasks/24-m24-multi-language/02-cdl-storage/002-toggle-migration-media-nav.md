@@ -1,6 +1,6 @@
 ---
 id: M24.2.2
-status: todo
+status: done
 depends: [M24.2.1]
 epic: m24-multi-language
 feature: cdl-storage
@@ -48,17 +48,17 @@ labels come from `NavigationServiceImpl.label(projectId, asset, lookup)` (~line 
 
 ## Acceptance criteria
 
-- [ ] Integration test: template with 3 pages using `headline`; toggling `localizable` on
+- [x] Integration test: template with 3 pages using `headline`; toggling `localizable` on
       wraps all 3 in one revision whose `summary.assets` lists the template + 3 pages.
-- [ ] Toggling off with an `en` translation present returns the discard report without
+- [x] Toggling off with an `en` translation present returns the discard report without
       writing; confirmed save unwraps and writes one revision.
-- [ ] Enabling project locales wraps values of already-localizable editors in the same
+- [x] Enabling project locales wraps values of already-localizable editors in the same
       revision as the locale settings change; disabling unwraps after confirmation.
-- [ ] Section instances inside bodies and list-item leaves are migrated (not only
+- [x] Section instances inside bodies and list-item leaves are migrated (not only
       top-level `content`).
-- [ ] Media `altText` per locale saved and read back; nav label per locale resolved by
+- [x] Media `altText` per locale saved and read back; nav label per locale resolved by
       `NavigationService.tree` for `de` and `en`.
-- [ ] `RevisionInvariantsTest` still green (compound revision invariants).
+- [x] `RevisionInvariantsTest` still green (compound revision invariants).
 
 ## Out of scope
 
@@ -75,3 +75,25 @@ labels come from `NavigationServiceImpl.label(projectId, asset, lookup)` (~line 
   (`media-detail-drawer.component.ts`) — the API view should expose both `altText`
   (resolved for the requested/default locale) and `altTextL10n` to avoid breaking existing
   clients.
+
+## Implementation notes (2026-09-17)
+
+- One **normalizing** migrator (`asset/content/LocalizationMigrator`) covers all four triggers
+  (editor gains/loses `localizable`, project gains/loses locales) instead of diffing two
+  definitions, which makes it idempotent by construction.
+- `asset/localization/LocalizationMigrationService` owns the asset walk and the revision: pages
+  (own content, body sections, catalog cards, recursively), global sets and dataset records.
+- Unconfirmed unwrapping throws a `409` carrying `discardedLocaleValues` / `discardedLocales` /
+  `affectedAssets` **inside** the save's transaction, so the rollback guarantees nothing was
+  written. Confirmed saves pass `?confirmDiscard=true`.
+- **Defect found and fixed while testing:** the `confirmDiscard` overloads were first added as
+  `default` interface methods. Self-invocation from a default method bypasses the Spring
+  transactional proxy, so a rejected save was *not* rolled back. All four services
+  (`TemplateService`, `GlobalSetService`, `DatasetService`, `PageReferenceService`) now declare
+  both overloads abstract and implement both with `@Transactional`.
+- **Latent test bug fixed:** `ProjectExportImportIntegrationTest` and `TemplateFolderIntegrationTest`
+  compared `Asset.getProjectId()` (a `Long`) with `==`. That only worked while project ids stayed
+  inside the `Long` cache (< 128); the new fixtures pushed them past it. Now `Objects.equals`.
+- `ProjectService.updateLocales` gained `confirmDiscard` and reports
+  `confirmationRequired`/`discardedLocaleValues`/`affectedAssets`; `retainedValueCount`
+  (deferred from M24.1.1) is now computed by `LocalizationMigrationService.countValuesForLocales`.

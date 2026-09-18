@@ -50,7 +50,15 @@
             <p class="record-editor__hint">The dataset declares no fields yet.</p>
           } @else {
             @if (form(); as group) {
-              <sf-content-form [definition]="definition()" [formGroup]="group" [projectKey]="projectKey()" [issues]="issues()" />
+              <sf-content-form
+                [definition]="definition()"
+                [formGroup]="group"
+                [projectKey]="projectKey()"
+                [issues]="issues()"
+                [editingLocale]="editingLocale()"
+                [storedValue]="storedContent()"
+                [localeLabels]="localeLabels()"
+              />
             }
           }
 

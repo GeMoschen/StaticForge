@@ -1,0 +1,4 @@
+<p>$CMS_VALUE(publishedOn | date("d. MMMM yyyy"))$</p>
+<p>$CMS_VALUE(price | number("#,##0.00"))$</p>
+<p>$CMS_VALUE(publishedOn | date("d. MMMM yyyy", "en"))$</p>
+<p>$CMS_VALUE(title | upper)$</p>

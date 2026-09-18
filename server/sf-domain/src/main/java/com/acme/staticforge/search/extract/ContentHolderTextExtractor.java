@@ -33,6 +33,6 @@ public class ContentHolderTextExtractor implements SearchTextExtractor {
         } else {
             ContentTextWalker.leaves(content, text);
         }
-        return Optional.of(Documents.of(asset, text.build(), ""));
+        return Optional.of(Documents.of(asset, text, ""));
     }
 }

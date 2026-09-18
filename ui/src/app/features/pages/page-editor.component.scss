@@ -256,3 +256,15 @@
   border-top: 1px solid var(--sf-line);
   min-width: 0;
 }
+
+/* How many fields the language being edited still owes (M24.4.2). */
+.page-editor__translation {
+  margin-left: auto;
+  padding: 0 var(--sf-2);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

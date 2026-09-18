@@ -94,5 +94,11 @@ public final class DiagnosticCodes {
     public static final String CDL_PAGINATION_PLACEMENT = "SF-CDL-0110";
     /** A page template declares, or declares and inherits, more than one {@code pagination} editor (M21.1.1). */
     public static final String CDL_PAGINATION_DUPLICATE = "SF-CDL-0111";
+    /**
+     * {@code localizable} on a structural editor ({@code group}, {@code list}, {@code catalog},
+     * {@code pagination}) — page structure is shared by all locales, only leaf values vary (M24.2.1).
+     * The M24 task file proposed {@code SF-CDL-0107}, which M17 had already taken.
+     */
+    public static final String CDL_CONTAINER_NOT_LOCALIZABLE = "SF-CDL-0112";
     public static final String CDL_SYNTAX = "SF-CDL-0200";
 }

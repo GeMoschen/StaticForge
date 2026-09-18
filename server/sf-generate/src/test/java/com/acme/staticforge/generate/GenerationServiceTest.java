@@ -62,7 +62,8 @@ class GenerationServiceTest {
         writers = mock(TargetWriterSelector.class);
         service = new GenerationService(runs, targets, projects, mock(ChannelService.class), snapshots, planner, renderer, assetsStage,
                 mock(MediaRenderStage.class), postStage,
-                writers, mock(RunPlanStore.class), new GenerationProperties(), new ObjectMapper(), new SimpleMeterRegistry());
+                writers, mock(RunPlanStore.class), new GenerationProperties(), new ObjectMapper(), new SimpleMeterRegistry(),
+                mock(com.acme.staticforge.project.ProjectLocales.class));
 
         Project project = project(1L);
         when(projects.requireByKey("p")).thenReturn(project);

@@ -28,6 +28,8 @@ const CONFLICT_ICONS: Record<string, string> = {
   MISSING_PARENT_FOLDER: 'folder_off',
   SETTINGS_KEY_COLLISION: 'settings',
   TARGET_PATH_COLLISION: 'drive_file_move',
+  LOCALE_CONFIG_MISMATCH: 'translate',
+  LOCALIZATION_SHAPE_MISMATCH: 'translate',
 };
 
 /**

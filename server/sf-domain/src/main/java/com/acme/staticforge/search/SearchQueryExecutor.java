@@ -62,6 +62,20 @@ final class SearchQueryExecutor {
     private static final List<String> BODY_FIELDS =
             List.of(SearchFields.TEXT, SearchFields.TEXT_DE, SearchFields.TEXT_EN, SearchFields.SOURCE);
 
+    /**
+     * The prose fields a query reads. Without a language, every field — the pre-M24 behaviour, and
+     * still what an editor searching "everything" wants. With one, that language's field plus the
+     * code field, so an English query does not match a German-only value through German stemming
+     * (M24.3.3). The neutral {@code text} field is part of the language field's own content, so it
+     * needs no separate clause.
+     */
+    private static List<String> bodyFields(SearchQuery query) {
+        if (query.locale() == null) {
+            return BODY_FIELDS;
+        }
+        return List.of(SearchFields.proseFor(query.locale()), SearchFields.SOURCE);
+    }
+
     private final Analyzer analyzer;
     private final SnippetBuilder snippets;
 
@@ -76,10 +90,11 @@ final class SearchQueryExecutor {
             if (input.isEmpty()) {
                 return new SearchHits(List.of(), 0, Map.of());
             }
-            Query match = build(input, false);
+            List<String> bodyFields = bodyFields(query);
+            Query match = build(input, false, bodyFields);
             Map<AssetType, Long> counts = match == null ? Map.of() : counts(searcher, filtered(match, Set.of(), query.folder()));
             if (total(counts, Set.of()) == 0 && hasFuzzyWords(input)) {
-                match = build(input, true);
+                match = build(input, true, bodyFields);
                 counts = counts(searcher, filtered(match, Set.of(), query.folder()));
             }
             long total = total(counts, query.types());
@@ -103,8 +118,17 @@ final class SearchQueryExecutor {
 
     // ------------------------------------------------------------------ query construction
 
-    /** The scoring part of the query, or {@code null} when the input yields no clause at all. */
+    /** The scoring part of the query over every language. */
     Query build(SearchInput input, boolean fuzzy) {
+        return build(input, fuzzy, BODY_FIELDS);
+    }
+
+    /**
+     * The scoring part of the query, or {@code null} when the input yields no clause at all.
+     *
+     * @param bodyFields the prose/code fields to match words in — one language's, or all of them
+     */
+    Query build(SearchInput input, boolean fuzzy, List<String> bodyFields) {
         BooleanQuery.Builder any = new BooleanQuery.Builder();
         int clauses = 0;
         boolean single = input.words().size() == 1 && input.phrases().isEmpty();
@@ -127,7 +151,7 @@ final class SearchQueryExecutor {
             any.add(new BoostQuery(titleTerms, TITLE_TERMS_BOOST), Occur.SHOULD);
             clauses++;
         }
-        Query body = allWords(input, fuzzy, BODY_FIELDS, MIN_TEXT_PREFIX_CHARS);
+        Query body = allWords(input, fuzzy, bodyFields, MIN_TEXT_PREFIX_CHARS);
         if (body != null) {
             any.add(body, Occur.SHOULD);
             clauses++;

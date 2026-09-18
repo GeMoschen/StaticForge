@@ -1,3 +1,5 @@
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { LocalesStore } from '../../core/project/locales.store';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -36,6 +38,18 @@ import type { SectionInstance } from './types';
 })
 export class SectionEditorComponent {
   private readonly fb = inject(FormBuilderService);
+  /** The language being edited (M24.4.1); `null` in a project without languages. */
+  protected readonly editingLocale = inject(EditingLocaleStore).binding;
+
+  private readonly localesForLabels = inject(LocalesStore);
+
+  /** Language tag to label, so the form says "from Deutsch" rather than "from de". */
+  protected readonly localeLabels = computed<Record<string, string>>(() =>
+    Object.fromEntries(
+      this.localesForLabels.locales().map((locale) => [locale.code ?? '', locale.label ?? locale.code ?? '']),
+    ),
+  );
+
 
   readonly contentDefinition = input.required<ContentDefinition>();
   readonly section = input.required<SectionInstance>();
@@ -59,6 +73,14 @@ export class SectionEditorComponent {
   readonly dropOn = output<number>();
   readonly dragEnd = output<void>();
 
+  /**
+   * The content object as stored — every language, not just the one being edited. The form binds
+   * one language; the fallback hint needs the others (M24.4.1).
+   */
+  protected readonly storedContent = computed<Record<string, unknown>>(
+    () => (this.section().content ?? {}) as Record<string, unknown>,
+  );
+
   protected readonly collapsed = signal(false);
   /**
    * A `computed`, not a signal rebuilt by a side-effect: the effect this replaced rebuilt
@@ -74,7 +96,7 @@ export class SectionEditorComponent {
     const definition = this.contentDefinition();
     const section = this.section();
     const content = (section.content ?? {}) as Record<string, unknown>;
-    const form = this.fb.build(definition, content);
+    const form = this.fb.build(definition, content, this.editingLocale());
     if (this.readOnly()) {
       form.disable();
     }

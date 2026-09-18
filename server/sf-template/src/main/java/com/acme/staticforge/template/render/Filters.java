@@ -50,14 +50,15 @@ public final class Filters {
                 Map.entry("js", (in, a) -> TextNode.valueOf(escapeJs(text(in)))),
                 Map.entry("url", (in, a) -> TextNode.valueOf(encodeUrl(text(in)))),
                 Map.entry("raw", (in, a) -> TextNode.valueOf(text(in))),
-                Map.entry("upper", (in, a) -> TextNode.valueOf(text(in).toUpperCase(Locale.ROOT))),
-                Map.entry("lower", (in, a) -> TextNode.valueOf(text(in).toLowerCase(Locale.ROOT))),
-                Map.entry("capitalize", (in, a) -> TextNode.valueOf(capitalize(text(in)))),
+                // Case folding is language-dependent (Turkish dotless i, M24.3.1).
+                Map.entry("upper", localeAware((in, a, l) -> TextNode.valueOf(text(in).toUpperCase(l)))),
+                Map.entry("lower", localeAware((in, a, l) -> TextNode.valueOf(text(in).toLowerCase(l)))),
+                Map.entry("capitalize", localeAware((in, a, l) -> TextNode.valueOf(capitalize(text(in), l)))),
                 Map.entry("trim", (in, a) -> TextNode.valueOf(text(in).trim())),
                 Map.entry("truncate", Filters::truncate),
                 Map.entry("default", Filters::defaultValue),
-                Map.entry("date", Filters::date),
-                Map.entry("number", Filters::number),
+                Map.entry("date", localeAware(Filters::date)),
+                Map.entry("number", localeAware(Filters::number)),
                 Map.entry("stripTags", (in, a) -> TextNode.valueOf(stripTags(text(in)))),
                 Map.entry("nl2br", (in, a) -> TextNode.valueOf(escapeHtml(text(in)).replace("\n", "<br>\n"))),
                 Map.entry("md", (in, a) -> TextNode.valueOf(markdown(text(in)))),
@@ -180,14 +181,21 @@ public final class Filters {
         return node;
     }
 
-    private static JsonNode date(JsonNode in, List<String> args) {
+    /**
+     * {@code date("d. MMMM yyyy")} formats in the render's language; an optional second argument
+     * ({@code date("d. MMMM yyyy", "en")}) overrides it. Never the JVM default — output must not
+     * depend on which machine generated the site (M24.3.1).
+     */
+    private static JsonNode date(JsonNode in, List<String> args, Locale locale) {
         String v = text(in);
         String pattern = args.isEmpty() ? "yyyy-MM-dd" : args.get(0);
+        Locale effective = args.size() > 1 ? localeOf(args.get(1)) : locale;
         if (v.isEmpty()) {
             return TextNode.valueOf("");
         }
         try {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern(pattern).withZone(ZoneOffset.UTC);
+            DateTimeFormatter fmt =
+                    DateTimeFormatter.ofPattern(pattern, effective).withZone(ZoneOffset.UTC);
             try {
                 return TextNode.valueOf(fmt.format(Instant.ofEpochMilli(Long.parseLong(v))));
             } catch (NumberFormatException ignore) {
@@ -199,7 +207,12 @@ public final class Filters {
         }
     }
 
-    private static JsonNode number(JsonNode in, List<String> args) {
+    /**
+     * {@code number("#,##0.00")} uses the render language's grouping and decimal separators; an
+     * optional second argument overrides the language. {@link Locale#ROOT} without a render
+     * language keeps pre-M24 output byte for byte.
+     */
+    private static JsonNode number(JsonNode in, List<String> args, Locale locale) {
         JsonNode node = normalize(in);
         if (args.isEmpty()) {
             return TextNode.valueOf(node.asText());
@@ -210,8 +223,9 @@ public final class Filters {
         } catch (NumberFormatException e) {
             return in;
         }
+        Locale effective = args.size() > 1 ? localeOf(args.get(1)) : locale;
         try {
-            DecimalFormat df = new DecimalFormat(args.get(0), DecimalFormatSymbols.getInstance(Locale.ROOT));
+            DecimalFormat df = new DecimalFormat(args.get(0), DecimalFormatSymbols.getInstance(effective));
             return TextNode.valueOf(df.format(d));
         } catch (IllegalArgumentException e) {
             return in;
@@ -245,11 +259,45 @@ public final class Filters {
         return IntNode.valueOf(1);
     }
 
+    /** A filter that cares about the render language. */
+    @FunctionalInterface
+    private interface LocaleFilter {
+        JsonNode apply(JsonNode input, List<String> args, Locale locale);
+    }
+
+    /** Adapts a {@link LocaleFilter} to {@link Filter}, defaulting to the neutral {@link Locale#ROOT}. */
+    private static Filter localeAware(LocaleFilter filter) {
+        return new Filter() {
+            @Override
+            public JsonNode apply(JsonNode input, List<String> args) {
+                return filter.apply(input, args, Locale.ROOT);
+            }
+
+            @Override
+            public JsonNode apply(JsonNode input, List<String> args, Locale locale) {
+                return filter.apply(input, args, locale == null ? Locale.ROOT : locale);
+            }
+        };
+    }
+
+    /** A BCP 47 tag as a {@link Locale}; blank or malformed falls back to {@link Locale#ROOT}. */
+    public static Locale localeOf(String tag) {
+        if (tag == null || tag.isBlank()) {
+            return Locale.ROOT;
+        }
+        Locale locale = Locale.forLanguageTag(tag.trim());
+        return locale.toLanguageTag().isEmpty() || "und".equals(locale.toLanguageTag()) ? Locale.ROOT : locale;
+    }
+
     private static String capitalize(String s) {
+        return capitalize(s, Locale.ROOT);
+    }
+
+    private static String capitalize(String s, Locale locale) {
         if (s.isEmpty()) {
             return s;
         }
-        return Character.toUpperCase(s.charAt(0)) + s.substring(1).toLowerCase(Locale.ROOT);
+        return s.substring(0, 1).toUpperCase(locale) + s.substring(1).toLowerCase(locale);
     }
 
     private static final Pattern TAGS = Pattern.compile("<[^>]*>");

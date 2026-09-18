@@ -1,0 +1,5 @@
+<ul>
+$CMS_FOR(l : CMS_LOCALES)$
+  <li><a href="$CMS_VALUE(l.href)$" hreflang="$CMS_VALUE(l.code)$">$CMS_VALUE(l.label)$$CMS_IF(l.current)$ (current)$CMS_END_IF$</a></li>
+$CMS_END_FOR$
+</ul>

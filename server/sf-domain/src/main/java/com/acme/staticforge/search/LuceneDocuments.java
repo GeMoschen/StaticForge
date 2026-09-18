@@ -29,14 +29,38 @@ final class LuceneDocuments {
         doc.add(new StoredField(SearchFields.REVISION, source.revision()));
         doc.add(new TextField(SearchFields.TITLE, source.title(), Field.Store.YES));
 
-        String text = TextCap.cap(source.text(), maxTextChars);
-        String code = TextCap.cap(source.source(), Math.max(0, maxTextChars - text.length()));
+        // The neutral field carries everything, so an unfiltered search still finds every language;
+        // each language field carries the neutral text plus its own, so its analyzer stems the right
+        // language (M24.3.3).
+        String all = TextCap.cap(source.allText(), maxTextChars);
+        String code = TextCap.cap(source.source(), Math.max(0, maxTextChars - all.length()));
+        doc.add(new TextField(SearchFields.TEXT, all, Field.Store.NO));
         for (String field : SearchFields.PROSE) {
-            doc.add(new TextField(field, text, Field.Store.NO));
+            if (field.equals(SearchFields.TEXT)) {
+                continue;
+            }
+            String forField = source.textByLocale().isEmpty()
+                    ? all
+                    : TextCap.cap(textForField(source, field), maxTextChars);
+            doc.add(new TextField(field, forField, Field.Store.NO));
         }
         doc.add(new TextField(SearchFields.SOURCE, code, Field.Store.NO));
-        doc.add(new StoredField(SearchFields.SNIPPET_SOURCE, snippetSource(text, code)));
+        doc.add(new StoredField(SearchFields.SNIPPET_SOURCE, snippetSource(all, code)));
         return doc;
+    }
+
+    /** The prose a language field indexes: the neutral text plus every language mapping to that field. */
+    private static String textForField(SearchDocument source, String field) {
+        StringBuilder out = new StringBuilder(source.text());
+        source.textByLocale().forEach((locale, value) -> {
+            if (SearchFields.proseFor(locale).equals(field) && !value.isBlank()) {
+                if (!out.isEmpty()) {
+                    out.append('\n');
+                }
+                out.append(value);
+            }
+        });
+        return out.toString();
     }
 
     /**

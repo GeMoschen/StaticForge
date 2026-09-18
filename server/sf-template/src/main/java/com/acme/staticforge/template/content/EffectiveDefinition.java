@@ -153,8 +153,8 @@ public record EffectiveDefinition(
                 name, editor.type(), editor.label(), editor.help(), editor.required(), editor.readOnly(), editor.hidden(),
                 editor.defaultValue(), editor.min(), editor.max(), editor.maxLength(), editor.maxChars(), editor.pattern(),
                 editor.patternMessage(), editor.mimeTypes(), editor.assetTypes(), editor.options(), editor.features(),
-                editor.allow(), editor.visibleWhen(), editor.renamedFrom(), items, editor.dataset(),
-                editor.pagination());
+                editor.allow(), editor.visibleWhen(), editor.renamedFrom(), editor.localizable(), items,
+                editor.dataset(), editor.pagination());
     }
 
     private static ContentDefinition empty() {

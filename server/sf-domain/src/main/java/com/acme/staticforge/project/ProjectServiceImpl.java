@@ -1,6 +1,8 @@
 package com.acme.staticforge.project;
 
 import com.acme.staticforge.asset.AssetService;
+import com.acme.staticforge.asset.content.LocalizationContext;
+import com.acme.staticforge.asset.localization.LocalizationMigrationService;
 import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
@@ -42,6 +44,14 @@ public class ProjectServiceImpl implements ProjectService {
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final AssetService assetService;
+    private final LocalizationMigrationService localizationMigrations;
+    /**
+     * Lazily resolved: the search index is an optional companion of the project service, and a hard
+     * dependency here would tie project writes to the index being constructible.
+     */
+    private final org.springframework.beans.factory.ObjectProvider<com.acme.staticforge.search.SearchIndexer> searchIndexer;
+
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(ProjectServiceImpl.class);
 
     public ProjectServiceImpl(
             ProjectRepository projectRepository,
@@ -51,13 +61,17 @@ public class ProjectServiceImpl implements ProjectService {
             ChannelService channelService,
             AuditService auditService,
             ObjectMapper objectMapper,
-            AssetService assetService) {
+            AssetService assetService,
+            LocalizationMigrationService localizationMigrations,
+            org.springframework.beans.factory.ObjectProvider<com.acme.staticforge.search.SearchIndexer> searchIndexer) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.revisionService = revisionService;
         this.counterRepository = counterRepository;
         this.channelService = channelService;
         this.auditService = auditService;
+        this.localizationMigrations = localizationMigrations;
+        this.searchIndexer = searchIndexer;
         this.objectMapper = objectMapper;
         this.assetService = assetService;
     }
@@ -162,6 +176,95 @@ public class ProjectServiceImpl implements ProjectService {
         projectRepository.save(project);
         revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
         return project;
+    }
+
+    @Override
+    @Transactional
+    public LocaleUpdateResult updateLocales(String key, LocaleConfig config, boolean confirmDiscard, RevisionContext ctx) {
+        Project project = requireByKey(key);
+        LocaleConfig before = decodeLocales(project);
+        LocaleConfig after = config == null ? LocaleConfig.EMPTY : config;
+        LocalizationContext target = LocalizationContext.of(after);
+
+        boolean urlsWillChange = before.isLocalized() != after.isLocalized()
+                || (after.isLocalized() && before.defaultWithoutPrefix() != after.defaultWithoutPrefix());
+        List<String> removed = before.codes().stream().filter(c -> !after.declares(c)).toList();
+
+        // A project giving up its locales unwraps every localizable value down to one language,
+        // so the caller confirms first. The dry run is what the confirmation dialog shows.
+        LocalizationMigrationService.MigrationReport preview =
+                localizationMigrations.migrateProject(project.getId(), target, ctx, false);
+        if (preview.requiresConfirmation() && !confirmDiscard) {
+            return new LocaleUpdateResult(
+                    before,
+                    urlsWillChange,
+                    removed,
+                    localizedValueCount(project.getId(), removed),
+                    true,
+                    preview.discardedLocaleValues(),
+                    preview.affectedAssets());
+        }
+
+        // The settings change and the content it migrates are one logical change, so they share
+        // one revision (spec §7.1, M15 batch mechanism).
+        Revision batch = revisionService.beginBatch(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
+
+        project.setLocaleConfig(after.isLocalized() || after.defaultWithoutPrefix()
+                ? objectMapper.valueToTree(after)
+                : null);
+        projectRepository.save(project);
+
+        LocalizationMigrationService.MigrationReport applied =
+                localizationMigrations.migrateProject(project.getId(), target, batchCtx, true);
+
+        // A changed language set changes which analyzer each value is indexed with, so the index is
+        // rebuilt rather than left describing the old set (M24.3.3). A failure here must not fail the
+        // settings change: the index catches up on the next sync either way.
+        if (!before.codes().equals(after.codes())) {
+            try {
+                com.acme.staticforge.search.SearchIndexer indexer = searchIndexer.getIfAvailable();
+                if (indexer != null) {
+                    indexer.requestRebuild(project.getId());
+                }
+            } catch (RuntimeException e) {
+                LOG.warn("Could not request a search reindex after a language change of project {}", project.getId(), e);
+            }
+        }
+
+        return new LocaleUpdateResult(
+                after,
+                urlsWillChange,
+                removed,
+                localizedValueCount(project.getId(), removed),
+                false,
+                applied.discardedLocaleValues(),
+                applied.affectedAssets());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LocaleConfig locales(String key) {
+        return decodeLocales(requireByKey(key));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LocaleConfig localesById(Long projectId) {
+        return projectRepository.findById(projectId).map(this::decodeLocales).orElse(LocaleConfig.EMPTY);
+    }
+
+    /**
+     * How many stored content values still carry a translation for one of {@code locales} —
+     * what the settings UI shows when a locale is removed. The values are kept, not deleted, so
+     * re-adding the locale restores them.
+     */
+    private int localizedValueCount(Long projectId, List<String> locales) {
+        return locales.isEmpty() ? 0 : localizationMigrations.countValuesForLocales(projectId, locales);
+    }
+
+    private LocaleConfig decodeLocales(Project project) {
+        return ProjectLocales.decode(project.getLocaleConfig(), objectMapper);
     }
 
     private static String joinMimeTypes(List<String> patterns) {

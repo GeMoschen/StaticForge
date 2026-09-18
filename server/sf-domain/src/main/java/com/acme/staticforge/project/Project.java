@@ -7,7 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** Project — the top-level isolation boundary (spec §8.1, §22.2). */
 @Entity
@@ -35,6 +38,11 @@ public class Project {
     @Lob
     @Column(name = "allowed_mime_types")
     private String allowedMimeTypes;
+
+    /** Content locale configuration (M24), {@code null} for a single-language project. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "locale_config")
+    private JsonNode localeConfig;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -89,6 +97,14 @@ public class Project {
 
     public Long getCreatedBy() {
         return createdBy;
+    }
+
+    public JsonNode getLocaleConfig() {
+        return localeConfig;
+    }
+
+    public void setLocaleConfig(JsonNode localeConfig) {
+        this.localeConfig = localeConfig;
     }
 
     public String getAllowedMimeTypes() {

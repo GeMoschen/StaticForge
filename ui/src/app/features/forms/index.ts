@@ -9,6 +9,7 @@ export {
   sfListLength,
   sfMaxChars,
 } from './form-builder.service';
+export type { EditingLocale } from './l10n.util';
 export { ExpressionEvaluator } from './expression-evaluator';
 export { EditorComponent, EDITOR_REGISTRY, provideSfFormEngine } from './editor-registry';
 export { SF_FORM_CONTEXT, SfFormContext } from './form.context';

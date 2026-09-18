@@ -90,6 +90,7 @@ public class PageTemplateController extends AbstractTemplateController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestParam(value = "confirmDiscard", defaultValue = "false") boolean confirmDiscard,
             @RequestBody UpdateTemplateRequest body) {
         TemplateView view = templateService.update(
                 uuid,
@@ -103,6 +104,7 @@ public class PageTemplateController extends AbstractTemplateController {
                         Boolean.TRUE.equals(body.abstractTemplate()),
                         body.paginationPath()),
                 RevisionHeaders.expectedRevision(ifMatch),
+                confirmDiscard,
                 ctx(projectKey, "update page template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))

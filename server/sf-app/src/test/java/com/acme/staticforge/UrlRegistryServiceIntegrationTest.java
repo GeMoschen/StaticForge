@@ -77,7 +77,7 @@ class UrlRegistryServiceIntegrationTest {
 
         assertThat(url).isEqualTo("hammer-drill.html");
         UrlRegistryEntry persisted = urlRegistryRepository
-                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED)
+                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED, "")
                 .orElseThrow();
         assertThat(persisted.getUrl()).isEqualTo(url);
         assertThat(persisted.isOverridden()).isFalse();
@@ -142,8 +142,8 @@ class UrlRegistryServiceIntegrationTest {
         assertThat(urlRegistryService.resolve(pageRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
                 .isEqualTo("custom/about-us.html");
         assertThat(urlRegistryRepository
-                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-                                fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED)
+                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                                fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED, "")
                         .orElseThrow()
                         .isOverridden())
                 .isTrue();
@@ -233,7 +233,7 @@ class UrlRegistryServiceIntegrationTest {
                 .isEqualTo("manual/reset-me.html");
 
         Long entryId = urlRegistryRepository
-                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED)
+                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED, "")
                 .orElseThrow()
                 .getId();
         urlRegistryService.reset(fx.project().getId(), ResetScope.entry(entryId), fx.ctx());
@@ -243,7 +243,7 @@ class UrlRegistryServiceIntegrationTest {
 
         assertThat(recomputed).isEqualTo(originalUrl);
         UrlRegistryEntry fresh = urlRegistryRepository
-                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED)
+                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED, "")
                 .orElseThrow();
         assertThat(fresh.isOverridden()).isFalse();
     }

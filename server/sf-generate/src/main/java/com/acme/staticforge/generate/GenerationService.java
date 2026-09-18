@@ -114,6 +114,8 @@ public class GenerationService {
     private final Map<String, Long> idempotencyKeys = new ConcurrentHashMap<>();
     private final Map<Long, List<SseEmitter>> emittersByRun = new ConcurrentHashMap<>();
 
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
+
     public GenerationService(
             GenerationRunRepository runs,
             GenerationTargetRepository targets,
@@ -129,7 +131,8 @@ public class GenerationService {
             RunPlanStore runPlanStore,
             GenerationProperties properties,
             ObjectMapper mapper,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            com.acme.staticforge.project.ProjectLocales projectLocales) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
@@ -145,6 +148,7 @@ public class GenerationService {
         this.properties = properties;
         this.mapper = mapper;
         this.meterRegistry = meterRegistry;
+        this.projectLocales = projectLocales;
     }
 
     /**
@@ -273,7 +277,8 @@ public class GenerationService {
         TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
         Snapshot snapshot = snapshotService.snapshot(projectId, request.revision());
         // Channel settings are live configuration (not revision-pinned), read once per run.
-        OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, channelService.outputSettings(projectId));
+        OutputPathResolver paths = OutputPathResolver.forSnapshot(
+                snapshot, channelService.outputSettings(projectId), projectLocales.forProject(projectId));
         Set<String> channels = BuildPlanner.effectiveChannels(request.channels());
         Set<UUID> scopeAssets = scopeAssets(request);
         GenerationMode mode = request.mode() == null ? GenerationMode.FULL : request.mode();
@@ -459,9 +464,12 @@ public class GenerationService {
                     build.base(),
                     build.carries() ? writer.readFile(build.baseRunId(), SEARCH_INDEX_PATH) : Optional.empty());
             List<String> channels = request.channels() == null ? parseChannels(run.getChannels()) : request.channels();
+            com.acme.staticforge.project.LocaleConfig locales =
+                    projectLocales.forProject(build.project().getId());
             PostProcessContext ctx = new PostProcessContext(
                     build.project().getId(), projectKey, baseUrl(build.target()), channels, carry.sitePages(),
-                    carry.carriedText());
+                    false, java.util.List.of(), java.util.List.of(), carry.carriedText(),
+                    locales.isLocalized() ? locales.defaultLocale() : null);
             allFiles = postProcessStage.apply(ctx, allFiles);
 
             emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, warnings.size(), null);

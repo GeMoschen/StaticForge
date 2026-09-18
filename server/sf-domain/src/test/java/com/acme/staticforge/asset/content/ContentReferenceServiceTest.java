@@ -35,6 +35,47 @@ class ContentReferenceServiceTest {
     }
 
     @Test
+    void extractsReferencesFromEveryLocaleOfAnL10nValue() {
+        UUID germanImage = UUID.randomUUID();
+        UUID englishImage = UUID.randomUUID();
+
+        // A localizable media editor (M24.2.1): each locale's value is its own edge, and the
+        // source path carries the locale so a per-locale rebuild can tell them apart.
+        JsonNode content = JsonUtil.parse("""
+                {
+                  "heroImage": {
+                    "type": "L10N",
+                    "values": {
+                      "de": { "type": "MEDIA_REF", "uuid": "%s" },
+                      "en": { "type": "MEDIA_REF", "uuid": "%s" }
+                    }
+                  }
+                }
+                """.formatted(germanImage, englishImage));
+
+        assertThat(service.extract(content, "content")).containsExactlyInAnyOrder(
+                new ExtractedReference(ReferenceKind.MEDIA_REF, germanImage, "content.heroImage.values.de"),
+                new ExtractedReference(ReferenceKind.MEDIA_REF, englishImage, "content.heroImage.values.en"));
+    }
+
+    @Test
+    void extractsAReferenceThatExistsOnlyInOneLocale() {
+        UUID englishOnly = UUID.randomUUID();
+
+        JsonNode content = JsonUtil.parse("""
+                {
+                  "attachment": {
+                    "type": "L10N",
+                    "values": { "en": { "type": "MEDIA_REF", "uuid": "%s" } }
+                  }
+                }
+                """.formatted(englishOnly));
+
+        assertThat(service.extract(content, "content")).containsExactly(
+                new ExtractedReference(ReferenceKind.MEDIA_REF, englishOnly, "content.attachment.values.en"));
+    }
+
+    @Test
     void mapsLinkKinds() {
         UUID pageUuid = UUID.randomUUID();
         UUID mediaUuid = UUID.randomUUID();

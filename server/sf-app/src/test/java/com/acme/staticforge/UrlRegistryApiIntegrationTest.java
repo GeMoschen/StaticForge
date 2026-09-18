@@ -126,7 +126,7 @@ class UrlRegistryApiIntegrationTest {
         AssetVersionView screw = createPageRef(fx, "Screwdriver Set");
         urlRegistryService.resolve(screw.uuid(), "html", UrlArea.GENERATED, fx.ctx());
         UrlRegistryEntry entry = urlRegistryRepository
-                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(fx.project().getId(), "html", screw.uuid(), UrlArea.GENERATED)
+                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(fx.project().getId(), "html", screw.uuid(), UrlArea.GENERATED, "")
                 .orElseThrow();
 
         mvc.perform(patch("/api/v1/projects/" + fx.project().getKey() + "/url-registry/" + entry.getId())
@@ -250,7 +250,7 @@ class UrlRegistryApiIntegrationTest {
         AssetVersionView screw = createPageRef(fx, "Wrench");
         urlRegistryService.resolve(screw.uuid(), "html", UrlArea.GENERATED, fx.ctx());
         UrlRegistryEntry entry = urlRegistryRepository
-                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(fx.project().getId(), "html", screw.uuid(), UrlArea.GENERATED)
+                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(fx.project().getId(), "html", screw.uuid(), UrlArea.GENERATED, "")
                 .orElseThrow();
 
         mvc.perform(patch("/api/v1/projects/" + fx.project().getKey() + "/url-registry/" + entry.getId())

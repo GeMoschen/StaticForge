@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- project.locale_config is a JSON column, declared per-dialect so Hibernate's
+         @JdbcTypeCode(SqlTypes.JSON) mapping validates against the actual schema
+         (M24, spec §8.1, §22.3). PostgreSQL uses JSONB; H2 uses the native JSON type.
+         NULL means "no locales configured" — a single-language project, pre-M24 behaviour. -->
+    <changeSet id="017-project-locales-postgresql" author="sf" dbms="postgresql">
+        <comment>Per-project content locale configuration (M24) — PostgreSQL (jsonb).</comment>
+        <addColumn tableName="project">
+            <column name="locale_config" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="017-project-locales-h2" author="sf" dbms="h2">
+        <comment>Per-project content locale configuration (M24) — H2 (json).</comment>
+        <addColumn tableName="project">
+            <column name="locale_config" type="JSON"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

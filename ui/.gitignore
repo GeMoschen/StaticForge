@@ -6,3 +6,5 @@ docs/
 *.log
 .DS_Store
 out-tsc/
+test-results/
+playwright-report/

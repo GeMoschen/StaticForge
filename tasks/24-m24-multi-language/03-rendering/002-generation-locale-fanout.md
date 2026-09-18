@@ -1,6 +1,6 @@
 ---
 id: M24.3.2
-status: todo
+status: done
 depends: [M24.3.1, M24.2.2, M16.4.1, M22.1.1]
 epic: m24-multi-language
 feature: rendering
@@ -67,25 +67,25 @@ title)`.
 
 ## Acceptance criteria
 
-- [ ] Integration test (`GenerationIntegrationTest` style): locales `de` (default), `en`;
+- [x] Integration test (`GenerationIntegrationTest` style): locales `de` (default), `en`;
       pages `about`, `pf/p2`; output `de/about.html`, `en/about.html`, `de/pf/p2.html`,
       `en/pf/p2.html`; with `defaultWithoutPrefix` → `about.html`, `en/about.html`.
-- [ ] Links: `en/pf/p2.html` links to `../about.html` for `$CMS_REF(page:about)$`; a link
+- [x] Links: `en/pf/p2.html` links to `../about.html` for `$CMS_REF(page:about)$`; a link
       checker resolving every href against its page finds no broken links
       (`tasks/lessons.md` rule).
-- [ ] Template `outputPath` without `{locale}` in a localized project → save warning,
+- [x] Template `outputPath` without `{locale}` in a localized project → save warning,
       generation `SF-GEN-0111`.
-- [ ] Sitemap contains `hreflang` alternates + `x-default`.
-- [ ] Incremental: change only `en` headline → plan contains that page's `en` entries
+- [x] Sitemap contains `hreflang` alternates + `x-default`.
+- [x] Incremental: change only `en` headline → plan contains that page's `en` entries
       only (per channel); change a non-localizable editor → all locales.
-- [ ] URL registry rows per locale; concurrent insert test (from the URL-registry race
+- [x] URL registry rows per locale; concurrent insert test (from the URL-registry race
       fix) still passes with the new key.
-- [ ] **Non-localized regression:** existing generation integration fixtures produce
+- [x] **Non-localized regression:** existing generation integration fixtures produce
       identical plan entries, output file set and bytes to master.
-- [ ] Benchmark: 5,000 pages × 2 channels × 2 locales full build measured and recorded
+- [x] Benchmark: 5,000 pages × 2 channels × 2 locales full build measured and recorded
       against §18.6 (target restated per plan entry); no regression for the non-localized
       benchmark.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -104,3 +104,25 @@ title)`.
 - `OutputPathResolver.forSnapshot(snapshot, "index", false, "DEFAULT")` hardcoding is
   removed by `M16.4.1`; do not reintroduce it when adding the locale parameter.
 - Asset copy (`AssetCopyStage`) stays locale-independent — media are written once.
+
+## Implementation notes (2026-09-17)
+
+- `PlanEntry` gained `locale` (null without locales); `BuildPlanner` fans out page × channel ×
+  language. A project without locales takes the **original** 2-arg resolver calls, so its plan is
+  produced by unchanged code rather than by a language-aware path that happens to agree.
+- `{locale}` lives in `OutputPathExpander`; the default expression becomes
+  `{locale}/{folder}{uid}.{ext}` once a project has languages, and "default language without
+  prefix" collapses the empty segment's slashes back to the pre-M24 path.
+- `SF-GEN-0111` is checked in `RenderPipeline.execute` before anything renders.
+- URL registry: new `locale_key` column in the unique key (changelog `018`), `''` for a project
+  without locales so no pre-M24 row changes identity.
+- `BuildManifest.Output` and `CarryForward`'s output key gained the language. **Defect found while
+  testing:** without it, an incremental run of a localized project carried forward only one
+  language's file per page and silently dropped the others.
+- Sitemap emits `xhtml:link rel="alternate"` per language plus `x-default`.
+- Incremental narrowing: `LocaleValueDiff` decides whether a page's change was confined to
+  translations; only then are that page's other languages left out, and `RebuildReason` records
+  `changedLocales`. Anything structural still rebuilds every language.
+- Preview and share links carry `?locale=`/a `locale` token claim.
+- Covered by `LocalizedGenerationIntegrationTest` (6 cases), including a link check that resolves
+  every generated href against its own page.

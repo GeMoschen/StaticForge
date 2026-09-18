@@ -103,12 +103,14 @@ public class DatasetController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestParam(value = "confirmDiscard", defaultValue = "false") boolean confirmDiscard,
             @RequestBody UpdateDatasetRequest body) {
         long expected = RevisionHeaders.expectedRevision(ifMatch);
         DatasetView view = datasetService.update(
                 uuid,
                 new UpdateDatasetCommand(body.displayName(), body.contentDefinition(), body.titleEditor(), body.description()),
                 expected,
+                confirmDiscard,
                 ctx(projectKey, comment(body.comment(), "update dataset schema")));
         return ok(view);
     }

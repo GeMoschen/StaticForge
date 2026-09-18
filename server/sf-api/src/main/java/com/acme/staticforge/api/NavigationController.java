@@ -65,6 +65,8 @@ public class NavigationController {
     private final LiveNavigationLookup navigationLookup;
     private final SecuritySupport securitySupport;
 
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
+
     public NavigationController(
             ProjectService projectService,
             FolderService folderService,
@@ -72,7 +74,8 @@ public class NavigationController {
             NavigationService navigationService,
             AssetService assetService,
             LiveNavigationLookup navigationLookup,
-            SecuritySupport securitySupport) {
+            SecuritySupport securitySupport,
+            com.acme.staticforge.project.ProjectLocales projectLocales) {
         this.projectService = projectService;
         this.folderService = folderService;
         this.pageReferenceService = pageReferenceService;
@@ -80,6 +83,7 @@ public class NavigationController {
         this.assetService = assetService;
         this.navigationLookup = navigationLookup;
         this.securitySupport = securitySupport;
+        this.projectLocales = projectLocales;
     }
 
     /**
@@ -90,12 +94,16 @@ public class NavigationController {
      */
     @GetMapping("/tree")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public List<NavTreeView> tree(@PathVariable String projectKey, @RequestParam(required = false) Integer depth) {
+    public List<NavTreeView> tree(
+            @PathVariable String projectKey,
+            @RequestParam(required = false) Integer depth,
+            @RequestParam(value = "locale", required = false) String locale) {
         int d = depth == null ? -1 : depth;
         long projectId = projectId(projectKey);
         List<Diagnostic> diagnostics = new ArrayList<>();
+        List<String> chain = projectLocales.forProject(projectId).effectiveChain(locale);
         return topLevelNavigationUuids(projectKey).stream()
-                .map(uuid -> navigationService.tree(projectId, uuid, d, navigationLookup, diagnostics))
+                .map(uuid -> navigationService.tree(projectId, uuid, d, navigationLookup, diagnostics, chain))
                 .filter(Objects::nonNull)
                 .map(node -> toView(projectId, node))
                 .toList();
@@ -154,15 +162,18 @@ public class NavigationController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestParam(value = "locale", required = false) String locale,
             @RequestBody UpdatePageReferenceRequest body) {
         AssetVersionView view = pageReferenceService.update(
                 uuid,
                 parseTargetKind(body.targetKind()),
                 body.targetAssetUuid(),
                 body.label(),
+                locale,
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, "update page reference"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toReferenceView(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
+                .body(toReferenceView(view, projectLocales.forProject(projectId(projectKey)).effectiveChain(locale)));
     }
 
     @DeleteMapping("/references/{uuid}")
@@ -239,13 +250,31 @@ public class NavigationController {
     }
 
     private static PageReferenceView toReferenceView(AssetVersionView v) {
+        return toReferenceView(v, List.of());
+    }
+
+    /** {@code chain} resolves a language-dependent label; an empty chain takes it as stored (M24.2.2). */
+    private static PageReferenceView toReferenceView(AssetVersionView v, List<String> chain) {
         JsonNode payload = v.payload();
         String targetKind = payload.path("target").path("kind").asText(null);
         String targetUuidText = payload.path("target").path("assetUuid").asText(null);
         UUID targetUuid = targetUuidText == null ? null : UUID.fromString(targetUuidText);
-        String label = payload.path("label").isMissingNode() || payload.path("label").isNull()
-                ? null
-                : payload.path("label").asText();
-        return new PageReferenceView(v.uuid(), v.uid(), v.displayName(), v.validFromRevision(), v.folderPath(), targetKind, targetUuid, label);
+        JsonNode stored = payload.get("label");
+        String label;
+        java.util.Map<String, String> labelL10n = null;
+        if (com.acme.staticforge.common.L10nValues.isL10n(stored)) {
+            List<String> lookup = chain.isEmpty() ? com.acme.staticforge.common.L10nValues.locales(stored) : chain;
+            JsonNode resolved = com.acme.staticforge.common.L10nValues.resolve(stored, lookup);
+            label = resolved == null ? null : resolved.asText();
+            labelL10n = new java.util.LinkedHashMap<>();
+            for (String locale : com.acme.staticforge.common.L10nValues.locales(stored)) {
+                labelL10n.put(locale, com.acme.staticforge.common.L10nValues.get(stored, locale).asText());
+            }
+        } else {
+            label = stored == null || stored.isNull() ? null : stored.asText();
+        }
+        return new PageReferenceView(
+                v.uuid(), v.uid(), v.displayName(), v.validFromRevision(), v.folderPath(), targetKind, targetUuid,
+                label, labelL10n);
     }
 }

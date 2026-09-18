@@ -1,3 +1,4 @@
+import { EditingLocaleStore } from '../../project/editing-locale.store';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -128,10 +129,17 @@ export class CommandPaletteComponent {
     }
   });
 
+  private readonly editingLocale = inject(EditingLocaleStore);
+
   constructor() {
-    combineLatest([toObservable(this.projectKey), toObservable(this.query)])
+    // The palette searches the language the editor is working in (M24.4.1).
+    combineLatest([
+      toObservable(this.projectKey),
+      toObservable(this.query),
+      toObservable(this.editingLocale.locale),
+    ])
       .pipe(
-        map(([projectKey, q]) => ({ projectKey, q })),
+        map(([projectKey, q, locale]) => ({ projectKey, q, locale: locale ?? undefined })),
         (queries) => this.search.live(queries),
         takeUntilDestroyed(),
       )

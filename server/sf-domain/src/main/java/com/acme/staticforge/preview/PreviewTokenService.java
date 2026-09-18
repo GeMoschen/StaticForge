@@ -55,7 +55,16 @@ public class PreviewTokenService {
      * @return a compact HS256 JWS
      */
     public String issueShareToken(UUID pageUuid, Long revision, String channel, String projectKey) {
-        return issueAssetShareToken("page", pageUuid, revision, channel, projectKey);
+        return issueShareToken(pageUuid, revision, channel, projectKey, null);
+    }
+
+    /**
+     * Issues a share token bound to one language (M24.3.2), so a shared link opens the page in the
+     * language the editor was looking at. {@code null} means the project's default language, which
+     * is also what every token issued before M24 carries.
+     */
+    public String issueShareToken(UUID pageUuid, Long revision, String channel, String projectKey, String locale) {
+        return issueAssetShareToken("page", pageUuid, revision, channel, projectKey, locale);
     }
 
     /**
@@ -69,10 +78,11 @@ public class PreviewTokenService {
      *     claim existed carry none and keep meaning "current"
      */
     public String issueMediaShareToken(UUID mediaUuid, Long revision, String projectKey) {
-        return issueAssetShareToken("media", mediaUuid, revision, null, projectKey);
+        return issueAssetShareToken("media", mediaUuid, revision, null, projectKey, null);
     }
 
-    private String issueAssetShareToken(String kind, UUID assetUuid, Long revision, String channel, String projectKey) {
+    private String issueAssetShareToken(
+            String kind, UUID assetUuid, Long revision, String channel, String projectKey, String locale) {
         Instant now = clock.instant();
         StringBuilder payload = new StringBuilder("{");
         payload.append("\"sub\":\"viewer\"");
@@ -86,6 +96,9 @@ public class PreviewTokenService {
         }
         if (projectKey != null && !projectKey.isBlank()) {
             payload.append(",\"projectKey\":\"").append(projectKey).append('"');
+        }
+        if (locale != null && !locale.isBlank()) {
+            payload.append(",\"locale\":\"").append(locale).append('"');
         }
         payload.append(",\"iat\":").append(now.getEpochSecond());
         payload.append(",\"exp\":").append(now.getEpochSecond() + DEFAULT_TTL_SECONDS);
@@ -162,7 +175,8 @@ public class PreviewTokenService {
                     UUID.fromString(pageUuid),
                     claims.path("revision").isNumber() ? claims.path("revision").asLong() : null,
                     blankToNull(claims.path("channel").asText(null)),
-                    blankToNull(claims.path("projectKey").asText(null)));
+                    blankToNull(claims.path("projectKey").asText(null)),
+                    blankToNull(claims.path("locale").asText(null)));
         } catch (IllegalArgumentException e) {
             throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
         }
@@ -195,6 +209,17 @@ public class PreviewTokenService {
         return value == null || value.isBlank() ? null : value;
     }
 
-    /** The asset target bound to a verified share token — {@code kind} is {@code "page"} or {@code "media"}. */
-    public record ShareTarget(String kind, UUID pageUuid, Long revision, String channel, String projectKey) {}
+    /**
+     * The asset target bound to a verified share token — {@code kind} is {@code "page"} or
+     * {@code "media"}. {@code locale} is the language the link opens in (M24.3.2), {@code null} for
+     * the project's default language and for every token issued before M24.
+     */
+    public record ShareTarget(
+            String kind, UUID pageUuid, Long revision, String channel, String projectKey, String locale) {
+
+        /** A target without a language. */
+        public ShareTarget(String kind, UUID pageUuid, Long revision, String channel, String projectKey) {
+            this(kind, pageUuid, revision, channel, projectKey, null);
+        }
+    }
 }

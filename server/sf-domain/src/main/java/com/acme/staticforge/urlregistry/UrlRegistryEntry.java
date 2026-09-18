@@ -12,10 +12,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A cached URL assignment for one {@code PageReference} in one output channel and one
- * {@link UrlArea} (feature `02-url-registry`, `M8.2.1`). Exactly one live row per
- * {@code (projectId, channelKey, pageReferenceUuid, area)} tuple, enforced by a DB unique
- * constraint.
+ * A cached URL assignment for one {@code PageReference} in one output channel, one
+ * {@link UrlArea} and one language (feature `02-url-registry`, `M8.2.1`; language added by
+ * M24.3.2). Exactly one live row per
+ * {@code (projectId, channelKey, pageReferenceUuid, area, localeKey)} tuple, enforced by a DB
+ * unique constraint. {@code localeKey} is the empty string in a project without locales, so
+ * pre-M24 rows keep their identity.
  *
  * <p><b>Deliberately not revisioned.</b> Unlike {@code AssetVersion} this is a plain CRUD
  * table with no {@code validFrom}/{@code validTo} interval: a URL is assigned once by
@@ -55,6 +57,10 @@ public class UrlRegistryEntry {
     @Column(name = "area", nullable = false, length = 20)
     private UrlArea area;
 
+    /** The language this URL is for; the empty string in a project without locales (M24.3.2). */
+    @Column(name = "locale_key", nullable = false, length = 40)
+    private String localeKey = "";
+
     @Column(name = "url", nullable = false, length = 1000)
     private String url;
 
@@ -78,14 +84,37 @@ public class UrlRegistryEntry {
             Instant assignedAt,
             long assignedRevision,
             boolean overridden) {
+        this(projectId, channelKey, pageReferenceUuid, area, "", url, assignedAt, assignedRevision, overridden);
+    }
+
+    public UrlRegistryEntry(
+            long projectId,
+            String channelKey,
+            UUID pageReferenceUuid,
+            UrlArea area,
+            String localeKey,
+            String url,
+            Instant assignedAt,
+            long assignedRevision,
+            boolean overridden) {
         this.projectId = projectId;
         this.channelKey = channelKey;
         this.pageReferenceUuid = pageReferenceUuid;
         this.area = area;
+        this.localeKey = localeKey == null ? "" : localeKey;
         this.url = url;
         this.assignedAt = assignedAt;
         this.assignedRevision = assignedRevision;
         this.overridden = overridden;
+    }
+
+    /** The language this URL is for; the empty string in a project without locales. */
+    public String getLocaleKey() {
+        return localeKey;
+    }
+
+    public void setLocaleKey(String localeKey) {
+        this.localeKey = localeKey == null ? "" : localeKey;
     }
 
     public Long getId() {

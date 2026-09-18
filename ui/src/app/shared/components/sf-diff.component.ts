@@ -16,6 +16,25 @@ export function formatValue(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+/**
+ * Turns a diff path into something an editor can read. A language-dependent value changes at
+ * `content.headline.values.en` (M24.2.1); showing that raw is noise, so it reads as
+ * `content.headline (English)` — the field, then the language that changed.
+ *
+ * <p>`labels` maps a language tag to its project label; an unknown tag keeps its own spelling.
+ */
+export function formatDiffPath(path: string | undefined, labels: Record<string, string> = {}): string {
+  if (!path) {
+    return '';
+  }
+  const match = /^(.*)\.values\.([^.[\]]+)(.*)$/.exec(path);
+  if (!match) {
+    return path;
+  }
+  const [, field, locale, rest] = match;
+  return `${field}${rest} (${labels[locale] ?? locale})`;
+}
+
 export function blockKind(block: BlockChange): BlockKind {
   if (block.kind === 'ADD' || block.kind === 'REMOVE') {
     return block.kind;
@@ -35,8 +54,14 @@ export function blockKind(block: BlockChange): BlockKind {
 })
 export class SfDiffComponent {
   readonly changes = input<FieldChange[]>([]);
+  /** Language tag to label, so a language-dependent change reads "(English)" not "(en)". */
+  readonly localeLabels = input<Record<string, string>>({});
 
   protected formatValue = formatValue;
+
+  protected pathOf(change: FieldChange): string {
+    return formatDiffPath(change.path, this.localeLabels());
+  }
 
   protected trackChange(index: number, _change: FieldChange): string {
     return `${index}:${_change.path ?? ''}`;

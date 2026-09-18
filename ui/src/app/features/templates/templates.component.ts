@@ -651,7 +651,29 @@ export class TemplatesComponent {
     });
   }
 
-  saveDefinition(): void {
+  /**
+   * The message of a pending "this discards translations" confirmation (M24.2.2), or `null`. The
+   * server refused the save and wrote nothing; confirming re-sends it with `confirmDiscard`.
+   */
+  protected readonly pendingDiscard = signal<string | null>(null);
+
+  /** A `409` whose body counts discarded translations is the localization confirmation, not a conflict. */
+  private isDiscardConfirmation(err: unknown): boolean {
+    const response = err as { status?: number; error?: Record<string, unknown> };
+    return response?.status === 409 && response.error?.['discardedLocaleValues'] !== undefined;
+  }
+
+  /** Saves again, this time authorising the discard. */
+  protected confirmDiscardAndSave(): void {
+    this.pendingDiscard.set(null);
+    this.saveDefinition(true);
+  }
+
+  protected cancelDiscard(): void {
+    this.pendingDiscard.set(null);
+  }
+
+  saveDefinition(confirmDiscard = false): void {
     const key = this.projectKey();
     const uuid = this.selectedUuid();
     const detail = this.detail();
@@ -684,6 +706,7 @@ export class TemplatesComponent {
               }),
         },
         this.etag(detail),
+        confirmDiscard,
       )
       .subscribe({
         next: (updated) => {
@@ -700,6 +723,13 @@ export class TemplatesComponent {
         },
         error: (err) => {
           const problem = (err as { error?: { field?: string; detail?: string } }).error;
+          // Taking `localizable` off an editor that has translations is refused until confirmed
+          // (M24.2.2); nothing was written, so re-sending with the flag is the whole retry.
+          if (!confirmDiscard && this.isDiscardConfirmation(err)) {
+            this.saving.set(false);
+            this.pendingDiscard.set(problem?.detail ?? 'This change discards translations.');
+            return;
+          }
           if (problem?.field?.startsWith('paginationPath') && problem.detail) {
             this.toast.show(problem.detail, 'error');
             this.saving.set(false);

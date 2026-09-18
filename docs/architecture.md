@@ -127,7 +127,43 @@ Liquibase owns the schema (`ddl-auto: validate` in every profile); see `infra/RE
 
 Angular 18+ standalone, zoneless + signals. The dynamic form engine (`sf-content-form` + `FormBuilderService` + `EDITOR_REGISTRY`) renders a form from the `ContentDefinition`; the revision spine is the signature UX element (§24.2). See the [user guide](user-guide.md) and `ui/src/app/features/` for the feature layout.
 
-## 11. Search
+## 11. Content languages (M24)
+
+Locale is a **content dimension**, not a second project. One project holds every language; only leaf values vary.
+
+- **Configuration.** `project.LocaleConfig` (ordered languages, default, per-language fallback chains, "default
+  language without URL prefix") is stored as the JSON column `project.locale_config` and read everywhere through
+  `project.ProjectLocales` — one decode point, no `ProjectService` dependency, so the bean graph stays acyclic. Like
+  `allowedMimeTypes`, it is overwritten in place with an `UPDATE` revision for attribution; **generating a past
+  revision therefore uses the current language configuration** (a known limitation, not a bug).
+- **Stored shape.** A CDL leaf editor marked `localizable` stores `{"type":"L10N","values":{"de":…,"en":…}}`.
+  `common.L10nValues` is the only code that reads or writes that shape — validator, migrator, renderer, search
+  extraction and export all go through it. Structural editors (`group`, `list`, `catalog`, `pagination`) can't be
+  localizable (`SF-CDL-0112`): structure is shared, values are not.
+- **Migration.** `asset.content.LocalizationMigrator` *normalizes* a content object to what its definition declares,
+  rather than diffing two definitions, so one pass covers all four triggers (an editor gaining or losing
+  `localizable`, a project gaining or losing languages) and is idempotent.
+  `asset.localization.LocalizationMigrationService` owns the asset walk and the compound revision. Unwrapping loses
+  translations, so it throws a `409` inside the save's own transaction unless the caller passed `confirmDiscard` —
+  the rollback is what guarantees nothing was written.
+- **Rendering.** `RenderContext` carries `locale` and `localeChain` (plain strings: `sf-template` still doesn't
+  depend on `sf-domain`). `OctlRenderer` resolves a wrapper **once**, at value lookup, so filters, truthiness and
+  `| json` never see one. `project.LocaleRenderScope` builds `$CMS_META(locale|language)$` and the `CMS_LOCALES`
+  switcher for both generation and preview. `date`/`number`/`upper`/`lower` format in the render language, or
+  `Locale.ROOT` — never the JVM default, which used to make output depend on the server.
+- **Generation.** The plan fans out page × channel × language (`PlanEntry.locale`); `{locale}` is a path placeholder
+  in `OutputPathExpander`, and a localized project's default expression is `{locale}/{folder}{uid}.{ext}`. A path
+  without `{locale}` is `SF-GEN-0111` before anything renders. `url_registry_entry` keys URLs by language too
+  (`locale_key`, `''` without languages). `BuildManifest.Output` and `CarryForward` carry the language, so an
+  incremental run keeps the languages it didn't rebuild. `plan.LocaleValueDiff` narrows a page whose only change was
+  a translation to those languages; anything structural still rebuilds them all.
+- **Search.** Text of a language-dependent value is indexed into that language's field (`text_de`, `text_en`), the
+  neutral `text` field carrying everything so an unfiltered search still finds it; `GET /search?locale=` reads one
+  language's field. Changing a project's languages requests a rebuild.
+- **A project without languages** takes the original code paths, not language-aware ones that happen to agree: the
+  same payloads, the same plan entries, the same output paths and the same URL registry rows as before M24.
+
+## 12. Search
 
 Editorial full-text search (M23) over every **current** asset of a project, in `sf-domain` package `search`, with
 `SearchController` in sf-api and the startup catch-up and health indicator in sf-app. It is separate from the public

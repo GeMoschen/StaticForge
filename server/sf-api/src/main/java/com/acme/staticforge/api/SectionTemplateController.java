@@ -88,6 +88,7 @@ public class SectionTemplateController extends AbstractTemplateController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestParam(value = "confirmDiscard", defaultValue = "false") boolean confirmDiscard,
             @RequestBody UpdateTemplateRequest body) {
         TemplateView view = templateService.update(
                 uuid,
@@ -99,6 +100,7 @@ public class SectionTemplateController extends AbstractTemplateController {
                         Boolean.TRUE.equals(body.deprecated()),
                         body.outputPath()),
                 RevisionHeaders.expectedRevision(ifMatch),
+                confirmDiscard,
                 ctx(projectKey, "update section template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))

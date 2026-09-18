@@ -1,3 +1,5 @@
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { LocalesStore } from '../../core/project/locales.store';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -23,6 +25,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { FormBuilderService } from '../forms/form-builder.service';
 import type { ContentDefinition } from '../forms/form.model';
+import type { EditingLocale } from '../forms/l10n.util';
 import { SfContentFormComponent } from '../forms/sf-content-form.component';
 import { ConflictDrawerComponent } from '../pages/conflict-drawer.component';
 import { diffFields, mergePayload } from '../pages/conflict-util';
@@ -72,6 +75,18 @@ export class RecordEditorComponent implements OnDestroy {
   readonly recordUuid = input.required<string>();
 
   private readonly content = inject(ContentService);
+  /** The language being edited (M24.4.1); `null` in a project without languages. */
+  protected readonly editingLocale = inject(EditingLocaleStore).binding;
+
+  private readonly localesForLabels = inject(LocalesStore);
+
+  /** Language tag to label, so the form says "from Deutsch" rather than "from de". */
+  protected readonly localeLabels = computed<Record<string, string>>(() =>
+    Object.fromEntries(
+      this.localesForLabels.locales().map((locale) => [locale.code ?? '', locale.label ?? locale.code ?? '']),
+    ),
+  );
+
   private readonly api = inject(ApiClient);
   private readonly forms = inject(FormBuilderService);
   private readonly toasts = inject(ToastService);
@@ -85,6 +100,12 @@ export class RecordEditorComponent implements OnDestroy {
   protected readonly dataset = signal<DatasetDetailView | null>(null);
   protected readonly definition = signal<ContentDefinition>(EMPTY_DEF);
   protected readonly form = signal<FormGroup | null>(null);
+
+  /**
+   * The content object as stored — every language, not just the one being edited. The form binds
+   * one language; the fallback hint needs the others (M24.4.1).
+   */
+  protected readonly storedContent = signal<Record<string, unknown>>({});
   protected readonly displayName = signal('');
   protected readonly issues = signal<ContentIssue[]>([]);
   protected readonly history = signal<AssetHistoryEntry[]>([]);
@@ -141,6 +162,34 @@ export class RecordEditorComponent implements OnDestroy {
       const revision = this.timeTravel.activeRevision();
       untracked(() => this.load(key, uuid, revision));
     });
+
+    // A form's controls hold the language it was built for, so a language switch has to rebuild it
+    // — otherwise the editors keep editing the previous language and the next save writes those
+    // values into the language now selected (M24.4.1).
+    effect(
+      () => {
+        const binding = this.editingLocale();
+        untracked(() => this.rebindForm(binding));
+      },
+      { allowSignalWrites: true },
+    );
+  }
+
+  /** Re-binds the form to another language, keeping unsaved edits in the one being left behind. */
+  private rebindForm(binding: EditingLocale | null): void {
+    const form = this.form();
+    if (!form || this.forms.bindingOf(form)?.locale === (binding?.locale ?? null)) {
+      return;
+    }
+    this.formSubscription?.unsubscribe();
+    const rebound = this.forms.rebind(this.definition(), form, binding);
+    this.storedContent.set(rebound.content);
+    if (this.readOnly() || this.record()?.deleted === true) {
+      rebound.form.disable();
+    } else {
+      this.formSubscription = rebound.form.valueChanges.subscribe(() => this.autosave.markDirty());
+    }
+    this.form.set(rebound.form);
   }
 
   ngOnDestroy(): void {
@@ -283,7 +332,8 @@ export class RecordEditorComponent implements OnDestroy {
 
   private buildForm(definition: ContentDefinition, content: unknown): void {
     this.formSubscription?.unsubscribe();
-    const form = this.forms.build(definition, (content ?? {}) as Record<string, unknown>);
+    this.storedContent.set((content ?? {}) as Record<string, unknown>);
+    const form = this.forms.build(definition, (content ?? {}) as Record<string, unknown>, this.editingLocale());
     const deleted = this.record()?.deleted === true;
     if (this.readOnly() || deleted) {
       form.disable();

@@ -31,6 +31,15 @@ public interface TemplateService {
      */
     TemplateView update(UUID uuid, UpdateTemplateCommand cmd, long expectedRevision, RevisionContext ctx);
 
+    /**
+     * Updates the template; {@code confirmDiscard} authorizes a CDL change that takes
+     * {@code localizable} off an editor whose stored values carry translations, which are then
+     * reduced to the default locale (M24.2.2). Without it, such a save is rejected with a
+     * {@code 409} listing what would be lost, and nothing is written.
+     */
+    TemplateView update(
+            UUID uuid, UpdateTemplateCommand cmd, long expectedRevision, boolean confirmDiscard, RevisionContext ctx);
+
     /** Compiles and stores (or replaces) the OCTL source for a single channel. */
     TemplateView saveChannel(UUID uuid, String channelKey, String octlSource, long expectedRevision, RevisionContext ctx);
 

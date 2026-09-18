@@ -16,6 +16,9 @@ import java.util.UUID;
  * @param rootRevision the revision the root changed in (change-driven roots only)
  * @param causeCount how many distinct changed roots reach the planned asset; {@code 1} for other root kinds
  * @param fallbackCause set for {@link RebuildRootKind#INCREMENTAL_FALLBACK_FULL}
+ * @param changedLocales when the change was confined to translations (M24.3.2), the languages it
+ *     touched — the plan then holds only those languages' outputs of the asset. Empty when the
+ *     change affects every language, and always empty in a project without locales.
  */
 public record RebuildReason(
         RebuildRootKind rootKind,
@@ -25,16 +28,37 @@ public record RebuildReason(
         Long rootRevision,
         int causeCount,
         FallbackCause fallbackCause,
-        List<RebuildStep> steps) {
+        List<RebuildStep> steps,
+        List<String> changedLocales) {
 
     public RebuildReason {
         steps = steps == null ? List.of() : List.copyOf(steps);
+        changedLocales = changedLocales == null ? List.of() : List.copyOf(changedLocales);
         causeCount = Math.max(causeCount, 1);
+    }
+
+    /** A reason that isn't narrowed to particular languages. */
+    public RebuildReason(
+            RebuildRootKind rootKind,
+            UUID rootUuid,
+            String rootType,
+            String rootUid,
+            Long rootRevision,
+            int causeCount,
+            FallbackCause fallbackCause,
+            List<RebuildStep> steps) {
+        this(rootKind, rootUuid, rootType, rootUid, rootRevision, causeCount, fallbackCause, steps, List.of());
     }
 
     /** A root without a chain: FULL, fallback, explicit scope or a base build gap. */
     public static RebuildReason of(RebuildRootKind kind, FallbackCause cause, UUID rootUuid, String rootType, String rootUid) {
-        return new RebuildReason(kind, rootUuid, rootType, rootUid, null, 1, cause, List.of());
+        return new RebuildReason(kind, rootUuid, rootType, rootUid, null, 1, cause, List.of(), List.of());
+    }
+
+    /** The same reason, recording that only {@code locales} were rebuilt (M24.3.2). */
+    public RebuildReason narrowedTo(List<String> locales) {
+        return new RebuildReason(
+                rootKind, rootUuid, rootType, rootUid, rootRevision, causeCount, fallbackCause, steps, locales);
     }
 
     /** The edge by which the planned asset depends on the next asset of the chain; {@code null} for a chain of length 0. */

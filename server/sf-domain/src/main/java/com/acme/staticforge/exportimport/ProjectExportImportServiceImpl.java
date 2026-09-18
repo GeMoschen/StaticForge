@@ -149,6 +149,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final OutputChannelRepository outputChannelRepository;
     private final GenerationTargetRepository generationTargetRepository;
     private final ReferenceMaterializer referenceMaterializer;
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -164,8 +165,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             ObjectMapper objectMapper,
             OutputChannelRepository outputChannelRepository,
             GenerationTargetRepository generationTargetRepository,
-            ReferenceMaterializer referenceMaterializer) {
+            ReferenceMaterializer referenceMaterializer,
+            com.acme.staticforge.project.ProjectLocales projectLocales) {
         this.projectRepository = projectRepository;
+        this.projectLocales = projectLocales;
         this.assetVersionRepository = assetVersionRepository;
         this.assetRepository = assetRepository;
         this.assetService = assetService;
@@ -561,6 +564,60 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     }
 
     /**
+     * What the languages of the archive and of the target project say about each other (M24.5.1).
+     * Both findings are warnings: nothing is lost either way, but the operator should know that some
+     * translations will sit unused, or that some values arrive with the wrong shape until a migration
+     * runs.
+     */
+    private List<ImportConflict> localeConflicts(long targetProjectId, ArchiveContent content) {
+        com.acme.staticforge.project.LocaleConfig target = projectLocales.forProject(targetProjectId);
+        com.acme.staticforge.project.LocaleConfig archive =
+                content.settings() == null || content.settings().locales() == null
+                        ? com.acme.staticforge.project.LocaleConfig.EMPTY
+                        : content.settings().locales();
+        List<ImportConflict> conflicts = new ArrayList<>();
+
+        if (archive.isLocalized() && target.isLocalized() && !archive.codes().equals(target.codes())) {
+            List<String> onlyInArchive = archive.codes().stream().filter(code -> !target.declares(code)).toList();
+            List<String> onlyInTarget = target.codes().stream().filter(code -> !archive.declares(code)).toList();
+            conflicts.add(ImportConflict.of(
+                    ConflictType.LOCALE_CONFIG_MISMATCH,
+                    null,
+                    null,
+                    "The archive's languages " + archive.codes() + " differ from this project's " + target.codes()
+                            + (onlyInArchive.isEmpty()
+                                    ? ""
+                                    : ". Values for " + onlyInArchive + " are kept but unused until those languages are added")
+                            + (onlyInTarget.isEmpty()
+                                    ? ""
+                                    : ". " + onlyInTarget + " will have no translations from this archive")
+                            + "."));
+        }
+
+        // Does any imported payload carry language-dependent values?
+        boolean archiveHasL10n = content.assets().stream()
+                .anyMatch(asset -> com.acme.staticforge.common.L10nValues.containsL10n(asset.payload()));
+        boolean expected = archive.isLocalized() || target.isLocalized();
+        if (archiveHasL10n && !target.isLocalized()) {
+            conflicts.add(ImportConflict.of(
+                    ConflictType.LOCALIZATION_SHAPE_MISMATCH,
+                    null,
+                    null,
+                    "The archive holds values in several languages, but this project has none configured. "
+                            + "The values are imported as they are; adding languages, or saving the template, "
+                            + "migrates their shape."));
+        } else if (!archiveHasL10n && target.isLocalized() && expected) {
+            conflicts.add(ImportConflict.of(
+                    ConflictType.LOCALIZATION_SHAPE_MISMATCH,
+                    null,
+                    null,
+                    "This project has languages configured, but the archive's values are single-language. "
+                            + "They are imported as they are; the next template save migrates their shape."));
+        }
+        return conflicts;
+    }
+
+    /**
      * Shared conflict-detection logic reused by both {@link #analyzeImport} (read-only) and
      * {@link #importProject} (which re-runs this unconditionally right before it starts
      * writing, so the two paths can never drift apart). Performs no writes.
@@ -579,6 +636,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         }
 
         List<ImportConflict> conflicts = new ArrayList<>();
+        conflicts.addAll(localeConflicts(targetProjectId, content));
         List<ExportedAsset> assets = content.assets();
         Set<String> archiveUuids = assets.stream()
                 .map(a -> a.uuid().toLowerCase(Locale.ROOT))
@@ -742,6 +800,14 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
      * is imported without it ({@link TargetImportPlan}); both cases are reported by analysis.
      */
     private void importSettings(long targetProjectId, ExportedSettings settings) {
+        // A target that already declares languages keeps its own: the archive describes the project
+        // it came from, and silently re-pointing a live site's URLs would be the wrong default.
+        if (settings.locales() != null && !projectLocales.forProject(targetProjectId).isLocalized()) {
+            projectRepository.findById(targetProjectId).ifPresent(project -> {
+                project.setLocaleConfig(objectMapper.valueToTree(settings.locales()));
+                projectRepository.save(project);
+            });
+        }
         for (ExportedChannel c : settings.channels()) {
             if (outputChannelRepository.existsByProjectIdAndKey(targetProjectId, c.key())) {
                 continue;
@@ -1020,7 +1086,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                                 t.getName(), t.getType().name(), redact(t.getConfig()), t.isDefaultTarget()))
                         .toList()
                 : List.of();
-        return new ExportedSettings(channels, targets);
+        // The language configuration travels with the settings, so an archive restores a localized
+        // project as one rather than as a single-language project holding L10N values (M24.5.1).
+        com.acme.staticforge.project.LocaleConfig locales = projectLocales.forProject(projectId);
+        return new ExportedSettings(channels, targets, locales.isLocalized() ? locales : null);
     }
 
     /**

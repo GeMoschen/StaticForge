@@ -12,6 +12,7 @@ import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.generate.target.BuildManifest;
 import com.acme.staticforge.pagination.PaginationSource;
 import com.acme.staticforge.pagination.PaginationValue;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -45,10 +46,15 @@ public class BuildPlanner {
 
     private final CompiledTemplateCache compiledTemplates;
     private final RebuildExpansion expansion;
+    private final com.acme.staticforge.asset.AssetVersionRepository assetVersions;
 
-    public BuildPlanner(CompiledTemplateCache compiledTemplates, RebuildExpansion expansion) {
+    public BuildPlanner(
+            CompiledTemplateCache compiledTemplates,
+            RebuildExpansion expansion,
+            com.acme.staticforge.asset.AssetVersionRepository assetVersions) {
         this.compiledTemplates = compiledTemplates;
         this.expansion = expansion;
+        this.assetVersions = assetVersions;
     }
 
     /**
@@ -86,27 +92,35 @@ public class BuildPlanner {
 
         BuildManifest manifest = baseline.manifest();
         Map<OutputKey, String> basePaths = basePaths(manifest);
-        Map<UUID, Map<String, String>> firstPaths = firstPaths(site);
+        Map<UUID, Map<ChannelLocale, String>> firstPaths = firstPaths(site);
         RebuildExpansion.Changes changes = expansion.changesSince(
                 snapshot, baseline.revision(), pageUuid -> moved(pageUuid, firstPaths, basePaths));
         RebuildExpansion.Result walk = expansion.expand(snapshot, changes, pagination);
 
         Map<UUID, RebuildReason> reasons = new HashMap<>();
+        // A page whose only change was a translation rebuilds just those languages (M24.3.2).
+        Map<UUID, Set<String>> narrowed = localeNarrowing(snapshot, walk, baseline.revision(), paths);
         List<PlanEntry> entries = new ArrayList<>();
         Set<OutputGroup> missing = new LinkedHashSet<>();
         for (PlanEntry output : site) {
             UUID page = output.pageUuid();
             if (walk.reached(page)) {
+                Set<String> only = narrowed.get(page);
+                if (only != null && output.locale() != null && !only.contains(output.locale())) {
+                    continue;
+                }
                 entries.add(output);
-                reasons.computeIfAbsent(page, walk::reasonFor);
+                reasons.computeIfAbsent(page, uuid -> only == null
+                        ? walk.reasonFor(uuid)
+                        : walk.reasonFor(uuid).narrowedTo(List.copyOf(only)));
             } else if (manifest != null
-                    && !output.outputPath().equals(basePaths.get(new OutputKey(page, output.channel(), output.pageNumber())))) {
-                missing.add(new OutputGroup(page, output.channel()));
+                    && !output.outputPath().equals(basePaths.get(new OutputKey(page, output.channel(), output.pageNumber(), output.locale())))) {
+                missing.add(new OutputGroup(page, output.channel(), output.locale()));
             }
         }
         // An output the base build lacks is rendered with every other page number of its page in that channel.
         for (PlanEntry output : site) {
-            OutputGroup group = new OutputGroup(output.pageUuid(), output.channel());
+            OutputGroup group = new OutputGroup(output.pageUuid(), output.channel(), output.locale());
             if (missing.contains(group) && !walk.reached(output.pageUuid())) {
                 entries.add(output);
                 reasons.computeIfAbsent(output.pageUuid(), uuid -> ownRoot(snapshot, uuid, RebuildRootKind.NOT_IN_BASE_BUILD));
@@ -119,6 +133,39 @@ public class BuildPlanner {
         return new BuildPlan(
                 true, snapshot.revision(), entries, walk.changedAssets(), walk.processedMedia(), site, reasons,
                 walk.changeRevisions(), null, baseline.revision());
+    }
+
+    /**
+     * For each page reached by its own change, the languages its change was confined to — absent
+     * when the page must rebuild in every language (M24.3.2). Only pages that are their own rebuild
+     * root qualify: a page reached over a dependency (a template, a media file, a global set) has no
+     * payload difference of its own to narrow by.
+     */
+    private Map<UUID, Set<String>> localeNarrowing(
+            Snapshot snapshot, RebuildExpansion.Result walk, long baselineRevision, OutputPathResolver paths) {
+        if (!com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales()).isLocalized()) {
+            return Map.of();
+        }
+        Map<UUID, Set<String>> narrowed = new HashMap<>();
+        for (UUID pageUuid : walk.pages()) {
+            RebuildReason reason = walk.reasonFor(pageUuid);
+            if (reason == null || !reason.steps().isEmpty() || !pageUuid.equals(reason.rootUuid())) {
+                continue; // reached over a dependency: its own payload says nothing about languages
+            }
+            SnapshotAsset page = snapshot.assetByUuid(pageUuid);
+            if (page == null || page.deleted()) {
+                continue;
+            }
+            JsonNode before = assetVersions
+                    .findValidAtRevision(page.assetId(), baselineRevision)
+                    .map(version -> version.isDeleted() ? null : version.getPayload())
+                    .orElse(null);
+            LocaleValueDiff.Result diff = LocaleValueDiff.compare(before, page.payload());
+            if (diff.localeOnly()) {
+                narrowed.put(pageUuid, diff.locales());
+            }
+        }
+        return Map.copyOf(narrowed);
     }
 
     private static BuildPlan fullPlan(Snapshot snapshot, PlanRequest request, List<PlanEntry> site) {
@@ -158,7 +205,9 @@ public class BuildPlanner {
 
     private static final Comparator<PlanEntry> ENTRY_ORDER = Comparator.comparing(PlanEntry::outputPath)
             .thenComparingInt(PlanEntry::pageNumber)
-            .thenComparing(PlanEntry::pageUuid);
+            .thenComparing(PlanEntry::pageUuid)
+            // The language is null in a project without locales, so order it explicitly.
+            .thenComparing(PlanEntry::locale, Comparator.nullsFirst(Comparator.naturalOrder()));
 
     /** Every output of every live page in scope, in every channel, in entry order. */
     private static List<PlanEntry> siteOutputs(
@@ -173,19 +222,38 @@ public class BuildPlanner {
                 .sorted(Comparator.comparing(page -> page.uuid().toString()))
                 .toList();
         List<String> sortedChannels = channels.stream().sorted().toList();
+        // A localized project fans out page × channel × language (M24.3.2); without locales the
+        // single null language reproduces the pre-M24 plan entry for entry.
+        com.acme.staticforge.project.LocaleConfig localeConfig =
+                com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales());
+        List<String> locales = localeConfig.isLocalized()
+                ? localeConfig.codes()
+                : java.util.Collections.singletonList(null);
         for (SnapshotAsset page : pages) {
             Optional<PaginationValue> paginated = pagination.valueOf(page);
             PaginationSource.Result items = paginated.map(pagination::items).orElse(null);
             for (String channel : sortedChannels) {
-                String path = paths.resolvePagePath(page.uuid(), channel);
-                if (paginated.isEmpty()) {
-                    outputs.add(new PlanEntry(page.uuid(), channel, path));
-                    continue;
-                }
-                PaginatedPage paginatedPage = paginatedPage(page.uuid(), channel, path, paginated.get(), items, paths);
-                for (int number = 1; number <= paginatedPage.totalPages(); number++) {
-                    outputs.add(new PlanEntry(
-                            page.uuid(), channel, paginatedPage.path(number), new PlanEntry.Pagination(number, paginatedPage)));
+                for (String locale : locales) {
+                    // A project without locales takes the exact pre-M24 call, so its plan is
+                    // produced by unchanged code rather than by a language-aware path that
+                    // happens to agree.
+                    String path = locale == null
+                            ? paths.resolvePagePath(page.uuid(), channel)
+                            : paths.resolvePagePath(page.uuid(), channel, locale);
+                    if (paginated.isEmpty()) {
+                        outputs.add(new PlanEntry(page.uuid(), channel, path, null, locale));
+                        continue;
+                    }
+                    PaginatedPage paginatedPage =
+                            paginatedPage(page.uuid(), channel, path, paginated.get(), items, paths, locale);
+                    for (int number = 1; number <= paginatedPage.totalPages(); number++) {
+                        outputs.add(new PlanEntry(
+                                page.uuid(),
+                                channel,
+                                paginatedPage.path(number),
+                                new PlanEntry.Pagination(number, paginatedPage),
+                                locale));
+                    }
                 }
             }
         }
@@ -200,12 +268,15 @@ public class BuildPlanner {
             String firstPath,
             PaginationValue value,
             PaginationSource.Result items,
-            OutputPathResolver paths) {
+            OutputPathResolver paths,
+            String locale) {
         int total = PaginationSource.totalPages(items.items().size(), value.pageSize());
         List<String> pagePaths = new ArrayList<>(total);
         pagePaths.add(firstPath);
         for (int number = 2; number <= total; number++) {
-            pagePaths.add(paths.resolvePaginationPath(pageUuid, channel, firstPath, number));
+            pagePaths.add(locale == null
+                    ? paths.resolvePaginationPath(pageUuid, channel, firstPath, number)
+                    : paths.resolvePaginationPath(pageUuid, channel, firstPath, number, locale));
         }
         return new PaginatedPage(value.sourceUuid(), value.pageSize(), items.items(), pagePaths, items.warnings());
     }
@@ -235,37 +306,43 @@ public class BuildPlanner {
     // Base build
     // ------------------------------------------------------------------
 
-    private record OutputKey(UUID page, String channel, int pageNumber) {}
+    private record OutputKey(UUID page, String channel, int pageNumber, String locale) {}
 
-    private record OutputGroup(UUID page, String channel) {}
+    private record OutputGroup(UUID page, String channel, String locale) {}
 
     private static Map<OutputKey, String> basePaths(BuildManifest manifest) {
         Map<OutputKey, String> paths = new HashMap<>();
         if (manifest != null) {
             for (BuildManifest.Output output : manifest.outputs()) {
                 if (output.kind() == BuildManifest.Kind.PAGE && output.asset() != null) {
-                    paths.put(new OutputKey(output.asset(), output.channel(), output.number()), output.path());
+                    paths.put(new OutputKey(output.asset(), output.channel(), output.number(), output.locale()), output.path());
                 }
             }
         }
         return paths;
     }
 
-    /** Page 1's path of every site page, per channel. */
-    private static Map<UUID, Map<String, String>> firstPaths(List<PlanEntry> site) {
-        Map<UUID, Map<String, String>> paths = new HashMap<>();
+    /** Page 1's path of every site page, per channel and language. */
+    private static Map<UUID, Map<ChannelLocale, String>> firstPaths(List<PlanEntry> site) {
+        Map<UUID, Map<ChannelLocale, String>> paths = new HashMap<>();
         for (PlanEntry output : site) {
             if (output.pageNumber() == 1) {
-                paths.computeIfAbsent(output.pageUuid(), k -> new LinkedHashMap<>()).put(output.channel(), output.outputPath());
+                paths.computeIfAbsent(output.pageUuid(), k -> new LinkedHashMap<>())
+                        .put(new ChannelLocale(output.channel(), output.locale()), output.outputPath());
             }
         }
         return paths;
     }
 
-    /** Whether a page's output sits at another path than in the base build, in any channel both have. */
-    private static boolean moved(UUID pageUuid, Map<UUID, Map<String, String>> firstPaths, Map<OutputKey, String> basePaths) {
-        for (Map.Entry<String, String> path : firstPaths.getOrDefault(pageUuid, Map.of()).entrySet()) {
-            String base = basePaths.get(new OutputKey(pageUuid, path.getKey(), 1));
+    /** One channel in one language — what a page's path is keyed by once locales exist (M24.3.2). */
+    private record ChannelLocale(String channel, String locale) {}
+
+    /** Whether a page's output sits at another path than in the base build, in any channel/language both have. */
+    private static boolean moved(
+            UUID pageUuid, Map<UUID, Map<ChannelLocale, String>> firstPaths, Map<OutputKey, String> basePaths) {
+        for (Map.Entry<ChannelLocale, String> path : firstPaths.getOrDefault(pageUuid, Map.of()).entrySet()) {
+            String base = basePaths.get(
+                    new OutputKey(pageUuid, path.getKey().channel(), 1, path.getKey().locale()));
             if (base != null && !base.equals(path.getValue())) {
                 return true;
             }

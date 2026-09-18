@@ -1,6 +1,6 @@
 ---
 id: M24.3.1
-status: todo
+status: done
 depends: [M24.2.1, M16.2.2]
 epic: m24-multi-language
 feature: rendering
@@ -53,19 +53,19 @@ depends on the server), `number` uses `DecimalFormatSymbols.getInstance(Locale.R
 
 ## Acceptance criteria
 
-- [ ] `de-CH` render of a value `{de:"Strasse", en:"Street"}` with chain `[de-CH, de, en]`
+- [x] `de-CH` render of a value `{de:"Strasse", en:"Street"}` with chain `[de-CH, de, en]`
       outputs `Strasse`; a value only in `en` outputs `Street`; no value → empty and
       `$CMS_IF$` false.
-- [ ] `date("d. MMMM yyyy")` on `2026-10-03` renders `3. Oktober 2026` for `de` and
+- [x] `date("d. MMMM yyyy")` on `2026-10-03` renders `3. Oktober 2026` for `de` and
       `3. October 2026` for `en`; `number("#,##0.00")` renders `1.234,50` for `de` and
       `1,234.50` for `en`; results are identical regardless of the JVM default locale
       (test sets `Locale.setDefault` to something else).
-- [ ] `$CMS_META(language)$` in the §16.8 example renders `de`.
-- [ ] `CMS_LOCALES` loop renders a switcher with `current` set on the active locale.
-- [ ] Non-localized project: all existing golden tests unchanged; new filters behavior
+- [x] `$CMS_META(language)$` in the §16.8 example renders `de`.
+- [x] `CMS_LOCALES` loop renders a switcher with `current` set on the active locale.
+- [x] Non-localized project: all existing golden tests unchanged; new filters behavior
       with no locale matches previous output for `number` and, for `date`, uses
       `Locale.ROOT` (document the change if any existing golden depends on JVM locale).
-- [ ] `./gradlew :server:sf-template:test :server:sf-generate:test :server:sf-domain:test`
+- [x] `./gradlew :server:sf-template:test :server:sf-generate:test :server:sf-domain:test`
       green.
 
 ## Out of scope
@@ -80,3 +80,22 @@ depends on the server), `number` uses `DecimalFormatSymbols.getInstance(Locale.R
   filters would leak the wrapper into output.
 - The `json` filter on a whole content object containing localizable leaves must emit
   resolved values, not wrappers (templates exporting data for JS).
+
+## Implementation notes (2026-09-17)
+
+- `RenderContext` carries `locale`, `localeChain` and the `CMS_LOCALES` scope. The chain stays a
+  plain `List<String>` so `sf-template` still does not depend on `sf-domain`.
+- Resolution happens **once**, in `OctlRenderer.resolve` (and at each step of `resolveSub`, so
+  `heroImage.altText` walks *through* a wrapper). A container value handed to `| json` is resolved
+  deeply, so no wrapper can reach the output.
+- Filters gained an optional locale: `Filter.apply(value, args, locale)`, with `date`, `number`,
+  `upper`, `lower` and `capitalize` overriding it. **Behaviour change:** `date` used to format with
+  the JVM default language and is now deterministic (render language, else `Locale.ROOT`).
+  `Locale.ROOT` abbreviates month names, so a single-language project's `MMMM` renders `Oct`
+  instead of the server's spelled-out month; `date("d. MMMM yyyy", "en")` restores it. Documented
+  in `docs/template-developer-guide.md` §2.12.
+- `LocaleRenderScope` (sf-domain `project`) builds the locale meta + `CMS_LOCALES` items once for
+  both generation and preview.
+- Golden cases `l10n-fallback`, `l10n-filters`, `l10n-locales-loop`; `GoldenFileRenderTest` reads
+  an optional `context.json`. Unit tests in `LocaleRenderTest`, including a JVM-default-independence
+  check.

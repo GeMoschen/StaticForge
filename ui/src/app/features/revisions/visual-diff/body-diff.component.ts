@@ -1,3 +1,5 @@
+import { LocalesStore } from '../../../core/project/locales.store';
+import { formatDiffPath } from '../../../shared/components/sf-diff.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -69,6 +71,18 @@ export class SfBodyDiffComponent {
   private readonly api = inject(ApiClient);
 
   readonly change = input.required<FieldChange>();
+
+  private readonly localesForDiff = inject(LocalesStore);
+
+  /** A field path with its language spelled out (M24.4.1). */
+  protected labelPath(path: string | undefined): string {
+    return formatDiffPath(
+      path,
+      Object.fromEntries(
+        this.localesForDiff.locales().map((locale) => [locale.code ?? '', locale.label ?? locale.code ?? '']),
+      ),
+    );
+  }
   readonly projectKey = input.required<string>();
 
   protected readonly sections = signal<RenderedSection[]>([]);

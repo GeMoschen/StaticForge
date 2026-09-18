@@ -165,6 +165,46 @@ Search finds anything in the current project by what it contains, not only by it
   rebuilds. If search says it is unavailable, the server can't open the project's search index — ask an operator (see
   `infra/README.md`).
 
+### Languages (M24)
+
+A project can publish in several **content languages**. A project that declares none is single-language and nothing
+below applies: the editors, the URLs and the generated site are exactly what they were.
+
+**Setting them up.** In **Settings → Languages**, a project admin lists the languages (a BCP 47 tag such as `de`,
+`en` or `de-CH`, plus a label editors will see), picks the **default language**, and optionally gives a language a
+**fallback chain** — `de-CH` falling back to `de` means a value nobody translated into Swiss German shows the German
+one. The default language is always the last fallback, so a page never renders a blank where a value exists.
+
+> **Adding the first language changes every page's URL.** `about.html` becomes `de/about.html` and `en/about.html`.
+> The tab shows the before/after path of one of your own pages and asks you to confirm. If your site already has
+> URLs people link to, switch on **Default language without URL prefix**: the default language keeps the site root
+> (`about.html`) and only the other languages get a prefix (`en/about.html`).
+
+**Switching language.** Once a project has languages, an **Editing language** picker sits above every screen. It
+drives everything you edit — page fields, sections, property sets, records, media alt text, navigation labels — plus
+the preview and the search palette. Your choice is remembered per project.
+
+**Translating.** A developer marks the fields that differ per language `localizable` in the template's CDL; page
+structure (bodies, section order, list rows, catalog cards) is shared by every language, so only values vary.
+
+- A language-dependent field shows the language you are editing as a badge.
+- A field you haven't translated shows what the page will actually render — *"Not translated — shows “Über uns” from
+  Deutsch"* — with a **Copy from Deutsch** button to start from that text.
+- Fields that are the same in every language are marked **All languages**; changing one changes them all.
+- A required field is required in the **default** language only; the others may stay empty and fall back.
+
+**Finding what's left.** The page, record and property-set editors show how many fields the current language still
+owes (`en: 3 of 12 missing`), and the pages list can filter to **missing in en**. A value inherited through a
+fallback counts as missing — that is the point: it is being read, but nobody has translated it.
+
+**Previewing and sharing.** The preview renders the language you are editing, and a share link opens in that same
+language.
+
+**Removing a language.** Its translations are **kept**, not deleted: add the language back and they return. The
+asset detail lists them as orphaned translations in the meantime. Turning languages off entirely, or taking
+`localizable` off a field, *does* discard the other languages' values — both ask you to confirm first, naming how
+many translations would go.
+
 ### Generate & publish
 
 First, in **Settings → Targets**, create at least one target (the first one becomes the default). Each target writes into its own folder, `{projectKey}/{output folder}` under the server's output root (`{projectKey}/target-{id}` when the folder is left empty); two targets of a project may not share or nest folders (an imported target whose folder is invalid or clashes is imported without it and uses its default folder; the import analysis warns about this). Set **Base URL** for correct sitemap and absolute links.
@@ -207,6 +247,9 @@ When two people edit the same asset, the second save shows a conflict drawer wit
 ## Keyboard
 
 Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` search (see [Search](#search)), `g p` pages, `g m` media, `g t` templates, `g r` revisions, `Cmd/Ctrl+S` save, `Cmd/Ctrl+Enter` refresh preview, `Alt+↑/↓` move section, `?` shortcut sheet.
+
+In a project with several languages, the **Editing language** picker above the content area is an ordinary select you
+can `Tab` to; changing it switches every editor, the preview and the search palette to that language.
 
 In the Globals tree and the other store trees, `Tab` reaches each item, `Enter` or `Space` opens it, and `→`/`←` expand and collapse a folder. The Values and Schema tabs are ordinary buttons you can `Tab` to.
 

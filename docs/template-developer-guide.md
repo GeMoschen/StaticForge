@@ -646,6 +646,130 @@ renders:
 The cases `pagination-first`, `pagination-last`, `pagination-single`, `pagination-empty` and
 `render-md/pagination-markdown` show the other pages.
 
+### 2.12 Several languages (M24)
+
+A project can declare a list of **languages** (BCP 47 tags such as `de`, `en`, `de-CH`), one of them the default, in
+**Project settings → Languages**. A project that declares none is single-language and everything below is inactive:
+its templates, payloads, output paths and URLs are exactly what they were before M24.
+
+#### Marking an editor language-dependent
+
+A leaf editor opts in with `localizable`:
+
+```
+content {
+  editor text headline { label "Headline" localizable }
+  editor text sku      { label "SKU" }
+}
+```
+
+Its stored value becomes one value per language:
+
+```json
+"headline": { "type": "L10N", "values": { "de": "Die Parka", "en": "The parka" } }
+```
+
+Page structure is shared by every language, so `group`, `list`, `catalog` and `pagination` reject the attribute
+(`SF-CDL-0112`) — mark the leaf editors *inside* them instead. `required` is checked in the default language only;
+every other language may be empty and falls back.
+
+Templates never see the wrapper. A value is resolved once, when the template reads it, through the render language's
+fallback chain (the language, its declared fallbacks, then the default language), so filters, `$CMS_IF`, loops and
+`| json` all see a plain value:
+
+```
+$CMS_VALUE(headline)$        <!-- "Die Parka" on a German page, "The parka" on an English one -->
+$CMS_IF(headline)$…          <!-- false when no language in the chain has a value -->
+```
+
+Media alt text and captions, and navigation labels, follow the same rule.
+
+#### The render language in a template
+
+| Accessor | Meaning |
+|---|---|
+| `$CMS_META(locale)$` | the full tag of the page being rendered, e.g. `de-CH` (empty without languages) |
+| `$CMS_META(language)$` | its language subtag, e.g. `de` — what `<html lang="…">` wants |
+| `$CMS_FOR(l : CMS_LOCALES)$` | the language switcher: one item per declared language |
+
+A `CMS_LOCALES` item is `{code, language, label, current, href}`; `href` is *this* page in that language, relative to
+the page being rendered, and empty in a preview or where the page has no URL in that language. `CMS_LOCALES` is
+read-only: a `$CMS_SET` or loop variable of that name is `SF-TPL-0163`.
+
+```
+<html lang="$CMS_META(language)$">
+<ul class="languages">
+  $CMS_FOR(l : CMS_LOCALES)$
+    <li><a href="$CMS_VALUE(l.href)$" hreflang="$CMS_VALUE(l.code)$">$CMS_VALUE(l.label)$</a></li>
+  $CMS_END_FOR$
+</ul>
+```
+
+Renders, on `de/about.html` of a project with `de` and `en`:
+
+```html
+<html lang="de">
+<ul class="languages">
+    <li><a href="../de/about.html" hreflang="de">Deutsch</a></li>
+    <li><a href="../en/about.html" hreflang="en">English</a></li>
+</ul>
+```
+
+#### Language-aware filters
+
+`date` and `number` format in the render language, and `upper`/`lower`/`capitalize` case-fold in it:
+
+| Expression | `de` | `en` |
+|---|---|---|
+| `publishedOn \| date("d. MMMM yyyy")` | `3. Oktober 2026` | `3. October 2026` |
+| `price \| number("#,##0.00")` | `1.234,50` | `1,234.50` |
+
+A second argument overrides the language: `date("d. MMMM yyyy", "en")`.
+
+> **Changed in M24.** `date` used to format with the *server's* JVM default language, so the same template produced
+> `3. Oktober 2026` on a German machine and `3. October 2026` on an English one. It is now deterministic: the render
+> language, or the neutral root language in a project without languages. The root language abbreviates month names
+> (`MMMM` → `Oct`), so a single-language site that wants a spelled-out month names it explicitly:
+> `date("d. MMMM yyyy", "en")`.
+
+#### Output paths and links
+
+Generation writes every page once per channel **per language**. The `{locale}` placeholder is where the language goes,
+and in a project with languages the default path expression is `{locale}/{folder}{uid}.{ext}`:
+
+| Page | Path |
+|---|---|
+| `about` | `de/about.html`, `en/about.html` |
+| `p2` in folder `pf` | `de/pf/p2.html`, `en/pf/p2.html` |
+
+Switching on **Default language without URL prefix** puts the default language back at the site root
+(`about.html`, `en/about.html`) — the migration path for a site that already has URLs people link to.
+
+Every page's effective path expression must contain `{locale}` once the project has languages, or two languages would
+write the same file; generation refuses the run with `SF-GEN-0111` before writing anything.
+
+`$CMS_REF(page:about)$` links to the target **in the render language**, relative to the page holding the link, so
+`en/pf/p2.html` links to `../about.html`. To cross languages deliberately, name one:
+`$CMS_REF(page:about, locale="en")$`.
+
+The sitemap lists every output and marks translations as alternates of one another, with `x-default` pointing at the
+default language:
+
+```xml
+<url>
+  <loc>https://example.com/de/about.html</loc>
+  <xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/about.html"/>
+  <xhtml:link rel="alternate" hreflang="en" href="https://example.com/en/about.html"/>
+  <xhtml:link rel="alternate" hreflang="x-default" href="https://example.com/de/about.html"/>
+</url>
+```
+
+#### Incremental builds
+
+Translating one language of one page rebuilds that language's outputs only. Anything else — structure, a
+non-language-dependent value, the template, the UID, the folder, a media file — rebuilds every language, and the
+build-insight plan says which languages a narrowed entry covers.
+
 ## Part 3 — Diagnostics
 
 ### 3.1 OCTL (`SF-TPL-*`) — `template.diagnostic.DiagnosticCodes`
@@ -710,6 +834,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-CDL-0109` | error | a page template's own editor or body name is already declared by an ancestor (§2.10); the message names the ancestor |
 | `SF-CDL-0110` | error | a `pagination` editor inside a `list` or `group`, or in a section template, property set or dataset schema (§2.11) |
 | `SF-CDL-0111` | error | more than one `pagination` editor in a page template, counting inherited ones (§2.11) |
+| `SF-CDL-0112` | error | `localizable` on a `group`, `list`, `catalog` or `pagination` editor — structure is shared by all languages, so mark the leaf editors inside it instead (§2.12) |
 | `SF-CDL-0200` | error | CDL syntax error |
 
 ### 3.3 Generation (`SF-GEN-*`) — `generate.GenerationDiagnosticCodes` + `generate.GenerationService`

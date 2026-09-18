@@ -1,6 +1,6 @@
 ---
 id: M24.4.1
-status: todo
+status: done
 depends: [M24.1.2, M24.2.2, M24.3.2, M17.4.1, M19.4.2]
 epic: m24-multi-language
 feature: ui
@@ -55,17 +55,17 @@ and — after M17/M19 — the global set and record editors. Media metadata is e
 
 ## Acceptance criteria
 
-- [ ] Page editor: switch to `en`, type a headline, autosave, reload → `de` unchanged,
+- [x] Page editor: switch to `en`, type a headline, autosave, reload → `de` unchanged,
       `en` saved; payload contains both in one wrapper.
-- [ ] Empty `en` field shows `de` fallback placeholder + "copy from" works.
-- [ ] Global set editor, record editor, media drawer and nav label editor all follow the
+- [x] Empty `en` field shows `de` fallback placeholder + "copy from" works.
+- [x] Global set editor, record editor, media drawer and nav label editor all follow the
       switcher.
-- [ ] Toggling a template editor to non-localizable with translations shows the confirm
+- [x] Toggling a template editor to non-localizable with translations shows the confirm
       dialog; cancel writes nothing.
-- [ ] Preview renders the `en` output; share link opens `en`.
-- [ ] Diff labels locale.
-- [ ] Non-localized project: no switcher, no badges, forms behave exactly as before.
-- [ ] Specs for `FormBuilderService` L10N binding (pure logic, runs despite the
+- [x] Preview renders the `en` output; share link opens `en`.
+- [x] Diff labels locale.
+- [x] Non-localized project: no switcher, no badges, forms behave exactly as before.
+- [x] Specs for `FormBuilderService` L10N binding (pure logic, runs despite the
       `templateUrl` runner issue); `npm run build` green.
 
 ## Out of scope
@@ -79,3 +79,19 @@ and — after M17/M19 — the global set and record editors. Media metadata is e
   value into the new locale's slot — bind by locale at edit time, not at flush time.
 - Accessibility: the fallback placeholder must not be read as a real value by screen
   readers (`aria-describedby` hint, not `value`).
+
+## Implementation notes (2026-09-17)
+
+- `EditingLocaleStore` (signals, `localStorage` per project inside try/catch) drives everything;
+  the switcher lives in the project shell and only renders when the project has languages.
+- `FormBuilderService.build(definition, value, l10n)` seeds a localizable leaf with **that
+  language's own value** (so an untranslated field looks empty), and `valueOf` merges it back into
+  the stored wrapper through a `WeakMap` of build contexts — no call-site signature churn, and the
+  languages the editor isn't looking at survive the save.
+- Language badge, "All languages" marker, the fallback hint with its **Copy from …** action and the
+  "required in the default language only" note are rendered by `sf-content-form` for top-level
+  editors, where the stored wrapper is available exactly.
+- Media alt text/caption, navigation labels, the preview, share links, the search palette and the
+  revision diff's field labels all follow the switcher.
+- A template save that would discard translations is refused by the server (`409`); the templates
+  screen shows the confirmation and re-sends with `confirmDiscard=true`.

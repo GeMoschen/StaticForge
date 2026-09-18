@@ -38,6 +38,16 @@ public class SearchService {
     public record Result(SearchHits hits, int page, int size, SearchStatus status) {}
 
     public Result search(long projectId, String q, List<String> types, String folder, int page, int size, String sort) {
+        return search(projectId, q, types, folder, page, size, sort, null);
+    }
+
+    /**
+     * As {@link #search(long, String, List, String, int, int, String)}, restricted to one content
+     * language (M24.3.3): the query then reads that language's prose field, so a German word matches
+     * through German stemming and an English-only value does not answer a German search.
+     */
+    public Result search(
+            long projectId, String q, List<String> types, String folder, int page, int size, String sort, String locale) {
         String text = q == null ? "" : q.strip();
         if (text.isEmpty()) {
             throw SearchProblems.badRequest("Parameter 'q' is required.");
@@ -59,7 +69,7 @@ public class SearchService {
         if (status.state() == SearchStatus.State.UNAVAILABLE) {
             throw SearchProblems.unavailable();
         }
-        SearchQuery query = new SearchQuery(text, parseTypes(types), folder, page, size);
+        SearchQuery query = new SearchQuery(text, parseTypes(types), folder, page, size, locale);
         return new Result(index.search(projectId, query), page, size, status);
     }
 

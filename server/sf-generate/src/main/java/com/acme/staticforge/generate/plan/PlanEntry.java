@@ -8,14 +8,26 @@ import java.util.UUID;
  * slash and no {@code ..} segments (see {@code OutputFile.normalize}).
  *
  * <p>A paginated page (M21.2.1) has one entry per page number per channel, each carrying its
- * {@link Pagination}; {@code pagination} is {@code null} for every other page. The components are
- * not a closed key: a later dimension (locale, M24) adds a component rather than a new key format.
+ * {@link Pagination}; {@code pagination} is {@code null} for every other page. A localized project
+ * (M24.3.2) has one entry per page × channel × locale, each carrying its {@code locale};
+ * {@code locale} is {@code null} in a project without locales, which keeps its plan identical to
+ * a pre-M24 build.
  */
-public record PlanEntry(UUID pageUuid, String channel, String outputPath, Pagination pagination) {
+public record PlanEntry(UUID pageUuid, String channel, String outputPath, Pagination pagination, String locale) {
 
-    /** An entry of a page that isn't paginated. */
+    /** An entry of a page that isn't paginated, in a project without locales. */
     public PlanEntry(UUID pageUuid, String channel, String outputPath) {
-        this(pageUuid, channel, outputPath, null);
+        this(pageUuid, channel, outputPath, null, null);
+    }
+
+    /** An entry of a paginated page in a project without locales. */
+    public PlanEntry(UUID pageUuid, String channel, String outputPath, Pagination pagination) {
+        this(pageUuid, channel, outputPath, pagination, null);
+    }
+
+    /** The same entry rendered for {@code locale} and written to {@code path}. */
+    public PlanEntry withLocale(String locale, String path) {
+        return new PlanEntry(pageUuid, channel, path, pagination, locale);
     }
 
     /** The 1-based page number; {@code 1} for a page that isn't paginated. */

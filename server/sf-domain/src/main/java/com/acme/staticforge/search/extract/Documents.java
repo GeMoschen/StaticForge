@@ -10,6 +10,12 @@ final class Documents {
 
     /** A document with the asset's identity, its title (display name and uid) and the given prose and code. */
     static SearchDocument of(IndexableAsset asset, String text, String source) {
+        return of(asset, text, java.util.Map.of(), source);
+    }
+
+    /** As {@link #of(IndexableAsset, String, String)}, with the prose of each language (M24.3.3). */
+    static SearchDocument of(
+            IndexableAsset asset, String text, java.util.Map<String, String> textByLocale, String source) {
         return new SearchDocument(
                 asset.uuid(),
                 asset.type(),
@@ -20,7 +26,13 @@ final class Documents {
                 asset.revision(),
                 title(asset),
                 text,
+                textByLocale,
                 source);
+    }
+
+    /** The document a {@link TextBuilder} produced, language-dependent text included. */
+    static SearchDocument of(IndexableAsset asset, TextBuilder text, String source) {
+        return of(asset, text.build(), text.buildByLocale(), source);
     }
 
     static String title(IndexableAsset asset) {

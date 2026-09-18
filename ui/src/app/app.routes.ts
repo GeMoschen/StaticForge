@@ -11,6 +11,7 @@ import { NavigationComponent } from './features/navigation/navigation.component'
 import { GlobalsComponent } from './features/globals/globals.component';
 import { ProjectSettingsShellComponent } from './features/settings/project-settings-shell.component';
 import { ProjectSettingsGeneralComponent } from './features/settings/project-settings-general.component';
+import { ProjectSettingsLocalesComponent } from './features/settings/project-settings-locales.component';
 import { ProjectSettingsMediaComponent } from './features/settings/project-settings-media.component';
 import { ChannelsComponent } from './features/channels/channels.component';
 import { GenerationComponent } from './features/generation/generation.component';
@@ -106,6 +107,10 @@ export const routes: Routes = [
           {
             path: 'media',
             component: ProjectSettingsMediaComponent,
+          },
+          {
+            path: 'locales',
+            component: ProjectSettingsLocalesComponent,
           },
           {
             path: 'channels',

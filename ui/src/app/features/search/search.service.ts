@@ -27,12 +27,16 @@ export interface SearchRequest {
   folder?: string;
   page?: number;
   size?: number;
+  /** Search one content language (M24.4.1); omitted searches every language. */
+  locale?: string;
 }
 
 /** What the palette types into: the project it searches (`null` outside a project) and the input. */
 export interface LiveQuery {
   projectKey: string | null;
   q: string;
+  /** The content language being edited (M24.4.1); omitted searches every language. */
+  locale?: string;
 }
 
 /** One state of an as-you-type search. */
@@ -65,6 +69,11 @@ export class SearchService {
     if (request.size) {
       params = params.set('size', String(request.size));
     }
+    if (request.locale) {
+      // Search the language the editor is working in (M24.4.1): a German query stems German and
+      // does not answer with a value that exists only in English.
+      params = params.set('locale', request.locale);
+    }
     return this.http.get<SearchResultView>(`${BASE}/projects/${encodeURIComponent(projectKey)}/search`, {
       params,
       context: new HttpContext().set(SKIP_ERROR_TOAST, true),
@@ -92,8 +101,10 @@ export class SearchService {
    */
   live(queries: Observable<LiveQuery>, debounceMs = 150): Observable<LiveSearchState> {
     return queries.pipe(
-      map((query) => ({ projectKey: query.projectKey, q: query.q.trim() })),
-      distinctUntilChanged((a, b) => a.projectKey === b.projectKey && a.q === b.q),
+      map((query) => ({ projectKey: query.projectKey, q: query.q.trim(), locale: query.locale })),
+      distinctUntilChanged(
+        (a, b) => a.projectKey === b.projectKey && a.q === b.q && a.locale === b.locale,
+      ),
       debounceTime(debounceMs),
       switchMap((query): Observable<LiveSearchState> => {
         if (!query.projectKey) {
@@ -102,7 +113,11 @@ export class SearchService {
         if (!shouldSearch(query.q)) {
           return of({ kind: 'idle', q: query.q });
         }
-        return this.search(query.projectKey, { q: query.q, size: PALETTE_SIZE }).pipe(
+        return this.search(query.projectKey, {
+          q: query.q,
+          size: PALETTE_SIZE,
+          locale: query.locale,
+        }).pipe(
           map((result): LiveSearchState => ({ kind: 'results', q: query.q, result })),
           catchError((error: unknown) => of(this.failure(query.q, error))),
           startWith<LiveSearchState>({ kind: 'loading', q: query.q }),

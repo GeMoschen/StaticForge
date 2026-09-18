@@ -111,6 +111,51 @@ export class ApiClient {
     });
   }
 
+  /** The project's content languages (M24). */
+  getProjectLocales(key: string): Observable<S['ProjectLocalesView']> {
+    return this.http.get<S['ProjectLocalesView']>(`${BASE}/projects/${key}/locales`, {
+      withCredentials: true,
+    });
+  }
+
+  /**
+   * Replaces the project's content languages. `confirmDiscard` authorises a change that would
+   * reduce language-dependent values to one language; without it the server answers with
+   * `confirmationRequired` and writes nothing.
+   */
+  updateProjectLocales(
+    key: string,
+    body: S['ProjectLocalesRequest'],
+    confirmDiscard = false,
+  ): Observable<S['ProjectLocalesView']> {
+    const query = confirmDiscard ? '?confirmDiscard=true' : '';
+    return this.http.put<S['ProjectLocalesView']>(`${BASE}/projects/${key}/locales${query}`, body, {
+      withCredentials: true,
+    });
+  }
+
+  /**
+   * How complete one asset's translations are (M24.4.2): per language, how many language-dependent
+   * fields the default language fills that it does not.
+   */
+  translationStatus(projectKey: string, uuid: string): Observable<S['TranslationStatusView']> {
+    return this.http.get<S['TranslationStatusView']>(
+      `${BASE}/projects/${projectKey}/translation-status/${uuid}`,
+      { withCredentials: true },
+    );
+  }
+
+  /** Every asset's translation status; `locale` lists only those still missing a translation in it. */
+  listTranslationStatus(
+    projectKey: string,
+    opts: { type?: string; locale?: string } = {},
+  ): Observable<S['TranslationStatusView'][]> {
+    return this.http.get<S['TranslationStatusView'][]>(
+      `${BASE}/projects/${projectKey}/translation-status`,
+      { withCredentials: true, params: this.params(opts) },
+    );
+  }
+
   listMembers(key: string): Observable<S['ProjectMemberView'][]> {
     return this.http.get<S['ProjectMemberView'][]>(
       `${BASE}/projects/${key}/members`,
@@ -423,14 +468,20 @@ export class ApiClient {
     );
   }
 
+  /**
+   * `locale` (M24) writes alt text and caption for one content language, leaving the others as they
+   * are; `copyright` stays single-valued. Omitted, the project's default language is written.
+   */
   updateMediaMetadata(
     projectKey: string,
     uuid: string,
     body: S['MediaMetadataRequest'],
     etag?: number,
+    locale?: string,
   ): Observable<S['MediaView']> {
+    const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
     return this.http.put<S['MediaView']>(
-      `${BASE}/projects/${projectKey}/media/${uuid}`,
+      `${BASE}/projects/${projectKey}/media/${uuid}${query}`,
       body,
       this.mutationOptions(etag),
     );
@@ -523,10 +574,11 @@ export class ApiClient {
     uuid: string,
     revision?: number,
     channel?: string,
+    locale?: string,
   ): Observable<string> {
     return this.http.get(`${BASE}/projects/${projectKey}/preview/pages/${uuid}`, {
       withCredentials: true,
-      params: this.params({ revision, channel }),
+      params: this.params({ revision, channel, locale }),
       responseType: 'text',
     });
   }
@@ -541,10 +593,11 @@ export class ApiClient {
     revision?: number,
     channel?: string,
     page?: number,
+    locale?: string,
   ): Observable<HttpResponse<string>> {
     return this.http.get(`${BASE}/projects/${projectKey}/preview/pages/${uuid}`, {
       withCredentials: true,
-      params: this.params({ revision, channel, page }),
+      params: this.params({ revision, channel, page, locale }),
       responseType: 'text',
       observe: 'response',
     });
@@ -579,10 +632,11 @@ export class ApiClient {
     uuid: string,
     revision?: number,
     channel?: string,
+    locale?: string,
   ): Observable<S['PreviewShareLink']> {
     return this.http.get<S['PreviewShareLink']>(
       `${BASE}/projects/${projectKey}/preview/pages/${uuid}/share`,
-      { withCredentials: true, params: this.params({ revision, channel }) },
+      { withCredentials: true, params: this.params({ revision, channel, locale }) },
     );
   }
 

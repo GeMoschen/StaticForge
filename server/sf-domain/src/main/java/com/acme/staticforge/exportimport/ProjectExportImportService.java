@@ -22,7 +22,7 @@ public interface ProjectExportImportService {
      * <p>Bumped to {@code 5} by M19 for the same reason: archives can carry {@code DATASET} and
      * {@code RECORD} assets. The file layout itself is unchanged.
      */
-    int PROTOCOL_VERSION = 5;
+    int PROTOCOL_VERSION = 6;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP

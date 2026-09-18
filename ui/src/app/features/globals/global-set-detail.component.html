@@ -55,7 +55,14 @@
           </p>
         } @else {
           @if (valuesForm(); as form) {
-            <sf-content-form [definition]="definition()" [formGroup]="form" [projectKey]="projectKey()" />
+            <sf-content-form
+              [definition]="definition()"
+              [formGroup]="form"
+              [projectKey]="projectKey()"
+              [editingLocale]="editingLocale()"
+              [storedValue]="storedContent()"
+              [localeLabels]="localeLabels()"
+            />
           }
         }
 

@@ -61,7 +61,21 @@ public final class DatasetQueryEvaluator {
      *     such as {@code CMS_PAGE.team}); {@code null} makes such accessors missing
      */
     public static List<RecordView> apply(List<RecordView> records, DatasetQuery query, Function<Accessor, JsonNode> scope) {
-        List<RecordView> selected = filterAndSort(records, query, scope);
+        return apply(records, query, scope, null);
+    }
+
+    /**
+     * As {@link #apply(List, DatasetQuery, Function)}, sorting strings in {@code collator}'s language
+     * (M24.3.3): with German collation {@code Äpfel} sorts next to {@code Apfel} rather than after
+     * {@code Zwetschge}. {@code null} keeps the fixed, language-independent collation, which is what
+     * a project without languages has always used.
+     */
+    public static List<RecordView> apply(
+            List<RecordView> records,
+            DatasetQuery query,
+            Function<Accessor, JsonNode> scope,
+            java.text.Collator collator) {
+        List<RecordView> selected = filterAndSort(records, query, scope, collator);
         int from = query.offset() == null ? 0 : Math.min(query.offset(), selected.size());
         int to = query.limit() == null ? selected.size() : (int) Math.min((long) from + query.limit(), selected.size());
         return List.copyOf(selected.subList(from, to));
@@ -104,7 +118,11 @@ public final class DatasetQueryEvaluator {
                 || truthy(eval(query.where(), record, query.variable(), null));
     }
 
-    private static List<RecordView> filterAndSort(List<RecordView> records, DatasetQuery query, Function<Accessor, JsonNode> scope) {
+    private static List<RecordView> filterAndSort(
+            List<RecordView> records,
+            DatasetQuery query,
+            Function<Accessor, JsonNode> scope,
+            java.text.Collator collator) {
         List<RecordView> selected = new ArrayList<>();
         for (RecordView record : records) {
             if (matches(record, query, scope)) {
@@ -113,7 +131,7 @@ public final class DatasetQueryEvaluator {
         }
         List<SortKey> keys = new ArrayList<>(query.sort());
         keys.addAll(DEFAULT_ORDER);
-        return sort(selected, keys);
+        return sort(selected, keys, collator);
     }
 
     /**
@@ -121,6 +139,11 @@ public final class DatasetQueryEvaluator {
      * so a date string is parsed once per record rather than once per comparison.
      */
     public static List<RecordView> sort(List<RecordView> records, List<SortKey> keys) {
+        return sort(records, keys, null);
+    }
+
+    /** As {@link #sort(List, List)}, with {@code collator}'s language collation for strings (M24.3.3). */
+    public static List<RecordView> sort(List<RecordView> records, List<SortKey> keys, java.text.Collator collator) {
         List<Keyed> keyed = new ArrayList<>(records.size());
         for (RecordView record : records) {
             SortValue[] values = new SortValue[keys.size()];
@@ -131,7 +154,7 @@ public final class DatasetQueryEvaluator {
         }
         keyed.sort((a, b) -> {
             for (int i = 0; i < keys.size(); i++) {
-                int result = a.values[i].compareTo(b.values[i], keys.get(i).descending());
+                int result = a.values[i].compareTo(b.values[i], keys.get(i).descending(), collator);
                 if (result != 0) {
                     return result;
                 }
@@ -339,7 +362,7 @@ public final class DatasetQueryEvaluator {
             return new SortValue(4, null, false, null, node.toString());
         }
 
-        int compareTo(SortValue other, boolean descending) {
+        int compareTo(SortValue other, boolean descending, java.text.Collator collator) {
             if (rank == ABSENT || other.rank == ABSENT) {
                 return Integer.compare(rank == ABSENT ? 1 : 0, other.rank == ABSENT ? 1 : 0);
             }
@@ -351,7 +374,7 @@ public final class DatasetQueryEvaluator {
                     case 0 -> number.compareTo(other.number);
                     case 1 -> Boolean.compare(bool, other.bool);
                     case 2 -> time.compareTo(other.time);
-                    default -> collate(text, other.text);
+                    default -> collate(text, other.text, collator);
                 };
             }
             return descending ? -result : result;
@@ -360,6 +383,20 @@ public final class DatasetQueryEvaluator {
 
     /** Locale-independent: case-insensitive first, then case-sensitive so the order is total. */
     static int collate(String a, String b) {
+        return collate(a, b, null);
+    }
+
+    /**
+     * With a {@code collator}, strings sort in that language (M24.3.3); the fixed comparison breaks
+     * any tie so the order stays total and deterministic. Without one, the pre-M24 fixed collation.
+     */
+    static int collate(String a, String b, java.text.Collator collator) {
+        if (collator != null) {
+            int collated = collator.compare(a, b);
+            if (collated != 0) {
+                return collated;
+            }
+        }
         int insensitive = String.CASE_INSENSITIVE_ORDER.compare(a, b);
         return insensitive != 0 ? insensitive : a.compareTo(b);
     }

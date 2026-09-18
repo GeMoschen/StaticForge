@@ -33,6 +33,14 @@ public interface DatasetService {
     DatasetView update(UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, RevisionContext ctx);
 
     /**
+     * Updates the schema; {@code confirmDiscard} authorizes a change that takes {@code localizable}
+     * off a field whose records carry translations, which are then reduced to the default language
+     * (M24.2.2). Without it, such a save is rejected with a {@code 409} and nothing is written.
+     */
+    DatasetView update(
+            UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, boolean confirmDiscard, RevisionContext ctx);
+
+    /**
      * Soft-deletes a dataset. {@code 409 SF-DOM-0121} with {@code recordCount} while it still has live
      * records (no cascade).
      */

@@ -86,6 +86,7 @@ public class PageRenderService {
     private final BlobStore blobStore;
     private final TextMediaCompiler textMediaCompiler;
     private final TemplateHierarchies templateHierarchies;
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
 
     private final Renderer renderer = new OctlRenderer();
     private final TextMediaRenderer textMediaRenderer = new TextMediaRenderer();
@@ -103,7 +104,8 @@ public class PageRenderService {
             CompiledTemplateCache compiledTemplates,
             BlobStore blobStore,
             TextMediaCompiler textMediaCompiler,
-            TemplateHierarchies templateHierarchies) {
+            TemplateHierarchies templateHierarchies,
+            com.acme.staticforge.project.ProjectLocales projectLocales) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
@@ -117,6 +119,7 @@ public class PageRenderService {
         this.blobStore = blobStore;
         this.textMediaCompiler = textMediaCompiler;
         this.templateHierarchies = templateHierarchies;
+        this.projectLocales = projectLocales;
     }
 
     /**
@@ -153,7 +156,19 @@ public class PageRenderService {
     public PagePreview renderPage(
             long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
             Integer pageNumber) {
-        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber);
+        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber, null);
+    }
+
+    /**
+     * Renders a saved page in one language (M24.3.2): language-dependent values resolve through
+     * that language's fallback chain, {@code $CMS_META(locale)$} reports it, and {@code date}/
+     * {@code number} format in it. {@code null} means the project's default language, which is what
+     * a project without locales always renders.
+     */
+    public PagePreview renderPage(
+            long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
+            Integer pageNumber, String locale) {
+        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber, locale);
     }
 
     /**
@@ -246,7 +261,7 @@ public class PageRenderService {
 
     private PagePreview doRender(
             long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
-            Integer pageNumber) {
+            Integer pageNumber, String locale) {
         String projectKey = projectKeyOf(projectId);
 
         PageView page;
@@ -259,7 +274,8 @@ public class PageRenderService {
             page = PageView.from(view);
         }
         PageView view = page;
-        return withRenderLimits(() -> renderPage(projectId, projectKey, view, channel, rewriteLinks, baseUrl, revision, pageNumber));
+        return withRenderLimits(
+                () -> renderPage(projectId, projectKey, view, channel, rewriteLinks, baseUrl, revision, pageNumber, locale));
     }
 
     /**
@@ -295,7 +311,8 @@ public class PageRenderService {
             boolean rewriteLinks,
             String baseUrl,
             Long revision,
-            Integer requestedPage) {
+            Integer requestedPage,
+            String locale) {
         AssetVersionView pageTemplate = templateAt(projectId, page.pageTemplateUuid(), revision);
         CompiledTemplate compiled = compilePageTemplateChannel(pageTemplate, channel, projectId, revision);
         if (compiled == null) {
@@ -332,6 +349,10 @@ public class PageRenderService {
             builder.meta("pageNumber", IntNode.valueOf(pagination.pageNumber()))
                     .meta("totalPages", IntNode.valueOf(pagination.totalPages()));
         }
+        // A preview has no generated URLs, so the language switcher's hrefs stay empty here: the
+        // editor switches language with the editing-locale control, not by following a link.
+        com.acme.staticforge.project.LocaleRenderScope.apply(
+                builder, projectLocales.forProject(projectId), locale, null);
         RenderContext context = builder.build();
 
         String html = budget.withTemplate(page.pageTemplateUuid(), pageTemplate.uid(), () -> renderer.render(compiled, context))
