@@ -1,0 +1,193 @@
+<div class="locales">
+  <header class="locales__header">
+    <div>
+      <h1 class="locales__title">Languages</h1>
+      <p class="locales__subtitle">
+        The content languages this project publishes in. A project with no languages listed stays
+        single-language: nothing in the editors or in the generated site changes.
+      </p>
+    </div>
+    <sf-button variant="secondary" [disabled]="readOnly()" (click)="addLocale()">Add language</sf-button>
+  </header>
+
+  @if (loading()) {
+    <sf-spinner />
+  } @else {
+    @if (rows().length === 0) {
+      <p class="locales__empty">
+        No languages yet. Add one to translate content; the first language you add becomes the
+        default and every generated page moves under its own prefix.
+      </p>
+    }
+
+    <ul class="locales__list">
+      <!-- The row index is aliased because the nested fallback loop below shadows `$index`: without
+           the alias, ticking a fallback wrote it to the candidate's row instead of this one. -->
+      @for (row of rows(); track $index; let rowIndex = $index) {
+        <li class="locale">
+          <div class="locale__row">
+            <sf-field label="Language tag" [hint]="errorFor('locales[' + rowIndex + '].code') ?? 'BCP 47, e.g. de, en, de-CH'">
+              <input
+                class="input"
+                type="text"
+                autocomplete="off"
+                [value]="row.code"
+                [disabled]="readOnly()"
+                [attr.aria-invalid]="errorFor('locales[' + rowIndex + '].code') ? 'true' : null"
+                (input)="setCode(rowIndex, $any($event.target).value)"
+              />
+            </sf-field>
+
+            <sf-field label="Label" hint="What editors see in the language switcher.">
+              <input
+                class="input"
+                type="text"
+                autocomplete="off"
+                [value]="row.label"
+                [disabled]="readOnly()"
+                (input)="setLabel(rowIndex, $any($event.target).value)"
+              />
+            </sf-field>
+
+            <div class="locale__actions">
+              <sf-button
+                variant="ghost"
+                [disabled]="readOnly() || !row.code"
+                (click)="suggestLabel(rowIndex)"
+                [attr.aria-label]="'Suggest a label for ' + (row.code || 'this language')"
+              >
+                Suggest
+              </sf-button>
+              <sf-button
+                variant="ghost"
+                [disabled]="readOnly() || rowIndex === 0"
+                (click)="move(rowIndex, -1)"
+                [attr.aria-label]="'Move ' + (row.code || 'this language') + ' up'"
+              >
+                ↑
+              </sf-button>
+              <sf-button
+                variant="ghost"
+                [disabled]="readOnly() || rowIndex === rows().length - 1"
+                (click)="move(rowIndex, 1)"
+                [attr.aria-label]="'Move ' + (row.code || 'this language') + ' down'"
+              >
+                ↓
+              </sf-button>
+              <sf-button
+                variant="ghost"
+                [disabled]="readOnly()"
+                (click)="removeLocale(rowIndex)"
+                [attr.aria-label]="'Remove ' + (row.code || 'this language')"
+              >
+                Remove
+              </sf-button>
+            </div>
+          </div>
+
+          @if (errorFor('locales[' + rowIndex + '].code'); as message) {
+            <p class="locale__error" role="alert">{{ message }}</p>
+          }
+
+          @if (candidatesFor(rowIndex).length > 0) {
+            <fieldset class="locale__fallbacks">
+              <legend class="locale__legend">
+                Falls back to
+                <span class="locale__legend-hint">
+                  — untranslated values are taken from these languages, in order, then from the
+                  default language.
+                </span>
+              </legend>
+              @for (candidate of candidatesFor(rowIndex); track candidate.code) {
+                <label class="locale__checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="row.fallbacks.includes(candidate.code)"
+                    [disabled]="readOnly()"
+                    (change)="toggleFallback(rowIndex, candidate.code, $any($event.target).checked)"
+                  />
+                  {{ candidate.label || candidate.code }}
+                </label>
+              }
+              @if (defaultLocale() && row.code !== defaultLocale()) {
+                <span class="locale__implicit">
+                  then {{ defaultLocale() }} (the default language, always last)
+                </span>
+              }
+            </fieldset>
+          }
+
+          @if (errorFor('fallbacks[' + row.code + ']'); as message) {
+            <p class="locale__error" role="alert">{{ message }}</p>
+          }
+        </li>
+      }
+    </ul>
+
+    @if (rows().length > 0) {
+      <div class="locales__settings">
+        <sf-field label="Default language" [hint]="errorFor('defaultLocale') ?? 'Used when a value has no translation, and for the site root.'">
+          <select
+            class="select"
+            [value]="defaultLocale()"
+            [disabled]="readOnly()"
+            (change)="setDefaultLocale($any($event.target).value)"
+          >
+            @for (row of rows(); track row.code) {
+              <option [value]="row.code">{{ row.label || row.code }}</option>
+            }
+          </select>
+        </sf-field>
+
+        <sf-field
+          label="Default language without URL prefix"
+          [hint]="
+            defaultWithoutPrefix()
+              ? samplePageUid() + '.html for ' + defaultLocale() + ', ' + otherLocale() + '/' + samplePageUid() + '.html for the rest'
+              : defaultLocale() + '/' + samplePageUid() + '.html for every language'
+          "
+        >
+          <input
+            class="checkbox"
+            type="checkbox"
+            [checked]="defaultWithoutPrefix()"
+            [disabled]="readOnly()"
+            (change)="setDefaultWithoutPrefix($any($event.target).checked)"
+          />
+        </sf-field>
+      </div>
+    }
+
+    @if (removedLocales().length > 0 && retainedValueCount() > 0) {
+      <p class="locales__kept" role="status">
+        {{ retainedValueCount() }} translation(s) are still stored for
+        {{ removedLocales().join(', ') }}. They are kept, not deleted — re-adding the language
+        brings them back.
+      </p>
+    }
+
+    <div class="locales__actions">
+      <sf-button variant="primary" [disabled]="!canSave()" (click)="save()">
+        {{ saving() ? 'Saving…' : 'Save languages' }}
+      </sf-button>
+    </div>
+  }
+</div>
+
+@if (dialog.state(); as d) {
+  <div class="scrim" (click)="cancel()"></div>
+  <div class="dialog" role="dialog" aria-modal="true" [attr.aria-label]="d.title">
+    <header class="dialog__header">
+      <h2 class="dialog__title">{{ d.title }}</h2>
+    </header>
+    <div class="dialog__body">
+      <p>{{ d.message }}</p>
+    </div>
+    <footer class="dialog__footer">
+      <sf-button variant="ghost" (click)="cancel()">{{ d.cancelLabel ?? 'Cancel' }}</sf-button>
+      <sf-button variant="danger" [disabled]="saving()" (click)="confirm()">
+        {{ d.confirmLabel ?? 'Confirm' }}
+      </sf-button>
+    </footer>
+  </div>
+}

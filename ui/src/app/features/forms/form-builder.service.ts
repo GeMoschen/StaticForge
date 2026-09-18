@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { EditingLocale, valueFor, withValue } from './l10n.util';
 import {
   AbstractControl,
   FormArray,
@@ -120,12 +121,13 @@ function seedFor(editor: EditorDefinition, seed: unknown): unknown {
 export function buildEditorControl(
   editor: EditorDefinition,
   seed: unknown,
+  l10n?: EditingLocale | null,
 ): AbstractControl {
   switch (editor.type) {
     case 'GROUP':
-      return buildRowGroup(editor.items ?? [], seed, editor.readOnly);
+      return buildRowGroup(editor.items ?? [], seed, editor.readOnly, l10n);
     case 'LIST':
-      return buildFormArray(editor, seed);
+      return buildFormArray(editor, seed, l10n);
     case 'LINK':
       return buildObjectGroup(editor, seed, LINK_FIELDS);
     case 'MEDIA':
@@ -183,6 +185,7 @@ export function buildRowGroup(
   items: EditorDefinition[],
   seed?: unknown,
   readOnly = false,
+  l10n?: EditingLocale | null,
 ): FormGroup {
   const seedObj =
     seed && typeof seed === 'object' && !Array.isArray(seed)
@@ -190,7 +193,7 @@ export function buildRowGroup(
       : {};
   const group = new FormGroup({});
   for (const item of items) {
-    group.addControl(item.name, buildEditorControl(item, childSeed(item, seedObj)));
+    group.addControl(item.name, buildEditorControl(item, childSeed(item, seedObj, l10n), l10n));
   }
   if (readOnly) {
     group.disable({ emitEvent: false });
@@ -204,14 +207,25 @@ export function buildRowGroup(
  * group is seeded with the enclosing object. Values that older UI builds nested under the
  * synthetic `_group_N` key are still read as a fallback; the next save flattens them.
  */
-function childSeed(editor: EditorDefinition, parent: Record<string, unknown>): unknown {
+function childSeed(
+  editor: EditorDefinition,
+  parent: Record<string, unknown>,
+  l10n?: EditingLocale | null,
+): unknown {
   if (editor.type === 'GROUP') {
     const legacy = parent[editor.name];
     return legacy && typeof legacy === 'object' && !Array.isArray(legacy)
       ? { ...(legacy as Record<string, unknown>), ...parent }
       : parent;
   }
-  return parent[editor.name] ?? editor.defaultValue ?? null;
+  const stored = parent[editor.name];
+  if (l10n && editor.localizable) {
+    // Seed with *this* language only: an untranslated field must look empty, so the editor can
+    // show the fallback as a placeholder instead of pretending it is already translated (M24.4.1).
+    const own = valueFor(stored, l10n.locale);
+    return own ?? editor.defaultValue ?? null;
+  }
+  return stored ?? editor.defaultValue ?? null;
 }
 
 /** Writes one editor's raw value into a content object, flattening transparent GROUPs. */
@@ -219,16 +233,22 @@ function writeRawValue(
   out: Record<string, unknown>,
   editor: EditorDefinition,
   control: AbstractControl,
+  l10n?: EditingLocale | null,
+  base?: Record<string, unknown>,
 ): void {
-  const raw = editorRawValue(editor, control);
+  const raw = editorRawValue(editor, control, l10n, base);
   if (editor.type === 'GROUP') {
-    Object.assign(out, raw);
+    Object.assign(out, raw as Record<string, unknown>);
+  } else if (l10n && editor.localizable) {
+    // Write this language into the value that is already stored, so the translations the editor
+    // is not looking at survive the save untouched (M24.4.1).
+    out[editor.name] = withValue(base?.[editor.name], l10n.locale, raw);
   } else {
     out[editor.name] = raw;
   }
 }
 
-function buildFormArray(editor: EditorDefinition, seed: unknown): FormArray {
+function buildFormArray(editor: EditorDefinition, seed: unknown, l10n?: EditingLocale | null): FormArray {
   const validators: ValidatorFn[] = [];
   if (editor.min != null || editor.max != null) {
     validators.push(sfListLength(editor.min, editor.max));
@@ -236,7 +256,7 @@ function buildFormArray(editor: EditorDefinition, seed: unknown): FormArray {
   const array = new FormArray<any>([], validators);
   if (Array.isArray(seed)) {
     for (const rowSeed of seed) {
-      array.push(buildRowGroup(editor.items ?? [], rowSeed));
+      array.push(buildRowGroup(editor.items ?? [], rowSeed, false, l10n));
     }
   }
   if (editor.readOnly) {
@@ -290,16 +310,19 @@ function buildRichTextGroup(editor: EditorDefinition, seed: unknown): FormGroup 
 export function editorRawValue(
   editor: EditorDefinition,
   control: AbstractControl,
+  l10n?: EditingLocale | null,
+  base?: Record<string, unknown>,
 ): unknown {
   switch (editor.type) {
     case 'LIST': {
       const array = control as FormArray;
-      return array.controls.map((row) =>
-        rawGroupValue(editor.items ?? [], row as FormGroup),
+      const storedRows = Array.isArray(base?.[editor.name]) ? (base?.[editor.name] as unknown[]) : [];
+      return array.controls.map((row, index) =>
+        rawGroupValue(editor.items ?? [], row as FormGroup, l10n, asObject(storedRows[index])),
       );
     }
     case 'GROUP':
-      return rawGroupValue(editor.items ?? [], control as FormGroup);
+      return rawGroupValue(editor.items ?? [], control as FormGroup, l10n, base);
     case 'LINK':
     case 'MEDIA':
     case 'REFERENCE':
@@ -313,15 +336,24 @@ export function editorRawValue(
 function rawGroupValue(
   items: EditorDefinition[],
   group: FormGroup,
+  l10n?: EditingLocale | null,
+  base?: Record<string, unknown>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const item of items) {
     const control = group.get(item.name);
     if (control) {
-      writeRawValue(out, item, control);
+      writeRawValue(out, item, control, l10n, base);
     }
   }
   return out;
+}
+
+/** A stored sub-object, or an empty one — the base a language write-back merges into. */
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 /**
@@ -333,16 +365,55 @@ function rawGroupValue(
 export class FormBuilderService {
   private lastForm: FormGroup | null = null;
 
+  /**
+   * What each built form was built from: the stored content object and the language being edited.
+   * {@link valueOf} needs both to merge one language back without dropping the others, and a
+   * `WeakMap` keeps that association without changing any caller's signature.
+   */
+  private readonly context = new WeakMap<
+    FormGroup,
+    { value: Record<string, unknown>; l10n: EditingLocale | null }
+  >();
+
   build(
     definition: ContentDefinition,
     value: Record<string, unknown> | null | undefined,
+    l10n?: EditingLocale | null,
   ): FormGroup {
     const form = new FormGroup({});
+    const stored = value ?? {};
     for (const editor of definition.editors ?? []) {
-      form.addControl(editor.name, buildEditorControl(editor, childSeed(editor, value ?? {})));
+      form.addControl(editor.name, buildEditorControl(editor, childSeed(editor, stored, l10n), l10n));
     }
     this.lastForm = form;
+    this.context.set(form, { value: stored, l10n: l10n ?? null });
     return form;
+  }
+
+  /** The language a form is currently bound to, or `null` when it was built without languages. */
+  bindingOf(form: FormGroup): EditingLocale | null {
+    return this.context.get(form)?.l10n ?? null;
+  }
+
+  /**
+   * Rebuilds `form` for another editing language (M24.4.1).
+   *
+   * <p>The editing language is baked into every control when the form is built — each localizable
+   * editor holds *that* language's value — so a form left in place after the language changed
+   * edits the language it was built for, and the next save writes those words into the language
+   * now selected. Switching therefore has to rebuild, and rebuilding has to start from
+   * {@link valueOf}, which folds the visible language back into the stored object: that keeps
+   * unsaved edits in the language being left behind, and the other languages untouched.
+   *
+   * @returns the new form, and the content object it was seeded from (every language).
+   */
+  rebind(
+    definition: ContentDefinition,
+    form: FormGroup,
+    l10n: EditingLocale | null,
+  ): { form: FormGroup; content: Record<string, unknown> } {
+    const content = { ...(this.context.get(form)?.value ?? {}), ...this.valueOf(definition, form) };
+    return { form: this.build(definition, content, l10n), content };
   }
 
   /**
@@ -359,10 +430,11 @@ export class FormBuilderService {
     if (!group) {
       return out;
     }
+    const context = this.context.get(group);
     for (const editor of definition.editors ?? []) {
       const control = group.get(editor.name);
       if (control) {
-        writeRawValue(out, editor, control);
+        writeRawValue(out, editor, control, context?.l10n, context?.value);
       }
     }
     return out;

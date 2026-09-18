@@ -35,18 +35,21 @@ public class PageReferenceServiceImpl implements PageReferenceService {
     private final AssetService assetService;
     private final NavigationService navigationService;
     private final NavigationLookup navigationLookup;
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
 
     public PageReferenceServiceImpl(
             AssetRepository assetRepository,
             AssetVersionRepository assetVersionRepository,
             AssetService assetService,
             NavigationService navigationService,
-            LiveNavigationLookup navigationLookup) {
+            LiveNavigationLookup navigationLookup,
+            com.acme.staticforge.project.ProjectLocales projectLocales) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.navigationService = navigationService;
         this.navigationLookup = navigationLookup;
+        this.projectLocales = projectLocales;
     }
 
     @Override
@@ -73,6 +76,19 @@ public class PageReferenceServiceImpl implements PageReferenceService {
             String label,
             long expectedRevision,
             RevisionContext ctx) {
+        return update(uuid, targetKind, targetAssetUuid, label, null, expectedRevision, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView update(
+            UUID uuid,
+            PageReferenceTargetKind targetKind,
+            UUID targetAssetUuid,
+            String label,
+            String locale,
+            long expectedRevision,
+            RevisionContext ctx) {
         requireValidTarget(ctx.projectId(), targetKind, targetAssetUuid);
 
         Asset pageReference = requirePageReference(ctx.projectId(), uuid);
@@ -80,7 +96,14 @@ public class PageReferenceServiceImpl implements PageReferenceService {
 
         ObjectNode payload = current.getPayload().deepCopy();
         writeTarget(payload, targetKind, targetAssetUuid);
-        writeLabel(payload, label);
+        com.acme.staticforge.project.LocaleConfig locales = projectLocales.forProject(ctx.projectId());
+        if (locales.isLocalized()) {
+            writeLocalizedLabel(payload, label, locales.canonicalDeclared(locale) != null
+                    ? locales.canonicalDeclared(locale)
+                    : locales.defaultLocale());
+        } else {
+            writeLabel(payload, label);
+        }
 
         return assetService.update(
                 uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx);
@@ -144,6 +167,23 @@ public class PageReferenceServiceImpl implements PageReferenceService {
         ObjectNode target = payload.putObject("target");
         target.put("kind", kind.name());
         target.put("assetUuid", targetAssetUuid.toString());
+    }
+
+    /**
+     * Writes one language's label, wrapping a label stored before the project had locales as the
+     * default language's translation (M24.2.2).
+     */
+    private static void writeLocalizedLabel(ObjectNode payload, String label, String locale) {
+        com.fasterxml.jackson.databind.JsonNode current = payload.get("label");
+        com.fasterxml.jackson.databind.JsonNode wrapper = com.acme.staticforge.common.L10nValues.isL10n(current)
+                ? current
+                : com.acme.staticforge.common.L10nValues.wrap(current, locale);
+        payload.set("label", com.acme.staticforge.common.L10nValues.with(
+                wrapper,
+                locale,
+                label == null || label.isBlank()
+                        ? null
+                        : com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.textNode(label)));
     }
 
     private static void writeLabel(ObjectNode payload, String label) {

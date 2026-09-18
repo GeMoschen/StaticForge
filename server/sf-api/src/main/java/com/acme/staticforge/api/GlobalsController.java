@@ -103,11 +103,13 @@ public class GlobalsController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestParam(value = "confirmDiscard", defaultValue = "false") boolean confirmDiscard,
             @RequestBody UpdateGlobalSetSchemaRequest body) {
         GlobalSetView view = globalSetService.updateSchema(
                 uuid,
                 body.contentDefinition(),
                 RevisionHeaders.expectedRevision(ifMatch),
+                confirmDiscard,
                 ctx(projectKey, comment(body.comment(), "update property set schema")));
         return ok(view);
     }

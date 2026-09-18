@@ -35,6 +35,9 @@ final class CdlParser {
         boolean required;
         boolean readOnly;
         boolean hidden;
+        boolean localizable;
+        int localizableLine = -1;
+        int localizableCol = -1;
         JsonNode defaultValue;
         Integer min;
         Integer max;
@@ -203,6 +206,11 @@ final class CdlParser {
             case "required" -> node.required = true;
             case "readOnly" -> node.readOnly = true;
             case "hidden" -> node.hidden = true;
+            case "localizable" -> {
+                node.localizable = true;
+                node.localizableLine = attrTok.line();
+                node.localizableCol = attrTok.column();
+            }
             case "default" -> node.defaultValue = parseLiteral(attrTok);
             case "visibleWhen" -> {
                 Token v = peek();

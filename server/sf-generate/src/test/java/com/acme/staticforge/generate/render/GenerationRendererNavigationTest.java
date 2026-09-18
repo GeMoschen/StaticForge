@@ -321,14 +321,26 @@ class GenerationRendererNavigationTest {
 
         @Override
         public String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, RevisionContext ctx) {
+            return resolve(pageReferenceUuid, channelKey, area, null, ctx);
+        }
+
+        @Override
+        public String resolve(
+                UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, RevisionContext ctx) {
             resolvedPageReferenceUuids.add(pageReferenceUuid);
             resolvedAreas.add(area);
-            String key = pageReferenceUuid + ":" + channelKey + ":" + area;
+            String key = pageReferenceUuid + ":" + channelKey + ":" + area + ":" + (locale == null ? "" : locale);
             return store.computeIfAbsent(key, k -> "registry/" + pageReferenceUuid + ".html");
         }
 
         @Override
         public UrlRegistryEntry override(UUID pageReferenceUuid, String channelKey, UrlArea area, String url, RevisionContext ctx) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public UrlRegistryEntry override(
+                UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, String url, RevisionContext ctx) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
 

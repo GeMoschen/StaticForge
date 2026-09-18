@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.content;
 
+import com.acme.staticforge.common.L10nValues;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorDefinition;
 import com.acme.staticforge.template.content.EditorType;
@@ -30,6 +31,7 @@ public final class ContentValidator {
     private final ExpressionEvaluator evaluator;
     private final RecordDatasetLookup recordDatasets;
     private final PaginationSourceLookup paginationSources;
+    private final LocalizationContext localization;
 
     /** Creates a validator with a fresh expression evaluator. */
     public ContentValidator() {
@@ -57,9 +59,24 @@ public final class ContentValidator {
      */
     public ContentValidator(
             ExpressionEvaluator evaluator, RecordDatasetLookup recordDatasets, PaginationSourceLookup paginationSources) {
+        this(evaluator, recordDatasets, paginationSources, LocalizationContext.NONE);
+    }
+
+    /**
+     * Creates a validator that also enforces the M24 locale rules: a {@code localizable} editor's
+     * value must be an L10N wrapper, each locale's value is checked against the editor's own
+     * rules, and {@code required} applies to the default locale only. {@link LocalizationContext#NONE}
+     * leaves {@code localizable} inactive, which is what a single-language project wants.
+     */
+    public ContentValidator(
+            ExpressionEvaluator evaluator,
+            RecordDatasetLookup recordDatasets,
+            PaginationSourceLookup paginationSources,
+            LocalizationContext localization) {
         this.evaluator = evaluator;
         this.recordDatasets = recordDatasets;
         this.paginationSources = paginationSources;
+        this.localization = localization == null ? LocalizationContext.NONE : localization;
     }
 
     /**
@@ -90,7 +107,12 @@ public final class ContentValidator {
             issues.add(new ContentIssue(pathPrefix, "type", Severity.ERROR, "Content must be an object."));
             return issues;
         }
-        validateEditors(definition.editors(), root, root, pathPrefix, sections, issues);
+        // `visibleWhen` reads plain values, so expressions see the default locale's resolution
+        // rather than the wrappers themselves (the Angular form engine uses the editing locale).
+        JsonNode scope = localization.localized()
+                ? L10nValues.resolveDeep(root, List.of(localization.defaultLocale()))
+                : root;
+        validateEditors(definition.editors(), scope, root, pathPrefix, sections, issues);
         return issues;
     }
 
@@ -152,8 +174,56 @@ public final class ContentValidator {
             } else if (editor.isPagination()) {
                 validatePagination(editor, value, path, issues);
             } else {
-                validateScalar(editor, value, path, issues);
+                validateLeaf(editor, value, path, issues);
             }
+        }
+    }
+
+    /**
+     * A leaf editor's value. When the editor is {@code localizable} and the project has locales,
+     * the stored value is an L10N wrapper: each present locale is validated on its own, and
+     * {@code required} is enforced for the default locale only — every other locale may be empty
+     * and resolve through its fallback chain (M24.2.1).
+     */
+    private void validateLeaf(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
+        if (!editor.localizable() || !localization.localized()) {
+            // `localizable` is inactive in a single-language project, and a non-localizable editor
+            // never holds a wrapper — either way a wrapper here is a malformed value.
+            if (L10nValues.isL10n(value)) {
+                issues.add(new ContentIssue(
+                        path, "type", Severity.ERROR,
+                        "Editor '" + editor.name() + "' is not language-dependent and must hold a plain value."));
+                return;
+            }
+            validateScalar(editor, value, path, issues);
+            return;
+        }
+
+        String defaultLocale = localization.defaultLocale();
+        boolean absent = value == null || value.isNull() || value.isMissingNode();
+        if (!absent && !L10nValues.isL10n(value)) {
+            issues.add(new ContentIssue(
+                    path, "type", Severity.ERROR,
+                    "Editor '" + editor.name() + "' is language-dependent and must hold a value per language."));
+            return;
+        }
+        if (editor.required() && isEmpty(editor.type(), L10nValues.get(value, defaultLocale))) {
+            issues.add(new ContentIssue(
+                    path + ".values." + defaultLocale, "required", Severity.ERROR,
+                    "Required editor '" + editor.name() + "' is empty in the default language."));
+        }
+        if (absent) {
+            return;
+        }
+        for (String locale : L10nValues.locales(value)) {
+            String localePath = path + ".values." + locale;
+            if (!localization.declares(locale)) {
+                issues.add(new ContentIssue(
+                        localePath, "locale", Severity.WARNING,
+                        "Editor '" + editor.name() + "' has a value for '" + locale
+                                + "', which this project no longer lists as a language. The value is kept."));
+            }
+            validateScalarValue(editor, L10nValues.get(value, locale), localePath, issues);
         }
     }
 
@@ -172,12 +242,16 @@ public final class ContentValidator {
     }
 
     private void validateScalar(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
-        boolean empty = isEmpty(editor.type(), value);
-        if (editor.required() && empty) {
+        if (editor.required() && isEmpty(editor.type(), value)) {
             issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
             return;
         }
-        if (empty) {
+        validateScalarValue(editor, value, path, issues);
+    }
+
+    /** A leaf value's shape and type rules, without the {@code required} check. */
+    private void validateScalarValue(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
+        if (isEmpty(editor.type(), value)) {
             return;
         }
         if (!matchesShape(editor.type(), value)) {

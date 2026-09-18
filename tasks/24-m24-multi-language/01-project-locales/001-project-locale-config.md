@@ -1,6 +1,6 @@
 ---
 id: M24.1.1
-status: todo
+status: done
 depends: []
 epic: m24-multi-language
 feature: project-locales
@@ -48,15 +48,15 @@ place. `ProjectUpdateRequest(name, description, allowedMimeTypes)` is the PUT bo
 
 ## Acceptance criteria
 
-- [ ] `LocaleConfig` unit tests: normalization, default required, unknown fallback target,
+- [x] `LocaleConfig` unit tests: normalization, default required, unknown fallback target,
       cycle (`de→en→de`) rejected, `effectiveChain("de-CH")` = `[de-CH, de, <default>]`.
-- [ ] Liquibase changeset runs on H2 (tests) and is dbms-paired for PostgreSQL;
+- [x] Liquibase changeset runs on H2 (tests) and is dbms-paired for PostgreSQL;
       `ddl-auto: validate` passes.
-- [ ] `PUT /locales` persists, returns the normalized config, and produces exactly one
+- [x] `PUT /locales` persists, returns the normalized config, and produces exactly one
       revision with `ChangeType.UPDATE`; `VIEWER`/`EDITOR` get 403.
-- [ ] A project that never set locales returns `{locales:[], defaultLocale:null,
+- [x] A project that never set locales returns `{locales:[], defaultLocale:null,
       fallbacks:{}, defaultWithoutPrefix:false}` and every existing test passes unchanged.
-- [ ] `./gradlew :server:sf-domain:test :server:sf-api:test` green.
+- [x] `./gradlew :server:sf-domain:test :server:sf-api:test` green.
 
 ## Out of scope
 

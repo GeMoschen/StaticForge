@@ -57,6 +57,8 @@ public class DatasetServiceImpl implements DatasetService {
     private final RevisionService revisionService;
     private final RecordRenameMigration recordRenameMigration;
     private final ObjectMapper objectMapper;
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
+    private final com.acme.staticforge.asset.localization.LocalizationMigrationService localizationMigrations;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
     public DatasetServiceImpl(
@@ -65,13 +67,17 @@ public class DatasetServiceImpl implements DatasetService {
             AssetVersionRepository assetVersionRepository,
             RevisionService revisionService,
             RecordRenameMigration recordRenameMigration,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            com.acme.staticforge.project.ProjectLocales projectLocales,
+            com.acme.staticforge.asset.localization.LocalizationMigrationService localizationMigrations) {
         this.recordRenameMigration = recordRenameMigration;
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.revisionService = revisionService;
         this.objectMapper = objectMapper;
+        this.projectLocales = projectLocales;
+        this.localizationMigrations = localizationMigrations;
     }
 
     @Override
@@ -101,14 +107,22 @@ public class DatasetServiceImpl implements DatasetService {
     @Override
     @Transactional
     public DatasetView update(UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, RevisionContext ctx) {
+        return update(uuid, cmd, expectedRevision, false, ctx);
+    }
+
+    @Override
+    @Transactional
+    public DatasetView update(
+            UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, boolean confirmDiscard, RevisionContext ctx) {
         Asset dataset = requireDataset(ctx.projectId(), uuid);
         requireLive(dataset);
         ContentDefinition definition = compile(cmd.contentDefinition());
         String titleEditor = validTitleEditor(definition, cmd.titleEditor());
         ObjectNode payload = payload(cmd.contentDefinition(), definition, titleEditor, cmd.description());
+        boolean localizationChanged = localizableFlagsChanged(dataset, definition);
 
         List<EditorRename> renames = ContentRenameMigrator.collect(definition);
-        if (renames.isEmpty()) {
+        if (renames.isEmpty() && !localizationChanged) {
             return toView(ctx.projectId(), assetService.update(
                     uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, ctx));
         }
@@ -121,8 +135,50 @@ public class DatasetServiceImpl implements DatasetService {
         RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
         AssetVersionView updated = assetService.update(
                 uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, batchCtx);
-        recordRenameMigration.migrate(ctx.projectId(), dataset.getId(), renames, batchCtx);
+        if (!renames.isEmpty()) {
+            recordRenameMigration.migrate(ctx.projectId(), dataset.getId(), renames, batchCtx);
+        }
+        if (localizationChanged) {
+            migrateLocalization(uuid, confirmDiscard, batchCtx);
+        }
         return toView(ctx.projectId(), updated);
+    }
+
+    /** Whether this save changes which schema fields are {@code localizable} (M24.2.2). */
+    private boolean localizableFlagsChanged(Asset dataset, ContentDefinition proposed) {
+        return assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(dataset.getId())
+                .map(version -> !com.acme.staticforge.asset.content.LocalizationMigrator
+                        .localizableLeaves(compile(version.getPayload().path("contentDefinition").asText("")))
+                        .equals(com.acme.staticforge.asset.content.LocalizationMigrator.localizableLeaves(proposed)))
+                .orElse(false);
+    }
+
+    /**
+     * Rewrites every record of the dataset into the shape the new schema declares, inside the
+     * caller's open batch. An unconfirmed save that would drop translations throws, rolling the
+     * whole save back (M24.2.2).
+     */
+    private void migrateLocalization(UUID datasetUuid, boolean confirmDiscard, RevisionContext batchCtx) {
+        com.acme.staticforge.asset.content.LocalizationContext target =
+                com.acme.staticforge.asset.content.LocalizationContext.of(
+                        projectLocales.forProject(batchCtx.projectId()));
+        com.acme.staticforge.asset.localization.LocalizationMigrationService.MigrationReport report =
+                localizationMigrations.migrateTemplate(batchCtx.projectId(), datasetUuid, target, batchCtx, true);
+        if (!report.requiresConfirmation() || confirmDiscard) {
+            return;
+        }
+        throw new SfException(com.acme.staticforge.common.Problem.builder()
+                .type("https://cms.example.com/problems/sf-api-0409")
+                .title("Conflict")
+                .status(409)
+                .detail("Turning off language dependence would discard " + report.discardedLocaleValues()
+                        + " translation(s) in " + report.affectedAssets().size()
+                        + " record(s). Re-send with confirmDiscard=true to keep only the default language.")
+                .property("code", "SF-API-0409")
+                .property("discardedLocaleValues", report.discardedLocaleValues())
+                .property("discardedLocales", report.discardedLocales())
+                .property("affectedAssets", report.affectedAssets().stream().map(UUID::toString).toList())
+                .build());
     }
 
     @Override

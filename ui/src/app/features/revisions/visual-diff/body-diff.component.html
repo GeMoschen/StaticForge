@@ -57,7 +57,7 @@
         <div class="sf-bdiff__fields">
           @for (change of section.fieldChanges; track $index) {
             <div class="sf-bdiff__field">
-              <div class="sf-bdiff__field-path">{{ change.path }}</div>
+              <div class="sf-bdiff__field-path">{{ labelPath(change.path) }}</div>
               <sf-field-diff [change]="change" />
             </div>
           }

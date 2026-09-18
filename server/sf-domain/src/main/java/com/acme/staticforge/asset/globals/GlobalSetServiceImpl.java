@@ -59,6 +59,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
     private final AssetVersionRepository assetVersionRepository;
     private final ObjectMapper objectMapper;
     private final RecordDatasets recordDatasets;
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
     public GlobalSetServiceImpl(
@@ -66,12 +67,14 @@ public class GlobalSetServiceImpl implements GlobalSetService {
             AssetRepository assetRepository,
             AssetVersionRepository assetVersionRepository,
             ObjectMapper objectMapper,
-            RecordDatasets recordDatasets) {
+            RecordDatasets recordDatasets,
+            com.acme.staticforge.project.ProjectLocales projectLocales) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.objectMapper = objectMapper;
         this.recordDatasets = recordDatasets;
+        this.projectLocales = projectLocales;
     }
 
     @Override
@@ -95,6 +98,13 @@ public class GlobalSetServiceImpl implements GlobalSetService {
     @Transactional
     public GlobalSetView updateSchema(
             UUID uuid, String contentDefinition, long expectedRevision, RevisionContext ctx) {
+        return updateSchema(uuid, contentDefinition, expectedRevision, false, ctx);
+    }
+
+    @Override
+    @Transactional
+    public GlobalSetView updateSchema(
+            UUID uuid, String contentDefinition, long expectedRevision, boolean confirmDiscard, RevisionContext ctx) {
         AssetVersion current = requireOpenSet(ctx.projectId(), uuid);
         ContentDefinition definition = compile(contentDefinition);
 
@@ -109,6 +119,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
         List<EditorRename> renames = ContentRenameMigrator.collect(definition);
         ContentRenameMigrator.apply(content, renames);
         ContentRenameMigrator.pruneUnknown(content, definition);
+        migrateLocalization(ctx.projectId(), content, definition, confirmDiscard);
         payload.set("content", content);
 
         rejectStructural(recordDatasets.validator(ctx.projectId()).validate(definition, content, null, CONTENT_PATH));
@@ -272,5 +283,36 @@ public class GlobalSetServiceImpl implements GlobalSetService {
                 payload == null ? null : payload.path("content"),
                 view.validFromRevision(),
                 view.deleted());
+    }
+
+    /**
+     * Brings the set's own values into the shape its new schema declares (M24.2.2). A property set
+     * owns its schema and its values, so this is the same version write — no cross-asset cascade.
+     * Dropping translations needs the caller's confirmation.
+     */
+    private void migrateLocalization(
+            long projectId,
+            com.fasterxml.jackson.databind.node.ObjectNode content,
+            ContentDefinition definition,
+            boolean confirmDiscard) {
+        com.acme.staticforge.asset.content.LocalizationContext target =
+                com.acme.staticforge.asset.content.LocalizationContext.of(projectLocales.forProject(projectId));
+        com.acme.staticforge.asset.content.LocalizationMigrator.Plan preview =
+                com.acme.staticforge.asset.content.LocalizationMigrator.preview(content, definition, target);
+        if (preview.requiresConfirmation() && !confirmDiscard) {
+            throw new SfException(com.acme.staticforge.common.Problem.builder()
+                    .type("https://cms.example.com/problems/sf-api-0409")
+                    .title("Conflict")
+                    .status(409)
+                    .detail("Turning off language dependence would discard translations of "
+                            + preview.discards().size() + " value(s). Re-send with confirmDiscard=true "
+                            + "to keep only the default language.")
+                    .property("code", "SF-API-0409")
+                    .property("discardedLocaleValues",
+                            preview.discards().stream().mapToInt(d -> d.locales().size()).sum())
+                    .property("discardedValues", preview.discards().stream().map(d -> d.path()).toList())
+                    .build());
+        }
+        com.acme.staticforge.asset.content.LocalizationMigrator.normalize(content, definition, target, true);
     }
 }

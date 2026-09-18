@@ -9,6 +9,8 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.common.JsonUtil;
+import com.acme.staticforge.project.LocaleConfig;
+import com.acme.staticforge.project.ProjectLocales;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.Project;
@@ -82,10 +84,13 @@ public class MediaServiceImpl implements MediaService {
     private final Tika tika = new Tika();
     private final Counter uploadBytesCounter;
 
+    private final ProjectLocales projectLocales;
+
     public MediaServiceImpl(AssetService assetService, AssetRepository assetRepository,
             MediaVersionRepository mediaVersionRepository, BlobRepository blobRepository,
             BlobStore blobStore, MediaProperties properties, ProjectRepository projectRepository,
-            TextMediaCompiler textMediaCompiler, MeterRegistry meterRegistry) {
+            TextMediaCompiler textMediaCompiler, MeterRegistry meterRegistry,
+            ProjectLocales projectLocales) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.mediaVersionRepository = mediaVersionRepository;
@@ -97,6 +102,7 @@ public class MediaServiceImpl implements MediaService {
         this.uploadBytesCounter = Counter.builder("sf.media.upload.bytes")
                 .description("Bytes of media uploaded (spec §26.4).")
                 .register(meterRegistry);
+        this.projectLocales = projectLocales;
     }
 
     @Override
@@ -260,11 +266,22 @@ public class MediaServiceImpl implements MediaService {
     @Override
     @Transactional
     public AssetVersionView updateMetadata(UUID uuid, String altText, String caption, String copyright,
-            FocalPoint focalPoint, long expectedRevision, RevisionContext ctx) {
+            FocalPoint focalPoint, String locale, long expectedRevision, RevisionContext ctx) {
         AssetVersionView current = require(ctx.projectId(), uuid);
         ObjectNode payload = JsonUtil.object(current.payload()).deepCopy();
-        payload.put("altText", altText);
-        payload.put("caption", caption);
+        // `altText` and `caption` are localizable in a project with locales (M24.2.2): the write
+        // targets one language and leaves the others alone. `copyright` stays single-valued.
+        LocaleConfig locales = projectLocales.forProject(ctx.projectId());
+        if (locales.isLocalized()) {
+            String target = locales.canonicalDeclared(locale) != null
+                    ? locales.canonicalDeclared(locale)
+                    : locales.defaultLocale();
+            setLocalized(payload, "altText", target, altText);
+            setLocalized(payload, "caption", target, caption);
+        } else {
+            payload.put("altText", altText);
+            payload.put("caption", caption);
+        }
         payload.put("copyright", copyright);
         FocalPoint fp = focalPoint == null ? FocalPoint.CENTER : focalPoint;
         ObjectNode fpNode = payload.has("focalPoint")
@@ -761,5 +778,22 @@ public class MediaServiceImpl implements MediaService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available.", e);
         }
+    }
+
+    /**
+     * Writes one language's value of a localizable media metadata field, wrapping a value stored
+     * before the project had locales as the default language's translation (M24.2.2).
+     */
+    private void setLocalized(ObjectNode payload, String field, String locale, String value) {
+        com.fasterxml.jackson.databind.JsonNode current = payload.get(field);
+        com.fasterxml.jackson.databind.JsonNode wrapper = com.acme.staticforge.common.L10nValues.isL10n(current)
+                ? current
+                : com.acme.staticforge.common.L10nValues.wrap(current, locale);
+        payload.set(field, com.acme.staticforge.common.L10nValues.with(
+                wrapper,
+                locale,
+                value == null || value.isBlank()
+                        ? null
+                        : com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.textNode(value)));
     }
 }

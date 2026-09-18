@@ -1,6 +1,6 @@
 ---
 id: M24.2.1
-status: todo
+status: done
 depends: [M24.1.1, M16.5.2]
 epic: m24-multi-language
 feature: cdl-storage
@@ -54,19 +54,19 @@ M17/M19 — global set and record payloads.
 
 ## Acceptance criteria
 
-- [ ] CDL unit tests: `localizable` parsed on `text`; `SF-CDL-0107` on `list`, `group`,
+- [x] CDL unit tests: `localizable` parsed on `text`; `SF-CDL-0107` on `list`, `group`,
       `catalog`; accepted on a `text` inside a `list` item.
-- [ ] `L10nValues` unit tests: resolve via chain, missing locale → next in chain → `null`,
+- [x] `L10nValues` unit tests: resolve via chain, missing locale → next in chain → `null`,
       `wrap`/`unwrap` round-trip.
-- [ ] `ContentValidator` tests: per-locale `maxLength` violation reports the locale in the
+- [x] `ContentValidator` tests: per-locale `maxLength` violation reports the locale in the
       issue path; required only checked on default locale; unknown locale key → warning.
-- [ ] Reference materialization records a media reference that exists only in the `en`
+- [x] Reference materialization records a media reference that exists only in the `en`
       value.
-- [ ] Projects without locales: a template using `localizable` still compiles, values stay
+- [x] Projects without locales: a template using `localizable` still compiles, values stay
       bare, and the validator treats `localizable` as inactive while
       `!LocaleConfig.isLocalized()` (no wrapper required, a wrapper is an error). Test
       covers this.
-- [ ] `./gradlew :server:sf-template:test :server:sf-domain:test` green.
+- [x] `./gradlew :server:sf-template:test :server:sf-domain:test` green.
 
 ## Out of scope
 
@@ -84,3 +84,17 @@ M17/M19 — global set and record payloads.
 - `JsonDiffer` needs no change (it diffs paths generically, e.g.
   `content.headline.values.de`), but verify the diff output with one test so the UI task
   can rely on the path shape.
+
+## Implementation notes (2026-09-17)
+
+- Diagnostic code is **`SF-CDL-0112`**, not the proposed `SF-CDL-0107` (taken by
+  `CDL_NOT_ALLOWED_IN_GLOBAL_SET` in M17). Catalogued in
+  `docs/template-developer-guide.md` §2 diagnostics table.
+- `L10nValues` lives in `sf-common` (every other module already depends on it) and also
+  carries `resolveDeep`/`containsL10n`, which M24.3.1 and M24.4.2 need.
+- The project's locale configuration reaches the validator as
+  `asset/content/LocalizationContext`, built in `RecordDatasets.validator(projectId)` from
+  the new `ProjectLocales` component — no `ProjectService` dependency, so the bean graph
+  stays acyclic.
+- `ContentReferenceService.extract` needed **no change**: its generic object walk already
+  descends into `values`, producing `content.hero.values.en`. Locked in by two new tests.

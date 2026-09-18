@@ -67,5 +67,21 @@ public interface NavigationService {
      * resolving entries is appended to {@code diagnostics}. Returns {@code null} if
      * {@code navFolderUuid} is not a live {@code FOLDER}.
      */
-    NavTreeNode tree(long projectId, UUID navFolderUuid, int depth, NavigationLookup lookup, List<Diagnostic> diagnostics);
+    default NavTreeNode tree(
+            long projectId, UUID navFolderUuid, int depth, NavigationLookup lookup, List<Diagnostic> diagnostics) {
+        return tree(projectId, navFolderUuid, depth, lookup, diagnostics, List.of());
+    }
+
+    /**
+     * The navigation tree with every {@code PageReference} label resolved for {@code localeChain}
+     * (M24.2.2): a label stored per language falls back through the chain before the target page's
+     * display name. An empty chain is a project without locales.
+     */
+    NavTreeNode tree(
+            long projectId,
+            UUID navFolderUuid,
+            int depth,
+            NavigationLookup lookup,
+            List<Diagnostic> diagnostics,
+            List<String> localeChain);
 }

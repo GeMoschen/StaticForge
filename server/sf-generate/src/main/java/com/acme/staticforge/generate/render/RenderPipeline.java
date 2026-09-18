@@ -62,6 +62,9 @@ public class RenderPipeline {
 
     private static final String COLLISION_CODE = "SF-GEN-0110";
 
+    /** A page whose output path expression has no {@code {locale}} segment in a localized project (M24.3.2). */
+    private static final String NOT_LOCALE_DISTINCT_CODE = "SF-GEN-0111";
+
     private final PageContentValidator contentValidator = new PageContentValidator();
 
     private final GenerationProperties properties;
@@ -205,6 +208,11 @@ public class RenderPipeline {
             return new RenderOutcome(List.of(), errors, List.of());
         }
 
+        List<Diagnostic> notLocaleDistinct = localeDistinctErrors(plan, paths);
+        if (!notLocaleDistinct.isEmpty()) {
+            return new RenderOutcome(List.of(), notLocaleDistinct, List.of());
+        }
+
         List<OutputPathResolver.Collision> collisions = paths.findCollisions(plan.entries());
         if (!collisions.isEmpty()) {
             throw collisionError(collisions);
@@ -213,7 +221,8 @@ public class RenderPipeline {
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
         GenerationRenderer renderer =
                 new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId,
-                        compiledTemplates.buildMemo(snapshot));
+                                compiledTemplates.buildMemo(snapshot))
+                        .withLocales(com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales()));
 
         Map<UUID, Diagnostic> incomplete = incompletePages(snapshot, plan);
         BuildPlan publishable = incomplete.isEmpty()
@@ -231,6 +240,37 @@ public class RenderPipeline {
     }
 
     /**
+     * In a localized project every page's path expression must contain {@code {locale}}, or two
+     * languages would write the same file and one would silently win. Reported once per
+     * (page, channel) as {@code SF-GEN-0111} before anything renders (M24.3.2).
+     */
+    private List<Diagnostic> localeDistinctErrors(BuildPlan plan, OutputPathResolver paths) {
+        if (!com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales()).isLocalized()) {
+            return List.of();
+        }
+        Set<String> seen = new HashSet<>();
+        List<Diagnostic> errors = new ArrayList<>();
+        for (PlanEntry entry : plan.entries()) {
+            String key = entry.pageUuid() + ":" + entry.channel();
+            if (!seen.add(key)) {
+                continue;
+            }
+            String expression = paths.effectiveExpression(entry.pageUuid(), entry.channel());
+            if (com.acme.staticforge.channel.OutputPathExpander.isLocaleDistinct(expression)) {
+                continue;
+            }
+            errors.add(Diagnostic.error(
+                    NOT_LOCALE_DISTINCT_CODE,
+                    "Output path '" + expression + "' is not language-distinct: this project has several "
+                            + "languages, so the path needs a {locale} segment or they would overwrite each other "
+                            + "(page " + entry.pageUuid() + ", channel " + entry.channel() + ").",
+                    0,
+                    0));
+        }
+        return List.copyOf(errors);
+    }
+
+    /**
      * Opens the processed media renderer of a build (M18.3.1), sharing the render stage's snapshot
      * resolvers, output paths and compile memo.
      *
@@ -240,7 +280,8 @@ public class RenderPipeline {
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
         return new MediaRenderSession(
                 new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId,
-                        compiledTemplates.buildMemo(snapshot)),
+                                compiledTemplates.buildMemo(snapshot))
+                        .withLocales(com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales())),
                 channel);
     }
 

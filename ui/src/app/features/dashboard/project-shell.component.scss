@@ -64,3 +64,30 @@
   background: var(--sf-amber);
   color: #fff;
 }
+
+/* The editing-language switcher (M24.4.1); absent in a project without languages. */
+.shell__languages {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  padding: var(--sf-2) var(--sf-4);
+  border-bottom: 1px solid var(--sf-line);
+  background: var(--sf-surface);
+}
+
+.shell__languages-label {
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--sf-slate);
+}
+
+.shell__languages-select {
+  font: inherit;
+  font-size: var(--sf-text-sm);
+  padding: 0.15em 0.4em;
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+}

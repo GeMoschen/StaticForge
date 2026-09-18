@@ -16,6 +16,9 @@ import java.util.Map;
  * <p>{@code pages} is every page output of the site, rendered by this run or not (M22.4.1). A page carried forward from
  * the base build has no file among the processed ones; {@code carriedText} holds its search index text from the base
  * build, keyed by output path.
+ *
+ * <p>{@code defaultLocale} is the project's default language (M24.3.2), {@code null} in a project
+ * without locales; the sitemap points {@code hreflang="x-default"} at it.
  */
 public record PostProcessContext(
         long projectId,
@@ -26,7 +29,22 @@ public record PostProcessContext(
         boolean minify,
         List<Redirect> redirects,
         List<String> disallow,
-        Map<String, String> carriedText) {
+        Map<String, String> carriedText,
+        String defaultLocale) {
+
+    /** A project without locales. */
+    public PostProcessContext(
+            long projectId,
+            String projectKey,
+            String baseUrl,
+            List<String> channels,
+            List<SitePage> pages,
+            boolean minify,
+            List<Redirect> redirects,
+            List<String> disallow,
+            Map<String, String> carriedText) {
+        this(projectId, projectKey, baseUrl, channels, pages, minify, redirects, disallow, carriedText, null);
+    }
 
     public PostProcessContext {
         projectKey = projectKey == null ? "" : projectKey;

@@ -2,13 +2,18 @@ package com.acme.staticforge.api;
 
 import com.acme.staticforge.api.dto.ProjectCreateRequest;
 import com.acme.staticforge.api.dto.ProjectDetail;
+import com.acme.staticforge.api.dto.ProjectLocalesRequest;
+import com.acme.staticforge.api.dto.ProjectLocalesView;
 import com.acme.staticforge.api.dto.ProjectMemberView;
 import com.acme.staticforge.api.dto.ProjectSummary;
 import com.acme.staticforge.api.dto.ProjectUpdateRequest;
 import com.acme.staticforge.api.dto.SetMemberRoleRequest;
 import com.acme.staticforge.common.ProblemFactory;
+import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
+import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectMember;
 import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
@@ -33,6 +38,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -95,6 +101,68 @@ public class ProjectController {
     public ProjectDetail update(@PathVariable("key") String projectKey, @Valid @RequestBody ProjectUpdateRequest body) {
         return toDetail(projectService.update(
                 projectKey, body.name(), body.description(), body.allowedMimeTypes(), ctx(projectKey, null)));
+    }
+
+    @GetMapping("/{key}/locales")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ROLE_EXPR + ".VIEWER)")
+    public ProjectLocalesView locales(@PathVariable("key") String projectKey) {
+        LocaleConfig config = projectService.locales(projectKey);
+        return new ProjectLocalesView(
+                localeViews(config), config.defaultLocale(), config.fallbacks(), config.defaultWithoutPrefix(),
+                false, List.of(), 0, false, 0, List.of());
+    }
+
+    @PutMapping("/{key}/locales")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ROLE_EXPR + ".PROJECT_ADMIN)")
+    public ProjectLocalesView updateLocales(
+            @PathVariable("key") String projectKey,
+            @RequestParam(value = "confirmDiscard", defaultValue = "false") boolean confirmDiscard,
+            @RequestBody ProjectLocalesRequest body) {
+        LocaleConfig config = toConfig(body);
+        ProjectService.LocaleUpdateResult result =
+                projectService.updateLocales(projectKey, config, confirmDiscard, ctx(projectKey, null));
+        return toLocalesView(result);
+    }
+
+    /** Normalizes and validates the request body, mapping findings onto {@code errors} field entries. */
+    private static LocaleConfig toConfig(ProjectLocalesRequest body) {
+        List<ProjectLocale> declared = (body.locales() == null ? List.<ProjectLocalesRequest.LocaleEntry>of() : body.locales())
+                .stream()
+                .map(e -> new ProjectLocale(e == null ? null : e.code(), e == null ? null : e.label()))
+                .toList();
+        try {
+            return LocaleConfig.of(declared, body.defaultLocale(), body.fallbacks(), body.defaultWithoutPrefix());
+        } catch (LocaleConfig.LocaleConfigException e) {
+            throw new SfException(Problem.builder()
+                    .type("https://cms.example.com/problems/sf-api-0400")
+                    .title("Bad Request")
+                    .status(400)
+                    .detail("The locale configuration is invalid.")
+                    .property("code", "SF-API-0400")
+                    .property("errors", e.errors())
+                    .build());
+        }
+    }
+
+    private static ProjectLocalesView toLocalesView(ProjectService.LocaleUpdateResult result) {
+        LocaleConfig config = result.config();
+        return new ProjectLocalesView(
+                localeViews(config),
+                config.defaultLocale(),
+                config.fallbacks(),
+                config.defaultWithoutPrefix(),
+                result.urlsWillChange(),
+                result.removedLocales(),
+                result.retainedValueCount(),
+                result.confirmationRequired(),
+                result.discardedLocaleValues(),
+                result.affectedAssets().stream().map(java.util.UUID::toString).collect(Collectors.toList()));
+    }
+
+    private static List<ProjectLocalesView.ProjectLocaleView> localeViews(LocaleConfig config) {
+        return config.locales().stream()
+                .map(l -> new ProjectLocalesView.ProjectLocaleView(l.code(), l.label()))
+                .collect(Collectors.toList());
     }
 
     @PostMapping("/{key}/archive")

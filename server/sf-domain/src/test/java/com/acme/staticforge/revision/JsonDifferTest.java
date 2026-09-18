@@ -32,6 +32,23 @@ class JsonDifferTest {
     }
 
     @Test
+    void localizedValuesDiffPerLocale() {
+        // M24.2.1: an L10N wrapper needs no special handling — the generic path walk already
+        // reports one change per locale, which is the path shape the diff UI labels.
+        JsonNode before = json(
+                "{\"content\":{\"headline\":{\"type\":\"L10N\",\"values\":{\"de\":\"Eins\",\"en\":\"One\"}}}}");
+        JsonNode after = json(
+                "{\"content\":{\"headline\":{\"type\":\"L10N\",\"values\":{\"de\":\"Eins\",\"en\":\"Two\"}}}}");
+
+        List<FieldChange> changes = JsonDiffer.diff(before, after);
+
+        assertThat(changes).hasSize(1);
+        assertThat(changes.get(0).path()).isEqualTo("content.headline.values.en");
+        assertThat(changes.get(0).before().asText()).isEqualTo("One");
+        assertThat(changes.get(0).after().asText()).isEqualTo("Two");
+    }
+
+    @Test
     void richtextAppendedBlockIsReportedAsBlockAddition() {
         JsonNode before = json("{\"content\":{\"body\":{\"format\":\"html\",\"value\":\"<p>one</p>\"}}}");
         JsonNode after = json("{\"content\":{\"body\":{\"format\":\"html\",\"value\":\"<p>one</p><h2>two</h2>\"}}}");

@@ -54,6 +54,12 @@ import org.springframework.test.context.DynamicPropertySource;
  * property) or {@code SF_PERF} (environment variable) so the default {@code ./gradlew build}
  * stays green. It is meant to be driven by {@code infra/scripts/benchmark-generation.sh}; the
  * 5,000- and 50,000-page matrix belongs to the nightly CI job, not a per-push gate.
+ *
+ * <p>{@code sf.perf.locales} / {@code SF_PERF_LOCALES} (M24.3.2) declares that many content
+ * languages on the fixture project, so the same run measures the language fan-out: the plan then
+ * holds {@code pages × languages} entries and generation writes that many files. §18.6's target is
+ * stated per plan entry, so the number to compare across runs is {@code fullMs / filesWritten}, which
+ * the summary reports as {@code msPerEntry}.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -98,13 +104,16 @@ class GenerationBenchmark {
     @Test
     void benchmarkFullThenIncremental() throws Exception {
         int pages = Integer.parseInt(config("sf.perf.pages", "SF_PERF_PAGES", String.valueOf(DEFAULT_PAGES)));
+        int locales = Integer.parseInt(config("sf.perf.locales", "SF_PERF_LOCALES", "1"));
 
         AppUser user = userService.create("bench-user", "bench-user@example.com", "Benchmark User", "password-1234");
         Project project = projectService.create(
                 new CreateProjectRequest("benchproj", "Benchmark Project", null, "generation benchmark"), user.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "generation benchmark");
 
-        AssetVersionView template = createPageTemplate(project, ctx);
+        // Declared before the pages exist, so no content migration runs inside the measured window.
+        enableLocales(project, ctx, locales);
+        AssetVersionView template = createPageTemplate(project, ctx, locales);
 
         long fixtureStart = System.nanoTime();
         UUID editedPageUuid = null;
@@ -162,21 +171,46 @@ class GenerationBenchmark {
         long pageImpactMs = (System.nanoTime() - pageImpactStart) / 1_000_000L;
         TimedRun allChanged = run(project.getKey(), GenerationMode.INCREMENTAL, target.getId(), user.getId(), pages);
 
+        long fullFiles = Math.max(1, full.run().getFilesWritten());
         String summary = String.format(
-                "pages=%d, fullMs=%d, incrementalMs=%d, filesWritten=%d, incrementalFilesWritten=%d, fixtureMs=%d, "
+                "pages=%d, locales=%d, fullMs=%d, msPerEntry=%.2f, incrementalMs=%d, filesWritten=%d, "
+                        + "incrementalFilesWritten=%d, fixtureMs=%d, "
                         + "onePageDryRunMs=%d, snapshotMs=%d, allChangedPlanMs=%d, allChangedEntries=%d, reasonsMs=%d, "
                         + "persistMs=%d, templateImpactMs=%d, templateImpactEntries=%d, pageImpactMs=%d, "
                         + "allChangedIncrementalMs=%d",
-                pages, full.millis(), incremental.millis(), full.run().getFilesWritten(),
+                pages, locales, full.millis(), full.millis() / (double) fullFiles, incremental.millis(),
+                full.run().getFilesWritten(),
                 incremental.run().getFilesWritten(), fixtureMs, onePageDryRunMs, snapshotMs, planMs, entries.size(),
                 reasonsMs, persistMs, templateImpactMs, templateImpact, pageImpactMs, allChanged.millis());
         System.out.println("SFP_BENCH " + summary);
         writeSummary(summary);
     }
 
-    private AssetVersionView createPageTemplate(Project project, RevisionContext ctx) {
+    /** Declares {@code count} content languages ({@code 1} leaves the project single-language). */
+    private void enableLocales(Project project, RevisionContext ctx, int count) {
+        if (count <= 1) {
+            return;
+        }
+        java.util.List<com.acme.staticforge.project.ProjectLocale> declared = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String code = i == 0 ? "de" : (i == 1 ? "en" : "l" + i);
+            declared.add(new com.acme.staticforge.project.ProjectLocale(code, code));
+        }
+        projectService.updateLocales(
+                project.getKey(),
+                com.acme.staticforge.project.LocaleConfig.of(declared, "de", java.util.Map.of(), false),
+                true,
+                ctx);
+    }
+
+    private AssetVersionView createPageTemplate(Project project, RevisionContext ctx, int locales) {
         ObjectNode payload = mapper.createObjectNode();
         payload.with("channelTemplates").with("html").put("source", TEMPLATE_SOURCE);
+        if (locales > 1) {
+            // A localized project needs a language-distinct output path, or generation stops with
+            // SF-GEN-0111 before it renders anything (M24.3.2).
+            payload.with("outputPath").put("html", "{locale}/{folder}{uid}.{ext}");
+        }
         return assetService.create(
                 new CreateAssetCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Benchmark Template", null, payload, null), ctx);
     }

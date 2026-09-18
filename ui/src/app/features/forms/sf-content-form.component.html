@@ -1,7 +1,36 @@
 <div class="sf-content-form">
   @for (editor of definition().editors; track editor.name) {
     <div class="sf-content-form__editor">
+      @if (localized()) {
+        <p class="sf-content-form__lang">
+          @if (editor.localizable) {
+            <span class="sf-content-form__badge">{{ labelOf(editingLocale()!.locale) }}</span>
+            @if (editor.required && !isDefaultLocale()) {
+              <span class="sf-content-form__hint">required in {{ labelOf(defaultLocale()) }} only</span>
+            }
+          } @else {
+            <span class="sf-content-form__badge sf-content-form__badge--all">All languages</span>
+          }
+        </p>
+      }
+
       <sf-editor-outlet [definition]="editor" [control]="controlFor(editor)" />
+
+      @if (fallbackFor(editor); as fallback) {
+        <p class="sf-content-form__fallback" [id]="'fallback-' + editor.name">
+          <span class="sf-content-form__fallback-text">
+            Not translated — shows “{{ fallback.text }}” from {{ labelOf(fallback.locale) }}.
+          </span>
+          <button
+            type="button"
+            class="sf-content-form__copy"
+            (click)="copyFallback(editor)"
+          >
+            Copy from {{ labelOf(fallback.locale) }}
+          </button>
+        </p>
+      }
+
       @for (message of issuesFor(editor); track $index) {
         <p class="sf-content-form__issue" role="alert">{{ message }}</p>
       }

@@ -203,7 +203,7 @@ class SearchIndexingIntegrationTest {
                 fx.projectId(), null, "notes.txt", null, "plain file".getBytes(StandardCharsets.UTF_8), fx.ctx());
         assertThat(fixtures.find(fx, "notes.txt")).containsExactly(file.uuid());
 
-        media.updateMetadata(file.uuid(), "A foggy harbour at dawn", "Harbour", "Jane Doe", null, file.validFromRevision(), fx.ctx());
+        media.updateMetadata(file.uuid(), "A foggy harbour at dawn", "Harbour", "Jane Doe", null, null, file.validFromRevision(), fx.ctx());
         assertThat(fixtures.find(fx, "foggy")).containsExactly(file.uuid());
     }
 

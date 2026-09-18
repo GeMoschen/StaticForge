@@ -18,7 +18,11 @@ import com.acme.staticforge.asset.content.ContentRenameMigrator;
 import com.acme.staticforge.asset.content.ContentRenameMigrator.EditorRename;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.reference.ProjectReferenceResolver;
+import com.acme.staticforge.asset.content.LocalizationContext;
+import com.acme.staticforge.asset.content.LocalizationMigrator;
+import com.acme.staticforge.asset.localization.LocalizationMigrationService;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
+import com.acme.staticforge.project.ProjectLocales;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -104,6 +108,8 @@ public class TemplateServiceImpl implements TemplateService {
     private final ReferenceMaterializer referenceMaterializer;
     private final ProjectReferenceResolver projectReferences;
     private final TemplateHierarchies hierarchies;
+    private final ProjectLocales projectLocales;
+    private final LocalizationMigrationService localizationMigrations;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
     private final OctlCompiler octlCompiler = new OctlCompiler();
 
@@ -116,7 +122,9 @@ public class TemplateServiceImpl implements TemplateService {
             ObjectMapper objectMapper,
             ReferenceMaterializer referenceMaterializer,
             ProjectReferenceResolver projectReferences,
-            TemplateHierarchies hierarchies) {
+            TemplateHierarchies hierarchies,
+            ProjectLocales projectLocales,
+            LocalizationMigrationService localizationMigrations) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetReferenceRepository = assetReferenceRepository;
@@ -126,6 +134,8 @@ public class TemplateServiceImpl implements TemplateService {
         this.referenceMaterializer = referenceMaterializer;
         this.projectReferences = projectReferences;
         this.hierarchies = hierarchies;
+        this.projectLocales = projectLocales;
+        this.localizationMigrations = localizationMigrations;
     }
 
     @Override
@@ -180,8 +190,16 @@ public class TemplateServiceImpl implements TemplateService {
     @Override
     @Transactional
     public TemplateView update(UUID uuid, UpdateTemplateCommand cmd, long expectedRevision, RevisionContext ctx) {
+        return update(uuid, cmd, expectedRevision, false, ctx);
+    }
+
+    @Override
+    @Transactional
+    public TemplateView update(
+            UUID uuid, UpdateTemplateCommand cmd, long expectedRevision, boolean confirmDiscard, RevisionContext ctx) {
         Asset template = requireTemplate(ctx.projectId(), uuid);
         ContentDefinition definition = compileDefinition(cmd.contentDefinition(), template.getAssetType());
+        boolean localizationChanged = localizableFlagsChanged(template, definition);
         CompiledChannels compiled = compileChannels(
                 template.getProjectId(), template.getAssetType(), uuid, template.getUid(), cmd.channelSources(),
                 cmd.channelSources().keySet(), definition, hierarchies.live(template.getProjectId()));
@@ -190,6 +208,17 @@ public class TemplateServiceImpl implements TemplateService {
                 definition, cmd.abstractTemplate(), cmd.paginationPath());
 
         if (template.getAssetType() == AssetType.SECTION_TEMPLATE) {
+            if (localizationChanged) {
+                // The CDL change and the section values it rewrites are one logical change (§7.1).
+                Revision batch = revisionService.beginBatch(
+                        ctx.projectId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+                RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
+                AssetVersionView updated = assetService.update(
+                        uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, batchCtx);
+                migrateRenames(template, definition, batchCtx);
+                migrateLocalization(uuid, confirmDiscard, batchCtx);
+                return toView(ctx.projectId(), updated, List.of());
+            }
             AssetVersionView updated = assetService.update(
                     uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, ctx);
             migrateRenames(template, definition, ctx);
@@ -202,7 +231,7 @@ public class TemplateServiceImpl implements TemplateService {
         List<Asset> descendants = descendants(template);
         List<DescendantIssue> warnings = validateDescendants(template, payload, definition, descendants);
         List<EditorRename> renames = ContentRenameMigrator.collect(definition);
-        if (renames.isEmpty()) {
+        if (renames.isEmpty() && !localizationChanged) {
             AssetVersionView updated = assetService.update(
                     uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, ctx);
             return toView(ctx.projectId(), updated, warnings);
@@ -217,8 +246,51 @@ public class TemplateServiceImpl implements TemplateService {
         List<Long> templateIds = new ArrayList<>();
         templateIds.add(template.getId());
         descendants.forEach(descendant -> templateIds.add(descendant.getId()));
-        migratePageContent(ctx.projectId(), templateIds, renames, batchCtx);
+        if (!renames.isEmpty()) {
+            migratePageContent(ctx.projectId(), templateIds, renames, batchCtx);
+        }
+        migrateLocalization(uuid, confirmDiscard, batchCtx);
         return toView(ctx.projectId(), updated, warnings);
+    }
+
+    /**
+     * Whether this save changes which of the template's editors are {@code localizable} — the only
+     * CDL change that needs stored values rewritten (M24.2.2).
+     */
+    private boolean localizableFlagsChanged(Asset template, ContentDefinition proposed) {
+        AssetVersion current = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(template.getId()).orElse(null);
+        if (current == null) {
+            return false;
+        }
+        ContentDefinition before = compileDefinition(current.getPayload().path("contentDefinition").asText(""));
+        return !LocalizationMigrator.localizableLeaves(before).equals(LocalizationMigrator.localizableLeaves(proposed));
+    }
+
+    /**
+     * Rewrites the stored values of every page/record that uses this template into the shape its
+     * new CDL declares, inside the caller's open batch. An unconfirmed save that would drop
+     * translations throws, which rolls the whole save back — nothing is written, and the problem
+     * tells the client what a confirmed save would discard.
+     */
+    private void migrateLocalization(UUID templateUuid, boolean confirmDiscard, RevisionContext batchCtx) {
+        LocalizationContext target = LocalizationContext.of(projectLocales.forProject(batchCtx.projectId()));
+        LocalizationMigrationService.MigrationReport report =
+                localizationMigrations.migrateTemplate(batchCtx.projectId(), templateUuid, target, batchCtx, true);
+        if (!report.requiresConfirmation() || confirmDiscard) {
+            return;
+        }
+        throw new SfException(com.acme.staticforge.common.Problem.builder()
+                .type("https://cms.example.com/problems/sf-api-0409")
+                .title("Conflict")
+                .status(409)
+                .detail("Turning off language dependence would discard " + report.discardedLocaleValues()
+                        + " translation(s) in " + report.affectedAssets().size()
+                        + " asset(s). Re-send with confirmDiscard=true to keep only the default language.")
+                .property("code", "SF-API-0409")
+                .property("discardedLocaleValues", report.discardedLocaleValues())
+                .property("discardedLocales", report.discardedLocales())
+                .property("affectedAssets", report.affectedAssets().stream().map(UUID::toString).toList())
+                .build());
     }
 
     @Override

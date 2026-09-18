@@ -51,15 +51,21 @@ export class TemplatesService {
     });
   }
 
+  /**
+   * `confirmDiscard` (M24.2.2) authorises a CDL change that takes `localizable` off an editor whose
+   * stored values carry translations; without it such a save answers `409` and writes nothing.
+   */
   update(
     kind: TemplateKind,
     key: string,
     uuid: string,
     body: UpdateTemplateRequest,
     etag?: string,
+    confirmDiscard = false,
   ): Observable<TemplateDetail> {
+    const query = confirmDiscard ? '?confirmDiscard=true' : '';
     return this.http.put<TemplateDetail>(
-      `${endpoint(kind, key)}/${uuid}`,
+      `${endpoint(kind, key)}/${uuid}${query}`,
       body,
       this.mutationOptions(etag),
     );

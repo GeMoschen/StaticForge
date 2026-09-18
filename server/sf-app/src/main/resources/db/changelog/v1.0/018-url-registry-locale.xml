@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- A localized project assigns one URL per PageReference per channel per area per LANGUAGE
+         (M24.3.2), so the language joins the unique key. Existing rows get '' — the key a project
+         without locales keeps using, so no pre-M24 row changes identity. -->
+    <changeSet id="018-url-registry-locale-column" author="sf">
+        <addColumn tableName="url_registry_entry">
+            <column name="locale_key" type="VARCHAR(40)" defaultValue="" value="">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="018-url-registry-locale-unique" author="sf">
+        <comment>Recreate the tuple's unique constraint with the language.</comment>
+        <dropUniqueConstraint tableName="url_registry_entry" constraintName="uq_url_registry_tuple"/>
+        <addUniqueConstraint tableName="url_registry_entry"
+                columnNames="project_id, channel_key, page_reference_uuid, area, locale_key"
+                constraintName="uq_url_registry_tuple"/>
+    </changeSet>
+
+</databaseChangeLog>

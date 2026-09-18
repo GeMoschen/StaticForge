@@ -114,6 +114,7 @@ final class CdlValidator {
         }
         checkExpression(node, diagnostics);
         checkDataset(node, type, diagnostics);
+        boolean localizable = checkLocalizable(node, type, diagnostics);
         PaginationOptions pagination = paginationOptions(node, type, diagnostics);
         List<EditorDefinition> items = buildEditors(node.items, diagnostics);
         String name = node.groupWrapper ? syntheticGroupName() : node.name;
@@ -139,9 +140,33 @@ final class CdlValidator {
                 node.allow,
                 node.visibleWhen,
                 node.renamedFrom,
+                localizable,
                 items,
                 node.dataset,
                 pagination);
+    }
+
+    /**
+     * {@code localizable} marks a leaf editor language-dependent (M24.2.1). Structure is shared across
+     * locales, so a container rejects it — its leaves may still be localizable individually.
+     */
+    private static boolean checkLocalizable(EditorNode node, EditorType type, List<Diagnostic> diagnostics) {
+        if (!node.localizable) {
+            return false;
+        }
+        boolean container = type == EditorType.GROUP
+                || type == EditorType.LIST
+                || type == EditorType.CATALOG
+                || type == EditorType.PAGINATION;
+        if (container) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_CONTAINER_NOT_LOCALIZABLE,
+                    "A " + node.typeKeyword + " editor cannot be localizable: page structure is shared by all "
+                            + "languages. Mark the leaf editors inside it instead.",
+                    node.localizableLine, node.localizableCol));
+            return false;
+        }
+        return true;
     }
 
     /**

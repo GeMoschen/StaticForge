@@ -42,6 +42,14 @@ public interface GlobalSetService {
     GlobalSetView updateSchema(UUID uuid, String contentDefinition, long expectedRevision, RevisionContext ctx);
 
     /**
+     * Updates the schema; {@code confirmDiscard} authorizes a change that takes {@code localizable}
+     * off an editor whose value carries translations, which are then reduced to the default
+     * language (M24.2.2). Without it, such a save is rejected with a {@code 409}.
+     */
+    GlobalSetView updateSchema(
+            UUID uuid, String contentDefinition, long expectedRevision, boolean confirmDiscard, RevisionContext ctx);
+
+    /**
      * Replaces the set's values, validated against the stored compiled definition. Structural
      * findings reject the save with {@code 422} and {@code issues}; completeness findings (an empty
      * required field) save, exactly as for a page, and surface at publish time. Media and link

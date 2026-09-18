@@ -36,11 +36,57 @@ public final class OutputPathExpander {
             String uid, String displayName, String folderPath, JsonNode payload, JsonNode templatePayload) {}
 
     /**
+     * Which language an output path is for (M24.3.2).
+     *
+     * @param locale the BCP 47 tag, {@code null} in a project without locales
+     * @param segment what {@code {locale}} expands to: the tag, or the empty string for the
+     *     default locale when the project sets "default locale without URL prefix"
+     */
+    public record LocaleContext(String locale, String segment) {
+
+        /** A project without locales: {@code {locale}} expands to nothing. */
+        public static final LocaleContext NONE = new LocaleContext(null, "");
+
+        public boolean isLocalized() {
+            return locale != null;
+        }
+    }
+
+    /** The default path expression of a project without locales. */
+    public static final String DEFAULT_EXPRESSION = "{folder}{uid}.{ext}";
+
+    /** The default path expression of a localized project: every language gets its own prefix. */
+    public static final String DEFAULT_LOCALIZED_EXPRESSION = "{locale}/{folder}{uid}.{ext}";
+
+    /** The placeholder that makes a path expression language-distinct. */
+    public static final String LOCALE_PLACEHOLDER = "{locale}";
+
+    /**
+     * Whether {@code expression} produces a different path per language. A localized project needs
+     * this of every page's effective expression, or two languages would overwrite each other
+     * ({@code SF-GEN-0111}).
+     */
+    public static boolean isLocaleDistinct(String expression) {
+        return expression != null && expression.contains(LOCALE_PLACEHOLDER);
+    }
+
+    /** The path expression that applies to {@code page} in {@code channel} (override, template, default). */
+    public static String effectiveExpression(PageContext page, String channel, boolean localized) {
+        return expressionFor(page, channel, localized);
+    }
+
+    /**
      * Resolves the (not-yet-syntax-normalized) relative output path for a page in a channel,
      * applying the channel's directory form ({@link ChannelOutputSettings#directoryUrls()}) when set.
      */
     public static String resolvePath(PageContext page, String channel, ChannelOutputSettings settings) {
-        String path = expand(expressionFor(page, channel), page, channel, settings);
+        return resolvePath(page, channel, settings, LocaleContext.NONE);
+    }
+
+    /** As {@link #resolvePath(PageContext, String, ChannelOutputSettings)}, for one language (M24.3.2). */
+    public static String resolvePath(
+            PageContext page, String channel, ChannelOutputSettings settings, LocaleContext locale) {
+        String path = expand(expressionFor(page, channel, locale.isLocalized()), page, channel, settings, locale);
         if (settings.directoryUrls()) {
             path = prettify(path, settings);
         }
@@ -53,7 +99,13 @@ public final class OutputPathExpander {
      * the (unnormalized) output path itself.
      */
     public static String resolveUrl(PageContext page, String channel, ChannelOutputSettings settings) {
-        return urlForPath(resolvePath(page, channel, settings), settings);
+        return resolveUrl(page, channel, settings, LocaleContext.NONE);
+    }
+
+    /** As {@link #resolveUrl(PageContext, String, ChannelOutputSettings)}, for one language (M24.3.2). */
+    public static String resolveUrl(
+            PageContext page, String channel, ChannelOutputSettings settings, LocaleContext locale) {
+        return urlForPath(resolvePath(page, channel, settings, locale), settings);
     }
 
     /**
@@ -80,6 +132,21 @@ public final class OutputPathExpander {
      */
     public static String resolvePaginationPath(
             PageContext page, String channel, ChannelOutputSettings settings, String firstPagePath, int pageNumber) {
+        return resolvePaginationPath(page, channel, settings, firstPagePath, pageNumber, LocaleContext.NONE);
+    }
+
+    /**
+     * As {@link #resolvePaginationPath(PageContext, String, ChannelOutputSettings, String, int)},
+     * for one language: {@code {locale}} composes with {@code {pageNumber}}, so page 2 of the
+     * English blog lands under the English prefix (M24.3.3).
+     */
+    public static String resolvePaginationPath(
+            PageContext page,
+            String channel,
+            ChannelOutputSettings settings,
+            String firstPagePath,
+            int pageNumber,
+            LocaleContext locale) {
         String pagePath = withoutExtension(firstPagePath);
         JsonNode pattern = page.templatePayload() == null
                 ? null
@@ -90,7 +157,7 @@ public final class OutputPathExpander {
         String expression = pattern.asText()
                 .replace("{pageNumber}", String.valueOf(pageNumber))
                 .replace("{pagePath}", pagePath);
-        return expand(expression, page, channel, settings);
+        return expand(expression, page, channel, settings, locale);
     }
 
     /**
@@ -113,7 +180,7 @@ public final class OutputPathExpander {
     // Resolution order and placeholder expansion
     // ------------------------------------------------------------------
 
-    private static String expressionFor(PageContext page, String channel) {
+    private static String expressionFor(PageContext page, String channel, boolean localized) {
         JsonNode payload = page.payload();
         if (payload != null) {
             JsonNode override = payload.path("output").path("pathOverride").path(channel);
@@ -128,23 +195,43 @@ public final class OutputPathExpander {
                 return expression.asText();
             }
         }
-        return "{folder}{uid}.{ext}";
+        return localized ? DEFAULT_LOCALIZED_EXPRESSION : DEFAULT_EXPRESSION;
     }
 
-    private static String expand(String expression, PageContext page, String channel, ChannelOutputSettings settings) {
+    private static String expand(
+            String expression,
+            PageContext page,
+            String channel,
+            ChannelOutputSettings settings,
+            LocaleContext locale) {
         String folder = relativeFolder(page.folderPath());
         String uid = settings.indexUid().equals(page.uid()) ? settings.indexStem() : (page.uid() == null ? "" : page.uid());
         String ext = settings.extension();
         DateParts date = dateParts(page);
-        return expression
+        String expanded = expression
                 .replace("{displayNameSlug}", slugify(page.displayName()))
                 .replace("{folder}", folder)
                 .replace("{uid}", uid)
                 .replace("{ext}", ext)
                 .replace("{channel}", channel)
+                .replace(LOCALE_PLACEHOLDER, locale.segment() == null ? "" : locale.segment())
                 .replace("{year}", date.year)
                 .replace("{month}", date.month)
                 .replace("{day}", date.day);
+        return collapseSlashes(expanded);
+    }
+
+    /**
+     * A {@code {locale}} that expanded to nothing (the default language without a prefix) leaves a
+     * leading or doubled slash behind. Collapsing both is what makes "default language at the site
+     * root" produce exactly the pre-M24 path.
+     */
+    private static String collapseSlashes(String path) {
+        String collapsed = path.replace("//", "/");
+        while (collapsed.startsWith("/")) {
+            collapsed = collapsed.substring(1);
+        }
+        return collapsed;
     }
 
     /** The fixed, protected {@code PAGES}-scope wrapper folder every page now lives under

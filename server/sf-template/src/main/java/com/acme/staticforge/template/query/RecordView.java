@@ -81,6 +81,24 @@ public final class RecordView {
         return item;
     }
 
+    /**
+     * The same record with every language-dependent value resolved for {@code chain} (M24.3.3), so
+     * {@code where}, {@code sort} and the loop item all see the language being rendered rather than
+     * the wrapper. An empty chain, or a record with no language-dependent field, returns {@code this}.
+     */
+    public RecordView resolvedFor(java.util.List<String> chain) {
+        if (chain == null || chain.isEmpty() || !com.acme.staticforge.common.L10nValues.containsL10n(content)) {
+            return this;
+        }
+        return new RecordView(
+                uuid,
+                uid,
+                displayName,
+                folderPath,
+                changedAt,
+                com.acme.staticforge.common.L10nValues.resolveDeep(content, chain));
+    }
+
     /** A field's value: a meta field, else the editor value; {@code MissingNode} when absent. */
     public JsonNode field(String name) {
         if (name == null) {

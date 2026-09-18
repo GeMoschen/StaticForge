@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.MissingNode;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,6 +26,9 @@ public final class RenderContext {
     private final Map<String, JsonNode> meta;
     private final JsonNode pageValues;
     private final JsonNode pagination;
+    private final String locale;
+    private final List<String> localeChain;
+    private final JsonNode localesScope;
     private final UrlResolver urlResolver;
     private final BlockResolver blockResolver;
     private final AssetValueResolver assetValueResolver;
@@ -37,6 +41,9 @@ public final class RenderContext {
             Map<String, JsonNode> meta,
             JsonNode pageValues,
             JsonNode pagination,
+            String locale,
+            List<String> localeChain,
+            JsonNode localesScope,
             UrlResolver urlResolver,
             BlockResolver blockResolver,
             AssetValueResolver assetValueResolver,
@@ -47,6 +54,9 @@ public final class RenderContext {
         this.meta = meta;
         this.pageValues = pageValues;
         this.pagination = pagination;
+        this.locale = locale;
+        this.localeChain = localeChain;
+        this.localesScope = localesScope;
         this.urlResolver = urlResolver;
         this.blockResolver = blockResolver;
         this.assetValueResolver = assetValueResolver;
@@ -91,6 +101,28 @@ public final class RenderContext {
         return pagination;
     }
 
+    /** The BCP 47 tag this render targets, or {@code null} in a project without locales (M24.3.1). */
+    public String locale() {
+        return locale;
+    }
+
+    /**
+     * The fallback chain language-dependent values resolve through, the render locale first.
+     * Empty in a project without locales, which is how every L10N lookup stays a no-op there.
+     */
+    public List<String> localeChain() {
+        return localeChain;
+    }
+
+    /**
+     * The {@code CMS_LOCALES} iterable — one item per project locale with
+     * {@code {code, language, label, current, href}} — or a missing node when the project has no
+     * locales, so {@code $CMS_FOR(l : CMS_LOCALES)$} renders nothing there.
+     */
+    public JsonNode locales() {
+        return localesScope;
+    }
+
     /** The URL resolver, or {@code null} when {@code $CMS_REF} has no target resolver. */
     public UrlResolver urlResolver() {
         return urlResolver;
@@ -119,6 +151,9 @@ public final class RenderContext {
         private final Map<String, JsonNode> meta = new LinkedHashMap<>();
         private JsonNode pageValues = MissingNode.getInstance();
         private JsonNode pagination = MissingNode.getInstance();
+        private String locale;
+        private List<String> localeChain = List.of();
+        private JsonNode localesScope = MissingNode.getInstance();
         private UrlResolver urlResolver;
         private BlockResolver blockResolver;
         private AssetValueResolver assetValueResolver;
@@ -160,6 +195,19 @@ public final class RenderContext {
             return this;
         }
 
+        /** Sets the render locale and the chain language-dependent values resolve through (M24.3.1). */
+        public Builder locale(String tag, List<String> chain) {
+            this.locale = tag;
+            this.localeChain = chain == null ? List.of() : List.copyOf(chain);
+            return this;
+        }
+
+        /** Sets the {@code CMS_LOCALES} iterable; {@code null} means the project has no locales. */
+        public Builder locales(JsonNode locales) {
+            this.localesScope = locales == null ? MissingNode.getInstance() : locales;
+            return this;
+        }
+
         /** Sets the URL resolver used by {@code $CMS_REF}. */
         public Builder urlResolver(UrlResolver resolver) {
             this.urlResolver = resolver;
@@ -186,7 +234,9 @@ public final class RenderContext {
 
         /** Builds an immutable {@link RenderContext}. */
         public RenderContext build() {
-            return new RenderContext(channel, escaping, values, Map.copyOf(meta), pageValues, pagination, urlResolver, blockResolver, assetValueResolver, budget);
+            return new RenderContext(
+                    channel, escaping, values, Map.copyOf(meta), pageValues, pagination, locale, localeChain,
+                    localesScope, urlResolver, blockResolver, assetValueResolver, budget);
         }
     }
 }

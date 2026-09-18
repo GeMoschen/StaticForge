@@ -65,8 +65,8 @@ class UrlRegistryRepositoryTest {
         urlRegistryRepository.save(entry(fx.project().getId(), "html", pageRefUuid, UrlArea.GENERATED, "/about/"));
 
         UrlRegistryEntry found = urlRegistryRepository
-                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-                        fx.project().getId(), "html", pageRefUuid, UrlArea.GENERATED)
+                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                        fx.project().getId(), "html", pageRefUuid, UrlArea.GENERATED, "")
                 .orElseThrow();
 
         assertThat(found.getUrl()).isEqualTo("/about/");
@@ -74,8 +74,8 @@ class UrlRegistryRepositoryTest {
         assertThat(found.isOverridden()).isFalse();
 
         assertThat(urlRegistryRepository
-                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-                                fx.project().getId(), "html", pageRefUuid, UrlArea.PREVIEW))
+                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                                fx.project().getId(), "html", pageRefUuid, UrlArea.PREVIEW, ""))
                 .isEmpty();
     }
 
@@ -99,14 +99,14 @@ class UrlRegistryRepositoryTest {
         urlRegistryRepository.save(entry(fx.project().getId(), "html", pageRefUuid, UrlArea.GENERATED, "/about/"));
 
         assertThat(urlRegistryRepository
-                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-                                fx.project().getId(), "html", pageRefUuid, UrlArea.PREVIEW)
+                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                                fx.project().getId(), "html", pageRefUuid, UrlArea.PREVIEW, "")
                         .orElseThrow()
                         .getUrl())
                 .isEqualTo("/preview/about/");
         assertThat(urlRegistryRepository
-                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-                                fx.project().getId(), "html", pageRefUuid, UrlArea.GENERATED)
+                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                                fx.project().getId(), "html", pageRefUuid, UrlArea.GENERATED, "")
                         .orElseThrow()
                         .getUrl())
                 .isEqualTo("/about/");
@@ -181,16 +181,16 @@ class UrlRegistryRepositoryTest {
         assetService.softDelete(pageRef.uuid(), true, fx.ctx());
 
         assertThat(urlRegistryRepository
-                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-                                fx.project().getId(), "html", pageRef.uuid(), UrlArea.PREVIEW))
+                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                                fx.project().getId(), "html", pageRef.uuid(), UrlArea.PREVIEW, ""))
                 .isEmpty();
         assertThat(urlRegistryRepository
-                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-                                fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED))
+                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                                fx.project().getId(), "html", pageRef.uuid(), UrlArea.GENERATED, ""))
                 .isEmpty();
         assertThat(urlRegistryRepository
-                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-                                fx.project().getId(), "html", unrelated, UrlArea.GENERATED))
+                        .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                                fx.project().getId(), "html", unrelated, UrlArea.GENERATED, ""))
                 .isPresent();
     }
 

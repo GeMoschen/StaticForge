@@ -1,0 +1,8 @@
+{
+  "locale": "de",
+  "localeChain": ["de"],
+  "locales": [
+    { "code": "de", "label": "Deutsch", "href": "../de/about.html" },
+    { "code": "en", "label": "English", "href": "../en/about.html" }
+  ]
+}

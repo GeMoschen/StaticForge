@@ -79,6 +79,11 @@ export interface EditorDefinition {
   allow?: string[];
   visibleWhen?: string;
   renamedFrom?: string;
+  /**
+   * Language-dependent (M24): the stored value is one value per language rather than a bare value,
+   * and the form binds whichever language is being edited. Only leaf editors carry it.
+   */
+  localizable?: boolean;
   items?: EditorDefinition[];
   /** For PAGINATION editors (M21.1.1): sources, page size and sort keys. */
   pagination?: PaginationOptions | null;

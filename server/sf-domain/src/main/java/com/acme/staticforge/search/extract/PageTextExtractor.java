@@ -48,7 +48,7 @@ public class PageTextExtractor implements SearchTextExtractor {
                 }
             });
         }
-        return Optional.of(Documents.of(asset, text.build(), ""));
+        return Optional.of(Documents.of(asset, text, ""));
     }
 
     private static void section(JsonNode section, ExtractionContext context, TextBuilder text) {

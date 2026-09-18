@@ -428,12 +428,12 @@ class TemplateFolderIntegrationTest {
 
         // Exactly one of each fixed folder in the target — no duplicates.
         List<Asset> targetPageTemplateFolders = assetRepository.findAll().stream()
-                .filter(a -> a.getProjectId() == target.project().getId()
+                .filter(a -> java.util.Objects.equals(a.getProjectId(), target.project().getId())
                         && a.getAssetType() == AssetType.FOLDER
                         && FolderScope.PAGE_TEMPLATES_UID.equals(a.getUid()))
                 .toList();
         List<Asset> targetSectionTemplateFolders = assetRepository.findAll().stream()
-                .filter(a -> a.getProjectId() == target.project().getId()
+                .filter(a -> java.util.Objects.equals(a.getProjectId(), target.project().getId())
                         && a.getAssetType() == AssetType.FOLDER
                         && FolderScope.SECTION_TEMPLATES_UID.equals(a.getUid()))
                 .toList();

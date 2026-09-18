@@ -1,3 +1,4 @@
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -99,6 +100,8 @@ const HIGHLIGHT_SCRIPT = `<script>
 })
 export class SfPreviewFrameComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
+  /** The language this preview renders — the one the editor is working in (M24.4.1). */
+  protected readonly editingLocale = inject(EditingLocaleStore);
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly projectKey = input.required<string>();
@@ -172,6 +175,8 @@ export class SfPreviewFrameComponent implements OnDestroy {
       }
       this.revision();
       this.refreshKey();
+      // Switching the editing language re-renders the preview in it (M24.4.1).
+      this.editingLocale.locale();
       this.scheduleDebounced();
     });
   }
@@ -223,7 +228,7 @@ export class SfPreviewFrameComponent implements OnDestroy {
     if (!key || !uuid) {
       return;
     }
-    this.api.sharePreviewUrl(key, uuid, undefined, CHANNEL).subscribe({
+    this.api.sharePreviewUrl(key, uuid, undefined, CHANNEL, this.editingLocale.locale() ?? undefined).subscribe({
       next: (link) => this.shareUrl.set(link.url ?? link.token ?? null),
       error: () => this.shareUrl.set(null),
     });
@@ -274,7 +279,17 @@ export class SfPreviewFrameComponent implements OnDestroy {
     if (!key || !uuid) {
       return;
     }
-    this.api.previewSavedPageResponse(key, uuid, this.revision() ?? undefined, CHANNEL, this.requestedPage).subscribe({
+    this.api
+      .previewSavedPageResponse(
+        key,
+        uuid,
+        this.revision() ?? undefined,
+        CHANNEL,
+        this.requestedPage,
+        // The preview renders the language the editor is working in (M24.4.1).
+        this.editingLocale.locale() ?? undefined,
+      )
+      .subscribe({
       next: (response) => {
         const { page, total } = readPageHeaders(response.headers);
         this.page.set(page);

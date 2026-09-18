@@ -52,5 +52,20 @@ public final class SearchFields {
     /** The prose fields, each analyzed differently. */
     public static final List<String> PROSE = List.of(TEXT, TEXT_DE, TEXT_EN);
 
+    /**
+     * The prose field of one language (M24.3.3): {@code text_de} for {@code de} and {@code de-CH}, since
+     * the analyzer is chosen by language, not by region. A language with no analyzer of its own indexes
+     * into the neutral {@link #TEXT} field, which every query already searches.
+     */
+    public static String proseFor(String locale) {
+        if (locale == null || locale.isBlank()) {
+            return TEXT;
+        }
+        int dash = locale.indexOf('-');
+        String language = (dash < 0 ? locale : locale.substring(0, dash)).toLowerCase(java.util.Locale.ROOT);
+        String field = "text_" + language;
+        return PROSE.contains(field) ? field : TEXT;
+    }
+
     private SearchFields() {}
 }

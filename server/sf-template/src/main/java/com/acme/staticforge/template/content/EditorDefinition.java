@@ -31,6 +31,13 @@ public record EditorDefinition(
         List<String> allow,
         String visibleWhen,
         String renamedFrom,
+        /**
+         * Language-dependent editor (M24): the stored value is an
+         * {@code {"type":"L10N","values":{…}}} wrapper holding one value per project locale
+         * instead of a bare value. Only leaf editors may set it; {@code group}, {@code list},
+         * {@code catalog} and {@code pagination} are structural and shared by all locales.
+         */
+        boolean localizable,
         List<EditorDefinition> items,
         /** For REFERENCE editors (M19.3.2): restricts picking to records of this dataset UID; {@code null} for none. */
         String dataset,
@@ -60,5 +67,10 @@ public record EditorDefinition(
 
     public boolean isPagination() {
         return type == EditorType.PAGINATION;
+    }
+
+    /** Structural editors are shared by every locale and can never be {@code localizable}. */
+    public boolean isContainer() {
+        return isGroup() || isList() || isCatalog() || isPagination();
     }
 }

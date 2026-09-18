@@ -18,8 +18,8 @@ import org.springframework.data.repository.query.Param;
  */
 public interface UrlRegistryRepository extends JpaRepository<UrlRegistryEntry, Long> {
 
-    Optional<UrlRegistryEntry> findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(
-            long projectId, String channelKey, UUID pageReferenceUuid, UrlArea area);
+    Optional<UrlRegistryEntry> findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+            long projectId, String channelKey, UUID pageReferenceUuid, UrlArea area, String localeKey);
 
     /**
      * Inserts a computed (non-overridden) entry unless the tuple already exists, atomically at the
@@ -33,8 +33,10 @@ public interface UrlRegistryRepository extends JpaRepository<UrlRegistryEntry, L
     @Modifying
     @Query(value = """
             INSERT INTO url_registry_entry
-                (project_id, channel_key, page_reference_uuid, area, url, assigned_at, assigned_revision, overridden)
-            VALUES (:projectId, :channelKey, :pageReferenceUuid, :area, :url, :assignedAt, :assignedRevision, FALSE)
+                (project_id, channel_key, page_reference_uuid, area, locale_key, url, assigned_at,
+                 assigned_revision, overridden)
+            VALUES (:projectId, :channelKey, :pageReferenceUuid, :area, :localeKey, :url, :assignedAt,
+                    :assignedRevision, FALSE)
             ON CONFLICT DO NOTHING
             """, nativeQuery = true)
     int insertIfAbsent(
@@ -42,6 +44,7 @@ public interface UrlRegistryRepository extends JpaRepository<UrlRegistryEntry, L
             @Param("channelKey") String channelKey,
             @Param("pageReferenceUuid") UUID pageReferenceUuid,
             @Param("area") String area,
+            @Param("localeKey") String localeKey,
             @Param("url") String url,
             @Param("assignedAt") Instant assignedAt,
             @Param("assignedRevision") long assignedRevision);

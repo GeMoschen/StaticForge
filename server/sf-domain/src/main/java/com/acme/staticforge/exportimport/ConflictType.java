@@ -38,6 +38,21 @@ public enum ConflictType {
     DUPLICATE_UUID_TYPE_MISMATCH(ConflictSeverity.BLOCKING),
 
     /**
+     * The archive's content languages differ from the target project's (M24.5.1). Not blocking:
+     * values for a language the target doesn't declare are kept (they become orphaned translations,
+     * and re-adding the language restores them), and a language the target has but the archive
+     * doesn't simply starts untranslated. The message names both sides so the operator can decide.
+     */
+    LOCALE_CONFIG_MISMATCH(ConflictSeverity.WARNING),
+
+    /**
+     * An imported asset carries language-dependent values but the target project has no languages
+     * (or the other way round) (M24.5.1). The payload is imported as it is; the next template save
+     * or language change migrates its shape, so exactly one migration implementation exists.
+     */
+    LOCALIZATION_SHAPE_MISMATCH(ConflictSeverity.WARNING),
+
+    /**
      * An {@code ExportedAsset.templateUuid} that resolves to neither another asset in the
      * archive nor an existing asset (by UUID) in the target project.
      */

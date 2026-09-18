@@ -1,6 +1,6 @@
 ---
 id: M24.5.1
-status: todo
+status: done
 depends: [M24.1.1, M24.2.1]
 epic: m24-multi-language
 feature: export-import
@@ -42,11 +42,11 @@ verbatim, so L10N wrappers already survive — but locale config does not.
 
 ## Acceptance criteria
 
-- [ ] Export of a localized project writes `settings.json.locales`; import into a fresh
+- [x] Export of a localized project writes `settings.json.locales`; import into a fresh
       project restores it and every L10N value byte-for-byte.
-- [ ] Archive from protocol version 3 (no locales) still imports.
-- [ ] Mismatch conflicts reported in analyze and match what import does (same helper).
-- [ ] `ProjectExportImportIntegrationTest` extended; full suite green.
+- [x] Archive from protocol version 3 (no locales) still imports.
+- [x] Mismatch conflicts reported in analyze and match what import does (same helper).
+- [x] `ProjectExportImportIntegrationTest` extended; full suite green.
 
 ## Out of scope
 
@@ -56,3 +56,14 @@ verbatim, so L10N wrappers already survive — but locale config does not.
 
 - Don't let the importer "fix" payload shapes itself — shape migration stays owned by
   M24.2.2 so there's one migration implementation.
+
+## Implementation notes (2026-09-17)
+
+- `PROTOCOL_VERSION` is **6** (M17/M19 had already taken 4 and 5, as the task warned). Older
+  archives read back with `locales == null`, which means "says nothing about languages".
+- `ExportedSettings.locales` carries the `LocaleConfig`; import applies it only when the target has
+  no languages of its own, so an archive can't silently re-point a live site's URLs.
+- `LOCALE_CONFIG_MISMATCH` and `LOCALIZATION_SHAPE_MISMATCH` are WARNING conflicts produced by one
+  helper shared by `analyze` and `importProject`, with icons in the import UI.
+- `LocalizedExportImportIntegrationTest`: round-trip of configuration and translations, both
+  mismatch warnings, "target keeps its own languages", and a pre-M24 archive still importing.

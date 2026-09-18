@@ -151,6 +151,7 @@ public class MediaController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @org.springframework.web.bind.annotation.RequestParam(value = "locale", required = false) String locale,
             @org.springframework.web.bind.annotation.RequestBody MediaMetadataRequest body) {
         FocalPointView fp = body.focalPoint();
         AssetVersionView view = mediaService.updateMetadata(
@@ -159,6 +160,7 @@ public class MediaController {
                 body.caption(),
                 body.copyright(),
                 fp == null ? null : FocalPoint.of(fp.x() == null ? 0.5 : fp.x(), fp.y() == null ? 0.5 : fp.y()),
+                locale,
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, "update media metadata"));
         return ResponseEntity.ok()
@@ -424,6 +426,14 @@ public class MediaController {
     }
 
     private static MediaView toMediaView(AssetVersionView v) {
+        return toMediaView(v, null);
+    }
+
+    /**
+     * {@code locale} resolves {@code altText}/{@code caption} for one language; {@code null} takes
+     * the first stored language, which is what a project without locales has anyway (M24.2.2).
+     */
+    private static MediaView toMediaView(AssetVersionView v, java.util.List<String> locale) {
         JsonNode payload = v.payload();
         return new MediaView(
                 v.uuid(),
@@ -435,9 +445,11 @@ public class MediaController {
                 text(payload, "mimeType"),
                 longVal(payload, "sizeBytes"),
                 image(payload),
-                text(payload, "altText"),
-                text(payload, "caption"),
+                localizedText(payload, "altText", locale),
+                localizedText(payload, "caption", locale),
                 text(payload, "copyright"),
+                localizedMap(payload, "altText"),
+                localizedMap(payload, "caption"),
                 focalPoint(payload),
                 variants(payload),
                 TextMediaTypes.isProcessed(payload),
@@ -492,5 +504,31 @@ public class MediaController {
 
     private static long longVal(JsonNode node, String field) {
         return node != null && node.hasNonNull(field) ? node.get(field).asLong() : 0L;
+    }
+
+    /** A media metadata field resolved for {@code chain}; a plain string passes through unchanged. */
+    private static String localizedText(JsonNode payload, String field, java.util.List<String> chain) {
+        JsonNode value = payload == null ? null : payload.get(field);
+        if (!com.acme.staticforge.common.L10nValues.isL10n(value)) {
+            return value == null || value.isNull() ? null : value.asText();
+        }
+        java.util.List<String> lookup = chain != null && !chain.isEmpty()
+                ? chain
+                : com.acme.staticforge.common.L10nValues.locales(value);
+        JsonNode resolved = com.acme.staticforge.common.L10nValues.resolve(value, lookup);
+        return resolved == null ? null : resolved.asText();
+    }
+
+    /** The per-language values of a media metadata field, or {@code null} when it is not localized. */
+    private static java.util.Map<String, String> localizedMap(JsonNode payload, String field) {
+        JsonNode value = payload == null ? null : payload.get(field);
+        if (!com.acme.staticforge.common.L10nValues.isL10n(value)) {
+            return null;
+        }
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        for (String locale : com.acme.staticforge.common.L10nValues.locales(value)) {
+            out.put(locale, com.acme.staticforge.common.L10nValues.get(value, locale).asText());
+        }
+        return out;
     }
 }

@@ -1,5 +1,6 @@
 package com.acme.staticforge.template.render;
 
+import com.acme.staticforge.common.L10nValues;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.octl.Accessor;
@@ -364,8 +365,18 @@ public final class OctlRenderer implements Renderer {
         if (dataset == null || resolver == null || query == null) {
             return null;
         }
+        // Records are resolved for the render language *before* the query runs, so `where` and
+        // `sort` compare the language being rendered rather than the wrapper (M24.3.3).
+        List<String> chain = s.context.localeChain();
+        List<RecordView> source = resolver.datasetRecords(dataset);
+        if (!chain.isEmpty()) {
+            source = source.stream().map(record -> record.resolvedFor(chain)).toList();
+        }
         List<RecordView> records = DatasetQueryEvaluator.apply(
-                resolver.datasetRecords(dataset), query, scopeAccessor -> resolve(scopeAccessor, s));
+                source,
+                query,
+                scopeAccessor -> resolve(scopeAccessor, s),
+                chain.isEmpty() ? null : java.text.Collator.getInstance(Filters.localeOf(s.context.locale())));
         ArrayNode items = JsonNodeFactory.instance.arrayNode(records.size());
         for (RecordView record : records) {
             items.add(record.item());
@@ -381,6 +392,11 @@ public final class OctlRenderer implements Renderer {
         s.setVar(st.name(), value);
     }
 
+    /** The render's language for locale-aware filters, neutral in a project without locales. */
+    private static java.util.Locale renderLocale(State s) {
+        return Filters.localeOf(s.context.locale());
+    }
+
     private String applyFilters(JsonNode value, List<FilterNode> filters, State s) {
         boolean escaped = false;
         for (FilterNode f : filters) {
@@ -391,7 +407,7 @@ public final class OctlRenderer implements Renderer {
             if (Filters.isEscapingOrRaw(f.name())) {
                 escaped = true;
             }
-            value = filter.apply(value, f.args());
+            value = filter.apply(value, f.args(), renderLocale(s));
         }
         String text = Filters.stringify(value);
         if (!escaped) {
@@ -405,6 +421,30 @@ public final class OctlRenderer implements Renderer {
     // ------------------------------------------------------------------
 
     private JsonNode resolve(Accessor accessor, State s) {
+        return localize(resolveRaw(accessor, s), s);
+    }
+
+    /**
+     * Resolves a language-dependent value for the render locale (M24.3.1). Done once, here at
+     * value lookup, so filters, truthiness and {@code | json} all see the resolved value and no
+     * wrapper can leak into output. A no-op in a project without locales (empty chain).
+     */
+    private static JsonNode localize(JsonNode node, State s) {
+        List<String> chain = s.context.localeChain();
+        if (chain.isEmpty() || node == null) {
+            return node;
+        }
+        if (L10nValues.isL10n(node)) {
+            JsonNode resolved = L10nValues.resolve(node, chain);
+            return resolved == null ? MissingNode.getInstance() : resolved;
+        }
+        // A whole object or list handed to `| json` must not carry wrappers either.
+        return node.isContainerNode() && L10nValues.containsL10n(node)
+                ? L10nValues.resolveDeep(node, chain)
+                : node;
+    }
+
+    private JsonNode resolveRaw(Accessor accessor, State s) {
         if (accessor.isAssetReference()) {
             noteReference(accessor, s);
             return resolveCrossAsset(accessor, s);
@@ -419,6 +459,9 @@ public final class OctlRenderer implements Renderer {
         }
         if (OctlCompiler.PAGINATION_ROOT.equals(first)) {
             return resolveSub(s.context.pagination(), path, 1, s);
+        }
+        if (OctlCompiler.LOCALES_ROOT.equals(first)) {
+            return resolveSub(s.context.locales(), path, 1, s);
         }
         LoopFrame loop = s.findLoop(first);
         if (loop != null) {
@@ -481,6 +524,9 @@ public final class OctlRenderer implements Renderer {
     private JsonNode resolveSub(JsonNode base, List<String> path, int from, State s) {
         JsonNode node = base;
         for (int i = from; i < path.size(); i++) {
+            // A language-dependent value is unwrapped before the path walks into it, so
+            // `heroImage.altText` reaches the media asset rather than the L10N wrapper (M24.3.1).
+            node = localize(node, s);
             if (node == null || node.isMissingNode() || node.isNull() || !node.isObject()) {
                 return MissingNode.getInstance();
             }
@@ -628,7 +674,7 @@ public final class OctlRenderer implements Renderer {
             case Expr.Literal l -> l.value();
             case Expr.Access a -> {
                 JsonNode v = resolve(a.accessor(), s);
-                yield pipe(v, a.filters());
+                yield pipe(v, a.filters(), s);
             }
             case Expr.Group g -> eval(g.inner(), s);
             case Expr.Not n -> BooleanNode.valueOf(!truthy(eval(n.operand(), s)));
@@ -638,13 +684,13 @@ public final class OctlRenderer implements Renderer {
         };
     }
 
-    private JsonNode pipe(JsonNode value, List<FilterNode> filters) {
+    private JsonNode pipe(JsonNode value, List<FilterNode> filters, State s) {
         for (FilterNode f : filters) {
             Filter filter = Filters.lookup(f.name());
             if (filter == null) {
                 continue;
             }
-            value = filter.apply(value, f.args());
+            value = filter.apply(value, f.args(), renderLocale(s));
         }
         return value;
     }

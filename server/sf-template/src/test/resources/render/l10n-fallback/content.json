@@ -1,0 +1,5 @@
+{
+  "street": { "type": "L10N", "values": { "de": "Strasse", "en": "Street" } },
+  "headline": { "type": "L10N", "values": { "en": "The parka" } },
+  "missing": { "type": "L10N", "values": {} }
+}

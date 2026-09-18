@@ -43,8 +43,18 @@ public class LiveOutputPathResolver {
      * live, non-deleted asset.
      */
     public Optional<String> resolveUrl(long projectId, UUID pageUuid, String channel, ChannelOutputSettings settings) {
+        return resolveUrl(projectId, pageUuid, channel, settings, OutputPathExpander.LocaleContext.NONE);
+    }
+
+    /** As {@link #resolveUrl(long, UUID, String, ChannelOutputSettings)}, for one language (M24.3.2). */
+    public Optional<String> resolveUrl(
+            long projectId,
+            UUID pageUuid,
+            String channel,
+            ChannelOutputSettings settings,
+            OutputPathExpander.LocaleContext locale) {
         return pageContext(projectId, pageUuid)
-                .map(context -> normalize(OutputPathExpander.resolveUrl(context, channel, settings)));
+                .map(context -> normalize(OutputPathExpander.resolveUrl(context, channel, settings, locale)));
     }
 
     private Optional<OutputPathExpander.PageContext> pageContext(long projectId, UUID pageUuid) {

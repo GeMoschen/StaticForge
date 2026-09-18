@@ -8,6 +8,7 @@ import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.project.LocaleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,12 +33,15 @@ public final class OutputPathResolver {
 
     private final Snapshot snapshot;
     private final Map<String, ChannelOutputSettings> settingsByChannel;
+    private final LocaleConfig locales;
 
     private volatile Map<String, UUID> collisionOwners = Map.of();
 
-    private OutputPathResolver(Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel) {
+    private OutputPathResolver(
+            Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel, LocaleConfig locales) {
         this.snapshot = snapshot;
         this.settingsByChannel = Map.copyOf(settingsByChannel);
+        this.locales = locales == null ? LocaleConfig.EMPTY : locales;
     }
 
     /**
@@ -47,7 +51,37 @@ public final class OutputPathResolver {
      *     {@link ChannelOutputSettings#defaults}
      */
     public static OutputPathResolver forSnapshot(Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel) {
-        return new OutputPathResolver(snapshot, settingsByChannel);
+        return new OutputPathResolver(snapshot, settingsByChannel, LocaleConfig.EMPTY);
+    }
+
+    /**
+     * Builds a resolver for a localized project (M24.3.2): every path resolution takes a language
+     * and {@code {locale}} expands to its segment.
+     */
+    public static OutputPathResolver forSnapshot(
+            Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel, LocaleConfig locales) {
+        return new OutputPathResolver(snapshot, settingsByChannel, locales);
+    }
+
+    /** The project's content locales; {@link LocaleConfig#EMPTY} for a single-language project. */
+    public LocaleConfig locales() {
+        return locales;
+    }
+
+    /**
+     * How {@code {locale}} expands for {@code locale}: the tag itself, or nothing for the default
+     * language when the project puts it at the site root.
+     */
+    public OutputPathExpander.LocaleContext localeContext(String locale) {
+        if (!locales.isLocalized() || locale == null) {
+            return OutputPathExpander.LocaleContext.NONE;
+        }
+        String declared = locales.canonicalDeclared(locale);
+        if (declared == null) {
+            return OutputPathExpander.LocaleContext.NONE;
+        }
+        boolean atRoot = locales.defaultWithoutPrefix() && declared.equals(locales.defaultLocale());
+        return new OutputPathExpander.LocaleContext(declared, atRoot ? "" : declared);
     }
 
     /** The output settings this resolver applies to {@code channel}. */
@@ -62,13 +96,30 @@ public final class OutputPathResolver {
      * @throws SfException (not-found) when the page is absent from the snapshot
      */
     public String resolvePagePath(UUID pageUuid, String channel) {
+        return resolvePagePath(pageUuid, channel, null);
+    }
+
+    /** As {@link #resolvePagePath(UUID, String)}, for one language (M24.3.2). */
+    public String resolvePagePath(UUID pageUuid, String channel, String locale) {
         SnapshotAsset page = snapshot.assetByUuid(pageUuid);
         if (page == null) {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }
         OutputPathExpander.PageContext context = toPageContext(page);
-        String path = OutputPathExpander.resolvePath(context, channel, settingsFor(channel));
+        String path = OutputPathExpander.resolvePath(context, channel, settingsFor(channel), localeContext(locale));
         return OutputFile.normalize(path);
+    }
+
+    /**
+     * The path expression that governs a page in a channel — what {@code SF-GEN-0111} checks for
+     * a {@code {locale}} segment when the project has locales.
+     */
+    public String effectiveExpression(UUID pageUuid, String channel) {
+        SnapshotAsset page = snapshot.assetByUuid(pageUuid);
+        if (page == null) {
+            return OutputPathExpander.DEFAULT_EXPRESSION;
+        }
+        return OutputPathExpander.effectiveExpression(toPageContext(page), channel, locales.isLocalized());
     }
 
     private OutputPathExpander.PageContext toPageContext(SnapshotAsset page) {
@@ -84,12 +135,18 @@ public final class OutputPathResolver {
      * @param firstPagePath page 1's path, as {@link #resolvePagePath} returned it
      */
     public String resolvePaginationPath(UUID pageUuid, String channel, String firstPagePath, int pageNumber) {
+        return resolvePaginationPath(pageUuid, channel, firstPagePath, pageNumber, null);
+    }
+
+    /** As {@link #resolvePaginationPath(UUID, String, String, int)}, for one language (M24.3.3). */
+    public String resolvePaginationPath(
+            UUID pageUuid, String channel, String firstPagePath, int pageNumber, String locale) {
         SnapshotAsset page = snapshot.assetByUuid(pageUuid);
         if (page == null) {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }
         return OutputFile.normalize(OutputPathExpander.resolvePaginationPath(
-                toPageContext(page), channel, settingsFor(channel), firstPagePath, pageNumber));
+                toPageContext(page), channel, settingsFor(channel), firstPagePath, pageNumber, localeContext(locale)));
     }
 
     /** The URL (href, relative to the site root) of a pagination page's output path in {@code channel}. */
@@ -104,7 +161,12 @@ public final class OutputPathResolver {
      * concrete output path.
      */
     public String resolvePageUrl(UUID pageUuid, String channel) {
-        return OutputPathExpander.urlForPath(resolvePagePath(pageUuid, channel), settingsFor(channel));
+        return resolvePageUrl(pageUuid, channel, null);
+    }
+
+    /** As {@link #resolvePageUrl(UUID, String)}, for one language (M24.3.2). */
+    public String resolvePageUrl(UUID pageUuid, String channel, String locale) {
+        return OutputPathExpander.urlForPath(resolvePagePath(pageUuid, channel, locale), settingsFor(channel));
     }
 
     /** First-resolved owner (path → page UUID) of each output path; populated by {@link #findCollisions}. */

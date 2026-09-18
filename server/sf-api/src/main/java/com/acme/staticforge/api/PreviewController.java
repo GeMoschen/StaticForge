@@ -72,9 +72,10 @@ public class PreviewController {
             @RequestParam(defaultValue = "html") String channel,
             @RequestParam(defaultValue = "true") boolean rewriteLinks,
             @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String locale,
             HttpServletRequest request) {
         PagePreview preview = pageRenderService.renderPage(
-                projectId(projectKey), uuid, revision, channel, rewriteLinks, apiBase(request), page);
+                projectId(projectKey), uuid, revision, channel, rewriteLinks, apiBase(request), page, locale);
         return respond(preview, channel);
     }
 
@@ -85,8 +86,9 @@ public class PreviewController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam(required = false) Long revision,
-            @RequestParam(defaultValue = "html") String channel) {
-        String token = previewTokenService.issueShareToken(uuid, revision, channel, projectKey);
+            @RequestParam(defaultValue = "html") String channel,
+            @RequestParam(required = false) String locale) {
+        String token = previewTokenService.issueShareToken(uuid, revision, channel, projectKey, locale);
         String url = "/api/v1/projects/" + projectKey + "/preview/share?t=" + token;
         return new PreviewShareLink(token, url);
     }
@@ -113,7 +115,8 @@ public class PreviewController {
         }
         String resolvedChannel = target.channel() != null ? target.channel() : channel;
         PagePreview preview = pageRenderService.renderPage(
-                projectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request), page);
+                projectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request),
+                page, target.locale());
         return respond(preview, resolvedChannel);
     }
 

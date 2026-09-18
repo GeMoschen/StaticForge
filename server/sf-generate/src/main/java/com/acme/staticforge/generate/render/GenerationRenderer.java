@@ -95,6 +95,9 @@ final class GenerationRenderer {
     private final UrlRegistryService urlRegistryService;
     private final Long generationUserId;
 
+    /** The project's content locales (M24.3.1); {@link com.acme.staticforge.project.LocaleConfig#EMPTY} is single-language. */
+    private com.acme.staticforge.project.LocaleConfig localeConfig = com.acme.staticforge.project.LocaleConfig.EMPTY;
+
     GenerationRenderer(
             Snapshot snapshot,
             OutputPathResolver paths,
@@ -139,6 +142,15 @@ final class GenerationRenderer {
         this.assetValues = new SnapshotAssetValueResolver(snapshot);
     }
 
+    /**
+     * Sets the project's locale configuration for this build (M24.3.1). Set once by the pipeline
+     * before any entry renders; without it the renderer behaves as a single-language project.
+     */
+    GenerationRenderer withLocales(com.acme.staticforge.project.LocaleConfig config) {
+        this.localeConfig = config == null ? com.acme.staticforge.project.LocaleConfig.EMPTY : config;
+        return this;
+    }
+
     /** How often this build's dataset record index was built (M19.3.2): at most once per snapshot. */
     int recordIndexBuilds() {
         return assetValues.indexBuilds();
@@ -179,10 +191,11 @@ final class GenerationRenderer {
 
         // One budget for the page and every section/include/catalog card rendered inside it.
         RenderBudget budget = new RenderBudget();
-        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath(), warnings);
+        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath(), warnings, entry.locale());
         JsonNode pagination = paginationScope(entry, deps, warnings);
         BlockResolver blocks = blockResolver(
-                content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), pagination, deps, warnings, budget);
+                content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), pagination, deps, warnings,
+                budget, entry.locale());
 
         RenderContext.Builder builder = RenderContext.builder()
                 .channel(entry.channel())
@@ -205,6 +218,9 @@ final class GenerationRenderer {
             builder.meta("pageNumber", IntNode.valueOf(entry.pagination().pageNumber()))
                     .meta("totalPages", IntNode.valueOf(entry.pagination().totalPages()));
         }
+        // The render locale, its fallback chain and the CMS_LOCALES language switcher (M24.3.1).
+        com.acme.staticforge.project.LocaleRenderScope.apply(
+                builder, localeConfig, entry.locale(), target -> localeHref(entry, page, target));
         RenderContext context = builder.build();
 
         RenderResult result = budget.withTemplate(template.uuid(), template.uid(), () -> renderer.render(compiled, context));
@@ -404,6 +420,14 @@ final class GenerationRenderer {
 
     /** @param pagePath output path of the page being rendered; generated links are relative to it */
     private UrlResolver urlResolver(String channel, String pagePath, List<Diagnostic> warnings) {
+        return urlResolver(channel, pagePath, warnings, null);
+    }
+
+    /**
+     * @param renderLocale the language links resolve in, so a German page links to German pages
+     *     (M24.3.2). {@code $CMS_REF(page:x, locale="en")} overrides it for one reference.
+     */
+    private UrlResolver urlResolver(String channel, String pagePath, List<Diagnostic> warnings, String renderLocale) {
         return (kind, uid, uuid, args) -> {
             if (uuid == null) {
                 return "";
@@ -412,13 +436,30 @@ final class GenerationRenderer {
                 warnDeletedReference(warnings, kind, uid);
                 return "";
             }
+            String locale = args != null && args.get("locale") != null ? args.get("locale") : renderLocale;
             return switch (kind) {
                 case "media" -> relativeUrl(pagePath, resolveMedia(uuid, args));
-                case "page" -> paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(uuid, channel));
+                case "page" -> paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(uuid, channel, locale));
                 case "folder" -> resolveFolder(uuid, pagePath);
                 default -> "";
             };
         };
+    }
+
+    /**
+     * The current page's URL in {@code target}, relative to this entry's own output path — what a
+     * {@code CMS_LOCALES} language switcher links to (M24.3.1). Empty when the page has no URL in
+     * that language.
+     */
+    private String localeHref(PlanEntry entry, SnapshotAsset page, String target) {
+        if (paths == null || page == null) {
+            return "";
+        }
+        try {
+            return relativeUrl(entry.outputPath(), paths.resolvePageUrl(page.uuid(), entry.channel(), target));
+        } catch (RuntimeException e) {
+            return "";
+        }
     }
 
     private String resolveMedia(UUID uuid, Map<String, String> args) {
@@ -529,6 +570,22 @@ final class GenerationRenderer {
             Set<UUID> deps,
             List<Diagnostic> warnings,
             RenderBudget budget) {
+        return blockResolver(
+                pageContent, bodies, channel, activePageUuid, pagePath, pagination, deps, warnings, budget, null);
+    }
+
+    /** @param locale the render language, threaded into nested navigation renders (M24.3.2) */
+    private BlockResolver blockResolver(
+            JsonNode pageContent,
+            JsonNode bodies,
+            String channel,
+            UUID activePageUuid,
+            String pagePath,
+            JsonNode pagination,
+            Set<UUID> deps,
+            List<Diagnostic> warnings,
+            RenderBudget budget,
+            String locale) {
         return new BlockResolver() {
             @Override
             public String renderBody(String bodyName) {
@@ -571,7 +628,7 @@ final class GenerationRenderer {
             @Override
             public String renderNavigation(UUID navFolderUuid, Map<String, String> args) {
                 JsonNode json = GenerationRenderer.this.navigationTreeJson(
-                        navFolderUuid, args, channel, activePageUuid, pagePath, deps, warnings);
+                        navFolderUuid, args, channel, activePageUuid, pagePath, deps, warnings, locale);
                 return json == null ? "" : NavigationHtmlRenderer.renderRoot(json);
             }
 
@@ -583,7 +640,7 @@ final class GenerationRenderer {
             @Override
             public JsonNode resolveNavigationChildren(UUID navFolderUuid, Map<String, String> args) {
                 JsonNode json = GenerationRenderer.this.navigationTreeJson(
-                        navFolderUuid, args, channel, activePageUuid, pagePath, deps, warnings);
+                        navFolderUuid, args, channel, activePageUuid, pagePath, deps, warnings, locale);
                 return json == null ? null : json.path("children");
             }
         };
@@ -608,6 +665,19 @@ final class GenerationRenderer {
             String pagePath,
             Set<UUID> deps,
             List<Diagnostic> warnings) {
+        return navigationTreeJson(navFolderUuid, args, defaultChannel, activePageUuid, pagePath, deps, warnings, null);
+    }
+
+    /** @param locale the render language: nav labels resolve through its chain and hrefs stay in it (M24.3.2) */
+    private JsonNode navigationTreeJson(
+            UUID navFolderUuid,
+            Map<String, String> args,
+            String defaultChannel,
+            UUID activePageUuid,
+            String pagePath,
+            Set<UUID> deps,
+            List<Diagnostic> warnings,
+            String locale) {
         if (navFolderUuid == null) {
             return null;
         }
@@ -615,7 +685,9 @@ final class GenerationRenderer {
         String navChannel = args != null && args.containsKey("channel") ? args.get("channel") : defaultChannel;
 
         List<Diagnostic> navDiagnostics = new ArrayList<>();
-        NavTreeNode tree = navigationService.tree(snapshot.projectId(), navFolderUuid, depth, navigationLookup, navDiagnostics);
+        NavTreeNode tree = navigationService.tree(
+                snapshot.projectId(), navFolderUuid, depth, navigationLookup, navDiagnostics,
+                localeConfig.effectiveChain(locale));
         warnings.addAll(navDiagnostics);
         if (tree == null) {
             return null;
@@ -638,7 +710,7 @@ final class GenerationRenderer {
                     0));
         }
 
-        return NavigationTreeJson.toJson(tree, activePageUuid, node -> navHref(node, navChannel, pagePath));
+        return NavigationTreeJson.toJson(tree, activePageUuid, node -> navHref(node, navChannel, pagePath, locale));
     }
 
     /**
@@ -652,16 +724,17 @@ final class GenerationRenderer {
      * PageReference} identity to key a registry lookup on, so it keeps resolving directly via
      * {@link OutputPathResolver} — unchanged pre-`M8.2.3` behavior for that node kind.
      */
-    private String navHref(NavTreeNode node, String channel, String pagePath) {
+    private String navHref(NavTreeNode node, String channel, String pagePath, String locale) {
         UUID resolvedPageUuid = node.resolvedPageUuid();
         if (resolvedPageUuid == null) {
             return "";
         }
         if (node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
             RevisionContext ctx = RevisionContext.of(snapshot.projectId(), generationUserId, "generation");
-            return relativeUrl(pagePath, urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.GENERATED, ctx));
+            return relativeUrl(
+                    pagePath, urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.GENERATED, locale, ctx));
         }
-        return paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(resolvedPageUuid, channel));
+        return paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(resolvedPageUuid, channel, locale));
     }
 
     /** {@code depth} named arg → int, {@code -1} (unlimited, still hard-capped) when absent/invalid. */

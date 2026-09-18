@@ -110,14 +110,20 @@ export class NavigationService {
     );
   }
 
+  /**
+   * `locale` (M24) writes the label for one content language, leaving the others as they are;
+   * omitted, the project's default language is written.
+   */
   updateReference(
     projectKey: string,
     uuid: string,
     req: UpdatePageReferenceRequest,
     etag?: string,
+    locale?: string,
   ): Observable<PageReferenceView> {
+    const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
     return this.http.patch<PageReferenceView>(
-      `${BASE}/projects/${projectKey}/navigation/references/${uuid}`,
+      `${BASE}/projects/${projectKey}/navigation/references/${uuid}${query}`,
       req,
       this.mutationOptions(etag),
     );

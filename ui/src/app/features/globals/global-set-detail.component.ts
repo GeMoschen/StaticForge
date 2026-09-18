@@ -1,3 +1,5 @@
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { LocalesStore } from '../../core/project/locales.store';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -20,6 +22,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfContentFormComponent } from '../forms/sf-content-form.component';
 import { FormBuilderService } from '../forms/form-builder.service';
 import type { ContentDefinition } from '../forms/form.model';
+import type { EditingLocale } from '../forms/l10n.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { GlobalsService, etagFor, type Diagnostic, type GlobalSetDetailView } from './globals.service';
 
@@ -62,6 +65,18 @@ export class GlobalSetDetailComponent {
   readonly deleted = output<void>();
 
   private readonly globals = inject(GlobalsService);
+  /** The language being edited (M24.4.1); `null` in a project without languages. */
+  protected readonly editingLocale = inject(EditingLocaleStore).binding;
+
+  private readonly localesForLabels = inject(LocalesStore);
+
+  /** Language tag to label, so the form says "from Deutsch" rather than "from de". */
+  protected readonly localeLabels = computed<Record<string, string>>(() =>
+    Object.fromEntries(
+      this.localesForLabels.locales().map((locale) => [locale.code ?? '', locale.label ?? locale.code ?? '']),
+    ),
+  );
+
   private readonly forms = inject(FormBuilderService);
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthStore);
@@ -77,6 +92,12 @@ export class GlobalSetDetailComponent {
   protected readonly detail = signal<GlobalSetDetailView | null>(null);
   protected readonly definition = signal<ContentDefinition>(EMPTY_DEF);
   protected readonly valuesForm = signal<FormGroup | null>(null);
+
+  /**
+   * The content object as stored — every language, not just the one being edited. The form binds
+   * one language; the fallback hint needs the others (M24.4.1).
+   */
+  protected readonly storedContent = signal<Record<string, unknown>>({});
   protected readonly contentDefinition = signal('');
   protected readonly cdlDiagnostics = signal<Diagnostic[]>([]);
   protected readonly valueIssues = signal<ContentIssue[]>([]);
@@ -106,6 +127,30 @@ export class GlobalSetDetailComponent {
       const revision = this.timeTravel.activeRevision();
       untracked(() => this.load(key, uuid, revision));
     });
+
+    // The values form binds one language; switching has to rebuild it, or the editors keep editing
+    // the previous language and the next save writes those values into the new one (M24.4.1).
+    effect(
+      () => {
+        const binding = this.editingLocale();
+        untracked(() => this.rebindValuesForm(binding));
+      },
+      { allowSignalWrites: true },
+    );
+  }
+
+  /** Re-binds the values form to another language, keeping unsaved edits in the one left behind. */
+  private rebindValuesForm(binding: EditingLocale | null): void {
+    const form = this.valuesForm();
+    if (!form || this.forms.bindingOf(form)?.locale === (binding?.locale ?? null)) {
+      return;
+    }
+    const rebound = this.forms.rebind(this.definition(), form, binding);
+    this.storedContent.set(rebound.content);
+    if (!this.canEditValues()) {
+      rebound.form.disable();
+    }
+    this.valuesForm.set(rebound.form);
   }
 
   protected showValues(): void {
@@ -236,7 +281,8 @@ export class GlobalSetDetailComponent {
     this.contentDefinition.set(detail.contentDefinition ?? '');
     const definition = toDefinition(detail.compiledDefinition);
     this.definition.set(definition);
-    const form = this.forms.build(definition, (detail.content ?? {}) as Record<string, unknown>);
+    this.storedContent.set((detail.content ?? {}) as Record<string, unknown>);
+    const form = this.forms.build(definition, (detail.content ?? {}) as Record<string, unknown>, this.editingLocale());
     if (!this.canEditValues()) {
       form.disable();
     }

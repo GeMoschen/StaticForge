@@ -43,6 +43,7 @@ class UrlRegistryServiceImplTest {
     private LiveOutputPathResolver outputPathResolver;
     private RevisionService revisionService;
     private ChannelService channelService;
+    private com.acme.staticforge.project.ProjectLocales projectLocales;
     private UrlRegistryServiceImpl service;
 
     @BeforeEach
@@ -53,12 +54,17 @@ class UrlRegistryServiceImplTest {
         revisionService = mock(RevisionService.class);
         LiveNavigationLookup lookup = mock(LiveNavigationLookup.class);
         channelService = mock(ChannelService.class);
+        projectLocales = mock(com.acme.staticforge.project.ProjectLocales.class);
+        when(projectLocales.forProject(PROJECT_ID)).thenReturn(com.acme.staticforge.project.LocaleConfig.EMPTY);
         service = new UrlRegistryServiceImpl(
-                repository, navigationService, lookup, outputPathResolver, revisionService, channelService);
+                repository, navigationService, lookup, outputPathResolver, revisionService, channelService,
+                projectLocales);
 
         when(navigationService.resolve(eq(PROJECT_ID), eq(PAGE_REF), any())).thenReturn(PAGE);
         when(channelService.outputSettings(PROJECT_ID, "html")).thenReturn(PRETTY);
-        when(outputPathResolver.resolveUrl(PROJECT_ID, PAGE, "html", PRETTY))
+        when(outputPathResolver.resolveUrl(
+                        PROJECT_ID, PAGE, "html", PRETTY,
+                        com.acme.staticforge.channel.OutputPathExpander.LocaleContext.NONE))
                 .thenReturn(Optional.of("products/hammer.html"));
         when(revisionService.findRecent(eq(PROJECT_ID), any())).thenReturn(List.of());
     }
@@ -67,32 +73,36 @@ class UrlRegistryServiceImplTest {
     void firstResolveInsertsIfAbsentAndReturnsTheRowReadBack() {
         RevisionContext ctx = RevisionContext.of(PROJECT_ID, 1L, null);
         // The read-back returns whichever row won — here a concurrent caller's, with a different URL.
-        when(repository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(PROJECT_ID, "html", PAGE_REF, UrlArea.GENERATED))
+        when(repository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                        PROJECT_ID, "html", PAGE_REF, UrlArea.GENERATED, ""))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(entry("winner/hammer.html")));
-        when(repository.insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), anyLong())).thenReturn(0);
+        when(repository.insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), anyLong())).thenReturn(0);
 
         String url = service.resolve(PAGE_REF, "html", UrlArea.GENERATED, ctx);
 
         assertThat(url).isEqualTo("winner/hammer.html");
         verify(repository).insertIfAbsent(
-                eq(PROJECT_ID), eq("html"), eq(PAGE_REF), eq("GENERATED"), eq("products/hammer.html"), any(), eq(0L));
+                eq(PROJECT_ID), eq("html"), eq(PAGE_REF), eq("GENERATED"), eq(""), eq("products/hammer.html"), any(),
+                eq(0L));
         verify(repository, never()).save(any());
         verify(repository, times(2))
-                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(PROJECT_ID, "html", PAGE_REF, UrlArea.GENERATED);
+                .findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                        PROJECT_ID, "html", PAGE_REF, UrlArea.GENERATED, "");
     }
 
     @Test
     void resolveReturnsTheExistingUrlWithoutRecomputingOrSaving() {
         RevisionContext ctx = RevisionContext.of(PROJECT_ID, 1L, null);
-        when(repository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndArea(PROJECT_ID, "html", PAGE_REF, UrlArea.GENERATED))
+        when(repository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                        PROJECT_ID, "html", PAGE_REF, UrlArea.GENERATED, ""))
                 .thenReturn(Optional.of(entry("cached/url.html")));
 
         String url = service.resolve(PAGE_REF, "html", UrlArea.GENERATED, ctx);
 
         assertThat(url).isEqualTo("cached/url.html");
         verify(navigationService, never()).resolve(anyLong(), any(), any());
-        verify(repository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), anyLong());
+        verify(repository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), anyLong());
     }
 
     @Test

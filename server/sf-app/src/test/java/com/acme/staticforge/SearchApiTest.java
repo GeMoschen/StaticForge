@@ -128,7 +128,7 @@ class SearchApiTest {
                 fx, "Teaser", "content {\n  editor text headline { label \"Headline\" }\n}", "<h2>$CMS_VALUE(headline)$</h2>");
         AssetVersionView photo = media.upload(
                 fx.projectId(), null, "coast.txt", null, "text".getBytes(StandardCharsets.UTF_8), fx.ctx());
-        media.updateMetadata(photo.uuid(), "A lighthouse at dusk", null, null, null, photo.validFromRevision(), fx.ctx());
+        media.updateMetadata(photo.uuid(), "A lighthouse at dusk", null, null, null, null, photo.validFromRevision(), fx.ctx());
         fixtures.awaitIndexed();
         return new Site(fx, jwt.issueAccessToken(fx.user()), contentPage.uuid(), uidPage.uuid(), teaser.uuid(), photo.uuid());
     }

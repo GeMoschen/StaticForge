@@ -1,6 +1,6 @@
 ---
 id: M24.3.3
-status: todo
+status: done
 depends: [M24.3.2, M17.3.1, M19.3.2, M21.3.1, M23.1.2]
 epic: m24-multi-language
 feature: rendering
@@ -44,17 +44,17 @@ M24.2.1–M24.3.2.
 
 ## Acceptance criteria
 
-- [ ] `$CMS_GLOBAL.site.tagline$` renders `de`/`en` values on the respective pages; an
+- [x] `$CMS_GLOBAL.site.tagline$` renders `de`/`en` values on the respective pages; an
       `en`-only global change rebuilds only `en` entries of dependent pages.
-- [ ] A dataset with localizable `title` sorts differently for `de` vs `en` output (test
+- [x] A dataset with localizable `title` sorts differently for `de` vs `en` output (test
       with umlauts: `Äpfel` sorts before `Birnen` in `de`).
-- [ ] Pagination over a dataset filtered on a localizable field produces the correct page
+- [x] Pagination over a dataset filtered on a localizable field produces the correct page
       count per locale; hrefs stay in the locale.
-- [ ] Search for a German word with `locale=de` finds the page via stemming; the same query
+- [x] Search for a German word with `locale=de` finds the page via stemming; the same query
       with `locale=en` does not match `en`-only fields.
-- [ ] Changing project locales triggers a reindex; search results reflect the new locale set.
-- [ ] Non-localized projects: M17/M19/M21/M23 test suites unchanged and green.
-- [ ] `./gradlew build` green.
+- [x] Changing project locales triggers a reindex; search results reflect the new locale set.
+- [x] Non-localized projects: M17/M19/M21/M23 test suites unchanged and green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -68,3 +68,20 @@ M24.2.1–M24.3.2.
   rather than bending their code.
 - Per-locale pagination counts multiply plan work; keep the count computation on the
   snapshot (no rendering) as M21.2.1 requires.
+
+## Implementation notes (2026-09-17)
+
+- **Global sets and records** needed no special renderer code: their values arrive through
+  `AssetValueResolver` and so pass the same one-shot `L10nValues` resolution in `OctlRenderer` that
+  a page's own values do.
+- **Dataset queries** resolve records for the render language *before* the query runs
+  (`RecordView.resolvedFor`), so `where` and `sort` compare the rendered language; sorting uses a
+  `Collator` for that language (`Äpfel` sorts with the A's), and a project without languages keeps
+  the fixed language-independent collation exactly as before.
+- **Pagination** composes automatically: `{locale}` is expanded by the same
+  `OutputPathExpander.resolvePaginationPath`, and a paginated page is planned per language, so its
+  page-2 hrefs stay inside the language.
+- **Search** indexes a language-dependent value's text into that language's analyzer field
+  (`text_de`, `text_en`) while the neutral `text` field keeps everything, so an unfiltered search is
+  unchanged; `GET /search?locale=` reads one language's field. Changing a project's languages
+  requests a rebuild (best-effort: a failure there never fails the settings change).

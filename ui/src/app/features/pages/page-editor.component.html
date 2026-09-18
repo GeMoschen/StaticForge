@@ -55,6 +55,9 @@
         }
       </div>
     }
+    @if (translationSummary(); as summary) {
+      <span class="page-editor__translation" aria-live="polite">{{ summary }}</span>
+    }
     <span class="page-editor__status" aria-live="polite">{{ statusLabel() }}</span>
   </header>
 
@@ -155,6 +158,9 @@
                   [definition]="def"
                   [formGroup]="fieldsForm()!"
                   [projectKey]="projectKey()"
+                  [editingLocale]="editingLocale()"
+                  [storedValue]="storedContent()"
+                  [localeLabels]="localeLabels()"
                 />
               }
               <div class="page-editor__impact">

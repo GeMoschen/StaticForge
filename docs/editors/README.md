@@ -38,7 +38,7 @@ All 19 are `EditorType` enum constants (`template/content/EditorType.java`); the
 
 ## Attributes common to every editor type
 
-`label`, `help`, `required`, `default`, `readOnly`, `hidden`, `visibleWhen`, `renamedFrom`.
+`label`, `help`, `required`, `default`, `readOnly`, `hidden`, `visibleWhen`, `renamedFrom`, `localizable`.
 
 ```
 editor text ctaLabel {
@@ -59,6 +59,40 @@ Angular form engine from one shared fixture file, so it behaves identically ever
 ```
 editor richtext body { label "Body", renamedFrom "text" }
 ```
+
+### `localizable` — one value per language (M24)
+
+`localizable` makes a leaf editor language-dependent in a project that declares languages
+(**Project settings → Languages**):
+
+```
+editor text headline { label "Headline" localizable }
+```
+
+Its stored value is a wrapper holding one value per language instead of a bare value:
+
+```json
+"headline": { "type": "L10N", "values": { "de": "Die Parka", "en": "The parka" } }
+```
+
+A language missing from `values` is "not translated" and resolves through that language's fallback chain
+(the language, its declared fallbacks, then the default language) when the page renders.
+
+**Only leaf editors.** Page structure — bodies, section order, list items, catalog cards — is shared by every
+language, so `group`, `list`, `catalog` and `pagination` reject the attribute with `SF-CDL-0112`. Leaf editors
+*inside* a list item or group may be localizable; a catalog card's fields follow its own section template's CDL.
+
+**Validation.** Each language's value is checked against the editor's own rules (`maxLength`, `pattern`, `min`/`max`,
+…) and the finding names the language: `headline.values.en`. `required` is enforced for the default language only.
+A value stored for a language the project no longer declares is a warning, never an error — the value is kept so
+re-adding the language restores it.
+
+**Toggling it.** Turning `localizable` on migrates every stored value of that editor into the wrapper, under the
+default language, in one revision. Turning it off reduces each wrapper to its default-language value; because that
+discards the other translations, the save is refused with a `409` listing what would be lost until it is re-sent
+with `confirmDiscard=true`. Enabling or disabling the project's languages migrates the same way.
+
+**In a project without languages** `localizable` is inert: values stay bare, exactly as before M24.
 
 **Accepted but not currently enforced:** the parser also accepts `group`, `order`, `pattern`, and
 `message` as bare top-level attributes on any editor (no `SF-CDL-0104` error) — but their values

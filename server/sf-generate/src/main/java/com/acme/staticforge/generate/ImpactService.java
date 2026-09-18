@@ -44,19 +44,23 @@ public class ImpactService {
     private final RebuildExpansion expansion;
     private final CompiledTemplateCache compiledTemplates;
 
+    private final com.acme.staticforge.project.ProjectLocales projectLocales;
+
     public ImpactService(
             ProjectService projectService,
             ChannelService channelService,
             SnapshotService snapshotService,
             BuildPlanner buildPlanner,
             RebuildExpansion expansion,
-            CompiledTemplateCache compiledTemplates) {
+            CompiledTemplateCache compiledTemplates,
+            com.acme.staticforge.project.ProjectLocales projectLocales) {
         this.projectService = projectService;
         this.channelService = channelService;
         this.snapshotService = snapshotService;
         this.buildPlanner = buildPlanner;
         this.expansion = expansion;
         this.compiledTemplates = compiledTemplates;
+        this.projectLocales = projectLocales;
     }
 
     /**
@@ -86,7 +90,8 @@ public class ImpactService {
                 snapshot,
                 RebuildExpansion.Changes.upperBound(asset.assetId()),
                 SnapshotPagination.of(snapshot, compiledTemplates.buildMemo(snapshot)));
-        OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, channelService.outputSettings(project.getId()));
+        OutputPathResolver paths = OutputPathResolver.forSnapshot(
+                snapshot, channelService.outputSettings(project.getId()), projectLocales.forProject(project.getId()));
         Set<UUID> pages = new LinkedHashSet<>();
         for (UUID page : walk.pages()) {
             SnapshotAsset reached = snapshot.assetByUuid(page);

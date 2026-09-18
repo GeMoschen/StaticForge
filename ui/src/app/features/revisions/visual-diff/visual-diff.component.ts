@@ -1,3 +1,5 @@
+import { LocalesStore } from '../../../core/project/locales.store';
+import { formatDiffPath } from '../../../shared/components/sf-diff.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -58,6 +60,23 @@ type FieldChange = components['schemas']['FieldChange'];
 })
 export class SfVisualDiffComponent {
   private readonly api = inject(ApiClient);
+
+  private readonly localesForDiff = inject(LocalesStore);
+
+  /**
+   * Language tag to label, so a language-dependent change reads `content.headline (English)`
+   * instead of the raw `content.headline.values.en` (M24.4.1).
+   */
+  protected readonly localeLabels = computed<Record<string, string>>(() =>
+    Object.fromEntries(
+      this.localesForDiff.locales().map((locale) => [locale.code ?? '', locale.label ?? locale.code ?? '']),
+    ),
+  );
+
+  /** A field path with its language spelled out. */
+  protected labelPath(path: string | undefined): string {
+    return formatDiffPath(path, this.localeLabels());
+  }
 
   readonly asset = input.required<AssetDiff>();
   readonly projectKey = input.required<string>();

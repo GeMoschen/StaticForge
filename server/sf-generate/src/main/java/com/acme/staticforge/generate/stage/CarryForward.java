@@ -100,19 +100,26 @@ public final class CarryForward {
     // Pages
     // ------------------------------------------------------------------
 
-    private record OutputKey(UUID page, String channel, int pageNumber) {}
+    /**
+     * What identifies one page output. The language is part of it (M24.3.2): the German and the
+     * English output of a page are two distinct files, and a run that rebuilds one must carry the
+     * other forward rather than treat them as the same output.
+     */
+    private record OutputKey(UUID page, String channel, int pageNumber, String locale) {}
 
     private void selectCarriedPages() {
         Map<OutputKey, String> site = new HashMap<>();
-        plan.siteOutputs().forEach(o -> site.put(new OutputKey(o.pageUuid(), o.channel(), o.pageNumber()), o.outputPath()));
+        plan.siteOutputs().forEach(o ->
+                site.put(new OutputKey(o.pageUuid(), o.channel(), o.pageNumber(), o.locale()), o.outputPath()));
         Set<OutputKey> planned = new HashSet<>();
-        plan.entries().forEach(o -> planned.add(new OutputKey(o.pageUuid(), o.channel(), o.pageNumber())));
+        plan.entries().forEach(o ->
+                planned.add(new OutputKey(o.pageUuid(), o.channel(), o.pageNumber(), o.locale())));
 
         for (BuildManifest.Output output : base.outputs()) {
             if (output.kind() != BuildManifest.Kind.PAGE) {
                 continue;
             }
-            OutputKey key = new OutputKey(output.asset(), output.channel(), output.number());
+            OutputKey key = new OutputKey(output.asset(), output.channel(), output.number(), output.locale());
             boolean keep = responsibleFor(output)
                     ? output.path().equals(site.get(key)) && !planned.contains(key)
                     : scoped;
@@ -141,7 +148,8 @@ public final class CarryForward {
             SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
             if (page != null) {
                 pages.add(entry.pagination() == null
-                        ? new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName())
+                        ? new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
+                                null, null, entry.locale())
                         : new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
                                 entry.pagination().pageNumber(), entry.pagination().totalPages()));
             }
@@ -163,7 +171,7 @@ public final class CarryForward {
         String title = entry != null
                 ? baseTitle(entry, output.pageNumber())
                 : page == null ? "" : page.displayName();
-        return new SitePage(uid, output.path(), output.channel(), title, output.pageNumber(), null);
+        return new SitePage(uid, output.path(), output.channel(), title, output.pageNumber(), null, output.locale());
     }
 
     /** The base entry's title without the {@code " – page n"} suffix the search index adds again. */
@@ -246,6 +254,7 @@ public final class CarryForward {
                     entry.pageUuid(),
                     entry.channel(),
                     entry.pagination() == null ? null : entry.pageNumber(),
+                    entry.locale(),
                     AssetCopyStage.mediaOnly(snapshot, page.dependencies()));
         }
         UUID media = assets.owners().get(file.path());

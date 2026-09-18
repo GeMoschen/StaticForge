@@ -1,6 +1,6 @@
 @for (change of changes(); track trackChange($index, change)) {
   <div class="sf-diff__field" [class.sf-diff__field--add]="change.add" [class.sf-diff__field--remove]="change.remove">
-    <div class="sf-diff__path">{{ change.path ?? '' }}</div>
+    <div class="sf-diff__path">{{ pathOf(change) }}</div>
 
     @if (change.blocks && change.blocks.length > 0) {
       <div class="sf-diff__blocks">

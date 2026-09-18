@@ -196,7 +196,7 @@ class ProcessedMediaIntegrationTest {
     void writeTextIsOneRevisionAndKeepsEverythingButTheBlob() {
         Fixture fx = newFixture();
         AssetVersionView css = processed(fx, upload(fx, "site.css", "a{color:red}"));
-        css = mediaService.updateMetadata(css.uuid(), "alt", null, null, null, css.validFromRevision(), fx.ctx());
+        css = mediaService.updateMetadata(css.uuid(), "alt", null, null, null, null, css.validFromRevision(), fx.ctx());
         String oldSha = css.payload().path("blobSha256").asText();
         int before = revisionCount(fx);
 
