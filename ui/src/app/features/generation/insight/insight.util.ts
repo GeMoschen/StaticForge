@@ -48,6 +48,9 @@ const EDGE_LABELS: Record<string, string> = {
   PARENT_TEMPLATE: 'extends template',
   NAVIGATION: 'renders navigation of',
   DATASET_MEMBERSHIP: 'loops dataset containing',
+  RECORD_SET_MEMBERSHIP: 'reads record set containing',
+  RECORD_SET_QUERY: 'reads record set with changed query',
+  RECORD_TEMPLATE: 'renders through record template of',
   PAGINATION_SOURCE: 'paginates source containing',
 };
 

@@ -22,7 +22,7 @@ next one in its lane starts.
 - [ ] Set grid: `revision` param on `GET /record-sets/{uuid}/records` (time travel lists records as of that
       revision) and a per-row `selectedBySet` flag in "All records" mode — replaces the UI's extra
       `_uuid == … || …` request for dimming (backend after M25.2.2, then UI)
-- [ ] Insight UI: `EDGE_LABELS` in `features/generation/insight/insight.util.ts` for `RECORD_SET_MEMBERSHIP`,
+- [x] Insight UI: `EDGE_LABELS` in `features/generation/insight/insight.util.ts` for `RECORD_SET_MEMBERSHIP`,
       `RECORD_SET_QUERY`, `RECORD_TEMPLATE`
 - [ ] Record template live check: `POST /octl/validate` gains a dataset context (`datasetUuid` + draft CDL) so
       unknown fields show while typing, not only on save (backend, then `dataset-schema-editor`)

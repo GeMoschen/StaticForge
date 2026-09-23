@@ -59,6 +59,9 @@ describe('build insight reasons', () => {
   it('labels edges from one lookup and falls back to the raw name of an unknown edge', () => {
     expect(edgeLabel({ edge: 'SECTION_TEMPLATE' })).toBe('places section');
     expect(edgeLabel({ edge: 'NAVIGATION' })).toBe('renders navigation of');
+    expect(edgeLabel({ edge: 'RECORD_SET_MEMBERSHIP' })).toBe('reads record set containing');
+    expect(edgeLabel({ edge: 'RECORD_SET_QUERY' })).toBe('reads record set with changed query');
+    expect(edgeLabel({ edge: 'RECORD_TEMPLATE' })).toBe('renders through record template of');
     expect(edgeLabel({ edge: 'REFERENCE', referenceKind: 'MEDIA_REF' })).toBe('references media');
     expect(edgeLabel({ edge: 'REFERENCE', referenceKind: 'SOMETHING' })).toBe('references (SOMETHING)');
     expect(edgeLabel({ edge: 'LOCALE_VARIANT' })).toBe('LOCALE_VARIANT');
