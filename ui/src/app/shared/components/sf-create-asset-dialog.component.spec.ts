@@ -141,4 +141,95 @@ describe('SfCreateAssetDialogComponent', () => {
     expect(api.createFolder).not.toHaveBeenCalled();
     expect(api.createPage).not.toHaveBeenCalled();
   });
+
+  describe('record sets and records (M25)', () => {
+    const DATASETS = [
+      { uuid: 'ds-team', displayName: 'Team' },
+      { uuid: 'ds-product', displayName: 'Products' },
+    ];
+
+    function renderSetDialog(create: (value: CreateAssetFormValue) => void, initialDatasetUuid: string | null = null) {
+      return render(SfCreateAssetDialogComponent, {
+        componentInputs: { kind: 'RECORD_SET', open: true, projectKey: 'proj', datasets: DATASETS, initialDatasetUuid },
+        providers: [{ provide: ApiClient, useValue: apiStub() }],
+        on: { create },
+      });
+    }
+
+    /**
+     * The dataset a set is created with is the one the select shows: the default is written into the
+     * control, never left to the browser's fallback display of an unmatched value.
+     */
+    it('submits the dataset the select shows by default, and no uid while it follows the name', async () => {
+      const create = vi.fn();
+      await renderSetDialog(create);
+
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Team leads' } });
+      screen.getByRole('button', { name: 'Create' }).click();
+
+      expect((screen.getByLabelText(/^Dataset/) as HTMLSelectElement).value).toBe('ds-team');
+      expect(create).toHaveBeenCalledWith({ displayName: 'Team leads', datasetUuid: 'ds-team' });
+    });
+
+    it('preselects the dataset the store is filtered to', async () => {
+      const create = vi.fn();
+      await renderSetDialog(create, 'ds-product');
+
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Featured' } });
+      screen.getByRole('button', { name: 'Create' }).click();
+
+      expect(create.mock.calls[0][0]).toMatchObject({ datasetUuid: 'ds-product' });
+    });
+
+    it('derives the uid from the name and says the dataset is permanent', async () => {
+      await renderSetDialog(vi.fn());
+
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Team Leads' } });
+
+      expect((screen.getByLabelText(/^UID/) as HTMLInputElement).value).toBe('team_leads');
+      expect(screen.getByText(/can't be changed after the set is created/)).toBeTruthy();
+    });
+
+    it('sends a uid the user typed, and keeps it when the name changes afterwards', async () => {
+      const create = vi.fn();
+      await renderSetDialog(create);
+
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Team Leads' } });
+      fireEvent.input(screen.getByLabelText(/^UID/), { target: { value: 'leadership' } });
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Leadership team' } });
+      fireEvent.change(screen.getByLabelText(/^Dataset/), { target: { value: 'ds-product' } });
+      screen.getByRole('button', { name: 'Create' }).click();
+
+      expect(create).toHaveBeenCalledWith({ displayName: 'Leadership team', datasetUuid: 'ds-product', uid: 'leadership' });
+    });
+
+    it('refuses a uid with characters a uid cannot have', async () => {
+      const create = vi.fn();
+      await renderSetDialog(create);
+
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Team' } });
+      fireEvent.input(screen.getByLabelText(/^UID/), { target: { value: 'Team Leads!' } });
+      screen.getByRole('button', { name: 'Create' }).click();
+
+      expect(create).not.toHaveBeenCalled();
+      expect(await screen.findByText('Use lowercase letters, numbers, and underscores only')).toBeTruthy();
+    });
+
+    /** A record's dataset is its set's: the record dialog asks for a name only. */
+    it('asks a new record for its name only', async () => {
+      const create = vi.fn();
+      await render(SfCreateAssetDialogComponent, {
+        componentInputs: { kind: 'RECORD', open: true, projectKey: 'proj', datasets: DATASETS },
+        providers: [{ provide: ApiClient, useValue: apiStub() }],
+        on: { create },
+      });
+
+      expect(screen.queryByLabelText(/^Dataset/)).toBeNull();
+      expect(screen.queryByLabelText(/^UID/)).toBeNull();
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Ada' } });
+      screen.getByRole('button', { name: 'Create' }).click();
+
+      expect(create).toHaveBeenCalledWith({ displayName: 'Ada' });
+    });
+  });
 });

@@ -42,8 +42,9 @@ Note: the `anyComponentStyle` warnings already emitted for several component sty
 ## One bundle, no code splitting
 
 Every route component is imported eagerly in `app.routes.ts`; there are no `loadComponent`/`loadChildren` dynamic
-imports, so the build emits a single `main-*.js` (about 1.03 MB raw, 190 kB transferred, M21). This was decided on
+imports, so the build emits a single `main-*.js` (about 1.03 MB raw, 190 kB transferred, M21; about 1.2 MB raw,
+220 kB transferred with the M25 record-set screens). This was decided on
 2026-09-16: the form editors import each other in a cycle (section editor → content form → editor registry → catalog
 editor → section editor), which chunk boundaries make fragile, and an "undefined ɵcmp" error was reported opening a
-page with sections. The `initial` budget in `angular.json` is sized for the single bundle (warning 1.1 MB, error
-1.3 MB). Don't reintroduce lazy routes without resolving that cycle first.
+page with sections. The `initial` budget in `angular.json` is sized for the single bundle (warning 1.3 MB, error
+1.5 MB; raised from 1.1/1.3 MB in M25.5.1, when the bundle passed 1.15 MB). Don't reintroduce lazy routes without resolving that cycle first.

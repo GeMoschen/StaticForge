@@ -3,22 +3,32 @@
 } @else {
   @if (record(); as rec) {
     <div class="record-editor">
+      <nav class="record-editor__crumbs" aria-label="Breadcrumb">
+        <a [routerLink]="['/p', projectKey(), 'content']">All content</a>
+        @if (rec.folderUuid && folderPath() !== '/') {
+          <span aria-hidden="true">›</span>
+          <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ folder: rec.folderUuid }">{{ folderPath() }}</a>
+        }
+        @if (rec.recordSet; as set) {
+          <span aria-hidden="true">›</span>
+          <a [routerLink]="['/p', projectKey(), 'content', 'sets', set.uuid]">{{ set.displayName ?? set.uid }}</a>
+        }
+        <span aria-hidden="true">›</span>
+        <span aria-current="page">{{ rec.displayName ?? rec.uid }}</span>
+      </nav>
+
       <header class="record-editor__header">
-        <a class="record-editor__back" [routerLink]="['/p', projectKey(), 'content']" queryParamsHandling="preserve">
-          <sf-icon name="arrow_back" />
-          <span>All records</span>
-        </a>
         <div class="record-editor__title">
           <h2>{{ rec.displayName ?? rec.uid }}</h2>
           <code class="record-editor__uid">{{ rec.uid }}</code>
           @if (rec.datasetUid) {
             <span class="record-editor__badge" title="Dataset">{{ dataset()?.displayName ?? rec.datasetUid }}</span>
           }
-          <span class="record-editor__path" title="Folder">{{ rec.folderPath }}</span>
         </div>
         <span class="record-editor__status" role="status" aria-live="polite">{{ statusLabel() }}</span>
         @if (!readOnly() && !rec.deleted) {
           <sf-button variant="secondary" [disabled]="autosave.saveState() === 'saving'" (click)="saveNow()">Save now</sf-button>
+          <sf-button variant="secondary" (click)="openMove()">Move…</sf-button>
           <sf-button variant="danger" (click)="deleteRecord()">Delete</sf-button>
         }
         @if (rec.deleted && !timeTravelling()) {
@@ -149,6 +159,17 @@
           }
         </aside>
       </div>
+
+      <sf-move-target-dialog
+        [open]="moveOpen()"
+        [title]="'Move “' + (rec.displayName ?? rec.uid) + '” to…'"
+        description="A record can move only to another record set of its dataset."
+        emptyText="This dataset has no other record set. Create one in the Content tree first."
+        [targets]="moveTargets()"
+        [submitting]="moving()"
+        (chosen)="moveTo($event)"
+        (closed)="closeMove()"
+      />
 
       @if (autosave.conflict(); as conflict) {
         <sf-conflict-drawer

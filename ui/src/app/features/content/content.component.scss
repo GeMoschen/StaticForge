@@ -1,3 +1,5 @@
+@use '../../design/table';
+
 :host {
   display: block;
   height: 100%;
@@ -89,23 +91,6 @@
   font-size: var(--sf-text-xs);
 }
 
-.content__dataset {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-2);
-}
-
-.content__dataset-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.content__dataset-head h2 {
-  margin: 0;
-  font-size: var(--sf-text-sm);
-}
-
 .content__badge {
   padding: 0 var(--sf-2);
   border: 1px solid var(--sf-line);
@@ -114,17 +99,66 @@
   font-weight: 500;
 }
 
-.content__link {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--sf-signal);
-  font-size: var(--sf-text-xs);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 .content__cta {
   text-align: center;
   font-size: var(--sf-text-sm);
+}
+
+.content__sets {
+  overflow-x: auto;
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  @include table.sf-table-base;
+}
+
+.content__set-row {
+  cursor: pointer;
+}
+
+.content__set-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  color: var(--sf-ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.content__set-link sf-icon {
+  color: var(--sf-amber);
+}
+
+.content__set-link:hover,
+.content__set-link:focus-visible {
+  text-decoration: underline;
+}
+
+.content__warning {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  margin-left: var(--sf-2);
+  padding: 0 var(--sf-2);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sf-amber) 14%, transparent);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-xs);
+}
+
+.content__muted {
+  color: var(--sf-slate);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+}
+
+.content__num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.content__empty {
+  padding: var(--sf-4) !important;
+  text-align: center;
+  color: var(--sf-slate);
 }

@@ -33,7 +33,20 @@
     <sf-icon class="store-node__icon" [name]="icon()" />
     <span class="store-node__name">{{ node().displayName ?? node().uid }}</span>
     @if (node().badge; as badge) {
-      <span class="store-node__badge" [class.store-node__badge--broken]="badge.broken">{{ badge.text }}</span>
+      @if (badge.label) {
+        <span class="store-node__badge" [class.store-node__badge--broken]="badge.broken" [title]="badge.label">
+          <span aria-hidden="true">{{ badge.text }}</span>
+          <span class="sf-sr-only">{{ badge.label }}</span>
+        </span>
+      } @else {
+        <span class="store-node__badge" [class.store-node__badge--broken]="badge.broken">{{ badge.text }}</span>
+      }
+    }
+    @if (node().warning; as warning) {
+      <span class="store-node__warning" [title]="warning">
+        <sf-icon name="warning" />
+        <span class="sf-sr-only">{{ warning }}</span>
+      </span>
     }
     @if (isProtected()) {
       <sf-icon
@@ -54,6 +67,7 @@
           [projectKey]="projectKey()"
           [leafNoun]="leafNoun()"
           [renameFolder]="renameFolder()"
+          [menuItems]="menuItems()"
           (select)="select.emit($event)"
           (move)="move.emit($event)"
           (changed)="changed.emit()"

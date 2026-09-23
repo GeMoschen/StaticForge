@@ -25,13 +25,23 @@
   flex-wrap: wrap;
 }
 
-.record-editor__back {
-  display: inline-flex;
+.record-editor__crumbs {
+  display: flex;
   align-items: center;
   gap: var(--sf-1);
+  flex-wrap: wrap;
   color: var(--sf-slate);
   font-size: var(--sf-text-sm);
+}
+
+.record-editor__crumbs a {
+  color: inherit;
   text-decoration: none;
+}
+
+.record-editor__crumbs a:hover,
+.record-editor__crumbs [aria-current='page'] {
+  color: var(--sf-ink);
 }
 
 .record-editor__title {
@@ -48,7 +58,6 @@
 }
 
 .record-editor__uid,
-.record-editor__path,
 .record-editor__muted {
   font-family: var(--sf-font-mono, monospace);
   font-size: var(--sf-text-xs);

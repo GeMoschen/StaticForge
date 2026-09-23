@@ -1,53 +1,83 @@
-<div class="record-grid" [class.record-grid--compact]="compact()">
-  @if (!compact()) {
-    <div class="record-grid__toolbar">
-      <label class="record-grid__search">
-        <sf-icon name="search" />
-        <span class="sf-sr-only">Search records by name</span>
-        <input type="search" placeholder="Search by name…" (input)="onSearch($event)" />
-      </label>
-      <div class="record-grid__filter">
-        <label class="sf-sr-only" [attr.for]="'where-' + dataset().uuid">Filter expression</label>
-        <input
-          [id]="'where-' + dataset().uuid"
-          type="text"
-          spellcheck="false"
-          placeholder="Filter, e.g. role == 'lead' && joined > '2022-01-01'"
-          [value]="whereDraft()"
-          [attr.aria-invalid]="whereError() ? true : null"
-          [attr.aria-describedby]="whereError() ? 'where-error-' + dataset().uuid : null"
-          (input)="onWhereInput($event)"
-          (keydown)="onWhereKeydown($event)"
-        />
-        <sf-button variant="secondary" (click)="applyWhere()">Apply</sf-button>
-        @if (where()) {
-          <sf-button variant="ghost" (click)="clearWhere()">Clear</sf-button>
-        }
-      </div>
-      <div class="record-grid__chooser">
-        <button type="button" class="record-grid__chooser-toggle" [attr.aria-expanded]="chooserOpen()" (click)="toggleChooser()">
-          <sf-icon name="view_column" /> Columns
-        </button>
-        @if (chooserOpen()) {
-          <div class="record-grid__chooser-menu" role="group" aria-label="Visible columns">
-            @for (column of columns(); track column.field) {
-              <label>
-                <input type="checkbox" [checked]="!isHidden(column.field)" (change)="toggleColumn(column.field)" />
-                {{ column.label }}
-              </label>
-            }
-          </div>
-        }
-      </div>
+<div class="record-grid">
+  <div class="record-grid__toolbar">
+    <div class="record-grid__modes" role="radiogroup" aria-label="Records shown">
+      <button
+        type="button"
+        role="radio"
+        class="record-grid__mode"
+        [class.record-grid__mode--active]="mode() === 'all'"
+        [attr.aria-checked]="mode() === 'all'"
+        (click)="setMode('all')"
+      >
+        All records
+      </button>
+      <button
+        type="button"
+        role="radio"
+        class="record-grid__mode"
+        [class.record-grid__mode--active]="mode() === 'rendered'"
+        [attr.aria-checked]="mode() === 'rendered'"
+        (click)="setMode('rendered')"
+      >
+        Show as rendered
+      </button>
     </div>
-    @if (whereError(); as problem) {
-      <p class="record-grid__error" role="alert" [id]="'where-error-' + dataset().uuid">
-        {{ problem.detail }}
-        @if (problem.column) {
-          <code class="record-grid__caret">{{ where() }}<br />{{ caretLine(problem.column) }}</code>
-        }
-      </p>
+    <label class="record-grid__search">
+      <sf-icon name="search" />
+      <span class="sf-sr-only">Search records by name</span>
+      <input type="search" placeholder="Search by name…" (input)="onSearch($event)" />
+    </label>
+    <div class="record-grid__filter">
+      <label class="sf-sr-only" [attr.for]="'where-' + recordSetUuid()">Filter expression</label>
+      <input
+        [id]="'where-' + recordSetUuid()"
+        type="text"
+        spellcheck="false"
+        placeholder="Filter, e.g. role == 'lead' && joined > '2022-01-01'"
+        [value]="whereDraft()"
+        [attr.aria-invalid]="whereError() ? true : null"
+        [attr.aria-describedby]="whereError() ? 'where-error-' + recordSetUuid() : null"
+        (input)="onWhereInput($event)"
+        (keydown)="onWhereKeydown($event)"
+      />
+      <sf-button variant="secondary" (click)="applyWhere()">Apply</sf-button>
+      @if (where()) {
+        <sf-button variant="ghost" (click)="clearWhere()">Clear</sf-button>
+      }
+    </div>
+    @if (canEditQuery()) {
+      <sf-button
+        variant="ghost"
+        [disabled]="!hasGridFilter()"
+        title="Copy this filter and sort into the set query (not saved until you save the query)"
+        (click)="useFilterAsSetQuery()"
+      >
+        Use as set query
+      </sf-button>
     }
+    <div class="record-grid__chooser">
+      <button type="button" class="record-grid__chooser-toggle" [attr.aria-expanded]="chooserOpen()" (click)="toggleChooser()">
+        <sf-icon name="view_column" /> Columns
+      </button>
+      @if (chooserOpen()) {
+        <div class="record-grid__chooser-menu" role="group" aria-label="Visible columns">
+          @for (column of columns(); track column.field) {
+            <label>
+              <input type="checkbox" [checked]="!isHidden(column.field)" (change)="toggleColumn(column.field)" />
+              {{ column.label }}
+            </label>
+          }
+        </div>
+      }
+    </div>
+  </div>
+  @if (whereError(); as problem) {
+    <p class="record-grid__error" role="alert" [id]="'where-error-' + recordSetUuid()">
+      {{ problem.detail }}
+      @if (problem.column) {
+        <code class="record-grid__caret">{{ where() }}<br />{{ caretLine(problem.column) }}</code>
+      }
+    </p>
   }
 
   <div class="record-grid__table-wrap">
@@ -79,42 +109,52 @@
               </button>
             </th>
           }
-          @if (!compact()) {
-            <th scope="col">Folder</th>
-            <th scope="col" [attr.aria-sort]="ariaSortOf(sort(), '_changedAt')">
-              <button type="button" class="record-grid__sort" (click)="onHeader('_changedAt', $event)">
-                Changed
-                @if (indicator(sort(), '_changedAt'); as ind) {
-                  <sf-icon [name]="ind.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
-                }
-              </button>
-            </th>
-          }
+          <th scope="col" [attr.aria-sort]="ariaSortOf(sort(), '_changedAt')">
+            <button type="button" class="record-grid__sort" (click)="onHeader('_changedAt', $event)">
+              Changed
+              @if (indicator(sort(), '_changedAt'); as ind) {
+                <sf-icon [name]="ind.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
+              }
+            </button>
+          </th>
         </tr>
       </thead>
       <tbody>
-        @for (row of rows(); track row.uuid; let i = $index) {
+        @for (row of rows(); track row.uuid; let rowIndex = $index) {
           <tr
             #row
             class="record-grid__row"
-            [attr.tabindex]="i === activeRow() ? 0 : -1"
+            [class.record-grid__row--excluded]="isExcluded(row)"
+            [attr.title]="isExcluded(row) ? excludedTooltip() : null"
+            [attr.tabindex]="rowIndex === activeRow() ? 0 : -1"
             (click)="openRow(row)"
-            (keydown)="onRowKeydown($event, i, row)"
-            (focus)="activeRow.set(i)"
+            (keydown)="onRowKeydown($event, rowIndex, row)"
+            (focus)="activeRow.set(rowIndex)"
           >
-            <td class="record-grid__name">{{ row.displayName }}</td>
+            <td class="record-grid__name">
+              {{ row.displayName }}
+              @if (isExcluded(row)) {
+                <span class="record-grid__excluded">
+                  <sf-icon name="visibility_off" />
+                  <span class="sf-sr-only">{{ excludedTooltip() }}</span>
+                </span>
+              }
+            </td>
             @for (column of visibleColumns(); track column.field) {
               <td>{{ valueOf(row, column) }}</td>
             }
-            @if (!compact()) {
-              <td class="record-grid__muted">{{ row.folderPath }}</td>
-              <td class="record-grid__muted">{{ row.changedAt | sfRelativeTime }}</td>
-            }
+            <td class="record-grid__muted">{{ row.changedAt | sfRelativeTime }}</td>
           </tr>
         } @empty {
           <tr>
-            <td class="record-grid__empty" [attr.colspan]="visibleColumns().length + (compact() ? 1 : 3)">
-              {{ loading() ? 'Loading…' : 'No records match.' }}
+            <td class="record-grid__empty" [attr.colspan]="visibleColumns().length + 2">
+              @if (loading()) {
+                Loading…
+              } @else if (mode() === 'rendered' && !queryValid()) {
+                The set query is invalid, so the set shows no records.
+              } @else {
+                No records match.
+              }
             </td>
           </tr>
         }
@@ -122,13 +162,13 @@
     </table>
   </div>
 
-  @if (!compact() && totalPages() > 1) {
+  @if (totalPages() > 1) {
     <nav class="record-grid__pager" aria-label="Record pages">
       <sf-button variant="ghost" [disabled]="page() === 0" (click)="previousPage()">Previous</sf-button>
       <span aria-live="polite">Page {{ page() + 1 }} of {{ totalPages() }} · {{ totalElements() }} records</span>
       <sf-button variant="ghost" [disabled]="page() + 1 >= totalPages()" (click)="nextPage()">Next</sf-button>
     </nav>
-  } @else if (!compact()) {
+  } @else {
     <p class="record-grid__summary" aria-live="polite">{{ totalElements() }} records</p>
   }
 </div>

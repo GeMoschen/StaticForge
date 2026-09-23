@@ -14,7 +14,7 @@ next one in its lane starts.
 - [ ] M25.4.1 — export/import
 
 ## UI lane (after M25.3.1)
-- [ ] M25.5.1 — Content store record sets
+- [x] M25.5.1 — Content store record sets
 - [ ] M25.5.2 — dataset record template editor
 - [ ] M25.5.3 — reference picker, search, routing
 

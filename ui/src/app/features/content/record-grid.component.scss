@@ -15,6 +15,29 @@
   flex-wrap: wrap;
 }
 
+.record-grid__modes {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--sf-line);
+  border-radius: 999px;
+  background: var(--sf-surface);
+}
+
+.record-grid__mode {
+  padding: var(--sf-1) var(--sf-3);
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+  cursor: pointer;
+}
+
+.record-grid__mode--active {
+  background: color-mix(in srgb, var(--sf-signal) 12%, transparent);
+  color: var(--sf-ink);
+}
+
 .record-grid__search {
   display: inline-flex;
   align-items: center;
@@ -166,6 +189,23 @@
 
 .record-grid__name {
   font-weight: 500;
+}
+
+/* A record the set query leaves out: still listed (All records), visibly not on the site. */
+.record-grid__row--excluded td {
+  color: var(--sf-slate);
+  opacity: 0.6;
+}
+
+.record-grid__row--excluded .record-grid__name {
+  font-weight: 400;
+  font-style: italic;
+}
+
+.record-grid__excluded {
+  display: inline-flex;
+  margin-left: var(--sf-1);
+  vertical-align: middle;
 }
 
 .record-grid__muted {

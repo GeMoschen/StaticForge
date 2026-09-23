@@ -21,8 +21,13 @@ export interface StoreTreeNode {
   icon?: string;
   /** The fixed, protected store root: no rename, no drag, no context menu. */
   protectedFolder?: boolean;
-  /** Optional trailing annotation, e.g. a navigation reference's resolved page path. */
-  badge?: { text: string; broken?: boolean };
+  /**
+   * Optional trailing annotation, e.g. a navigation reference's resolved page path or a record set's
+   * record count; `label` is what assistive technology reads instead of the bare text.
+   */
+  badge?: { text: string; broken?: boolean; label?: string };
+  /** A problem with this node, shown as a warning icon with this text as its tooltip. */
+  warning?: string;
   children?: StoreTreeNode[];
 }
 
@@ -31,6 +36,12 @@ export interface StoreTreeMoveEvent {
   source: string;
   target: string;
 }
+
+/**
+ * A store's own context-menu entries for a node, listed after the built-in "Rename" (M25.5.1: the
+ * Content store's "New record set", "Move to…", "Delete" …). Return `[]` for none.
+ */
+export type StoreTreeMenuFn = (node: StoreTreeNode) => ContextMenuItem[];
 
 /** How a folder rename is persisted; stores whose folders have a dedicated endpoint pass their own. */
 export type FolderRenameFn = (projectKey: string, uuid: string, displayName: string) => Observable<unknown>;
@@ -76,6 +87,8 @@ export class SfStoreTreeNodeComponent {
    * whose folders have no endpoint of their own.
    */
   readonly renameFolder = input<FolderRenameFn | null>(null);
+  /** Store-specific context-menu entries, appended to "Rename" on every node of the tree. */
+  readonly menuItems = input<StoreTreeMenuFn | null>(null);
 
   readonly select = output<string>();
   readonly move = output<StoreTreeMoveEvent>();
@@ -168,7 +181,10 @@ export class SfStoreTreeNodeComponent {
     if (!uuid || this.isProtected() || this.readOnly()) {
       return;
     }
-    const items: ContextMenuItem[] = [{ label: 'Rename', icon: 'edit', action: () => this.openRename() }];
+    const items: ContextMenuItem[] = [
+      { label: 'Rename', icon: 'edit', action: () => this.openRename() },
+      ...(this.menuItems()?.(this.node()) ?? []),
+    ];
     this.menu.open(event, items);
   }
 

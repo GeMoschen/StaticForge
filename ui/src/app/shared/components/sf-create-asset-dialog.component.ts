@@ -26,6 +26,8 @@ import { SfButtonComponent } from './sf-button.component';
 import { SfFieldComponent } from './sf-field.component';
 import { SfSpinnerComponent } from './sf-spinner.component';
 import { concreteTemplates } from '../../features/templates/inheritance.util';
+import { deriveUid, UID_PATTERN } from '../uid.util';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 type TemplateSummary = components['schemas']['TemplateSummary'];
 
@@ -37,10 +39,11 @@ export type CreateAssetKind =
   | 'PAGE_REFERENCE'
   | 'GLOBAL_SET'
   | 'DATASET'
+  | 'RECORD_SET'
   | 'RECORD';
 export type CreateAssetScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'GLOBALS' | 'CONTENT';
 
-/** A dataset a new record can belong to (the dialog's dataset chooser, M19.4.1). */
+/** A dataset a new record set is of (the dialog's dataset chooser, M25.5.1). */
 export interface CreateAssetDatasetOption {
   uuid?: string;
   displayName?: string;
@@ -54,13 +57,21 @@ export interface CreateAssetFormValue {
   label?: string;
   targetKind?: string;
   targetAssetUuid?: string;
-  /** For `RECORD`: the dataset the record belongs to. */
+  /** For `RECORD_SET`: the dataset of the set's records (fixed for the set's life). */
   datasetUuid?: string;
+  /** For `RECORD_SET`: a uid the user chose; absent when the server should derive it from the name. */
+  uid?: string;
 }
 
 function nonBlank(control: AbstractControl): ValidationErrors | null {
   const value = (control.value ?? '').toString();
   return value.trim().length > 0 ? null : { required: true };
+}
+
+/** A blank uid is fine (the server derives one); anything else must be a valid uid. */
+function uidOrBlank(control: AbstractControl): ValidationErrors | null {
+  const value = (control.value ?? '').toString().trim();
+  return !value || UID_PATTERN.test(value) ? null : { uid: true };
 }
 
 const TITLES: Record<CreateAssetKind, string> = {
@@ -71,12 +82,13 @@ const TITLES: Record<CreateAssetKind, string> = {
   PAGE_REFERENCE: 'New reference',
   GLOBAL_SET: 'New property set',
   DATASET: 'New dataset',
+  RECORD_SET: 'New record set',
   RECORD: 'New record',
 };
 
 /**
  * Shared "create asset" modal — one dialog for the creation flows (folder,
- * page, page/section template, navigation reference, global property set, dataset, record) that used to be raw
+ * page, page/section template, navigation reference, global property set, dataset, record set, record) that used to be raw
  * `window.prompt` calls or one-off inline panels. Adapts its fields to
  * `kind`, validates with Reactive Forms, and emits the collected values via
  * `create` — it never calls a create API itself; the caller does that and
@@ -100,9 +112,9 @@ export class SfCreateAssetDialogComponent {
   readonly templates = input<TemplateSummary[]>([]);
   /** Page templates a page may use: abstract templates are layouts for other templates (M20). */
   protected readonly templateOptions = computed(() => concreteTemplates(this.templates()));
-  /** For `RECORD`: the datasets to choose from; the chooser is shown when there is more than one. */
+  /** For `RECORD_SET`: the live datasets to choose from. */
   readonly datasets = input<CreateAssetDatasetOption[]>([]);
-  /** For `RECORD`: the dataset preselected in the chooser. */
+  /** For `RECORD_SET`: the dataset preselected in the chooser (otherwise the first one). */
   readonly initialDatasetUuid = input<string | null>(null);
 
   readonly create = output<CreateAssetFormValue>();
@@ -120,7 +132,11 @@ export class SfCreateAssetDialogComponent {
   protected readonly showTemplateField = computed(() => this.kind() === 'PAGE');
   protected readonly showTargetField = computed(() => this.kind() === 'PAGE_REFERENCE');
   protected readonly showLabelField = computed(() => this.kind() === 'PAGE_REFERENCE');
-  protected readonly showDatasetField = computed(() => this.kind() === 'RECORD' && this.datasets().length > 1);
+  /** A record's dataset is its set's (M25): only a new record set picks one — always visibly, as it's permanent. */
+  protected readonly showDatasetField = computed(() => this.kind() === 'RECORD_SET');
+  protected readonly showUidField = computed(() => this.kind() === 'RECORD_SET');
+  /** Set once the user types a uid of their own; until then the uid follows the name. */
+  private readonly uidEdited = signal(false);
 
   protected readonly form = this.fb.nonNullable.group({
     displayName: ['', [nonBlank]],
@@ -128,6 +144,7 @@ export class SfCreateAssetDialogComponent {
     label: [''],
     targetAssetUuid: [''],
     datasetUuid: [''],
+    uid: ['', [uidOrBlank]],
   });
 
   constructor() {
@@ -142,17 +159,25 @@ export class SfCreateAssetDialogComponent {
       targetCtrl.setValidators(kind === 'PAGE_REFERENCE' ? [Validators.required] : []);
       targetCtrl.updateValueAndValidity({ emitEvent: false });
       const datasetCtrl = this.form.controls.datasetUuid;
-      datasetCtrl.setValidators(kind === 'RECORD' ? [Validators.required] : []);
+      datasetCtrl.setValidators(kind === 'RECORD_SET' ? [Validators.required] : []);
       datasetCtrl.updateValueAndValidity({ emitEvent: false });
     });
 
-    // A record's dataset defaults to the preselected one, or the only one there is.
+    // The uid suggestion follows the name until the user writes their own.
+    this.form.controls.displayName.valueChanges.pipe(takeUntilDestroyed()).subscribe((name) => {
+      if (this.kind() === 'RECORD_SET' && !this.uidEdited()) {
+        this.form.controls.uid.setValue(deriveUid(name ?? ''), { emitEvent: false });
+      }
+    });
+
+    // A set's dataset defaults to the preselected one, or the first there is — written into the
+    // control, so what the select shows is what gets submitted.
     effect(
       () => {
         const open = this.open();
         const datasets = this.datasets();
         const initial = this.initialDatasetUuid();
-        if (!open || this.kind() !== 'RECORD') {
+        if (!open || this.kind() !== 'RECORD_SET') {
           return;
         }
         untracked(() => {
@@ -220,6 +245,10 @@ export class SfCreateAssetDialogComponent {
     this.showPicker.set(false);
   }
 
+  protected onUidInput(): void {
+    this.uidEdited.set(true);
+  }
+
   protected cancel(): void {
     this.resetForm();
     this.closed.emit();
@@ -241,14 +270,19 @@ export class SfCreateAssetDialogComponent {
       payload.targetKind = 'PAGE';
       payload.targetAssetUuid = value.targetAssetUuid;
     }
-    if (kind === 'RECORD') {
+    if (kind === 'RECORD_SET') {
       payload.datasetUuid = value.datasetUuid;
+      const uid = value.uid.trim();
+      if (uid && uid !== deriveUid(payload.displayName)) {
+        payload.uid = uid;
+      }
     }
     this.create.emit(payload);
   }
 
   private resetForm(): void {
-    this.form.reset({ displayName: '', templateUuid: '', label: '', targetAssetUuid: '', datasetUuid: '' });
+    this.form.reset({ displayName: '', templateUuid: '', label: '', targetAssetUuid: '', datasetUuid: '', uid: '' });
+    this.uidEdited.set(false);
     this.targetLabel.set('');
     this.showPicker.set(false);
   }

@@ -73,6 +73,17 @@
   color: var(--sf-danger, #c0392b);
 }
 
+.store-node__warning {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--sf-amber);
+  font-size: 0.95em;
+}
+
+.store-node--selected > .store-node__row .store-node__warning {
+  color: inherit;
+}
+
 .store-node__protected-icon {
   flex-shrink: 0;
   color: inherit;

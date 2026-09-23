@@ -7,7 +7,7 @@
       </div>
       <div class="dataset-editor__records">
         <span>{{ d.recordCount }} {{ d.recordCount === 1 ? 'record' : 'records' }}</span>
-        <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ dataset: d.uuid }">Open records</a>
+        <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ dataset: d.uuid }">Open record sets</a>
       </div>
     </div>
 

@@ -1,9 +1,10 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink, RouterOutlet } from '@angular/router';
-import { consumeQueryParam } from '../../shared/deep-link';
-import { forkJoin } from 'rxjs';
-import { AuthStore } from '../../core/auth/auth.store';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { filter, forkJoin, map, type Observable } from 'rxjs';
 import { roleRank } from '../../core/auth/auth.guard';
+import { AuthStore } from '../../core/auth/auth.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
@@ -16,26 +17,49 @@ import {
   type StoreTreeNode,
 } from '../../shared/components/sf-store-tree-node.component';
 import { SfTreeComponent } from '../../shared/components/sf-tree.component';
+import { consumeQueryParam } from '../../shared/deep-link';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
-import { ContentService, type DatasetDetailView, type DatasetSummaryView, type FolderView } from './content.service';
-import { RecordGridComponent } from './record-grid.component';
+import {
+  contentTreeNodes,
+  findFolder,
+  folderMoveTargets,
+  INVALID_QUERY_WARNING,
+  isRecordSet,
+  RECORD_SET_ICON,
+  relativeFolderPath,
+} from './content-tree.util';
+import { ContentStoreRefresh } from './content-store-refresh.service';
+import {
+  ContentService,
+  type DatasetSummaryView,
+  type FolderView,
+  type RecordSetSummaryView,
+} from './content.service';
+import { MoveTargetDialogComponent } from './move-target-dialog.component';
+import { RecordSetActions } from './record-set-actions.service';
 
-/** The chip value that shows every dataset's first records at once. */
+/** The chip value that shows the record sets of every dataset. */
 const ALL = 'all';
 
+/** `/p/{key}/content/sets/{uuid}` → the uuid of the set on screen. */
+const SET_ROUTE = /\/content\/sets\/([^/?#;]+)/;
+
 /**
- * Content store (M19.4.1): dataset records and their folders.
+ * Content store (M19.4.1, record sets since M25.5.1): Content folders holding **record sets**, each
+ * of one dataset and holding that dataset's records.
  *
- * <p>The tree holds the Content folders; the records themselves live in a server-paged grid per
- * dataset, because a dataset can have thousands of them — the tree narrows the grid to a folder
- * instead of listing records itself. A chip row picks the dataset; "All" shows the first records of
- * every dataset, each with its dataset as a badge. A record opens in the record editor, a child route
- * rendered in place of the grid, so the tree and chips stay where they are.
+ * <p>The tree shows folders and, as leaves, the sets in them — with their record count and a
+ * warning when a set's stored query no longer validates. Selecting a set opens the set view (a
+ * child route: query panel and record grid); a record opens in the record editor, another child
+ * route, so the tree stays where it is. Without a child the main area lists the record sets,
+ * narrowed by the selected folder and by a dataset chip — the dataset filter editors had before
+ * record sets, which now filters sets (the per-dataset record grids it used to show are gone:
+ * records live in, and are listed by, their sets).
  *
  * <p>Datasets are defined by developers in the Templates store; with none defined the store explains
- * that and links developers there. Every create/move control is disabled in time travel and for
- * viewers.
+ * that and links developers there. Every create/move/delete control is disabled in time travel and
+ * for viewers.
  */
 @Component({
   selector: 'sf-content',
@@ -51,14 +75,15 @@ const ALL = 'all';
     SfSpinnerComponent,
     SfStoreTreeNodeComponent,
     SfTreeComponent,
-    RecordGridComponent,
+    MoveTargetDialogComponent,
   ],
+  providers: [ContentStoreRefresh],
   templateUrl: './content.component.html',
   styleUrl: './content.component.scss',
 })
 export class ContentComponent {
   readonly projectKey = input.required<string>();
-  /** `?dataset=<uuid>` preselects a dataset chip (the dataset editor's "Open records" link). */
+  /** `?dataset=<uuid>` preselects a dataset chip (the dataset editor's "Open record sets" link). */
   readonly dataset = input<string | undefined>();
   /** `?folder=<uuid>` selects that Content folder (search deep link, M23.4.1). */
   readonly folder = input<string | undefined>();
@@ -70,33 +95,65 @@ export class ContentComponent {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthStore);
   private readonly timeTravel = inject(TimeTravelStore);
+  private readonly refresh = inject(ContentStoreRefresh);
+  private readonly setActions = inject(RecordSetActions);
 
   protected readonly all = ALL;
+  protected readonly setIcon = RECORD_SET_ICON;
+  protected readonly invalidQueryWarning = INVALID_QUERY_WARNING;
+  protected readonly relativePath = relativeFolderPath;
   protected readonly loading = signal(false);
   protected readonly folders = signal<FolderView[]>([]);
   protected readonly datasets = signal<DatasetSummaryView[]>([]);
-  /** Full dataset details (schemas) by uuid, loaded once per store visit for the grid columns. */
-  protected readonly details = signal<Map<string, DatasetDetailView>>(new Map());
+  protected readonly sets = signal<RecordSetSummaryView[]>([]);
   protected readonly activeChip = signal<string>(ALL);
   protected readonly selectedFolderUuid = signal<string | null>(null);
-  protected readonly editorOpen = signal(false);
-  protected readonly refreshKey = signal(0);
+  protected readonly childOpen = signal(false);
 
   protected readonly newFolderOpen = signal(false);
   protected readonly creatingFolder = signal(false);
-  protected readonly newRecordOpen = signal(false);
-  protected readonly creatingRecord = signal(false);
+  protected readonly newSetOpen = signal(false);
+  protected readonly creatingSet = signal(false);
+  /** Where "New folder" / "New record set" creates: the right-clicked or selected folder (`null`: root). */
+  private readonly createTarget = signal<string | null>(null);
+  /** The set being moved with "Move to…". */
+  protected readonly movingSet = signal<FolderView | null>(null);
+  protected readonly moving = signal(false);
 
   private readonly role = computed(() => this.auth.roleFor(this.projectKey()));
-  protected readonly canEditRecords = computed(
+  protected readonly canEdit = computed(
     () => !this.timeTravel.isTimeTravel() && roleRank(this.role()) >= roleRank('EDITOR'),
   );
   protected readonly isDeveloper = computed(() => roleRank(this.role()) >= roleRank('DEVELOPER'));
 
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    { initialValue: this.router.url },
+  );
+  /** The set whose view is open, highlighted in the tree. */
+  protected readonly activeSetUuid = computed(() => SET_ROUTE.exec(this.url())?.[1] ?? null);
+
   /** The fixed "All Content" root, unwrapped for display like every store root. */
   private readonly rootFolder = computed<FolderView | null>(() => this.folders()[0] ?? null);
 
-  protected readonly treeNodes = computed<StoreTreeNode[]>(() => (this.rootFolder()?.children ?? []).map(folderNode));
+  private readonly setsByUuid = computed(
+    () => new Map(this.sets().map((set) => [set.uuid ?? '', set] as [string, RecordSetSummaryView])),
+  );
+
+  protected readonly treeNodes = computed<StoreTreeNode[]>(() => contentTreeNodes(this.rootFolder(), this.setsByUuid()));
+
+  /** Sets per dataset uuid, for the chip counts. */
+  protected readonly setCounts = computed(() => {
+    const counts = new Map<string, number>();
+    for (const set of this.sets()) {
+      const uuid = set.dataset?.uuid ?? '';
+      counts.set(uuid, (counts.get(uuid) ?? 0) + 1);
+    }
+    return counts;
+  });
 
   /** The Content-store-relative path of the selected folder (`/` for the whole store). */
   protected readonly folderPath = computed(() => {
@@ -105,18 +162,54 @@ export class ContentComponent {
     return relativeFolderPath(folder?.path);
   });
 
-  protected readonly visibleDatasets = computed<DatasetDetailView[]>(() => {
+  /** The overview: sets in the selected folder (and below), of the chip's dataset. */
+  protected readonly visibleSets = computed<RecordSetSummaryView[]>(() => {
     const chip = this.activeChip();
-    const details = this.details();
-    const list = this.datasets()
-      .map((d) => (d.uuid ? details.get(d.uuid) : undefined))
-      .filter((d): d is DatasetDetailView => !!d);
-    return chip === ALL ? list : list.filter((d) => d.uuid === chip);
+    const prefix = this.folderPath();
+    return this.sets().filter(
+      (set) =>
+        (chip === ALL || set.dataset?.uuid === chip) && relativeFolderPath(set.folderPath).startsWith(prefix),
+    );
   });
+
+  protected readonly moveTargets = computed(() => {
+    const set = this.movingSet();
+    return set ? folderMoveTargets(this.rootFolder(), this.setsByUuid().get(set.uuid ?? '')?.folderUuid) : [];
+  });
+
+  /** Store-specific tree menu entries, after the node's own "Rename" (which also changes the uid). */
+  protected readonly nodeMenu = (node: StoreTreeNode): ContextMenuItem[] => {
+    const uuid = node.uuid;
+    if (!uuid || !this.canEdit()) {
+      return [];
+    }
+    if (node.kind === 'FOLDER') {
+      return [
+        { label: 'New folder', icon: 'create_new_folder', action: () => this.newFolder(uuid) },
+        {
+          label: 'New record set',
+          icon: RECORD_SET_ICON,
+          disabled: this.datasets().length === 0,
+          action: () => this.newSet(uuid),
+        },
+      ];
+    }
+    return [
+      { label: 'New record', icon: 'post_add', action: () => this.openSet(uuid, { newRecord: '1' }) },
+      { label: 'Move to…', icon: 'drive_file_move', action: () => this.startMove(uuid) },
+      { label: 'History', icon: 'history', action: () => this.openSet(uuid, { panel: 'history' }) },
+      { label: 'Used by', icon: 'link', action: () => this.openSet(uuid, { panel: 'usages' }) },
+      { label: 'Delete…', icon: 'delete', danger: true, action: () => this.deleteSet(uuid) },
+    ];
+  };
+
+  protected readonly renameFolder = (projectKey: string, uuid: string, displayName: string) =>
+    this.content.renameFolder(projectKey, uuid, displayName);
 
   constructor() {
     effect(() => {
       const key = this.projectKey();
+      this.refresh.tick();
       untracked(() => this.reload(key));
     });
     effect(() => {
@@ -158,35 +251,41 @@ export class ContentComponent {
     queueMicrotask(() => (document.getElementById(`content-chip-${next}`) as HTMLElement | null)?.focus());
   }
 
+  /** A tree row was selected: a set opens its view, a folder narrows the set list. */
+  protected onTreeSelect(uuid: string): void {
+    const node = findFolder(this.folders(), uuid);
+    if (node && isRecordSet(node)) {
+      this.openSet(uuid);
+    } else {
+      this.selectFolder(uuid);
+    }
+  }
+
   protected selectFolder(uuid: string): void {
     this.selectedFolderUuid.set(uuid);
+    this.showOverview();
   }
 
   protected clearFolder(): void {
     this.selectedFolderUuid.set(null);
+    this.showOverview();
   }
 
-  protected openRecord(uuid: string): void {
-    void this.router.navigate(['/p', this.projectKey(), 'content', 'records', uuid], {
-      queryParamsHandling: 'preserve',
-    });
+  protected openSet(uuid: string, queryParams: Record<string, string> = {}): void {
+    void this.router.navigate(['/p', this.projectKey(), 'content', 'sets', uuid], { queryParams });
   }
 
-  protected onEditorActivated(): void {
-    this.editorOpen.set(true);
+  protected onChildActivated(): void {
+    this.childOpen.set(true);
   }
 
-  protected onEditorDeactivated(): void {
-    this.editorOpen.set(false);
-    this.refreshKey.update((k) => k + 1);
+  protected onChildDeactivated(): void {
+    this.childOpen.set(false);
   }
 
-  protected onRecordChanged(): void {
-    this.refreshKey.update((k) => k + 1);
-  }
-
-  protected newFolder(): void {
-    if (this.canEditRecords()) {
+  protected newFolder(parentUuid: string | null = this.selectedFolderUuid()): void {
+    if (this.canEdit()) {
+      this.createTarget.set(parentUuid);
       this.newFolderOpen.set(true);
     }
   }
@@ -196,11 +295,11 @@ export class ContentComponent {
   }
 
   protected submitNewFolder(value: CreateAssetFormValue): void {
-    if (!this.canEditRecords()) {
+    if (!this.canEdit()) {
       return;
     }
     this.creatingFolder.set(true);
-    this.content.createFolder(this.projectKey(), value.displayName, this.selectedFolderUuid() ?? undefined).subscribe({
+    this.content.createFolder(this.projectKey(), value.displayName, this.createTarget() ?? undefined).subscribe({
       next: () => {
         this.creatingFolder.set(false);
         this.newFolderOpen.set(false);
@@ -214,59 +313,112 @@ export class ContentComponent {
     });
   }
 
-  protected newRecord(): void {
-    if (this.canEditRecords() && this.datasets().length > 0) {
-      this.newRecordOpen.set(true);
+  protected newSet(folderUuid: string | null = this.selectedFolderUuid()): void {
+    if (this.canEdit() && this.datasets().length > 0) {
+      this.createTarget.set(folderUuid);
+      this.newSetOpen.set(true);
     }
   }
 
-  protected closeNewRecord(): void {
-    this.newRecordOpen.set(false);
+  protected closeNewSet(): void {
+    this.newSetOpen.set(false);
   }
 
-  protected submitNewRecord(value: CreateAssetFormValue): void {
-    const datasetUuid = value.datasetUuid || this.datasets()[0]?.uuid;
-    if (!this.canEditRecords() || !datasetUuid) {
+  protected submitNewSet(value: CreateAssetFormValue): void {
+    if (!this.canEdit() || !value.datasetUuid) {
       return;
     }
-    this.creatingRecord.set(true);
+    this.creatingSet.set(true);
     this.content
-      .createRecord(this.projectKey(), datasetUuid, {
-        folderUuid: this.selectedFolderUuid() ?? undefined,
+      .createRecordSet(this.projectKey(), {
+        folderUuid: this.createTarget() ?? undefined,
+        datasetUuid: value.datasetUuid,
+        uid: value.uid,
         displayName: value.displayName,
-        content: {},
       })
       .subscribe({
         next: (created) => {
-          this.creatingRecord.set(false);
-          this.newRecordOpen.set(false);
-          this.toasts.show('Record created', 'success');
-          this.onRecordChanged();
+          this.creatingSet.set(false);
+          this.newSetOpen.set(false);
+          this.toasts.show('Record set created', 'success');
+          this.reload(this.projectKey());
           if (created.uuid) {
-            this.openRecord(created.uuid);
+            this.openSet(created.uuid);
           }
         },
-        error: () => {
-          this.creatingRecord.set(false);
-          this.toasts.show('Could not create the record — you may need the editor role.', 'error');
+        error: (err: unknown) => {
+          this.creatingSet.set(false);
+          const detail = err instanceof HttpErrorResponse ? (err.error as { detail?: string } | null)?.detail : undefined;
+          this.toasts.show(detail ?? 'Could not create the record set — you may need the editor role.', 'error');
         },
       });
   }
 
-  protected onMove(event: StoreTreeMoveEvent): void {
-    if (!this.canEditRecords()) {
+  protected startMove(uuid: string): void {
+    const set = findFolder(this.folders(), uuid);
+    if (set && this.canEdit()) {
+      this.movingSet.set(set);
+    }
+  }
+
+  protected closeMove(): void {
+    this.movingSet.set(null);
+  }
+
+  protected submitMove(folderUuid: string | null): void {
+    const set = this.movingSet();
+    if (!set?.uuid || !this.canEdit()) {
       return;
     }
-    this.content.moveFolder(this.projectKey(), event.source, event.target).subscribe({
+    this.moving.set(true);
+    this.content.moveAsset(this.projectKey(), set.uuid, folderUuid ?? undefined).subscribe({
+      next: () => {
+        this.moving.set(false);
+        this.movingSet.set(null);
+        this.toasts.show('Record set moved', 'success');
+        this.refresh.notify();
+      },
+      error: () => {
+        this.moving.set(false);
+        this.toasts.show('Could not move the record set — try again in a moment.', 'error');
+      },
+    });
+  }
+
+  protected deleteSet(uuid: string): void {
+    const node = findFolder(this.folders(), uuid);
+    if (!node || !this.canEdit()) {
+      return;
+    }
+    const recordCount = this.setsByUuid().get(uuid)?.recordCount ?? node.recordCount ?? 0;
+    this.setActions
+      .delete(this.projectKey(), { uuid, name: node.displayName ?? node.uid ?? '', recordCount })
+      .subscribe((deleted) => {
+        if (!deleted) {
+          return;
+        }
+        if (this.activeSetUuid() === uuid) {
+          this.showOverview();
+        }
+        this.refresh.notify();
+      });
+  }
+
+  /** Drag-move in the tree: a set or folder dropped on a folder. */
+  protected onMove(event: StoreTreeMoveEvent): void {
+    if (!this.canEdit()) {
+      return;
+    }
+    this.move(event.source, event.target).subscribe({
       next: () => {
         this.toasts.show('Moved', 'success');
-        this.reload(this.projectKey());
+        this.refresh.notify();
       },
       error: () => this.toasts.show('Could not move — that may create a cycle.', 'error'),
     });
   }
 
-  /** A folder dropped on the root row moves to the top of the store. */
+  /** A folder or set dropped on the root row moves to the top of the store. */
   protected onRootDragOver(event: DragEvent): void {
     event.preventDefault();
     event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
@@ -275,43 +427,70 @@ export class ContentComponent {
   protected onRootDrop(event: DragEvent): void {
     event.preventDefault();
     const source = event.dataTransfer?.getData('text/plain');
-    if (!source || !this.canEditRecords()) {
+    if (!source || !this.canEdit()) {
       return;
     }
-    this.content.moveFolder(this.projectKey(), source, undefined).subscribe({
+    this.move(source, undefined).subscribe({
       next: () => {
         this.toasts.show('Moved to the store root', 'success');
-        this.reload(this.projectKey());
+        this.refresh.notify();
       },
       error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
     });
   }
 
   protected onRootContextMenu(event: MouseEvent): void {
-    if (!this.canEditRecords()) {
+    if (!this.canEdit()) {
       return;
     }
     this.clearFolder();
     const items: ContextMenuItem[] = [
-      { label: 'New folder', icon: 'create_new_folder', action: () => this.newFolder() },
-      { label: 'New record', icon: 'post_add', disabled: this.datasets().length === 0, action: () => this.newRecord() },
+      { label: 'New folder', icon: 'create_new_folder', action: () => this.newFolder(null) },
+      {
+        label: 'New record set',
+        icon: RECORD_SET_ICON,
+        disabled: this.datasets().length === 0,
+        action: () => this.newSet(null),
+      },
     ];
     this.menu.open(event, items);
   }
 
-  protected readonly renameFolder = (projectKey: string, uuid: string, displayName: string) =>
-    this.content.renameFolder(projectKey, uuid, displayName);
+  protected onTreeChanged(): void {
+    this.refresh.notify();
+  }
+
+  /** Folders move through the folder endpoint, sets through the generic asset move. */
+  private move(source: string, target: string | undefined): Observable<unknown> {
+    const node = findFolder(this.folders(), source);
+    return node && isRecordSet(node)
+      ? this.content.moveAsset(this.projectKey(), source, target)
+      : this.content.moveFolder(this.projectKey(), source, target);
+  }
+
+  private showOverview(): void {
+    if (this.childOpen()) {
+      void this.router.navigate(['/p', this.projectKey(), 'content'], {
+        queryParams: { dataset: this.activeChip() === ALL ? null : this.activeChip() },
+      });
+    }
+  }
 
   private reload(key: string): void {
     if (!key) {
       return;
     }
     this.loading.set(true);
-    forkJoin({ folders: this.content.folders(key), datasets: this.content.listDatasets(key) }).subscribe({
-      next: ({ folders, datasets }) => {
+    forkJoin({
+      folders: this.content.folders(key),
+      datasets: this.content.listDatasets(key),
+      sets: this.content.listRecordSets(key),
+    }).subscribe({
+      next: ({ folders, datasets, sets }) => {
         this.folders.set(folders ?? []);
         this.datasets.set(datasets ?? []);
-        this.loadDetails(key, datasets ?? []);
+        this.sets.set(sets ?? []);
+        this.loading.set(false);
       },
       error: () => {
         this.loading.set(false);
@@ -319,56 +498,4 @@ export class ContentComponent {
       },
     });
   }
-
-  private loadDetails(key: string, datasets: DatasetSummaryView[]): void {
-    const uuids = datasets.map((d) => d.uuid).filter((u): u is string => !!u);
-    if (uuids.length === 0) {
-      this.details.set(new Map());
-      this.loading.set(false);
-      return;
-    }
-    forkJoin(uuids.map((uuid) => this.content.getDataset(key, uuid))).subscribe({
-      next: (details) => {
-        this.details.set(new Map(details.map((d) => [d.uuid ?? '', d])));
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loading.set(false);
-        this.toasts.show('Could not load the dataset schemas — try again in a moment.', 'error');
-      },
-    });
-  }
-}
-
-function folderNode(folder: FolderView): StoreTreeNode {
-  return {
-    uuid: folder.uuid,
-    uid: folder.uid,
-    displayName: folder.displayName,
-    kind: 'FOLDER',
-    protectedFolder: folder.protectedFolder === true,
-    children: (folder.children ?? []).map(folderNode),
-  };
-}
-
-function findFolder(nodes: FolderView[], uuid: string): FolderView | null {
-  for (const node of nodes) {
-    if (node.uuid === uuid) {
-      return node;
-    }
-    const found = findFolder(node.children ?? [], uuid);
-    if (found) {
-      return found;
-    }
-  }
-  return null;
-}
-
-/** `/content_root/team/leads/` → `/team/leads/`; the root itself and nothing selected → `/`. */
-export function relativeFolderPath(storedPath: string | null | undefined): string {
-  const root = '/content_root/';
-  if (!storedPath || !storedPath.startsWith(root)) {
-    return '/';
-  }
-  return '/' + storedPath.slice(root.length);
 }

@@ -14,6 +14,27 @@ export type RecordRowView = S['RecordRowView'];
 export type RecordPageView = S['RecordPageView'];
 export type FolderView = S['FolderView'];
 export type Diagnostic = S['Diagnostic'];
+export type AssetRefView = S['AssetRefView'];
+export type RecordSetSummaryView = S['RecordSetSummaryView'];
+export type RecordSetDetailView = S['RecordSetDetailView'];
+export type RecordSetQuery = S['RecordSetQuery'];
+export type RecordSetQueryDiagnostic = S['RecordSetQueryDiagnostic'];
+export type RecordSetQueryPreviewView = S['RecordSetQueryPreviewView'];
+export type CreateRecordSetRequest = S['CreateRecordSetRequest'];
+export type UpdateRecordSetRequest = S['UpdateRecordSetRequest'];
+
+/** `FolderView.type` of a record set leaf in the Content folder tree (M25). */
+export const RECORD_SET_TYPE = 'RECORD_SET';
+
+/**
+ * What a record create sends (M25): the record set it goes into — which also fixes its dataset —
+ * and its first values. `CreateRecordRequest` on the wire, with `content` typed as the JSON it is.
+ */
+export interface CreateRecordBody {
+  recordSetUuid: string;
+  displayName?: string;
+  content: Record<string, unknown>;
+}
 
 const BASE = '/api/v1';
 
@@ -41,6 +62,12 @@ export interface RecordQuery {
   folder?: string;
 }
 
+/** A record set grid request (M25): the listing parameters, without a folder, plus whether the set's own query applies. */
+export interface RecordSetGridQuery extends Omit<RecordQuery, 'folder'> {
+  /** `true`: the stored query runs first (render order, excluded records left out); `false`: every record. */
+  applySetQuery: boolean;
+}
+
 /**
  * The HTTP params of a record listing. `sort` repeats once per key (`sort=role,desc&sort=name,asc`),
  * blank filters are left out entirely so the server applies no filter.
@@ -65,12 +92,30 @@ export function recordQueryParams(query: RecordQuery): Record<string, string | s
   return params;
 }
 
+/** The HTTP params of a record set grid request; `folder` doesn't apply (a set is the scope). */
+export function recordSetGridParams(query: RecordSetGridQuery): Record<string, string | string[]> {
+  const { applySetQuery, ...listing } = query;
+  const params = recordQueryParams(listing);
+  if (applySetQuery) {
+    params['applySetQuery'] = 'true';
+  }
+  return params;
+}
+
 /**
- * Content store client (M19.4): dataset schemas, records and Content folders.
+ * A `where` expression matching exactly the given records by uuid — how the grid asks which of the
+ * rows it shows the set query keeps (with `applySetQuery` it narrows the set's own selection).
+ */
+export function uuidMembershipWhere(uuids: readonly string[]): string {
+  return uuids.map((uuid) => `_uuid == '${uuid.replace(/'/g, '')}'`).join(' || ');
+}
+
+/**
+ * Content store client (M19.4, M25): dataset schemas, record sets, records and Content folders.
  *
- * <p>Schemas are developer-owned (`DEVELOPER` writes), records editor-owned (`EDITOR` writes). Folders
- * use the generic `/folders` endpoints with `scope=CONTENT`; moving, deleting, restoring, history and
- * usages of a record use the generic asset endpoints on `ApiClient`.
+ * <p>Schemas are developer-owned (`DEVELOPER` writes), record sets and records editor-owned (`EDITOR`
+ * writes). Folders use the generic `/folders` endpoints with `scope=CONTENT`; moving, renaming,
+ * deleting, restoring, history and usages of a set or record use the generic asset endpoints.
  */
 @Injectable({ providedIn: 'root' })
 export class ContentService {
@@ -130,11 +175,8 @@ export class ContentService {
     });
   }
 
-  createRecord(
-    projectKey: string,
-    datasetUuid: string,
-    req: { folderUuid?: string; displayName?: string; content: Record<string, unknown> },
-  ): Observable<RecordDetailView> {
+  /** Adds a record to a record set; `datasetUuid` must be the set's dataset (M25). */
+  createRecord(projectKey: string, datasetUuid: string, req: CreateRecordBody): Observable<RecordDetailView> {
     return this.http.post<RecordDetailView>(`${BASE}/projects/${projectKey}/datasets/${datasetUuid}/records`, req, {
       withCredentials: true,
     });
@@ -150,6 +192,68 @@ export class ContentService {
       withCredentials: true,
       headers: { 'If-Match': etag },
     });
+  }
+
+  // ── Record sets (M25) ─────────────────────────────────────────────────
+
+  /** Live record sets by display name; `datasetUuid` narrows them to one dataset's. */
+  listRecordSets(projectKey: string, datasetUuid?: string): Observable<RecordSetSummaryView[]> {
+    return this.http.get<RecordSetSummaryView[]>(`${BASE}/projects/${projectKey}/record-sets`, {
+      withCredentials: true,
+      params: datasetUuid ? { dataset: datasetUuid } : undefined,
+    });
+  }
+
+  /** One record set with its stored query; `revision` reads it as it was then (time travel). */
+  getRecordSet(projectKey: string, uuid: string, revision?: number | null): Observable<RecordSetDetailView> {
+    return this.http.get<RecordSetDetailView>(`${BASE}/projects/${projectKey}/record-sets/${uuid}`, {
+      withCredentials: true,
+      params: revision != null ? { revision } : undefined,
+    });
+  }
+
+  createRecordSet(projectKey: string, req: CreateRecordSetRequest): Observable<RecordSetDetailView> {
+    return this.http.post<RecordSetDetailView>(`${BASE}/projects/${projectKey}/record-sets`, req, {
+      withCredentials: true,
+    });
+  }
+
+  /** Replaces the set's display name and/or its whole query; `If-Match` is required. */
+  updateRecordSet(
+    projectKey: string,
+    uuid: string,
+    req: UpdateRecordSetRequest,
+    etag: string,
+  ): Observable<RecordSetDetailView> {
+    return this.http.put<RecordSetDetailView>(`${BASE}/projects/${projectKey}/record-sets/${uuid}`, req, {
+      withCredentials: true,
+      headers: { 'If-Match': etag },
+    });
+  }
+
+  /** Deletes a set; one with live records needs `cascade` (its records go in the same revision). */
+  deleteRecordSet(projectKey: string, uuid: string, cascade: boolean): Observable<void> {
+    return this.http.delete<void>(`${BASE}/projects/${projectKey}/record-sets/${uuid}`, {
+      withCredentials: true,
+      params: cascade ? { cascade: 'true' } : undefined,
+    });
+  }
+
+  /** The set's grid: every record, or with `applySetQuery` the records the set shows, in its order. */
+  listSetRecords(projectKey: string, uuid: string, query: RecordSetGridQuery): Observable<RecordPageView> {
+    return this.http.get<RecordPageView>(`${BASE}/projects/${projectKey}/record-sets/${uuid}/records`, {
+      withCredentials: true,
+      params: recordSetGridParams(query),
+    });
+  }
+
+  /** Validates a draft set query and counts what it would select; nothing is saved. */
+  previewSetQuery(projectKey: string, uuid: string, query: RecordSetQuery): Observable<RecordSetQueryPreviewView> {
+    return this.http.post<RecordSetQueryPreviewView>(
+      `${BASE}/projects/${projectKey}/record-sets/${uuid}/preview-query`,
+      query,
+      { withCredentials: true },
+    );
   }
 
   // ── Content folders (generic `/folders`, scoped to CONTENT) ─────────────
@@ -181,8 +285,11 @@ export class ContentService {
     return this.http.post(`${BASE}/projects/${projectKey}/folders/${uuid}/move`, { folderUuid }, { withCredentials: true });
   }
 
-  /** Moves a record between Content folders through the generic asset-move endpoint. */
-  moveRecord(projectKey: string, uuid: string, folderUuid: string | undefined): Observable<unknown> {
+  /**
+   * Moves an asset through the generic asset-move endpoint: a record set into a Content folder
+   * (`undefined`: the store root), a record into another set of its dataset (M25).
+   */
+  moveAsset(projectKey: string, uuid: string, folderUuid: string | undefined): Observable<unknown> {
     return this.http.post(`${BASE}/projects/${projectKey}/assets/${uuid}/move`, { folderUuid }, { withCredentials: true });
   }
 }
