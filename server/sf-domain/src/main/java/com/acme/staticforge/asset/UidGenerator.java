@@ -38,6 +38,22 @@ public class UidGenerator {
         this.assetRepository = assetRepository;
     }
 
+    /**
+     * Variant used on import (feature cross-project-import-identity, M9.3.1): prefers the
+     * archive's own {@code preferredUid} — carrying the asset's human-readable identity across
+     * the export/import round-trip, same as its UUID — and falls back to deriving fresh from
+     * {@code displayName} only when that preferred uid is blank, reserved, or already taken in
+     * the target project (a same-type collision the caller resolves by minting a fresh uuid
+     * anyway, so a fresh uid follows the same fallback here).
+     */
+    public String deriveUid(String preferredUid, String displayName, long projectId, AssetType assetType) {
+        if (preferredUid != null && !preferredUid.isBlank() && !isReserved(preferredUid)
+                && !taken(preferredUid, projectId, assetType)) {
+            return preferredUid;
+        }
+        return deriveUid(displayName, projectId, assetType);
+    }
+
     public String deriveUid(String displayName, long projectId, AssetType assetType) {
         String base = slugifier.slug(displayName);
         if (base.isEmpty()) {

@@ -871,7 +871,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 assetVersionRepository.save(current);
             });
         } else {
-            uid = uidGenerator.deriveUid(asset.displayName(), projectId, type);
+            uid = uidGenerator.deriveUid(asset.uid(), asset.displayName(), projectId, type);
             Asset saved = assetRepository.save(new Asset(uuid, projectId, type, uid, importedAt, ctx.userId()));
             identity = saved;
             assetId = saved.getId();
