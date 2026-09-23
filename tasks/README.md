@@ -84,7 +84,7 @@ Rules of thumb:
 | 06 | [m6-revision-ux](06-m6-revision-ux/README.md) | 17, 24 | Journeys 5–8 pass |
 | 07 | [m7-hardening](07-m7-hardening/README.md) | 2, 25, 26 | Quality gates (§25.7) met; pen-test findings closed |
 
-### Post-roadmap feature epics (M16–M24)
+### Post-roadmap feature epics (M16–M25)
 
 Inserted after the §27 roadmap the same way `M8`–`M15` were. Decisions and the binding
 feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M24").
@@ -100,6 +100,7 @@ feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M2
 | 22 | [m22-build-insight](22-m22-build-insight/README.md) | 18 | Dry-run plan + stored rebuild reasons per run |
 | 23 | [m23-global-search](23-m23-global-search/README.md) | 20, 24 | Ctrl+K search across all stores backed by Lucene |
 | 24 | [m24-multi-language](24-m24-multi-language/README.md) | 2.2, 14–18 | Localizable editors, per-locale output + hreflang |
+| 25 | [m25-record-sets](25-m25-record-sets/README.md) | 5, 14, 16, 26.5 | Records live in typed, queryable record sets rendered via `$CMS_VALUE(recordset:uid)$` / reference editors |
 
 Epics are sequential **hard** dependencies. Within an epic, features and tasks declare
 their own `depends` graph; anything with no dependencies can be parallelised across
