@@ -252,8 +252,84 @@ describe('ProjectSettingsImportComponent', () => {
     expect(importBtn.disabled).toBe(true);
   });
 
+  /** M25: a pre-record-set archive — its records are rejected on their own, everything else imports. */
+  it('lists records outside a record set as not imported and still lets the import proceed', async () => {
+    const report: ConflictReportView = {
+      hasBlocking: true,
+      blocksImport: false,
+      conflicts: [
+        {
+          severity: 'BLOCKING',
+          type: 'RECORD_OUTSIDE_RECORD_SET',
+          elementUuid: 'r-ada',
+          elementLabel: 'Ada',
+          detail: 'Not imported: records from before record sets are not migrated.',
+          blocksImport: false,
+        },
+        {
+          severity: 'WARNING',
+          type: 'RECORD_SET_QUERY_INVALID',
+          elementUuid: 's-leads',
+          elementLabel: 'Leads',
+          detail: 'The set query does not fit the schema.',
+          blocksImport: false,
+        },
+      ],
+    };
+    const api = makeApiStub({
+      analyzeImport: vi.fn().mockReturnValue(of(report)),
+      commitImport: vi.fn().mockReturnValue(of(importResult)),
+    });
+    await render(ProjectSettingsImportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: ImportExportService, useValue: api }],
+    });
+
+    selectFile(document.querySelector('input[type="file"]') as HTMLInputElement, zipFile());
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Not imported/ })).toBeTruthy());
+    expect(screen.queryByText('Blocking issues')).toBeNull();
+    const ada = screen.getByText('Ada').closest('li')!;
+    expect(ada.textContent).toContain('Record will not be imported');
+    expect(screen.getByText('Leads').closest('li')!.querySelector('sf-icon')!.textContent!.trim()).toBe('filter_alt_off');
+
+    const importBtn = screen.getByRole('button', { name: 'Import' }) as HTMLButtonElement;
+    expect(importBtn.disabled).toBe(false);
+    importBtn.click();
+    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false);
+  });
+
+  it('keeps Import disabled when a conflict refuses the whole import next to rejected records', async () => {
+    const report: ConflictReportView = {
+      hasBlocking: true,
+      blocksImport: true,
+      conflicts: [
+        { severity: 'BLOCKING', type: 'RECORD_OUTSIDE_RECORD_SET', elementLabel: 'Ada', detail: '', blocksImport: false },
+        { severity: 'BLOCKING', type: 'RECORD_SET_MISSING', elementLabel: 'Bob', detail: '', blocksImport: true },
+      ],
+    };
+    const api = makeApiStub({ analyzeImport: vi.fn().mockReturnValue(of(report)) });
+    await render(ProjectSettingsImportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: ImportExportService, useValue: api }],
+    });
+
+    selectFile(document.querySelector('input[type="file"]') as HTMLInputElement, zipFile());
+
+    await waitFor(() => expect(screen.getByText('Blocking issues')).toBeTruthy());
+    expect(screen.getByText('Bob').closest('section')!.textContent).toContain('Blocking issues');
+    expect(screen.getByText('Ada').closest('section')!.textContent).toContain('Not imported');
+    expect((screen.getByRole('button', { name: 'Import' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('gives each record-set conflict (M25) its own icon', async () => {
-    const types = ['RECORD_SET_DATASET_MISSING', 'RECORD_SET_MISSING', 'RECORD_SET_DATASET_MISMATCH', 'RECORD_OUTSIDE_RECORD_SET'];
+    const types = [
+      'RECORD_SET_DATASET_MISSING',
+      'RECORD_SET_MISSING',
+      'RECORD_SET_DATASET_MISMATCH',
+      'RECORD_OUTSIDE_RECORD_SET',
+      'RECORD_SET_QUERY_INVALID',
+    ];
     const report: ConflictReportView = {
       hasBlocking: true,
       conflicts: types.map((type, i) => ({ severity: 'BLOCKING', type, elementUuid: `r-${i}`, elementLabel: type, detail: '' })),
@@ -268,6 +344,6 @@ describe('ProjectSettingsImportComponent', () => {
     await waitFor(() => expect(screen.getByText('RECORD_OUTSIDE_RECORD_SET')).toBeTruthy());
 
     const icons = types.map((type) => screen.getByText(type).closest('li')!.querySelector('sf-icon')!.textContent!.trim());
-    expect(icons).toEqual(['dataset_linked', 'table_rows', 'rule', 'move_item']);
+    expect(icons).toEqual(['dataset_linked', 'table_rows', 'rule', 'move_item', 'filter_alt_off']);
   });
 });

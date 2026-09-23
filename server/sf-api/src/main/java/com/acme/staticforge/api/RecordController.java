@@ -157,7 +157,8 @@ public class RecordController {
     static RecordPageView toPageView(RecordPage result) {
         List<RecordRowView> rows = result.rows().stream()
                 .map(r -> new RecordRowView(
-                        r.uuid(), r.uid(), r.displayName(), r.folderPath(), r.changedAt(), r.changedBy(), r.values()))
+                        r.uuid(), r.uid(), r.displayName(), r.folderPath(), r.changedAt(), r.changedBy(), r.values(),
+                        r.selectedBySet()))
                 .toList();
         return new RecordPageView(
                 rows,

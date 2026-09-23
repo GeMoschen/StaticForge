@@ -124,3 +124,15 @@ are never migrated.
   The class got a `@DynamicPropertySource` output root for the generation comparison. `ProjectImportAnalyzeApiTest`
   (+1: fixture → `hasBlocking` true, `blocksImport` false, commit `200` with 4 assets; `blocksImport` asserted on
   the existing blocking test). UI specs of `M25.5.3` (`project-settings-import/export.component.spec`) re-run green.
+
+### Follow-up (2026-09-23) — import UI gating
+- `schema.d.ts` regenerated (`ConflictReportView.blocksImport`, `ImportConflictView.blocksImport`). The import screen
+  gates "Import" on `blocksImport` (report flag or any conflict that refuses the whole import), not on any
+  `BLOCKING` conflict. Conflicts that reject only their own asset get their own "Not imported" section ("These
+  assets are left out. Everything else in the archive can still be imported."), each row badged "Record will not be
+  imported" for `RECORD_OUTSIDE_RECORD_SET`; `RECORD_SET_QUERY_INVALID` has the icon `filter_alt_off`.
+- The commit `409` body's conflicts now carry `blocksImport` too (`assertNoBlockingConflicts`), so the UI's re-check
+  after a changed archive reads the same flag; a conflict without it counts as refusing.
+- Tests: `ProjectImportAnalyzeApiTest` (409 conflicts carry `blocksImport`), `project-settings-import.component.spec`
+  (+2: pre-M25 archive → "Not imported", Import enabled and committed; refusing conflict next to rejected records
+  keeps it disabled; icon test incl. `RECORD_SET_QUERY_INVALID`).

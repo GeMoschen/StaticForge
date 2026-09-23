@@ -280,8 +280,51 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
       fireEvent.input(editor('md'), { target: { value: '$CMS_IF(x)$' } });
       vi.advanceTimersByTime(350);
       fixture.detectChanges();
-      expect(templates.validateOctl).toHaveBeenCalledWith('proj', { source: '$CMS_IF(x)$', channelKey: 'md' });
+      expect(templates.validateOctl).toHaveBeenCalledWith('proj', {
+        source: '$CMS_IF(x)$',
+        channelKey: 'md',
+        datasetUuid: 'ds-team',
+        contentDefinition: CDL,
+      });
       expect(screen.getByText(/SF-TPL-0001/)).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /** The live check knows the dataset: fields are checked against the CDL being edited, not only on save. */
+  it('checks fields against the schema as edited and re-checks a template when its tab opens again', async () => {
+    vi.useFakeTimers();
+    try {
+      const { templates, fixture } = await setup();
+      const unknownSquad = {
+        diagnostics: [{ severity: 'ERROR', code: 'SF-TPL-0103', message: 'Unknown editor: squad', line: 1, column: 1 }],
+      };
+      templates.validateOctl.mockReturnValue(of(unknownSquad));
+      fireEvent.click(screen.getByRole('tab', { name: /Record template \(html\)/ }));
+      fixture.detectChanges();
+      fireEvent.input(editor('html'), { target: { value: '$CMS_VALUE(squad)$' } });
+      vi.advanceTimersByTime(350);
+      fixture.detectChanges();
+      expect(screen.getByText(/Unknown editor: squad/)).toBeTruthy();
+
+      // Declare the field on the schema tab, then come back: the template is checked against the new CDL.
+      const withSquad = CDL.replace('content {', 'content {\n  editor text squad { label "Squad" }');
+      fireEvent.click(screen.getByRole('tab', { name: /Schema \(CDL\)/ }));
+      fixture.detectChanges();
+      fireEvent.input(screen.getByLabelText(/Record fields \(CDL\)/), { target: { value: withSquad } });
+      templates.validateOctl.mockReturnValue(of({ diagnostics: [] }));
+      fireEvent.click(screen.getByRole('tab', { name: /Record template \(html\)/ }));
+      vi.advanceTimersByTime(350);
+      fixture.detectChanges();
+
+      expect(templates.validateOctl).toHaveBeenLastCalledWith('proj', {
+        source: '$CMS_VALUE(squad)$',
+        channelKey: 'html',
+        datasetUuid: 'ds-team',
+        contentDefinition: withSquad,
+      });
+      expect(screen.queryByText(/Unknown editor: squad/)).toBeNull();
     } finally {
       vi.useRealTimers();
     }

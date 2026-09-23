@@ -89,3 +89,12 @@ records only), `sf-asset-picker-dialog.component`, `features/forms/editors/refer
   `project-settings-export.component.spec` (+1: sets as leaves, records never listed, set uuid exported),
   `project-settings-import.component.spec` (+1: icons of the four conflicts). `npx vitest run` 441/441 (incl. the
   parallel `M25.5.2` specs), `npx ng build` green (no new warnings from these files).
+
+### Follow-up (2026-09-23) — picker matches the server for `dataset "uid"` without `assetTypes`
+- Fix: `pickerTypeOptions` offered records **and** record sets for a `reference` editor with `dataset "uid"` and no
+  `assetTypes`, but the server (`ContentValidator.validateDataset`: records when `assetTypes` is empty or names
+  `RECORD`, sets only when it names `RECORD_SET`) rejects a set there with a `dataset` ERROR. Now: no/empty
+  `assetTypes` → records only (the M19 meaning); record sets only when `assetTypes` names them; neither allowed (a
+  `SF-CDL-0104` CDL error) → records. This supersedes the "both when it is empty/absent" rule above.
+  `asset-picker.util.spec` and `sf-asset-picker-dialog.component.spec` updated (no type switch and no set listing
+  without `assetTypes`; the switch with `[RECORD, RECORD_SET]`).

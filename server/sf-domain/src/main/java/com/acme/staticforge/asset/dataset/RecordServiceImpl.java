@@ -144,7 +144,7 @@ public class RecordServiceImpl implements RecordService {
             changedBy.put(version.getAsset().getUuid(), version.getChangedBy());
         }
         List<RecordView> selected = DatasetQueryEvaluator.apply(candidates, datasetQuery, null);
-        return RecordGrid.page(selected, dataset.definition(), null, changedBy, page, size);
+        return RecordGrid.page(selected, dataset.definition(), null, changedBy, null, page, size);
     }
 
     // ------------------------------------------------------------------

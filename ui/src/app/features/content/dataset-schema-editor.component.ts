@@ -47,13 +47,16 @@ import {
 type ChannelView = components['schemas']['ChannelView'];
 type BrokenRecordSet = components['schemas']['BrokenRecordSet'];
 
-/** How long record template typing pauses before its syntax is checked (the Templates store's pace). */
+/** How long record template typing pauses before it is checked (the Templates store's pace). */
 const OCTL_VALIDATE_DEBOUNCE_MS = 300;
 
+/** One live check of a record template: the source as typed, against the schema (CDL) as edited. */
 interface RecordTemplateValidation {
   key: string;
+  datasetUuid: string;
   channel: string;
   source: string;
+  contentDefinition: string;
 }
 
 /**
@@ -109,7 +112,7 @@ export class DatasetSchemaEditorComponent {
   private readonly channels = signal<ChannelView[]>([]);
   /** The record templates as edited, channel → source. */
   protected readonly recordTemplates = signal<Record<string, string>>({});
-  /** Per channel: live syntax findings while typing, or what the last save reported. */
+  /** Per channel: the live check's findings while typing (fields included), or what the last save reported. */
   protected readonly recordTemplateDiagnostics = signal<Record<string, Diagnostic[]>>({});
   /** Sets whose stored query the last save left invalid (`brokenRecordSets`); dismissible. */
   protected readonly brokenRecordSets = signal<BrokenRecordSet[]>([]);
@@ -210,24 +213,36 @@ export class DatasetSchemaEditorComponent {
   });
 
   constructor() {
-    // Live syntax check of the open record template: debounced, a newer keystroke cancels the one in flight.
-    // Field names are checked by the save (the schema being saved is the scope).
+    // Live check of the open record template: debounced, a newer keystroke cancels the one in flight. The
+    // server compiles it as this dataset's record template against the CDL as edited (`datasetUuid` +
+    // `contentDefinition`), so an undeclared field (SF-TPL-0103) or SF-TPL-0122 shows while typing — the
+    // diagnostics a save would report.
     this.recordTemplateValidation
       .pipe(
         debounceTime(OCTL_VALIDATE_DEBOUNCE_MS),
         switchMap((request) =>
           request
-            ? this.templates.validateOctl(request.key, { source: request.source, channelKey: request.channel }).pipe(
-                catchError(() => of(null)),
-                // Carry the request along: the answer belongs to the channel that was typed in.
-                map((response) => ({ request, response })),
-              )
+            ? this.templates
+                .validateOctl(request.key, {
+                  source: request.source,
+                  channelKey: request.channel,
+                  datasetUuid: request.datasetUuid,
+                  contentDefinition: request.contentDefinition,
+                })
+                .pipe(
+                  catchError(() => of(null)),
+                  // Carry the request along: the answer belongs to the channel that was typed in.
+                  map((response) => ({ request, response })),
+                )
             : EMPTY,
         ),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(({ request, response }) => {
-        if (response && (this.recordTemplates()[request.channel] ?? '') === request.source) {
+        const current =
+          (this.recordTemplates()[request.channel] ?? '') === request.source &&
+          this.contentDefinition() === request.contentDefinition;
+        if (response && current) {
           this.recordTemplateDiagnostics.update((all) => ({
             ...all,
             [request.channel]: sortDiagnostics(response.diagnostics ?? []) as Diagnostic[],
@@ -286,7 +301,12 @@ export class DatasetSchemaEditorComponent {
 
   /** Opens the schema tab (`null`) or a channel's record template tab. */
   selectTab(channel: string | null): void {
+    const previous = this.activeChannel();
     this.activeChannel.set(channel);
+    // Opening a template re-checks it: the schema may have changed on the CDL tab since it was last checked.
+    if (channel != null && channel !== previous && (this.recordTemplates()[channel] ?? '').trim() !== '') {
+      this.checkRecordTemplate(channel, this.recordTemplates()[channel]);
+    }
   }
 
   /** An edit of the open record template. */
@@ -296,7 +316,22 @@ export class DatasetSchemaEditorComponent {
       return;
     }
     this.recordTemplates.update((all) => ({ ...all, [channel]: source }));
-    this.recordTemplateValidation.next({ key: this.projectKey(), channel, source });
+    this.checkRecordTemplate(channel, source);
+  }
+
+  /** Queues a live check of one channel's record template against the schema as edited (developers only). */
+  private checkRecordTemplate(channel: string, source: string): void {
+    const datasetUuid = this.detail()?.uuid;
+    if (!datasetUuid || !this.canEdit()) {
+      return;
+    }
+    this.recordTemplateValidation.next({
+      key: this.projectKey(),
+      datasetUuid,
+      channel,
+      source,
+      contentDefinition: this.contentDefinition(),
+    });
   }
 
   protected insertHelper(helper: RecordTemplateHelper): void {

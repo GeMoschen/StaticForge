@@ -121,3 +121,23 @@ read-only.
   403/403, `npx ng build` green.
 - **Left for later tasks:** search/deep-link routing of `RECORD_SET` (`asset-route.util`), reference pickers and the
   export picker (`M25.5.3`); record templates (`M25.5.2`).
+
+### Follow-up (2026-09-23) — set grid time travel and `selectedBySet`
+- **Backend.** `GET /record-sets/{uuid}/records` gained `revision` (`RecordSetService.listRecords(…, Long revision,
+  …)`): the set version, its stored query, the dataset schema and the set's records — membership and values
+  (new `AssetVersionRepository.findRecordsOfSetAt`) — as of that revision; `404` before the set existed or while it
+  was deleted. Every row carries `selectedBySet` (`RecordPage.Row` / `RecordRowView`, `@JsonInclude(NON_NULL)` so
+  the dataset listing omits it): the stored query run with `RecordSetQueries.select` over the whole set before
+  paging, in the grid's `locale` chain; `false` for every row while the query is invalid (an invalid query selects
+  nothing). OpenAPI and `ui/src/app/core/api/generated/schema.d.ts` regenerated.
+- **UI.** `RecordGridComponent` gained a `revision` input (passed through `RecordSetGridQuery.revision`); the set view
+  hands it `TimeTravelStore.activeRevision`, so time travel lists the set as it was. Dimming reads `selectedBySet`
+  — the extra `applySetQuery` + `_uuid == 'a' || …` request per page and `uuidMembershipWhere` are gone (one request
+  per page in both modes).
+- **Tests.** `RecordSetQueryIntegrationTest` (+1 `theGridTravelsInTimeWithTheSetsMembershipValuesAndQuery`: values,
+  membership moves in and out, query change, `404` before creation; `selectedBySet` over the whole set incl. the
+  set's `limit`, with a request filter, in apply mode, and all `false` for a broken set), `RecordSetApiTest` (+1
+  `theSetGridListsTheSetAsOfARevision`; `selectedBySet` on the grid, absent on the dataset listing);
+  `record-grid.component.spec` (single request, flags, invalid query, revision in and out),
+  `record-set-view.component.spec` (grid requests at the time-travel revision), `content.service.spec` (`revision`
+  param).

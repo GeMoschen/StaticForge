@@ -13,24 +13,24 @@ const DATASET = {
   compiledDefinition: { editors: [{ name: 'role', type: 'TEXT', label: 'Role' }], bodies: [] },
 } as unknown as DatasetDetailView;
 
+/** The server marks what the stored set query selects on every row (`selectedBySet`). */
 const ROWS = [
-  { uuid: 'r1', uid: 'ada', displayName: 'Ada', values: { role: 'lead' } },
-  { uuid: 'r2', uid: 'bob', displayName: 'Bob', values: { role: 'staff' } },
+  { uuid: 'r1', uid: 'ada', displayName: 'Ada', values: { role: 'lead' }, selectedBySet: true },
+  { uuid: 'r2', uid: 'bob', displayName: 'Bob', values: { role: 'staff' }, selectedBySet: false },
 ];
 
 function page(rows: unknown[]) {
   return of({ content: rows, page: { size: 50, number: 0, totalElements: rows.length, totalPages: 1 } });
 }
 
-/** Every record for the grid; for the membership probe (applySetQuery + `_uuid` where) only Ada. */
-function contentStub() {
+/** Every record for "All records"; only what the set shows (Ada) with the set query applied. */
+function contentStub(rows: unknown[] = ROWS) {
   return {
-    listSetRecords: vi.fn().mockImplementation((_key: string, _uuid: string, query: RecordSetGridQuery) => {
-      if (query.applySetQuery && query.where?.includes('_uuid')) {
-        return page([ROWS[0]]);
-      }
-      return page(query.applySetQuery ? [ROWS[0]] : ROWS);
-    }),
+    listSetRecords: vi
+      .fn()
+      .mockImplementation((_key: string, _uuid: string, query: RecordSetGridQuery) =>
+        page(query.applySetQuery ? [rows[0]] : rows),
+      ),
   };
 }
 
@@ -49,17 +49,13 @@ function rowOf(name: string): HTMLTableRowElement {
 }
 
 describe('RecordGridComponent (record set grid)', () => {
-  it('lists every record by default and dims the ones the set query leaves out', async () => {
+  it('lists every record by default and dims the ones the set query leaves out, in one request', async () => {
     const content = contentStub();
     await setup(content);
 
     await waitFor(() => expect(rowOf('Bob').classList).toContain('record-grid__row--excluded'));
-    expect(content.listSetRecords.mock.calls[0][2]).toMatchObject({ applySetQuery: false, page: 0 });
-    expect(content.listSetRecords.mock.calls[1][2]).toMatchObject({
-      applySetQuery: true,
-      where: "_uuid == 'r1' || _uuid == 'r2'",
-      size: 2,
-    });
+    expect(content.listSetRecords).toHaveBeenCalledTimes(1);
+    expect(content.listSetRecords.mock.calls[0][2]).toMatchObject({ applySetQuery: false, page: 0, revision: null });
     expect(rowOf('Bob').getAttribute('title')).toBe(EXCLUDED_BY_QUERY);
     expect(rowOf('Ada').classList).not.toContain('record-grid__row--excluded');
     expect(rowOf('Ada').getAttribute('title')).toBeNull();
@@ -81,13 +77,25 @@ describe('RecordGridComponent (record set grid)', () => {
     expect(screen.getByRole('radio', { name: 'Show as rendered' }).getAttribute('aria-checked')).toBe('true');
   });
 
-  it('dims every row while the stored set query is invalid, without asking which it keeps', async () => {
-    const content = contentStub();
+  it('dims every row the server reports unselected while the stored set query is invalid', async () => {
+    const content = contentStub(ROWS.map((row) => ({ ...row, selectedBySet: false })));
     await setup(content, { queryValid: false });
 
     await waitFor(() => expect(rowOf('Ada').classList).toContain('record-grid__row--excluded'));
     expect(rowOf('Bob').getAttribute('title')).toBe(EXCLUDED_INVALID_QUERY);
     expect(content.listSetRecords).toHaveBeenCalledTimes(1);
+  });
+
+  it('lists the set as of the time-travel revision', async () => {
+    const content = contentStub();
+    const view = await setup(content, { revision: 7 });
+
+    await waitFor(() => expect(rowOf('Bob').classList).toContain('record-grid__row--excluded'));
+    expect(content.listSetRecords.mock.calls[0][2]).toMatchObject({ applySetQuery: false, revision: 7 });
+
+    view.fixture.componentRef.setInput('revision', null);
+    await waitFor(() => expect(content.listSetRecords).toHaveBeenCalledTimes(2));
+    expect(content.listSetRecords.mock.calls[1][2]).toMatchObject({ revision: null });
   });
 
   /** The grid's own filter is ephemeral: it narrows the listing but only a click hands it to the query. */
@@ -104,7 +112,7 @@ describe('RecordGridComponent (record set grid)', () => {
 
     await waitFor(() => expect(use.disabled).toBe(false));
     expect(useAsSetQuery).not.toHaveBeenCalled();
-    const lastListing = content.listSetRecords.mock.calls.filter((call) => !String(call[2].where).includes('_uuid')).at(-1);
+    const lastListing = content.listSetRecords.mock.calls.at(-1);
     expect(lastListing?.[2]).toMatchObject({ where: "role == 'lead'", sort: [{ field: 'role', direction: 'asc' }] });
 
     fireEvent.click(use);

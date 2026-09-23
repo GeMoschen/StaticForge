@@ -181,6 +181,23 @@ public class DatasetServiceImpl implements DatasetService {
                 .withRecordTemplateDiagnostics(templates.warnings());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<Diagnostic> validateRecordTemplate(
+            long projectId, UUID uuid, String channelKey, String source, String cdlSource) {
+        Asset dataset = requireDataset(projectId, uuid);
+        String cdl = cdlSource != null
+                ? cdlSource
+                : assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(dataset.getId())
+                        .map(version -> version.getPayload().path("contentDefinition").asText(""))
+                        .orElse("");
+        ContentDefinition definition = cdlCompiler.compile(cdl).definition();
+        String channel = channelKey == null || channelKey.isBlank() ? "html" : channelKey;
+        return octlCompiler
+                .compileRecordTemplate(source == null ? "" : source, channel, savingResolver(projectId, uuid, definition), definition)
+                .diagnostics();
+    }
+
     /** Whether this save changes which schema fields are {@code localizable} (M24.2.2). */
     private boolean localizableFlagsChanged(Asset dataset, ContentDefinition proposed) {
         return assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(dataset.getId())

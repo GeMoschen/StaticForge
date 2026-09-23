@@ -133,7 +133,8 @@ class ProjectImportAnalyzeApiTest {
                         .header("Authorization", "Bearer " + target.token()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SF-API-0409"))
-                .andExpect(jsonPath("$.conflicts[?(@.type == 'MISSING_TEMPLATE_REFERENCE')]").exists());
+                .andExpect(jsonPath("$.conflicts[?(@.type == 'MISSING_TEMPLATE_REFERENCE' && @.blocksImport == true)]")
+                        .exists());
 
         assertThat(assetCount(target)).isEqualTo(countBefore);
     }

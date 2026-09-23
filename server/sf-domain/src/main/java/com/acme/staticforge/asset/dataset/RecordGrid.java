@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -72,12 +73,15 @@ final class RecordGrid {
      * @param stored the record as stored, by uuid, when {@code selected} holds language-resolved views
      *     ({@code null}: {@code selected} is as stored); rows always show stored values, like the dataset grid
      * @param changedBy the last editor of each record, by uuid
+     * @param selectedBySet the records a record set's stored query selects, for each row's
+     *     {@link RecordPage.Row#selectedBySet()} flag ({@code null}: not a set's grid, the flag stays {@code null})
      */
     static RecordPage page(
             List<RecordView> selected,
             ContentDefinition definition,
             Map<UUID, RecordView> stored,
             Map<UUID, Long> changedBy,
+            Set<UUID> selectedBySet,
             int page,
             int size) {
         int from = (int) Math.min((long) page * size, selected.size());
@@ -96,7 +100,8 @@ final class RecordGrid {
             }
             rows.add(new RecordPage.Row(
                     record.uuid(), record.uid(), record.displayName(), record.folderPath(), record.changedAt(),
-                    changedBy.get(record.uuid()), values));
+                    changedBy.get(record.uuid()), values,
+                    selectedBySet == null ? null : selectedBySet.contains(record.uuid())));
         }
         return new RecordPage(rows, selected.size(), page, size);
     }

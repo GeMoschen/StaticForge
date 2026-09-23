@@ -97,3 +97,16 @@ The Templates store edits section/page templates with one OCTL tab per enabled c
   schema 422 to the CDL tab, broken sets with links + warnings + dismiss, insert helpers, live check per channel,
   read-only for EDITOR, read-only in time travel). `npx vitest run` 441/441 (incl. the parallel M25.5.3 lane's specs),
   `npx ng build` green.
+
+### Follow-up (2026-09-23) — field-aware live check
+- `POST /octl/validate` gained `datasetUuid` (with the existing optional `contentDefinition` = the unsaved dataset
+  CDL): `DatasetService.validateRecordTemplate` compiles the source with `OctlCompiler.compileRecordTemplate` against
+  the draft (or stored) schema through the save's resolver, so undeclared fields (`SF-TPL-0103`) and `SF-TPL-0122`
+  are reported while typing — the diagnostics a save would give. `templateUuid` + `datasetUuid` is `422`, an unknown
+  dataset `404`, role `DEVELOPER` as before. OpenAPI / `schema.d.ts` regenerated.
+- The editor's live check sends `datasetUuid` and the CDL being edited; an answer is applied only while both the
+  source and the CDL are unchanged. Opening a template tab re-checks it, so a field added on the CDL tab clears its
+  `SF-TPL-0103` without retyping. This replaces the "structural only" note above.
+- Tests: `DatasetApiTest.theRecordTemplateLiveCheckKnowsTheDatasetsFields` (unknown field with position, draft CDL
+  declaring it, `0122`, plain mode unchanged, `422`s, `404`, `403` for EDITOR); `dataset-schema-editor.component.spec`
+  (request body; field check against the edited CDL and re-check on tab open).

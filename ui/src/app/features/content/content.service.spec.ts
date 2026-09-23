@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ContentService, etagFor, recordQueryParams, recordSetGridParams, uuidMembershipWhere } from './content.service';
+import { ContentService, etagFor, recordQueryParams, recordSetGridParams } from './content.service';
 
 describe('recordQueryParams', () => {
   it('repeats sort once per key as field,direction', () => {
@@ -41,10 +41,15 @@ describe('record set grid params (M25)', () => {
       applySetQuery: 'true',
     });
     expect(recordSetGridParams({ page: 0, size: 50, sort: [], applySetQuery: false })).toEqual({ page: '0', size: '50' });
-  });
-
-  it('matches exactly the given records by uuid', () => {
-    expect(uuidMembershipWhere(['a-1', 'b-2'])).toBe("_uuid == 'a-1' || _uuid == 'b-2'");
+    expect(recordSetGridParams({ page: 0, size: 50, sort: [], applySetQuery: false, revision: 12 })).toEqual({
+      page: '0',
+      size: '50',
+      revision: '12',
+    });
+    expect(recordSetGridParams({ page: 0, size: 50, sort: [], applySetQuery: false, revision: null })).toEqual({
+      page: '0',
+      size: '50',
+    });
   });
 });
 

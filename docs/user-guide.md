@@ -145,7 +145,7 @@ While you type, the panel checks the query and says what it would do: "4 of 9 re
 
 **In a page**, a field that points at a record or a record set opens a picker. A field meant for one dataset lists only that dataset's records or sets; a set shows its dataset and record count. Pick a set and the page shows that set's records the way its query says, in the look the developer gave the dataset.
 
-During time travel a set and its records open read-only, as they were at that revision, and page previews show the records of that revision. The records grid itself always lists today's records.
+During time travel a set and its records open read-only, as they were at that revision, and page previews show the records of that revision. The records grid lists the set's records of that revision too, dimming the ones its query left out then.
 
 | Role | Record sets and records | Dataset fields and look, create and delete datasets |
 |---|---|---|

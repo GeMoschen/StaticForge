@@ -62,10 +62,15 @@ export interface RecordQuery {
   folder?: string;
 }
 
-/** A record set grid request (M25): the listing parameters, without a folder, plus whether the set's own query applies. */
+/**
+ * A record set grid request (M25): the listing parameters, without a folder, plus whether the set's own
+ * query applies and, for time travel, the revision to list the set at.
+ */
 export interface RecordSetGridQuery extends Omit<RecordQuery, 'folder'> {
   /** `true`: the stored query runs first (render order, excluded records left out); `false`: every record. */
   applySetQuery: boolean;
+  /** The set as of this revision — its records, their values and its query then (`null`/absent: current). */
+  revision?: number | null;
 }
 
 /**
@@ -94,20 +99,15 @@ export function recordQueryParams(query: RecordQuery): Record<string, string | s
 
 /** The HTTP params of a record set grid request; `folder` doesn't apply (a set is the scope). */
 export function recordSetGridParams(query: RecordSetGridQuery): Record<string, string | string[]> {
-  const { applySetQuery, ...listing } = query;
+  const { applySetQuery, revision, ...listing } = query;
   const params = recordQueryParams(listing);
   if (applySetQuery) {
     params['applySetQuery'] = 'true';
   }
+  if (revision != null) {
+    params['revision'] = String(revision);
+  }
   return params;
-}
-
-/**
- * A `where` expression matching exactly the given records by uuid — how the grid asks which of the
- * rows it shows the set query keeps (with `applySetQuery` it narrows the set's own selection).
- */
-export function uuidMembershipWhere(uuids: readonly string[]): string {
-  return uuids.map((uuid) => `_uuid == '${uuid.replace(/'/g, '')}'`).join(' || ');
 }
 
 /**

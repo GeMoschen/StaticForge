@@ -50,7 +50,7 @@ function isPanel(value: string | undefined): value is RecordSetPanel {
  * dims (All records) or hides (Show as rendered) what the query leaves out.
  *
  * <p>In time travel the set is read at the selected revision and everything is read-only; the
- * grid lists the set's current records (the listing has no revision parameter).
+ * grid lists the set as of that revision too (its records, their values and its query then).
  */
 @Component({
   selector: 'sf-record-set-view',
@@ -89,6 +89,8 @@ export class RecordSetViewComponent {
   private readonly queryPanel = viewChild(RecordSetQueryPanelComponent);
 
   protected readonly timeTravelling = this.timeTravel.isTimeTravel;
+  /** The revision the grid lists the set at (`null`: current). */
+  protected readonly activeRevision = this.timeTravel.activeRevision;
   protected readonly loading = signal(false);
   protected readonly set = signal<RecordSetDetailView | null>(null);
   protected readonly dataset = signal<DatasetDetailView | null>(null);

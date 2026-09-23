@@ -180,6 +180,56 @@ class DatasetApiTest {
                 .andExpect(jsonPath("$.channelTemplates.html.source").value("<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$"));
     }
 
+    /**
+     * M25 follow-up: {@code POST /octl/validate} with {@code datasetUuid} checks a record template while it is
+     * typed — against the unsaved dataset CDL when sent, the stored schema otherwise.
+     */
+    @Test
+    void theRecordTemplateLiveCheckKnowsTheDatasetsFields() throws Exception {
+        Fixture fx = newFixture();
+        DatasetView team = team(fx);
+        String source = "<b>$CMS_VALUE(name)$</b> $CMS_VALUE(squad)$ $CMS_VALUE(_index)$";
+
+        validateOctl(fx, fx.developerToken(), source, team.uuid().toString(), null, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics.length()").value(1))
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.OCTL_UNKNOWN_EDITOR))
+                .andExpect(jsonPath("$.diagnostics[0].line").value(1))
+                .andExpect(jsonPath("$.diagnostics[0].column").value(26));
+        String withSquad = TEAM_CDL.replace("editor date joined", "editor text squad { label \"Squad\" }\n  editor date joined");
+        validateOctl(fx, fx.developerToken(), source, team.uuid().toString(), withSquad, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics").isEmpty());
+        validateOctl(fx, fx.developerToken(), "<div>\n$CMS_BODY(x)$</div>", team.uuid().toString(), null, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE))
+                .andExpect(jsonPath("$.diagnostics[0].line").value(2));
+        // Without a dataset the source compiles on its own (structural checks only), as before.
+        validateOctl(fx, fx.developerToken(), source, null, null, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics").isEmpty());
+
+        validateOctl(fx, fx.developerToken(), source, team.uuid().toString(), null, UUID.randomUUID().toString())
+                .andExpect(status().isUnprocessableEntity());
+        validateOctl(fx, fx.developerToken(), source, "not-a-uuid", null, null).andExpect(status().isUnprocessableEntity());
+        validateOctl(fx, fx.developerToken(), source, UUID.randomUUID().toString(), null, null)
+                .andExpect(status().isNotFound());
+        validateOctl(fx, fx.editorToken(), source, team.uuid().toString(), null, null).andExpect(status().isForbidden());
+    }
+
+    private ResultActions validateOctl(
+            Fixture fx, String token, String source, String datasetUuid, String cdl, String templateUuid)
+            throws Exception {
+        ObjectNode body = objectMapper.createObjectNode().put("source", source).put("channelKey", "html");
+        body.put("datasetUuid", datasetUuid);
+        body.put("contentDefinition", cdl);
+        body.put("templateUuid", templateUuid);
+        return mvc.perform(post(project(fx) + "/octl/validate")
+                .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)));
+    }
+
     /** M25.1.2 over REST: a schema save that leaves a set query invalid lists the set on the update response. */
     @Test
     void aSchemaChangeThatBreaksASetQueryListsTheSetOnTheUpdateResponse() throws Exception {

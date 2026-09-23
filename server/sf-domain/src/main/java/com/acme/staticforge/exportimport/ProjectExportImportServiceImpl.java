@@ -1003,6 +1003,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     body.put("elementUuid", c.elementUuid());
                     body.put("elementLabel", c.elementLabel());
                     body.put("detail", c.detail());
+                    body.put("blocksImport", c.blocksImport());
                     return body;
                 })
                 .toList();

@@ -2232,6 +2232,7 @@ export interface components {
             channelKey?: string;
             templateUuid?: string;
             contentDefinition?: string;
+            datasetUuid?: string;
         };
         OctlValidateResponse: {
             diagnostics?: components["schemas"]["Diagnostic"][];
@@ -2281,6 +2282,7 @@ export interface components {
         ConflictReportView: {
             conflicts?: components["schemas"]["ImportConflictView"][];
             hasBlocking?: boolean;
+            blocksImport?: boolean;
         };
         ImportConflictView: {
             severity?: string;
@@ -2289,6 +2291,7 @@ export interface components {
             elementLabel?: string;
             detail?: string;
             explicit?: boolean;
+            blocksImport?: boolean;
         };
         CreateGlobalSetRequest: {
             /** Format: uuid */
@@ -2612,10 +2615,12 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -2625,19 +2630,17 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
-            /** Format: int32 */
-            pageSize?: number;
             /** Format: int32 */
             pageNumber?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            paged?: boolean;
             unpaged?: boolean;
         };
         SortObject: {
@@ -2661,10 +2664,12 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -2674,8 +2679,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -2804,6 +2807,7 @@ export interface components {
             /** Format: int64 */
             changedBy?: number;
             values?: components["schemas"]["JsonNode"];
+            selectedBySet?: boolean;
         };
         PreviewShareLink: {
             token?: string;
@@ -2858,10 +2862,12 @@ export interface components {
             textEditable?: boolean;
         };
         PageMediaSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -2871,8 +2877,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -2932,10 +2936,12 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -2945,8 +2951,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -5904,6 +5908,7 @@ export interface operations {
                 where?: string;
                 applySetQuery?: boolean;
                 locale?: string;
+                revision?: number;
             };
             header?: never;
             path: {

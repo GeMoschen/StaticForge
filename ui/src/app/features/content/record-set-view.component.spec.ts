@@ -124,12 +124,14 @@ describe('RecordSetViewComponent', () => {
     expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'content']);
   });
 
-  it('reads the set at the time-travel revision and offers no edits', async () => {
+  it('reads the set and its records at the time-travel revision and offers no edits', async () => {
     const content = contentStub();
     await setup(content, { revision: 7 });
 
     expect(await screen.findByText(/the set and its query are read-only/)).toBeTruthy();
     expect(content.getRecordSet).toHaveBeenCalledWith('proj', 'set-uuid', 7);
+    await waitFor(() => expect(content.listSetRecords).toHaveBeenCalled());
+    expect(content.listSetRecords.mock.calls.every((call) => call[2].revision === 7)).toBe(true);
     expect(screen.queryByRole('button', { name: 'New record' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete set' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Save query' })).toBeNull();

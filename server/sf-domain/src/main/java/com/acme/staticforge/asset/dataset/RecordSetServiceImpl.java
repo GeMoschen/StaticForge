@@ -218,7 +218,7 @@ public class RecordSetServiceImpl implements RecordSetService {
         if (!compiled.valid()) {
             return new RecordSetQueryPreview(false, compiled.diagnostics(), 0, 0);
         }
-        List<RecordView> records = recordsOf(set).stream().map(SetRecord::view).toList();
+        List<RecordView> records = recordsOf(set, set.getUid(), null).stream().map(SetRecord::view).toList();
         List<String> chain = localeChain(projectId, null);
         return new RecordSetQueryPreview(
                 true,
@@ -230,16 +230,28 @@ public class RecordSetServiceImpl implements RecordSetService {
     @Override
     @Transactional(readOnly = true)
     public RecordPage listRecords(
-            long projectId, UUID uuid, RecordListQuery query, boolean applySetQuery, String locale, int page, int size) {
+            long projectId,
+            UUID uuid,
+            RecordListQuery query,
+            boolean applySetQuery,
+            String locale,
+            Long revision,
+            int page,
+            int size) {
         RecordGrid.checkPaging(page, size);
         Asset set = requireSet(projectId, uuid);
-        AssetVersion current = requireLiveVersion(set);
-        ContentDefinition definition = currentDefinition(projectId, current);
+        AssetVersionView version = (revision == null
+                        ? Optional.of(assetService.requireCurrent(projectId, uuid))
+                        : assetService.findAt(projectId, uuid, revision))
+                .filter(found -> !found.deleted())
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")));
+        ContentDefinition definition = definitionAt(projectId, RecordValues.datasetRef(version.payload()), revision);
         DatasetQuery narrowing = RecordGrid.listingQuery(definition, query);
-        RecordSetQuery setQuery =
-                applySetQuery ? RecordSetQuery.fromJson(current.getPayload().get("query")) : RecordSetQuery.ALL;
+        RecordSetQueries.Compiled storedQuery =
+                RecordSetQueries.compile(RecordSetQuery.fromJson(version.payload().get("query")), definition);
+        List<String> chain = localeChain(projectId, locale);
 
-        List<SetRecord> records = recordsOf(set);
+        List<SetRecord> records = recordsOf(set, version.uid(), revision);
         Map<UUID, RecordView> stored = new HashMap<>();
         Map<UUID, Long> changedBy = new HashMap<>();
         List<RecordView> views = new ArrayList<>(records.size());
@@ -248,17 +260,21 @@ public class RecordSetServiceImpl implements RecordSetService {
             changedBy.put(record.view().uuid(), record.changedBy());
             views.add(record.view());
         }
+        // What the set shows, over all of its records: every row's selectedBySet flag (nothing for an invalid query).
+        Set<UUID> selectedBySet = new HashSet<>();
+        RecordSetQueries.select(views, storedQuery, chain).forEach(record -> selectedBySet.add(record.uuid()));
         // The set query (without it: every record in the default order) comes first and the request narrows
         // its result; q filters last, so it never shifts the set query's offset/limit window.
-        List<RecordView> selected = RecordSetQueries.select(
-                views, RecordSetQueries.compile(setQuery, definition), localeChain(projectId, locale), narrowing, null);
+        RecordSetQueries.Compiled base =
+                applySetQuery ? storedQuery : RecordSetQueries.compile(RecordSetQuery.ALL, definition);
+        List<RecordView> selected = RecordSetQueries.select(views, base, chain, narrowing, null);
         String q = query.q() == null || query.q().isBlank() ? null : query.q().strip().toLowerCase(Locale.ROOT);
         if (q != null) {
             selected = selected.stream()
                     .filter(record -> record.displayName().toLowerCase(Locale.ROOT).contains(q))
                     .toList();
         }
-        return RecordGrid.page(selected, definition, stored, changedBy, page, size);
+        return RecordGrid.page(selected, definition, stored, changedBy, selectedBySet, page, size);
     }
 
     // ------------------------------------------------------------------
@@ -317,13 +333,21 @@ public class RecordSetServiceImpl implements RecordSetService {
     /** A live record of a set: its query view and its last editor. */
     private record SetRecord(RecordView view, Long changedBy) {}
 
-    private List<SetRecord> recordsOf(Asset set) {
-        List<SetRecord> records = new ArrayList<>();
-        for (AssetVersion version : assetVersionRepository.findCurrentRecordsOfSet(set.getId())) {
+    /**
+     * The live records of {@code set} — at {@code revision} when given, current otherwise.
+     *
+     * @param setUid the set's uid at that revision ({@code _recordSet} of every record)
+     */
+    private List<SetRecord> recordsOf(Asset set, String setUid, Long revision) {
+        List<AssetVersion> versions = revision == null
+                ? assetVersionRepository.findCurrentRecordsOfSet(set.getId())
+                : assetVersionRepository.findRecordsOfSetAt(set.getId(), revision);
+        List<SetRecord> records = new ArrayList<>(versions.size());
+        for (AssetVersion version : versions) {
             records.add(new SetRecord(
                     RecordValues.view(
                             version.getAsset().getUuid(), version.getAsset().getUid(), version.getDisplayName(),
-                            version.getFolderPath(), set.getUid(), version.getChangedAt(), version.getPayload()),
+                            version.getFolderPath(), setUid, version.getChangedAt(), version.getPayload()),
                     version.getChangedBy()));
         }
         return records;

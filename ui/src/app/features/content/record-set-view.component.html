@@ -82,6 +82,7 @@
                   [dataset]="ds"
                   [recordSetUuid]="rs.uuid ?? ''"
                   [queryValid]="rs.queryValid !== false"
+                  [revision]="activeRevision()"
                   [canEditQuery]="!readOnly()"
                   [refreshKey]="gridRefresh()"
                   (open)="openRecord($event)"

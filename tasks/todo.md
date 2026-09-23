@@ -19,19 +19,19 @@ next one in its lane starts.
 - [x] M25.5.3 — reference picker, search, routing
 
 ## Follow-ups found in review
-- [ ] Set grid: `revision` param on `GET /record-sets/{uuid}/records` (time travel lists records as of that
+- [x] Set grid: `revision` param on `GET /record-sets/{uuid}/records` (time travel lists records as of that
       revision) and a per-row `selectedBySet` flag in "All records" mode — replaces the UI's extra
       `_uuid == … || …` request for dimming (backend after M25.2.2, then UI)
 - [x] Insight UI: `EDGE_LABELS` in `features/generation/insight/insight.util.ts` for `RECORD_SET_MEMBERSHIP`,
       `RECORD_SET_QUERY`, `RECORD_TEMPLATE`
-- [ ] Record template live check: `POST /octl/validate` gains a dataset context (`datasetUuid` + draft CDL) so
+- [x] Record template live check: `POST /octl/validate` gains a dataset context (`datasetUuid` + draft CDL) so
       unknown fields show while typing, not only on save (backend, then `dataset-schema-editor`)
 
-- [ ] Import UI: gate Proceed on `blocksImport` (not any BLOCKING), `RECORD_OUTSIDE_RECORD_SET` reads "will not be
+- [x] Import UI: gate Proceed on `blocksImport` (not any BLOCKING), `RECORD_OUTSIDE_RECORD_SET` reads "will not be
       imported", icon for `RECORD_SET_QUERY_INVALID`; regenerate `schema.d.ts` (`blocksImport` fields)
 
 ## Finish
-- [ ] M25.6.1 — docs + spec
+- [x] M25.6.1 — docs + spec
 - [ ] M25.6.2 — Playwright journey
 - [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green; merge to master
 

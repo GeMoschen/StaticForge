@@ -18,13 +18,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import type { ContentDefinition } from '../forms/form.model';
-import {
-  ContentService,
-  uuidMembershipWhere,
-  type DatasetDetailView,
-  type RecordRowView,
-  type RecordSort,
-} from './content.service';
+import { ContentService, type DatasetDetailView, type RecordRowView, type RecordSort } from './content.service';
 import {
   ariaSort,
   deriveColumns,
@@ -65,9 +59,10 @@ export const EXCLUDED_INVALID_QUERY = 'Not shown on the site: the set query is i
  * and filtered on the server so a set of any size never loads more than one page of rows.
  *
  * <p>Two views of the set: **All records** (the default) lists every record and dims the ones the
- * stored set query leaves out — one extra request per page asks the server which of the shown rows
- * the query keeps; **Show as rendered** applies the set query first, so rows appear in render order
- * and excluded records are hidden. The quick search, filter box and header sort only narrow what
+ * stored set query leaves out — each row's `selectedBySet` flag, which the server computes over the
+ * whole set; **Show as rendered** applies the set query first, so rows appear in render order and
+ * excluded records are hidden. With `revision` (time travel) the server lists the set as of that
+ * revision: its records, their values and its stored query then. The quick search, filter box and header sort only narrow what
  * the grid shows: they never change the set query. "Use as set query" hands them to the query panel
  * as an unsaved draft.
  *
@@ -94,6 +89,8 @@ export class RecordGridComponent {
   readonly recordSetUuid = input.required<string>();
   /** Whether the stored set query validates; while it doesn't, the set shows nothing. */
   readonly queryValid = input<boolean>(true);
+  /** Time travel: list the set as of this revision (`null`: current). */
+  readonly revision = input<number | null>(null);
   /** Whether "Use as set query" is offered (an editor, not time travelling). */
   readonly canEditQuery = input<boolean>(false);
   readonly pageSize = input<number>(50);
@@ -109,8 +106,6 @@ export class RecordGridComponent {
 
   protected readonly mode = signal<RecordGridMode>('all');
   protected readonly rows = signal<RecordRowView[]>([]);
-  /** Uuids of the shown rows the set query keeps (`all` mode); `null` until known. */
-  protected readonly kept = signal<ReadonlySet<string> | null>(null);
   protected readonly totalElements = signal(0);
   protected readonly totalPages = signal(0);
   protected readonly page = signal(0);
@@ -126,7 +121,6 @@ export class RecordGridComponent {
 
   private readonly search$ = new Subject<string>();
   private request: Subscription | null = null;
-  private membershipRequest: Subscription | null = null;
 
   protected readonly columns = computed<RecordColumn[]>(() =>
     deriveColumns(this.dataset().compiledDefinition as unknown as ContentDefinition),
@@ -160,6 +154,7 @@ export class RecordGridComponent {
       () => {
         this.projectKey();
         this.recordSetUuid();
+        this.revision();
         this.mode();
         this.queryValid();
         this.q();
@@ -180,10 +175,9 @@ export class RecordGridComponent {
       });
   }
 
-  /** Whether a shown row is one the set query leaves out (only known in `all` mode). */
+  /** Whether a shown row is one the set query leaves out (`all` mode; the server's `selectedBySet`). */
   protected isExcluded(row: RecordRowView): boolean {
-    const kept = this.kept();
-    return this.mode() === 'all' && kept !== null && !!row.uuid && !kept.has(row.uuid);
+    return this.mode() === 'all' && row.selectedBySet === false;
   }
 
   protected excludedTooltip(): string {
@@ -314,9 +308,7 @@ export class RecordGridComponent {
       return;
     }
     this.request?.unsubscribe();
-    this.membershipRequest?.unsubscribe();
     this.loading.set(true);
-    const mode = this.mode();
     this.request = this.content
       .listSetRecords(key, uuid, {
         page,
@@ -324,7 +316,8 @@ export class RecordGridComponent {
         sort: this.sort(),
         q: this.q(),
         where: this.where(),
-        applySetQuery: mode === 'rendered',
+        applySetQuery: this.mode() === 'rendered',
+        revision: this.revision(),
       })
       .subscribe({
         next: (result) => {
@@ -332,19 +325,14 @@ export class RecordGridComponent {
           this.loading.set(false);
           this.whereError.set(null);
           this.rows.set(rows);
-          this.kept.set(null);
           this.totalElements.set(result.page?.totalElements ?? 0);
           this.totalPages.set(result.page?.totalPages ?? 0);
           this.activeRow.set(0);
           this.total.emit(result.page?.totalElements ?? 0);
-          if (mode === 'all') {
-            this.loadMembership(key, uuid, rows);
-          }
         },
         error: (err: unknown) => {
           this.loading.set(false);
           this.rows.set([]);
-          this.kept.set(null);
           this.totalElements.set(0);
           this.totalPages.set(0);
           if (err instanceof HttpErrorResponse && err.status === 400) {
@@ -354,34 +342,6 @@ export class RecordGridComponent {
             this.whereError.set({ detail: 'Could not load records — try again in a moment.' });
           }
         },
-      });
-  }
-
-  /**
-   * Which of the shown rows the set query keeps: the set query applied, narrowed to exactly these
-   * rows by uuid. A failure leaves every row undimmed rather than guessing.
-   */
-  private loadMembership(key: string, uuid: string, rows: RecordRowView[]): void {
-    const uuids = rows.map((row) => row.uuid).filter((u): u is string => !!u);
-    if (uuids.length === 0) {
-      this.kept.set(new Set());
-      return;
-    }
-    if (!this.queryValid()) {
-      this.kept.set(new Set());
-      return;
-    }
-    this.membershipRequest = this.content
-      .listSetRecords(key, uuid, {
-        page: 0,
-        size: uuids.length,
-        sort: [],
-        where: uuidMembershipWhere(uuids),
-        applySetQuery: true,
-      })
-      .subscribe({
-        next: (result) => this.kept.set(new Set((result.content ?? []).map((row) => row.uuid ?? ''))),
-        error: () => this.kept.set(null),
       });
   }
 }

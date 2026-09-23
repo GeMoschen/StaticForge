@@ -31,6 +31,15 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 | `PUT`/`DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN |
 | `GET` | `/projects/{key}/locales` | VIEWER |
 | `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |
+| `GET` / `POST` | `/projects/{key}/export` / `/projects/{key}/export/selection` | PROJECT_ADMIN |
+| `POST` | `/projects/{key}/import/analyze`, `/projects/{key}/import` (multipart `file`, `?skipExistingImplicit=`) | PROJECT_ADMIN |
+
+**Import conflicts.** `import/analyze` returns `{conflicts: [{severity, type, elementUuid, elementLabel, detail,
+explicit, blocksImport}], hasBlocking, blocksImport}` and writes nothing. `hasBlocking` is true when any conflict is
+`BLOCKING`; `blocksImport` when one refuses the **whole** import. A `BLOCKING` conflict with `blocksImport: false`
+rejects only its own asset, which stays out while the rest of the archive imports — today only
+`RECORD_OUTSIDE_RECORD_SET` (M25: a record from before record sets, never migrated). `import` refuses exactly when
+`blocksImport` is true: `409 SF-API-0409` with those conflicts under `conflicts` (each with `blocksImport`).
 
 ### 3.1 Content languages (M24)
 
@@ -171,7 +180,7 @@ A **record set** (`RECORD_SET`) lives in a Content folder (or the Content store 
 | `POST` | `/projects/{projectKey}/record-sets` | `EDITOR` | `{folderUuid?, datasetUuid, uid?, displayName, query?, comment?}` → `201`; no `datasetUuid` is `400` with `field`; a parent that isn't a Content folder is `422 SF-DOM-0104`; an invalid query is `422 SF-API-0422` with `diagnostics` and nothing is written |
 | `PUT` | `/projects/{projectKey}/record-sets/{uuid}` | `EDITOR` | `{displayName?, query?, comment?}` — replaces the whole query (omitted: every record, default order); the dataset can't change; an invalid query is `422` with `diagnostics` |
 | `DELETE` | `/projects/{projectKey}/record-sets/{uuid}` | `EDITOR` | `409 SF-DOM-0110` with `recordCount` while the set has live records; `?cascade=true` deletes the set and its records in one revision (restoring the set brings them back) |
-| `GET` | `/projects/{projectKey}/record-sets/{uuid}/records` | `VIEWER` | the set's grid: the dataset listing's envelope and `q`/`where`/`sort`/`page`/`size` (same parsers, same `400`s; `folder` does not apply). `applySetQuery=true` runs the stored query first and the request narrows it: `where` is AND-ed, `sort` re-sorts (without one the set's order is kept), `q` filters last; a set whose query no longer validates lists nothing. Otherwise every record of the set is listed. `locale` picks the language values compare in (default: the project default language) |
+| `GET` | `/projects/{projectKey}/record-sets/{uuid}/records` | `VIEWER` | the set's grid: the dataset listing's envelope and `q`/`where`/`sort`/`page`/`size` (same parsers, same `400`s; `folder` does not apply). `applySetQuery=true` runs the stored query first and the request narrows it: `where` is AND-ed, `sort` re-sorts (without one the set's order is kept), `q` filters last; a set whose query no longer validates lists nothing. Otherwise every record of the set is listed. `locale` picks the language values compare in (default: the project default language). Every row carries `selectedBySet`: whether the stored query selects the record, evaluated over the whole set before paging (`false` for every row while the query is invalid) — "All records" dims the rest with it; the dataset listing has no such field. `revision` lists the set as of that revision — membership, values, stored query and schema then (`404` before the set existed or while it was deleted) |
 | `POST` | `/projects/{projectKey}/record-sets/{uuid}/preview-query` | `EDITOR` | body: a draft `query`; nothing is saved. `{valid, diagnostics, matchCount, selectedCount}` — `matchCount` counts the draft's `where` matches before `offset`/`limit`, `selectedCount` what the set would show (both `0` for an invalid draft) |
 
 A query diagnostic is `{field, severity, code, message, line, column}`: `field` is the query part (`where`, `sort`, `limit`, `offset`), `line`/`column` the 1-based position inside that part's text (`0` when unknown, and for `limit`/`offset`), `code` is `SF-TPL-0140` (malformed, or reads the render scope), `SF-TPL-0141` (a field the dataset doesn't declare) or `SF-TPL-0142` (a sort field without a natural order).
@@ -228,7 +237,7 @@ with the diagnostic in `X-SF-Render-Error`.
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/structures/{uuid}` |
 | `GET` | `/projects/{projectKey}/structures/{uuid}/preview` |
 | `POST` | `/projects/{projectKey}/cdl/validate` (`?kind=GLOBAL_SET` adds the property-set restrictions, `?kind=DATASET` the dataset-schema ones) |
-| `POST` | `/projects/{projectKey}/octl/validate` (body `source`, `channelKey`; with `templateUuid` and optional unsaved `contentDefinition` it returns the diagnostics a save of that template's channel would: references, inheritance chain, effective-definition names) |
+| `POST` | `/projects/{projectKey}/octl/validate` (body `source`, `channelKey`; with `templateUuid` and optional unsaved `contentDefinition` it returns the diagnostics a save of that template's channel would: references, inheritance chain, effective-definition names; with `datasetUuid` (M25) and optional unsaved dataset `contentDefinition` it checks the source as that dataset's record template — record fields and meta names in scope, so an undeclared field is `SF-TPL-0103` and `$CMS_BODY`/`$CMS_EXTENDS`/`$CMS_BLOCK`/`$CMS_PARENT` are `SF-TPL-0122`, as on save. `templateUuid` with `datasetUuid` is `422`; an unknown dataset `404`) |
 
 **Language-dependent editors (M24).** A CDL leaf editor may be `localizable`; a container (`group`, `list`,
 `catalog`, `pagination`) may not (`SF-CDL-0112`). Adding the flag migrates every stored value of that editor into

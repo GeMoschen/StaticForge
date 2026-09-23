@@ -3,6 +3,7 @@ package com.acme.staticforge;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.dataset.CreateDatasetCommand;
 import com.acme.staticforge.asset.dataset.CreateRecordCommand;
 import com.acme.staticforge.asset.dataset.CreateRecordSetCommand;
@@ -67,6 +68,7 @@ class RecordSetQueryIntegrationTest {
     @Autowired DatasetService datasetService;
     @Autowired RecordService recordService;
     @Autowired RecordSetService recordSetService;
+    @Autowired AssetService assetService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -145,7 +147,7 @@ class RecordSetQueryIntegrationTest {
         assertThat(renamed.brokenRecordSets()).isEmpty();
 
         // The renamed query still selects the record it selected before.
-        assertThat(recordSetService.listRecords(fx.projectId(), a.uuid(), all(), true, null, 0, 50).rows())
+        assertThat(recordSetService.listRecords(fx.projectId(), a.uuid(), all(), true, null, null, 0, 50).rows())
                 .extracting(RecordPage.Row::uuid)
                 .containsExactly(ada.uuid());
     }
@@ -182,9 +184,12 @@ class RecordSetQueryIntegrationTest {
         // Time travel checks the query against the schema of that revision.
         assertThat(recordSetService.find(fx.projectId(), a.uuid(), saved.revision() - 1).orElseThrow().queryValid()).isTrue();
 
-        // A broken set shows nothing — never every record — while the unfiltered grid still lists them.
-        assertThat(recordSetService.listRecords(fx.projectId(), a.uuid(), all(), true, null, 0, 50).totalElements()).isZero();
-        assertThat(recordSetService.listRecords(fx.projectId(), a.uuid(), all(), false, null, 0, 50).totalElements()).isEqualTo(2);
+        // A broken set shows nothing — never every record — while the unfiltered grid still lists them, each
+        // marked as not selected by the set.
+        assertThat(recordSetService.listRecords(fx.projectId(), a.uuid(), all(), true, null, null, 0, 50).totalElements()).isZero();
+        RecordPage unfiltered = recordSetService.listRecords(fx.projectId(), a.uuid(), all(), false, null, null, 0, 50);
+        assertThat(unfiltered.totalElements()).isEqualTo(2);
+        assertThat(unfiltered.rows()).extracting(RecordPage.Row::selectedBySet).containsExactly(false, false);
         assertThat(recordSetService.previewQuery(fx.projectId(), a.uuid(), flagged.query()).valid()).isFalse();
 
         RecordSetView fixed = recordSetService.update(
@@ -192,7 +197,7 @@ class RecordSetQueryIntegrationTest {
                 flagged.revision(), fx.ctx());
         assertThat(fixed.queryValid()).isTrue();
         assertThat(find(fx, a).queryValid()).isTrue();
-        assertThat(recordSetService.listRecords(fx.projectId(), a.uuid(), all(), true, null, 0, 50).totalElements()).isEqualTo(2);
+        assertThat(recordSetService.listRecords(fx.projectId(), a.uuid(), all(), true, null, null, 0, 50).totalElements()).isEqualTo(2);
         assertThat(find(fx, b).queryValid()).isTrue();
     }
 
@@ -208,31 +213,94 @@ class RecordSetQueryIntegrationTest {
         RecordDetail eve = record(fx, leads, "Eve", "lead", "2018-01-01");
 
         // The set query alone: leads by -joined, the first three.
-        assertThat(uuids(recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), true, null, 0, 50)))
+        assertThat(uuids(recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), true, null, null, 0, 50)))
                 .containsExactly(dan.uuid(), ann.uuid(), cyd.uuid());
         // Request where is AND-ed and keeps the set's order; request sort re-sorts; q filters names.
         assertThat(uuids(recordSetService.listRecords(fx.projectId(), leads.uuid(),
-                        new RecordListQuery(null, null, "joined < '2022-01-01'", List.of()), true, null, 0, 50)))
+                        new RecordListQuery(null, null, "joined < '2022-01-01'", List.of()), true, null, null, 0, 50)))
                 .containsExactly(ann.uuid(), cyd.uuid());
         assertThat(uuids(recordSetService.listRecords(fx.projectId(), leads.uuid(),
-                        new RecordListQuery(null, null, null, List.of(SortKey.asc("name"))), true, null, 0, 50)))
+                        new RecordListQuery(null, null, null, List.of(SortKey.asc("name"))), true, null, null, 0, 50)))
                 .containsExactly(ann.uuid(), cyd.uuid(), dan.uuid());
         assertThat(uuids(recordSetService.listRecords(fx.projectId(), leads.uuid(),
-                        new RecordListQuery("y", null, null, List.of()), true, null, 0, 50)))
+                        new RecordListQuery("y", null, null, List.of()), true, null, null, 0, 50)))
                 .as("q never pulls Eve into the set's three")
                 .containsExactly(cyd.uuid());
-        // Without the set query: every record of the set, default order, paged.
-        RecordPage page = recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), false, null, 1, 2);
+        // Without the set query: every record of the set, default order, paged; each row says whether the set
+        // shows it, judged over the whole set (Eve is a lead, but the set's limit of 3 leaves her out).
+        RecordPage page = recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), false, null, null, 1, 2);
         assertThat(page.totalElements()).isEqualTo(5);
         assertThat(uuids(page)).containsExactly(cyd.uuid(), dan.uuid());
+        assertThat(recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), false, null, null, 0, 50).rows())
+                .extracting(RecordPage.Row::displayName, RecordPage.Row::selectedBySet)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("Ann", true),
+                        org.assertj.core.groups.Tuple.tuple("Bob", false),
+                        org.assertj.core.groups.Tuple.tuple("Cyd", true),
+                        org.assertj.core.groups.Tuple.tuple("Dan", true),
+                        org.assertj.core.groups.Tuple.tuple("Eve", false));
+        assertThat(recordSetService.listRecords(fx.projectId(), leads.uuid(),
+                        new RecordListQuery(null, null, "joined < '2019-01-01'", List.of()), false, null, null, 0, 50).rows())
+                .as("a request filter narrows the rows, not what the set selects")
+                .extracting(RecordPage.Row::displayName, RecordPage.Row::selectedBySet)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("Eve", false));
+        assertThat(recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), true, null, null, 0, 50).rows())
+                .extracting(RecordPage.Row::selectedBySet)
+                .containsOnly(true);
         assertThat(page.rows().get(0).values().path("role").asText()).isEqualTo("lead");
         assertThat(uuids(recordSetService.listRecords(fx.projectId(), leads.uuid(),
-                        new RecordListQuery(null, null, "joined < '2019-01-01'", List.of()), false, null, 0, 50)))
+                        new RecordListQuery(null, null, "joined < '2019-01-01'", List.of()), false, null, null, 0, 50)))
                 .containsExactly(eve.uuid());
         // The request is checked like the dataset listing's.
         assertThatThrownBy(() -> recordSetService.listRecords(fx.projectId(), leads.uuid(),
-                        new RecordListQuery(null, null, "squad == 1", List.of()), true, null, 0, 50))
+                        new RecordListQuery(null, null, "squad == 1", List.of()), true, null, null, 0, 50))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(400));
+    }
+
+    @Test
+    void theGridTravelsInTimeWithTheSetsMembershipValuesAndQuery() {
+        Fixture fx = newFixture();
+        DatasetView team = team(fx);
+        RecordSetView leads = set(fx, team, "Leads", new RecordSetQuery("role == 'lead'", "name", null, null));
+        RecordSetView staff = set(fx, team, "Staff", RecordSetQuery.ALL);
+        RecordDetail ann = record(fx, leads, "Ann", "lead", "2021-03-01");
+        RecordDetail bob = record(fx, leads, "Bob", "dev", "2022-01-01");
+        RecordDetail cyd = record(fx, staff, "Cyd", "lead", "2019-06-01");
+        long then = cyd.revision();
+
+        // After "then": Ann becomes a dev, Bob leaves the set, Cyd joins it, the query flips to devs.
+        recordService.update(ann.uuid(), mapper.createObjectNode().put("name", "Ann").put("role", "dev")
+                .put("joined", "2021-03-01"), "Ann", ann.revision(), fx.ctx());
+        recordService.update(bob.uuid(), mapper.createObjectNode().put("name", "Bob").put("role", "dev")
+                .put("joined", "2022-01-01"), "Bob", bob.revision(), fx.ctx());
+        assetService.move(bob.uuid(), staff.uuid(), fx.ctx());
+        assetService.move(cyd.uuid(), leads.uuid(), fx.ctx());
+        RecordSetView current = find(fx, leads);
+        recordSetService.update(leads.uuid(),
+                new UpdateRecordSetCommand("Leads", new RecordSetQuery("role == 'dev'", "name", null, null)),
+                current.revision(), fx.ctx());
+
+        RecordPage now = recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), false, null, null, 0, 50);
+        assertThat(now.rows()).extracting(RecordPage.Row::displayName, RecordPage.Row::selectedBySet)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("Ann", true),
+                        org.assertj.core.groups.Tuple.tuple("Cyd", false));
+
+        RecordPage past = recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), false, null, then, 0, 50);
+        assertThat(past.rows())
+                .as("membership, values and the stored query as of that revision")
+                .extracting(RecordPage.Row::displayName, RecordPage.Row::selectedBySet)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("Ann", true),
+                        org.assertj.core.groups.Tuple.tuple("Bob", false));
+        assertThat(past.rows().get(0).values().path("role").asText()).isEqualTo("lead");
+        assertThat(uuids(recordSetService.listRecords(fx.projectId(), leads.uuid(), all(), true, null, then, 0, 50)))
+                .containsExactly(ann.uuid());
+
+        // Before the set existed: 404, like reading the set itself there.
+        assertThatThrownBy(() -> recordSetService.listRecords(
+                        fx.projectId(), leads.uuid(), all(), false, null, leads.revision() - 1, 0, 50))
+                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(404));
     }
 
     @Test

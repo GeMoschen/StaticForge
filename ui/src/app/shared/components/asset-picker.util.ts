@@ -32,8 +32,10 @@ export const SOURCE_TYPE_OPTIONS: { value: PickerType; label: string }[] = [
 
 /**
  * The type switch's options. A `dataset` restriction (a reference editor's `dataset "uid"`) means that
- * dataset's records and/or record sets — whichever `allowedTypes` (its `assetTypes`) allows, both when it
- * allows neither (the CDL rejects that combination, `SF-CDL-0104`) or says nothing. Otherwise
+ * dataset's records and/or record sets, exactly as the server validates the value
+ * (`ContentValidator.validateDataset`): record sets only when `allowedTypes` (its `assetTypes`) names
+ * `RECORD_SET`, records when it names `RECORD` — and records alone when it says nothing (the M19 meaning of
+ * `dataset "uid"`) or allows neither (the CDL rejects that combination, `SF-CDL-0104`). Otherwise
  * `allowedTypes` filters the list, and an unknown or empty restriction offers everything.
  */
 export function pickerTypeOptions(
@@ -41,9 +43,10 @@ export function pickerTypeOptions(
   dataset: string | null | undefined,
 ): { value: PickerType; label: string }[] {
   if (dataset) {
-    const bound = PICKER_TYPE_OPTIONS.filter((t) => DATASET_BOUND_TYPES.includes(t.value));
-    const allowed = bound.filter((t) => allowedTypes?.includes(t.value));
-    return allowed.length > 0 ? allowed : bound;
+    const allowed = PICKER_TYPE_OPTIONS.filter(
+      (t) => DATASET_BOUND_TYPES.includes(t.value) && allowedTypes?.includes(t.value),
+    );
+    return allowed.length > 0 ? allowed : PICKER_TYPE_OPTIONS.filter((t) => t.value === 'RECORD');
   }
   if (!allowedTypes || allowedTypes.length === 0) {
     return PICKER_TYPE_OPTIONS;

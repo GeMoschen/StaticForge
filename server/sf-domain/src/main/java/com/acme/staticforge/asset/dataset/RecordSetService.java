@@ -73,7 +73,12 @@ public interface RecordSetService {
      * kept) and {@code q} filters display names; a set whose query no longer validates lists nothing.
      * Without it every record of the set is listed, filtered by {@code q}/{@code where} and ordered by
      * {@code sort} (default order {@code _displayName}, {@code _uid}), like the dataset listing.
-     * {@code query.folder} is ignored: the set is the scope.
+     * {@code query.folder} is ignored: the set is the scope. In both modes each row says whether the set's
+     * stored query selects it ({@link RecordPage.Row#selectedBySet()}, evaluated over the whole set before
+     * paging; {@code false} for every row while the stored query is invalid).
+     *
+     * <p>With {@code revision} the listing travels in time like the preview does (M25): the set, its stored
+     * query, the dataset schema and the set's records — membership and values — as of that revision.
      *
      * <p>Language-dependent values are compared in {@code locale}'s fallback chain — the project's default
      * language when {@code null} or undeclared — the rule a {@code $CMS_FOR} over the set follows for its
@@ -81,8 +86,15 @@ public interface RecordSetService {
      *
      * @throws com.acme.staticforge.common.SfException {@code 400} for an invalid {@code where} (with
      *     {@code column}) or an unknown or unsortable {@code sort} field, {@code 404} for an unknown or
-     *     deleted set
+     *     deleted set (at {@code revision}, when given — also before the set existed)
      */
     RecordPage listRecords(
-            long projectId, UUID uuid, RecordListQuery query, boolean applySetQuery, String locale, int page, int size);
+            long projectId,
+            UUID uuid,
+            RecordListQuery query,
+            boolean applySetQuery,
+            String locale,
+            Long revision,
+            int page,
+            int size);
 }

@@ -1,6 +1,7 @@
 package com.acme.staticforge.asset.dataset;
 
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,4 +60,17 @@ public interface DatasetService {
 
     /** The project's live datasets, by display name. */
     List<DatasetView> list(long projectId);
+
+    /**
+     * The diagnostics saving {@code source} as the dataset's record template for {@code channelKey} would produce
+     * (M25), without saving — the live check of the record template editor. It compiles with the record-template
+     * profile against the dataset's schema: {@code cdlSource} (the unsaved CDL being edited) when not {@code null},
+     * otherwise the stored one, so an undeclared field ({@code SF-TPL-0103}) or {@code SF-TPL-0122} shows while
+     * typing. References resolve against the project, and a {@code dataset:} loop over this dataset is checked
+     * against the same schema, as on save. CDL errors are the CDL editor's to report: names are checked against
+     * the best-effort definition.
+     *
+     * @throws com.acme.staticforge.common.SfException {@code 404} for a uuid that is not a dataset of the project
+     */
+    List<Diagnostic> validateRecordTemplate(long projectId, UUID uuid, String channelKey, String source, String cdlSource);
 }

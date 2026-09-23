@@ -279,6 +279,20 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             """)
     List<AssetVersion> findCurrentRecordsOfSet(@Param("setId") long setId);
 
+    /**
+     * The non-deleted records that sat in the record set {@code setId} at revision {@code R} (M25, the set grid's
+     * time travel), asset joined: membership and values as of that revision.
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset
+            WHERE v.folderId = :setId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.validFromRevision <= :revision
+              AND (v.validToRevision IS NULL OR v.validToRevision > :revision)
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findRecordsOfSetAt(@Param("setId") long setId, @Param("revision") long revision);
+
     /** How many direct children of {@code type} the container {@code folderId} held, live, at revision {@code R}. */
     @Query("""
             SELECT COUNT(v) FROM AssetVersion v

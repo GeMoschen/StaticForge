@@ -1,6 +1,7 @@
 package com.acme.staticforge;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -260,6 +261,8 @@ class RecordSetApiTest {
         assertThat(names(send(fx, fx.viewerToken(), get(records), null)))
                 .as("without applySetQuery the grid sees every record of the set")
                 .containsExactly("Ada", "Bob", "Dee", "Eve");
+        send(fx, fx.viewerToken(), get(records), null)
+                .andExpect(jsonPath("$.content[*].selectedBySet").value(contains(true, false, true, true)));
         assertThat(names(send(fx, fx.viewerToken(), get(records).param("where", "role == 'dev'"), null)))
                 .containsExactly("Bob");
         assertThat(names(send(fx, fx.viewerToken(), get(records).param("sort", "joined,desc").param("q", "e"), null)))
@@ -273,10 +276,34 @@ class RecordSetApiTest {
                 .andExpect(status().isBadRequest());
         send(fx, fx.viewerToken(), get(records).param("sort", "bio"), null).andExpect(status().isBadRequest());
 
-        // The dataset listing still spans every set of the dataset, set queries not applied.
+        // The dataset listing still spans every set of the dataset, set queries not applied, and has no set flag.
         send(fx, fx.viewerToken(), get(project(fx) + "/datasets/" + team.uuid() + "/records"), null)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.totalElements").value(5));
+                .andExpect(jsonPath("$.page.totalElements").value(5))
+                .andExpect(jsonPath("$.content[0].selectedBySet").doesNotExist());
+    }
+
+    @Test
+    void theSetGridListsTheSetAsOfARevision() throws Exception {
+        Fixture fx = newFixture();
+        DatasetView team = team(fx);
+        RecordSetView leads = set(fx, team, "Leads", new RecordSetQuery("role == 'lead'", null, null, null));
+        record(fx, leads.uuid(), "Ada", "lead", "2021-03-01");
+        record(fx, leads.uuid(), "Bob", "dev", "2022-01-01");
+        long then = latestRevision(fx);
+        record(fx, leads.uuid(), "Cy", "lead", "2023-01-01");
+        String records = sets(fx) + "/" + leads.uuid() + "/records";
+
+        assertThat(names(send(fx, fx.viewerToken(), get(records), null))).containsExactly("Ada", "Bob", "Cy");
+        send(fx, fx.viewerToken(), get(records).param("revision", String.valueOf(then)), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].displayName").value(contains("Ada", "Bob")))
+                .andExpect(jsonPath("$.content[*].selectedBySet").value(contains(true, false)));
+        assertThat(names(send(fx, fx.viewerToken(),
+                        get(records).param("revision", String.valueOf(then)).param("applySetQuery", "true"), null)))
+                .containsExactly("Ada");
+        send(fx, fx.viewerToken(), get(records).param("revision", String.valueOf(leads.revision() - 1)), null)
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -454,6 +481,10 @@ class RecordSetApiTest {
         return recordService.create(new CreateRecordCommand(fx.project().getId(), set, name, content), fx.ctx())
                 .record()
                 .uuid();
+    }
+
+    private long latestRevision(Fixture fx) {
+        return revisionRepository.findByProjectIdOrderByRevisionIdDesc(fx.project().getId()).get(0).getRevisionId();
     }
 
     private long revisionCount(Fixture fx) {

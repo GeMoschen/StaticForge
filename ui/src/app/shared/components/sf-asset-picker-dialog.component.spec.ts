@@ -54,8 +54,16 @@ describe('SfAssetPickerDialogComponent — record sets', () => {
     });
   });
 
-  it('offers records and record sets for a dataset restriction without assetTypes', async () => {
-    await renderPicker({ allowedTypes: null, dataset: 'team' });
+  it('offers only records for a dataset restriction without assetTypes, as the server validates it', async () => {
+    const { content } = await renderPicker({ allowedTypes: null, dataset: 'team' });
+
+    await waitFor(() => expect(content.listDatasets).toHaveBeenCalled());
+    expect(screen.queryByRole('combobox', { name: 'Asset type' })).toBeNull();
+    expect(content.listRecordSets).not.toHaveBeenCalled();
+  });
+
+  it('offers records and record sets when assetTypes names both', async () => {
+    await renderPicker({ allowedTypes: ['RECORD', 'RECORD_SET'], dataset: 'team' });
 
     const typeSwitch = (await screen.findByRole('combobox', { name: 'Asset type' })) as HTMLSelectElement;
     expect(Array.from(typeSwitch.options).map((o) => o.textContent?.trim())).toEqual(['Records', 'Record sets']);

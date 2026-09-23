@@ -12,16 +12,21 @@ describe('pickerTypeOptions', () => {
   const values = (allowed: string[] | null | undefined, dataset: string | null | undefined) =>
     pickerTypeOptions(allowed, dataset).map((o) => o.value);
 
-  it('offers records and record sets of a restricted dataset, as far as assetTypes allows', () => {
-    expect(values(null, 'team')).toEqual(['RECORD', 'RECORD_SET']);
-    expect(values([], 'team')).toEqual(['RECORD', 'RECORD_SET']);
+  it('offers records and record sets of a restricted dataset exactly as far as assetTypes allows', () => {
     expect(values(['RECORD'], 'team')).toEqual(['RECORD']);
     expect(values(['RECORD_SET'], 'team')).toEqual(['RECORD_SET']);
     expect(values(['RECORD_SET', 'RECORD', 'PAGE'], 'team')).toEqual(['RECORD', 'RECORD_SET']);
   });
 
-  it('falls back to both dataset-bound types when assetTypes allows neither (a CDL error)', () => {
-    expect(values(['PAGE'], 'team')).toEqual(['RECORD', 'RECORD_SET']);
+  /** The server accepts only records for `dataset "uid"` without `assetTypes` (M19), never a record set. */
+  it('offers records only for a dataset restriction without assetTypes', () => {
+    expect(values(null, 'team')).toEqual(['RECORD']);
+    expect(values(undefined, 'team')).toEqual(['RECORD']);
+    expect(values([], 'team')).toEqual(['RECORD']);
+  });
+
+  it('falls back to records when assetTypes allows neither dataset-bound type (a CDL error)', () => {
+    expect(values(['PAGE'], 'team')).toEqual(['RECORD']);
   });
 
   it('filters by assetTypes and falls back to everything for an unknown restriction', () => {

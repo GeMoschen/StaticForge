@@ -109,6 +109,16 @@
   background: color-mix(in srgb, var(--sf-rust) 6%, var(--sf-surface));
 }
 
+.conflict-section--rejected {
+  border-color: color-mix(in srgb, var(--sf-amber) 40%, var(--sf-line));
+}
+
+.conflict-section__note {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
 .conflict-section__title {
   display: flex;
   align-items: center;

@@ -16,7 +16,18 @@ public record RecordPage(List<Row> rows, long totalElements, int page, int size)
         return size <= 0 ? 0 : (int) ((totalElements + size - 1) / size);
     }
 
-    /** @param folderPath Content-store relative ({@code /team/}) */
+    /**
+     * @param folderPath Content-store relative ({@code /team/})
+     * @param selectedBySet in a record set's grid (M25), whether the set's stored query selects the record —
+     *     {@code false} for every record while the query is invalid; {@code null} in the dataset listing
+     */
     public record Row(
-            UUID uuid, String uid, String displayName, String folderPath, Instant changedAt, Long changedBy, JsonNode values) {}
+            UUID uuid,
+            String uid,
+            String displayName,
+            String folderPath,
+            Instant changedAt,
+            Long changedBy,
+            JsonNode values,
+            Boolean selectedBySet) {}
 }

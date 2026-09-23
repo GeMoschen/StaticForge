@@ -146,7 +146,10 @@ public class RecordSetController {
      * request's {@code where} (AND-ed), {@code sort} (re-sorts; without one the set's order is kept) and
      * {@code q}; a set whose stored query no longer validates lists nothing. Otherwise every record of the set,
      * filtered and ordered like the dataset listing. {@code locale} picks the language language-dependent
-     * values compare in (default: the project's default language).
+     * values compare in (default: the project's default language). Every row carries {@code selectedBySet}:
+     * whether the stored query selects it ({@code false} for all while the query is invalid), so "All records"
+     * can mark what the set leaves out. {@code revision} lists the set as of that revision (membership, values,
+     * stored query and schema; {@code 404} before the set existed or while it was deleted).
      */
     @GetMapping("/{uuid}/records")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
@@ -160,6 +163,7 @@ public class RecordSetController {
             @RequestParam(value = "where", required = false) String where,
             @RequestParam(value = "applySetQuery", defaultValue = "false") boolean applySetQuery,
             @RequestParam(value = "locale", required = false) String locale,
+            @RequestParam(value = "revision", required = false) Long revision,
             HttpServletRequest request) {
         return RecordController.toPageView(recordSetService.listRecords(
                 projectId(projectKey),
@@ -167,6 +171,7 @@ public class RecordSetController {
                 new RecordListQuery(q, null, where, RecordController.sortKeys(request)),
                 applySetQuery,
                 locale,
+                revision,
                 page,
                 size));
     }
