@@ -269,6 +269,16 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             """)
     long countCurrentChildrenOfType(@Param("folderId") long folderId, @Param("type") AssetType type);
 
+    /** The current, non-deleted records of the record set {@code setId} (M25.1.2), asset joined. */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset
+            WHERE v.folderId = :setId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findCurrentRecordsOfSet(@Param("setId") long setId);
+
     /** How many direct children of {@code type} the container {@code folderId} held, live, at revision {@code R}. */
     @Query("""
             SELECT COUNT(v) FROM AssetVersion v

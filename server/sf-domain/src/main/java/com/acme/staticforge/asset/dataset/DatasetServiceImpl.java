@@ -56,6 +56,7 @@ public class DatasetServiceImpl implements DatasetService {
     private final AssetVersionRepository assetVersionRepository;
     private final RevisionService revisionService;
     private final RecordRenameMigration recordRenameMigration;
+    private final RecordSetQueryMigration recordSetQueryMigration;
     private final ObjectMapper objectMapper;
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
     private final com.acme.staticforge.asset.localization.LocalizationMigrationService localizationMigrations;
@@ -67,10 +68,12 @@ public class DatasetServiceImpl implements DatasetService {
             AssetVersionRepository assetVersionRepository,
             RevisionService revisionService,
             RecordRenameMigration recordRenameMigration,
+            RecordSetQueryMigration recordSetQueryMigration,
             ObjectMapper objectMapper,
             com.acme.staticforge.project.ProjectLocales projectLocales,
             com.acme.staticforge.asset.localization.LocalizationMigrationService localizationMigrations) {
         this.recordRenameMigration = recordRenameMigration;
+        this.recordSetQueryMigration = recordSetQueryMigration;
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
@@ -122,26 +125,31 @@ public class DatasetServiceImpl implements DatasetService {
         boolean localizationChanged = localizableFlagsChanged(dataset, definition);
 
         List<EditorRename> renames = ContentRenameMigrator.collect(definition);
+        AssetVersionView updated;
         if (renames.isEmpty() && !localizationChanged) {
-            return toView(ctx.projectId(), assetService.update(
-                    uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, ctx));
+            updated = assetService.update(uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, ctx);
+        } else {
+            // The schema change and the rewrites it causes are one logical change: one revision listing the
+            // dataset, every rewritten record set query and every rewritten record (§12.3, M15). A stale
+            // If-Match on the dataset throws before anything is written, and the transaction rolls the batch
+            // revision back. The batch holds the project's revision lock, so the sets and records read after
+            // it cannot change under us.
+            Revision batch = revisionService.beginBatch(ctx.projectId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+            RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
+            updated = assetService.update(
+                    uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, batchCtx);
+            if (!renames.isEmpty()) {
+                // Sets first: the record migration clears the persistence context when it is done.
+                recordSetQueryMigration.migrate(ctx.projectId(), dataset.getId(), renames, batchCtx);
+                recordRenameMigration.migrate(ctx.projectId(), dataset.getId(), renames, batchCtx);
+            }
+            if (localizationChanged) {
+                migrateLocalization(uuid, confirmDiscard, batchCtx);
+            }
         }
-
-        // The schema change and the record rewrites it causes are one logical change: one revision
-        // listing the dataset and every rewritten record (§12.3, M15). A stale If-Match on the dataset
-        // throws before anything is written, and the transaction rolls the batch revision back. The
-        // batch holds the project's revision lock, so the records read after it cannot change under us.
-        Revision batch = revisionService.beginBatch(ctx.projectId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
-        RevisionContext batchCtx = RevisionContext.joining(batch, ctx.userId(), ctx.comment());
-        AssetVersionView updated = assetService.update(
-                uuid, new UpdateAssetCommand(cmd.displayName(), payload), expectedRevision, batchCtx);
-        if (!renames.isEmpty()) {
-            recordRenameMigration.migrate(ctx.projectId(), dataset.getId(), renames, batchCtx);
-        }
-        if (localizationChanged) {
-            migrateLocalization(uuid, confirmDiscard, batchCtx);
-        }
-        return toView(ctx.projectId(), updated);
+        // A field removed or retyped leaves the sets reading it broken: the save stands, the sets are reported.
+        return toView(ctx.projectId(), updated)
+                .withBrokenRecordSets(recordSetQueryMigration.brokenSets(ctx.projectId(), dataset.getId(), definition));
     }
 
     /** Whether this save changes which schema fields are {@code localizable} (M24.2.2). */
@@ -312,6 +320,7 @@ public class DatasetServiceImpl implements DatasetService {
                 payload == null ? "" : payload.path("description").asText(""),
                 recordCount,
                 view.validFromRevision(),
-                view.deleted());
+                view.deleted(),
+                List.of());
     }
 }

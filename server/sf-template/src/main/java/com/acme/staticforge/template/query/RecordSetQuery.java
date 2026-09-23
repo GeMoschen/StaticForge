@@ -1,4 +1,4 @@
-package com.acme.staticforge.asset.dataset;
+package com.acme.staticforge.template.query;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;

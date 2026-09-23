@@ -26,6 +26,14 @@ public final class DiagnosticCodes {
     /** A dataset loop sorts by an editor with no natural order (list, richtext, reference, …) (M19.3.1). */
     public static final String OCTL_DATASET_UNSORTABLE_FIELD = "SF-TPL-0142";
 
+    /**
+     * Render warning (generation and preview alike, hence here rather than in {@code GenerationDiagnosticCodes}):
+     * a record set's stored query no longer validates against its dataset — typically a field removed from the
+     * schema — so the set renders no records rather than all of them (M25.1.2,
+     * {@code RecordSetQueries.invalidQueryWarning}).
+     */
+    public static final String GEN_RECORD_SET_QUERY_INVALID = "SF-GEN-0240";
+
     // OCTL template inheritance (M20). The epic proposed 0140–0149, which M19 had already taken.
     /** {@code $CMS_EXTENDS} is not the template's first instruction, is nested, or appears more than once. */
     public static final String OCTL_EXTENDS_POSITION = "SF-TPL-0150";

@@ -20,7 +20,7 @@ import com.acme.staticforge.asset.dataset.DatasetView;
 import com.acme.staticforge.asset.dataset.RecordDetail;
 import com.acme.staticforge.asset.dataset.RecordService;
 import com.acme.staticforge.asset.dataset.RecordService.RecordListQuery;
-import com.acme.staticforge.asset.dataset.RecordSetQuery;
+import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.asset.dataset.RecordSetService;
 import com.acme.staticforge.asset.dataset.RecordSetView;
 import com.acme.staticforge.asset.dataset.UpdateRecordSetCommand;

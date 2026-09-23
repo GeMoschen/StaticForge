@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.acme.staticforge.asset.AssetType;
-import com.acme.staticforge.asset.dataset.RecordSetQuery;
+import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.common.SfException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;

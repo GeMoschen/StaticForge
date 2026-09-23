@@ -6,7 +6,7 @@ next one in its lane starts.
 
 ## Backend lane
 - [x] M25.1.1 — `RECORD_SET` asset type, containment, `RecordSetService`
-- [ ] M25.1.2 — stored set query: validation, evaluation, rename rewrite, broken-query flags
+- [x] M25.1.2 — stored set query: validation, evaluation, rename rewrite, broken-query flags
 - [ ] M25.2.1 — per-channel record templates on `DATASET`
 - [ ] M25.3.1 — `RecordSetController`, record create by set, DTOs, `schema.d.ts`
 - [ ] M25.2.2 — `recordset:` values, loops, reference editor, golden files

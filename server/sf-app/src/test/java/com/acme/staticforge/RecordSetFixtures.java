@@ -1,7 +1,7 @@
 package com.acme.staticforge;
 
 import com.acme.staticforge.asset.dataset.CreateRecordSetCommand;
-import com.acme.staticforge.asset.dataset.RecordSetQuery;
+import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.asset.dataset.RecordSetService;
 import com.acme.staticforge.asset.dataset.RecordSetView;
 import com.acme.staticforge.revision.RevisionContext;

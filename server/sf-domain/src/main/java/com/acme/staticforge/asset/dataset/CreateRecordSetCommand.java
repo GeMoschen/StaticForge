@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.dataset;
 
+import com.acme.staticforge.template.query.RecordSetQuery;
 import java.util.UUID;
 
 /**
