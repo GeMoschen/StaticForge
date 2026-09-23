@@ -50,6 +50,14 @@ public class ChannelServiceImpl implements ChannelService {
     private static final String CHANNEL_ASSET_TYPE = "CHANNEL";
     private static final Pattern KEY_PATTERN = Pattern.compile("[a-z][a-z0-9_]{1,39}");
 
+    /**
+     * The asset types carrying per-channel OCTL under {@code channelTemplates.<channel>}: page and section
+     * templates, and datasets with their record templates (M25.2.1). Copying a channel seeds them all; deleting
+     * one is blocked by any of them.
+     */
+    private static final List<AssetType> CHANNEL_TEMPLATE_HOLDERS =
+            List.of(AssetType.PAGE_TEMPLATE, AssetType.SECTION_TEMPLATE, AssetType.DATASET);
+
     private final OutputChannelRepository channelRepository;
     private final RevisionService revisionService;
     private final AssetRepository assetRepository;
@@ -249,7 +257,7 @@ public class ChannelServiceImpl implements ChannelService {
     public void seedFrom(String newChannelKey, String sourceChannelKey, RevisionContext ctx) {
         long projectId = ctx.projectId();
         List<SeedTarget> targets = new ArrayList<>();
-        for (AssetType type : List.of(AssetType.PAGE_TEMPLATE, AssetType.SECTION_TEMPLATE)) {
+        for (AssetType type : CHANNEL_TEMPLATE_HOLDERS) {
             for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, type)) {
                 JsonNode channelTemplates = version.getPayload() == null ? null : version.getPayload().get("channelTemplates");
                 JsonNode source = channelTemplates == null ? null : channelTemplates.get(sourceChannelKey);
@@ -295,7 +303,7 @@ public class ChannelServiceImpl implements ChannelService {
 
     private List<TemplateRef> affectedTemplates(long projectId, String key) {
         List<TemplateRef> refs = new ArrayList<>();
-        for (AssetType type : List.of(AssetType.PAGE_TEMPLATE, AssetType.SECTION_TEMPLATE)) {
+        for (AssetType type : CHANNEL_TEMPLATE_HOLDERS) {
             for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, type)) {
                 JsonNode channelTemplates = version.getPayload() == null ? null : version.getPayload().get("channelTemplates");
                 if (channelTemplates != null && channelTemplates.hasNonNull(key)) {

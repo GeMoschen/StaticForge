@@ -18,6 +18,8 @@ public final class DiagnosticCodes {
     public static final String OCTL_BODY_IN_SECTION = "SF-TPL-0120";
     /** {@code $CMS_BODY}, {@code $CMS_INCLUDE}, leaf {@code $CMS_NAVIGATION} or {@code CMS_PAGE} in a processed text media file (M18.2.1). */
     public static final String OCTL_NOT_ALLOWED_IN_TEXT_MEDIA = "SF-TPL-0121";
+    /** {@code $CMS_EXTENDS}, {@code $CMS_BLOCK}, {@code $CMS_PARENT} or {@code $CMS_BODY} in a dataset record template (M25.2.1). */
+    public static final String OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE = "SF-TPL-0122";
     public static final String OCTL_UNKNOWN_NAV_VARIABLE = "SF-TPL-0134";
     /** A dataset loop's query arguments are invalid: unknown argument, bad {@code where}/{@code sort}, negative {@code limit} (M19.3.1). */
     public static final String OCTL_DATASET_QUERY = "SF-TPL-0140";

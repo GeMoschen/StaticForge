@@ -10,7 +10,7 @@ import java.util.Map;
  * every mutation allocates a revision via {@link com.acme.staticforge.revision.RevisionService}
  * so the change is on the project's record. {@code html} is seeded on project create and cannot
  * be deleted (only disabled); deletion is blocked while any template still carries a channel
- * template for the key.
+ * template for the key (a dataset's record template included, M25.2.1).
  */
 public interface ChannelService {
 
@@ -66,8 +66,9 @@ public interface ChannelService {
     Escaping defaultEscaping(long projectId, String channelKey);
 
     /**
-     * Seeds {@code newChannelKey} channel templates from {@code sourceChannelKey} for every page
-     * and section template in the project whose payload carries the source key, in one revision.
+     * Seeds {@code newChannelKey} channel templates from {@code sourceChannelKey} for every page template,
+     * section template and dataset record template (M25.2.1) in the project whose payload carries the source key,
+     * in one revision.
      */
     void seedFrom(String newChannelKey, String sourceChannelKey, RevisionContext ctx);
 

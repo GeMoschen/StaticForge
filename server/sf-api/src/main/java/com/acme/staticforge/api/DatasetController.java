@@ -90,7 +90,8 @@ public class DatasetController {
                         body.displayName(),
                         body.contentDefinition(),
                         body.titleEditor(),
-                        body.description()),
+                        body.description(),
+                        body.channelTemplates()),
                 ctx(projectKey, comment(body.comment(), "create dataset")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
@@ -108,7 +109,9 @@ public class DatasetController {
         long expected = RevisionHeaders.expectedRevision(ifMatch);
         DatasetView view = datasetService.update(
                 uuid,
-                new UpdateDatasetCommand(body.displayName(), body.contentDefinition(), body.titleEditor(), body.description()),
+                new UpdateDatasetCommand(
+                        body.displayName(), body.contentDefinition(), body.titleEditor(), body.description(),
+                        body.channelTemplates()),
                 expected,
                 confirmDiscard,
                 ctx(projectKey, comment(body.comment(), "update dataset schema")));
@@ -157,6 +160,8 @@ public class DatasetController {
                 v.compiledDefinition(),
                 v.titleEditor(),
                 v.description(),
+                v.channelTemplates(),
+                v.recordTemplateDiagnostics(),
                 v.recordCount(),
                 v.revision(),
                 v.deleted());

@@ -21,14 +21,19 @@ public interface DatasetService {
     /**
      * Creates a dataset. CDL errors (and {@code body} declarations, {@code SF-CDL-0108}) abort with
      * {@code 422} and {@code diagnostics} before a revision is allocated; a {@code titleEditor} that is
-     * not a declared {@code text} editor is a {@code 422} too.
+     * not a declared {@code text} editor is a {@code 422} too. Record templates (M25.2.1) compile against
+     * the schema: a channel key the project doesn't define is a {@code 422} with {@code field}, compile
+     * errors a {@code 422} with {@code channel}, {@code diagnostics} and {@code channelDiagnostics}; the
+     * view's {@code recordTemplateDiagnostics} carries the warnings.
      */
     DatasetView create(CreateDatasetCommand cmd, RevisionContext ctx);
 
     /**
      * Replaces the schema. Declared {@code renamedFrom} hops rewrite the content keys of every current
      * record of the dataset; the dataset and every rewritten record share <em>one</em> revision (§12.3,
-     * M15). Values of editors the schema no longer declares are kept, exactly as for pages.
+     * M15). Values of editors the schema no longer declares are kept, exactly as for pages. Record
+     * templates compile against the new schema as on {@link #create} — also the stored ones kept by a
+     * {@code null} {@code channelTemplates}; their sources are never rewritten by a rename.
      */
     DatasetView update(UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, RevisionContext ctx);
 

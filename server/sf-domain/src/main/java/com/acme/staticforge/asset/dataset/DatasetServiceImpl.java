@@ -11,6 +11,8 @@ import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentRenameMigrator.EditorRename;
 import com.acme.staticforge.asset.content.ContentRenameMigrator;
+import com.acme.staticforge.asset.reference.ProjectReferenceResolver;
+import com.acme.staticforge.channel.OutputChannelRepository;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -26,13 +28,18 @@ import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorType;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.Severity;
+import com.acme.staticforge.template.octl.OctlCompiler;
+import com.acme.staticforge.template.octl.OctlResult;
+import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +51,13 @@ import org.springframework.transaction.annotation.Transactional;
  * folder-scope checks (a dataset belongs in the {@code datasets} folder tree), uid derivation,
  * summaries and reference materialization are the generic ones. This class adds compiling the
  * schema and the one cross-asset step: the {@code renamedFrom} migration of the dataset's records.
+ *
+ * <p>Record templates (M25.2.1) compile on save like a section template's channels: against the schema being
+ * saved, with the record as the scope ({@link OctlCompiler#compileRecordTemplate}); errors reject the save with
+ * {@code 422} before a revision is allocated, warnings come back per channel. A {@code renamedFrom} hop does
+ * <em>not</em> rewrite record template sources — section templates' OCTL isn't rewritten either — so a template
+ * still reading the old name fails the save with {@code SF-TPL-0103} at its line and column, and the developer
+ * saves the schema and the fixed template together.
  */
 @Service
 @RevisionAware
@@ -60,7 +74,10 @@ public class DatasetServiceImpl implements DatasetService {
     private final ObjectMapper objectMapper;
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
     private final com.acme.staticforge.asset.localization.LocalizationMigrationService localizationMigrations;
+    private final ProjectReferenceResolver projectReferences;
+    private final OutputChannelRepository channels;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
+    private final OctlCompiler octlCompiler = new OctlCompiler();
 
     public DatasetServiceImpl(
             AssetService assetService,
@@ -71,7 +88,11 @@ public class DatasetServiceImpl implements DatasetService {
             RecordSetQueryMigration recordSetQueryMigration,
             ObjectMapper objectMapper,
             com.acme.staticforge.project.ProjectLocales projectLocales,
-            com.acme.staticforge.asset.localization.LocalizationMigrationService localizationMigrations) {
+            com.acme.staticforge.asset.localization.LocalizationMigrationService localizationMigrations,
+            ProjectReferenceResolver projectReferences,
+            OutputChannelRepository channels) {
+        this.projectReferences = projectReferences;
+        this.channels = channels;
         this.recordRenameMigration = recordRenameMigration;
         this.recordSetQueryMigration = recordSetQueryMigration;
         this.assetService = assetService;
@@ -88,6 +109,7 @@ public class DatasetServiceImpl implements DatasetService {
     public DatasetView create(CreateDatasetCommand cmd, RevisionContext ctx) {
         ContentDefinition definition = compile(cmd.contentDefinition());
         String titleEditor = validTitleEditor(definition, cmd.titleEditor());
+        CompiledRecordTemplates templates = compileRecordTemplates(cmd.projectId(), null, cmd.channelTemplates(), definition);
         // A project created before M19 has no `datasets` folder yet: provisioning it joins this
         // creation's revision instead of adding one of its own.
         RevisionContext writeCtx = joinOrBegin(ctx);
@@ -101,10 +123,10 @@ public class DatasetServiceImpl implements DatasetService {
                         AssetType.DATASET,
                         cmd.displayName(),
                         parent,
-                        payload(cmd.contentDefinition(), definition, titleEditor, cmd.description()),
+                        payload(cmd.contentDefinition(), definition, titleEditor, cmd.description(), templates),
                         null),
                 writeCtx);
-        return toView(cmd.projectId(), created);
+        return toView(cmd.projectId(), created).withRecordTemplateDiagnostics(templates.warnings());
     }
 
     @Override
@@ -121,7 +143,13 @@ public class DatasetServiceImpl implements DatasetService {
         requireLive(dataset);
         ContentDefinition definition = compile(cmd.contentDefinition());
         String titleEditor = validTitleEditor(definition, cmd.titleEditor());
-        ObjectNode payload = payload(cmd.contentDefinition(), definition, titleEditor, cmd.description());
+        Map<String, String> templateSources = cmd.channelTemplates() != null
+                ? cmd.channelTemplates()
+                : assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(dataset.getId())
+                        .map(version -> RecordTemplates.sources(version.getPayload()))
+                        .orElse(Map.of());
+        CompiledRecordTemplates templates = compileRecordTemplates(ctx.projectId(), uuid, templateSources, definition);
+        ObjectNode payload = payload(cmd.contentDefinition(), definition, titleEditor, cmd.description(), templates);
         boolean localizationChanged = localizableFlagsChanged(dataset, definition);
 
         List<EditorRename> renames = ContentRenameMigrator.collect(definition);
@@ -149,7 +177,8 @@ public class DatasetServiceImpl implements DatasetService {
         }
         // A field removed or retyped leaves the sets reading it broken: the save stands, the sets are reported.
         return toView(ctx.projectId(), updated)
-                .withBrokenRecordSets(recordSetQueryMigration.brokenSets(ctx.projectId(), dataset.getId(), definition));
+                .withBrokenRecordSets(recordSetQueryMigration.brokenSets(ctx.projectId(), dataset.getId(), definition))
+                .withRecordTemplateDiagnostics(templates.warnings());
     }
 
     /** Whether this save changes which schema fields are {@code localizable} (M24.2.2). */
@@ -253,6 +282,100 @@ public class DatasetServiceImpl implements DatasetService {
         return result.definition();
     }
 
+    /**
+     * The record templates being saved, compiled: channel → {@code (source, result)} in channel key order, blank
+     * sources dropped (no record template for that channel).
+     */
+    private record CompiledRecordTemplates(Map<String, String> sources, Map<String, OctlResult> results) {
+
+        /** The compile warnings of every channel that has any, by channel. */
+        Map<String, List<Diagnostic>> warnings() {
+            Map<String, List<Diagnostic>> warnings = new TreeMap<>();
+            results.forEach((channel, result) -> {
+                if (!result.diagnostics().isEmpty()) {
+                    warnings.put(channel, result.diagnostics());
+                }
+            });
+            return warnings;
+        }
+    }
+
+    /**
+     * Compiles the record templates against {@code definition} (M25.2.1). A channel key the project doesn't
+     * define is a {@code 422} with {@code field}; compile errors in any channel are a {@code 422 SF-API-0422}
+     * whose {@code diagnostics} are the first failing channel's (named by {@code channel}) and whose
+     * {@code channelDiagnostics} hold every failing channel's. Thrown before any revision is allocated.
+     */
+    private CompiledRecordTemplates compileRecordTemplates(
+            long projectId, UUID self, Map<String, String> requested, ContentDefinition definition) {
+        Map<String, String> sources = new TreeMap<>();
+        if (requested != null) {
+            requested.forEach((channel, source) -> {
+                if (source != null && !source.isBlank()) {
+                    sources.put(channel, source);
+                }
+            });
+        }
+        if (sources.isEmpty()) {
+            return new CompiledRecordTemplates(Map.of(), Map.of());
+        }
+        for (String channel : sources.keySet()) {
+            if (channel == null || !channels.existsByProjectIdAndKey(projectId, channel)) {
+                throw new SfException(ProblemFactory.unprocessableEntity(
+                        "Unknown output channel '" + channel + "': a record template needs a channel of this project.",
+                        "field", RecordTemplates.PAYLOAD_FIELD + "." + channel));
+            }
+        }
+        ReferenceResolver references = savingResolver(projectId, self, definition);
+        Map<String, OctlResult> results = new TreeMap<>();
+        Map<String, List<Diagnostic>> errors = new TreeMap<>();
+        sources.forEach((channel, source) -> {
+            OctlResult result = octlCompiler.compileRecordTemplate(source, channel, references, definition);
+            results.put(channel, result);
+            if (result.hasErrors()) {
+                errors.put(channel, result.diagnostics());
+            }
+        });
+        if (!errors.isEmpty()) {
+            Map.Entry<String, List<Diagnostic>> first = errors.entrySet().iterator().next();
+            throw new SfException(Problem.builder()
+                    .type(PROBLEM_TYPE_422)
+                    .title("Validation Failed")
+                    .status(422)
+                    .detail("The " + String.join(", ", errors.keySet()) + " record template"
+                            + (errors.size() == 1 ? " has" : "s have") + " compile errors.")
+                    .property("code", "SF-API-0422")
+                    .property("channel", first.getKey())
+                    .property("diagnostics", first.getValue())
+                    .property("channelDiagnostics", errors)
+                    .build());
+        }
+        return new CompiledRecordTemplates(sources, results);
+    }
+
+    /**
+     * The project's save-time resolver, except that the dataset being saved ({@code self}, {@code null} on create)
+     * answers with the schema being saved: a record template looping its own dataset is checked against the
+     * fields it will have, not the ones it had.
+     */
+    private ReferenceResolver savingResolver(long projectId, UUID self, ContentDefinition definition) {
+        ReferenceResolver project = projectReferences.forProject(projectId);
+        if (self == null) {
+            return project;
+        }
+        return new ReferenceResolver() {
+            @Override
+            public Optional<UUID> resolve(String assetType, String uid) {
+                return project.resolve(assetType, uid);
+            }
+
+            @Override
+            public Optional<ContentDefinition> datasetDefinition(UUID datasetUuid) {
+                return self.equals(datasetUuid) ? Optional.of(definition) : project.datasetDefinition(datasetUuid);
+            }
+        };
+    }
+
     /** A blank title editor means none; otherwise it must be a declared {@code text} editor. */
     private static String validTitleEditor(ContentDefinition definition, String titleEditor) {
         if (titleEditor == null || titleEditor.isBlank()) {
@@ -267,7 +390,16 @@ public class DatasetServiceImpl implements DatasetService {
         return name;
     }
 
-    private ObjectNode payload(String source, ContentDefinition definition, String titleEditor, String description) {
+    /**
+     * The dataset payload. {@code channelTemplates} is written only when the dataset has record templates, so a
+     * dataset without any keeps the M19 payload shape.
+     */
+    private ObjectNode payload(
+            String source,
+            ContentDefinition definition,
+            String titleEditor,
+            String description,
+            CompiledRecordTemplates templates) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("contentDefinition", source == null ? "" : source);
         payload.set("compiledDefinition", objectMapper.valueToTree(definition));
@@ -277,6 +409,14 @@ public class DatasetServiceImpl implements DatasetService {
             payload.put("titleEditor", titleEditor);
         }
         payload.put("description", description == null ? "" : description);
+        if (!templates.results().isEmpty()) {
+            ObjectNode channelTemplates = payload.putObject(RecordTemplates.PAYLOAD_FIELD);
+            templates.results().forEach((channelKey, result) -> {
+                ObjectNode channel = channelTemplates.putObject(channelKey);
+                channel.put("source", templates.sources().get(channelKey));
+                channel.put("compiledHash", result.template().hash());
+            });
+        }
         return payload;
     }
 
@@ -318,9 +458,13 @@ public class DatasetServiceImpl implements DatasetService {
                 payload == null ? null : payload.path("compiledDefinition"),
                 titleEditor == null || !titleEditor.isTextual() ? null : titleEditor.asText(),
                 payload == null ? "" : payload.path("description").asText(""),
+                payload != null && payload.get(RecordTemplates.PAYLOAD_FIELD) instanceof ObjectNode templates
+                        ? templates.deepCopy()
+                        : objectMapper.createObjectNode(),
                 recordCount,
                 view.validFromRevision(),
                 view.deleted(),
-                List.of());
+                List.of(),
+                Map.of());
     }
 }

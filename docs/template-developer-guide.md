@@ -787,6 +787,7 @@ build-insight plan says which languages a narrowed entry covers.
 | `SF-TPL-0110` | error | unresolvable asset reference |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
 | `SF-TPL-0121` | error | processed text media (§2.8): `$CMS_BODY`, `$CMS_INCLUDE`, the leaf `$CMS_NAVIGATION(nav:…)$` or `CMS_PAGE`, none of which exist outside a page |
+| `SF-TPL-0122` | error | dataset record template (M25): `$CMS_EXTENDS`, `$CMS_BLOCK`, `$CMS_PARENT` or `$CMS_BODY` — a record template renders on its own and a record has no bodies |
 | `SF-TPL-0140` | error | dataset loop (§2.9): a malformed `where`, `sort`, `limit`, `offset` or `folder`, an unknown loop argument, or a path after `dataset:uid`; the message carries the column inside the argument |
 | `SF-TPL-0141` | error | dataset loop: `where` or `sort` names a field the dataset's schema doesn't declare (checked when the template is saved) |
 | `SF-TPL-0142` | error | dataset loop: `sort` by a field with no order — `list`, `richtext`, `media`, `reference` and other structured editors |
@@ -814,7 +815,7 @@ build-insight plan says which languages a narrowed entry covers.
 | `SF-TPL-0157` | warning | a template overrides a block no ancestor defines, so the override never renders; carries a "did you mean" suggestion |
 | `SF-TPL-0201` | warning | body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
-| `SF-TPL-0310` | warning | editor declared but never used in any channel template |
+| `SF-TPL-0310` | warning | editor declared but never used in any channel template (not raised for a dataset's fields in its record templates) |
 | `SF-TPL-0320` | warning | processed text media: `$$` is output as a single `$` (one per occurrence outside `$CMS_COMMENT$`, with its position) |
 | `SF-TPL-0321` | warning | processed JavaScript/JSON: `$CMS_VALUE` without an escaping filter (`js`, `json`, `attr`, `url`, `html`, `raw`) |
 

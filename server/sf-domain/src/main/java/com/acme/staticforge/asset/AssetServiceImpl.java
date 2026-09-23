@@ -563,8 +563,8 @@ public class AssetServiceImpl implements AssetService {
     }
 
     /**
-     * Scans every current section/page template for the literal {@code assetType:oldUid}
-     * reference form (§16.4) still present in the OCTL {@code source} after a UID change
+     * Scans every current section/page template and dataset record template (M25.2.1) for the
+     * literal {@code assetType:oldUid} reference form (§16.4) still present in the OCTL {@code source} after a UID change
      * ({@code dataset:}/{@code record:} included, M19.3.2; {@code recordset:}, M25).
      * Compiled templates already hold UUIDs; this is purely the source text the developer
      * should fix by hand.
@@ -581,7 +581,7 @@ public class AssetServiceImpl implements AssetService {
                 "\\b(?:(?:page|media|section_template|page_template|folder|nav|global|dataset|record|recordset):|CMS_GLOBAL\\.)"
                         + Pattern.quote(oldUid) + "\\b");
         List<UidLiteralReference> found = new java.util.ArrayList<>();
-        for (AssetType type : List.of(AssetType.SECTION_TEMPLATE, AssetType.PAGE_TEMPLATE)) {
+        for (AssetType type : List.of(AssetType.SECTION_TEMPLATE, AssetType.PAGE_TEMPLATE, AssetType.DATASET)) {
             for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, type)) {
                 JsonNode payload = version.getPayload();
                 JsonNode channelTemplates = payload == null ? null : payload.get("channelTemplates");

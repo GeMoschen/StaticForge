@@ -9,6 +9,7 @@ import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.query.DatasetQuery;
 import com.acme.staticforge.template.query.DatasetQueryParser;
+import com.acme.staticforge.template.query.RecordView;
 import com.acme.staticforge.template.render.Filters;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -47,6 +48,19 @@ public final class OctlCompiler {
      * {@code {code, language, label, current, href}} items.
      */
     public static final String LOCALES_ROOT = "CMS_LOCALES";
+
+    /**
+     * The per-render position names of a dataset record template (M25): the record's place in the list a
+     * record set renders — {@code _index} (0-based), {@code _first}, {@code _last} and {@code _count}. Known at
+     * compile time, bound by the renderer.
+     */
+    public static final Set<String> RECORD_POSITION_FIELDS = Set.of("_index", "_first", "_last", "_count");
+
+    /** The {@code _meta} object every record item carries ({@code uid}, {@code displayName}). */
+    private static final String RECORD_META_OBJECT = "_meta";
+
+    private static final String INHERITANCE_IS_FOR_PAGE_TEMPLATES =
+            "it renders on its own, inheritance is for page templates";
 
     /** The {@code assetType:uid} prefix of a dataset loop source (M19.3.2). */
     private static final String DATASET_PREFIX = "dataset";
@@ -108,6 +122,30 @@ public final class OctlCompiler {
     }
 
     /**
+     * Compiles a dataset's per-channel record template (M25): the markup one record renders with when a record
+     * set is rendered. The record is the local scope — the dataset's fields are top-level names like a section
+     * template's editors, next to the record meta fields ({@link RecordView#META_FIELDS},
+     * {@code _meta}) and the per-render position ({@link #RECORD_POSITION_FIELDS}); any other bare name is the
+     * usual {@code SF-TPL-0103}. On top of the template checks:
+     *
+     * <ul>
+     *   <li>{@code $CMS_EXTENDS}, {@code $CMS_BLOCK}, {@code $CMS_PARENT} and {@code $CMS_BODY} are
+     *       {@code SF-TPL-0122} errors: a record template is standalone and has no bodies;
+     *   <li>{@code SF-TPL-0310} (field declared but unused) is not raised — a record template shows the fields it
+     *       wants.
+     * </ul>
+     *
+     * @param datasetDefinition the dataset's schema, may be {@code null} to skip name checks
+     */
+    public OctlResult compileRecordTemplate(
+            String source, String channelKey, ReferenceResolver references, ContentDefinition datasetDefinition) {
+        String channel = channelKey == null ? "html" : channelKey;
+        Link link = link(new LayerSource(null, null, source, datasetDefinition), channel, references, null, true,
+                new Inheritance(null, null, null, null), new ArrayList<>());
+        return new OctlResult(link.template(), link.diagnostics());
+    }
+
+    /**
      * Compiles a page template's channel source against its inheritance chain (M20): the ancestors its
      * {@code $CMS_EXTENDS} names are loaded through {@code parents}, compiled and linked, and names are
      * checked against the effective definition (own + inherited). A template that doesn't extend compiles
@@ -157,7 +195,7 @@ public final class OctlCompiler {
     private OctlResult compile(
             LayerSource layer, String channelKey, ReferenceResolver references, TextMedia textMedia, Inheritance inheritance) {
         String channel = channelKey == null ? "html" : channelKey;
-        Link link = link(layer, channel, references, textMedia, inheritance, new ArrayList<>());
+        Link link = link(layer, channel, references, textMedia, false, inheritance, new ArrayList<>());
         return new OctlResult(link.template(), link.diagnostics());
     }
 
@@ -202,13 +240,15 @@ public final class OctlCompiler {
 
     /**
      * Compiles {@code layer} and, when it extends, its chain. {@code path} holds the descendants that led
-     * here (entry template first) for cycle detection by UUID and the depth cap.
+     * here (entry template first) for cycle detection by UUID and the depth cap. A {@code recordTemplate}
+     * (M25) never extends: its inheritance instructions are reported by the validation walk instead.
      */
     private Link link(
             LayerSource layer,
             String channel,
             ReferenceResolver references,
             TextMedia textMedia,
+            boolean recordTemplate,
             Inheritance inheritance,
             List<LayerSource> path) {
         String text = layer.source();
@@ -218,8 +258,8 @@ public final class OctlCompiler {
 
         List<Diagnostic> diagnostics = new ArrayList<>(lexed.diagnostics());
         diagnostics.addAll(parsed.diagnostics());
-        OctlNode.Extends extendsNode = InheritanceRules.check(nodes, diagnostics);
-        boolean extending = nodes.stream().anyMatch(OctlNode.Extends.class::isInstance);
+        OctlNode.Extends extendsNode = recordTemplate ? null : InheritanceRules.check(nodes, diagnostics);
+        boolean extending = !recordTemplate && nodes.stream().anyMatch(OctlNode.Extends.class::isInstance);
         if (textMedia != null && extending) {
             nodes.stream()
                     .filter(OctlNode.Extends.class::isInstance)
@@ -302,7 +342,8 @@ public final class OctlCompiler {
 
         Map<String, UUID> refMap = new LinkedHashMap<>();
         ValidateCtx ctx = new ValidateCtx(
-                references, effective == null ? null : effective.definition(), refMap, diagnostics, textMedia, namesUnknown);
+                references, effective == null ? null : effective.definition(), refMap, diagnostics, textMedia,
+                recordTemplate, namesUnknown);
         validate(nodes, new HashSet<>(), ctx);
 
         Set<String> usedEditors = new HashSet<>(ctx.usedEditors);
@@ -311,7 +352,7 @@ public final class OctlCompiler {
             usedEditors.addAll(parent.usedEditors());
             usedBodies.addAll(parent.usedBodies());
         }
-        if (effective != null) {
+        if (effective != null && !recordTemplate) {
             emitDeclaredNeverUsed(layer.ownDefinition(), effective, usedEditors, usedBodies, diagnostics);
         }
         if (textMedia != null) {
@@ -411,7 +452,7 @@ public final class OctlCompiler {
         }
         Link link = link(
                 new LayerSource(source.uuid(), source.uid(), source.channelSource(), source.ownDefinition()),
-                channel, references, null, inheritance, path);
+                channel, references, null, false, inheritance, path);
         if (memo != null && link.cycle() == null && !link.truncated()) {
             memo.put(uuid, channel, link);
         }
@@ -480,7 +521,9 @@ public final class OctlCompiler {
                     checkRefHasUrl(r.accessor(), r.line(), r.col(), ctx);
                 }
                 case OctlNode.Body b -> {
-                    if (ctx.textMedia != null) {
+                    if (ctx.recordTemplate) {
+                        notInRecordTemplate("$CMS_BODY", "a record has values only, no bodies", b.line(), b.col(), ctx);
+                    } else if (ctx.textMedia != null) {
                         notInTextMedia("$CMS_BODY", b.line(), b.col(), ctx.diagnostics);
                     } else {
                         checkBody(b, ctx);
@@ -544,13 +587,25 @@ public final class OctlCompiler {
                 case OctlNode.Meta m -> checkFilters(m.filters(), m.line(), m.col(), ctx);
                 case OctlNode.Comment c -> { /* nothing */ }
                 case OctlNode.Extends e -> {
-                    if (InheritanceRules.PAGE_TEMPLATE_PREFIX.equals(e.accessor().assetType())
+                    if (ctx.recordTemplate) {
+                        notInRecordTemplate("$CMS_EXTENDS", INHERITANCE_IS_FOR_PAGE_TEMPLATES, e.line(), e.col(), ctx);
+                    } else if (InheritanceRules.PAGE_TEMPLATE_PREFIX.equals(e.accessor().assetType())
                             && e.accessor().uid() != null && !e.accessor().uid().isBlank()) {
                         resolveReference(e.accessor(), e.line(), e.col(), ctx);
                     }
                 }
-                case OctlNode.Block b -> validate(b.body(), shadowed, ctx);
-                case OctlNode.Parent p -> { /* placement checked by InheritanceRules */ }
+                case OctlNode.Block b -> {
+                    if (ctx.recordTemplate) {
+                        notInRecordTemplate("$CMS_BLOCK", INHERITANCE_IS_FOR_PAGE_TEMPLATES, b.line(), b.col(), ctx);
+                    }
+                    validate(b.body(), shadowed, ctx);
+                }
+                case OctlNode.Parent p -> {
+                    // Otherwise placement is checked by InheritanceRules.
+                    if (ctx.recordTemplate) {
+                        notInRecordTemplate("$CMS_PARENT", INHERITANCE_IS_FOR_PAGE_TEMPLATES, p.line(), p.col(), ctx);
+                    }
+                }
             }
         }
     }
@@ -627,6 +682,9 @@ public final class OctlCompiler {
         }
         if (ctx.contentDef.findEditor(name).isPresent()) {
             ctx.usedEditors.add(name);
+            return;
+        }
+        if (ctx.recordTemplate && isRecordScopeName(name)) {
             return;
         }
         ctx.diagnostics.add(Diagnostic.error(
@@ -749,6 +807,20 @@ public final class OctlCompiler {
         }
     }
 
+    /** A record template's own names besides the dataset's fields: the record meta fields and its position. */
+    private static boolean isRecordScopeName(String name) {
+        return RecordView.META_FIELDS.contains(name) || RECORD_META_OBJECT.equals(name)
+                || RECORD_POSITION_FIELDS.contains(name);
+    }
+
+    private static void notInRecordTemplate(String what, String reason, int line, int col, ValidateCtx ctx) {
+        ctx.diagnostics.add(Diagnostic.error(
+                DiagnosticCodes.OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE,
+                what + " is not available in a dataset record template: " + reason,
+                line,
+                col));
+    }
+
     private static void notInTextMedia(String what, int line, int col, List<Diagnostic> diagnostics) {
         diagnostics.add(Diagnostic.error(
                 DiagnosticCodes.OCTL_NOT_ALLOWED_IN_TEXT_MEDIA,
@@ -867,6 +939,8 @@ public final class OctlCompiler {
         final Map<OctlNode.For, DatasetQuery> datasetQueries = new IdentityHashMap<>();
         /** The text media profile, or {@code null} when compiling a template. */
         final TextMedia textMedia;
+        /** Compiling a dataset record template (M25): the record is the scope, inheritance and bodies are errors. */
+        final boolean recordTemplate;
         /** A template that extends but whose chain didn't link: inherited names are unknown, so none are checked. */
         final boolean namesUnknown;
 
@@ -876,12 +950,14 @@ public final class OctlCompiler {
                 Map<String, UUID> refMap,
                 List<Diagnostic> diagnostics,
                 TextMedia textMedia,
+                boolean recordTemplate,
                 boolean namesUnknown) {
             this.references = references;
             this.contentDef = contentDef;
             this.refMap = refMap;
             this.diagnostics = diagnostics;
             this.textMedia = textMedia;
+            this.recordTemplate = recordTemplate;
             this.namesUnknown = namesUnknown;
         }
 

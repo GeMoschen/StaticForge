@@ -136,6 +136,34 @@ public class CompiledTemplateCache {
     }
 
     /**
+     * Cross-request compile of one dataset version's record template for {@code channel} (M25), keyed and
+     * validated exactly like a section template's channel ({@code (projectId, datasetUuid, validFromRevision,
+     * channel)}, references re-resolved on every hit). The dataset's CDL is its schema: the record's fields are
+     * the template's scope.
+     *
+     * @param datasetValidFromRevision the {@code validFromRevision} of the dataset version whose sources are passed
+     * @param cdlSource the dataset's {@code contentDefinition}
+     * @param octlSource the dataset's {@code channelTemplates.<channel>.source}
+     */
+    public CompiledChannel compileRecordTemplate(
+            long projectId,
+            UUID datasetUuid,
+            long datasetValidFromRevision,
+            String channel,
+            String cdlSource,
+            String octlSource,
+            ReferenceResolver resolver) {
+        ContentDefinition definition = definition(projectId, datasetUuid, datasetValidFromRevision, cdlSource);
+        return cached(
+                channels,
+                new ChannelKey(projectId, datasetUuid, datasetValidFromRevision, channel),
+                resolver,
+                null,
+                (recording, lookups) ->
+                        new CompiledChannel(compiler.recordTemplate(octlSource, channel, recording, definition), definition));
+    }
+
+    /**
      * Cross-request compile of one processed text media version's source (M18.3.2), validated on
      * every hit exactly like {@link #compile}. The media version pins the blob, so
      * {@code mediaValidFromRevision} identifies the source.

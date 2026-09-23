@@ -54,6 +54,23 @@ public final class TemplateCompileMemo {
     }
 
     /**
+     * Returns a dataset's compiled record template for {@code channel} (M25), compiling only on the first request
+     * for this dataset and channel in this build; every record of every set of the dataset renders with the one
+     * result. The dataset's CDL (its schema) is compiled once and shared with {@link #definition}.
+     *
+     * @param cdlSource the dataset's {@code contentDefinition}
+     * @param octlSource the dataset's {@code channelTemplates.<channel>.source}
+     * @param resolver the build's snapshot-backed {@code assetType:uid} resolver
+     */
+    public CompiledChannel compileRecordTemplate(
+            UUID datasetUuid, String channel, String cdlSource, String octlSource, ReferenceResolver resolver) {
+        return channels.computeIfAbsent(new ChannelKey(datasetUuid, channel), key -> {
+            ContentDefinition definition = definition(datasetUuid, cdlSource);
+            return new CompiledChannel(compiler.recordTemplate(octlSource, channel, resolver, definition), definition);
+        });
+    }
+
+    /**
      * Returns a page template's compiled channel against its inheritance chain (M20), compiling only on the first
      * request for this template and channel in this build. Ancestors compile once per build for all their
      * descendants.

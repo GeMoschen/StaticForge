@@ -137,9 +137,9 @@ A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | `GET` | `/projects/{projectKey}/datasets` | `VIEWER` | summaries with `titleEditor`, `description` and live `recordCount` |
-| `GET` | `/projects/{projectKey}/datasets/{uuid}` | `VIEWER` | adds `contentDefinition`, `compiledDefinition`, `deleted`; `?revision=` for time travel |
-| `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, titleEditor?, description?, comment?}` → `201`; the parent defaults to `datasets` |
-| `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentDefinition, titleEditor?, description?, comment?}`; `renamedFrom` rewrites the key in every record, in the same revision |
+| `GET` | `/projects/{projectKey}/datasets/{uuid}` | `VIEWER` | adds `contentDefinition`, `compiledDefinition`, `channelTemplates` (record templates, `{<channel>: {source, compiledHash}}`, M25), `deleted`; `?revision=` for time travel |
+| `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, titleEditor?, description?, channelTemplates?, comment?}` → `201`; the parent defaults to `datasets`. Record templates compile against the schema: an unknown channel key is `422` with `field`, compile errors `422 SF-API-0422` with `channel`, `diagnostics` and `channelDiagnostics`; warnings come back in `recordTemplateDiagnostics` |
+| `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentDefinition, titleEditor?, description?, channelTemplates?, comment?}`; `renamedFrom` rewrites the key in every record, in the same revision (never in record templates: a template still reading the old name fails the save). Without `channelTemplates` the stored record templates are kept and recompiled |
 | `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount`/`setCount` while it has live records or record sets, even with `?force=true` |
 | `POST` | `/projects/{projectKey}/datasets/{uuid}/restore` | `DEVELOPER` | |
 | `GET` | `/projects/{projectKey}/datasets/{uuid}/records` | `VIEWER` | paged listing, see below |

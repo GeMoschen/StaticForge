@@ -54,7 +54,9 @@ import org.springframework.stereotype.Service;
  *       content references.</li>
  *   <li>{@code RECORD_SET} (M25): {@code datasetRef} as {@link ReferenceKind#TEMPLATE}. A record's place in
  *       its set is its parent, not a reference.</li>
- *   <li>{@code FOLDER}, {@code DATASET}: none.</li>
+ *   <li>{@code DATASET} (M25.2.1): the OCTL references of its per-channel record templates, exactly like a
+ *       section template's, with source path {@code channelTemplates.<channel>}; its CDL schema makes none.</li>
+ *   <li>{@code FOLDER}: none.</li>
  * </ul>
  *
  * <p>The write is a per-edge diff rather than close-all-then-insert-all: an edge present in both
@@ -124,12 +126,12 @@ public class ReferenceMaterializer {
         List<ExtractedReference> found = payload == null || payload.isNull() ? List.of() : switch (type) {
             case PAGE -> pageReferences(payload);
             case PAGE_REFERENCE -> navigationReferences(payload);
-            case PAGE_TEMPLATE, SECTION_TEMPLATE -> templateReferences(projectId, payload);
+            case PAGE_TEMPLATE, SECTION_TEMPLATE, DATASET -> templateReferences(projectId, payload);
             case GLOBAL_SET -> contentReferences.extract(payload.get("content"), "content");
             case RECORD -> recordReferences(payload);
             case RECORD_SET -> recordSetReferences(payload);
             case MEDIA -> mediaReferences(projectId, payload);
-            case FOLDER, DATASET -> List.of();
+            case FOLDER -> List.of();
         };
         if (found.isEmpty()) {
             return Set.of();

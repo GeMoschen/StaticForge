@@ -135,6 +135,51 @@ class DatasetApiTest {
                 .andExpect(jsonPath("$.setCount").value(1));
     }
 
+    /** M25.2.1: record templates travel through the dataset DTOs; save warnings and errors are per channel. */
+    @Test
+    void recordTemplatesRoundTripWithPerChannelDiagnostics() throws Exception {
+        Fixture fx = newFixture();
+        ObjectNode create = objectMapper.createObjectNode().put("displayName", "Team").put("contentDefinition", TEAM_CDL);
+        create.putObject("channelTemplates").put("html", "<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$");
+
+        JsonNode dataset = json(mvc.perform(post(datasets(fx))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(create)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.channelTemplates.html.source").value("<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$"))
+                .andExpect(jsonPath("$.recordTemplateDiagnostics.html[0].code").value(DiagnosticCodes.OCTL_RAW_ON_TEXT)));
+        String uuid = dataset.get("uuid").asText();
+
+        mvc.perform(get(datasets(fx) + "/" + uuid).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.channelTemplates.html.compiledHash").isString())
+                .andExpect(jsonPath("$.recordTemplateDiagnostics").isEmpty());
+
+        ObjectNode broken = objectMapper.createObjectNode().put("displayName", "Team").put("contentDefinition", TEAM_CDL);
+        broken.putObject("channelTemplates").put("html", "<div>\n$CMS_BODY(x)$</div>");
+        mvc.perform(put(datasets(fx) + "/" + uuid)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .header(HttpHeaders.IF_MATCH, "\"rev-" + dataset.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(broken)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SF-API-0422"))
+                .andExpect(jsonPath("$.channel").value("html"))
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE))
+                .andExpect(jsonPath("$.diagnostics[0].line").value(2))
+                .andExpect(jsonPath("$.channelDiagnostics.html[0].code").value(DiagnosticCodes.OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE));
+
+        // A client that doesn't know record templates (no channelTemplates field) keeps them.
+        mvc.perform(put(datasets(fx) + "/" + uuid)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .header(HttpHeaders.IF_MATCH, "\"rev-" + dataset.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(datasetBody("Team", TEAM_CDL, "name")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.channelTemplates.html.source").value("<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$"));
+    }
+
     @Test
     void schemaErrorsAre422WithDiagnosticsAndTheValidateEndpointAgrees() throws Exception {
         Fixture fx = newFixture();

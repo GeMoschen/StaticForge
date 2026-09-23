@@ -109,6 +109,52 @@ class CompiledTemplateCacheTest {
         assertThat(compiles("cdl")).isEqualTo(1);
     }
 
+    // ------------------------------------------------------------------
+    // Dataset record templates (M25.2.1)
+    // ------------------------------------------------------------------
+
+    private static final UUID DATASET = UUID.fromString("30000000-0000-0000-0000-000000000001");
+    private static final String RECORD_OCTL = "$CMS_VALUE(headline)$ $CMS_VALUE(_index)$ $CMS_REF(page:about)$";
+
+    @Test
+    void aRecordTemplateCompilesOncePerDatasetVersionAndChannelWithTheRecordScope() {
+        CompiledChannel first = cache.compileRecordTemplate(1L, DATASET, 7L, "html", CDL, RECORD_OCTL, resolver);
+        CompiledChannel second = cache.compileRecordTemplate(1L, DATASET, 7L, "html", CDL, RECORD_OCTL, resolver);
+        cache.compileRecordTemplate(1L, DATASET, 7L, "md", CDL, RECORD_OCTL, resolver);
+
+        assertThat(second).isSameAs(first);
+        assertThat(first.octl().diagnostics()).as("_index is in a record template's scope").isEmpty();
+        assertThat(first.definition().findEditor("headline")).isPresent();
+        assertThat(compiles("octl")).isEqualTo(2);
+        assertThat(compiles("cdl")).isEqualTo(1);
+    }
+
+    @Test
+    void aRecordTemplateIsRevalidatedAgainstReferencesLikeATemplate() {
+        cache.compileRecordTemplate(1L, DATASET, 7L, "html", CDL, RECORD_OCTL, resolver);
+
+        project.put("page:about", OTHER);
+        CompiledChannel recompiled = cache.compileRecordTemplate(1L, DATASET, 7L, "html", CDL, RECORD_OCTL, resolver);
+
+        assertThat(recompiled.template().references()).containsEntry("page:about", OTHER);
+        assertThat(compiles("octl")).isEqualTo(2);
+    }
+
+    @Test
+    void theBuildMemoCompilesARecordTemplateOncePerBuild() {
+        TemplateCompileMemo memo = cache.buildMemo(new Object());
+
+        for (int i = 0; i < 10; i++) {
+            memo.compileRecordTemplate(DATASET, "html", CDL, RECORD_OCTL, resolver);
+        }
+        CompiledChannel compiled = memo.compileRecordTemplate(DATASET, "html", CDL, RECORD_OCTL, resolver);
+
+        assertThat(compiled.octl().diagnostics()).isEmpty();
+        assertThat(memo.definition(DATASET, CDL)).isSameAs(compiled.definition());
+        assertThat(compiles("octl")).isEqualTo(1);
+        assertThat(compiles("cdl")).isEqualTo(1);
+    }
+
     private double compiles(String kind) {
         return meters.get(MeteredTemplateCompiler.COMPILES_METRIC).tag("kind", kind).counter().count();
     }
