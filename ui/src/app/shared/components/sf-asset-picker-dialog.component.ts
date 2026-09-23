@@ -19,19 +19,29 @@ import { SfEmptyStateComponent } from './sf-empty-state.component';
 import { SfIconComponent } from './sf-icon.component';
 import { SfSpinnerComponent } from './sf-spinner.component';
 import { SfAssetPickerFolderNodeComponent } from './sf-asset-picker-folder-node.component';
-import { ContentService, type DatasetSummaryView } from '../../features/content/content.service';
-import { folderRows, matchingDatasets, pickerDatasets, pickerTypeOptions, type PickerType } from './asset-picker.util';
+import { ContentService, type DatasetSummaryView, type RecordSetSummaryView } from '../../features/content/content.service';
+import {
+  folderRows,
+  matchingDatasets,
+  pickerDatasets,
+  pickerRecordSets,
+  pickerTypeOptions,
+  recordCountLabel,
+  type PickerType,
+} from './asset-picker.util';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type FolderView = components['schemas']['FolderView'];
 
-/** One row of the result list: an asset, or (type `RECORD`) a record with its dataset. */
+/** One row of the result list: an asset, or (type `RECORD`/`RECORD_SET`) a record or record set with its dataset. */
 interface PickerItem {
   uuid?: string;
   uid?: string;
   displayName?: string;
   type?: string;
   dataset?: string;
+  /** A record set's live record count. */
+  recordCount?: number;
   /** Indentation of a folder row (Navigation folders). */
   depth?: number;
   /** The row's detail line; the uid when absent. */
@@ -42,6 +52,10 @@ export interface AssetPicked {
   uuid: string;
   assetType: string;
   label: string;
+  /** Records and record sets: their dataset's name. */
+  dataset?: string;
+  /** Record sets: their live record count. */
+  recordCount?: number;
 }
 
 /**
@@ -49,8 +63,10 @@ export interface AssetPicked {
  * types that actually have folders (pages/media), and a flat searchable
  * list for the rest. Records (M19.4.2) are listed per dataset through the
  * server-paged record listing, with a dataset switch unless a `dataset`
- * restriction pins it. Used by `sf-reference-editor` to fill an ASSET_REF
- * value, but generic enough for anything that needs to point at an asset.
+ * restriction pins it. Record sets (M25.5.3) are one flat list with their
+ * dataset and record count, narrowed to the `dataset` restriction's sets.
+ * Used by `sf-reference-editor` to fill an ASSET_REF value, but generic
+ * enough for anything that needs to point at an asset.
  *
  * Asked for by name (`allowedTypes`), it also picks a pagination source (M21.4.1): a folder of the Navigation store,
  * listed as its tree, or a dataset. Both are loaded fresh when the dialog opens.
@@ -69,7 +85,7 @@ export class SfAssetPickerDialogComponent {
   readonly initialType = input<string | null>(null);
   /** Restricts the type switch to these asset types (from the editor's CDL `assetTypes`); omit/empty allows any type. */
   readonly allowedTypes = input<string[] | null>(null);
-  /** Restricts picking to records of this dataset uid (the reference editor's `dataset` attribute). */
+  /** Restricts picking to records and record sets of this dataset uid (the reference editor's `dataset` attribute). */
   readonly dataset = input<string | null>(null);
 
   readonly picked = output<AssetPicked>();
@@ -99,6 +115,8 @@ export class SfAssetPickerDialogComponent {
     switch (this.type()) {
       case 'RECORD':
         return 'No records found';
+      case 'RECORD_SET':
+        return 'No record sets found';
       case 'NAV_FOLDER':
         return 'No navigation folders found';
       case 'DATASET':
@@ -108,6 +126,7 @@ export class SfAssetPickerDialogComponent {
     }
   });
   private navigationTree: FolderView[] | null = null;
+  private recordSets: RecordSetSummaryView[] | null = null;
 
   protected readonly hasFolders = computed(() => this.type() === 'PAGE' || this.type() === 'MEDIA');
   /** Raw scope tree — for PAGE/MEDIA this is always a single-entry array holding the fixed,
@@ -178,6 +197,8 @@ export class SfAssetPickerDialogComponent {
       uuid: item.uuid,
       assetType: item.type ?? this.type(),
       label: item.displayName ?? item.uid ?? item.uuid,
+      dataset: item.dataset,
+      recordCount: item.recordCount,
     });
   }
 
@@ -192,6 +213,10 @@ export class SfAssetPickerDialogComponent {
     }
     if (this.type() === 'RECORD') {
       this.reloadRecords(key);
+      return;
+    }
+    if (this.type() === 'RECORD_SET') {
+      this.reloadRecordSets(key);
       return;
     }
     if (this.type() === 'NAV_FOLDER') {
@@ -245,6 +270,43 @@ export class SfAssetPickerDialogComponent {
       next: (tree) => {
         this.navigationTree = tree ?? [];
         show(this.navigationTree);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.items.set([]);
+        this.loading.set(false);
+      },
+    });
+  }
+
+  /**
+   * The project's live record sets (loaded once per dialog), narrowed to the `dataset` restriction and the
+   * search; each row names its dataset and record count.
+   */
+  private reloadRecordSets(key: string): void {
+    const show = (sets: RecordSetSummaryView[]) =>
+      this.items.set(
+        pickerRecordSets(sets, this.dataset(), this.search()).map((set) => ({
+          uuid: set.uuid,
+          uid: set.uid,
+          displayName: set.displayName,
+          type: 'RECORD_SET',
+          dataset: set.dataset?.displayName ?? set.dataset?.uid,
+          recordCount: set.recordCount ?? 0,
+          meta: `${recordCountLabel(set.recordCount)} · ${set.uid ?? ''}`,
+        })),
+      );
+    if (this.recordSets) {
+      show(this.recordSets);
+      return;
+    }
+    this.loading.set(true);
+    this.content.listRecordSets(key).subscribe({
+      next: (sets) => {
+        this.recordSets = sets ?? [];
+        if (this.type() === 'RECORD_SET') {
+          show(this.recordSets);
+        }
         this.loading.set(false);
       },
       error: () => {

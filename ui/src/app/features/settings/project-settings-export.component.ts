@@ -19,7 +19,7 @@ type AssetSummaryView = components['schemas']['AssetSummaryView'];
  * just happens to have two fixed top-level folders ("Page Templates"/"Section Templates"),
  * structurally no different from any other scope having multiple top-level folders — so it
  * needs no special-casing anywhere below. */
-type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE' | 'TEMPLATES' | 'GLOBAL_SET' | 'RECORD';
+type TreeScope = 'PAGE' | 'MEDIA' | 'PAGE_REFERENCE' | 'TEMPLATES' | 'GLOBAL_SET' | 'RECORD_SET';
 /** The `FolderScope`/`ExportSelectionRequest.fullStores` string for each tree scope. */
 type StoreScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'TEMPLATES' | 'GLOBALS' | 'CONTENT';
 
@@ -29,7 +29,7 @@ const STORE_SCOPE_FOR: Record<TreeScope, StoreScope> = {
   PAGE_REFERENCE: 'NAVIGATION',
   TEMPLATES: 'TEMPLATES',
   GLOBAL_SET: 'GLOBALS',
-  RECORD: 'CONTENT',
+  RECORD_SET: 'CONTENT',
 };
 
 /** The `ApiClient.listAssets` `type` filter(s) backing each tree scope — `TEMPLATES` needs two
@@ -41,8 +41,17 @@ const ASSET_TYPES_FOR: Record<TreeScope, string[]> = {
   // The "Datasets" folder (M19.4.1) lives in the templates tree, so its schemas are leaves there.
   TEMPLATES: ['PAGE_TEMPLATE', 'SECTION_TEMPLATE', 'DATASET'],
   GLOBAL_SET: ['GLOBAL_SET'],
-  RECORD: ['RECORD'],
+  // The Content store's leaves are its record sets (M25.5.3); a set's records go with it and are never picked
+  // one by one.
+  RECORD_SET: ['RECORD_SET'],
 };
+
+/** A folder tree with the Content store's record-set leaf nodes (`type: RECORD_SET`) removed at every level. */
+function withoutRecordSets(tree: FolderView[]): FolderView[] {
+  return tree
+    .filter((node) => node.type !== 'RECORD_SET')
+    .map((node) => ({ ...node, children: withoutRecordSets(node.children ?? []) }));
+}
 
 /** Bucket key used for items with no folder — i.e. living directly at the store's hidden root. */
 const ROOT_PATH = '/';
@@ -127,6 +136,10 @@ export class ProjectSettingsExportComponent {
     return result;
   });
 
+  /** The Content folder tree without its record-set nodes (M25): the sets are this scope's leaf rows
+   * (`assetsByScope`, bucketed by their folder like every other leaf), not folders to expand. */
+  private readonly contentFolders = computed(() => withoutRecordSets(this.store.contentFolderTree()));
+
   protected readonly includeChannels = signal(false);
   protected readonly includeGenerationTargets = signal(false);
 
@@ -156,7 +169,7 @@ export class ProjectSettingsExportComponent {
 
   private loadAllAssets(key: string): void {
     this.loadingAssets.set(true);
-    const scopes: TreeScope[] = ['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'TEMPLATES', 'GLOBAL_SET', 'RECORD'];
+    const scopes: TreeScope[] = ['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'TEMPLATES', 'GLOBAL_SET', 'RECORD_SET'];
     forkJoin(
       scopes.map((scope) =>
         forkJoin(
@@ -380,8 +393,8 @@ export class ProjectSettingsExportComponent {
         return 'perm_media';
       case 'GLOBAL_SET':
         return 'tune';
-      case 'RECORD':
-        return 'dataset';
+      case 'RECORD_SET':
+        return 'table_rows';
       default:
         return 'description';
     }
@@ -433,8 +446,8 @@ export class ProjectSettingsExportComponent {
         return this.store.templateFolderTree();
       case 'GLOBAL_SET':
         return this.store.globalsFolderTree();
-      case 'RECORD':
-        return this.store.contentFolderTree();
+      case 'RECORD_SET':
+        return this.contentFolders();
     }
   }
 

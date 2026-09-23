@@ -1,17 +1,34 @@
 <sf-field [label]="definition().label" [hint]="definition().help">
   <div class="sf-reference" sfDropTarget (drop)="onDrop($event)">
-    <div class="sf-reference__current">
+    <div class="sf-reference__current" [class.sf-reference__current--broken]="resolved()?.broken">
       @if (uuid(); as u) {
-        <sf-icon class="sf-reference__icon" name="link" />
-        @if (link(); as route) {
+        <sf-icon class="sf-reference__icon" [name]="resolved()?.broken ? 'link_off' : 'link'" />
+        @if (resolved()?.broken !== 'missing' && link(); as route) {
           <a class="sf-reference__label sf-reference__label--link" [routerLink]="route" target="_blank" title="Open in a new tab">
-            {{ resolvedLabel() ?? u }}
+            {{ resolved()?.label ?? u }}
           </a>
         } @else {
-          <span class="sf-reference__label">{{ resolvedLabel() ?? u }}</span>
+          <span class="sf-reference__label">{{ resolved()?.label ?? u }}</span>
         }
-        @if (assetType(); as t) {
-          <span class="sf-reference__type">{{ t === 'RECORD' && definition().dataset ? definition().dataset : t }}</span>
+        @switch (resolved()?.broken) {
+          @case ('missing') {
+            <span class="sf-reference__broken">Not found</span>
+          }
+          @case ('deleted') {
+            <span class="sf-reference__broken">Deleted</span>
+          }
+        }
+        @if (targetType() === 'RECORD_SET') {
+          @if (resolved()?.dataset; as dataset) {
+            <span class="sf-reference__type" title="Dataset">{{ dataset }}</span>
+          } @else {
+            <span class="sf-reference__type">Record set</span>
+          }
+          @if (resolved()?.recordCount != null) {
+            <span class="sf-reference__meta">{{ recordCountLabel(resolved()?.recordCount) }}</span>
+          }
+        } @else if (targetType()) {
+          <span class="sf-reference__type">{{ targetType() === 'RECORD' && definition().dataset ? definition().dataset : targetType() }}</span>
         }
       } @else {
         <span class="sf-reference__empty">No asset selected</span>

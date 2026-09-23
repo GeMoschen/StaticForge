@@ -1,7 +1,10 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { ReactiveFormsModule, FormControl, FormGroup } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient } from '../../../core/api/api.client';
+import { ContentService } from '../../content/content.service';
+import { recordCountLabel } from '../../../shared/components/asset-picker.util';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
@@ -20,9 +23,23 @@ function linkFor(projectKey: string, assetType: string | null, uuid: string): st
       return ['/p', projectKey, 'templates'];
     case 'RECORD':
       return ['/p', projectKey, 'content', 'records', uuid];
+    case 'RECORD_SET':
+      return ['/p', projectKey, 'content', 'sets', uuid];
     default:
       return null;
   }
+}
+
+/** What the editor knows about the referenced asset beyond its uuid. */
+export interface ResolvedReference {
+  label: string;
+  /** The target's type as the server reports it — fills in for a value stored without `assetType`. */
+  assetType?: string;
+  /** Record sets (M25.5.3): the dataset's name and the live record count. */
+  dataset?: string;
+  recordCount?: number;
+  /** The target is gone (`missing`: no such asset) or in the trash (`deleted`) — a broken reference. */
+  broken?: 'missing' | 'deleted';
 }
 
 @Component({
@@ -47,9 +64,11 @@ export class SfReferenceEditor {
   readonly projectKey = input<string>();
 
   private readonly api = inject(ApiClient);
+  private readonly content = inject(ContentService);
 
   protected readonly pickerOpen = signal(false);
-  protected readonly resolvedLabel = signal<string | null>(null);
+  protected readonly resolved = signal<ResolvedReference | null>(null);
+  protected readonly recordCountLabel = recordCountLabel;
   private lastResolvedUuid: string | null = null;
 
   /**
@@ -66,7 +85,12 @@ export class SfReferenceEditor {
     if (!key || !uuid) {
       return null;
     }
-    return linkFor(key, this.assetType(), uuid);
+    return linkFor(key, this.targetType(), uuid);
+  }
+
+  /** The value's asset type, or — for a value without one (a raw drag-drop payload) — the resolved target's. */
+  protected targetType(): string | null {
+    return this.assetType() ?? this.resolved()?.assetType ?? null;
   }
 
   constructor() {
@@ -76,14 +100,14 @@ export class SfReferenceEditor {
         const uuid = this.uuid();
         if (!key || !uuid) {
           this.lastResolvedUuid = null;
-          this.resolvedLabel.set(null);
+          this.resolved.set(null);
           return;
         }
         if (uuid === this.lastResolvedUuid) {
           return;
         }
         this.lastResolvedUuid = uuid;
-        untracked(() => this.resolveLabel(key, uuid));
+        untracked(() => this.resolve(key, uuid, this.assetType()));
       },
       { allowSignalWrites: true },
     );
@@ -113,11 +137,11 @@ export class SfReferenceEditor {
       const parsed = JSON.parse(data) as { uuid?: string; assetType?: string };
       if (parsed.uuid) {
         this.select(parsed.uuid, parsed.assetType ?? '');
-        this.refreshLabel(parsed.uuid);
+        this.refreshLabel(parsed.uuid, parsed.assetType ?? null);
       }
     } catch {
       this.select(data, '');
-      this.refreshLabel(data);
+      this.refreshLabel(data, null);
     }
   }
 
@@ -134,7 +158,12 @@ export class SfReferenceEditor {
 
   protected onPicked(result: AssetPicked): void {
     this.select(result.uuid, result.assetType);
-    this.resolvedLabel.set(result.label);
+    this.resolved.set({
+      label: result.label,
+      assetType: result.assetType,
+      dataset: result.dataset,
+      recordCount: result.recordCount,
+    });
     this.pickerOpen.set(false);
   }
 
@@ -143,7 +172,7 @@ export class SfReferenceEditor {
     this.field('assetType').setValue(null);
     this.control().markAsDirty();
     this.lastResolvedUuid = null;
-    this.resolvedLabel.set(null);
+    this.resolved.set(null);
   }
 
   private select(uuid: string, assetType: string): void {
@@ -155,19 +184,57 @@ export class SfReferenceEditor {
     this.lastResolvedUuid = uuid;
   }
 
-  /** Fetches the display name for a uuid we don't already have a label for (e.g. a raw drag-drop payload). */
-  private refreshLabel(uuid: string): void {
+  /**
+   * Fetches the display name for a uuid we don't already have a label for (e.g. a raw drag-drop payload). Only the
+   * dropped type counts — the control may still hold the previous value's — and without one the generic lookup
+   * finds out.
+   */
+  private refreshLabel(uuid: string, assetType: string | null): void {
     const key = this.projectKey();
     if (!key) {
       return;
     }
-    this.resolveLabel(key, uuid);
+    this.resolve(key, uuid, assetType);
   }
 
-  private resolveLabel(projectKey: string, uuid: string): void {
+  /**
+   * Looks the target up: a record set through the set endpoint (name, dataset, record count), anything else
+   * through the generic asset detail. A `404` or a deleted target is a broken reference; any other failure
+   * leaves just the uuid on show, since it says nothing about the target.
+   */
+  private resolve(projectKey: string, uuid: string, assetType: string | null): void {
+    const failed = (error: unknown) =>
+      this.resolved.set(
+        error instanceof HttpErrorResponse && error.status === 404 ? { label: uuid, broken: 'missing' } : null,
+      );
+    if (assetType === 'RECORD_SET') {
+      this.content.getRecordSet(projectKey, uuid).subscribe({
+        next: (set) =>
+          this.resolved.set({
+            label: set.displayName ?? set.uid ?? uuid,
+            assetType: 'RECORD_SET',
+            dataset: set.dataset?.displayName ?? set.dataset?.uid,
+            recordCount: set.recordCount ?? 0,
+            broken: set.deleted ? 'deleted' : undefined,
+          }),
+        error: failed,
+      });
+      return;
+    }
     this.api.assetDetail(projectKey, uuid).subscribe({
-      next: (detail) => this.resolvedLabel.set(detail.displayName ?? detail.uid ?? uuid),
-      error: () => this.resolvedLabel.set(null),
+      next: (detail) => {
+        if (detail.type === 'RECORD_SET') {
+          // A value without its asset type (a raw drag-drop payload) that turns out to be a set.
+          this.resolve(projectKey, uuid, 'RECORD_SET');
+          return;
+        }
+        this.resolved.set({
+          label: detail.displayName ?? detail.uid ?? uuid,
+          assetType: detail.type,
+          broken: detail.deleted ? 'deleted' : undefined,
+        });
+      },
+      error: failed,
     });
   }
 }

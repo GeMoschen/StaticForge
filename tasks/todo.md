@@ -9,14 +9,19 @@ next one in its lane starts.
 - [x] M25.1.2 — stored set query: validation, evaluation, rename rewrite, broken-query flags
 - [x] M25.2.1 — per-channel record templates on `DATASET`
 - [x] M25.3.1 — `RecordSetController`, record create by set, DTOs, `schema.d.ts`
-- [ ] M25.2.2 — `recordset:` values, loops, reference editor, golden files
+- [x] M25.2.2 — `recordset:` values, loops, reference editor, golden files
 - [ ] M25.2.3 — incremental planning + build insight
 - [ ] M25.4.1 — export/import
 
 ## UI lane (after M25.3.1)
 - [x] M25.5.1 — Content store record sets
 - [ ] M25.5.2 — dataset record template editor
-- [ ] M25.5.3 — reference picker, search, routing
+- [x] M25.5.3 — reference picker, search, routing
+
+## Follow-ups found in review
+- [ ] Set grid: `revision` param on `GET /record-sets/{uuid}/records` (time travel lists records as of that
+      revision) and a per-row `selectedBySet` flag in "All records" mode — replaces the UI's extra
+      `_uuid == … || …` request for dimming (backend after M25.2.2, then UI)
 
 ## Finish
 - [ ] M25.6.1 — docs + spec

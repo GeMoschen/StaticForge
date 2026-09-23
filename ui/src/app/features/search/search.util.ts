@@ -9,6 +9,7 @@ export type SearchStatusView = components['schemas']['SearchStatusView'];
 export const TYPE_ORDER = [
   'PAGE',
   'RECORD',
+  'RECORD_SET',
   'MEDIA',
   'GLOBAL_SET',
   'PAGE_REFERENCE',
@@ -21,6 +22,7 @@ export const TYPE_ORDER = [
 export const TYPE_LABELS: Record<string, string> = {
   PAGE: 'Pages',
   RECORD: 'Records',
+  RECORD_SET: 'Record sets',
   MEDIA: 'Media',
   GLOBAL_SET: 'Globals',
   PAGE_REFERENCE: 'Navigation',
@@ -33,6 +35,7 @@ export const TYPE_LABELS: Record<string, string> = {
 export const TYPE_ICONS: Record<string, string> = {
   PAGE: 'description',
   RECORD: 'dataset',
+  RECORD_SET: 'table_rows',
   MEDIA: 'perm_media',
   GLOBAL_SET: 'tune',
   PAGE_REFERENCE: 'account_tree',

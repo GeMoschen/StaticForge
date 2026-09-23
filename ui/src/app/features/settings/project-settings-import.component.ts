@@ -17,13 +17,21 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfDropTargetDirective } from '../../shared/directives/sf-drop-target.directive';
 
-/** Material Symbols icon per `ConflictType` — a reasonable visual cue, not meant to be pixel-perfect. */
+/**
+ * Material Symbols icon per `ConflictType` — a reasonable visual cue, not meant to be pixel-perfect. Keyed by the
+ * plain string the API sends (`ImportConflictView.type` is not an enum in the schema), so a type the server adds
+ * later just falls back to `info`; the four record-set conflicts (M25) are mapped ahead of the backend.
+ */
 const CONFLICT_ICONS: Record<string, string> = {
   PROTOCOL_VERSION_MISMATCH: 'warning',
   DUPLICATE_UUID: 'content_copy',
   DUPLICATE_UUID_TYPE_MISMATCH: 'report',
   MISSING_TEMPLATE_REFERENCE: 'link_off',
   RECORD_DATASET_MISSING: 'dataset_linked',
+  RECORD_SET_DATASET_MISSING: 'dataset_linked',
+  RECORD_SET_MISSING: 'table_rows',
+  RECORD_SET_DATASET_MISMATCH: 'rule',
+  RECORD_OUTSIDE_RECORD_SET: 'move_item',
   PARENT_TEMPLATE_MISSING: 'link_off',
   MISSING_PARENT_FOLDER: 'folder_off',
   SETTINGS_KEY_COLLISION: 'settings',

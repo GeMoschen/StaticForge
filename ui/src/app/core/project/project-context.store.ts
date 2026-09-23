@@ -35,7 +35,7 @@ export class ProjectContextStore {
   readonly templateFolderTree = signal<FolderView[]>([]);
   /** The Globals store's folders (`GLOBAL_SET` leaves). Entirely separate from the other four. */
   readonly globalsFolderTree = signal<FolderView[]>([]);
-  /** The Content store's folders (`RECORD` leaves, M19.4.1). Entirely separate from the other five. */
+  /** The Content store's folders, with its record sets as `type: RECORD_SET` leaf nodes (M25). Entirely separate from the other five. */
   readonly contentFolderTree = signal<FolderView[]>([]);
   readonly pageTemplates = signal<TemplateSummary[]>([]);
   readonly sectionTemplates = signal<TemplateSummary[]>([]);

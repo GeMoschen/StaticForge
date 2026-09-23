@@ -251,4 +251,23 @@ describe('ProjectSettingsImportComponent', () => {
     const importBtn = screen.getByRole('button', { name: 'Import' }) as HTMLButtonElement;
     expect(importBtn.disabled).toBe(true);
   });
+
+  it('gives each record-set conflict (M25) its own icon', async () => {
+    const types = ['RECORD_SET_DATASET_MISSING', 'RECORD_SET_MISSING', 'RECORD_SET_DATASET_MISMATCH', 'RECORD_OUTSIDE_RECORD_SET'];
+    const report: ConflictReportView = {
+      hasBlocking: true,
+      conflicts: types.map((type, i) => ({ severity: 'BLOCKING', type, elementUuid: `r-${i}`, elementLabel: type, detail: '' })),
+    };
+    const api = makeApiStub({ analyzeImport: vi.fn().mockReturnValue(of(report)) });
+    await render(ProjectSettingsImportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: ImportExportService, useValue: api }],
+    });
+
+    selectFile(document.querySelector('input[type="file"]') as HTMLInputElement, zipFile());
+    await waitFor(() => expect(screen.getByText('RECORD_OUTSIDE_RECORD_SET')).toBeTruthy());
+
+    const icons = types.map((type) => screen.getByText(type).closest('li')!.querySelector('sf-icon')!.textContent!.trim());
+    expect(icons).toEqual(['dataset_linked', 'table_rows', 'rule', 'move_item']);
+  });
 });

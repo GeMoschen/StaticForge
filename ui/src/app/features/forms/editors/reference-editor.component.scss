@@ -70,3 +70,26 @@
   border-color: var(--sf-rust);
   color: var(--sf-rust);
 }
+
+.sf-reference__current--broken {
+  border-color: var(--sf-rust);
+}
+
+.sf-reference__current--broken .sf-reference__icon {
+  color: var(--sf-rust);
+}
+
+.sf-reference__broken {
+  flex-shrink: 0;
+  padding: 0 var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  background: color-mix(in srgb, var(--sf-rust) 14%, transparent);
+  color: var(--sf-rust);
+  font-size: var(--sf-text-xs);
+}
+
+.sf-reference__meta {
+  flex-shrink: 0;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}
