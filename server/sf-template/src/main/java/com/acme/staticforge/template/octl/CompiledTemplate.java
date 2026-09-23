@@ -208,4 +208,23 @@ public final class CompiledTemplate {
                 .map(Map.Entry::getValue)
                 .toList();
     }
+
+    /**
+     * How the template reads record set {@code recordset:<setUid>} (M25.2.3): the arguments of every loop over it
+     * (nested loops included) and whether it reads the set any other way — the value form, which renders the records
+     * through the dataset's record template, or a path into its root value object. Found by the uid as spelled, so it
+     * works on a template compiled without a resolver; incremental planning uses it to prune record and record
+     * template changes.
+     */
+    public RecordSetReads recordSetReads(String setUid) {
+        List<DatasetQuery> loops = datasetQueries.entrySet().stream()
+                .filter(entry -> OctlCompiler.RECORD_SET_PREFIX.equals(entry.getKey().accessor().assetType())
+                        && setUid.equals(entry.getKey().accessor().uid())
+                        && entry.getKey().accessor().path().isEmpty())
+                .map(Map.Entry::getValue)
+                .toList();
+        boolean valueReads = ReferenceUseCollector.valueReads(nodes, datasetQueries)
+                .contains(OctlCompiler.RECORD_SET_PREFIX + ":" + setUid);
+        return loops.isEmpty() && !valueReads ? RecordSetReads.NONE : new RecordSetReads(loops, valueReads);
+    }
 }

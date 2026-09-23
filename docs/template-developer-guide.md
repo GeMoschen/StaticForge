@@ -473,6 +473,18 @@ only; editing a sibling record does not rebuild it. Changing the schema rebuilds
 the dataset. A 5,000-record dataset looped
 by 500 pages generates in about 2.6 s (full) on the development machine.
 
+**Rebuilds with record sets (M25).** A page reading a record set — `$CMS_VALUE(recordset:leads)$`, a
+`$CMS_FOR(m : recordset:leads, …)$` loop, or a `reference` editor pointing at the set — rebuilds when a record
+of the set (or moved into or out of it) changes **and the set's stored query selects that record before or after
+the change**; a loop's own `where` narrows further, like on a dataset loop. The set's query can't read the render
+scope, so this is always decided exactly. Changing a set (its query, name or uid) rebuilds every page reading it.
+Changing only a dataset's record template rebuilds the pages rendering a set of it *through* the template (the
+value form and `reference` editor values) — not set loops, which bring their own markup, and not `dataset:` loops.
+A record whose `reference` editor points at a set is a reader too, so a set rendered inside another record's
+template rebuilds the pages showing that record. The build insight names the chain: *record `jane` in record set
+`leads`* (`RECORD_SET_MEMBERSHIP`), *record set `leads` query changed* (`RECORD_SET_QUERY`), *record template of
+dataset `team`* (`RECORD_TEMPLATE`).
+
 **Not the `visibleWhen` grammar.** `where` is the OCTL expression grammar `$CMS_IF` uses. The CDL
 `visibleWhen` attribute has its own, deliberately tiny grammar shared with the editor UI (§14.4) — no
 filters, no `in`, no dates — and the two are not interchangeable.

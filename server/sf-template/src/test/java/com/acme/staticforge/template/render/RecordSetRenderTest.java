@@ -12,6 +12,7 @@ import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
+import com.acme.staticforge.template.octl.RecordSetReads;
 import com.acme.staticforge.template.query.RecordSetQueries;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.template.query.RecordView;
@@ -153,6 +154,43 @@ class RecordSetRenderTest {
                 (type, uid) -> Optional.of(TEAM));
 
         assertThat(result.template().datasetQueries("team")).singleElement().satisfies(q -> assertThat(q.limit()).isEqualTo(1));
+    }
+
+    /** M25.2.3: what incremental planning reads off a template — found by the uid as spelled, without a resolver. */
+    @Test
+    void theReadsOfARecordSetAreListedByUid() {
+        CompiledTemplate loops = compiler.compile(
+                        "$CMS_FOR(m : recordset:leads, where=\"m.role == 'lead'\")$x$CMS_END_FOR$"
+                                + "$CMS_FOR(m : recordset:loop)$$CMS_FOR(n : recordset:leads, limit=2)$y$CMS_END_FOR$$CMS_END_FOR$",
+                        "html",
+                        null)
+                .template();
+        RecordSetReads leads = loops.recordSetReads("leads");
+        assertThat(leads.valueReads()).isFalse();
+        assertThat(leads.loops()).hasSize(2).anySatisfy(q -> assertThat(q.where()).isNotNull())
+                .anySatisfy(q -> assertThat(q.limit()).isEqualTo(2));
+        assertThat(loops.recordSetReads("loop").loops()).singleElement().satisfies(q -> assertThat(q.where()).isNull());
+        assertThat(loops.recordSetReads("nope")).isEqualTo(RecordSetReads.NONE);
+        assertThat(loops.recordSetReads("nope").isEmpty()).isTrue();
+
+        // The value form, a path into the root value object and a condition are value reads; a dataset loop of the
+        // same uid is not a read of the set.
+        CompiledTemplate values = compiler.compile(
+                        "$CMS_VALUE(recordset:leads)$$CMS_IF(recordset:loop._count > 0)$z$CMS_END_IF$"
+                                + "$CMS_FOR(m : recordset:gone.records)$w$CMS_END_FOR$$CMS_FOR(m : dataset:leads)$v$CMS_END_FOR$",
+                        "html",
+                        null)
+                .template();
+        assertThat(values.recordSetReads("leads")).isEqualTo(new RecordSetReads(List.of(), true));
+        assertThat(values.recordSetReads("loop").valueReads()).isTrue();
+        assertThat(values.recordSetReads("gone")).isEqualTo(new RecordSetReads(List.of(), true));
+
+        // A record template reads sets the same way.
+        CompiledTemplate recordTemplate = compiler.compileRecordTemplate(
+                        "$CMS_VALUE(featured)$$CMS_FOR(m : recordset:leads)$$CMS_VALUE(m.name)$$CMS_END_FOR$", "html", null, null)
+                .template();
+        assertThat(recordTemplate.recordSetReads("leads").loops()).hasSize(1);
+        assertThat(recordTemplate.recordSetReads("leads").valueReads()).isFalse();
     }
 
     // ------------------------------------------------------------------

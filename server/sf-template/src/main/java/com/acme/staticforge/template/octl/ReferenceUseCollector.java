@@ -2,6 +2,7 @@ package com.acme.staticforge.template.octl;
 
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,6 +18,8 @@ final class ReferenceUseCollector {
     private static final String NAV = "nav";
 
     private final Map<String, Set<ReferenceUse>> uses = new LinkedHashMap<>();
+    /** Every key read other than as the path-less source of a loop (M25.2.3). */
+    private final Set<String> valueReads = new LinkedHashSet<>();
     private final Map<OctlNode.For, com.acme.staticforge.template.query.DatasetQuery> datasetQueries;
 
     private ReferenceUseCollector(Map<OctlNode.For, com.acme.staticforge.template.query.DatasetQuery> datasetQueries) {
@@ -33,6 +36,18 @@ final class ReferenceUseCollector {
         ReferenceUseCollector collector = new ReferenceUseCollector(datasetQueries);
         collector.nodes(nodes);
         return collector.uses;
+    }
+
+    /**
+     * The reference keys the template reads other than as the path-less source of a {@code $CMS_FOR} loop
+     * (M25.2.3): a value, a link, an include, a condition, a {@code $CMS_SET}, a loop {@code where}, or a loop over a
+     * path below the reference. Unresolved references are included — the keys are spelled, not resolved.
+     */
+    static Set<String> valueReads(
+            List<OctlNode> nodes, Map<OctlNode.For, com.acme.staticforge.template.query.DatasetQuery> datasetQueries) {
+        ReferenceUseCollector collector = new ReferenceUseCollector(datasetQueries);
+        collector.nodes(nodes);
+        return collector.valueReads;
     }
 
     private void nodes(List<OctlNode> nodes) {
@@ -53,7 +68,8 @@ final class ReferenceUseCollector {
                     nodes(f.elseBody());
                 }
                 case OctlNode.For f -> {
-                    record(f.accessor(), NAV.equals(f.accessor().assetType()) ? ReferenceUse.REF : ReferenceUse.VALUE);
+                    boolean loopSource = f.accessor() != null && f.accessor().path().isEmpty();
+                    record(f.accessor(), NAV.equals(f.accessor().assetType()) ? ReferenceUse.REF : ReferenceUse.VALUE, !loopSource);
                     var query = datasetQueries.get(f);
                     if (query != null && query.where() != null) {
                         expr(query.where());
@@ -95,8 +111,15 @@ final class ReferenceUseCollector {
     }
 
     private void record(Accessor accessor, ReferenceUse use) {
+        record(accessor, use, true);
+    }
+
+    private void record(Accessor accessor, ReferenceUse use, boolean valueRead) {
         if (accessor != null && accessor.isAssetReference()) {
             uses.computeIfAbsent(accessor.referenceKey(), k -> EnumSet.noneOf(ReferenceUse.class)).add(use);
+            if (valueRead) {
+                valueReads.add(accessor.referenceKey());
+            }
         }
     }
 }

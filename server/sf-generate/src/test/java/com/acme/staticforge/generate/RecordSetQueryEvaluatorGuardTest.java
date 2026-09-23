@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * {@link RecordSetQueries} — never by calling {@link DatasetQueryEvaluator} themselves. Every direct caller
  * of the dataset evaluator outside {@code template.query} is listed here with the reason it is not about
  * record sets; a new caller (a planner rule) fails this test until it goes through {@code RecordSetQueries}.
- * Set rendering (M25.2.2) goes through it.
+ * Set rendering (M25.2.2) and incremental planning (M25.2.3, {@code RecordSetImpact}) go through it.
  *
  * <p>Imports the modules generation sees ({@code sf-template}, {@code sf-domain}, {@code sf-generate}),
  * which is every module that renders, lists or plans records.
@@ -79,6 +79,18 @@ class RecordSetQueryEvaluatorGuardTest {
                 .haveFullyQualifiedName("com.acme.staticforge.generate.render.SnapshotAssetValueResolver")
                 .or()
                 .haveFullyQualifiedName("com.acme.staticforge.preview.LiveAssetValueResolver")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(RecordSetQueries.class)
+                .check(CLASSES);
+    }
+
+    /** M25.2.3: incremental planning prunes set readers with the same evaluator the sets render with. */
+    @Test
+    void thePlannerUsesTheSharedEvaluator() {
+        classes()
+                .that()
+                .haveFullyQualifiedName("com.acme.staticforge.generate.plan.RecordSetImpact")
                 .should()
                 .dependOnClassesThat()
                 .areAssignableTo(RecordSetQueries.class)

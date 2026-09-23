@@ -10,7 +10,7 @@ next one in its lane starts.
 - [x] M25.2.1 — per-channel record templates on `DATASET`
 - [x] M25.3.1 — `RecordSetController`, record create by set, DTOs, `schema.d.ts`
 - [x] M25.2.2 — `recordset:` values, loops, reference editor, golden files
-- [ ] M25.2.3 — incremental planning + build insight
+- [x] M25.2.3 — incremental planning + build insight
 - [ ] M25.4.1 — export/import
 
 ## UI lane (after M25.3.1)
@@ -22,6 +22,8 @@ next one in its lane starts.
 - [ ] Set grid: `revision` param on `GET /record-sets/{uuid}/records` (time travel lists records as of that
       revision) and a per-row `selectedBySet` flag in "All records" mode — replaces the UI's extra
       `_uuid == … || …` request for dimming (backend after M25.2.2, then UI)
+- [ ] Insight UI: `EDGE_LABELS` in `features/generation/insight/insight.util.ts` for `RECORD_SET_MEMBERSHIP`,
+      `RECORD_SET_QUERY`, `RECORD_TEMPLATE`
 - [ ] Record template live check: `POST /octl/validate` gains a dataset context (`datasetUuid` + draft CDL) so
       unknown fields show while typing, not only on save (backend, then `dataset-schema-editor`)
 

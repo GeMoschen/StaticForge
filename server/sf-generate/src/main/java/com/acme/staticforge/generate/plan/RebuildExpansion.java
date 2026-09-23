@@ -7,9 +7,11 @@ import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.ReferenceKind;
 import com.acme.staticforge.asset.ReferenceRow;
+import com.acme.staticforge.asset.dataset.RecordTemplates;
 import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.media.TextMediaTypes;
+import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.generate.insight.RebuildEdgeKind;
 import com.acme.staticforge.generate.insight.RebuildReason;
 import com.acme.staticforge.generate.insight.RebuildRootKind;
@@ -17,7 +19,10 @@ import com.acme.staticforge.generate.insight.RebuildStep;
 import com.acme.staticforge.generate.render.SnapshotPagination;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.template.query.RecordView;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -31,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Predicate;
 import org.springframework.stereotype.Service;
@@ -63,6 +69,23 @@ import org.springframework.stereotype.Service;
  * looping its dataset ({@link RebuildEdgeKind#DATASET_MEMBERSHIP}), but only to those with a loop whose
  * {@code folder}/{@code where} may select the record before or after the change ({@link DatasetLoopImpact}). A changed
  * dataset (its schema) still reaches every referrer.
+ *
+ * <p>Record sets (M25.2.3): a record's set is its parent, not a reference, and a set reader has an edge to the set
+ * only — an {@code OCTL_VALUE} row from a template spelling {@code recordset:uid}, or a {@code CONTENT_REF} row from a
+ * page, record or global set whose {@code reference} editor points at it. So every record the walk visits also
+ * continues to the readers of the set it is in and of the set it was in at the baseline, but only to those that may
+ * render it ({@link RebuildEdgeKind#RECORD_SET_MEMBERSHIP}, {@link RecordSetImpact}): the set's stored query must
+ * select the record's version in that set, and a loop's {@code where} must let it through. A record referencing a set
+ * is a reader like a page (its record template may render the set), so nested set rendering walks on through it. A
+ * changed set reaches every reader — with {@link RebuildEdgeKind#RECORD_SET_QUERY} when its query changed.
+ *
+ * <p>Record templates (M25.2.1): a dataset's per-channel record templates render every record of its sets in the
+ * value form ({@code $CMS_VALUE(recordset:uid)$}, a {@code reference} editor value). A dataset whose change is
+ * confined to its record templates, and a dataset merely reached (over its record templates' own OCTL edges, or a
+ * {@code dataset:} loop in them that may select a changed record), reach only the readers of its sets that render the
+ * records through a record template ({@link RebuildEdgeKind#RECORD_TEMPLATE}); set loops bring their own markup and
+ * {@code dataset:} loops never use a record template. Any other dataset change (schema, name, uid) reaches every
+ * referrer, its sets included, and so every reader of its sets.
  *
  * <p>Pagination (M21.2.1): a page paginating a navigation folder has a {@code CONTENT_REF} edge to it, but its output
  * also depends on the page references in the folder, which have no edge to it. Every page reference the walk visits
@@ -98,7 +121,8 @@ public class RebuildExpansion {
     private static final int ID_CHUNK = 1000;
 
     private static final Set<AssetType> BEFORE_TYPES =
-            Set.of(AssetType.PAGE, AssetType.PAGE_REFERENCE, AssetType.FOLDER, AssetType.RECORD);
+            Set.of(AssetType.PAGE, AssetType.PAGE_REFERENCE, AssetType.FOLDER, AssetType.RECORD, AssetType.RECORD_SET,
+                    AssetType.DATASET);
 
     private final AssetVersionRepository versions;
     private final AssetUidHistoryRepository uidHistory;
@@ -142,9 +166,24 @@ public class RebuildExpansion {
         return new Changes(roots, before, uidChanged, outputMoved, false);
     }
 
-    /** Walks {@code changes} over the snapshot's reference graph. */
-    public Result expand(Snapshot snapshot, Changes changes, SnapshotPagination pagination) {
-        return new Walk(snapshot, changes, pagination, references.findRowsValidAtByProject(snapshot.projectId(), snapshot.revision()))
+    /**
+     * Walks {@code changes} over the snapshot's reference graph.
+     *
+     * @param definitions the build's compile memo: the dataset schemas record set queries compile against
+     * @param locales the project's languages: a record set query may select a record in any of them
+     */
+    public Result expand(
+            Snapshot snapshot,
+            Changes changes,
+            SnapshotPagination pagination,
+            TemplateCompileMemo definitions,
+            LocaleConfig locales) {
+        return new Walk(
+                        snapshot,
+                        changes,
+                        pagination,
+                        new RecordSetImpact(snapshot, definitions, locales),
+                        references.findRowsValidAtByProject(snapshot.projectId(), snapshot.revision()))
                 .run();
     }
 
@@ -214,6 +253,53 @@ public class RebuildExpansion {
                     || !Objects.equals(previous.getDisplayName(), page.displayName())
                     || uidChanged.contains(page.assetId())
                     || outputMoved.test(page.uuid());
+        }
+
+        /**
+         * Whether a changed dataset's change is confined to its record templates (M25.2.3): the templates differ from
+         * the baseline, while its schema, every other payload field, its name and its uid don't.
+         */
+        boolean recordTemplatesOnly(SnapshotAsset dataset) {
+            if (upperBound) {
+                return false;
+            }
+            AssetVersion previous = before.get(dataset.assetId());
+            return previous != null
+                    && !previous.isDeleted()
+                    && !dataset.deleted()
+                    && !uidChanged.contains(dataset.assetId())
+                    && Objects.equals(previous.getDisplayName(), dataset.displayName())
+                    && !Objects.equals(recordTemplates(previous.getPayload()), recordTemplates(dataset.payload()))
+                    && Objects.equals(withoutRecordTemplates(previous.getPayload()), withoutRecordTemplates(dataset.payload()));
+        }
+
+        /** Whether a changed record set's stored query differs from the baseline's (M25.2.3). */
+        boolean queryChanged(SnapshotAsset set) {
+            if (upperBound) {
+                return false;
+            }
+            AssetVersion previous = before.get(set.assetId());
+            return previous != null
+                    && !previous.isDeleted()
+                    && !set.deleted()
+                    && !Objects.equals(query(previous.getPayload()), query(set.payload()));
+        }
+
+        private static JsonNode recordTemplates(JsonNode payload) {
+            return payload == null ? null : payload.get(RecordTemplates.PAYLOAD_FIELD);
+        }
+
+        private static JsonNode withoutRecordTemplates(JsonNode payload) {
+            if (!(payload instanceof ObjectNode object)) {
+                return payload;
+            }
+            ObjectNode copy = object.deepCopy();
+            copy.remove(RecordTemplates.PAYLOAD_FIELD);
+            return copy;
+        }
+
+        private static JsonNode query(JsonNode payload) {
+            return payload == null ? null : payload.get("query");
         }
     }
 
@@ -381,6 +467,8 @@ public class RebuildExpansion {
         private final Map<Long, List<ReferenceRow>> referrers = new HashMap<>();
         private final Map<Long, List<Long>> navTargets = new HashMap<>();
         private final DatasetLoopImpact loops = new DatasetLoopImpact();
+        private final RecordSetImpact recordSets;
+        private final Map<Long, Boolean> everyReader = new HashMap<>();
 
         private final Deque<Long> queue = new ArrayDeque<>();
         private final Map<Long, Discovery> discoveries = new HashMap<>();
@@ -392,10 +480,16 @@ public class RebuildExpansion {
         private Map<UUID, List<Long>> paginatorsBySource;
         private List<String> navigationVisiblePagePaths;
 
-        Walk(Snapshot snapshot, Changes changes, SnapshotPagination pagination, List<ReferenceRow> rows) {
+        Walk(
+                Snapshot snapshot,
+                Changes changes,
+                SnapshotPagination pagination,
+                RecordSetImpact recordSets,
+                List<ReferenceRow> rows) {
             this.snapshot = snapshot;
             this.changes = changes;
             this.pagination = pagination;
+            this.recordSets = recordSets;
             for (ReferenceRow row : rows) {
                 referrers.computeIfAbsent(row.toAssetId(), k -> new ArrayList<>()).add(row);
                 if (row.kind() == ReferenceKind.NAV) {
@@ -441,6 +535,21 @@ public class RebuildExpansion {
                     }
                 }
                 case RECORD -> readersSelecting(asset);
+                case RECORD_SET -> {
+                    if (changed && changes.queryChanged(asset)) {
+                        // Every reader renders the set's selection, which the new query decides.
+                        for (ReferenceRow row : referrers.getOrDefault(id, List.of())) {
+                            discover(row.fromAssetId(), id, RebuildEdgeKind.RECORD_SET_QUERY, null, row.sourcePath());
+                        }
+                        return;
+                    }
+                }
+                case DATASET -> {
+                    if (!changed || changes.recordTemplatesOnly(asset)) {
+                        recordTemplateReaders(asset);
+                        return;
+                    }
+                }
                 case PAGE_REFERENCE -> {
                     AssetVersion before = changed ? changes.before(id) : null;
                     SnapshotAsset folder = folderAt(asset.folderPath());
@@ -501,36 +610,61 @@ public class RebuildExpansion {
         }
 
         /**
-         * Queues the readers of {@code record}'s dataset that may render it: templates with a loop that may select the
-         * record's current or previous version (every loop for an upper bound), processed text media (its source can't
-         * be analysed) and the pages paginating the dataset. The dataset's other referrers — its records, content
-         * references to it — read no records.
+         * Queues the readers that may render {@code record}: those of its dataset ({@code dataset:} loops) and those of
+         * the record sets it is in now and was in at the baseline. A dataset that walks to every reader itself (a
+         * schema change) covers both.
          */
         private void readersSelecting(SnapshotAsset record) {
             UUID datasetUuid = RecordValues.datasetRef(record.payload());
             SnapshotAsset dataset = datasetUuid == null ? null : snapshot.assetByUuid(datasetUuid);
-            if (dataset == null || changes.isRoot(dataset.assetId())) {
-                return; // a changed dataset walks to all of its readers itself
+            if (dataset == null || walksEveryReader(dataset)) {
+                return;
             }
-            List<RecordView> versions = new ArrayList<>(2);
-            if (!record.deleted()) {
-                versions.add(RecordValues.view(
-                        record.uuid(), record.uid(), record.displayName(), record.folderPath(),
-                        recordSetUid(record.folderId()), record.changedAt(), record.payload()));
-            }
+            RecordView now = record.deleted()
+                    ? null
+                    : RecordValues.view(
+                            record.uuid(), record.uid(), record.displayName(), record.folderPath(),
+                            recordSetUid(record.folderId()), record.changedAt(), record.payload());
             AssetVersion before = changes.before(record.assetId());
-            if (before != null && !before.isDeleted()) {
-                versions.add(RecordValues.view(
-                        record.uuid(), record.uid(), before.getDisplayName(), before.getFolderPath(),
-                        recordSetUid(before.getFolderId()), before.getChangedAt(), before.getPayload()));
+            RecordView previous = before == null || before.isDeleted()
+                    ? null
+                    : RecordValues.view(
+                            record.uuid(), record.uid(), before.getDisplayName(), before.getFolderPath(),
+                            recordSetUid(before.getFolderId()), before.getChangedAt(), before.getPayload());
+            List<RecordView> versions = new ArrayList<>(2);
+            if (now != null) {
+                versions.add(now);
             }
+            if (previous != null) {
+                versions.add(previous);
+            }
+            datasetReadersSelecting(record, dataset, versions);
+
+            // Each version is a member of the set it was in then: a move tests the old set with the old version only.
+            Map<Long, List<RecordView>> bySet = new TreeMap<>();
+            if (now != null && record.folderId() != null) {
+                bySet.computeIfAbsent(record.folderId(), k -> new ArrayList<>(2)).add(now);
+            }
+            if (previous != null && before.getFolderId() != null) {
+                bySet.computeIfAbsent(before.getFolderId(), k -> new ArrayList<>(2)).add(previous);
+            }
+            bySet.forEach((setId, members) -> setReadersSelecting(record, setId, members));
+        }
+
+        /**
+         * Queues the readers of {@code record}'s dataset that may render it: templates and record templates with a loop
+         * that may select the record's current or previous version (every loop for an upper bound), processed text media
+         * (its source can't be analysed) and the pages paginating the dataset. The dataset's other referrers — its
+         * records and sets, content references to it — read no records.
+         */
+        private void datasetReadersSelecting(SnapshotAsset record, SnapshotAsset dataset, List<RecordView> versions) {
             for (ReferenceRow row : referrers.getOrDefault(dataset.assetId(), List.of())) {
                 SnapshotAsset reader = snapshot.assetById(row.fromAssetId());
                 if (reader == null) {
                     continue;
                 }
                 switch (reader.type()) {
-                    case SECTION_TEMPLATE, PAGE_TEMPLATE -> {
+                    case SECTION_TEMPLATE, PAGE_TEMPLATE, DATASET -> {
                         if (changes.upperBound || loops.affects(reader, dataset, versions)) {
                             discover(reader.assetId(), record.assetId(), RebuildEdgeKind.DATASET_MEMBERSHIP, null, dataset.uid());
                         }
@@ -542,10 +676,57 @@ public class RebuildExpansion {
                         }
                     }
                     default -> {
-                        // records and other referrers read no records
+                        // records, record sets and other referrers read no records
                     }
                 }
             }
+        }
+
+        /**
+         * Queues the readers of record set {@code setId} that may render {@code members} (versions of {@code record} in
+         * that set): templates, record templates, pages, records and global sets for which {@link RecordSetImpact} says
+         * so (every reader for an upper bound). A set that changed itself walks to every reader on its own.
+         */
+        private void setReadersSelecting(SnapshotAsset record, long setId, List<RecordView> members) {
+            SnapshotAsset set = snapshot.assetById(setId);
+            if (set == null || set.type() != AssetType.RECORD_SET || set.deleted() || changes.isRoot(setId)) {
+                return;
+            }
+            for (ReferenceRow row : referrers.getOrDefault(setId, List.of())) {
+                SnapshotAsset reader = snapshot.assetById(row.fromAssetId());
+                if (reader != null && (changes.upperBound || recordSets.selects(reader, set, members))) {
+                    discover(reader.assetId(), record.assetId(), RebuildEdgeKind.RECORD_SET_MEMBERSHIP, null, set.uid());
+                }
+            }
+        }
+
+        /**
+         * Queues the readers rendering one of {@code dataset}'s sets through its record templates (M25.2.3): the value
+         * form of a template or record template, and every content reader (a {@code reference} editor's value renders
+         * that way). The source path names the set.
+         */
+        private void recordTemplateReaders(SnapshotAsset dataset) {
+            for (ReferenceRow setRow : referrers.getOrDefault(dataset.assetId(), List.of())) {
+                SnapshotAsset set = snapshot.assetById(setRow.fromAssetId());
+                if (set == null || set.type() != AssetType.RECORD_SET || set.deleted()) {
+                    continue;
+                }
+                for (ReferenceRow row : referrers.getOrDefault(set.assetId(), List.of())) {
+                    SnapshotAsset reader = snapshot.assetById(row.fromAssetId());
+                    if (reader != null && (changes.upperBound || recordSets.rendersRecords(reader, set))) {
+                        discover(reader.assetId(), dataset.assetId(), RebuildEdgeKind.RECORD_TEMPLATE, null, set.uid());
+                    }
+                }
+            }
+        }
+
+        /**
+         * Whether {@code dataset} walks to every referrer itself — it changed, and not only in its record templates — so
+         * a record of it needs no pruned walk of its own.
+         */
+        private boolean walksEveryReader(SnapshotAsset dataset) {
+            return everyReader.computeIfAbsent(dataset.assetId(), id ->
+                    changes.isRoot(id) && !changes.recordTemplatesOnly(dataset));
         }
 
         /** The uid of the record set with asset id {@code setId} in the snapshot (M25), or {@code null}. */
