@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, Subject, type Subscription } from 'rxjs';
 import {
   ConflictReportView,
   ImportConflictView,
@@ -100,6 +100,9 @@ export class ProjectSettingsImportComponent {
   protected readonly skipExistingImplicit = signal(false);
   private readonly skipExistingImplicit$ = new Subject<boolean>();
 
+  /** The analysis in flight — dropped when the archive or the project changes before it answers. */
+  private analysis: Subscription | null = null;
+
   protected readonly committing = signal(false);
   protected readonly commitError = signal<string | null>(null);
   protected readonly result = signal<ImportResultView | null>(null);
@@ -136,6 +139,18 @@ export class ProjectSettingsImportComponent {
         return;
       }
       untracked(() => this.analyze(file, skip));
+    });
+
+    // The router reuses this screen when only the project changes (`/p/a/settings/…` → `/p/b/settings/…`): an
+    // archive loaded and analyzed for the previous project must not stay armed for this one — its report was
+    // checked against the other project, and "Import" would commit into this one.
+    let shownFor: string | null = null;
+    effect(() => {
+      const key = this.projectKey();
+      if (shownFor !== null && shownFor !== key) {
+        untracked(() => this.cancel());
+      }
+      shownFor = key;
     });
   }
 
@@ -198,7 +213,8 @@ export class ProjectSettingsImportComponent {
   private analyze(file: File, skipExistingImplicit: boolean): void {
     this.analyzing.set(true);
     this.report.set(null);
-    this.api.analyzeImport(this.projectKey(), file, skipExistingImplicit).subscribe({
+    this.analysis?.unsubscribe();
+    this.analysis = this.api.analyzeImport(this.projectKey(), file, skipExistingImplicit).subscribe({
       next: (report) => {
         this.analyzing.set(false);
         this.report.set(report);
@@ -214,6 +230,9 @@ export class ProjectSettingsImportComponent {
   // ── Actions ─────────────────────────────────────────────────────────────
 
   cancel(): void {
+    this.analysis?.unsubscribe();
+    this.analysis = null;
+    this.analyzing.set(false);
     this.file.set(null);
     this.report.set(null);
     this.pickError.set(null);

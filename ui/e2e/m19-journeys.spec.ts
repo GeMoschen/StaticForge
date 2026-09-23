@@ -4,8 +4,9 @@ import { test, expect, request as playwrightRequest, APIRequestContext, Page } f
  * M19 Content store journeys (feature `docs-e2e`, `M19.5.2`):
  *   1. a developer defines dataset `team` in the Templates store: a `body` is rejected inline
  *      (SF-CDL-0108), the fixed schema saves and shows its record count;
- *   2. an editor creates records in the Content store, edits one in the record editor (autosave), and
- *      filters the grid with a `where` expression — an invalid one shows the server's diagnostic;
+ *   2. an editor creates records in a record set of the Content store (M25: a record always lives in a set),
+ *      edits one in the record editor (autosave), and filters the set's grid with a `where` expression — an
+ *      invalid one shows the server's diagnostic;
  *   3. a `reference` editor restricted to the dataset picks a record, and the page preview renders the
  *      dereferenced record value;
  *   4. time travel to before a record edit makes the record editor read-only with the old value, and the
@@ -82,8 +83,13 @@ class Api {
     return this.post('/datasets', { displayName, contentDefinition, titleEditor });
   }
 
-  record(datasetUuid: string, content: Json): Promise<Json> {
-    return this.post(`/datasets/${datasetUuid}/records`, { displayName: content['name'], content });
+  /** A record set of the dataset (M25): records can only be created inside one. */
+  recordSet(datasetUuid: string, displayName: string): Promise<Json> {
+    return this.post('/record-sets', { datasetUuid, displayName });
+  }
+
+  record(datasetUuid: string, recordSetUuid: string, content: Json): Promise<Json> {
+    return this.post(`/datasets/${datasetUuid}/records`, { recordSetUuid, displayName: content['name'], content });
   }
 
   async updateRecord(uuid: string, content: Json): Promise<Json> {
@@ -178,17 +184,22 @@ test('journey 2: an editor creates and edits records and filters the grid', asyn
   const api = await Api.forNewProject('m19b');
   try {
     const team = await api.dataset('Team', TEAM_CDL, 'name');
-    await api.record(team.uuid, { name: 'Ada', role: 'lead', level: 3 });
-    await api.record(team.uuid, { name: 'Bob', role: 'dev', level: 1 });
+    const members = await api.recordSet(team.uuid, 'Members');
+    await api.record(team.uuid, members.uuid, { name: 'Ada', role: 'lead', level: 3 });
+    await api.record(team.uuid, members.uuid, { name: 'Bob', role: 'dev', level: 1 });
 
     await login(page);
     await navigate(page, `/p/${api.projectKey}/content`);
+    // The store lists record sets; the Team chip narrows them to the dataset's.
     await page.locator('sf-content').getByRole('radio', { name: /Team/ }).click();
-    const grid = page.locator('sf-record-grid');
+    await page.locator('sf-content').getByRole('link', { name: /Members/ }).click();
+    const setView = page.locator('sf-record-set-view');
+    await expect(setView.getByRole('heading', { name: 'Members' })).toBeVisible();
+    const grid = setView.locator('sf-record-grid');
     await expect(grid.locator('tbody tr')).toHaveCount(2);
 
-    // A new record through the dialog opens in the record editor.
-    await page.locator('sf-content').getByRole('button', { name: 'New record' }).click();
+    // A new record through the set's dialog opens in the record editor.
+    await setView.getByRole('button', { name: 'New record' }).click();
     await page.locator('sf-create-asset-dialog input').first().fill('Cy');
     await page.locator('sf-create-asset-dialog').getByRole('button', { name: /create/i }).click();
     await expect(page.locator('sf-record-editor h2')).toHaveText('Cy');
@@ -202,8 +213,8 @@ test('journey 2: an editor creates and edits records and filters the grid', asyn
     await expect(page.locator('sf-record-editor h2')).toHaveText('Cy Young');
     await snap(page, 'j2-record-autosaved');
 
-    // Back to the grid: filter with a where expression.
-    await page.locator('sf-record-editor').getByRole('link', { name: 'All records' }).click();
+    // Back to the set's grid (breadcrumb): filter with a where expression.
+    await page.locator('sf-record-editor').getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Members' }).click();
     await expect(grid.locator('tbody tr')).toHaveCount(3);
     const filter = grid.getByPlaceholder(/Filter/);
     await filter.fill("role == 'lead' )");
@@ -229,7 +240,8 @@ test('journey 3: a reference editor picks a record and the preview renders its v
   const api = await Api.forNewProject('m19c');
   try {
     const team = await api.dataset('Team', TEAM_CDL, 'name');
-    await api.record(team.uuid, { name: 'Ada Lovelace', role: 'lead' });
+    const members = await api.recordSet(team.uuid, 'Members');
+    await api.record(team.uuid, members.uuid, { name: 'Ada Lovelace', role: 'lead' });
     await api.dataset('Products', 'content { editor text sku { label "SKU" } }');
     const tpl = await api.pageTemplate(
       'Profile',
@@ -260,7 +272,8 @@ test('journey 4: time travel before a record edit is read-only and shows the old
   const api = await Api.forNewProject('m19d');
   try {
     const team = await api.dataset('Team', TEAM_CDL, 'name');
-    const ada = await api.record(team.uuid, { name: 'Ada', role: 'dev' });
+    const members = await api.recordSet(team.uuid, 'Members');
+    const ada = await api.record(team.uuid, members.uuid, { name: 'Ada', role: 'dev' });
     const tpl = await api.pageTemplate(
       'Leads',
       '',

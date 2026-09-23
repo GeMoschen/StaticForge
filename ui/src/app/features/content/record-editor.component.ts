@@ -31,7 +31,7 @@ import { ConflictDrawerComponent } from '../pages/conflict-drawer.component';
 import { diffFields, mergePayload } from '../pages/conflict-util';
 import type { FieldResolveEvent, ResolveMode } from '../pages/types';
 import { TimeTravelStore } from '../revisions/time-travel.store';
-import { recordMoveTargets, relativeFolderPath, type MoveTarget } from './content-tree.util';
+import { recordMoveTargets, storeFolderPath, type MoveTarget } from './content-tree.util';
 import { ContentStoreRefresh } from './content-store-refresh.service';
 import { ContentService, type DatasetDetailView, type RecordDetailView } from './content.service';
 import { MoveTargetDialogComponent } from './move-target-dialog.component';
@@ -124,7 +124,7 @@ export class RecordEditorComponent implements OnDestroy {
   protected readonly moveTargets = signal<MoveTarget[]>([]);
 
   /** The record's Content folder, store-relative, for the breadcrumb (`/` at the store root). */
-  protected readonly folderPath = computed(() => relativeFolderPath(this.record()?.folderPath));
+  protected readonly folderPath = computed(() => storeFolderPath(this.record()?.folderPath));
 
   private formSubscription: Subscription | null = null;
 

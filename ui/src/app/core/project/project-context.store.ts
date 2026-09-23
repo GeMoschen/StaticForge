@@ -76,6 +76,18 @@ export class ProjectContextStore {
     return Math.max(...revs.map((r) => r.revisionId ?? 0));
   });
 
+  /**
+   * Replaces the Content store's tree with one the Content screen just loaded (M25). Its folder and record-set
+   * writes don't go through {@link loadFor}, so without this the shared tree — which the export picker and the
+   * search page read — kept the folders of the project's first load. Ignored for another project than the
+   * active one.
+   */
+  updateContentFolderTree(projectKey: string, tree: FolderView[]): void {
+    if (this.activeProjectKey() === projectKey) {
+      this.contentFolderTree.set(sortFolderTree(tree));
+    }
+  }
+
   loadFor(projectKey: string, force = false): Observable<void> {
     if (!force && this.activeProjectKey() === projectKey && this.project() !== null) {
       return of(undefined);

@@ -1,5 +1,6 @@
 package com.acme.staticforge.template.query;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -11,8 +12,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  *
  * <p>{@code where} is an OCTL expression over bare field names, {@code sort} the loop sort-key syntax
  * ({@code "name,-joined"}), {@code limit}/{@code offset} slice the result. It is persisted as the set
- * payload's {@code query} object, holding only the parts that are set.
+ * payload's {@code query} object, holding only the parts that are set, and serialized the same way in REST
+ * responses: an absent part is left out, never sent as {@code null}.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record RecordSetQuery(String where, String sort, Integer limit, Integer offset) {
 
     /** The query that selects every record in the default order. */

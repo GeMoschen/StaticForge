@@ -67,13 +67,27 @@ export function findFolder(nodes: FolderView[], uuid: string): FolderView | null
   return null;
 }
 
-/** `/content_root/team/leads/` → `/team/leads/`; the root itself and nothing selected → `/`. */
+/**
+ * A Content folder tree node's stored `path` → its store-relative path: `/content_root/team/leads/` →
+ * `/team/leads/`; the root itself and nothing selected → `/`. Only for folder tree paths: a record's or set's
+ * `folderPath` already arrives store-relative (see {@link storeFolderPath}).
+ */
 export function relativeFolderPath(storedPath: string | null | undefined): string {
   const root = '/content_root/';
   if (!storedPath || !storedPath.startsWith(root)) {
     return '/';
   }
   return '/' + storedPath.slice(root.length);
+}
+
+/**
+ * A record's or record set's `folderPath` as the REST API sends it: already relative to the Content store
+ * (`/team/leads/`, `/` for the store root — the server's `ContentStorePaths.relative`, the path templates and
+ * the `folder=` filters use). Only a missing value needs a default; running it through
+ * {@link relativeFolderPath} would turn every path into `/`.
+ */
+export function storeFolderPath(apiPath: string | null | undefined): string {
+  return apiPath && apiPath.startsWith('/') ? apiPath : '/';
 }
 
 /** One choice of a "Move to…" dialog. */
@@ -135,7 +149,7 @@ export function recordMoveTargets(
     .map((set) => ({
       uuid: set.uuid!,
       label: set.displayName ?? set.uid ?? '',
-      detail: relativeFolderPath(set.folderPath),
+      detail: storeFolderPath(set.folderPath),
       depth: 0,
       current: set.uuid === currentSetUuid,
     }));

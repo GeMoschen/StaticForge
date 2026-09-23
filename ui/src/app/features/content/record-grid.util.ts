@@ -31,9 +31,13 @@ export interface RecordColumn {
 /**
  * The grid columns of a dataset: every scalar editor, groups flattened (their editors share the
  * record's namespace). Lists, catalogs, rich text, media and references are never columns — the
- * listing endpoint does not return them.
+ * listing endpoint does not return them. The dataset's title field starts hidden: its value is the
+ * record's name, which the grid's first column already shows (two identical "Name" columns otherwise).
  */
-export function deriveColumns(definition: ContentDefinition | null | undefined): RecordColumn[] {
+export function deriveColumns(
+  definition: ContentDefinition | null | undefined,
+  titleEditor?: string | null,
+): RecordColumn[] {
   const columns: RecordColumn[] = [];
   const walk = (editors: EditorDefinition[] | undefined) => {
     for (const editor of editors ?? []) {
@@ -44,7 +48,7 @@ export function deriveColumns(definition: ContentDefinition | null | undefined):
           field: editor.name,
           label: editor.label?.trim() || editor.name,
           type: editor.type,
-          defaultVisible: editor.type !== 'TEXTAREA',
+          defaultVisible: editor.type !== 'TEXTAREA' && editor.name !== titleEditor,
         });
       }
     }

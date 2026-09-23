@@ -41,6 +41,13 @@ describe('deriveColumns', () => {
     ]);
   });
 
+  it("starts the title field hidden: the Name column already shows its value", () => {
+    const columns = deriveColumns(TEAM, 'name');
+
+    expect(columns.find((c) => c.field === 'name')).toEqual({ field: 'name', label: 'Name', type: 'TEXT', defaultVisible: false });
+    expect(columns.filter((c) => c.defaultVisible).map((c) => c.field)).toEqual(['joined', 'active']);
+  });
+
   it('tolerates a missing definition', () => {
     expect(deriveColumns(null)).toEqual([]);
   });

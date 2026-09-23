@@ -2,6 +2,8 @@ package com.acme.staticforge;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -145,7 +147,9 @@ class RecordSetApiTest {
         send(fx, fx.editorToken(), withIfMatch(put(sets(fx) + "/" + uuid), revision), rename)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Leads"))
-                .andExpect(jsonPath("$.query.sort").doesNotExist());
+                // An absent part is left out of the response, not sent as null (docs/api.md §6.3).
+                .andExpect(jsonPath("$.query", not(hasKey("sort"))))
+                .andExpect(jsonPath("$.query", not(hasKey("limit"))));
     }
 
     @Test
@@ -175,7 +179,7 @@ class RecordSetApiTest {
                 .andExpect(header().string(HttpHeaders.ETAG, "\"rev-" + set.revision() + "\""))
                 .andExpect(jsonPath("$.displayName").value("Leads"))
                 .andExpect(jsonPath("$.query.where").value("role == 'lead'"))
-                .andExpect(jsonPath("$.query.offset").doesNotExist());
+                .andExpect(jsonPath("$.query", not(hasKey("offset"))));
         send(fx, fx.viewerToken(), get(url).param("revision", String.valueOf(set.revision() - 1)), null)
                 .andExpect(status().isNotFound());
     }

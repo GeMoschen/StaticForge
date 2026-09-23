@@ -5,6 +5,7 @@ import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from 
 import { filter, forkJoin, map, type Observable } from 'rxjs';
 import { roleRank } from '../../core/auth/auth.guard';
 import { AuthStore } from '../../core/auth/auth.store';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
@@ -28,6 +29,7 @@ import {
   isRecordSet,
   RECORD_SET_ICON,
   relativeFolderPath,
+  storeFolderPath,
 } from './content-tree.util';
 import { ContentStoreRefresh } from './content-store-refresh.service';
 import {
@@ -97,11 +99,12 @@ export class ContentComponent {
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly refresh = inject(ContentStoreRefresh);
   private readonly setActions = inject(RecordSetActions);
+  private readonly projectContext = inject(ProjectContextStore);
 
   protected readonly all = ALL;
   protected readonly setIcon = RECORD_SET_ICON;
   protected readonly invalidQueryWarning = INVALID_QUERY_WARNING;
-  protected readonly relativePath = relativeFolderPath;
+  protected readonly setFolderPath = storeFolderPath;
   protected readonly loading = signal(false);
   protected readonly folders = signal<FolderView[]>([]);
   protected readonly datasets = signal<DatasetSummaryView[]>([]);
@@ -168,7 +171,7 @@ export class ContentComponent {
     const prefix = this.folderPath();
     return this.sets().filter(
       (set) =>
-        (chip === ALL || set.dataset?.uuid === chip) && relativeFolderPath(set.folderPath).startsWith(prefix),
+        (chip === ALL || set.dataset?.uuid === chip) && storeFolderPath(set.folderPath).startsWith(prefix),
     );
   });
 
@@ -488,6 +491,8 @@ export class ContentComponent {
     }).subscribe({
       next: ({ folders, datasets, sets }) => {
         this.folders.set(folders ?? []);
+        // Other screens (export picker, search) read the shared tree: keep it as current as this one.
+        this.projectContext.updateContentFolderTree(key, folders ?? []);
         this.datasets.set(datasets ?? []);
         this.sets.set(sets ?? []);
         this.loading.set(false);

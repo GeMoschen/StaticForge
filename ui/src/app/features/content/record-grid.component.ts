@@ -123,7 +123,7 @@ export class RecordGridComponent {
   private request: Subscription | null = null;
 
   protected readonly columns = computed<RecordColumn[]>(() =>
-    deriveColumns(this.dataset().compiledDefinition as unknown as ContentDefinition),
+    deriveColumns(this.dataset().compiledDefinition as unknown as ContentDefinition, this.dataset().titleEditor),
   );
   protected readonly visibleColumns = computed(() => this.columns().filter((c) => !this.hidden().has(c.field)));
   /** Something to hand to the set query: an applied filter or a header sort. */

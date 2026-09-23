@@ -71,10 +71,12 @@
                 [style.padding-left]="item.depth ? 'calc(var(--sf-2) + ' + item.depth * 14 + 'px)' : null"
                 (click)="pick(item)"
               >
-                <span class="dialog__item-name">{{ item.displayName ?? item.uid }}</span>
-                @if (item.dataset) {
-                  <span class="dialog__item-badge">{{ item.dataset }}</span>
-                }
+                <span class="dialog__item-head">
+                  <span class="dialog__item-name">{{ item.displayName ?? item.uid }}</span>
+                  @if (item.dataset) {
+                    <span class="dialog__item-badge">{{ item.dataset }}</span>
+                  }
+                </span>
                 <span class="dialog__item-meta">{{ item.meta ?? item.uid }}</span>
               </button>
             </li>

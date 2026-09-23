@@ -132,7 +132,7 @@
                       }
                     </td>
                     <td><span class="content__badge">{{ set.dataset?.displayName ?? set.dataset?.uid }}</span></td>
-                    <td class="content__muted">{{ relativePath(set.folderPath) }}</td>
+                    <td class="content__muted">{{ setFolderPath(set.folderPath) }}</td>
                     <td class="content__num">{{ set.recordCount ?? 0 }}</td>
                   </tr>
                 } @empty {

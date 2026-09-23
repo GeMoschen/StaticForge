@@ -23,7 +23,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { TimeTravelStore } from '../revisions/time-travel.store';
-import { INVALID_QUERY_WARNING, relativeFolderPath } from './content-tree.util';
+import { INVALID_QUERY_WARNING, storeFolderPath } from './content-tree.util';
 import { ContentStoreRefresh } from './content-store-refresh.service';
 import { ContentService, type DatasetDetailView, type RecordSetDetailView } from './content.service';
 import { RecordGridComponent, type GridFilter } from './record-grid.component';
@@ -105,7 +105,7 @@ export class RecordSetViewComponent {
 
   private readonly canEditRole = computed(() => roleRank(this.auth.roleFor(this.projectKey())) >= roleRank('EDITOR'));
   protected readonly readOnly = computed(() => this.timeTravelling() || !this.canEditRole());
-  protected readonly folderPath = computed(() => relativeFolderPath(this.set()?.folderPath));
+  protected readonly folderPath = computed(() => storeFolderPath(this.set()?.folderPath));
   protected readonly recordCountLabel = computed(() => {
     const count = this.set()?.recordCount ?? 0;
     return `${count} ${count === 1 ? 'record' : 'records'}`;

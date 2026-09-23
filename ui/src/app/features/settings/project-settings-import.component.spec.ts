@@ -112,6 +112,30 @@ describe('ProjectSettingsImportComponent', () => {
     expect(importBtn.disabled).toBe(false);
   });
 
+  it('drops a loaded archive when the (reused) screen switches to another project', async () => {
+    const api = makeApiStub({ analyzeImport: vi.fn().mockReturnValue(of(cleanReport)) });
+    const { fixture } = await render(ProjectSettingsImportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ImportExportService, useValue: api },
+      ],
+    });
+    selectFile(document.querySelector('input[type="file"]') as HTMLInputElement, zipFile());
+    await waitFor(() => expect(screen.getByText('No conflicts found')).toBeTruthy());
+
+    fixture.componentRef.setInput('projectKey', 'other');
+    fixture.detectChanges();
+
+    // The report was checked against `proj`: nothing may be committed into `other` with it.
+    await waitFor(() => expect(screen.getByText('Choose file…')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'Import' })).toBeNull();
+    selectFile(document.querySelector('input[type="file"]') as HTMLInputElement, zipFile());
+    await waitFor(() => expect(api.analyzeImport).toHaveBeenLastCalledWith('other', expect.any(File), false));
+    expect(api.commitImport).not.toHaveBeenCalled();
+  });
+
   it('clears the file/report on Cancel with no additional network calls', async () => {
     const api = makeApiStub({ analyzeImport: vi.fn().mockReturnValue(of(cleanReport)) });
     await render(ProjectSettingsImportComponent, {

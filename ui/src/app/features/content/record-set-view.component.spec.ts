@@ -15,7 +15,7 @@ const SET: RecordSetDetailView = {
   displayName: 'Leads',
   dataset: { uuid: 'ds-team', uid: 'team', displayName: 'Team' },
   folderUuid: 'folder-team',
-  folderPath: '/content_root/team/',
+  folderPath: '/team/',
   query: { where: "role == 'lead'" },
   queryValid: true,
   queryDiagnostics: [],

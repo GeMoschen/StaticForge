@@ -46,8 +46,12 @@ read-only.
 - [x] Vitest specs: tree node rendering (count, invalid badge), query panel validation state machine
       (debounce, diagnostics, match count, dirty/revert), grid mode toggle and dimming, create-dialog
       payloads, move-target filtering by dataset.
-- [ ] Manual check in the running app (see memory "Running StaticForge locally"): create set → add records
-      → edit query → grid reflects it; time travel is read-only.
+- [x] Manual check in the running app (see memory "Running StaticForge locally"): create set → add records
+      → edit query → grid reflects it; time travel is read-only. *(Done in `M25.6.2`'s journey,
+      `ui/e2e/m25-journeys.spec.ts`, against the dev stack: folder → set → three records through the set view →
+      query "2 of 3" → dimming and "Show as rendered"; time travel read-only with the set's records as of that
+      revision. Two defects found and fixed there: the breadcrumb/set list read the store-relative `folderPath` as a
+      stored path, and the title field showed as a second "Name" column — see `M25.6.2`'s notes.)*
 - [x] `npm run build` green, no new warnings beyond the known budget ones.
 
 ## Out of scope

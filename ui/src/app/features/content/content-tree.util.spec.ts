@@ -7,6 +7,7 @@ import {
   RECORD_SET_ICON,
   recordMoveTargets,
   relativeFolderPath,
+  storeFolderPath,
 } from './content-tree.util';
 import type { FolderView, RecordSetSummaryView } from './content.service';
 
@@ -90,9 +91,9 @@ describe('folderMoveTargets', () => {
 
 describe('recordMoveTargets', () => {
   const sets: RecordSetSummaryView[] = [
-    summary('a', { displayName: 'Leads', dataset: { uuid: 'team-ds' }, folderPath: '/content_root/' }),
-    summary('b', { displayName: 'Staff', dataset: { uuid: 'team-ds' }, folderPath: '/content_root/team/' }),
-    summary('c', { displayName: 'Products', dataset: { uuid: 'product-ds' }, folderPath: '/content_root/' }),
+    summary('a', { displayName: 'Leads', dataset: { uuid: 'team-ds' }, folderPath: '/' }),
+    summary('b', { displayName: 'Staff', dataset: { uuid: 'team-ds' }, folderPath: '/team/' }),
+    summary('c', { displayName: 'Products', dataset: { uuid: 'product-ds' }, folderPath: '/' }),
   ];
 
   it("offers only the sets of the record's own dataset", () => {
@@ -127,5 +128,19 @@ describe('relativeFolderPath', () => {
     expect(relativeFolderPath('/content_root/team/')).toBe('/team/');
     expect(relativeFolderPath('/content_root/')).toBe('/');
     expect(relativeFolderPath(undefined)).toBe('/');
+  });
+});
+
+describe('storeFolderPath', () => {
+  // The REST API sends a record's or set's `folderPath` store-relative already (`ContentStorePaths.relative`):
+  // treating it as a stored path turned every set's folder into `/` (M25.6.2 journey).
+  it('keeps the store-relative path the API sends', () => {
+    expect(storeFolderPath('/team/leads/')).toBe('/team/leads/');
+    expect(storeFolderPath('/')).toBe('/');
+  });
+
+  it('reads a missing path as the store root', () => {
+    expect(storeFolderPath(undefined)).toBe('/');
+    expect(storeFolderPath('')).toBe('/');
   });
 });

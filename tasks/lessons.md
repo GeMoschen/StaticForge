@@ -68,3 +68,14 @@
 - **Rule:** the moment a `@for` is nested inside another, alias the outer index (`let rowIndex = $index`) and use the
   alias throughout the outer block. Implicit contextual variables are the first suspect whenever an action lands on
   the wrong item of a list.
+
+## Spec fixtures must have the API's real shape (2026-09-23)
+- **Mistake (M25, found by the e2e journey):** the Content UI ran record/set `folderPath` values through a helper
+  that expects stored paths (`/content_root/…`), but the REST API sends them store-relative (`/staff/`). Every unit
+  spec passed because its fixtures were hand-written in the *stored* shape — so breadcrumbs, move targets and the
+  folder filter of the set list were broken in the running app only.
+- **Rule:** build UI spec fixtures from the API's real response shape (the generated `schema.d.ts` types, a captured
+  response, or the backend's own DTO test), never from what the component code expects. When a helper converts a
+  value, its spec needs one case per source shape it can actually receive.
+- **Rule:** an assertion like `jsonPath(...).doesNotExist()` passes on an explicit `null`; assert absence and
+  null-ness separately when the contract says "left out".

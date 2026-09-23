@@ -32,8 +32,10 @@ records only), `sf-asset-picker-dialog.component`, `features/forms/editors/refer
 
 - [x] Vitest specs: `asset-picker.util` type options for all `assetTypes`/`dataset` combinations; reference
       editor rendering of set values; route and search mappings.
-- [ ] Manual check: a page's reference editor restricted to dataset `team` lists only `team` sets; saving a
-      value renders the set in preview.
+- [x] Manual check: a page's reference editor restricted to dataset `team` lists only `team` sets; saving a
+      value renders the set in preview. *(Done in `M25.6.2`'s journey against the dev stack: a `products` set is
+      not offered, the pick autosaves and the preview renders the set; the picker row's dataset badge stretched
+      across the row and was fixed there — see `M25.6.2`'s notes.)*
 - [x] `npm run build` green.
 
 ## Out of scope

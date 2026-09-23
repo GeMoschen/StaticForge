@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ContextMenuService } from '../../shared/services/context-menu.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ContentComponent } from './content.component';
@@ -39,7 +40,7 @@ const SETS: RecordSetSummaryView[] = [
     displayName: 'Leads',
     dataset: { uuid: 'ds-team', displayName: 'Team' },
     folderUuid: 'team',
-    folderPath: '/content_root/team/',
+    folderPath: '/team/',
     recordCount: 3,
     queryValid: false,
   },
@@ -49,7 +50,7 @@ const SETS: RecordSetSummaryView[] = [
     displayName: 'Products',
     dataset: { uuid: 'ds-product', displayName: 'Product' },
     folderUuid: 'root',
-    folderPath: '/content_root/',
+    folderPath: '/',
     recordCount: 0,
     queryValid: true,
   },
@@ -74,7 +75,12 @@ function contentStub() {
   };
 }
 
-async function setup(content: ReturnType<typeof contentStub>, menu = new ContextMenuService(), role = 'EDITOR') {
+async function setup(
+  content: ReturnType<typeof contentStub>,
+  menu = new ContextMenuService(),
+  role = 'EDITOR',
+  projectContext = { updateContentFolderTree: vi.fn() },
+) {
   const view = await render(ContentComponent, {
     componentInputs: { projectKey: 'proj' },
     providers: [
@@ -84,6 +90,7 @@ async function setup(content: ReturnType<typeof contentStub>, menu = new Context
       { provide: AuthStore, useValue: { roleFor: () => role } },
       { provide: TimeTravelStore, useValue: new TimeTravelStore() },
       { provide: ContextMenuService, useValue: menu },
+      { provide: ProjectContextStore, useValue: projectContext },
     ],
   });
   const router = view.fixture.debugElement.injector.get(Router);
@@ -116,6 +123,25 @@ describe('ContentComponent (record sets)', () => {
 
     await waitFor(() => expect(screen.queryByRole('link', { name: /Products/ })).toBeNull());
     expect(screen.getByRole('link', { name: /Leads/ })).toBeTruthy();
+  });
+
+  it('lists only the sets in the selected folder, by the store-relative folder path the API sends', async () => {
+    await setup(contentStub());
+    await waitFor(() => expect(treeRow('Team')).toBeTruthy());
+
+    fireEvent.click(treeRow('Team'));
+
+    await waitFor(() => expect(screen.queryByRole('link', { name: /Products/ })).toBeNull());
+    expect(screen.getByRole('link', { name: /Leads/ })).toBeTruthy();
+    expect(screen.getByRole('cell', { name: '/team/' })).toBeTruthy();
+  });
+
+  it('hands every tree it loads to the shared project context, so the export picker sees new folders', async () => {
+    const content = contentStub();
+    const projectContext = { updateContentFolderTree: vi.fn() };
+    await setup(content, new ContextMenuService(), 'EDITOR', projectContext);
+
+    await waitFor(() => expect(projectContext.updateContentFolderTree).toHaveBeenCalledWith('proj', FOLDERS));
   });
 
   it('opens a set from the tree', async () => {

@@ -32,7 +32,7 @@ next one in its lane starts.
 
 ## Finish
 - [x] M25.6.1 — docs + spec
-- [ ] M25.6.2 — Playwright journey
+- [x] M25.6.2 — Playwright journey
 - [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green; merge to master
 
 ---
