@@ -8,6 +8,8 @@ import com.acme.staticforge.api.dto.UpdateRecordRequest;
 import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.asset.dataset.CreateRecordCommand;
 import com.acme.staticforge.asset.dataset.RecordDetail;
+import com.acme.staticforge.asset.dataset.RecordSetService;
+import com.acme.staticforge.asset.folder.RecordSetContainment;
 import com.acme.staticforge.asset.dataset.RecordPage;
 import com.acme.staticforge.asset.dataset.RecordService.RecordListQuery;
 import com.acme.staticforge.asset.dataset.RecordService;
@@ -55,11 +57,17 @@ public class RecordController {
 
     private final ProjectService projectService;
     private final RecordService recordService;
+    private final RecordSetService recordSetService;
     private final SecuritySupport securitySupport;
 
-    public RecordController(ProjectService projectService, RecordService recordService, SecuritySupport securitySupport) {
+    public RecordController(
+            ProjectService projectService,
+            RecordService recordService,
+            RecordSetService recordSetService,
+            SecuritySupport securitySupport) {
         this.projectService = projectService;
         this.recordService = recordService;
+        this.recordSetService = recordSetService;
         this.securitySupport = securitySupport;
     }
 
@@ -92,12 +100,24 @@ public class RecordController {
                 new RecordPageView.PageMeta(result.size(), result.page(), result.totalElements(), result.totalPages()));
     }
 
+    /**
+     * Adds a record to the record set {@code recordSetUuid} (M25), which must be a set of the dataset in
+     * the path; without a set, or with a set of another dataset, it is {@code 422 SF-DOM-0104}.
+     */
     @PostMapping("/datasets/{datasetUuid}/records")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<RecordDetailView> create(
             @PathVariable String projectKey, @PathVariable UUID datasetUuid, @RequestBody CreateRecordRequest body) {
+        long projectId = projectId(projectKey);
+        if (body.recordSetUuid() != null) {
+            recordSetService.find(projectId, body.recordSetUuid(), null)
+                    .filter(set -> !datasetUuid.equals(set.datasetUuid()))
+                    .ifPresent(set -> {
+                        throw RecordSetContainment.error("Record set '" + set.uid() + "' holds records of another dataset.");
+                    });
+        }
         RecordWriteResult result = recordService.create(
-                new CreateRecordCommand(projectId(projectKey), datasetUuid, body.folderUuid(), body.displayName(), body.content()),
+                new CreateRecordCommand(projectId, body.recordSetUuid(), body.displayName(), body.content()),
                 ctx(projectKey, comment(body.comment(), "create record")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.record().revision()))

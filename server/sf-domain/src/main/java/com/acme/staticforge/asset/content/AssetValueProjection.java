@@ -27,7 +27,7 @@ import java.util.List;
  *   <li>{@code RECORD} — the record's values ({@code payload.content}), exactly like a page (M19.3.2).
  *       Renderers read records through {@code RecordValues}, which adds the record meta fields
  *       ({@code _uid}, {@code _folderPath}, …) on top;
- *   <li>templates, datasets and folders — no values.
+ *   <li>templates, datasets, record sets (M25 renders a set, it has no values) and folders — no values.
  * </ul>
  *
  * <p>Every projection carries the reserved {@code _meta} object ({@code uid}, {@code displayName}).
@@ -64,7 +64,7 @@ public final class AssetValueProjection {
                 copy(data.path("image"), MEDIA_IMAGE_FIELDS, root);
             }
             case PAGE_REFERENCE -> copy(data, List.of("label"), root);
-            case SECTION_TEMPLATE, PAGE_TEMPLATE, FOLDER -> { /* identity only */ }
+            case SECTION_TEMPLATE, PAGE_TEMPLATE, FOLDER, DATASET, RECORD_SET -> { /* identity only */ }
         }
         root.putObject(META).put("uid", uid).put("displayName", displayName);
         return root;

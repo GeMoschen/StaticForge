@@ -1,3 +1,30 @@
+# M25 — Record sets (implementation, branch `m25-record-sets`)
+
+Spec: `tasks/25-m25-record-sets/`. One subagent per task; backend lane sequential (shared Gradle build and
+service classes), UI lane parallel once the API exists. Each task is reviewed, tested and committed before the
+next one in its lane starts.
+
+## Backend lane
+- [x] M25.1.1 — `RECORD_SET` asset type, containment, `RecordSetService`
+- [ ] M25.1.2 — stored set query: validation, evaluation, rename rewrite, broken-query flags
+- [ ] M25.2.1 — per-channel record templates on `DATASET`
+- [ ] M25.3.1 — `RecordSetController`, record create by set, DTOs, `schema.d.ts`
+- [ ] M25.2.2 — `recordset:` values, loops, reference editor, golden files
+- [ ] M25.2.3 — incremental planning + build insight
+- [ ] M25.4.1 — export/import
+
+## UI lane (after M25.3.1)
+- [ ] M25.5.1 — Content store record sets
+- [ ] M25.5.2 — dataset record template editor
+- [ ] M25.5.3 — reference picker, search, routing
+
+## Finish
+- [ ] M25.6.1 — docs + spec
+- [ ] M25.6.2 — Playwright journey
+- [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green; merge to master
+
+---
+
 # Project settings — merge tabs
 
 Collapse the nine project-settings tabs to five:

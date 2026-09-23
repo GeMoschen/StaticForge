@@ -86,12 +86,19 @@ final class SnapshotAssetValueResolver implements AssetValueResolver {
                 continue;
             }
             RecordView view = RecordValues.view(
-                    asset.uuid(), asset.uid(), asset.displayName(), asset.folderPath(), asset.changedAt(), asset.payload());
+                    asset.uuid(), asset.uid(), asset.displayName(), asset.folderPath(), recordSetUid(asset.folderId()),
+                    asset.changedAt(), asset.payload());
             byDataset.computeIfAbsent(dataset, d -> new ArrayList<>()).add(view);
             byUuid.put(asset.uuid(), view);
         }
         byDataset.replaceAll((dataset, records) -> List.copyOf(records));
         return new RecordIndex(Map.copyOf(byDataset), Map.copyOf(byUuid));
+    }
+
+    /** The uid of the record set with asset id {@code setId} in this snapshot, or {@code null}. */
+    private String recordSetUid(Long setId) {
+        SnapshotAsset set = setId == null ? null : snapshot.assetById(setId);
+        return set == null ? null : set.uid();
     }
 
     private record RecordIndex(Map<UUID, List<RecordView>> byDataset, Map<UUID, RecordView> byUuid) {}

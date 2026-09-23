@@ -515,14 +515,14 @@ public class RebuildExpansion {
             List<RecordView> versions = new ArrayList<>(2);
             if (!record.deleted()) {
                 versions.add(RecordValues.view(
-                        record.uuid(), record.uid(), record.displayName(), record.folderPath(), record.changedAt(),
-                        record.payload()));
+                        record.uuid(), record.uid(), record.displayName(), record.folderPath(),
+                        recordSetUid(record.folderId()), record.changedAt(), record.payload()));
             }
             AssetVersion before = changes.before(record.assetId());
             if (before != null && !before.isDeleted()) {
                 versions.add(RecordValues.view(
-                        record.uuid(), record.uid(), before.getDisplayName(), before.getFolderPath(), before.getChangedAt(),
-                        before.getPayload()));
+                        record.uuid(), record.uid(), before.getDisplayName(), before.getFolderPath(),
+                        recordSetUid(before.getFolderId()), before.getChangedAt(), before.getPayload()));
             }
             for (ReferenceRow row : referrers.getOrDefault(dataset.assetId(), List.of())) {
                 SnapshotAsset reader = snapshot.assetById(row.fromAssetId());
@@ -546,6 +546,12 @@ public class RebuildExpansion {
                     }
                 }
             }
+        }
+
+        /** The uid of the record set with asset id {@code setId} in the snapshot (M25), or {@code null}. */
+        private String recordSetUid(Long setId) {
+            SnapshotAsset set = setId == null ? null : snapshot.assetById(setId);
+            return set == null ? null : set.uid();
         }
 
         private void discoverPaginators(SnapshotAsset folder, long fromId) {

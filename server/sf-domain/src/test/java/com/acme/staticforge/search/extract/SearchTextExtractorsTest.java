@@ -32,7 +32,8 @@ class SearchTextExtractorsTest {
             new TemplateTextExtractor(),
             new PageReferenceTextExtractor(),
             new FolderTextExtractor(),
-            new ContentHolderTextExtractor()));
+            new ContentHolderTextExtractor(),
+            new RecordSetTextExtractor()));
 
     private static JsonNode json(String source) {
         try {
@@ -206,6 +207,19 @@ class SearchTextExtractorsTest {
     }
 
     @Test
+    void aRecordSetIsFoundByItsNameAndItsDatasetName() {
+        UUID team = UUID.randomUUID();
+        context.datasetNames.put(team, "Team members");
+        SearchDocument set = registry.extract(
+                new IndexableAsset(UUID.randomUUID(), AssetType.RECORD_SET, "leadership", "Leadership", "/content_root/",
+                        team, 5, json("{'datasetRef':'" + team + "','query':{'sort':'-joined'}}")),
+                context).orElseThrow();
+
+        assertThat(set.title()).isEqualTo("Leadership leadership");
+        assertThat(set.text()).isEqualTo("Team members");
+    }
+
+    @Test
     void textIsCappedAtAWordBoundary() {
         context.pages.put(pageTemplate, cdl("editor textarea body { label \"Body\" }"));
         context.maxChars = 20;
@@ -217,6 +231,7 @@ class SearchTextExtractorsTest {
         final Map<UUID, ContentDefinition> pages = new HashMap<>();
         final Map<UUID, ContentDefinition> sections = new HashMap<>();
         final Map<UUID, ContentDefinition> datasets = new HashMap<>();
+        final Map<UUID, String> datasetNames = new HashMap<>();
         final Map<String, String> blobs = new HashMap<>();
         int maxChars = 200_000;
 
@@ -233,6 +248,11 @@ class SearchTextExtractorsTest {
         @Override
         public Optional<ContentDefinition> datasetDefinition(UUID dataset) {
             return Optional.ofNullable(datasets.get(dataset));
+        }
+
+        @Override
+        public Optional<String> datasetName(UUID dataset) {
+            return Optional.ofNullable(datasetNames.get(dataset));
         }
 
         @Override

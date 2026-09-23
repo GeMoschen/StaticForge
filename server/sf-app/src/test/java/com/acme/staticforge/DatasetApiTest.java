@@ -14,6 +14,7 @@ import com.acme.staticforge.asset.dataset.CreateRecordCommand;
 import com.acme.staticforge.asset.dataset.DatasetService;
 import com.acme.staticforge.asset.dataset.DatasetView;
 import com.acme.staticforge.asset.dataset.RecordService;
+import com.acme.staticforge.asset.dataset.RecordSetService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRole;
@@ -72,6 +73,7 @@ class DatasetApiTest {
     @Autowired ProjectService projectService;
     @Autowired DatasetService datasetService;
     @Autowired RecordService recordService;
+    @Autowired RecordSetService recordSetService;
     @Autowired RevisionService revisionService;
     @Autowired TransactionTemplate transactionTemplate;
 
@@ -129,7 +131,8 @@ class DatasetApiTest {
         mvc.perform(delete(datasets(fx) + "/" + datasetUuid).header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SF-DOM-0121"))
-                .andExpect(jsonPath("$.recordCount").value(1));
+                .andExpect(jsonPath("$.recordCount").value(1))
+                .andExpect(jsonPath("$.setCount").value(1));
     }
 
     @Test
@@ -156,8 +159,9 @@ class DatasetApiTest {
         Fixture fx = newFixture();
         Fixture other = newFixture();
         DatasetView foreign = team(other);
+        UUID foreignSet = set(other, foreign.uuid());
         UUID foreignRecord = recordService.create(
-                        new CreateRecordCommand(other.project().getId(), foreign.uuid(), null, "Ada", objectMapper.readTree("{\"name\":\"Ada\"}")),
+                        new CreateRecordCommand(other.project().getId(), foreignSet, "Ada", objectMapper.readTree("{\"name\":\"Ada\"}")),
                         other.ctx())
                 .record()
                 .uuid();
@@ -169,7 +173,8 @@ class DatasetApiTest {
         mvc.perform(get(project(fx) + "/records/" + foreignRecord).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
                 .andExpect(status().isNotFound());
         putRecord(fx, fx.editorToken(), foreignRecord.toString(), 1, "{\"name\":\"Leak\"}").andExpect(status().isNotFound());
-        postRecord(fx, fx.editorToken(), foreign.uuid().toString(), "{\"name\":\"Leak\"}").andExpect(status().isNotFound());
+        postRecord(fx, fx.editorToken(), foreign.uuid().toString(), foreignSet, "{\"name\":\"Leak\"}")
+                .andExpect(status().isNotFound());
 
         // §8.4: without membership a project is not found, exactly like an unknown project key;
         // 403 is reserved for a member whose role is too low (covered above).
@@ -257,10 +262,20 @@ class DatasetApiTest {
                 .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"displayName\":\"Leads\",\"scope\":\"CONTENT\"}")));
+        // M25: a record goes into a record set, never straight into a folder.
         mvc.perform(post(datasets(fx) + "/" + team.uuid() + "/records")
                         .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"folderUuid\":\"" + leads.get("uuid").asText() + "\",\"displayName\":\"Ada\",\"content\":{\"name\":\"Ada\"}}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SF-DOM-0104"));
+        UUID leadSet = new RecordSetFixtures(recordSetService)
+                .create(fx.project().getId(), team.uuid(), UUID.fromString(leads.get("uuid").asText()), "Leads", fx.ctx())
+                .uuid();
+        mvc.perform(post(datasets(fx) + "/" + team.uuid() + "/records")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"recordSetUuid\":\"" + leadSet + "\",\"displayName\":\"Ada\",\"content\":{\"name\":\"Ada\"}}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.folderPath").value("/leads/"));
         record(fx, team, "{\"name\":\"Bob\"}");
@@ -285,6 +300,7 @@ class DatasetApiTest {
             transactionTemplate.executeWithoutResult(tx -> {
                 Revision batch = revisionService.beginBatch(fx.project().getId(), ChangeType.CREATE, "seed", fx.admin().getId());
                 RevisionContext batchCtx = RevisionContext.joining(batch, fx.admin().getId(), "seed");
+                UUID members = set(fx, team.uuid());
                 for (int i = offset; i < offset + 200; i++) {
                     ObjectNode content = objectMapper.createObjectNode()
                             .put("name", "Member " + i)
@@ -292,7 +308,7 @@ class DatasetApiTest {
                             .put("level", i % 7);
                     content.putArray("tags").addObject().put("tag", "t" + i);
                     recordService.create(
-                            new CreateRecordCommand(fx.project().getId(), team.uuid(), null, "Member " + i, content), batchCtx);
+                            new CreateRecordCommand(fx.project().getId(), members, "Member " + i, content), batchCtx);
                 }
             });
         }
@@ -315,11 +331,21 @@ class DatasetApiTest {
 
     // ------------------------------------------------------------------
 
+    /** Posts a record into the project's record set of the dataset (created on first use). */
     private ResultActions postRecord(Fixture fx, String token, String datasetUuid, String content) throws Exception {
+        return postRecord(fx, token, datasetUuid, set(fx, UUID.fromString(datasetUuid)), content);
+    }
+
+    private ResultActions postRecord(Fixture fx, String token, String datasetUuid, UUID recordSet, String content)
+            throws Exception {
         return mvc.perform(post(datasets(fx) + "/" + datasetUuid + "/records")
                 .header(HttpHeaders.AUTHORIZATION, bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"displayName\":\"Record\",\"content\":" + content + "}"));
+                .content("{\"recordSetUuid\":\"" + recordSet + "\",\"displayName\":\"Record\",\"content\":" + content + "}"));
+    }
+
+    private UUID set(Fixture fx, UUID dataset) {
+        return new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), dataset, null, fx.ctx());
     }
 
     private ResultActions putRecord(Fixture fx, String token, String uuid, long ifMatch, String content) throws Exception {
@@ -333,7 +359,8 @@ class DatasetApiTest {
     private void record(Fixture fx, DatasetView dataset, String content) throws Exception {
         JsonNode values = objectMapper.readTree(content);
         recordService.create(
-                new CreateRecordCommand(fx.project().getId(), dataset.uuid(), null, values.path("name").asText(), values), fx.ctx());
+                new CreateRecordCommand(fx.project().getId(), set(fx, dataset.uuid()), values.path("name").asText(), values),
+                fx.ctx());
     }
 
     private DatasetView team(Fixture fx) {

@@ -27,7 +27,10 @@ public final class AssetReferencePrefixes {
             return AssetType.GLOBAL_SET;
         }
         try {
-            return AssetType.valueOf(prefix.toUpperCase(Locale.ROOT));
+            AssetType type = AssetType.valueOf(prefix.toUpperCase(Locale.ROOT));
+            // A record set's prefix is `recordset` (M25, epic decision 1), registered with its rendering;
+            // the enum-derived `record_set` is deliberately not a second spelling.
+            return type == AssetType.RECORD_SET ? null : type;
         } catch (IllegalArgumentException | NullPointerException e) {
             return null;
         }

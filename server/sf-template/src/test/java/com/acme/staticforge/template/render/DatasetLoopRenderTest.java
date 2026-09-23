@@ -269,7 +269,7 @@ class DatasetLoopRenderTest {
     private static RecordView record(String uid, String content) {
         try {
             return new RecordView(
-                    UUID.nameUUIDFromBytes(uid.getBytes()), uid, uid, "/", Instant.EPOCH, MAPPER.readTree(content));
+                    UUID.nameUUIDFromBytes(uid.getBytes()), uid, uid, "/", "members", Instant.EPOCH, MAPPER.readTree(content));
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }

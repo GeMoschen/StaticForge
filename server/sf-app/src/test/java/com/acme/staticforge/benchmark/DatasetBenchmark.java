@@ -2,6 +2,7 @@ package com.acme.staticforge.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.acme.staticforge.RecordSetFixtures;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.dataset.CreateDatasetCommand;
 import com.acme.staticforge.asset.dataset.CreateRecordCommand;
@@ -36,6 +37,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -77,6 +79,7 @@ class DatasetBenchmark {
     @Autowired ProjectService projectService;
     @Autowired DatasetService datasetService;
     @Autowired RecordService recordService;
+    @Autowired com.acme.staticforge.asset.dataset.RecordSetService recordSetService;
     @Autowired TemplateService templateService;
     @Autowired PageService pageService;
     @Autowired GenerationTargetRepository targetRepository;
@@ -96,6 +99,7 @@ class DatasetBenchmark {
 
         DatasetView team = datasetService.create(
                 new CreateDatasetCommand(project.getId(), null, "Team", SCHEMA, "name", null), ctx);
+        UUID members = new RecordSetFixtures(recordSetService).setFor(project.getId(), team.uuid(), null, ctx);
         long start = System.nanoTime();
         com.acme.staticforge.asset.dataset.RecordDetail first = null;
         com.acme.staticforge.asset.dataset.RecordDetail developer = null;
@@ -105,7 +109,7 @@ class DatasetBenchmark {
                     .put("role", i % 5 == 0 ? "lead" : "dev")
                     .put("level", i % 7);
             var created = recordService.create(
-                    new CreateRecordCommand(project.getId(), team.uuid(), null, null, content), ctx).record();
+                    new CreateRecordCommand(project.getId(), members, null, content), ctx).record();
             if (first == null) {
                 first = created;
             } else if (developer == null) {

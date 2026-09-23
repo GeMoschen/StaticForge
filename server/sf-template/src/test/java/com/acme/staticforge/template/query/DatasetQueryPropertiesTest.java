@@ -65,7 +65,7 @@ class DatasetQueryPropertiesTest {
                     ObjectNode content = JsonNodeFactory.instance.objectNode();
                     put(content, "a", a);
                     put(content, "b", b);
-                    return new RecordView(UUID.randomUUID(), "r" + n, name, "/", Instant.EPOCH, content);
+                    return new RecordView(UUID.randomUUID(), "r" + n, name, "/", "set", Instant.EPOCH, content);
                 });
         // uids are unique per project in the real store
         return record.list().ofMaxSize(40).uniqueElements(RecordView::uid);

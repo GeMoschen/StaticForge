@@ -115,7 +115,7 @@ public class DatasetController {
         return ok(view);
     }
 
-    /** {@code 409 SF-DOM-0121} with {@code recordCount} while the dataset still has live records. */
+    /** {@code 409 SF-DOM-0121} with {@code recordCount}/{@code setCount} while the dataset has live records or sets. */
     @DeleteMapping("/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public ResponseEntity<Void> delete(@PathVariable String projectKey, @PathVariable UUID uuid) {

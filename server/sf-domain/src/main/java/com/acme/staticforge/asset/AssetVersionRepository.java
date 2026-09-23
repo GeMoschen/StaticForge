@@ -218,6 +218,96 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             """)
     long countCurrentRecordsOfDataset(@Param("projectId") long projectId, @Param("datasetAssetId") long datasetAssetId);
 
+    /**
+     * Current, non-deleted record sets of a dataset (M25), asset joined. Like a record, a set mirrors its
+     * {@code datasetRef} into {@code template_asset_id}; the {@code asset_type} filter keeps records out.
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD_SET
+              AND v.templateAssetId = :datasetAssetId
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findCurrentSetsOfDataset(
+            @Param("projectId") long projectId, @Param("datasetAssetId") long datasetAssetId);
+
+    /** Record sets of a dataset that are live (not deleted) at revision {@code R} (M25), asset joined. */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD_SET
+              AND v.templateAssetId = :datasetAssetId
+              AND v.validFromRevision <= :revision
+              AND (v.validToRevision IS NULL OR v.validToRevision > :revision)
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findSetsOfDatasetAt(
+            @Param("projectId") long projectId,
+            @Param("datasetAssetId") long datasetAssetId,
+            @Param("revision") long revision);
+
+    /** How many current, non-deleted record sets a dataset has (M25). */
+    @Query("""
+            SELECT COUNT(v) FROM AssetVersion v
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD_SET
+              AND v.templateAssetId = :datasetAssetId
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            """)
+    long countCurrentSetsOfDataset(@Param("projectId") long projectId, @Param("datasetAssetId") long datasetAssetId);
+
+    /** How many current, non-deleted direct children of {@code type} the container {@code folderId} holds. */
+    @Query("""
+            SELECT COUNT(v) FROM AssetVersion v
+            WHERE v.folderId = :folderId
+              AND v.asset.assetType = :type
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            """)
+    long countCurrentChildrenOfType(@Param("folderId") long folderId, @Param("type") AssetType type);
+
+    /** How many direct children of {@code type} the container {@code folderId} held, live, at revision {@code R}. */
+    @Query("""
+            SELECT COUNT(v) FROM AssetVersion v
+            WHERE v.folderId = :folderId
+              AND v.asset.assetType = :type
+              AND v.validFromRevision <= :revision
+              AND (v.validToRevision IS NULL OR v.validToRevision > :revision)
+              AND v.deleted = false
+            """)
+    long countChildrenOfTypeAt(
+            @Param("folderId") long folderId, @Param("type") AssetType type, @Param("revision") long revision);
+
+    /**
+     * The live record count of every record set of a project (M25) in one grouped query: sets without a
+     * live record are absent. Keeps the Content tree and the set listing free of per-set counts.
+     */
+    @Query("""
+            SELECT new com.acme.staticforge.asset.ChildCount(v.folderId, COUNT(v))
+            FROM AssetVersion v
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.validToRevision IS NULL
+              AND v.deleted = false
+            GROUP BY v.folderId
+            """)
+    List<ChildCount> countCurrentRecordsPerSet(@Param("projectId") long projectId);
+
+    /**
+     * Live versions of {@code folderId}'s direct children that were closed exactly at {@code revision}, asset
+     * joined: what a cascading delete in that revision took with it (M25 record set restore).
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset
+            WHERE v.folderId = :folderId
+              AND v.validToRevision = :revision
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findLiveChildVersionsClosedAt(@Param("folderId") long folderId, @Param("revision") long revision);
+
     /** Current, non-deleted pages whose page template is one of {@code templateAssetIds} (M20), by uid. */
     @Query("""
             SELECT v FROM AssetVersion v JOIN FETCH v.asset a

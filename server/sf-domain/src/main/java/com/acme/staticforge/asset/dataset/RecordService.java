@@ -8,22 +8,27 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Dataset records (M19.1.2): one asset per entry, {@code payload = {datasetRef, content}}, in the
- * Content store. The REST layer requires {@code EDITOR} for writes and {@code VIEWER} for reads.
+ * Dataset records (M19.1.2): one asset per entry, {@code payload = {datasetRef, content}}, always inside a
+ * record set of its dataset (M25). The REST layer requires {@code EDITOR} for writes and {@code VIEWER} for
+ * reads.
  *
  * <p>Content is validated against the dataset's schema with page semantics (§10.5): a structural
  * finding (wrong value shape) rejects the save with {@code 422} and {@code issues}; a completeness
  * finding (an empty required field) saves and is returned with the result.
  *
  * <p>Delete, restore, move, uid changes, usages and history are generic
- * ({@link com.acme.staticforge.asset.AssetService}); a record's dataset never changes after create
- * (moving an entry to another dataset is create + delete).
+ * ({@link com.acme.staticforge.asset.AssetService}), under the record set containment rules: a record
+ * moves only between sets of its dataset, and its dataset never changes after create (moving an entry to
+ * another dataset is create + delete).
  */
 public interface RecordService {
 
     /**
-     * Creates a record in {@code folderUuid} ({@code null}: the Content store root). The display name
-     * is the dataset's title editor value when that is set, else {@code displayName}.
+     * Adds a record to the record set {@code recordSetUuid}; the set's dataset is the record's. The display
+     * name is the dataset's title editor value when that is set, else {@code displayName}.
+     *
+     * @throws com.acme.staticforge.common.SfException {@code 422 SF-DOM-0104} without a set, or when the
+     *     uuid names a folder or a deleted set; {@code 404} for an unknown uuid or a deleted dataset
      */
     RecordWriteResult create(CreateRecordCommand cmd, RevisionContext ctx);
 

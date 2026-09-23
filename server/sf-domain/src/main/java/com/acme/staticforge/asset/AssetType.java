@@ -17,7 +17,15 @@ public enum AssetType {
     DATASET,
     /**
      * One entry of a dataset (M19): {@code payload = {datasetRef, content}}, in the foldered Content
-     * store. The dataset link is mirrored into {@code asset_version.template_asset_id}.
+     * store. The dataset link is mirrored into {@code asset_version.template_asset_id}. Since M25 its
+     * parent is always a {@link #RECORD_SET} of the same dataset, never a folder.
      */
-    RECORD
+    RECORD,
+    /**
+     * A record set (M25): {@code payload = {datasetRef, query{where, sort, limit, offset}}}, in a
+     * Content-store folder. It fixes the dataset of its records (its direct children, the only assets
+     * it may hold) and stores the query selecting and ordering them. The dataset link is mirrored into
+     * {@code asset_version.template_asset_id}, like a record's.
+     */
+    RECORD_SET
 }

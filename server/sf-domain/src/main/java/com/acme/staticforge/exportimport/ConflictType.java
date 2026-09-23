@@ -59,8 +59,8 @@ public enum ConflictType {
     MISSING_TEMPLATE_REFERENCE(ConflictSeverity.BLOCKING),
 
     /**
-     * A {@code RECORD} whose dataset ({@code ExportedAsset.templateUuid}) is neither in the archive
-     * nor in the target project (M19.1.3). A record cannot exist without its schema.
+     * A {@code RECORD} or {@code RECORD_SET} (M25) whose dataset ({@code ExportedAsset.templateUuid}) is
+     * neither in the archive nor in the target project (M19.1.3). Neither can exist without its schema.
      */
     RECORD_DATASET_MISSING(ConflictSeverity.BLOCKING),
 

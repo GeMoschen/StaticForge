@@ -24,7 +24,7 @@ import java.util.UUID;
  *       width, height, …}.
  *   <li>{@code page_reference} — {@code {label, …}}.
  *   <li>{@code record} — the record's item: its values plus {@code _uuid}, {@code _uid},
- *       {@code _displayName}, {@code _folderPath}, {@code _changedAt} (M19.3.2), the same object a
+ *       {@code _displayName}, {@code _folderPath}, {@code _recordSet} (M25), {@code _changedAt} (M19.3.2), the same object a
  *       dataset loop binds.
  *   <li>template and folder types — no values: an object holding only the reserved {@code _meta}
  *       sub-object below.

@@ -20,6 +20,8 @@ import com.acme.staticforge.asset.dataset.DatasetService;
 import com.acme.staticforge.asset.dataset.DatasetView;
 import com.acme.staticforge.asset.dataset.RecordDetail;
 import com.acme.staticforge.asset.dataset.RecordService;
+import com.acme.staticforge.asset.dataset.RecordSetService;
+import com.acme.staticforge.asset.dataset.RecordSetView;
 import com.acme.staticforge.asset.dataset.RecordWriteResult;
 import com.acme.staticforge.asset.dataset.UpdateDatasetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
@@ -85,6 +87,7 @@ class DatasetRecordIntegrationTest {
     @Autowired RevisionRepository revisionRepository;
     @Autowired DatasetService datasetService;
     @Autowired RecordService recordService;
+    @Autowired RecordSetService recordSetService;
     @Autowired FolderService folderService;
     @Autowired MediaService mediaService;
     @Autowired TemplateService templateService;
@@ -129,11 +132,17 @@ class DatasetRecordIntegrationTest {
                                 fx.project().getId(), AssetType.FOLDER, FolderScope.DATASETS_UID).orElseThrow().getUuid());
         assertThat(team.folderPath()).isEqualTo("/templates_root/datasets/");
 
-        RecordDetail ada = record(fx, team, null, "{\"name\":\"Ada\",\"role\":\"lead\"}").record();
+        // M25: a record lives in a record set; the set's creation provisions the Content store root.
+        RecordSetView members = sets().create(fx.project().getId(), team.uuid(), null, "Members", fx.ctx());
         assertThat(revisionCount(fx)).isEqualTo(before + 2);
-        assertThat(touchedAssetUuids(fx, ada.revision()))
-                .contains(ada.uuid(), assetRepository.findByProjectIdAndAssetTypeAndUid(
+        assertThat(touchedAssetUuids(fx, members.revision()))
+                .contains(members.uuid(), assetRepository.findByProjectIdAndAssetTypeAndUid(
                                 fx.project().getId(), AssetType.FOLDER, FolderScope.CONTENT_ROOT_UID).orElseThrow().getUuid());
+        assertThat(members.folderPath()).isEqualTo("/");
+
+        RecordDetail ada = record(fx, team, null, "{\"name\":\"Ada\",\"role\":\"lead\"}").record();
+        assertThat(revisionCount(fx)).isEqualTo(before + 3);
+        assertThat(ada.recordSetUuid()).isEqualTo(members.uuid());
         assertThat(ada.folderPath()).isEqualTo("/");
     }
 
@@ -145,8 +154,10 @@ class DatasetRecordIntegrationTest {
         AssetVersion sectionTemplates = currentFolder(fx, FolderScope.SECTION_TEMPLATES_UID);
 
         assertThatThrownBy(() -> recordService.create(
-                        new CreateRecordCommand(fx.project().getId(), team.uuid(), pageFolder.uuid(), "Ada", content("{\"name\":\"Ada\"}")),
+                        new CreateRecordCommand(fx.project().getId(), pageFolder.uuid(), "Ada", content("{\"name\":\"Ada\"}")),
                         fx.ctx()))
+                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(422));
+        assertThatThrownBy(() -> sets().create(fx.project().getId(), team.uuid(), pageFolder.uuid(), "Docs set", fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(422));
         assertThatThrownBy(() -> datasetService.create(
                         new CreateDatasetCommand(fx.project().getId(), sectionTemplates.getAsset().getUuid(), "Other", TEAM_CDL, null, null),
@@ -312,7 +323,7 @@ class DatasetRecordIntegrationTest {
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(issuePaths(ex)).containsExactly("content.role"));
 
         RecordWriteResult incomplete = recordService.create(
-                new CreateRecordCommand(fx.project().getId(), team.uuid(), null, "Nameless", content("{\"level\":2}")),
+                new CreateRecordCommand(fx.project().getId(), set(fx, team), "Nameless", content("{\"level\":2}")),
                 fx.ctx());
         assertThat(incomplete.issues()).extracting(ContentIssue::path, ContentIssue::code)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("content.name", "required"));
@@ -383,6 +394,12 @@ class DatasetRecordIntegrationTest {
 
         assetService.softDelete(ada.uuid(), false, fx.ctx());
         assetService.softDelete(bob.uuid(), false, fx.ctx());
+        // M25: the now empty record set still holds the dataset.
+        assertThatThrownBy(() -> datasetService.delete(team.uuid(), fx.ctx()))
+                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getProblem().getExtensions())
+                        .containsEntry("recordCount", 0L)
+                        .containsEntry("setCount", 1L));
+        recordSetService.delete(ada.recordSetUuid(), false, fx.ctx());
         datasetService.delete(team.uuid(), fx.ctx());
         assertThat(datasetService.list(fx.project().getId())).isEmpty();
     }
@@ -394,7 +411,7 @@ class DatasetRecordIntegrationTest {
                 new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
 
         RecordDetail jane = recordService.create(
-                        new CreateRecordCommand(fx.project().getId(), team.uuid(), null, null, content("{\"name\":\"Jane Doe\"}")),
+                        new CreateRecordCommand(fx.project().getId(), set(fx, team), null, content("{\"name\":\"Jane Doe\"}")),
                         fx.ctx())
                 .record();
         assertThat(jane.displayName()).isEqualTo("Jane Doe");
@@ -407,12 +424,12 @@ class DatasetRecordIntegrationTest {
         assertThat(renamed.uid()).isEqualTo("jane_doe");
 
         assertThatThrownBy(() -> recordService.create(
-                        new CreateRecordCommand(fx.project().getId(), team.uuid(), null, null, content("{}")), fx.ctx()))
+                        new CreateRecordCommand(fx.project().getId(), set(fx, team), null, content("{}")), fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(400));
     }
 
     @Test
-    void recordsMoveBetweenContentFoldersAndRestoreThroughTheGenericPaths() {
+    void recordsMoveBetweenSetsAndRestoreThroughTheGenericPaths() {
         Fixture fx = newFixture();
         DatasetView team = team(fx);
         AssetVersionView people = folderService.create(null, "People", FolderScope.CONTENT, fx.ctx());
@@ -420,9 +437,11 @@ class DatasetRecordIntegrationTest {
         RecordDetail ada = record(fx, team, people.uuid(), "{\"name\":\"Ada\"}").record();
         assertThat(ada.folderPath()).isEqualTo("/people/");
 
-        assetService.move(ada.uuid(), leads.uuid(), fx.ctx());
+        UUID leadSet = set(fx, team, leads.uuid());
+        assetService.move(ada.uuid(), leadSet, fx.ctx());
         assertThat(current(fx, ada).folderPath()).isEqualTo("/people/leads/");
         assertThat(current(fx, ada).folderUuid()).isEqualTo(leads.uuid());
+        assertThat(current(fx, ada).recordSetUuid()).isEqualTo(leadSet);
 
         long live = current(fx, ada).revision();
         assetService.softDelete(ada.uuid(), false, fx.ctx());
@@ -487,11 +506,24 @@ class DatasetRecordIntegrationTest {
                 new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, null, "People"), fx.ctx());
     }
 
+    /** Creates a record in the record set of {@code dataset} in {@code folder} ({@code null}: the store root). */
     private RecordWriteResult record(Fixture fx, DatasetView dataset, UUID folder, String json) {
         JsonNode values = content(json);
         String name = values.path("name").asText(values.path("sku").asText("Record"));
         return recordService.create(
-                new CreateRecordCommand(fx.project().getId(), dataset.uuid(), folder, name, values), fx.ctx());
+                new CreateRecordCommand(fx.project().getId(), set(fx, dataset, folder), name, values), fx.ctx());
+    }
+
+    private RecordSetFixtures sets() {
+        return new RecordSetFixtures(recordSetService);
+    }
+
+    private UUID set(Fixture fx, DatasetView dataset) {
+        return set(fx, dataset, null);
+    }
+
+    private UUID set(Fixture fx, DatasetView dataset, UUID folder) {
+        return sets().setFor(fx.project().getId(), dataset.uuid(), folder, fx.ctx());
     }
 
     private TemplateView sectionTemplate(Fixture fx, String html) {

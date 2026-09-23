@@ -2,6 +2,7 @@ package com.acme.staticforge.asset;
 
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
+import com.acme.staticforge.asset.folder.RecordSetContainment;
 import com.acme.staticforge.asset.media.BlobStore;
 import com.acme.staticforge.asset.media.TextMediaCompiler;
 import com.acme.staticforge.asset.media.TextMediaTypes;
@@ -82,9 +83,12 @@ public class AssetServiceImpl implements AssetService {
     public AssetVersionView create(CreateAssetCommand cmd, RevisionContext ctx) {
         String displayName = validatedDisplayName(cmd.displayName());
         UUID uuid = UUID.randomUUID();
-        String uid = uidGenerator.deriveUid(displayName, cmd.projectId(), cmd.type());
+        String uid = cmd.uid() == null
+                ? uidGenerator.deriveUid(displayName, cmd.projectId(), cmd.type())
+                : requireAvailableUid(cmd.projectId(), cmd.type(), cmd.uid(), null);
 
         validateFolderScope(cmd.projectId(), cmd.parentFolderUuid(), cmd.type());
+        requireContainment(cmd.projectId(), cmd.type(), cmd.initialPayload(), cmd.parentFolderUuid());
         FolderScope scopeHint = cmd.type() == AssetType.FOLDER
                 ? FolderScope.fromPayload(cmd.initialPayload())
                 : FolderScope.requiredFor(cmd.type());
@@ -271,19 +275,29 @@ public class AssetServiceImpl implements AssetService {
         Asset asset = require(ctx.projectId(), uuid);
 
         if (asset.getAssetType() == AssetType.DATASET) {
-            // No cascade in v1 (M19.1.2): records would be orphaned, so not even `force` deletes a
-            // dataset that still has live records.
+            // No cascade (M19.1.2, M25): records and record sets would be orphaned, so not even
+            // `force` deletes a dataset that still has live records or live sets.
             long records = assetVersionRepository.countCurrentRecordsOfDataset(asset.getProjectId(), asset.getId());
-            if (records > 0) {
+            long sets = assetVersionRepository.countCurrentSetsOfDataset(asset.getProjectId(), asset.getId());
+            if (records > 0 || sets > 0) {
                 throw new SfException(Problem.builder()
                         .type("https://cms.example.com/problems/sf-dom-0121")
                         .title("Conflict")
                         .status(409)
-                        .detail("Dataset still has " + records + " record" + (records == 1 ? "" : "s")
+                        .detail("Dataset still has " + count(records, "record") + " and " + count(sets, "record set")
                                 + ". Delete them first.")
                         .property("code", "SF-DOM-0121")
                         .property("recordCount", records)
+                        .property("setCount", sets)
                         .build());
+            }
+        }
+        if (asset.getAssetType() == AssetType.RECORD_SET) {
+            // Records never outlive their set (M25): the generic delete refuses a set with live records;
+            // RecordSetService.delete(uuid, cascade=true) takes the set and its records in one revision.
+            long records = assetVersionRepository.countCurrentChildrenOfType(asset.getId(), AssetType.RECORD);
+            if (records > 0) {
+                throw RecordSetContainment.notEmpty(records);
             }
         }
         if (!force && isReferencedByLiveAssets(asset)) {
@@ -342,8 +356,24 @@ public class AssetServiceImpl implements AssetService {
                 .findValidAtRevision(asset.getId(), fromRevision)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("No version valid at revision " + fromRevision + ".")));
 
+        // A restore puts the asset back into its old parent, so the containment rules hold there too (M25):
+        // a record whose set is deleted stays deleted until the set is restored, which brings it back.
+        String folderPath = source.getFolderPath();
+        if (source.getFolderId() != null) {
+            Asset parent = assetRepository.findById(source.getFolderId())
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Parent folder not found.")));
+            AssetVersion parentVersion = requireContainment(asset.getAssetType(), source.getPayload(), parent);
+            if (parent.getAssetType() == AssetType.RECORD_SET) {
+                // The set may have moved since: a record always sits at its set's folder path.
+                folderPath = pathService.contentPath(parentVersion.getFolderPath());
+            }
+        }
+
         Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.RESTORE, ctx.comment(), ctx.userId());
         AssetVersion current = requireOpen(asset.getId());
+        Long deletedAt = asset.getAssetType() == AssetType.RECORD_SET && current.isDeleted()
+                ? deletionRevision(asset.getId())
+                : null;
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
@@ -354,11 +384,88 @@ public class AssetServiceImpl implements AssetService {
                 ctx.userId(),
                 Instant.now(),
                 source.getFolderId(),
-                source.getFolderPath(),
+                folderPath,
                 source.getTemplateAssetId(),
                 false);
         appendSummary(asset, revision, "RESTORE", List.of("payload"));
+        if (asset.getAssetType() == AssetType.RECORD_SET) {
+            if (deletedAt != null) {
+                restoreCascadeDeletedRecords(asset, deletedAt, next.getFolderPath(), revision, ctx);
+            }
+            rebaseRecords(asset, next.getFolderPath(), revision, ctx);
+        }
         return toView(next);
+    }
+
+    /**
+     * The revision that soft-deleted an asset whose current version is a tombstone: where its last live
+     * version was closed, or {@code null} when it never was live.
+     */
+    private Long deletionRevision(Long assetId) {
+        return assetVersionRepository.findByAssetIdOrderByValidFromRevisionDesc(assetId).stream()
+                .filter(version -> !version.isDeleted())
+                .findFirst()
+                .map(AssetVersion::getValidToRevision)
+                .orElse(null);
+    }
+
+    /**
+     * Brings back the records a cascading set delete took with it (M25, folder cascade semantics): the
+     * set's records whose live version was closed by the very revision that deleted the set and that are
+     * still deleted. Records deleted on their own before stay deleted.
+     */
+    private void restoreCascadeDeletedRecords(
+            Asset set, long deletedAt, String setFolderPath, Revision revision, RevisionContext ctx) {
+        for (AssetVersion lastLive : assetVersionRepository.findLiveChildVersionsClosedAt(set.getId(), deletedAt)) {
+            Asset record = lastLive.getAsset();
+            if (record.getAssetType() != AssetType.RECORD) {
+                continue;
+            }
+            AssetVersion current = requireOpen(record.getId());
+            if (!current.isDeleted() || !set.getId().equals(current.getFolderId())) {
+                continue;
+            }
+            close(record.getId(), revision.getRevisionId());
+            insertVersion(
+                    record,
+                    revision.getRevisionId(),
+                    current.getDisplayName(),
+                    current.getPayload(),
+                    ctx.userId(),
+                    Instant.now(),
+                    set.getId(),
+                    pathService.contentPath(setFolderPath),
+                    current.getTemplateAssetId(),
+                    false);
+            appendSummary(record, revision, "RESTORE", List.of());
+        }
+    }
+
+    /**
+     * Keeps a set's live records at the set's folder path (M25) once the set itself moved (a move, or a
+     * restore into another folder), in the same revision — the way a folder move rebases its subtree.
+     */
+    private void rebaseRecords(Asset set, String setFolderPath, Revision revision, RevisionContext ctx) {
+        String recordPath = pathService.contentPath(setFolderPath);
+        for (AssetVersion current : assetVersionRepository.findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(set.getId())) {
+            if (recordPath.equals(current.getFolderPath())) {
+                continue;
+            }
+            Asset record = assetRepository.findById(current.getAssetId()).orElseThrow();
+            close(record.getId(), revision.getRevisionId());
+            insertVersion(
+                    record,
+                    revision.getRevisionId(),
+                    current.getDisplayName(),
+                    current.getPayload(),
+                    ctx.userId(),
+                    Instant.now(),
+                    set.getId(),
+                    recordPath,
+                    current.getTemplateAssetId(),
+                    false);
+            appendSummary(record, revision, "MOVE", List.of("folder"));
+        }
     }
 
     @Override
@@ -444,16 +551,7 @@ public class AssetServiceImpl implements AssetService {
     public UidChangeResult changeUid(UUID uuid, String newUid, RevisionContext ctx) {
         Asset asset = require(ctx.projectId(), uuid);
         String oldUid = asset.getUid();
-        String uid = validatedUid(newUid);
-
-        if (uidGenerator.isReserved(uid)) {
-            throw new SfException(ProblemFactory.other(422, "SF-DOM-0102", "Validation Failed", "UID is reserved."));
-        }
-        assetRepository.findByProjectIdAndAssetTypeAndUid(asset.getProjectId(), asset.getAssetType(), uid).ifPresent(existing -> {
-            if (!existing.getId().equals(asset.getId())) {
-                throw new SfException(ProblemFactory.other(422, "SF-DOM-0101", "Validation Failed", "UID already taken."));
-            }
-        });
+        String uid = requireAvailableUid(asset.getProjectId(), asset.getAssetType(), newUid, asset.getId());
 
         Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.UID_CHANGE, ctx.comment(), ctx.userId());
         assetUidHistoryRepository.save(new AssetUidHistory(asset.getId(), oldUid, uid, revision.getRevisionId()));
@@ -467,7 +565,7 @@ public class AssetServiceImpl implements AssetService {
     /**
      * Scans every current section/page template for the literal {@code assetType:oldUid}
      * reference form (§16.4) still present in the OCTL {@code source} after a UID change
-     * ({@code dataset:}/{@code record:} included, M19.3.2).
+     * ({@code dataset:}/{@code record:} included, M19.3.2; {@code recordset:}, M25).
      * Compiled templates already hold UUIDs; this is purely the source text the developer
      * should fix by hand.
      *
@@ -480,7 +578,7 @@ public class AssetServiceImpl implements AssetService {
      */
     private List<UidLiteralReference> findUidLiteralReferences(long projectId, String oldUid) {
         Pattern pattern = Pattern.compile(
-                "\\b(?:(?:page|media|section_template|page_template|folder|nav|global|dataset|record):|CMS_GLOBAL\\.)"
+                "\\b(?:(?:page|media|section_template|page_template|folder|nav|global|dataset|record|recordset):|CMS_GLOBAL\\.)"
                         + Pattern.quote(oldUid) + "\\b");
         List<UidLiteralReference> found = new java.util.ArrayList<>();
         for (AssetType type : List.of(AssetType.SECTION_TEMPLATE, AssetType.PAGE_TEMPLATE)) {
@@ -529,10 +627,11 @@ public class AssetServiceImpl implements AssetService {
         }
 
         validateFolderScope(asset.getProjectId(), newParentFolderUuid, asset.getAssetType());
+        AssetVersion current = requireOpen(asset.getId());
+        requireContainment(asset.getProjectId(), asset.getAssetType(), current.getPayload(), newParentFolderUuid);
         FolderRef parent = resolveParent(
                 newParentFolderUuid, asset.getProjectId(), ctx, FolderScope.requiredFor(asset.getAssetType()));
         Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.MOVE, ctx.comment(), ctx.userId());
-        AssetVersion current = requireOpen(asset.getId());
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(
@@ -547,6 +646,9 @@ public class AssetServiceImpl implements AssetService {
                 current.getTemplateAssetId(),
                 current.isDeleted());
         appendSummary(asset, revision, "MOVE", List.of("folder"));
+        if (asset.getAssetType() == AssetType.RECORD_SET) {
+            rebaseRecords(asset, next.getFolderPath(), revision, ctx);
+        }
         return toView(next);
     }
 
@@ -717,11 +819,55 @@ public class AssetServiceImpl implements AssetService {
         }
         Asset folder = assetRepository.findByProjectIdAndUuid(projectId, parentFolderUuid)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Parent folder not found.")));
-        if (folder.getAssetType() != AssetType.FOLDER) {
+        // A record set is the one non-folder parent (M25); requireContainment admits only records into it.
+        if (folder.getAssetType() != AssetType.FOLDER && folder.getAssetType() != AssetType.RECORD_SET) {
             throw new SfException(ProblemFactory.unprocessableEntity("Parent is not a folder."));
         }
         AssetVersion version = requireOpen(folder.getId());
         return new FolderRef(folder.getId(), version.getFolderPath());
+    }
+
+    /**
+     * Enforces the record set containment rules (M25, {@link RecordSetContainment}) for placing an asset
+     * of {@code type} with {@code payload} under {@code parentUuid} ({@code null}: its store's root folder).
+     */
+    private void requireContainment(long projectId, AssetType type, JsonNode payload, UUID parentUuid) {
+        if (parentUuid == null) {
+            RecordSetContainment.require(type, payload, AssetType.FOLDER, null, false);
+            return;
+        }
+        Asset parent = assetRepository.findByProjectIdAndUuid(projectId, parentUuid)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Parent folder not found.")));
+        requireContainment(type, payload, parent);
+    }
+
+    /** {@link #requireContainment(long, AssetType, JsonNode, UUID)} for a resolved parent; returns its current version. */
+    private AssetVersion requireContainment(AssetType type, JsonNode payload, Asset parent) {
+        AssetVersion version = requireOpen(parent.getId());
+        RecordSetContainment.require(type, payload, parent.getAssetType(), version.getPayload(), version.isDeleted());
+        return version;
+    }
+
+    private static String count(long n, String noun) {
+        return n + " " + noun + (n == 1 ? "" : "s");
+    }
+
+    /**
+     * A well-formed, unreserved uid no other asset of {@code type} holds ({@code self} may hold it
+     * already), else {@code 422}: malformed ({@code SF-API-0422}), reserved ({@code SF-DOM-0102}) or
+     * taken ({@code SF-DOM-0101}).
+     */
+    private String requireAvailableUid(long projectId, AssetType type, String candidate, Long self) {
+        String uid = validatedUid(candidate);
+        if (uidGenerator.isReserved(uid)) {
+            throw new SfException(ProblemFactory.other(422, "SF-DOM-0102", "Validation Failed", "UID is reserved."));
+        }
+        assetRepository.findByProjectIdAndAssetTypeAndUid(projectId, type, uid).ifPresent(existing -> {
+            if (!existing.getId().equals(self)) {
+                throw new SfException(ProblemFactory.other(422, "SF-DOM-0101", "Validation Failed", "UID already taken."));
+            }
+        });
+        return uid;
     }
 
     private Asset require(long projectId, UUID uuid) {

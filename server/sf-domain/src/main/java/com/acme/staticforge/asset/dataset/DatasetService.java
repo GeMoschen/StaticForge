@@ -41,8 +41,8 @@ public interface DatasetService {
             UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, boolean confirmDiscard, RevisionContext ctx);
 
     /**
-     * Soft-deletes a dataset. {@code 409 SF-DOM-0121} with {@code recordCount} while it still has live
-     * records (no cascade).
+     * Soft-deletes a dataset. {@code 409 SF-DOM-0121} with {@code recordCount} and {@code setCount} while it
+     * still has live records or live record sets (M25) — no cascade.
      */
     void delete(UUID uuid, RevisionContext ctx);
 

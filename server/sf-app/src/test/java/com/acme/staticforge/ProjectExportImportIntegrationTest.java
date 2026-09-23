@@ -126,6 +126,7 @@ class ProjectExportImportIntegrationTest {
     @Autowired DiffService diffService;
     @Autowired com.acme.staticforge.asset.dataset.DatasetService datasetService;
     @Autowired com.acme.staticforge.asset.dataset.RecordService recordService;
+    @Autowired com.acme.staticforge.asset.dataset.RecordSetService recordSetService;
     @Autowired com.acme.staticforge.asset.AssetReferenceRepository assetReferenceRepository;
 
     @Test
@@ -2073,6 +2074,7 @@ class ProjectExportImportIntegrationTest {
         assertThat(importedTeam.recordCount()).isEqualTo(3);
         var importedBob = recordService.find(targetId, bob.uuid(), null).orElseThrow();
         assertThat(importedBob.datasetUuid()).isEqualTo(team.uuid());
+        assertThat(importedBob.recordSetUuid()).as("records keep their record set (M25)").isEqualTo(bob.recordSetUuid());
         assertThat(importedBob.folderPath()).isEqualTo("/people/");
         assertThat(importedBob.content().path("mentor").path("uuid").asText()).isEqualTo(ada.uuid().toString());
         assertThat(recordService.find(targetId, ada.uuid(), null).orElseThrow().folderPath()).isEqualTo("/people/leads/");
@@ -2147,7 +2149,9 @@ class ProjectExportImportIntegrationTest {
         assertThat(report.conflicts())
                 .filteredOn(c -> c.type() == ConflictType.RECORD_DATASET_MISSING)
                 .extracting(ImportConflict::elementUuid, ImportConflict::severity)
-                .containsExactly(org.assertj.core.groups.Tuple.tuple(ada.uuid().toString(), ConflictSeverity.BLOCKING));
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(ada.uuid().toString(), ConflictSeverity.BLOCKING),
+                        org.assertj.core.groups.Tuple.tuple(ada.recordSetUuid().toString(), ConflictSeverity.BLOCKING));
         assertThat(report.conflicts()).noneMatch(c -> c.type() == ConflictType.MISSING_TEMPLATE_REFERENCE);
         assertThatThrownBy(() -> exportImportService.importProject(
                         target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT))
@@ -2186,12 +2190,14 @@ class ProjectExportImportIntegrationTest {
         assertThat(datasetDiff.changes()).extracting(FieldChange::path).contains("contentDefinition");
     }
 
+    /** A record in the record set of {@code dataset} in {@code folder} (M25: records always live in a set). */
     private com.acme.staticforge.asset.dataset.RecordDetail createRecord(
             Fixture fixture, com.acme.staticforge.asset.dataset.DatasetView dataset, UUID folder, String content) {
         JsonNode values = json(content);
+        UUID set = new RecordSetFixtures(recordSetService).setFor(fixture.project().getId(), dataset.uuid(), folder, fixture.ctx());
         return recordService.create(
                         new com.acme.staticforge.asset.dataset.CreateRecordCommand(
-                                fixture.project().getId(), dataset.uuid(), folder, values.path("name").asText(), values),
+                                fixture.project().getId(), set, values.path("name").asText(), values),
                         fixture.ctx())
                 .record();
     }

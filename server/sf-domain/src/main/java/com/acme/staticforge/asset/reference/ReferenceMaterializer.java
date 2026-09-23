@@ -52,6 +52,8 @@ import org.springframework.stereotype.Service;
  *   <li>{@code GLOBAL_SET}: its values' content references.</li>
  *   <li>{@code RECORD} (M19.1.2): {@code datasetRef} as {@link ReferenceKind#TEMPLATE} plus its values'
  *       content references.</li>
+ *   <li>{@code RECORD_SET} (M25): {@code datasetRef} as {@link ReferenceKind#TEMPLATE}. A record's place in
+ *       its set is its parent, not a reference.</li>
  *   <li>{@code FOLDER}, {@code DATASET}: none.</li>
  * </ul>
  *
@@ -125,6 +127,7 @@ public class ReferenceMaterializer {
             case PAGE_TEMPLATE, SECTION_TEMPLATE -> templateReferences(projectId, payload);
             case GLOBAL_SET -> contentReferences.extract(payload.get("content"), "content");
             case RECORD -> recordReferences(payload);
+            case RECORD_SET -> recordSetReferences(payload);
             case MEDIA -> mediaReferences(projectId, payload);
             case FOLDER, DATASET -> List.of();
         };
@@ -177,6 +180,13 @@ public class ReferenceMaterializer {
      * dataset's usages and the planner can walk from a record to the templates looping its dataset)
      * plus the references in its values, exactly like a page's content.
      */
+    /** A record set's {@code datasetRef} (M25); its stored query names fields, never assets. */
+    private static List<ExtractedReference> recordSetReferences(JsonNode payload) {
+        List<ExtractedReference> found = new ArrayList<>();
+        addTemplate(found, payload.get("datasetRef"), "datasetRef");
+        return found;
+    }
+
     private List<ExtractedReference> recordReferences(JsonNode payload) {
         List<ExtractedReference> found = new ArrayList<>();
         addTemplate(found, payload.get("datasetRef"), "datasetRef");

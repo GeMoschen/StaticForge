@@ -20,6 +20,9 @@ public interface ExtractionContext {
     /** The definition of a live dataset schema. */
     Optional<ContentDefinition> datasetDefinition(UUID dataset);
 
+    /** The display name of a live dataset (a record set's document carries it, M25). */
+    Optional<String> datasetName(UUID dataset);
+
     /** The definition compiled from {@code cdlSource}, owned by the asset version {@code (owner, revision)}. */
     ContentDefinition definition(UUID owner, long revision, String cdlSource);
 

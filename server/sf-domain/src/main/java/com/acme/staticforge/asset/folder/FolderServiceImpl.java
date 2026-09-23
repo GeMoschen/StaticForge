@@ -7,6 +7,7 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.ChildCount;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
@@ -78,6 +79,9 @@ public class FolderServiceImpl implements FolderService {
                     FolderScope.fromPayload(version.getPayload()), FolderScope.isProtected(version.getPayload())));
             children.put(asset.getId(), new java.util.ArrayList<>());
         }
+        java.util.Map<Long, List<FolderNode>> setsByFolder = scope == FolderScope.CONTENT
+                ? recordSetNodes(projectId)
+                : java.util.Map.of();
         List<Long> roots = new java.util.ArrayList<>();
         for (AssetVersion version : folders) {
             Long assetId = version.getAssetId();
@@ -93,18 +97,44 @@ public class FolderServiceImpl implements FolderService {
             }
         }
         return roots.stream()
-                .map(id -> toNode(id, info, children, depth))
+                .map(id -> toNode(id, info, children, setsByFolder, depth))
                 .filter(node -> node.scope() == scope)
                 .toList();
     }
 
+    /**
+     * The Content store's record sets as leaf nodes keyed by their folder's asset id (M25), each with its
+     * live record count from one grouped query — never a count per set.
+     */
+    private java.util.Map<Long, List<FolderNode>> recordSetNodes(long projectId) {
+        java.util.Map<Long, Long> counts = new java.util.HashMap<>();
+        for (ChildCount count : assetVersionRepository.countCurrentRecordsPerSet(projectId)) {
+            counts.put(count.folderId(), count.count());
+        }
+        java.util.Map<Long, List<FolderNode>> byFolder = new java.util.HashMap<>();
+        List<AssetVersion> sets = assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.RECORD_SET).stream()
+                .sorted(java.util.Comparator.comparing(AssetVersion::getDisplayName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+        for (AssetVersion set : sets) {
+            Asset asset = set.getAsset();
+            byFolder.computeIfAbsent(set.getFolderId(), id -> new java.util.ArrayList<>()).add(new FolderNode(
+                    asset.getUuid(), asset.getUid(), set.getDisplayName(), set.getFolderPath(), FolderScope.CONTENT,
+                    false, AssetType.RECORD_SET, counts.getOrDefault(asset.getId(), 0L), List.of()));
+        }
+        return byFolder;
+    }
+
     private static FolderNode toNode(Long id, java.util.Map<Long, FolderInfo> info,
-            java.util.Map<Long, List<Long>> children, int depth) {
+            java.util.Map<Long, List<Long>> children, java.util.Map<Long, List<FolderNode>> setsByFolder, int depth) {
         FolderInfo f = info.get(id);
-        List<FolderNode> childNodes = (depth == 0)
-                ? List.of()
-                : children.get(id).stream().map(cid -> toNode(cid, info, children, depth - 1)).toList();
-        return new FolderNode(f.uuid(), f.uid(), f.displayName(), f.path(), f.scope(), f.protectedFolder(), childNodes);
+        List<FolderNode> childNodes = new java.util.ArrayList<>();
+        if (depth != 0) {
+            children.get(id).forEach(cid -> childNodes.add(toNode(cid, info, children, setsByFolder, depth - 1)));
+            childNodes.addAll(setsByFolder.getOrDefault(id, List.of()));
+        }
+        return new FolderNode(
+                f.uuid(), f.uid(), f.displayName(), f.path(), f.scope(), f.protectedFolder(), AssetType.FOLDER, null,
+                List.copyOf(childNodes));
     }
 
     private record FolderInfo(UUID uuid, String uid, String displayName, String path, FolderScope scope, boolean protectedFolder) {}
@@ -129,7 +159,7 @@ public class FolderServiceImpl implements FolderService {
         FolderScope effectiveScope = scope;
         AssetType effectiveTemplateKind = templateKind;
         if (parentFolderUuid != null) {
-            Asset parentAsset = requireFolder(parentFolderUuid, ctx.projectId());
+            Asset parentAsset = requireFolderParent(parentFolderUuid, ctx.projectId());
             AssetVersion parentVersion = requireOpen(parentAsset.getId());
             parentPath = parentVersion.getFolderPath();
             FolderScope parentScope = FolderScope.fromPayload(parentVersion.getPayload());
@@ -232,7 +262,7 @@ public class FolderServiceImpl implements FolderService {
         }
 
         if (targetParentFolderUuid != null) {
-            Asset targetAsset = requireFolder(targetParentFolderUuid, ctx.projectId());
+            Asset targetAsset = requireFolderParent(targetParentFolderUuid, ctx.projectId());
             AssetVersion targetVersion = requireOpen(targetAsset.getId());
             FolderScope targetScope = FolderScope.fromPayload(targetVersion.getPayload());
             FolderScope ownScope = FolderScope.fromPayload(current.getPayload());
@@ -289,16 +319,31 @@ public class FolderServiceImpl implements FolderService {
     @Override
     @Transactional
     public void delete(UUID uuid, boolean cascade, RevisionContext ctx) {
-        Asset folder = requireFolder(uuid, ctx.projectId());
+        Asset folder = assetRepository.findByProjectIdAndUuid(ctx.projectId(), uuid)
+                .filter(asset -> asset.getAssetType() == AssetType.RECORD_SET)
+                .orElseGet(() -> requireFolder(uuid, ctx.projectId()));
         AssetVersion current = requireOpen(folder.getId());
         requireNotProtected(current, "deleted");
 
-        List<AssetVersion> subtree = assetVersionRepository.findCurrentByProject(ctx.projectId()).stream()
-                .filter(v -> pathService.isUnder(v.getFolderPath(), current.getFolderPath()))
-                .toList();
-
-        if (!cascade && subtree.size() > 1) {
-            throw new SfException(ProblemFactory.other(409, "SF-DOM-0110", "Conflict", "Folder is not empty."));
+        List<AssetVersion> subtree;
+        if (folder.getAssetType() == AssetType.RECORD_SET) {
+            // A record set follows folder delete semantics (M25): its subtree is itself and its live records.
+            // (Its records share its folder path, so the path prefix can't tell them from its siblings.)
+            List<AssetVersion> records = assetVersionRepository.findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(folder.getId());
+            if (!cascade && !records.isEmpty()) {
+                throw RecordSetContainment.notEmpty(records.size());
+            }
+            subtree = new java.util.ArrayList<>(records);
+            if (!current.isDeleted()) {
+                subtree.add(current);
+            }
+        } else {
+            subtree = assetVersionRepository.findCurrentByProject(ctx.projectId()).stream()
+                    .filter(v -> pathService.isUnder(v.getFolderPath(), current.getFolderPath()))
+                    .toList();
+            if (!cascade && subtree.size() > 1) {
+                throw new SfException(ProblemFactory.other(409, "SF-DOM-0110", "Conflict", "Folder is not empty."));
+            }
         }
 
         Revision revision = revisionService.allocate(ctx.projectId(), ChangeType.DELETE, ctx.comment(), ctx.userId());
@@ -329,6 +374,17 @@ public class FolderServiceImpl implements FolderService {
         if (FolderScope.isProtected(version.getPayload())) {
             throw new SfException(ProblemFactory.unprocessableEntity("This folder is protected and cannot be " + action + "."));
         }
+    }
+
+    /**
+     * The folder a new or moved folder goes into. A record set is not one: the containment rules
+     * (M25, {@link RecordSetContainment}) reject it with their own error.
+     */
+    private Asset requireFolderParent(UUID uuid, long projectId) {
+        assetRepository.findByProjectIdAndUuid(projectId, uuid)
+                .filter(asset -> asset.getAssetType() == AssetType.RECORD_SET)
+                .ifPresent(set -> RecordSetContainment.require(AssetType.FOLDER, null, AssetType.RECORD_SET, null, false));
+        return requireFolder(uuid, projectId);
     }
 
     private Asset requireFolder(UUID uuid, long projectId) {

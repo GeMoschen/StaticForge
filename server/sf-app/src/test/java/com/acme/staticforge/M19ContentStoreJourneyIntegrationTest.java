@@ -14,6 +14,7 @@ import com.acme.staticforge.asset.dataset.DatasetService;
 import com.acme.staticforge.asset.dataset.DatasetView;
 import com.acme.staticforge.asset.dataset.RecordDetail;
 import com.acme.staticforge.asset.dataset.RecordService;
+import com.acme.staticforge.asset.dataset.RecordSetService;
 import com.acme.staticforge.asset.dataset.UpdateDatasetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
@@ -114,6 +115,7 @@ class M19ContentStoreJourneyIntegrationTest {
     @Autowired FolderService folderService;
     @Autowired DatasetService datasetService;
     @Autowired RecordService recordService;
+    @Autowired RecordSetService recordSetService;
     @Autowired TemplateService templateService;
     @Autowired PageService pageService;
     @Autowired GenerationTargetRepository targetRepository;
@@ -246,9 +248,10 @@ class M19ContentStoreJourneyIntegrationTest {
     // Helpers
     // ------------------------------------------------------------------
 
+    /** A record in the record set of {@code dataset} in {@code folder} (M25: records always live in a set). */
     private RecordDetail record(Fixture fx, DatasetView dataset, UUID folder, String content) throws IOException {
-        return recordService.create(
-                        new CreateRecordCommand(fx.project().getId(), dataset.uuid(), folder, null, mapper.readTree(content)), fx.ctx())
+        UUID set = new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), dataset.uuid(), folder, fx.ctx());
+        return recordService.create(new CreateRecordCommand(fx.project().getId(), set, null, mapper.readTree(content)), fx.ctx())
                 .record();
     }
 

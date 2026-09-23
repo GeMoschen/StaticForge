@@ -8,6 +8,17 @@ import java.util.UUID;
  * {@code NAVIGATION}, or {@code TEMPLATES} — each store's folder tree is entirely separate.
  * {@code protectedFolder} is {@code true} only for a folder that can never be renamed, moved,
  * or deleted (currently: the two fixed {@code TEMPLATES} roots).
+ *
+ * <p>{@code type} is {@code FOLDER}, or {@code RECORD_SET} for a record set in the {@code CONTENT} tree
+ * (M25): a leaf whose {@code recordCount} is its live record count ({@code null} for folders).
  */
 public record FolderView(
-        UUID uuid, String uid, String displayName, String path, String scope, boolean protectedFolder, List<FolderView> children) {}
+        UUID uuid,
+        String uid,
+        String displayName,
+        String path,
+        String scope,
+        boolean protectedFolder,
+        String type,
+        Long recordCount,
+        List<FolderView> children) {}

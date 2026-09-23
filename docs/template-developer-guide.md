@@ -350,7 +350,8 @@ order). An unknown dataset uid is `SF-TPL-0110`. Loops count toward the 100,000 
 - **Sorting** is stable; missing values sort last in both directions; strings sort case-insensitively
   with a fixed, locale-independent order, so output is identical on every server.
 - **Loop scope.** Each item has the record's fields plus `_uuid`, `_uid`, `_displayName`,
-  `_folderPath` (relative to the Content store: `/staff/leads/`), `_changedAt` (ISO instant) and the
+  `_folderPath` (the Content folder of the record's set, relative to the Content store: `/staff/leads/`),
+  `_recordSet` (the uid of the record set holding it), `_changedAt` (ISO instant) and the
   usual `_index`, `_first`, `_last`, `_count`. A record's list fields loop like any list:
   `$CMS_FOR(tag : member.tags)$`.
 - **Deleted records** never appear. Preview in time travel loops the records as they were then.
@@ -373,14 +374,14 @@ follows references through records. Only segments the reference value itself lac
   "team": {
     "uuid": "d0000000-0000-0000-0000-000000000001",
     "records": [
-      { "uuid": "e0000000-0000-0000-0000-00000000000a", "uid": "ada", "displayName": "Ada", "folderPath": "/team/leads/",
+      { "uuid": "e0000000-0000-0000-0000-00000000000a", "uid": "ada", "displayName": "Ada", "folderPath": "/team/leads/", "recordSet": "leads",
         "content": { "name": "Ada", "role": "lead", "level": 3, "joined": "2021-03-01", "tags": ["vip", "founder"] } },
-      { "uuid": "e0000000-0000-0000-0000-00000000000b", "uid": "bob", "displayName": "bob", "folderPath": "/team/",
+      { "uuid": "e0000000-0000-0000-0000-00000000000b", "uid": "bob", "displayName": "bob", "folderPath": "/team/", "recordSet": "members",
         "content": { "name": "bob <b>", "role": "dev", "level": 1.5, "joined": "2023-07-15", "tags": [] } },
-      { "uuid": "e0000000-0000-0000-0000-00000000000c", "uid": "cy", "displayName": "Cy", "folderPath": "/team/",
+      { "uuid": "e0000000-0000-0000-0000-00000000000c", "uid": "cy", "displayName": "Cy", "folderPath": "/team/", "recordSet": "members",
         "content": { "name": "Cy", "role": "dev", "level": 2, "joined": "2022-11-30",
                      "mentor": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-00000000000a", "assetType": "RECORD" } } },
-      { "uuid": "e0000000-0000-0000-0000-00000000000d", "uid": "dee", "displayName": "Dee", "folderPath": "/alumni/",
+      { "uuid": "e0000000-0000-0000-0000-00000000000d", "uid": "dee", "displayName": "Dee", "folderPath": "/alumni/", "recordSet": "alumni",
         "content": { "name": "Dee", "role": "lead", "joined": "2019-05-05" } }
     ]
   }
@@ -394,7 +395,8 @@ The HTML channel:
 $CMS_SET(minLevel = 2)$<ul>
 $CMS_FOR(member : dataset:team, where="member.role == 'lead' || member.level >= minLevel", sort="-joined,name", limit=3)$<li data-i="$CMS_VALUE(member._index)$">$CMS_VALUE(member.name)$ ($CMS_VALUE(member.role)$, $CMS_VALUE(member.joined)$)</li>
 $CMS_END_FOR$</ul>
-<p>$CMS_FOR(m : dataset:team, folder="alumni")$$CMS_VALUE(m._displayName)$ in $CMS_VALUE(m._folderPath)$$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : dataset:team, folder="alumni")$$CMS_VALUE(m._displayName)$ in $CMS_VALUE(m._folderPath)$ ($CMS_VALUE(m._recordSet)$)$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : dataset:team, where="m._recordSet == 'members'")$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
 <p>$CMS_FOR(m : dataset:team, sort="_uid", offset=1, limit=2)$[$CMS_VALUE(m.name)$]$CMS_END_FOR$</p>
 <p>$CMS_FOR(m : dataset:team, where="m.nope == 1")$never$CMS_END_FOR$</p>
 ```
@@ -408,7 +410,8 @@ renders:
 <li data-i="1">Ada (lead, 2021-03-01)</li>
 <li data-i="2">Dee (lead, 2019-05-05)</li>
 </ul>
-<p>Dee in /alumni/</p>
+<p>Dee in /alumni/ (alumni)</p>
+<p>[bob][cy]</p>
 <p>[bob &lt;b&gt;][Cy]</p>
 <p></p>
 ```

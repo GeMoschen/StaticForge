@@ -207,6 +207,7 @@ class GoldenFileRenderTest {
                         record.path("uid").asText(),
                         record.path("displayName").asText(),
                         record.path("folderPath").asText("/"),
+                        record.path("recordSet").asText(null),
                         java.time.Instant.parse(record.path("changedAt").asText("2026-01-01T00:00:00Z")),
                         record.path("content"));
                 records.add(view);

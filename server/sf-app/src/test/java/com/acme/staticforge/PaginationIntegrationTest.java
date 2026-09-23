@@ -17,6 +17,7 @@ import com.acme.staticforge.asset.dataset.CreateRecordCommand;
 import com.acme.staticforge.asset.dataset.DatasetService;
 import com.acme.staticforge.asset.dataset.DatasetView;
 import com.acme.staticforge.asset.dataset.RecordService;
+import com.acme.staticforge.asset.dataset.RecordSetService;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.navigation.CreatePageReferenceCommand;
@@ -113,6 +114,7 @@ class PaginationIntegrationTest {
     @Autowired TemplateService templateService;
     @Autowired DatasetService datasetService;
     @Autowired RecordService recordService;
+    @Autowired RecordSetService recordSetService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
     @Autowired SnapshotService snapshotService;
@@ -279,8 +281,9 @@ class PaginationIntegrationTest {
         DatasetView team = datasetService.create(new CreateDatasetCommand(
                 fx.project().getId(), null, "Team " + SEQ.incrementAndGet(),
                 "content { editor text name { label \"Name\" } }", "name", null), fx.ctx());
+        UUID members = new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), team.uuid(), null, fx.ctx());
         for (String name : List.of("Cy", "Ada", "Bo")) {
-            recordService.create(new CreateRecordCommand(fx.project().getId(), team.uuid(), null, null,
+            recordService.create(new CreateRecordCommand(fx.project().getId(), members, null,
                     mapper.createObjectNode().put("name", name)), fx.ctx());
         }
         TemplateView template = pageTemplate(fx, "Team page", BLOG_CDL,
@@ -321,7 +324,7 @@ class PaginationIntegrationTest {
                 .andExpect(status().isUnprocessableEntity());
 
         long baseline = head(fx);
-        recordService.create(new CreateRecordCommand(fx.project().getId(), team.uuid(), null, null,
+        recordService.create(new CreateRecordCommand(fx.project().getId(), members, null,
                 mapper.createObjectNode().put("name", "Dee")), fx.ctx());
         assertThat(plannedEntries(fx, baseline, page.uuid())).extracting(PlanEntry::pageNumber).containsExactlyInAnyOrder(1, 2);
     }

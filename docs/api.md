@@ -140,10 +140,10 @@ A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder
 | `GET` | `/projects/{projectKey}/datasets/{uuid}` | `VIEWER` | adds `contentDefinition`, `compiledDefinition`, `deleted`; `?revision=` for time travel |
 | `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, titleEditor?, description?, comment?}` → `201`; the parent defaults to `datasets` |
 | `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentDefinition, titleEditor?, description?, comment?}`; `renamedFrom` rewrites the key in every record, in the same revision |
-| `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount` while it has live records, even with `?force=true` |
+| `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount`/`setCount` while it has live records or record sets, even with `?force=true` |
 | `POST` | `/projects/{projectKey}/datasets/{uuid}/restore` | `DEVELOPER` | |
 | `GET` | `/projects/{projectKey}/datasets/{uuid}/records` | `VIEWER` | paged listing, see below |
-| `POST` | `/projects/{projectKey}/datasets/{uuid}/records` | `EDITOR` | `{folderUuid?, displayName?, content, comment?}` → `201`; `folderUuid` defaults to the Content store root; when the dataset has a `titleEditor`, that editor's value names the record and `displayName` is only the fallback while it is empty |
+| `POST` | `/projects/{projectKey}/datasets/{uuid}/records` | `EDITOR` | `{recordSetUuid, displayName?, content, comment?}` → `201`; the record goes into that record set, which must be a live set of this dataset (M25; otherwise `422 SF-DOM-0104`); when the dataset has a `titleEditor`, that editor's value names the record and `displayName` is only the fallback while it is empty |
 | `GET` | `/projects/{projectKey}/records/{uuid}` | `VIEWER` | `{uuid, uid, displayName, datasetUuid, datasetUid, folderUuid, folderPath, content, revision, changedBy, changedAt, deleted, issues}`; `?revision=` |
 | `PUT` | `/projects/{projectKey}/records/{uuid}` | `EDITOR` | `{content, displayName?, comment?}`; the dataset can't change |
 
@@ -366,9 +366,10 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0101` | 422 | UID already taken (probe exhaustion) — `UidGenerator` |
 | `SF-DOM-0102` | 422 | reserved UID — `UidGenerator` |
 | `SF-DOM-0103` | 422 | folder depth limit exceeded — `PathService.MAX_DEPTH` — *implemented addition* |
-| `SF-DOM-0110` | 409 | folder not empty — `FolderService` |
+| `SF-DOM-0104` | 422 | record set containment violated (M25): a record outside a live record set of its dataset, a record set outside a Content folder, or anything but a record in a set — on create, move, restore — `RecordSetContainment` |
+| `SF-DOM-0110` | 409 | folder not empty — `FolderService`; a record set with live records (delete without `cascade`) carries `recordCount` (M25) |
 | `SF-DOM-0120` | 409 | asset still referenced by an open edge from a non-deleted asset (delete without `force`) — `AssetServiceImpl` |
-| `SF-DOM-0121` | 409 | dataset still has live records (delete, with or without `force`); the problem carries `recordCount` — `AssetServiceImpl` |
+| `SF-DOM-0121` | 409 | dataset still has live records or live record sets (delete, with or without `force`); the problem carries `recordCount` and `setCount` (M25) — `AssetServiceImpl` |
 | `SF-DOM-0122` | 422 | a page template that pages use can't become abstract; carries `pageCount`, `pageUids`, `pageUuids` — `TemplateServiceImpl` |
 | `SF-DOM-0123` | 422 | a page can't be created on, or switched to, an abstract page template — `PageServiceImpl` |
 | `SF-DOM-0124` | 422 | a page template save would break templates that extend it; carries `descendants[]` (`uuid`, `uid`, `channel`, `diagnostics`) — `TemplateServiceImpl` |

@@ -10,14 +10,13 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentIssue;
+import com.acme.staticforge.asset.folder.RecordSetContainment;
 import com.acme.staticforge.asset.page.PageContentValidation;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
-import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorDefinition;
@@ -58,7 +57,6 @@ public class RecordServiceImpl implements RecordService {
     private final PageContentValidation pageContentValidation;
     private final RecordDatasets recordDatasets;
     private final ObjectMapper objectMapper;
-    private final RevisionService revisionService;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
     public RecordServiceImpl(
@@ -67,9 +65,7 @@ public class RecordServiceImpl implements RecordService {
             AssetVersionRepository assetVersionRepository,
             PageContentValidation pageContentValidation,
             RecordDatasets recordDatasets,
-            ObjectMapper objectMapper,
-            RevisionService revisionService) {
-        this.revisionService = revisionService;
+            ObjectMapper objectMapper) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
@@ -81,7 +77,8 @@ public class RecordServiceImpl implements RecordService {
     @Override
     @Transactional
     public RecordWriteResult create(CreateRecordCommand cmd, RevisionContext ctx) {
-        Dataset dataset = requireLiveDataset(cmd.projectId(), cmd.datasetUuid());
+        AssetVersion set = requireRecordSet(cmd.projectId(), cmd.recordSetUuid());
+        Dataset dataset = requireLiveDataset(cmd.projectId(), RecordValues.datasetRef(set.getPayload()));
         JsonNode content = contentOrEmpty(cmd.content());
         List<ContentIssue> issues = validate(cmd.projectId(), dataset, content);
 
@@ -94,18 +91,10 @@ public class RecordServiceImpl implements RecordService {
             throw new SfException(ProblemFactory.badRequest(
                     "displayName must not be blank (the dataset has no title editor value to use)."));
         }
-        // A project created before M19 has no Content store root yet: provisioning it (inside
-        // AssetService.create) joins this creation's revision instead of adding one of its own.
-        RevisionContext writeCtx = ctx.openRevision() != null
-                ? ctx
-                : RevisionContext.joining(
-                        revisionService.beginBatch(ctx.projectId(), ChangeType.CREATE, ctx.comment(), ctx.userId()),
-                        ctx.userId(),
-                        ctx.comment());
         AssetVersionView created = assetService.create(
                 new CreateAssetCommand(
-                        cmd.projectId(), AssetType.RECORD, displayName, cmd.folderUuid(), payload, dataset.uuid()),
-                writeCtx);
+                        cmd.projectId(), AssetType.RECORD, displayName, cmd.recordSetUuid(), payload, dataset.uuid()),
+                ctx);
         return new RecordWriteResult(toDetail(cmd.projectId(), created), issues);
     }
 
@@ -151,11 +140,14 @@ public class RecordServiceImpl implements RecordService {
         // what is left (v1 sizes, see M19.2.1 — pushing where into SQL would break H2 portability).
         List<RecordView> candidates = new ArrayList<>();
         Map<UUID, Long> changedBy = new HashMap<>();
-        for (AssetVersion version : assetVersionRepository.searchCurrentRecordsOfDataset(
-                projectId, dataset.assetId(), likeContains(query.q()), folderPattern(query.folder()))) {
+        List<AssetVersion> versions = assetVersionRepository.searchCurrentRecordsOfDataset(
+                projectId, dataset.assetId(), likeContains(query.q()), folderPattern(query.folder()));
+        Map<Long, String> setUids = RecordValues.recordSetUids(assetRepository, versions);
+        for (AssetVersion version : versions) {
             candidates.add(RecordValues.view(
                     version.getAsset().getUuid(), version.getAsset().getUid(), version.getDisplayName(),
-                    version.getFolderPath(), version.getChangedAt(), version.getPayload()));
+                    version.getFolderPath(), setUids.get(version.getFolderId()), version.getChangedAt(),
+                    version.getPayload()));
             changedBy.put(version.getAsset().getUuid(), version.getChangedBy());
         }
         List<RecordView> selected = DatasetQueryEvaluator.apply(candidates, datasetQuery, null);
@@ -310,6 +302,26 @@ public class RecordServiceImpl implements RecordService {
                 version.isDeleted());
     }
 
+    /**
+     * The current version of the live record set a new record goes into. Without one — no uuid, a folder,
+     * another type, a deleted set — the containment rules reject the record ({@code 422 SF-DOM-0104}); a
+     * uuid unknown to the project is {@code 404}.
+     */
+    private AssetVersion requireRecordSet(long projectId, UUID recordSetUuid) {
+        if (recordSetUuid == null) {
+            RecordSetContainment.require(AssetType.RECORD, null, AssetType.FOLDER, null, false);
+        }
+        Asset parent = assetRepository.findByProjectIdAndUuid(projectId, recordSetUuid)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")));
+        AssetVersion version = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(parent.getId())
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")));
+        if (parent.getAssetType() != AssetType.RECORD_SET || version.isDeleted()) {
+            RecordSetContainment.require(
+                    AssetType.RECORD, null, parent.getAssetType(), version.getPayload(), version.isDeleted());
+        }
+        return version;
+    }
+
     /** A live record of this project; another type, project or a deleted record is {@code 404}. */
     private AssetVersion requireOpenRecord(long projectId, UUID uuid) {
         Asset asset = assetRepository.findByProjectIdAndUuid(projectId, uuid)
@@ -325,9 +337,13 @@ public class RecordServiceImpl implements RecordService {
         String datasetUid = datasetUuid == null
                 ? null
                 : assetRepository.findByProjectIdAndUuid(projectId, datasetUuid).map(Asset::getUid).orElse(null);
-        UUID folderUuid = view.folderId() == null
-                ? null
-                : assetRepository.findById(view.folderId()).map(Asset::getUuid).orElse(null);
+        // A record's parent is its set (M25); the set's own parent is the Content folder it lives in.
+        Optional<Asset> set = view.folderId() == null ? Optional.empty() : assetRepository.findById(view.folderId());
+        UUID folderUuid = set.flatMap(s -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(s.getId()))
+                .map(AssetVersion::getFolderId)
+                .flatMap(assetRepository::findById)
+                .map(Asset::getUuid)
+                .orElse(null);
         JsonNode content = view.payload() == null ? null : view.payload().get("content");
         return new RecordDetail(
                 view.uuid(),
@@ -335,6 +351,8 @@ public class RecordServiceImpl implements RecordService {
                 view.displayName(),
                 datasetUuid,
                 datasetUid,
+                set.map(Asset::getUuid).orElse(null),
+                set.map(Asset::getUid).orElse(null),
                 folderUuid,
                 ContentStorePaths.relative(view.folderPath()),
                 content == null ? objectMapper.createObjectNode() : content,

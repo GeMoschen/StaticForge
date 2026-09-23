@@ -121,8 +121,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             AssetType.PAGE_TEMPLATE,
             AssetType.MEDIA,
             AssetType.GLOBAL_SET,
-            // A record's validation and its template_asset_id need its dataset (M19.1.3).
+            // A record's validation and its template_asset_id need its dataset (M19.1.3); a record's
+            // folder path is its record set's (M25), so sets come after datasets and before records.
             AssetType.DATASET,
+            AssetType.RECORD_SET,
             AssetType.RECORD,
             AssetType.PAGE,
             AssetType.PAGE_REFERENCE);
@@ -328,12 +330,13 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
         }
 
-        // A record is meaningless without its schema (M19.1.3): its dataset joins the archive as an
-        // implicit pick, exactly like an ancestor folder, so an import can reuse an existing copy.
+        // A record (or record set, M25) is meaningless without its schema (M19.1.3): its dataset joins the
+        // archive as an implicit pick, exactly like an ancestor folder, so an import can reuse an existing copy.
         Set<Long> ancestors = new HashSet<>();
         for (Long id : List.copyOf(included)) {
             AssetVersion version = versionByAssetId.get(id);
-            Long datasetId = version.getAsset().getAssetType() == AssetType.RECORD ? version.getTemplateAssetId() : null;
+            AssetType type = version.getAsset().getAssetType();
+            Long datasetId = type == AssetType.RECORD || type == AssetType.RECORD_SET ? version.getTemplateAssetId() : null;
             if (datasetId != null && !included.contains(datasetId) && versionByAssetId.containsKey(datasetId)) {
                 ancestors.add(datasetId);
             }
@@ -681,7 +684,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 boolean satisfied = archiveUuids.contains(templateUuid.toLowerCase(Locale.ROOT))
                         || assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(templateUuid))
                                 .isPresent();
-                if (!satisfied && AssetType.RECORD.name().equals(asset.type())) {
+                if (!satisfied && (AssetType.RECORD.name().equals(asset.type())
+                        || AssetType.RECORD_SET.name().equals(asset.type()))) {
                     conflicts.add(ImportConflict.of(
                             ConflictType.RECORD_DATASET_MISSING,
                             asset.uuid(),

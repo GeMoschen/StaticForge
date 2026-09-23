@@ -74,10 +74,12 @@ final class LiveAssetValueResolver implements AssetValueResolver {
                 ? assetVersionRepository.findCurrentRecordsOfDataset(projectId, datasetId)
                 : assetVersionRepository.findRecordsOfDatasetAt(projectId, datasetId, revision);
         List<RecordView> records = new ArrayList<>(versions.size());
+        Map<Long, String> setUids = RecordValues.recordSetUids(assetRepository, versions);
         for (AssetVersion version : versions) {
             records.add(RecordValues.view(
                     version.getAsset().getUuid(), version.getAsset().getUid(), version.getDisplayName(),
-                    version.getFolderPath(), version.getChangedAt(), version.getPayload()));
+                    version.getFolderPath(), setUids.get(version.getFolderId()), version.getChangedAt(),
+                    version.getPayload()));
         }
         return records;
     }
@@ -104,12 +106,15 @@ final class LiveAssetValueResolver implements AssetValueResolver {
     }
 
     /** A record reads as its loop item, so {@code record:x.name} and a loop's {@code member.name} agree. */
-    private static JsonNode recordItem(AssetVersionView version) {
+    private JsonNode recordItem(AssetVersionView version) {
         if (version.deleted()) {
             return MissingNode.getInstance();
         }
+        String setUid = version.folderId() == null
+                ? null
+                : assetRepository.findById(version.folderId()).map(Asset::getUid).orElse(null);
         return RecordValues.view(
-                        version.uuid(), version.uid(), version.displayName(), version.folderPath(),
+                        version.uuid(), version.uid(), version.displayName(), version.folderPath(), setUid,
                         version.changedAt(), version.payload())
                 .item();
     }
