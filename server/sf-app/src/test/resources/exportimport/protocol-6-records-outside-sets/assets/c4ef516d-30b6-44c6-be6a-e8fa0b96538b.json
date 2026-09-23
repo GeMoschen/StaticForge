@@ -1,0 +1,17 @@
+{
+  "uuid": "c4ef516d-30b6-44c6-be6a-e8fa0b96538b",
+  "type": "FOLDER",
+  "uid": "datasets",
+  "displayName": "Datasets",
+  "parentFolderUuid": "bf373fab-6665-421b-8db8-87375fff3406",
+  "folderPath": "/templates_root/datasets/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "TEMPLATES",
+    "templateKind": "DATASET",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

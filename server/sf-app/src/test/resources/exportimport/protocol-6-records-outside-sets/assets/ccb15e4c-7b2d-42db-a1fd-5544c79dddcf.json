@@ -1,0 +1,13 @@
+{
+  "uuid": "ccb15e4c-7b2d-42db-a1fd-5544c79dddcf",
+  "type": "FOLDER",
+  "uid": "root",
+  "displayName": "Root",
+  "parentFolderUuid": null,
+  "folderPath": "/",
+  "templateUuid": null,
+  "payload": {},
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

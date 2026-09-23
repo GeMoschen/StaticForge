@@ -11,7 +11,7 @@ next one in its lane starts.
 - [x] M25.3.1 — `RecordSetController`, record create by set, DTOs, `schema.d.ts`
 - [x] M25.2.2 — `recordset:` values, loops, reference editor, golden files
 - [x] M25.2.3 — incremental planning + build insight
-- [ ] M25.4.1 — export/import
+- [x] M25.4.1 — export/import
 
 ## UI lane (after M25.3.1)
 - [x] M25.5.1 — Content store record sets
@@ -26,6 +26,9 @@ next one in its lane starts.
       `RECORD_SET_QUERY`, `RECORD_TEMPLATE`
 - [ ] Record template live check: `POST /octl/validate` gains a dataset context (`datasetUuid` + draft CDL) so
       unknown fields show while typing, not only on save (backend, then `dataset-schema-editor`)
+
+- [ ] Import UI: gate Proceed on `blocksImport` (not any BLOCKING), `RECORD_OUTSIDE_RECORD_SET` reads "will not be
+      imported", icon for `RECORD_SET_QUERY_INVALID`; regenerate `schema.d.ts` (`blocksImport` fields)
 
 ## Finish
 - [ ] M25.6.1 — docs + spec

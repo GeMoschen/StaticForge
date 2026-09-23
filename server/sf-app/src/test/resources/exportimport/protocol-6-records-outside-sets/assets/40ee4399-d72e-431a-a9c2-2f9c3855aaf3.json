@@ -1,0 +1,19 @@
+{
+  "uuid": "40ee4399-d72e-431a-a9c2-2f9c3855aaf3",
+  "type": "RECORD",
+  "uid": "cy",
+  "displayName": "Cy",
+  "parentFolderUuid": "feb70555-c64e-4edb-befb-9235b4b1be50",
+  "folderPath": "/content_root/",
+  "templateUuid": "d5ebd057-7f51-4a70-87ac-4ed885780831",
+  "payload": {
+    "datasetRef": "d5ebd057-7f51-4a70-87ac-4ed885780831",
+    "content": {
+      "name": "Cy",
+      "role": "dev"
+    }
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

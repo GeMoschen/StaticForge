@@ -1,0 +1,16 @@
+{
+  "uuid": "afa79d62-21ec-41b9-84d0-7927ee5c0ddd",
+  "type": "FOLDER",
+  "uid": "pages_root",
+  "displayName": "All Pages",
+  "parentFolderUuid": "ccb15e4c-7b2d-42db-a1fd-5544c79dddcf",
+  "folderPath": "/pages_root/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "PAGES",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

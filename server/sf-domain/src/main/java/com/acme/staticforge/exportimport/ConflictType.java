@@ -3,8 +3,14 @@ package com.acme.staticforge.exportimport;
 /**
  * Every distinct kind of import conflict this service can detect. Each constant maps to
  * exactly one fixed {@link ConflictSeverity} — no per-instance override — so client logic
- * ("disable Proceed if any BLOCKING") stays simple and the safety decision is centralized
- * here rather than scattered across call sites.
+ * stays simple and the safety decision is centralized here rather than scattered across call
+ * sites.
+ *
+ * <p>A {@link ConflictSeverity#BLOCKING} conflict blocks the whole import ({@link #blocksImport()}),
+ * except for the few types that only <em>reject their own asset</em> ({@link #rejectsAssetOnly()},
+ * M25): that asset is never imported, and the rest of the archive imports as usual. The only such type
+ * is {@link #RECORD_OUTSIDE_RECORD_SET} — epic M25 decision 8 rejects those records without refusing the
+ * pages, templates, datasets and media of the same (pre-M25) archive.
  */
 public enum ConflictType {
 
@@ -59,10 +65,47 @@ public enum ConflictType {
     MISSING_TEMPLATE_REFERENCE(ConflictSeverity.BLOCKING),
 
     /**
-     * A {@code RECORD} or {@code RECORD_SET} (M25) whose dataset ({@code ExportedAsset.templateUuid}) is
-     * neither in the archive nor in the target project (M19.1.3). Neither can exist without its schema.
+     * A {@code RECORD} whose dataset ({@code ExportedAsset.templateUuid}) is neither in the archive nor in
+     * the target project (M19.1.3). A record can't exist without its schema.
      */
     RECORD_DATASET_MISSING(ConflictSeverity.BLOCKING),
+
+    /**
+     * A {@code RECORD_SET} (M25) whose dataset ({@code payload.datasetRef}, mirrored in {@code
+     * ExportedAsset.templateUuid}) is neither in the archive nor in the target project. A set defines the
+     * type of its records; it can't exist without its schema.
+     */
+    RECORD_SET_DATASET_MISSING(ConflictSeverity.BLOCKING),
+
+    /**
+     * A {@code RECORD} whose record set (its {@code parentFolderUuid}) is neither in the archive nor a live
+     * set of the target project (M25). Only reachable with a hand-edited archive: the exporter always
+     * includes a record's set.
+     */
+    RECORD_SET_MISSING(ConflictSeverity.BLOCKING),
+
+    /**
+     * A {@code RECORD} whose {@code datasetRef} differs from its record set's, or a {@code RECORD_SET} that
+     * would overwrite an existing target set of another dataset (M25). A record only lives in a set of its
+     * own dataset, and a set's dataset never changes.
+     */
+    RECORD_SET_DATASET_MISMATCH(ConflictSeverity.BLOCKING),
+
+    /**
+     * A {@code RECORD} whose archive parent is the Content store root or a Content folder instead of a
+     * record set — every record of a pre-M25 archive (protocol 6 and older). Epic M25 decision 8: such a
+     * record is never migrated or grouped into a set. It is rejected — not imported — while the rest of the
+     * archive imports ({@link #rejectsAssetOnly()}).
+     */
+    RECORD_OUTSIDE_RECORD_SET(ConflictSeverity.BLOCKING, true),
+
+    /**
+     * A {@code RECORD_SET} whose stored query does not validate against the schema of the dataset it will
+     * belong to in the target — the archive's dataset, or the target's existing one when that is reused
+     * (M25). The set is imported with its query untouched; it reads {@code queryValid: false} and selects
+     * nothing until an editor fixes the query.
+     */
+    RECORD_SET_QUERY_INVALID(ConflictSeverity.WARNING),
 
     /**
      * A {@code PAGE_TEMPLATE} whose {@code parentTemplateRef} is neither in the archive nor in the target project
@@ -94,12 +137,28 @@ public enum ConflictType {
     TARGET_PATH_COLLISION(ConflictSeverity.WARNING);
 
     private final ConflictSeverity severity;
+    private final boolean rejectsAssetOnly;
 
     ConflictType(ConflictSeverity severity) {
+        this(severity, false);
+    }
+
+    ConflictType(ConflictSeverity severity, boolean rejectsAssetOnly) {
         this.severity = severity;
+        this.rejectsAssetOnly = rejectsAssetOnly;
     }
 
     public ConflictSeverity severity() {
         return severity;
+    }
+
+    /** {@code true} when this blocking type rejects only the asset it names; the rest of the archive imports. */
+    public boolean rejectsAssetOnly() {
+        return rejectsAssetOnly;
+    }
+
+    /** {@code true} when a conflict of this type refuses the whole import. */
+    public boolean blocksImport() {
+        return severity == ConflictSeverity.BLOCKING && !rejectsAssetOnly;
     }
 }

@@ -44,8 +44,14 @@ import com.acme.staticforge.exportimport.ImportConflict;
 import com.acme.staticforge.exportimport.ImportOptions;
 import com.acme.staticforge.exportimport.ImportResult;
 import com.acme.staticforge.exportimport.ProjectExportImportService;
+import com.acme.staticforge.generate.GenerationMode;
+import com.acme.staticforge.generate.GenerationRequest;
+import com.acme.staticforge.generate.GenerationRun;
+import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
+import com.acme.staticforge.generate.RunStatus;
+import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
@@ -66,6 +72,9 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -82,6 +91,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Project export → import round-trip (spec §26.5, §6.1, feature `cross-project-import-identity`,
@@ -128,6 +139,17 @@ class ProjectExportImportIntegrationTest {
     @Autowired com.acme.staticforge.asset.dataset.RecordService recordService;
     @Autowired com.acme.staticforge.asset.dataset.RecordSetService recordSetService;
     @Autowired com.acme.staticforge.asset.AssetReferenceRepository assetReferenceRepository;
+    @Autowired com.acme.staticforge.asset.page.PageService pageService;
+    @Autowired GenerationService generationService;
+
+    /** Where the M25 round trip's FULL generations write (generated output of source and target is compared). */
+    private static Path outputRoot;
+
+    @DynamicPropertySource
+    static void configure(DynamicPropertyRegistry registry) throws IOException {
+        outputRoot = Files.createTempDirectory("sf-export-import-test");
+        registry.add("sf.generate.output-root", outputRoot::toString);
+    }
 
     @Test
     void roundTripPreservesAssetsAndMediaRemapsUuidsAndAddsProvenance() {
@@ -1802,9 +1824,9 @@ class ProjectExportImportIntegrationTest {
         byte[] archive = exportImportService.exportProject(source.project().getId());
 
         ExportManifest manifest = parseManifest(archive);
-        // Bumped to 6 by M24.5.1, which added the project's content languages to settings.json.
+        // Bumped to 6 by M24.5.1 (the project's content languages in settings.json), to 7 by M25.4.1 (record sets).
         assertThat(manifest.protocolVersion()).isEqualTo(ProjectExportImportService.PROTOCOL_VERSION);
-        assertThat(manifest.protocolVersion()).isEqualTo(6);
+        assertThat(manifest.protocolVersion()).isEqualTo(7);
     }
 
     /**
@@ -2098,11 +2120,12 @@ class ProjectExportImportIntegrationTest {
     }
 
     /**
-     * Exporting one record includes its dataset as an implicit pick; importing back into a project
-     * that already has the dataset with "skip existing implicit" leaves the dataset untouched.
+     * Exporting one record includes its record set and dataset as implicit picks (M19.1.3, M25.4.1);
+     * importing back into a project that already has them with "skip existing implicit" leaves both
+     * untouched and puts the record into the existing set.
      */
     @Test
-    void aSingleRecordExportCarriesItsDatasetImplicitly() {
+    void aSingleRecordExportCarriesItsSetAndDatasetImplicitly() {
         Fixture source = newFixture("m19_single", "M19 Single Record Source");
         var team = datasetService.create(
                 new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
@@ -2112,28 +2135,40 @@ class ProjectExportImportIntegrationTest {
         byte[] archive = exportImportService.exportSelection(
                 source.project().getId(), new ExportSelection(Set.of(ada.uuid()), false, false, Set.of()));
         assertThat(readAssetEntry(archive, ada.uuid()).isExplicit()).isTrue();
+        assertThat(readAssetEntry(archive, ada.uuid()).parentFolderUuid()).isEqualTo(ada.recordSetUuid().toString());
+        assertThat(readAssetEntry(archive, ada.recordSetUuid()).isExplicit()).as("the record's set is implicit").isFalse();
+        assertThat(readAssetEntry(archive, ada.recordSetUuid()).templateUuid()).isEqualTo(team.uuid().toString());
         assertThat(readAssetEntry(archive, team.uuid()).isExplicit()).isFalse();
         assertThat(parseAssets(archive).stream().map(ExportedAsset::uid))
                 .contains(FolderScope.DATASETS_UID, FolderScope.TEMPLATES_ROOT_UID, FolderScope.CONTENT_ROOT_UID);
 
         long datasetRevision = datasetService.find(source.project().getId(), team.uuid(), null).orElseThrow().revision();
+        long setRevision = recordSetService.find(source.project().getId(), ada.recordSetUuid(), null).orElseThrow().revision();
         ImportOptions skip = new ImportOptions(true);
         assertThat(exportImportService.analyzeImport(source.project().getId(), archive, skip).conflicts())
                 .extracting(ImportConflict::elementUuid)
-                .doesNotContain(team.uuid().toString());
+                .doesNotContain(team.uuid().toString(), ada.recordSetUuid().toString());
         exportImportService.importProject(source.project().getId(), archive, source.ctx(), skip);
         assertThat(datasetService.find(source.project().getId(), team.uuid(), null).orElseThrow().revision())
                 .as("the implicit, existing dataset was skipped, not overwritten")
                 .isEqualTo(datasetRevision);
+        assertThat(recordSetService.find(source.project().getId(), ada.recordSetUuid(), null).orElseThrow().revision())
+                .as("the implicit, existing record set was skipped, not overwritten")
+                .isEqualTo(setRevision);
+        assertThat(recordService.find(source.project().getId(), ada.uuid(), null).orElseThrow().recordSetUuid())
+                .isEqualTo(ada.recordSetUuid());
 
         Fixture fresh = newFixture("m19_single_tgt", "M19 Single Record Target");
         exportImportService.importProject(fresh.project().getId(), archive, fresh.ctx(), skip);
         assertThat(recordService.find(fresh.project().getId(), ada.uuid(), null).orElseThrow().datasetUid()).isEqualTo("team");
     }
 
-    /** A record whose dataset is neither in the archive nor in the target is a blocking conflict. */
+    /**
+     * A record whose dataset is neither in the archive nor in the target is {@code RECORD_DATASET_MISSING}, its
+     * set {@code RECORD_SET_DATASET_MISSING} (M25.4.1) — both block the import.
+     */
     @Test
-    void aRecordWithoutItsDatasetIsABlockingConflict() {
+    void aRecordAndItsSetWithoutTheirDatasetAreBlockingConflicts() {
         Fixture source = newFixture("m19_missing", "M19 Missing Dataset Source");
         var team = datasetService.create(
                 new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
@@ -2147,11 +2182,15 @@ class ProjectExportImportIntegrationTest {
         Fixture target = newFixture("m19_missing_tgt", "M19 Missing Dataset Target");
         ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
         assertThat(report.conflicts())
-                .filteredOn(c -> c.type() == ConflictType.RECORD_DATASET_MISSING)
-                .extracting(ImportConflict::elementUuid, ImportConflict::severity)
+                .filteredOn(c -> c.type() == ConflictType.RECORD_DATASET_MISSING
+                        || c.type() == ConflictType.RECORD_SET_DATASET_MISSING)
+                .extracting(ImportConflict::type, ImportConflict::elementUuid, ImportConflict::severity)
                 .containsExactlyInAnyOrder(
-                        org.assertj.core.groups.Tuple.tuple(ada.uuid().toString(), ConflictSeverity.BLOCKING),
-                        org.assertj.core.groups.Tuple.tuple(ada.recordSetUuid().toString(), ConflictSeverity.BLOCKING));
+                        org.assertj.core.groups.Tuple.tuple(
+                                ConflictType.RECORD_DATASET_MISSING, ada.uuid().toString(), ConflictSeverity.BLOCKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ConflictType.RECORD_SET_DATASET_MISSING, ada.recordSetUuid().toString(), ConflictSeverity.BLOCKING));
+        assertThat(report.blocksImport()).isTrue();
         assertThat(report.conflicts()).noneMatch(c -> c.type() == ConflictType.MISSING_TEMPLATE_REFERENCE);
         assertThatThrownBy(() -> exportImportService.importProject(
                         target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT))
@@ -2160,7 +2199,8 @@ class ProjectExportImportIntegrationTest {
         // The same archive into the source project, where the dataset exists: no conflict, and the
         // record links to the existing dataset.
         assertThat(exportImportService.analyzeImport(source.project().getId(), archive, ImportOptions.DEFAULT).conflicts())
-                .noneMatch(c -> c.type() == ConflictType.RECORD_DATASET_MISSING);
+                .noneMatch(c -> c.type() == ConflictType.RECORD_DATASET_MISSING
+                        || c.type() == ConflictType.RECORD_SET_DATASET_MISSING);
         exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
         long teamId = assetRepository.findByProjectIdAndUuid(source.project().getId(), team.uuid()).orElseThrow().getId();
         assertThat(assetVersionRepository.findCurrentRecordsOfDataset(source.project().getId(), teamId))
@@ -2188,6 +2228,424 @@ class ProjectExportImportIntegrationTest {
         AssetDiff datasetDiff = onlyAssetDiff(diffService.diff(source.project().getId(), retyped.revision()));
         assertThat(datasetDiff.type()).isEqualTo("DATASET");
         assertThat(datasetDiff.changes()).extracting(FieldChange::path).contains("contentDefinition");
+    }
+
+    // ------------------------------------------------------------------
+    // M25.4.1 — record sets in archives
+    // ------------------------------------------------------------------
+
+    private static final String SET_TEAM_CDL =
+            """
+            content {
+              editor text name { label "Name" required }
+              editor select role { label "Role" options [ { value "lead", label "Lead" }, { value "dev", label "Developer" } ] }
+              editor date joined { label "Joined" }
+            }
+            """;
+
+    private static final String SET_RECORD_HTML = "<li>$CMS_VALUE(name)$ ($CMS_VALUE(_index)$/$CMS_VALUE(_count)$)</li>";
+    private static final String SET_RECORD_MD = "- $CMS_VALUE(name)$ ($CMS_VALUE(role)$)\n";
+    private static final String SET_PAGE_CDL =
+            "content { editor reference featured { label \"Featured\" assetTypes [RECORD_SET] dataset \"team\" } }";
+    private static final String SET_PAGE_HTML =
+            "<section>$CMS_VALUE(recordset:leads)$</section><p>$CMS_VALUE(recordset:leads._count)$</p>"
+                    + "<div>$CMS_VALUE(featured)$</div>"
+                    + "<ol>$CMS_FOR(m : featured, sort=\"-name\", limit=1)$<li>$CMS_VALUE(m.name)$</li>$CMS_END_FOR$</ol>";
+    private static final String SET_PAGE_MD = "# Team\n\n$CMS_VALUE(recordset:leads)$\n$CMS_VALUE(featured)$";
+
+    /** The checked-in pre-M25 archive: dataset {@code team}, records Ada and Bob in Content folder People, Cy in the root. */
+    private static final String PROTOCOL_6_ARCHIVE = "exportimport/protocol-6-records-outside-sets";
+
+    private static final UUID FIXTURE_ADA = UUID.fromString("3db03ec7-d871-4926-a16e-de386a051e34");
+    private static final UUID FIXTURE_BOB = UUID.fromString("7273d992-3c17-4a18-bddb-01ed37c79f2e");
+    private static final UUID FIXTURE_CY = UUID.fromString("40ee4399-d72e-431a-a9c2-2f9c3855aaf3");
+    private static final UUID FIXTURE_TEAM = UUID.fromString("d5ebd057-7f51-4a70-87ac-4ed885780831");
+    private static final UUID FIXTURE_PEOPLE = UUID.fromString("ac5685e3-8aa5-4c25-b978-baae20dc37cd");
+    private static final UUID FIXTURE_PAGE = UUID.fromString("f6722bba-368d-45b3-b521-5e1c74bfe159");
+
+    /**
+     * The acceptance round trip: dataset {@code team} with an html and a md record template, sets {@code leads}
+     * ({@code People/Leads}, query) and {@code staff} ({@code People}, query), five records, and a page rendering
+     * {@code recordset:leads} and its {@code featured} reference editor → {@code staff} — into an empty project.
+     * Payloads, queries, dataset links, parents, folder paths and reference rows survive; FULL generation of both
+     * projects writes identical files.
+     */
+    @Test
+    void recordSetsRoundTripIntoAnEmptyProjectAndGenerateIdenticalOutput() throws Exception {
+        Fixture source = newFixture("m25_rt", "M25 Round Trip Source");
+        long sourceId = source.project().getId();
+        SetSite site = setSite(source);
+
+        byte[] archive = exportImportService.exportProject(sourceId);
+        Fixture target = newFixture("m25_rt_tgt", "M25 Round Trip Target");
+        long targetId = target.project().getId();
+        assertThat(exportImportService.analyzeImport(targetId, archive, ImportOptions.DEFAULT).conflicts())
+                .as("nothing blocks, no set query is flagged")
+                .noneMatch(c -> c.severity() == ConflictSeverity.BLOCKING || c.type() == ConflictType.RECORD_SET_QUERY_INVALID);
+        exportImportService.importProject(targetId, archive, target.ctx(), ImportOptions.DEFAULT);
+
+        var sourceTeam = datasetService.find(sourceId, site.team(), null).orElseThrow();
+        var importedTeam = datasetService.find(targetId, site.team(), null).orElseThrow();
+        assertThat(importedTeam.channelTemplates()).as("record templates travel in the payload").isEqualTo(sourceTeam.channelTemplates());
+        assertThat(importedTeam.channelTemplates().path("md").path("source").asText()).isEqualTo(SET_RECORD_MD);
+        assertThat(importedTeam.recordCount()).isEqualTo(5);
+
+        for (UUID set : List.of(site.leads(), site.staff())) {
+            var before = recordSetService.find(sourceId, set, null).orElseThrow();
+            var after = recordSetService.find(targetId, set, null).orElseThrow();
+            assertThat(after)
+                    .extracting(v -> v.uid(), v -> v.displayName(), v -> v.datasetUuid(), v -> v.folderUuid(), v -> v.folderPath(),
+                            v -> v.query(), v -> v.queryValid(), v -> v.recordCount())
+                    .containsExactly(before.uid(), before.displayName(), before.datasetUuid(), before.folderUuid(),
+                            before.folderPath(), before.query(), true, before.recordCount());
+        }
+        assertThat(recordSetService.find(targetId, site.leads(), null).orElseThrow().folderPath()).isEqualTo("/people/leads/");
+        for (UUID record : site.records()) {
+            var before = recordService.find(sourceId, record, null).orElseThrow();
+            var after = recordService.find(targetId, record, null).orElseThrow();
+            assertThat(after)
+                    .extracting(v -> v.uid(), v -> v.datasetUuid(), v -> v.recordSetUuid(), v -> v.folderUuid(), v -> v.folderPath(),
+                            v -> v.content())
+                    .containsExactly(before.uid(), before.datasetUuid(), before.recordSetUuid(), before.folderUuid(),
+                            before.folderPath(), before.content());
+        }
+        long pageId = assetRepository.findByProjectIdAndUuid(targetId, site.page()).orElseThrow().getId();
+        long staffId = assetRepository.findByProjectIdAndUuid(targetId, site.staff()).orElseThrow().getId();
+        assertThat(assetReferenceRepository.findByFromAssetIdAndValidToRevisionIsNull(pageId))
+                .as("the page's reference editor still points at the set")
+                .anySatisfy(ref -> {
+                    assertThat(ref.getKind()).isEqualTo(com.acme.staticforge.asset.ReferenceKind.CONTENT_REF);
+                    assertThat(ref.getToAssetId()).isEqualTo(staffId);
+                });
+
+        Map<String, String> sourceOutput = generatedFiles(source);
+        assertThat(sourceOutput.get("team.html"))
+                .isEqualTo("<section><li>Ada (0/2)</li><li>Dee (1/2)</li></section><p>2</p>"
+                        + "<div><li>Bob (0/2)</li><li>Cy (1/2)</li></div><ol><li>Cy</li></ol>");
+        assertThat(sourceOutput.get("team.md")).contains("- Ada (lead)", "- Bob (dev)");
+        assertThat(generatedFiles(target)).as("generated output identical to the source project").isEqualTo(sourceOutput);
+    }
+
+    /**
+     * Picking a record set exports it with its live records (container semantics, like a folder), its dataset
+     * implicitly, and nothing of another set.
+     */
+    @Test
+    void pickingARecordSetExportsItsRecordsAndItsDatasetImplicitly() {
+        Fixture source = newFixture("m25_pick", "M25 Set Pick");
+        SetSite site = setSite(source);
+
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(site.leads()), false, false, Set.of()));
+        Map<String, Boolean> explicitByUid = parseAssets(archive).stream()
+                .filter(a -> !"FOLDER".equals(a.type()))
+                .collect(Collectors.toMap(a -> a.type() + ":" + a.uid(), ExportedAsset::isExplicit));
+        assertThat(explicitByUid).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "RECORD_SET:leads", true,
+                "RECORD:ada", true,
+                "RECORD:dee", true,
+                "RECORD:eve", true,
+                "DATASET:team", false));
+        assertThat(parseAssets(archive).stream().filter(a -> "FOLDER".equals(a.type())).map(ExportedAsset::uid))
+                .as("the set's folders ride along as ancestors")
+                .contains("people", "leads", FolderScope.CONTENT_ROOT_UID);
+    }
+
+    /**
+     * {@code RECORD_SET_MISSING}: a record whose set is neither in the archive nor in the target blocks the import;
+     * the same archive imports into a project that has the set, and the record joins it.
+     */
+    @Test
+    void aRecordWhoseSetIsMissingIsABlockingConflictUnlessTheTargetHasTheSet() {
+        Fixture source = newFixture("m25_noset", "M25 Missing Set");
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                source.ctx());
+        var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
+        byte[] archive = ArchiveFixtures.withoutEntry(
+                exportImportService.exportSelection(
+                        source.project().getId(), new ExportSelection(Set.of(ada.uuid()), false, false, Set.of())),
+                "assets/" + ada.recordSetUuid() + ".json");
+
+        Fixture target = newFixture("m25_noset_tgt", "M25 Missing Set Target");
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), archive, ImportOptions.DEFAULT);
+        assertThat(report.conflicts())
+                .filteredOn(c -> c.severity() == ConflictSeverity.BLOCKING)
+                .extracting(ImportConflict::type, ImportConflict::elementUuid)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(ConflictType.RECORD_SET_MISSING, ada.uuid().toString()));
+        assertThat(report.blocksImport()).isTrue();
+        assertThatThrownBy(() -> exportImportService.importProject(
+                        target.project().getId(), archive, target.ctx(), ImportOptions.DEFAULT))
+                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
+        assertThat(assetRepository.findByProjectIdAndUuid(target.project().getId(), ada.uuid())).isEmpty();
+
+        // Into the source project, which has the set: no conflict, the record keeps its set and folder path.
+        var edited = recordService.update(ada.uuid(), json("{\"name\":\"Ada Lovelace\"}"), null, ada.revision(), source.ctx()).record();
+        assertThat(exportImportService.analyzeImport(source.project().getId(), archive, ImportOptions.DEFAULT).conflicts())
+                .noneMatch(c -> c.severity() == ConflictSeverity.BLOCKING);
+        exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
+        var restored = recordService.find(source.project().getId(), ada.uuid(), null).orElseThrow();
+        assertThat(restored.content().path("name").asText()).isEqualTo("Ada");
+        assertThat(restored.recordSetUuid()).isEqualTo(edited.recordSetUuid());
+        assertThat(restored.folderPath()).isEqualTo(edited.folderPath());
+    }
+
+    /**
+     * {@code RECORD_SET_DATASET_MISMATCH}: a record whose {@code datasetRef} is another dataset than its set's, and a
+     * set that would overwrite a target set of another dataset, both block the import (a set's dataset never
+     * changes; records never merge into a set of another dataset).
+     */
+    @Test
+    void aRecordOrSetOfAnotherDatasetThanItsSetIsABlockingConflict() {
+        Fixture source = newFixture("m25_mismatch", "M25 Dataset Mismatch");
+        long sourceId = source.project().getId();
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(sourceId, null, "Team", TEAM_CDL, null, null), source.ctx());
+        var faq = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
+                        sourceId, null, "FAQ", "content { editor text name { label \"Question\" } }", null, null),
+                source.ctx());
+        var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
+        byte[] archive = exportImportService.exportSelection(
+                sourceId, new ExportSelection(Set.of(ada.recordSetUuid(), faq.uuid()), false, false, Set.of()));
+
+        byte[] recordOfFaq = ArchiveFixtures.editAsset(archive, ada.uuid(), asset -> {
+            ((ObjectNode) asset.get("payload")).put("datasetRef", faq.uuid().toString());
+            asset.put("templateUuid", faq.uuid().toString());
+        });
+        Fixture target = newFixture("m25_mismatch_tgt", "M25 Dataset Mismatch Target");
+        ConflictReport report = exportImportService.analyzeImport(target.project().getId(), recordOfFaq, ImportOptions.DEFAULT);
+        assertThat(report.conflicts())
+                .filteredOn(c -> c.severity() == ConflictSeverity.BLOCKING)
+                .extracting(ImportConflict::type, ImportConflict::elementUuid)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(ConflictType.RECORD_SET_DATASET_MISMATCH, ada.uuid().toString()));
+        assertThatThrownBy(() -> exportImportService.importProject(
+                        target.project().getId(), recordOfFaq, target.ctx(), ImportOptions.DEFAULT))
+                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
+        assertThat(assetRepository.findByProjectIdAndUuid(target.project().getId(), ada.uuid())).isEmpty();
+
+        byte[] setOfFaq = ArchiveFixtures.editAsset(archive, ada.recordSetUuid(), asset -> {
+            ((ObjectNode) asset.get("payload")).put("datasetRef", faq.uuid().toString());
+            asset.put("templateUuid", faq.uuid().toString());
+        });
+        ConflictReport overwrite = exportImportService.analyzeImport(sourceId, setOfFaq, ImportOptions.DEFAULT);
+        assertThat(overwrite.conflicts())
+                .filteredOn(c -> c.type() == ConflictType.RECORD_SET_DATASET_MISMATCH)
+                .extracting(ImportConflict::elementUuid)
+                .as("the set would change its dataset; its record no longer matches it")
+                .containsExactlyInAnyOrder(ada.recordSetUuid().toString(), ada.uuid().toString());
+        long head = recordSetService.find(sourceId, ada.recordSetUuid(), null).orElseThrow().revision();
+        assertThatThrownBy(() -> exportImportService.importProject(sourceId, setOfFaq, source.ctx(), ImportOptions.DEFAULT))
+                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
+        assertThat(recordSetService.find(sourceId, ada.recordSetUuid(), null).orElseThrow())
+                .extracting(v -> v.datasetUuid(), v -> v.revision())
+                .containsExactly(team.uuid(), head);
+    }
+
+    /**
+     * A target set with the same uid but another dataset is an ordinary uid collision: the archive's set arrives
+     * under a derived uid with its own records; nothing merges into the target's set.
+     */
+    @Test
+    void aSetWhoseUidIsTakenByASetOfAnotherDatasetImportsUnderADerivedUid() {
+        Fixture source = newFixture("m25_uid", "M25 Set Uid");
+        SetSite site = setSite(source);
+        byte[] archive = exportImportService.exportSelection(
+                source.project().getId(), new ExportSelection(Set.of(site.leads()), false, false, Set.of()));
+
+        Fixture target = newFixture("m25_uid_tgt", "M25 Set Uid Target");
+        long targetId = target.project().getId();
+        var faq = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
+                        targetId, null, "FAQ", "content { editor text name { label \"Question\" } }", null, null),
+                target.ctx());
+        var theirs = recordSetService.create(new com.acme.staticforge.asset.dataset.CreateRecordSetCommand(
+                        targetId, null, faq.uuid(), "leads", "Leads", com.acme.staticforge.template.query.RecordSetQuery.ALL),
+                target.ctx());
+        assertThat(exportImportService.analyzeImport(targetId, archive, ImportOptions.DEFAULT).hasBlocking()).isFalse();
+        exportImportService.importProject(targetId, archive, target.ctx(), ImportOptions.DEFAULT);
+
+        var imported = recordSetService.find(targetId, site.leads(), null).orElseThrow();
+        assertThat(imported.uid()).isNotEqualTo("leads").startsWith("leads");
+        assertThat(imported.datasetUuid()).isEqualTo(site.team());
+        assertThat(imported.recordCount()).isEqualTo(3);
+        assertThat(recordSetService.find(targetId, theirs.uuid(), null).orElseThrow())
+                .extracting(v -> v.uid(), v -> v.datasetUuid(), v -> v.recordCount())
+                .containsExactly("leads", faq.uuid(), 0L);
+    }
+
+    /**
+     * A set's stored query is re-validated against the schema it gets in the target — the archive's dataset, or
+     * the existing one when that is reused. A query that doesn't fit imports unchanged, reads {@code queryValid:
+     * false}, and is a warning in {@code analyze}, never a blocker.
+     */
+    @Test
+    void aSetQueryThatDoesNotFitTheTargetSchemaImportsFlaggedWithAWarning() {
+        Fixture source = newFixture("m25_query", "M25 Set Query");
+        long sourceId = source.project().getId();
+        SetSite site = setSite(source);
+        byte[] archive = exportImportService.exportSelection(sourceId, new ExportSelection(Set.of(site.leads()), false, false, Set.of()));
+
+        // 1. The archive's own dataset: a hand-edited query on an undeclared field.
+        byte[] edited = ArchiveFixtures.editAsset(archive, site.leads(),
+                asset -> ((ObjectNode) asset.get("payload").get("query")).put("where", "nickname == 'x'"));
+        Fixture target = newFixture("m25_query_tgt", "M25 Set Query Target");
+        long targetId = target.project().getId();
+        ConflictReport report = exportImportService.analyzeImport(targetId, edited, ImportOptions.DEFAULT);
+        assertThat(report.hasBlocking()).isFalse();
+        assertThat(report.conflicts())
+                .filteredOn(c -> c.type() == ConflictType.RECORD_SET_QUERY_INVALID)
+                .singleElement()
+                .satisfies(c -> {
+                    assertThat(c.severity()).isEqualTo(ConflictSeverity.WARNING);
+                    assertThat(c.elementUuid()).isEqualTo(site.leads().toString());
+                    assertThat(c.detail()).contains("nickname");
+                });
+        exportImportService.importProject(targetId, edited, target.ctx(), ImportOptions.DEFAULT);
+        var imported = recordSetService.find(targetId, site.leads(), null).orElseThrow();
+        assertThat(imported.queryValid()).isFalse();
+        assertThat(imported.query().where()).isEqualTo("nickname == 'x'");
+        assertThat(imported.recordCount()).isEqualTo(3);
+
+        // 2. The target's existing dataset, reused as an implicit pick, no longer declares the field the query reads.
+        var team = datasetService.find(sourceId, site.team(), null).orElseThrow();
+        datasetService.update(site.team(),
+                new com.acme.staticforge.asset.dataset.UpdateDatasetCommand(
+                        "Team", SET_TEAM_CDL.replace("editor date joined { label \"Joined\" }", ""), "name", null),
+                team.revision(), source.ctx());
+        ImportOptions skip = new ImportOptions(true);
+        assertThat(exportImportService.analyzeImport(sourceId, archive, skip).conflicts())
+                .filteredOn(c -> c.type() == ConflictType.RECORD_SET_QUERY_INVALID)
+                .extracting(ImportConflict::elementUuid)
+                .containsExactly(site.leads().toString());
+        exportImportService.importProject(sourceId, archive, source.ctx(), skip);
+        assertThat(recordSetService.find(sourceId, site.leads(), null).orElseThrow().queryValid()).isFalse();
+    }
+
+    /**
+     * {@code RECORD_OUTSIDE_RECORD_SET} (epic decision 8): the checked-in protocol-6 archive — records in a Content
+     * folder and in the Content root, a page whose reference editor points at one of them — lists one conflict per
+     * record. They block only themselves: the import creates none of them, no set, and everything else.
+     */
+    @Test
+    void aProtocol6ArchiveRejectsItsRecordsOutsideSetsAndImportsEverythingElse() {
+        byte[] archive = ArchiveFixtures.zipResourceDirectory(PROTOCOL_6_ARCHIVE);
+        assertThat(parseManifest(archive).protocolVersion()).isEqualTo(6);
+        Fixture target = newFixture("m25_p6", "M25 Protocol 6 Target");
+        long targetId = target.project().getId();
+
+        ConflictReport report = exportImportService.analyzeImport(targetId, archive, ImportOptions.DEFAULT);
+        assertThat(report.conflicts())
+                .filteredOn(c -> c.severity() == ConflictSeverity.BLOCKING)
+                .extracting(ImportConflict::type, ImportConflict::elementUuid)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(ConflictType.RECORD_OUTSIDE_RECORD_SET, FIXTURE_ADA.toString()),
+                        org.assertj.core.groups.Tuple.tuple(ConflictType.RECORD_OUTSIDE_RECORD_SET, FIXTURE_BOB.toString()),
+                        org.assertj.core.groups.Tuple.tuple(ConflictType.RECORD_OUTSIDE_RECORD_SET, FIXTURE_CY.toString()));
+        assertThat(report.hasBlocking()).isTrue();
+        assertThat(report.blocksImport()).as("they reject only themselves").isFalse();
+        assertThat(report.conflicts()).allSatisfy(c -> assertThat(c.blocksImport()).isFalse());
+
+        ImportResult result = exportImportService.importProject(targetId, archive, target.ctx(), ImportOptions.DEFAULT);
+        assertThat(uidsByType(targetId, AssetType.RECORD)).as("no record imported").isEmpty();
+        assertThat(uidsByType(targetId, AssetType.RECORD_SET)).as("no set invented for them").isEmpty();
+        for (UUID record : List.of(FIXTURE_ADA, FIXTURE_BOB, FIXTURE_CY)) {
+            assertThat(assetRepository.findByProjectIdAndUuid(targetId, record)).isEmpty();
+        }
+        assertThat(datasetService.find(targetId, FIXTURE_TEAM, null).orElseThrow().recordCount()).isZero();
+        assertThat(assetRepository.findByProjectIdAndUuid(targetId, FIXTURE_PEOPLE)).isPresent();
+        assertThat(assetRepository.findByProjectIdAndUuid(targetId, FIXTURE_PAGE)).isPresent();
+        assertThat(uidsByType(targetId, AssetType.PAGE_TEMPLATE)).containsKey("team_page");
+        assertThat(result.importedAssetCount()).as("dataset, People folder, page template and page").isEqualTo(4);
+    }
+
+    /**
+     * Dataset {@code team} (html + md record templates); Content folders {@code People} and {@code People/Leads};
+     * set {@code leads} in {@code Leads} (leads, newest first: Ada, Dee — Eve is a developer) and {@code staff} in
+     * {@code People} (by name: Bob, Cy); a page rendering {@code recordset:leads} and its {@code featured}
+     * reference editor → {@code staff}, in both channels.
+     */
+    private SetSite setSite(Fixture fx) {
+        long projectId = fx.project().getId();
+        channelService.create(
+                new CreateChannelRequest("md", "Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null), fx.ctx());
+        var team = datasetService.create(
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
+                        projectId, null, "Team", SET_TEAM_CDL, "name", null, Map.of("html", SET_RECORD_HTML, "md", SET_RECORD_MD)),
+                fx.ctx());
+        AssetVersionView people = folderService.create(null, "People", FolderScope.CONTENT, fx.ctx());
+        AssetVersionView leadsFolder = folderService.create(people.uuid(), "Leads", FolderScope.CONTENT, fx.ctx());
+        UUID leads = recordSetService.create(new com.acme.staticforge.asset.dataset.CreateRecordSetCommand(
+                        projectId, leadsFolder.uuid(), team.uuid(), "leads", "Leads",
+                        new com.acme.staticforge.template.query.RecordSetQuery("role == 'lead'", "-joined", null, null)),
+                        fx.ctx())
+                .uuid();
+        UUID staff = recordSetService.create(new com.acme.staticforge.asset.dataset.CreateRecordSetCommand(
+                        projectId, people.uuid(), team.uuid(), "staff", "Staff",
+                        new com.acme.staticforge.template.query.RecordSetQuery(null, "name", 5, null)),
+                        fx.ctx())
+                .uuid();
+        List<UUID> records = List.of(
+                setRecord(fx, leads, "{\"name\":\"Ada\",\"role\":\"lead\",\"joined\":\"2021-03-01\"}"),
+                setRecord(fx, leads, "{\"name\":\"Dee\",\"role\":\"lead\",\"joined\":\"2019-05-05\"}"),
+                setRecord(fx, leads, "{\"name\":\"Eve\",\"role\":\"dev\",\"joined\":\"2024-02-02\"}"),
+                setRecord(fx, staff, "{\"name\":\"Bob\",\"role\":\"dev\",\"joined\":\"2023-07-15\"}"),
+                setRecord(fx, staff, "{\"name\":\"Cy\",\"role\":\"dev\",\"joined\":\"2022-11-30\"}"));
+
+        TemplateView template = templateService.create(
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Team Page", SET_PAGE_CDL,
+                        Map.of("html", SET_PAGE_HTML, "md", SET_PAGE_MD), null, false,
+                        Map.of("html", "{displayNameSlug}.{ext}", "md", "{displayNameSlug}.{ext}")),
+                fx.ctx());
+        AssetVersionView page = pageService.create(
+                new com.acme.staticforge.asset.page.CreatePageCommand("Team", null, template.uuid()), fx.ctx());
+        ObjectNode payload = page.payload().deepCopy();
+        payload.putObject("content").set("featured", MAPPER.createObjectNode()
+                .put("type", "ASSET_REF").put("uuid", staff.toString()).put("assetType", "RECORD_SET"));
+        pageService.update(page.uuid(), payload, page.validFromRevision(), fx.ctx());
+        return new SetSite(team.uuid(), leads, staff, records, page.uuid());
+    }
+
+    private record SetSite(UUID team, UUID leads, UUID staff, List<UUID> records, UUID page) {}
+
+    private UUID setRecord(Fixture fx, UUID set, String content) {
+        return recordService.create(
+                        new com.acme.staticforge.asset.dataset.CreateRecordCommand(fx.project().getId(), set, null, json(content)),
+                        fx.ctx())
+                .record()
+                .uuid();
+    }
+
+    /** Runs a FULL generation of every channel into a new filesystem target; the build's files by relative path. */
+    private Map<String, String> generatedFiles(Fixture fx) throws Exception {
+        GenerationTarget target = generationTargetRepository.save(new GenerationTarget(
+                fx.project().getId(), "m25-output", TargetType.FILESYSTEM,
+                MAPPER.readTree("{\"baseUrl\":\"https://example.com\"}"), false));
+        GenerationRun started = generationService.start(
+                fx.project().getKey(),
+                new GenerationRequest(GenerationMode.FULL, null, List.of("html", "md"), target.getId(), null, null, null, null),
+                fx.user().getId());
+        GenerationRun run = started;
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (!Set.of(RunStatus.SUCCESS, RunStatus.PARTIAL, RunStatus.FAILED, RunStatus.CANCELLED).contains(run.getStatus())
+                && System.currentTimeMillis() < deadline) {
+            Thread.sleep(100);
+            run = generationService.status(fx.project().getKey(), started.getId());
+        }
+        assertThat(run.getStatus()).as("diagnostics: %s", run.getDiagnostics()).isEqualTo(RunStatus.SUCCESS);
+        Path build = TargetLocations.resolve(outputRoot, fx.project().getKey(), target)
+                .resolve("builds")
+                .resolve(String.valueOf(run.getId()));
+        Map<String, String> files = new java.util.TreeMap<>();
+        try (java.util.stream.Stream<Path> walk = Files.walk(build)) {
+            for (Path file : walk.filter(Files::isRegularFile).toList()) {
+                String name = build.relativize(file).toString().replace('\\', '/');
+                if (name.endsWith(".html") || name.endsWith(".md")) {
+                    files.put(name, Files.readString(file));
+                }
+            }
+        }
+        return files;
     }
 
     /** A record in the record set of {@code dataset} in {@code folder} (M25: records always live in a set). */

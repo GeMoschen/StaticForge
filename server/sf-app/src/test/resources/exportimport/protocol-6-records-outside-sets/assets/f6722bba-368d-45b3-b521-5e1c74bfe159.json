@@ -1,0 +1,29 @@
+{
+  "uuid": "f6722bba-368d-45b3-b521-5e1c74bfe159",
+  "type": "PAGE",
+  "uid": "team",
+  "displayName": "Team",
+  "parentFolderUuid": "afa79d62-21ec-41b9-84d0-7927ee5c0ddd",
+  "folderPath": "/pages_root/",
+  "templateUuid": "5175344f-20bf-4eb9-93ef-4b0311d7d58c",
+  "payload": {
+    "templateRef": "5175344f-20bf-4eb9-93ef-4b0311d7d58c",
+    "content": {
+      "lead": {
+        "type": "ASSET_REF",
+        "uuid": "3db03ec7-d871-4926-a16e-de386a051e34",
+        "assetType": "RECORD"
+      }
+    },
+    "bodies": {},
+    "nav": {
+      "visible": true,
+      "position": 0
+    },
+    "output": {},
+    "meta": {}
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

@@ -95,7 +95,8 @@ class ProjectImportAnalyzeApiTest {
                         .header("Authorization", "Bearer " + target.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.hasBlocking").value(true))
-                .andExpect(jsonPath("$.conflicts[?(@.type == 'MISSING_TEMPLATE_REFERENCE')]").exists());
+                .andExpect(jsonPath("$.blocksImport").value(true))
+                .andExpect(jsonPath("$.conflicts[?(@.type == 'MISSING_TEMPLATE_REFERENCE' && @.blocksImport == true)]").exists());
 
         assertThat(assetCount(target)).isEqualTo(countBefore);
     }
@@ -156,6 +157,33 @@ class ProjectImportAnalyzeApiTest {
                         .header("Authorization", "Bearer " + target.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sourceProjectKey").value(source.project().getKey()));
+    }
+
+    /**
+     * A pre-M25 archive (M25.4.1): its records outside a record set are {@code BLOCKING} conflicts that reject only
+     * themselves — {@code hasBlocking} but not {@code blocksImport} — so committing succeeds without them.
+     */
+    @Test
+    void recordsOutsideARecordSetBlockOnlyThemselvesAndTheImportCommits() throws Exception {
+        byte[] archive = ArchiveFixtures.zipResourceDirectory("exportimport/protocol-6-records-outside-sets");
+        Fixture target = newFixture("an_p6_tgt");
+
+        mvc.perform(multipart("/api/v1/projects/" + target.project().getKey() + "/import/analyze")
+                        .file(new MockMultipartFile("file", "archive.zip", "application/zip", archive))
+                        .header("Authorization", "Bearer " + target.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasBlocking").value(true))
+                .andExpect(jsonPath("$.blocksImport").value(false))
+                .andExpect(jsonPath("$.conflicts[?(@.type == 'RECORD_OUTSIDE_RECORD_SET')].severity")
+                        .value(org.hamcrest.Matchers.contains("BLOCKING", "BLOCKING", "BLOCKING")))
+                .andExpect(jsonPath("$.conflicts[?(@.type == 'RECORD_OUTSIDE_RECORD_SET')].blocksImport")
+                        .value(org.hamcrest.Matchers.contains(false, false, false)));
+
+        mvc.perform(multipart("/api/v1/projects/" + target.project().getKey() + "/import")
+                        .file(new MockMultipartFile("file", "archive.zip", "application/zip", archive))
+                        .header("Authorization", "Bearer " + target.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.importedAssetCount").value(4));
     }
 
     private long assetCount(Fixture fixture) {

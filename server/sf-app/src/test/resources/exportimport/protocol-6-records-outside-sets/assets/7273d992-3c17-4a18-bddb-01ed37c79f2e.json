@@ -1,0 +1,19 @@
+{
+  "uuid": "7273d992-3c17-4a18-bddb-01ed37c79f2e",
+  "type": "RECORD",
+  "uid": "bob",
+  "displayName": "Bob",
+  "parentFolderUuid": "ac5685e3-8aa5-4c25-b978-baae20dc37cd",
+  "folderPath": "/content_root/people/",
+  "templateUuid": "d5ebd057-7f51-4a70-87ac-4ed885780831",
+  "payload": {
+    "datasetRef": "d5ebd057-7f51-4a70-87ac-4ed885780831",
+    "content": {
+      "name": "Bob",
+      "role": "dev"
+    }
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

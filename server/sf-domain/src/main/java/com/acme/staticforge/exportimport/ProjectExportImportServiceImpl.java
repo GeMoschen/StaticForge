@@ -7,11 +7,14 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.content.TemplateContentDefinitions;
+import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.UidGenerator;
 import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.folder.PathService;
+import com.acme.staticforge.asset.folder.RecordSetContainment;
 import com.acme.staticforge.asset.media.Blob;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.BlobStore;
@@ -34,6 +37,8 @@ import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
+import com.acme.staticforge.template.query.RecordSetQueries;
+import com.acme.staticforge.template.query.RecordSetQuery;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -51,6 +56,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -79,6 +85,14 @@ import org.springframework.transaction.annotation.Transactional;
  * unique, a remapped payload (via {@link UuidRemapper}) with {@code payload.origin} provenance
  * (§6.1, plus {@code origin.sourceUuid} when the collision path re-keyed the asset), and
  * resolved folder/template edges.
+ *
+ * <p><strong>Record sets</strong> (M25, protocol {@code 7} — see {@link #PROTOCOL_VERSION}): a record's archive
+ * parent is its {@code RECORD_SET}, a set's {@code templateUuid} its dataset. Export pulls a picked record's set
+ * and dataset in implicitly and exports a picked set's records with it. Import creates datasets, then sets, then
+ * records, and judges every record's placement with {@link RecordSetContainment}: a record outside a set — every
+ * record of a protocol {@code <= 6} archive — is rejected on its own ({@link
+ * ConflictType#RECORD_OUTSIDE_RECORD_SET}) while the rest of the archive imports. Such records are never migrated
+ * or grouped into sets (epic decision 8).
  */
 @Service
 @RevisionAware
@@ -299,10 +313,11 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     /**
      * Expands the caller's explicit {@code assetUuids} picks into the full set of asset
      * ids to export: a picked folder pulls in every live descendant transitively (matched
-     * by {@code folderPath} prefix), a picked non-folder asset is included by itself
-     * (its own template reference is deliberately left out, see {@link
-     * ProjectExportImportService#exportSelection}), and every ancestor folder of an
-     * included asset is always added too, up to the project root.
+     * by {@code folderPath} prefix), a picked record set pulls in its live records (M25), a
+     * picked non-folder asset is included by itself (its own template reference is
+     * deliberately left out, see {@link ProjectExportImportService#exportSelection}, except
+     * for the implicit picks named there), and every ancestor folder of an included asset is
+     * always added too, up to the project root.
      */
     private IncludedIds resolveIncludedAssetIds(
             List<AssetVersion> versions, Map<Long, AssetVersion> versionByAssetId, Set<UUID> assetUuids) {
@@ -324,16 +339,41 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                             included.add(candidate.getAssetId());
                         }
                     }
+                } else if (picked.getAsset().getAssetType() == AssetType.RECORD_SET) {
+                    // A record set is a container (M25), like a folder: picking it picks its live records. They
+                    // share the set's folder path, so they are matched by parent, not by path prefix.
+                    included.add(picked.getAssetId());
+                    for (AssetVersion candidate : versions) {
+                        if (Objects.equals(candidate.getFolderId(), picked.getAssetId())) {
+                            included.add(candidate.getAssetId());
+                        }
+                    }
                 } else {
                     included.add(picked.getAssetId());
                 }
             }
         }
 
-        // A record (or record set, M25) is meaningless without its schema (M19.1.3): its dataset joins the
-        // archive as an implicit pick, exactly like an ancestor folder, so an import can reuse an existing copy.
+        // Implicit provenance of the Content store (M19.1.3, M25): a record is meaningless outside its record
+        // set, and a record or set without its schema. A picked record pulls in its set, and every record or
+        // set its dataset — as implicit picks, exactly like an ancestor folder, so an import can reuse an
+        // existing copy. (The set is the record's parent, so the ancestor walk below would find it too; it is
+        // named here so that its dataset joins as well.)
         Set<Long> ancestors = new HashSet<>();
         for (Long id : List.copyOf(included)) {
+            AssetVersion version = versionByAssetId.get(id);
+            if (version.getAsset().getAssetType() != AssetType.RECORD) {
+                continue;
+            }
+            Long setId = version.getFolderId();
+            AssetVersion set = setId == null ? null : versionByAssetId.get(setId);
+            if (set != null && set.getAsset().getAssetType() == AssetType.RECORD_SET && !included.contains(setId)) {
+                ancestors.add(setId);
+            }
+        }
+        Set<Long> contentAssets = new HashSet<>(included);
+        contentAssets.addAll(ancestors);
+        for (Long id : contentAssets) {
             AssetVersion version = versionByAssetId.get(id);
             AssetType type = version.getAsset().getAssetType();
             Long datasetId = type == AssetType.RECORD || type == AssetType.RECORD_SET ? version.getTemplateAssetId() : null;
@@ -405,9 +445,15 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // it.
         ConflictReport report = detectConflicts(targetProjectId, content, options);
         List<ImportConflict> hardBlocking = report.conflicts().stream()
-                .filter(c -> c.severity() == ConflictSeverity.BLOCKING)
+                .filter(ImportConflict::blocksImport)
                 .toList();
         assertNoBlockingConflicts(new ConflictReport(hardBlocking));
+        // A conflict that rejects only its own asset (M25: a record outside a record set) keeps that asset out
+        // of the import; everything else in the archive imports.
+        Set<String> rejected = report.conflicts().stream()
+                .filter(c -> c.type().rejectsAssetOnly())
+                .map(c -> c.elementUuid().toLowerCase())
+                .collect(Collectors.toSet());
 
         List<ExportedAsset> assets = content.assets();
 
@@ -521,6 +567,22 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             idMaps.put(key, existingAsset.getId(), existingVersion.getFolderPath());
         }
 
+        // A record may join a record set the target already has and the archive doesn't carry (M25): that set
+        // resolves like a skipped asset, so the record takes its id and folder path.
+        Set<String> archiveKeys = assets.stream().map(a -> a.uuid().toLowerCase()).collect(Collectors.toSet());
+        for (ExportedAsset asset : assets) {
+            String parentUuid = asset.parentFolderUuid();
+            if (!AssetType.RECORD.name().equals(asset.type()) || rejected.contains(asset.uuid().toLowerCase())
+                    || parentUuid == null || archiveKeys.contains(parentUuid.toLowerCase()) || idMaps.idOf(parentUuid) != null) {
+                continue;
+            }
+            Asset set = assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(parentUuid))
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")));
+            AssetVersion setVersion = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(set.getId())
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set has no current version.")));
+            idMaps.put(parentUuid.toLowerCase(), set.getId(), setVersion.getFolderPath());
+        }
+
         Set<String> importedShas = new HashSet<>();
         for (ExportedAsset asset : assets) {
             if ("MEDIA".equals(asset.type())) {
@@ -534,7 +596,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         List<AssetVersion> importedVersions = new ArrayList<>();
         for (ExportedAsset asset : order(assets, rootAsset)) {
             String key = asset.uuid().toLowerCase();
-            if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key)) {
+            if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key) || rejected.contains(key)) {
                 continue;
             }
             importedVersions.add(createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest,
@@ -644,9 +706,24 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Set<String> archiveUuids = assets.stream()
                 .map(a -> a.uuid().toLowerCase(Locale.ROOT))
                 .collect(Collectors.toSet());
+        Map<String, ExportedAsset> archiveByUuid = new HashMap<>();
+        assets.forEach(asset -> archiveByUuid.put(asset.uuid().toLowerCase(Locale.ROOT), asset));
 
         for (ExportedAsset asset : assets) {
             String label = asset.displayName() != null ? asset.displayName() : asset.uid();
+            boolean record = AssetType.RECORD.name().equals(asset.type());
+            boolean recordSet = AssetType.RECORD_SET.name().equals(asset.type());
+
+            // Record set containment (M25) — decided first for a record, because a record outside a set is
+            // rejected on its own (epic decision 8): nothing else about it matters, since it is never written.
+            Optional<ImportConflict> containment = record
+                    ? recordContainmentConflict(targetProjectId, asset, label, archiveByUuid, options)
+                    : Optional.empty();
+            if (containment.isPresent() && containment.get().type().rejectsAssetOnly()) {
+                conflicts.add(containment.get());
+                continue;
+            }
+            containment.ifPresent(conflicts::add);
 
             Optional<Asset> existingAsset =
                     assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(asset.uuid()));
@@ -679,13 +756,17 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 }
             }
 
+            if (recordSet) {
+                conflicts.addAll(recordSetConflicts(targetProjectId, asset, label, existingAsset, archiveByUuid, options));
+            }
+
+            // A set's dataset (its templateUuid) is checked by recordSetConflicts.
             String templateUuid = asset.templateUuid();
-            if (templateUuid != null && !templateUuid.isBlank()) {
+            if (templateUuid != null && !templateUuid.isBlank() && !recordSet) {
                 boolean satisfied = archiveUuids.contains(templateUuid.toLowerCase(Locale.ROOT))
                         || assetRepository.findByProjectIdAndUuid(targetProjectId, UUID.fromString(templateUuid))
                                 .isPresent();
-                if (!satisfied && (AssetType.RECORD.name().equals(asset.type())
-                        || AssetType.RECORD_SET.name().equals(asset.type()))) {
+                if (!satisfied && record) {
                     conflicts.add(ImportConflict.of(
                             ConflictType.RECORD_DATASET_MISSING,
                             asset.uuid(),
@@ -722,8 +803,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                         asset.isExplicit()));
             }
 
+            // A record's parent is its record set, checked above — it may also be a set the target already has.
             String parentFolderUuid = asset.parentFolderUuid();
-            if (parentFolderUuid != null && !archiveUuids.contains(parentFolderUuid.toLowerCase(Locale.ROOT))) {
+            if (!record && parentFolderUuid != null && !archiveUuids.contains(parentFolderUuid.toLowerCase(Locale.ROOT))) {
                 conflicts.add(ImportConflict.of(
                         ConflictType.MISSING_PARENT_FOLDER,
                         asset.uuid(),
@@ -770,6 +852,144 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
         return new ConflictReport(conflicts);
     }
+
+    /**
+     * Where an archived record would land (M25, epic decision 2), judged by {@link RecordSetContainment} — the
+     * rule every other write path applies: {@link ConflictType#RECORD_OUTSIDE_RECORD_SET} for a record in the
+     * Content store root or a Content folder (every pre-M25 archive), {@link ConflictType#RECORD_SET_MISSING} for
+     * a set that is neither in the archive nor live in the target, and {@link
+     * ConflictType#RECORD_SET_DATASET_MISMATCH} for a set of another dataset.
+     */
+    private Optional<ImportConflict> recordContainmentConflict(
+            long targetProjectId, ExportedAsset record, String label, Map<String, ExportedAsset> archiveByUuid,
+            ImportOptions options) {
+        String parentUuid = record.parentFolderUuid();
+        Optional<Placement> parent = placement(targetProjectId, parentUuid, archiveByUuid, options);
+        if (parent.isEmpty()) {
+            return Optional.of(ImportConflict.of(
+                    ConflictType.RECORD_SET_MISSING,
+                    record.uuid(),
+                    label,
+                    "Belongs to record set " + parentUuid
+                            + ", which is not in this archive and does not exist in the target project.",
+                    record.isExplicit()));
+        }
+        Placement set = parent.get();
+        return RecordSetContainment.violation(AssetType.RECORD, record.payload(), set.type(), set.payload(), set.deleted())
+                .map(detail -> {
+                    ConflictType type = set.type() != AssetType.RECORD_SET
+                            ? ConflictType.RECORD_OUTSIDE_RECORD_SET
+                            : set.deleted() ? ConflictType.RECORD_SET_MISSING : ConflictType.RECORD_SET_DATASET_MISMATCH;
+                    String prefix = type == ConflictType.RECORD_OUTSIDE_RECORD_SET
+                            ? "Not imported: records from before record sets are not migrated. "
+                            : "";
+                    return ImportConflict.of(type, record.uuid(), label, prefix + detail, record.isExplicit());
+                });
+    }
+
+    /**
+     * The record set checks of an archived set (M25): its dataset must be in the archive or the target
+     * ({@link ConflictType#RECORD_SET_DATASET_MISSING}); overwriting a target set may not change its dataset
+     * ({@link ConflictType#RECORD_SET_DATASET_MISMATCH}); and its stored query is re-validated against the
+     * schema the set will have in the target ({@link ConflictType#RECORD_SET_QUERY_INVALID}, a warning — the set
+     * imports and reads {@code queryValid: false}). A set that is skipped (an existing implicit pick) is not
+     * written, so only its dataset is checked.
+     */
+    private List<ImportConflict> recordSetConflicts(
+            long targetProjectId, ExportedAsset set, String label, Optional<Asset> existing,
+            Map<String, ExportedAsset> archiveByUuid, ImportOptions options) {
+        UUID dataset = datasetOf(set);
+        Optional<JsonNode> datasetPayload = dataset == null
+                ? Optional.empty()
+                : placement(targetProjectId, dataset.toString(), archiveByUuid, options).map(Placement::payload);
+        if (datasetPayload.isEmpty()) {
+            return List.of(ImportConflict.of(
+                    ConflictType.RECORD_SET_DATASET_MISSING,
+                    set.uuid(),
+                    label,
+                    "Holds records of dataset " + dataset
+                            + ", which is not in this archive and does not exist in the target project.",
+                    set.isExplicit()));
+        }
+        if (existing.isEmpty() || existing.get().getAssetType() != AssetType.RECORD_SET) {
+            return queryConflict(set, label, datasetPayload.get());
+        }
+        if (options.skipExistingImplicit() && !set.isExplicit()) {
+            return List.of();
+        }
+        UUID targetDataset = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(existing.get().getId())
+                .map(version -> RecordValues.datasetRef(version.getPayload()))
+                .orElse(null);
+        if (targetDataset != null && !targetDataset.equals(dataset)) {
+            return List.of(ImportConflict.of(
+                    ConflictType.RECORD_SET_DATASET_MISMATCH,
+                    set.uuid(),
+                    label,
+                    "Would overwrite a record set of dataset " + targetDataset + " with one of dataset " + dataset
+                            + " — a record set's dataset never changes.",
+                    set.isExplicit()));
+        }
+        return queryConflict(set, label, datasetPayload.get());
+    }
+
+    /** {@link ConflictType#RECORD_SET_QUERY_INVALID} when the set's stored query doesn't fit the dataset's schema. */
+    private static List<ImportConflict> queryConflict(ExportedAsset set, String label, JsonNode datasetPayload) {
+        RecordSetQuery query = RecordSetQuery.fromJson(set.payload() == null ? null : set.payload().get("query"));
+        RecordSetQueries.Compiled compiled =
+                RecordSetQueries.compile(query, TemplateContentDefinitions.of(datasetPayload));
+        if (compiled.valid()) {
+            return List.of();
+        }
+        return List.of(ImportConflict.of(
+                ConflictType.RECORD_SET_QUERY_INVALID,
+                set.uuid(),
+                label,
+                "The stored query does not fit the dataset's schema (" + compiled.diagnostics().get(0).message()
+                        + "). The set is imported but shows no records until its query is fixed.",
+                set.isExplicit()));
+    }
+
+    /** A record set's dataset: {@code payload.datasetRef}, else the mirrored {@code templateUuid}. */
+    private static UUID datasetOf(ExportedAsset set) {
+        UUID ref = RecordValues.datasetRef(set.payload());
+        if (ref != null || set.templateUuid() == null || set.templateUuid().isBlank()) {
+            return ref;
+        }
+        try {
+            return UUID.fromString(set.templateUuid());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * What the asset {@code uuid} will be in the target once the import has run: the archive's copy, unless
+     * that one is skipped as an existing implicit pick ({@link ImportOptions#skipExistingImplicit()}) or absent
+     * — then the target's current version. Empty when it is in neither. A missing uuid is the store root (a
+     * {@code FOLDER}, as {@link RecordSetContainment} expects).
+     */
+    private Optional<Placement> placement(
+            long targetProjectId, String uuid, Map<String, ExportedAsset> archiveByUuid, ImportOptions options) {
+        if (uuid == null || uuid.isBlank()) {
+            return Optional.of(new Placement(AssetType.FOLDER, null, false));
+        }
+        UUID parsed;
+        try {
+            parsed = UUID.fromString(uuid);
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+        ExportedAsset archived = archiveByUuid.get(uuid.toLowerCase(Locale.ROOT));
+        Optional<Asset> existing = assetRepository.findByProjectIdAndUuid(targetProjectId, parsed);
+        if (archived != null && (existing.isEmpty() || archived.isExplicit() || !options.skipExistingImplicit())) {
+            return Optional.of(new Placement(AssetType.valueOf(archived.type()), archived.payload(), false));
+        }
+        return existing.flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId())
+                .map(version -> new Placement(asset.getAssetType(), version.getPayload(), version.isDeleted())));
+    }
+
+    /** An asset as the import will find it: its type, payload and whether it is soft-deleted. */
+    private record Placement(AssetType type, JsonNode payload, boolean deleted) {}
 
     private void assertNoBlockingConflicts(ConflictReport report) {
         if (!report.hasBlocking()) {
