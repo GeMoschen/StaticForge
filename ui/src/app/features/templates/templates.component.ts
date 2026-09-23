@@ -23,6 +23,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
+import { SfOctlEditorComponent } from '../../shared/components/sf-octl-editor.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ChannelsService } from '../channels/channels.service';
@@ -107,6 +108,7 @@ const NEW_DATASET_DEFINITION = `content {
     SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
     SfFieldComponent,
+    SfOctlEditorComponent,
     SfSpinnerComponent,
     SfUidRenameComponent,
     TemplateFolderNodeComponent,
@@ -768,8 +770,8 @@ export class TemplatesComponent {
     this.requestOctlValidation();
   }
 
-  onChannelInput(event: Event): void {
-    this.channelSource.set((event.target as HTMLTextAreaElement).value);
+  onChannelInput(source: string): void {
+    this.channelSource.set(source);
     this.requestOctlValidation();
   }
 

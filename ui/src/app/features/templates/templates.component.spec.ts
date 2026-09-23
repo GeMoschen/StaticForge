@@ -198,7 +198,7 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
     vi.useFakeTimers();
     try {
       selectArticle();
-      component.onChannelInput({ target: { value: '$CMS_EXTENDS(page_template:base)$$CMS_BLOCK(contnet)$$CMS_END_BLOCK$' } } as unknown as Event);
+      component.onChannelInput('$CMS_EXTENDS(page_template:base)$$CMS_BLOCK(contnet)$$CMS_END_BLOCK$');
       vi.advanceTimersByTime(350);
       const validate = httpMock.expectOne((r) => r.url.endsWith('/octl/validate'));
       expect((validate.request.body as { templateUuid?: string }).templateUuid).toBe('a-3');

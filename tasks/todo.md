@@ -15,13 +15,15 @@ next one in its lane starts.
 
 ## UI lane (after M25.3.1)
 - [x] M25.5.1 — Content store record sets
-- [ ] M25.5.2 — dataset record template editor
+- [x] M25.5.2 — dataset record template editor
 - [x] M25.5.3 — reference picker, search, routing
 
 ## Follow-ups found in review
 - [ ] Set grid: `revision` param on `GET /record-sets/{uuid}/records` (time travel lists records as of that
       revision) and a per-row `selectedBySet` flag in "All records" mode — replaces the UI's extra
       `_uuid == … || …` request for dimming (backend after M25.2.2, then UI)
+- [ ] Record template live check: `POST /octl/validate` gains a dataset context (`datasetUuid` + draft CDL) so
+      unknown fields show while typing, not only on save (backend, then `dataset-schema-editor`)
 
 ## Finish
 - [ ] M25.6.1 — docs + spec

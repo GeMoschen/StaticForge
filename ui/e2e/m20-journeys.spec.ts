@@ -184,7 +184,7 @@ async function createTemplateInUi(
   await screen.getByRole('combobox', { name: 'Add channel' }).selectOption('html');
   expect((await addedChannel).status()).toBe(200);
 
-  const channel = screen.locator('textarea[aria-describedby="octl-diagnostics"]');
+  const channel = screen.getByRole('textbox', { name: /^OCTL source for channel / });
   await expect(channel).toBeVisible();
   await channel.fill(htmlSource);
   const savedChannel = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/channels/html'));
@@ -216,13 +216,13 @@ test('journey: a layout change re-renders every descendant page', async ({ page 
     await expect(screen.getByRole('region', { name: 'Inherited editors and bodies' })).toContainText('title');
 
     // A typo'd block name warns live, with a suggestion; fixing it clears the warning.
-    const channel = screen.locator('textarea[aria-describedby="octl-diagnostics"]');
+    const channel = screen.getByRole('textbox', { name: /^OCTL source for channel / });
     await channel.fill(ARTICLE_HTML.replace('$CMS_BLOCK(content)$', '$CMS_BLOCK(contnet)$'));
-    await expect(screen.locator('#octl-diagnostics')).toContainText('SF-TPL-0157', { timeout: 10_000 });
-    await expect(screen.locator('#octl-diagnostics')).toContainText("did you mean 'content'");
+    await expect(screen.locator('sf-octl-editor .octl-editor__diagnostics')).toContainText('SF-TPL-0157', { timeout: 10_000 });
+    await expect(screen.locator('sf-octl-editor .octl-editor__diagnostics')).toContainText("did you mean 'content'");
     await snap(page, 'j1-typo-warning');
     await channel.fill(ARTICLE_HTML);
-    await expect(screen.locator('#octl-diagnostics .diagnostic')).toHaveCount(0, { timeout: 10_000 });
+    await expect(screen.locator('sf-octl-editor .diagnostic')).toHaveCount(0, { timeout: 10_000 });
 
     const base = await api.templateByUid('base');
     const docs = await api.templateByUid('docs_layout');

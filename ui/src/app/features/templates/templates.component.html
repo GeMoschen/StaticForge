@@ -274,19 +274,13 @@
                   </button>
                 }
               </div>
-              <textarea
+              <sf-octl-editor
+                [label]="'OCTL source for channel ' + selectedChannel()"
                 [value]="channelSource()"
-                (input)="onChannelInput($event)"
-                spellcheck="false"
-                aria-describedby="octl-diagnostics"
-              ></textarea>
-              <div id="octl-diagnostics" class="diagnostics" aria-live="polite">
-                @for (diag of octlDiagnostics(); track $index) {
-                  <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
-                    {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
-                  </div>
-                }
-              </div>
+                [diagnostics]="octlDiagnostics()"
+                [readOnly]="readOnly()"
+                (valueChange)="onChannelInput($event)"
+              />
               <div class="actions">
                 <sf-button
                   variant="primary"
