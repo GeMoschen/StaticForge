@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate.plan;
 
 import com.acme.staticforge.asset.template.CompiledTemplateCache;
+import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.insight.FallbackCause;
 import com.acme.staticforge.generate.insight.RebuildReason;
@@ -82,7 +83,8 @@ public class BuildPlanner {
 
     public BuildPlan plan(Snapshot snapshot, PlanRequest request, OutputPathResolver paths) {
         Set<String> channels = effectiveChannels(request.channels());
-        SnapshotPagination pagination = SnapshotPagination.of(snapshot, compiledTemplates.buildMemo(snapshot));
+        TemplateCompileMemo memo = compiledTemplates.buildMemo(snapshot);
+        SnapshotPagination pagination = SnapshotPagination.of(snapshot, memo);
         List<PlanEntry> site = siteOutputs(snapshot, request, channels, pagination, paths);
 
         Baseline baseline = request.mode() == GenerationMode.INCREMENTAL ? request.baseline() : null;
@@ -95,7 +97,7 @@ public class BuildPlanner {
         Map<UUID, Map<ChannelLocale, String>> firstPaths = firstPaths(site);
         RebuildExpansion.Changes changes = expansion.changesSince(
                 snapshot, baseline.revision(), pageUuid -> moved(pageUuid, firstPaths, basePaths));
-        RebuildExpansion.Result walk = expansion.expand(snapshot, changes, pagination);
+        RebuildExpansion.Result walk = expansion.expand(snapshot, changes, pagination, memo, paths.locales());
 
         Map<UUID, RebuildReason> reasons = new HashMap<>();
         // A page whose only change was a translation rebuilds just those languages (M24.3.2).

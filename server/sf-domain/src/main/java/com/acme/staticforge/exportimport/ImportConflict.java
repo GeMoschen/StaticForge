@@ -28,6 +28,11 @@ public record ImportConflict(
         return new ImportConflict(type.severity(), type, elementUuid, elementLabel, detail, explicit);
     }
 
+    /** {@code true} when this conflict refuses the whole import (see {@link ConflictType#blocksImport()}). */
+    public boolean blocksImport() {
+        return type.blocksImport();
+    }
+
     /** Convenience for conflict kinds with no backing {@code ExportedAsset} (always explicit). */
     public static ImportConflict of(ConflictType type, String elementUuid, String elementLabel, String detail) {
         return of(type, elementUuid, elementLabel, detail, true);

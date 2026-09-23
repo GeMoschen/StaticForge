@@ -29,7 +29,7 @@ class LocalizedDatasetQueryTest {
         String content = """
                 {"title":{"type":"L10N","values":{"de":"%s","en":"%s"}},"sku":"%s"}"""
                 .formatted(de, en, uid);
-        return new RecordView(UUID.randomUUID(), uid, uid, "/", Instant.parse("2026-01-01T00:00:00Z"), json(content));
+        return new RecordView(UUID.randomUUID(), uid, uid, "/", "products", Instant.parse("2026-01-01T00:00:00Z"), json(content));
     }
 
     @Test
@@ -50,6 +50,7 @@ class LocalizedDatasetQueryTest {
                 "a",
                 "A",
                 "/",
+                "products",
                 Instant.parse("2026-01-01T00:00:00Z"),
                 json("{\"title\":{\"type\":\"L10N\",\"values\":{\"de\":\"Äpfel\"}}}"));
 
@@ -60,7 +61,7 @@ class LocalizedDatasetQueryTest {
     @DisplayName("a record without language-dependent fields is returned unchanged")
     void plainRecordIsUntouched() {
         RecordView record = new RecordView(
-                UUID.randomUUID(), "a", "A", "/", Instant.parse("2026-01-01T00:00:00Z"), json("{\"title\":\"Plain\"}"));
+                UUID.randomUUID(), "a", "A", "/", "products", Instant.parse("2026-01-01T00:00:00Z"), json("{\"title\":\"Plain\"}"));
 
         assertThat(record.resolvedFor(List.of("de"))).isSameAs(record);
         assertThat(record.resolvedFor(List.of())).isSameAs(record);

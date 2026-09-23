@@ -1,3 +1,42 @@
+# M25 — Record sets (implementation, branch `m25-record-sets`)
+
+Spec: `tasks/25-m25-record-sets/`. One subagent per task; backend lane sequential (shared Gradle build and
+service classes), UI lane parallel once the API exists. Each task is reviewed, tested and committed before the
+next one in its lane starts.
+
+## Backend lane
+- [x] M25.1.1 — `RECORD_SET` asset type, containment, `RecordSetService`
+- [x] M25.1.2 — stored set query: validation, evaluation, rename rewrite, broken-query flags
+- [x] M25.2.1 — per-channel record templates on `DATASET`
+- [x] M25.3.1 — `RecordSetController`, record create by set, DTOs, `schema.d.ts`
+- [x] M25.2.2 — `recordset:` values, loops, reference editor, golden files
+- [x] M25.2.3 — incremental planning + build insight
+- [x] M25.4.1 — export/import
+
+## UI lane (after M25.3.1)
+- [x] M25.5.1 — Content store record sets
+- [x] M25.5.2 — dataset record template editor
+- [x] M25.5.3 — reference picker, search, routing
+
+## Follow-ups found in review
+- [x] Set grid: `revision` param on `GET /record-sets/{uuid}/records` (time travel lists records as of that
+      revision) and a per-row `selectedBySet` flag in "All records" mode — replaces the UI's extra
+      `_uuid == … || …` request for dimming (backend after M25.2.2, then UI)
+- [x] Insight UI: `EDGE_LABELS` in `features/generation/insight/insight.util.ts` for `RECORD_SET_MEMBERSHIP`,
+      `RECORD_SET_QUERY`, `RECORD_TEMPLATE`
+- [x] Record template live check: `POST /octl/validate` gains a dataset context (`datasetUuid` + draft CDL) so
+      unknown fields show while typing, not only on save (backend, then `dataset-schema-editor`)
+
+- [x] Import UI: gate Proceed on `blocksImport` (not any BLOCKING), `RECORD_OUTSIDE_RECORD_SET` reads "will not be
+      imported", icon for `RECORD_SET_QUERY_INVALID`; regenerate `schema.d.ts` (`blocksImport` fields)
+
+## Finish
+- [x] M25.6.1 — docs + spec
+- [x] M25.6.2 — Playwright journey
+- [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green; merge to master
+
+---
+
 # Project settings — merge tabs
 
 Collapse the nine project-settings tabs to five:

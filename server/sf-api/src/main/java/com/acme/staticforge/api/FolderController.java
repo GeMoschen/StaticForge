@@ -132,13 +132,13 @@ public class FolderController {
 
     private static FolderView toView(FolderNode node) {
         return new FolderView(node.uuid(), node.uid(), node.displayName(), node.path(),
-                node.scope() == null ? null : node.scope().name(), node.protectedFolder(),
-                node.children().stream().map(FolderController::toView).toList());
+                node.scope() == null ? null : node.scope().name(), node.protectedFolder(), node.type().name(),
+                node.recordCount(), node.children().stream().map(FolderController::toView).toList());
     }
 
     private static FolderView toView(AssetVersionView v) {
         FolderScope scope = FolderScope.fromPayload(v.payload());
         return new FolderView(v.uuid(), v.uid(), v.displayName(), v.folderPath(), scope == null ? null : scope.name(),
-                FolderScope.isProtected(v.payload()), List.of());
+                FolderScope.isProtected(v.payload()), AssetType.FOLDER.name(), null, List.of());
     }
 }

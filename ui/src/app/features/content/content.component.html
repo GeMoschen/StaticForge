@@ -2,16 +2,16 @@
   <h1 class="sf-sr-only">Content</h1>
   <aside class="content__tree">
     <div class="content__toolbar">
-      <sf-button variant="secondary" [disabled]="!canEditRecords()" (click)="newFolder()">New folder</sf-button>
-      <sf-button variant="primary" [disabled]="!canEditRecords() || datasets().length === 0" (click)="newRecord()">
-        New record
+      <sf-button variant="secondary" [disabled]="!canEdit()" (click)="newFolder()">New folder</sf-button>
+      <sf-button variant="primary" [disabled]="!canEdit() || datasets().length === 0" (click)="newSet()">
+        New record set
       </sf-button>
     </div>
 
     <button
       type="button"
       class="content__clear"
-      [class.content__clear--active]="!selectedFolderUuid()"
+      [class.content__clear--active]="!selectedFolderUuid() && !activeSetUuid()"
       (click)="clearFolder()"
       (dragover)="onRootDragOver($event)"
       (drop)="onRootDrop($event)"
@@ -27,60 +27,27 @@
           <sf-store-tree-node
             [node]="node"
             [depth]="0"
-            [selectedUuid]="selectedFolderUuid()"
+            [selectedUuid]="activeSetUuid() ?? selectedFolderUuid()"
             [projectKey]="projectKey()"
-            leafNoun="Record"
+            leafNoun="Record set"
             [renameFolder]="renameFolder"
-            (select)="selectFolder($event)"
+            [menuItems]="nodeMenu"
+            (select)="onTreeSelect($event)"
             (move)="onMove($event)"
-            (changed)="onRecordChanged()"
+            (changed)="onTreeChanged()"
           />
         }
       </sf-tree>
     } @else if (!loading()) {
-      <p class="content__hint">Folders you create here group records; every folder can hold records of any dataset.</p>
+      <p class="content__hint">Folders group record sets; a record set holds the records of one dataset.</p>
     }
   </aside>
 
   <section class="content__main">
-    @if (datasets().length > 0 && !editorOpen()) {
-      <div class="content__chips" role="radiogroup" aria-label="Dataset">
-        <button
-          id="content-chip-0"
-          type="button"
-          role="radio"
-          class="content__chip"
-          [class.content__chip--active]="activeChip() === all"
-          [attr.aria-checked]="activeChip() === all"
-          [attr.tabindex]="activeChip() === all ? 0 : -1"
-          (click)="selectChip(all)"
-          (keydown)="onChipKeydown($event, 0)"
-        >
-          All
-        </button>
-        @for (ds of datasets(); track ds.uuid; let i = $index) {
-          <button
-            [id]="'content-chip-' + (i + 1)"
-            type="button"
-            role="radio"
-            class="content__chip"
-            [class.content__chip--active]="activeChip() === ds.uuid"
-            [attr.aria-checked]="activeChip() === ds.uuid"
-            [attr.tabindex]="activeChip() === ds.uuid ? 0 : -1"
-            (click)="selectChip(ds.uuid ?? all)"
-            (keydown)="onChipKeydown($event, i + 1)"
-          >
-            {{ ds.displayName ?? ds.uid }}
-            <span class="content__chip-count">{{ ds.recordCount }}</span>
-          </button>
-        }
-      </div>
-    }
+    <router-outlet (activate)="onChildActivated()" (deactivate)="onChildDeactivated()" />
 
-    <router-outlet (activate)="onEditorActivated()" (deactivate)="onEditorDeactivated()" />
-
-    @if (!editorOpen()) {
-      @if (loading()) {
+    @if (!childOpen()) {
+      @if (loading() && datasets().length === 0) {
         <sf-spinner label="Loading content…" />
       } @else if (datasets().length === 0) {
         <sf-empty-state
@@ -93,28 +60,89 @@
           </p>
         }
       } @else {
-        @for (ds of visibleDatasets(); track ds.uuid) {
-          <section class="content__dataset" [attr.aria-label]="ds.displayName">
-            @if (activeChip() === all) {
-              <header class="content__dataset-head">
-                <h2>
-                  <span class="content__badge">{{ ds.displayName ?? ds.uid }}</span>
-                </h2>
-                <button type="button" class="content__link" (click)="selectChip(ds.uuid ?? all)">
-                  Show all {{ ds.recordCount }}
-                </button>
-              </header>
-            }
-            <sf-record-grid
-              [projectKey]="projectKey()"
-              [dataset]="ds"
-              [folder]="folderPath()"
-              [compact]="activeChip() === all"
-              [pageSize]="activeChip() === all ? 10 : 50"
-              [refreshKey]="refreshKey()"
-              (open)="openRecord($event)"
-            />
-          </section>
+        <div class="content__chips" role="radiogroup" aria-label="Dataset">
+          <button
+            id="content-chip-0"
+            type="button"
+            role="radio"
+            class="content__chip"
+            [class.content__chip--active]="activeChip() === all"
+            [attr.aria-checked]="activeChip() === all"
+            [attr.tabindex]="activeChip() === all ? 0 : -1"
+            (click)="selectChip(all)"
+            (keydown)="onChipKeydown($event, 0)"
+          >
+            All
+          </button>
+          @for (ds of datasets(); track ds.uuid; let chipIndex = $index) {
+            <button
+              [id]="'content-chip-' + (chipIndex + 1)"
+              type="button"
+              role="radio"
+              class="content__chip"
+              [class.content__chip--active]="activeChip() === ds.uuid"
+              [attr.aria-checked]="activeChip() === ds.uuid"
+              [attr.tabindex]="activeChip() === ds.uuid ? 0 : -1"
+              (click)="selectChip(ds.uuid ?? all)"
+              (keydown)="onChipKeydown($event, chipIndex + 1)"
+            >
+              {{ ds.displayName ?? ds.uid }}
+              <span class="content__chip-count" [title]="(setCounts().get(ds.uuid ?? '') ?? 0) + ' record sets'">
+                {{ setCounts().get(ds.uuid ?? '') ?? 0 }}
+              </span>
+            </button>
+          }
+        </div>
+
+        @if (sets().length === 0) {
+          <sf-empty-state
+            title="No record sets yet"
+            description="A record set holds the records of one dataset — say, the team members shown on the About page — and a query deciding which of them a page shows, in which order."
+          />
+          @if (canEdit()) {
+            <p class="content__cta">
+              <sf-button variant="primary" (click)="newSet()">New record set</sf-button>
+            </p>
+          }
+        } @else {
+          <div class="content__sets">
+            <table class="content__table">
+              <caption class="sf-sr-only">Record sets in {{ folderPath() }}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Record set</th>
+                  <th scope="col">Dataset</th>
+                  <th scope="col">Folder</th>
+                  <th scope="col" class="content__num">Records</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (set of visibleSets(); track set.uuid) {
+                  <tr class="content__set-row" (click)="openSet(set.uuid ?? '')">
+                    <td>
+                      <a class="content__set-link" [routerLink]="['/p', projectKey(), 'content', 'sets', set.uuid]" (click)="$event.stopPropagation()">
+                        <sf-icon [name]="setIcon" />
+                        {{ set.displayName ?? set.uid }}
+                      </a>
+                      @if (set.queryValid === false) {
+                        <span class="content__warning" [title]="invalidQueryWarning">
+                          <sf-icon name="warning" />
+                          Query invalid
+                        </span>
+                      }
+                    </td>
+                    <td><span class="content__badge">{{ set.dataset?.displayName ?? set.dataset?.uid }}</span></td>
+                    <td class="content__muted">{{ setFolderPath(set.folderPath) }}</td>
+                    <td class="content__num">{{ set.recordCount ?? 0 }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td class="content__empty" colspan="4">No record sets match this folder and dataset.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
       }
     }
@@ -132,13 +160,23 @@
 />
 
 <sf-create-asset-dialog
-  kind="RECORD"
+  kind="RECORD_SET"
   scope="CONTENT"
-  [open]="newRecordOpen()"
-  [submitting]="creatingRecord()"
+  [open]="newSetOpen()"
+  [submitting]="creatingSet()"
   [projectKey]="projectKey()"
   [datasets]="datasets()"
   [initialDatasetUuid]="activeChip() === all ? null : activeChip()"
-  (create)="submitNewRecord($event)"
-  (closed)="closeNewRecord()"
+  (create)="submitNewSet($event)"
+  (closed)="closeNewSet()"
+/>
+
+<sf-move-target-dialog
+  [open]="movingSet() !== null"
+  [title]="'Move “' + (movingSet()?.displayName ?? '') + '” to…'"
+  description="A record set lives in a Content folder; its records move with it."
+  [targets]="moveTargets()"
+  [submitting]="moving()"
+  (chosen)="submitMove($event)"
+  (closed)="closeMove()"
 />

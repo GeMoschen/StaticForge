@@ -80,6 +80,18 @@ describe('groupHits', () => {
   it('is empty without a result', () => {
     expect(groupHits(null)).toEqual([]);
   });
+
+  it('groups record sets after records, with their own label and icon', () => {
+    const groups = groupHits({
+      content: [
+        { uuid: 's1', type: 'RECORD_SET' },
+        { uuid: 'r1', type: 'RECORD' },
+        { uuid: 'd1', type: 'DATASET' },
+      ],
+    } as SearchResultView);
+    expect(groups.map((g) => g.type)).toEqual(['RECORD', 'RECORD_SET', 'DATASET']);
+    expect(groups[1]).toMatchObject({ label: 'Record sets', icon: 'table_rows', total: 1 });
+  });
 });
 
 describe('shouldSearch', () => {

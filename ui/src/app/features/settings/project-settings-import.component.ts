@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, Subject, type Subscription } from 'rxjs';
 import {
   ConflictReportView,
   ImportConflictView,
@@ -17,13 +17,22 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfDropTargetDirective } from '../../shared/directives/sf-drop-target.directive';
 
-/** Material Symbols icon per `ConflictType` — a reasonable visual cue, not meant to be pixel-perfect. */
+/**
+ * Material Symbols icon per `ConflictType` — a reasonable visual cue, not meant to be pixel-perfect. Keyed by the
+ * plain string the API sends (`ImportConflictView.type` is not an enum in the schema), so a type the server adds
+ * later just falls back to `info`.
+ */
 const CONFLICT_ICONS: Record<string, string> = {
   PROTOCOL_VERSION_MISMATCH: 'warning',
   DUPLICATE_UUID: 'content_copy',
   DUPLICATE_UUID_TYPE_MISMATCH: 'report',
   MISSING_TEMPLATE_REFERENCE: 'link_off',
   RECORD_DATASET_MISSING: 'dataset_linked',
+  RECORD_SET_DATASET_MISSING: 'dataset_linked',
+  RECORD_SET_MISSING: 'table_rows',
+  RECORD_SET_DATASET_MISMATCH: 'rule',
+  RECORD_OUTSIDE_RECORD_SET: 'move_item',
+  RECORD_SET_QUERY_INVALID: 'filter_alt_off',
   PARENT_TEMPLATE_MISSING: 'link_off',
   MISSING_PARENT_FOLDER: 'folder_off',
   SETTINGS_KEY_COLLISION: 'settings',
@@ -33,9 +42,27 @@ const CONFLICT_ICONS: Record<string, string> = {
 };
 
 /**
+ * Whether a conflict refuses the whole import. A `BLOCKING` conflict does unless the server says it only rejects
+ * its own asset (`blocksImport: false` — M25: a record outside a record set, which is left out while the rest of
+ * the archive imports). A conflict without the flag counts as refusing, the safe reading.
+ */
+export function refusesImport(conflict: ImportConflictView): boolean {
+  return conflict.severity === 'BLOCKING' && conflict.blocksImport !== false;
+}
+
+/** Whether a conflict keeps only its own asset out of the import (`BLOCKING` with `blocksImport: false`). */
+export function rejectsAssetOnly(conflict: ImportConflictView): boolean {
+  return conflict.severity === 'BLOCKING' && conflict.blocksImport === false;
+}
+
+/**
  * Project settings tab: "Import" half of `M10`/`M11`'s selective export/import feature —
  * pick a `.zip` archive, analyze it for conflicts, then let the user cancel or commit.
  * Same standalone/OnPush/signals shape as `project-settings-url-registry.component`.
+ *
+ * <p>Import is gated on conflicts that refuse the whole import (`blocksImport`), not on every `BLOCKING`
+ * one: assets whose conflict rejects only themselves are listed under "Not imported" and simply stay out
+ * (M25: records from before record sets).
  */
 @Component({
   selector: 'sf-project-settings-import',
@@ -73,21 +100,26 @@ export class ProjectSettingsImportComponent {
   protected readonly skipExistingImplicit = signal(false);
   private readonly skipExistingImplicit$ = new Subject<boolean>();
 
+  /** The analysis in flight — dropped when the archive or the project changes before it answers. */
+  private analysis: Subscription | null = null;
+
   protected readonly committing = signal(false);
   protected readonly commitError = signal<string | null>(null);
   protected readonly result = signal<ImportResultView | null>(null);
 
-  protected readonly blocking = computed(
-    () => (this.report()?.conflicts ?? []).filter((c) => c.severity === 'BLOCKING'),
-  );
+  /** Conflicts that refuse the whole import. */
+  protected readonly blocking = computed(() => (this.report()?.conflicts ?? []).filter(refusesImport));
+  /** Assets the import leaves out while the rest of the archive imports. */
+  protected readonly rejected = computed(() => (this.report()?.conflicts ?? []).filter(rejectsAssetOnly));
   protected readonly warnings = computed(
     () => (this.report()?.conflicts ?? []).filter((c) => c.severity === 'WARNING'),
   );
-  protected readonly hasBlocking = computed(
-    () => this.report()?.hasBlocking === true || this.blocking().length > 0,
+  /** Whether the server would refuse this import — the only thing that disables "Import". */
+  protected readonly blocksImport = computed(
+    () => this.report()?.blocksImport === true || this.blocking().length > 0,
   );
   protected readonly noConflicts = computed(
-    () => this.blocking().length === 0 && this.warnings().length === 0,
+    () => this.blocking().length === 0 && this.rejected().length === 0 && this.warnings().length === 0,
   );
 
   constructor() {
@@ -108,10 +140,27 @@ export class ProjectSettingsImportComponent {
       }
       untracked(() => this.analyze(file, skip));
     });
+
+    // The router reuses this screen when only the project changes (`/p/a/settings/…` → `/p/b/settings/…`): an
+    // archive loaded and analyzed for the previous project must not stay armed for this one — its report was
+    // checked against the other project, and "Import" would commit into this one.
+    let shownFor: string | null = null;
+    effect(() => {
+      const key = this.projectKey();
+      if (shownFor !== null && shownFor !== key) {
+        untracked(() => this.cancel());
+      }
+      shownFor = key;
+    });
   }
 
   protected iconFor(type: string | undefined): string {
     return CONFLICT_ICONS[type ?? ''] ?? 'info';
+  }
+
+  /** The badge of an asset left out of the import: a record outside a record set says what it is. */
+  protected notImportedLabel(type: string | undefined): string {
+    return type === 'RECORD_OUTSIDE_RECORD_SET' ? 'Record will not be imported' : 'Will not be imported';
   }
 
   // ── File selection ──────────────────────────────────────────────────────
@@ -164,7 +213,8 @@ export class ProjectSettingsImportComponent {
   private analyze(file: File, skipExistingImplicit: boolean): void {
     this.analyzing.set(true);
     this.report.set(null);
-    this.api.analyzeImport(this.projectKey(), file, skipExistingImplicit).subscribe({
+    this.analysis?.unsubscribe();
+    this.analysis = this.api.analyzeImport(this.projectKey(), file, skipExistingImplicit).subscribe({
       next: (report) => {
         this.analyzing.set(false);
         this.report.set(report);
@@ -180,6 +230,9 @@ export class ProjectSettingsImportComponent {
   // ── Actions ─────────────────────────────────────────────────────────────
 
   cancel(): void {
+    this.analysis?.unsubscribe();
+    this.analysis = null;
+    this.analyzing.set(false);
     this.file.set(null);
     this.report.set(null);
     this.pickError.set(null);
@@ -189,7 +242,7 @@ export class ProjectSettingsImportComponent {
 
   commit(): void {
     const file = this.file();
-    if (!file || this.hasBlocking() || this.committing() || this.readOnly()) {
+    if (!file || this.blocksImport() || this.committing() || this.readOnly()) {
       return;
     }
     this.committing.set(true);
@@ -218,7 +271,11 @@ export class ProjectSettingsImportComponent {
         this.committing.set(false);
         const freshConflicts: ImportConflictView[] | null = extractConflicts(err);
         if (freshConflicts) {
-          this.report.set({ conflicts: freshConflicts, hasBlocking: freshConflicts.some((c) => c.severity === 'BLOCKING') });
+          this.report.set({
+            conflicts: freshConflicts,
+            hasBlocking: freshConflicts.some((c) => c.severity === 'BLOCKING'),
+            blocksImport: freshConflicts.some(refusesImport),
+          });
           this.commitError.set(
             'Conflicts changed since you last checked this archive — please re-check it.',
           );

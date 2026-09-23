@@ -1,0 +1,158 @@
+@if (loading() && !set()) {
+  <p class="set-view__loading">Loading record set…</p>
+} @else {
+  @if (set(); as rs) {
+    <div class="set-view">
+      <nav class="set-view__crumbs" aria-label="Breadcrumb">
+        <a [routerLink]="['/p', projectKey(), 'content']">All content</a>
+        @if (rs.folderUuid && folderPath() !== '/') {
+          <span aria-hidden="true">›</span>
+          <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ folder: rs.folderUuid }">{{ folderPath() }}</a>
+        }
+        <span aria-hidden="true">›</span>
+        <span aria-current="page">{{ rs.displayName ?? rs.uid }}</span>
+      </nav>
+
+      <header class="set-view__header">
+        <div class="set-view__title">
+          <h2>{{ rs.displayName ?? rs.uid }}</h2>
+          <code class="set-view__uid">{{ rs.uid }}</code>
+          @if (rs.dataset; as ds) {
+            <span class="set-view__badge" title="Dataset — fixed for the set's life">
+              <sf-icon name="dataset" />
+              {{ ds.displayName ?? ds.uid }}
+            </span>
+          }
+          <span class="set-view__count">{{ recordCountLabel() }}</span>
+          @if (rs.queryValid === false) {
+            <span class="set-view__warning" [title]="invalidQueryWarning">
+              <sf-icon name="warning" />
+              Query invalid
+            </span>
+          }
+        </div>
+        @if (!readOnly() && !rs.deleted) {
+          <sf-button variant="primary" (click)="openNewRecord()">New record</sf-button>
+          <sf-button variant="danger" (click)="deleteSet()">Delete set</sf-button>
+        }
+        @if (rs.deleted && !timeTravelling()) {
+          <sf-button variant="primary" [disabled]="readOnly()" (click)="restoreSet()">Restore</sf-button>
+        }
+      </header>
+
+      @if (timeTravelling()) {
+        <p class="set-view__notice" role="status">
+          Viewing revision {{ rs.revision }} — the set and its query are read-only until you leave time travel.
+          <button type="button" class="set-view__link" (click)="leaveTimeTravel()">Back to now</button>
+        </p>
+      } @else if (rs.deleted) {
+        <p class="set-view__notice" role="status">This record set is deleted. Restore it to bring it and its records back.</p>
+      }
+
+      <div class="set-view__tabs" role="tablist" aria-label="Record set">
+        <button type="button" role="tab" [attr.aria-selected]="activePanel() === 'records'" [class.set-view__tab--active]="activePanel() === 'records'" (click)="showPanel('records')">
+          Records
+        </button>
+        <button type="button" role="tab" [attr.aria-selected]="activePanel() === 'history'" [class.set-view__tab--active]="activePanel() === 'history'" (click)="showPanel('history')">
+          History
+        </button>
+        <button type="button" role="tab" [attr.aria-selected]="activePanel() === 'usages'" [class.set-view__tab--active]="activePanel() === 'usages'" (click)="showPanel('usages')">
+          Used by
+          @if (usages().length > 0) {
+            <span class="set-view__tab-count">{{ usages().length }}</span>
+          }
+        </button>
+      </div>
+
+      @switch (activePanel()) {
+        @case ('records') {
+          <div class="set-view__records" role="tabpanel" aria-label="Records">
+            <sf-record-set-query-panel
+              [projectKey]="projectKey()"
+              [set]="rs"
+              [dataset]="dataset()"
+              [readOnly]="readOnly() || rs.deleted === true"
+              (saved)="onQuerySaved($event)"
+              (stale)="onQueryStale()"
+            />
+            @if (dataset(); as ds) {
+              @if (!rs.deleted) {
+                <sf-record-grid
+                  [projectKey]="projectKey()"
+                  [dataset]="ds"
+                  [recordSetUuid]="rs.uuid ?? ''"
+                  [queryValid]="rs.queryValid !== false"
+                  [revision]="activeRevision()"
+                  [canEditQuery]="!readOnly()"
+                  [refreshKey]="gridRefresh()"
+                  (open)="openRecord($event)"
+                  (useAsSetQuery)="onUseAsSetQuery($event)"
+                />
+              }
+            }
+            <p class="set-view__snippet" title="Render this set in a template">
+              <span class="sf-sr-only">Template snippet: </span><code>{{ snippet() }}</code>
+            </p>
+          </div>
+        }
+        @case ('history') {
+          <div role="tabpanel" aria-label="History">
+            <ul class="set-view__list">
+              @for (entry of history(); track entry.revision) {
+                <li>
+                  <button
+                    type="button"
+                    class="set-view__revision"
+                    [class.set-view__revision--current]="entry.revision === rs.revision"
+                    (click)="viewRevision(entry.revision)"
+                  >
+                    <span>rev {{ entry.revision }}</span>
+                    <span>{{ entry.displayName }}@if (entry.deleted) { (deleted) }</span>
+                    <span class="set-view__muted">{{ entry.changedAt | sfRelativeTime }}</span>
+                  </button>
+                </li>
+              } @empty {
+                <li class="set-view__hint">No history yet.</li>
+              }
+            </ul>
+          </div>
+        }
+        @case ('usages') {
+          <div role="tabpanel" aria-label="Used by">
+            @if (usages().length === 0) {
+              <p class="set-view__hint">No page, template or record references this set.</p>
+            } @else {
+              <ul class="set-view__list">
+                @for (usage of usages(); track $index) {
+                  <li class="set-view__usage">
+                    <span class="set-view__badge">{{ usage.fromType }}</span>
+                    @if (usage.fromType === 'PAGE') {
+                      <a [routerLink]="['/p', projectKey(), 'pages', usage.fromUuid]">{{ usage.fromUid }}</a>
+                    } @else if (usage.fromType === 'RECORD') {
+                      <a [routerLink]="['/p', projectKey(), 'content', 'records', usage.fromUuid]">{{ usage.fromUid }}</a>
+                    } @else {
+                      <span>{{ usage.fromUid }}</span>
+                    }
+                    <code class="set-view__muted">{{ usage.sourcePath }}</code>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+      }
+    </div>
+  } @else {
+    <p class="set-view__loading">This record set could not be loaded.</p>
+  }
+}
+
+<sf-create-asset-dialog
+  kind="RECORD"
+  scope="CONTENT"
+  [open]="newRecordOpen()"
+  [submitting]="creatingRecord()"
+  [projectKey]="projectKey()"
+  (create)="submitNewRecord($event)"
+  (closed)="closeNewRecord()"
+/>

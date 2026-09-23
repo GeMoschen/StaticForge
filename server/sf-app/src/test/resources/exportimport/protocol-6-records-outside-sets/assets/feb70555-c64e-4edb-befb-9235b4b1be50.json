@@ -1,0 +1,16 @@
+{
+  "uuid": "feb70555-c64e-4edb-befb-9235b4b1be50",
+  "type": "FOLDER",
+  "uid": "content_root",
+  "displayName": "All Content",
+  "parentFolderUuid": "ccb15e4c-7b2d-42db-a1fd-5544c79dddcf",
+  "folderPath": "/content_root/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "CONTENT",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

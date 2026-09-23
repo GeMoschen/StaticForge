@@ -48,7 +48,8 @@ public class SnapshotService {
                     v.getFolderPath(),
                     v.getPayload(),
                     v.isDeleted(),
-                    v.getChangedAt());
+                    v.getChangedAt(),
+                    v.getFolderId());
             byAssetId.put(sa.assetId(), sa);
             if (sa.uuid() != null) {
                 byUuid.put(sa.uuid(), sa);

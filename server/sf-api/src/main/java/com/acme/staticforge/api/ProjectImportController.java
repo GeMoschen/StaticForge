@@ -75,9 +75,9 @@ public class ProjectImportController {
         List<ImportConflictView> conflicts = report.conflicts().stream()
                 .map(c -> new ImportConflictView(
                         c.severity().name(), c.type().name(), c.elementUuid(), c.elementLabel(), c.detail(),
-                        c.explicit()))
+                        c.explicit(), c.blocksImport()))
                 .toList();
-        return new ConflictReportView(conflicts, report.hasBlocking());
+        return new ConflictReportView(conflicts, report.hasBlocking(), report.blocksImport());
     }
 
     private static byte[] bytes(MultipartFile file) {

@@ -10,22 +10,16 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentIssue;
+import com.acme.staticforge.asset.folder.RecordSetContainment;
 import com.acme.staticforge.asset.page.PageContentValidation;
-import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
-import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.content.ContentDefinition;
-import com.acme.staticforge.template.content.EditorDefinition;
-import com.acme.staticforge.template.diagnostic.Diagnostic;
-import com.acme.staticforge.template.octl.OctlExpressions;
 import com.acme.staticforge.template.query.DatasetQuery;
 import com.acme.staticforge.template.query.DatasetQueryEvaluator;
-import com.acme.staticforge.template.query.DatasetQueryParser;
 import com.acme.staticforge.template.query.RecordView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,7 +52,6 @@ public class RecordServiceImpl implements RecordService {
     private final PageContentValidation pageContentValidation;
     private final RecordDatasets recordDatasets;
     private final ObjectMapper objectMapper;
-    private final RevisionService revisionService;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
     public RecordServiceImpl(
@@ -67,9 +60,7 @@ public class RecordServiceImpl implements RecordService {
             AssetVersionRepository assetVersionRepository,
             PageContentValidation pageContentValidation,
             RecordDatasets recordDatasets,
-            ObjectMapper objectMapper,
-            RevisionService revisionService) {
-        this.revisionService = revisionService;
+            ObjectMapper objectMapper) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
@@ -81,7 +72,8 @@ public class RecordServiceImpl implements RecordService {
     @Override
     @Transactional
     public RecordWriteResult create(CreateRecordCommand cmd, RevisionContext ctx) {
-        Dataset dataset = requireLiveDataset(cmd.projectId(), cmd.datasetUuid());
+        AssetVersion set = requireRecordSet(cmd.projectId(), cmd.recordSetUuid());
+        Dataset dataset = requireLiveDataset(cmd.projectId(), RecordValues.datasetRef(set.getPayload()));
         JsonNode content = contentOrEmpty(cmd.content());
         List<ContentIssue> issues = validate(cmd.projectId(), dataset, content);
 
@@ -94,18 +86,10 @@ public class RecordServiceImpl implements RecordService {
             throw new SfException(ProblemFactory.badRequest(
                     "displayName must not be blank (the dataset has no title editor value to use)."));
         }
-        // A project created before M19 has no Content store root yet: provisioning it (inside
-        // AssetService.create) joins this creation's revision instead of adding one of its own.
-        RevisionContext writeCtx = ctx.openRevision() != null
-                ? ctx
-                : RevisionContext.joining(
-                        revisionService.beginBatch(ctx.projectId(), ChangeType.CREATE, ctx.comment(), ctx.userId()),
-                        ctx.userId(),
-                        ctx.comment());
         AssetVersionView created = assetService.create(
                 new CreateAssetCommand(
-                        cmd.projectId(), AssetType.RECORD, displayName, cmd.folderUuid(), payload, dataset.uuid()),
-                writeCtx);
+                        cmd.projectId(), AssetType.RECORD, displayName, cmd.recordSetUuid(), payload, dataset.uuid()),
+                ctx);
         return new RecordWriteResult(toDetail(cmd.projectId(), created), issues);
     }
 
@@ -141,59 +125,26 @@ public class RecordServiceImpl implements RecordService {
     @Override
     @Transactional(readOnly = true)
     public RecordPage list(long projectId, UUID datasetUuid, RecordListQuery query, int page, int size) {
-        if (page < 0 || size < 1 || size > 500) {
-            throw new SfException(ProblemFactory.badRequest("page must be >= 0 and size between 1 and 500."));
-        }
+        RecordGrid.checkPaging(page, size);
         Dataset dataset = requireDataset(projectId, datasetUuid);
-        DatasetQuery datasetQuery = listingQuery(dataset, query);
+        DatasetQuery datasetQuery = RecordGrid.listingQuery(dataset.definition(), query);
 
         // Dataset membership, q and folder narrow the rows in SQL; where and sort run in memory over
         // what is left (v1 sizes, see M19.2.1 — pushing where into SQL would break H2 portability).
         List<RecordView> candidates = new ArrayList<>();
         Map<UUID, Long> changedBy = new HashMap<>();
-        for (AssetVersion version : assetVersionRepository.searchCurrentRecordsOfDataset(
-                projectId, dataset.assetId(), likeContains(query.q()), folderPattern(query.folder()))) {
+        List<AssetVersion> versions = assetVersionRepository.searchCurrentRecordsOfDataset(
+                projectId, dataset.assetId(), likeContains(query.q()), folderPattern(query.folder()));
+        Map<Long, String> setUids = RecordValues.recordSetUids(assetRepository, versions);
+        for (AssetVersion version : versions) {
             candidates.add(RecordValues.view(
                     version.getAsset().getUuid(), version.getAsset().getUid(), version.getDisplayName(),
-                    version.getFolderPath(), version.getChangedAt(), version.getPayload()));
+                    version.getFolderPath(), setUids.get(version.getFolderId()), version.getChangedAt(),
+                    version.getPayload()));
             changedBy.put(version.getAsset().getUuid(), version.getChangedBy());
         }
         List<RecordView> selected = DatasetQueryEvaluator.apply(candidates, datasetQuery, null);
-        int from = (int) Math.min((long) page * size, selected.size());
-        int to = Math.min(from + size, selected.size());
-
-        List<String> scalarFields = scalarFields(dataset.definition());
-        List<RecordPage.Row> rows = new ArrayList<>(to - from);
-        for (RecordView record : selected.subList(from, to)) {
-            ObjectNode values = objectMapper.createObjectNode();
-            for (String field : scalarFields) {
-                JsonNode value = record.content().get(field);
-                if (value != null && value.isValueNode()) {
-                    values.set(field, value);
-                }
-            }
-            rows.add(new RecordPage.Row(
-                    record.uuid(), record.uid(), record.displayName(), record.folderPath(), record.changedAt(),
-                    changedBy.get(record.uuid()), values));
-        }
-        return new RecordPage(rows, selected.size(), page, size);
-    }
-
-    /** The names of the schema's scalar editors, groups being transparent. */
-    private static List<String> scalarFields(ContentDefinition definition) {
-        List<String> fields = new ArrayList<>();
-        collectScalar(definition.editors(), fields);
-        return fields;
-    }
-
-    private static void collectScalar(List<EditorDefinition> editors, List<String> fields) {
-        for (EditorDefinition editor : editors) {
-            if (editor.isGroup()) {
-                collectScalar(editor.items(), fields);
-            } else if (DatasetQueryParser.SCALAR_TYPES.contains(editor.type())) {
-                fields.add(editor.name());
-            }
-        }
+        return RecordGrid.page(selected, dataset.definition(), null, changedBy, null, page, size);
     }
 
     // ------------------------------------------------------------------
@@ -214,43 +165,6 @@ public class RecordServiceImpl implements RecordService {
             throw new SfException(ProblemFactory.unprocessableEntity(detail, "issues", structural));
         }
         return issues;
-    }
-
-    /** The listing's where/sort as a query over bare field names; invalid input is a {@code 400}. */
-    private static DatasetQuery listingQuery(Dataset dataset, RecordListQuery query) {
-        com.acme.staticforge.template.octl.Expr where = null;
-        if (query.where() != null && !query.where().isBlank()) {
-            OctlExpressions.Parsed parsed = OctlExpressions.parse(query.where());
-            if (!parsed.ok()) {
-                throw badQuery("Invalid where expression at column " + parsed.column() + ": " + parsed.error(),
-                        parsed.column());
-            }
-            List<Diagnostic> rootErrors =
-                    DatasetQueryParser.parse(Map.of("where", query.where()), null, 0, 0).diagnostics();
-            if (!rootErrors.isEmpty()) {
-                throw badQuery(rootErrors.get(0).message(), 0);
-            }
-            where = parsed.expr();
-        }
-        DatasetQuery datasetQuery = new DatasetQuery(null, where, query.sort(), null, null, null);
-        List<Diagnostic> fieldErrors = DatasetQueryParser.validateFields(datasetQuery, dataset.definition(), 0, 0);
-        if (!fieldErrors.isEmpty()) {
-            throw badQuery(fieldErrors.get(0).message(), 0);
-        }
-        return datasetQuery;
-    }
-
-    private static SfException badQuery(String detail, int column) {
-        Problem.Builder problem = Problem.builder()
-                .type("https://cms.example.com/problems/sf-api-0400")
-                .title("Bad Request")
-                .status(400)
-                .detail(detail)
-                .property("code", "SF-API-0400");
-        if (column > 0) {
-            problem.property("column", column);
-        }
-        return new SfException(problem.build());
     }
 
     // ------------------------------------------------------------------
@@ -310,6 +224,26 @@ public class RecordServiceImpl implements RecordService {
                 version.isDeleted());
     }
 
+    /**
+     * The current version of the live record set a new record goes into. Without one — no uuid, a folder,
+     * another type, a deleted set — the containment rules reject the record ({@code 422 SF-DOM-0104}); a
+     * uuid unknown to the project is {@code 404}.
+     */
+    private AssetVersion requireRecordSet(long projectId, UUID recordSetUuid) {
+        if (recordSetUuid == null) {
+            RecordSetContainment.require(AssetType.RECORD, null, AssetType.FOLDER, null, false);
+        }
+        Asset parent = assetRepository.findByProjectIdAndUuid(projectId, recordSetUuid)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")));
+        AssetVersion version = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(parent.getId())
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")));
+        if (parent.getAssetType() != AssetType.RECORD_SET || version.isDeleted()) {
+            RecordSetContainment.require(
+                    AssetType.RECORD, null, parent.getAssetType(), version.getPayload(), version.isDeleted());
+        }
+        return version;
+    }
+
     /** A live record of this project; another type, project or a deleted record is {@code 404}. */
     private AssetVersion requireOpenRecord(long projectId, UUID uuid) {
         Asset asset = assetRepository.findByProjectIdAndUuid(projectId, uuid)
@@ -325,9 +259,15 @@ public class RecordServiceImpl implements RecordService {
         String datasetUid = datasetUuid == null
                 ? null
                 : assetRepository.findByProjectIdAndUuid(projectId, datasetUuid).map(Asset::getUid).orElse(null);
-        UUID folderUuid = view.folderId() == null
-                ? null
-                : assetRepository.findById(view.folderId()).map(Asset::getUuid).orElse(null);
+        // A record's parent is its set (M25); the set's own parent is the Content folder it lives in.
+        Optional<Asset> set = view.folderId() == null ? Optional.empty() : assetRepository.findById(view.folderId());
+        Optional<AssetVersion> setVersion =
+                set.flatMap(s -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(s.getId()));
+        UUID folderUuid = setVersion
+                .map(AssetVersion::getFolderId)
+                .flatMap(assetRepository::findById)
+                .map(Asset::getUuid)
+                .orElse(null);
         JsonNode content = view.payload() == null ? null : view.payload().get("content");
         return new RecordDetail(
                 view.uuid(),
@@ -335,6 +275,9 @@ public class RecordServiceImpl implements RecordService {
                 view.displayName(),
                 datasetUuid,
                 datasetUid,
+                set.map(Asset::getUuid).orElse(null),
+                set.map(Asset::getUid).orElse(null),
+                setVersion.map(AssetVersion::getDisplayName).orElse(null),
                 folderUuid,
                 ContentStorePaths.relative(view.folderPath()),
                 content == null ? objectMapper.createObjectNode() : content,

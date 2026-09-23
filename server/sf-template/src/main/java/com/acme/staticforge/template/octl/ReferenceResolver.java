@@ -23,4 +23,13 @@ public interface ReferenceResolver {
     default Optional<com.acme.staticforge.template.content.ContentDefinition> datasetDefinition(UUID datasetUuid) {
         return Optional.empty();
     }
+
+    /**
+     * The dataset of the record set {@code setUuid} (M25.2.2), so a {@code $CMS_FOR(x : recordset:uid, …)$} loop's
+     * {@code where}/{@code sort} fields are checked against the set's dataset through {@link #datasetDefinition}. Like
+     * that method, only the template-save resolver provides it.
+     */
+    default Optional<UUID> recordSetDataset(UUID setUuid) {
+        return Optional.empty();
+    }
 }

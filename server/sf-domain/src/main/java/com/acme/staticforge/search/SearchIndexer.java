@@ -439,15 +439,20 @@ public class SearchIndexer implements DisposableBean {
     /**
      * Pages, records and child templates whose extraction depends on a touched template or dataset whose definition
      * (CDL, parent, deleted state) changed since {@code since}: over open reverse {@code TEMPLATE} edges and catalog
-     * card {@code templateRef} edges, transitively through page templates extending a changed one.
+     * card {@code templateRef} edges, transitively through page templates extending a changed one. A renamed dataset
+     * also re-indexes its record sets, whose documents carry the dataset's name (M25).
      */
     private Map<Long, Asset> cascade(long since, Collection<Asset> touched, Map<Long, Long> firstRevision) {
         Set<Long> seen = new HashSet<>();
         Deque<Asset> queue = new ArrayDeque<>();
+        List<Asset> renamedDatasets = new ArrayList<>();
         for (Asset asset : touched) {
             seen.add(asset.getId());
             if (definesContent(asset.getAssetType()) && definitionChanged(asset, since)) {
                 queue.add(asset);
+            }
+            if (asset.getAssetType() == AssetType.DATASET && nameChanged(asset, since)) {
+                renamedDatasets.add(asset);
             }
         }
         Map<Long, Asset> dependents = new LinkedHashMap<>();
@@ -468,7 +473,23 @@ public class SearchIndexer implements DisposableBean {
                 }
             }
         }
+        for (Asset dataset : renamedDatasets) {
+            for (AssetVersion set : versions.findCurrentSetsOfDataset(dataset.getProjectId(), dataset.getId())) {
+                if (seen.add(set.getAssetId())) {
+                    dependents.put(set.getAssetId(), set.getAsset());
+                    firstRevision.merge(set.getAssetId(), firstRevision.getOrDefault(dataset.getId(), since + 1), Math::min);
+                }
+            }
+        }
         return dependents;
+    }
+
+    /** Whether the asset's display name differs from the one it had at {@code since} (a new asset: no). */
+    private boolean nameChanged(Asset asset, long since) {
+        Optional<AssetVersion> before = since == 0 ? Optional.empty() : versions.findValidAtRevision(asset.getId(), since);
+        Optional<AssetVersion> now = versions.findByAssetIdAndValidToRevisionIsNull(asset.getId());
+        return before.isPresent() && now.isPresent()
+                && !Objects.equals(before.get().getDisplayName(), now.get().getDisplayName());
     }
 
     private static boolean definesContent(AssetType type) {
@@ -538,7 +559,7 @@ public class SearchIndexer implements DisposableBean {
         JsonNode payload = version.getPayload();
         String templateRef = switch (asset.getAssetType()) {
             case PAGE -> payload.path("templateRef").asText(null);
-            case RECORD -> payload.path("datasetRef").asText(null);
+            case RECORD, RECORD_SET -> payload.path("datasetRef").asText(null);
             default -> null;
         };
         return new IndexableAsset(

@@ -38,14 +38,38 @@ interface QueryProblem {
 }
 
 /**
- * The records of one dataset as a table (M19.4.2), paged, sorted and filtered on the server so a
- * dataset of any size never loads more than one page of rows.
+ * `all`: every record of the set, those the set query leaves out dimmed; `rendered`: only what the
+ * set shows, in its order.
+ */
+export type RecordGridMode = 'all' | 'rendered';
+
+/** The grid's own filter and sort, handed to the set query panel ("Use current filter as set query"). */
+export interface GridFilter {
+  where: string;
+  sort: RecordSort[];
+}
+
+/** Tooltip of a row the set query leaves out. */
+export const EXCLUDED_BY_QUERY = 'Not shown on the site: the set query leaves this record out.';
+/** Tooltip of every row while the stored set query is invalid (the set shows nothing then). */
+export const EXCLUDED_INVALID_QUERY = 'Not shown on the site: the set query is invalid, so the set shows no records.';
+
+/**
+ * The records of one record set as a table (M19.4.2, scoped to a set in M25.5.1), paged, sorted
+ * and filtered on the server so a set of any size never loads more than one page of rows.
+ *
+ * <p>Two views of the set: **All records** (the default) lists every record and dims the ones the
+ * stored set query leaves out — each row's `selectedBySet` flag, which the server computes over the
+ * whole set; **Show as rendered** applies the set query first, so rows appear in render order and
+ * excluded records are hidden. With `revision` (time travel) the server lists the set as of that
+ * revision: its records, their values and its stored query then. The quick search, filter box and header sort only narrow what
+ * the grid shows: they never change the set query. "Use as set query" hands them to the query panel
+ * as an unsaved draft.
  *
  * <p>Columns come from the dataset schema's scalar editors; a viewer can hide columns (remembered per
  * dataset in this browser). Clicking a header sorts by it, shift-click adds it as a further key. The
- * quick search matches display names; the filter box takes an OCTL expression over field names
- * ({@code role == 'lead' && joined > '2022-01-01'}), evaluated by the server, which reports where an
- * invalid one goes wrong.
+ * filter box takes an OCTL expression over field names ({@code role == 'lead'}), evaluated by the
+ * server, which reports where an invalid one goes wrong.
  *
  * <p>Keyboard: arrow keys move between rows, Enter opens one; headers are buttons, so Enter/Space
  * sorts and Shift+Enter adds a key.
@@ -60,21 +84,27 @@ interface QueryProblem {
 })
 export class RecordGridComponent {
   readonly projectKey = input.required<string>();
+  /** The set's dataset: its schema gives the columns. */
   readonly dataset = input.required<DatasetDetailView>();
-  /** Content-store-relative folder prefix the grid is limited to (`/` for the whole store). */
-  readonly folder = input<string>('/');
+  readonly recordSetUuid = input.required<string>();
+  /** Whether the stored set query validates; while it doesn't, the set shows nothing. */
+  readonly queryValid = input<boolean>(true);
+  /** Time travel: list the set as of this revision (`null`: current). */
+  readonly revision = input<number | null>(null);
+  /** Whether "Use as set query" is offered (an editor, not time travelling). */
+  readonly canEditQuery = input<boolean>(false);
   readonly pageSize = input<number>(50);
-  /** A compact grid (the "All datasets" overview): no filter box, no column chooser, no paging. */
-  readonly compact = input<boolean>(false);
-  /** Bumped by the parent after a record changed elsewhere, to reload the current page. */
+  /** Bumped by the parent after a record or the set query changed elsewhere, to reload the current page. */
   readonly refreshKey = input<number>(0);
 
   readonly open = output<string>();
   readonly total = output<number>();
+  readonly useAsSetQuery = output<GridFilter>();
 
   private readonly content = inject(ContentService);
   private readonly rowElements = viewChildren<ElementRef<HTMLTableRowElement>>('row');
 
+  protected readonly mode = signal<RecordGridMode>('all');
   protected readonly rows = signal<RecordRowView[]>([]);
   protected readonly totalElements = signal(0);
   protected readonly totalPages = signal(0);
@@ -93,9 +123,11 @@ export class RecordGridComponent {
   private request: Subscription | null = null;
 
   protected readonly columns = computed<RecordColumn[]>(() =>
-    deriveColumns(this.dataset().compiledDefinition as unknown as ContentDefinition),
+    deriveColumns(this.dataset().compiledDefinition as unknown as ContentDefinition, this.dataset().titleEditor),
   );
   protected readonly visibleColumns = computed(() => this.columns().filter((c) => !this.hidden().has(c.field)));
+  /** Something to hand to the set query: an applied filter or a header sort. */
+  protected readonly hasGridFilter = computed(() => this.where() !== '' || this.sort().length > 0);
 
   protected readonly format = formatCell;
   protected readonly indicator = sortIndicator;
@@ -121,8 +153,10 @@ export class RecordGridComponent {
     effect(
       () => {
         this.projectKey();
-        this.dataset();
-        this.folder();
+        this.recordSetUuid();
+        this.revision();
+        this.mode();
+        this.queryValid();
         this.q();
         this.where();
         this.sort();
@@ -139,6 +173,26 @@ export class RecordGridComponent {
         this.page.set(0);
         this.q.set(value);
       });
+  }
+
+  /** Whether a shown row is one the set query leaves out (`all` mode; the server's `selectedBySet`). */
+  protected isExcluded(row: RecordRowView): boolean {
+    return this.mode() === 'all' && row.selectedBySet === false;
+  }
+
+  protected excludedTooltip(): string {
+    return this.queryValid() ? EXCLUDED_BY_QUERY : EXCLUDED_INVALID_QUERY;
+  }
+
+  protected setMode(mode: RecordGridMode): void {
+    if (this.mode() !== mode) {
+      this.page.set(0);
+      this.mode.set(mode);
+    }
+  }
+
+  protected useFilterAsSetQuery(): void {
+    this.useAsSetQuery.emit({ where: this.where(), sort: this.sort().map((s) => ({ ...s })) });
   }
 
   protected onSearch(event: Event): void {
@@ -249,26 +303,28 @@ export class RecordGridComponent {
 
   private reload(page: number): void {
     const key = this.projectKey();
-    const uuid = this.dataset().uuid;
+    const uuid = this.recordSetUuid();
     if (!key || !uuid) {
       return;
     }
     this.request?.unsubscribe();
     this.loading.set(true);
     this.request = this.content
-      .listRecords(key, uuid, {
+      .listSetRecords(key, uuid, {
         page,
         size: this.pageSize(),
         sort: this.sort(),
         q: this.q(),
         where: this.where(),
-        folder: this.folder(),
+        applySetQuery: this.mode() === 'rendered',
+        revision: this.revision(),
       })
       .subscribe({
         next: (result) => {
+          const rows = result.content ?? [];
           this.loading.set(false);
           this.whereError.set(null);
-          this.rows.set(result.content ?? []);
+          this.rows.set(rows);
           this.totalElements.set(result.page?.totalElements ?? 0);
           this.totalPages.set(result.page?.totalPages ?? 0);
           this.activeRow.set(0);

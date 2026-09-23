@@ -40,6 +40,12 @@ final class MeteredTemplateCompiler {
         return octlCompiler.compile(octlSource, channel, resolver, definition);
     }
 
+    /** Compiles a dataset's record template against its schema (M25); counted as an {@code octl} compile. */
+    OctlResult recordTemplate(String octlSource, String channel, ReferenceResolver resolver, ContentDefinition definition) {
+        octlCompiles.increment();
+        return octlCompiler.compileRecordTemplate(octlSource, channel, resolver, definition);
+    }
+
     /**
      * Compiles a page template channel against its chain in {@code hierarchy} (M20); counted as one {@code octl}
      * compile, however many ancestors it links.

@@ -7,12 +7,12 @@
       </div>
       <div class="dataset-editor__records">
         <span>{{ d.recordCount }} {{ d.recordCount === 1 ? 'record' : 'records' }}</span>
-        <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ dataset: d.uuid }">Open records</a>
+        <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ dataset: d.uuid }">Open record sets</a>
       </div>
     </div>
 
     @if (!canEdit()) {
-      <p class="dataset-editor__hint" role="status">Only a developer can change a dataset schema.</p>
+      <p class="dataset-editor__hint" role="status">Only a developer can change a dataset schema or its record templates.</p>
     }
 
     <div class="panel">
@@ -25,53 +25,167 @@
       <sf-uid-rename [projectKey]="projectKey()" [uuid]="d.uuid ?? ''" [uid]="d.uid ?? ''" (uidChanged)="onUidChanged()" />
     </div>
 
-    <div class="panel">
-      <sf-field
-        label="Record fields (CDL)"
-        hint="Editors only — records have no bodies. Rename a field with renamedFrom and every record follows in one revision."
+    <div class="dataset-editor__tabs" role="tablist" aria-label="Dataset">
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeChannelTab() === null"
+        [class.dataset-editor__tab--active]="activeChannelTab() === null"
+        (click)="selectTab(null)"
       >
-        <textarea
-          class="dataset-editor__cdl"
-          spellcheck="false"
-          [value]="contentDefinition()"
-          [disabled]="!canEdit()"
-          [attr.aria-invalid]="hasErrors() ? true : null"
-          aria-describedby="dataset-cdl-diagnostics"
-          (input)="onCdlInput($event)"
-        ></textarea>
-      </sf-field>
+        Schema (CDL)
+        @if (hasErrors()) {
+          <span class="dataset-editor__tab-errors">{{ diagnostics().length }}<span class="sf-sr-only"> diagnostics</span></span>
+        }
+        @if (schemaDirty()) {
+          <span class="dataset-editor__tab-dirty" aria-hidden="true">•</span><span class="sf-sr-only"> (unsaved)</span>
+        }
+      </button>
+      @for (tab of channelTabs(); track tab.key) {
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="activeChannel() === tab.key"
+          [class.dataset-editor__tab--active]="activeChannel() === tab.key"
+          (click)="selectTab(tab.key)"
+        >
+          Record template ({{ tab.key }})
+          @if (!tab.enabled) {
+            <span class="dataset-editor__meta">disabled</span>
+          }
+          @if (errorCounts()[tab.key]; as errors) {
+            <span class="dataset-editor__tab-errors">{{ errors }}<span class="sf-sr-only"> errors</span></span>
+          }
+          @if (dirtyChannels().has(tab.key)) {
+            <span class="dataset-editor__tab-dirty" aria-hidden="true">•</span><span class="sf-sr-only"> (unsaved)</span>
+          }
+        </button>
+      }
+    </div>
 
-      <div id="dataset-cdl-diagnostics" class="diagnostics" aria-live="polite">
-        @for (diag of diagnostics(); track $index) {
-          <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
-            {{ diag.severity }} {{ diag.code }}
-            @if (diag.line) {
-              ({{ diag.line }}:{{ diag.column }})
+    @if (activeChannelTab(); as tab) {
+      <div class="panel" role="tabpanel" [attr.aria-label]="'Record template (' + tab.key + ')'">
+        <p class="dataset-editor__hint">
+          How one record renders in the {{ tab.name }} channel wherever a record set of this dataset is rendered.
+          Fields are top-level names; <code>_index</code>, <code>_first</code>, <code>_last</code> and
+          <code>_count</code> describe the record's place among the records the set renders.
+        </p>
+        @if (!tab.enabled) {
+          <p class="dataset-editor__notice" role="status">The {{ tab.key }} channel is disabled — this template is kept but not rendered.</p>
+        }
+        @if (!activeSource().trim()) {
+          <div class="dataset-editor__empty" role="note">
+            <strong>No record template for {{ tab.key }}</strong>
+            <p>
+              <code>$CMS_VALUE(recordset:…)$</code> — and a reference editor pointing at a record set of this dataset —
+              renders nothing in this channel. <code>$CMS_FOR</code> loops over a set are not affected: they bring
+              their own markup.
+            </p>
+          </div>
+        }
+        @if (canEdit() || activeSource().trim()) {
+          <sf-octl-editor
+            [label]="'Record template for channel ' + tab.key"
+            [value]="activeSource()"
+            [diagnostics]="activeDiagnostics()"
+            [readOnly]="!canEdit()"
+            (valueChange)="onRecordTemplateInput($event)"
+          />
+        }
+        @if (canEdit()) {
+          <div class="dataset-editor__helpers" role="group" aria-label="Insert into the record template">
+            <span class="dataset-editor__helpers-label">Fields</span>
+            @for (helper of fieldHelpers(); track helper.name) {
+              <button type="button" class="dataset-editor__chip" [title]="helper.snippet + ' — ' + helper.description" (click)="insertHelper(helper)">
+                {{ helper.name }}
+              </button>
+            } @empty {
+              <span class="dataset-editor__hint">The schema declares no fields yet.</span>
             }
-            — {{ diag.message }}
+            <span class="dataset-editor__helpers-label">Record</span>
+            @for (helper of metaHelpers; track helper.name) {
+              <button type="button" class="dataset-editor__chip" [title]="helper.snippet + ' — ' + helper.description" (click)="insertHelper(helper)">
+                {{ helper.name }}
+              </button>
+            }
           </div>
         }
       </div>
+    } @else {
+      <div class="panel" role="tabpanel" aria-label="Schema (CDL)">
+        <sf-field
+          label="Record fields (CDL)"
+          hint="Editors only — records have no bodies. Rename a field with renamedFrom and every record follows in one revision."
+        >
+          <textarea
+            class="dataset-editor__cdl"
+            spellcheck="false"
+            [value]="contentDefinition()"
+            [disabled]="!canEdit()"
+            [attr.aria-invalid]="hasErrors() ? true : null"
+            aria-describedby="dataset-cdl-diagnostics"
+            (input)="onCdlInput($event)"
+          ></textarea>
+        </sf-field>
 
-      <sf-field label="Title field" hint="A text field whose value becomes each record's display name. Takes effect after saving the schema.">
-        <select [value]="titleEditor()" [disabled]="!canEdit()" (change)="onTitleEditorChange($event)">
-          <option value="">None — editors name records themselves</option>
-          @for (editor of textEditors(); track editor.name) {
-            <option [value]="editor.name" [selected]="editor.name === titleEditor()">{{ editor.label ?? editor.name }}</option>
+        <div id="dataset-cdl-diagnostics" class="diagnostics" aria-live="polite">
+          @for (diag of diagnostics(); track $index) {
+            <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+              {{ diag.severity }} {{ diag.code }}
+              @if (diag.line) {
+                ({{ diag.line }}:{{ diag.column }})
+              }
+              — {{ diag.message }}
+            </div>
           }
-        </select>
-      </sf-field>
+        </div>
 
-      <p class="dataset-editor__snippet"><span class="sf-sr-only">Template snippet: </span><code>{{ loopSnippet() }}</code></p>
+        <sf-field label="Title field" hint="A text field whose value becomes each record's display name. Takes effect after saving the schema.">
+          <select [value]="titleEditor()" [disabled]="!canEdit()" (change)="onTitleEditorChange($event)">
+            <option value="">None — editors name records themselves</option>
+            @for (editor of textEditors(); track editor.name) {
+              <option [value]="editor.name" [selected]="editor.name === titleEditor()">{{ editor.label ?? editor.name }}</option>
+            }
+          </select>
+        </sf-field>
 
-      <div class="actions">
-        <sf-button variant="secondary" [disabled]="validating()" (click)="validate()">Validate</sf-button>
-        <sf-button variant="primary" [disabled]="saving() || !canEdit()" (click)="save()">Save dataset</sf-button>
-        <sf-button variant="danger" [disabled]="!canEdit() || (d.recordCount ?? 0) > 0" (click)="remove()">Delete</sf-button>
-        @if ((d.recordCount ?? 0) > 0) {
-          <span class="dataset-editor__hint">Delete its {{ d.recordCount }} records first to delete the dataset.</span>
-        }
+        <p class="dataset-editor__snippet"><span class="sf-sr-only">Template snippet: </span><code>{{ loopSnippet() }}</code></p>
+
+        <div class="actions">
+          <sf-button variant="secondary" [disabled]="validating()" (click)="validate()">Validate</sf-button>
+        </div>
       </div>
+    }
+
+    @if (brokenRecordSets().length > 0) {
+      <div class="dataset-editor__broken" role="status">
+        <div class="dataset-editor__broken-head">
+          <p>Saved. These record sets' queries no longer match the schema — they render nothing until their query is fixed:</p>
+          <sf-button variant="ghost" (click)="dismissBrokenRecordSets()">Dismiss</sf-button>
+        </div>
+        <ul>
+          @for (set of brokenRecordSets(); track set.uuid) {
+            <li>
+              <a [routerLink]="['/p', projectKey(), 'content', 'sets', set.uuid]">{{ set.displayName || set.uid }}</a>
+              <span class="dataset-editor__meta">{{ set.uid }}</span>
+              @for (diag of set.diagnostics ?? []; track $index) {
+                <span class="dataset-editor__broken-diag">{{ diag.field ? diag.field + ': ' : '' }}{{ diag.message }}</span>
+              }
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+    <div class="actions">
+      <sf-button variant="primary" [disabled]="saving() || !canEdit() || !dirty()" (click)="save()">Save dataset</sf-button>
+      <sf-button variant="danger" [disabled]="!canEdit() || (d.recordCount ?? 0) > 0" (click)="remove()">Delete</sf-button>
+      @if (canEdit() && dirty()) {
+        <span class="dataset-editor__hint" role="status">Unsaved changes — schema and record templates save together.</span>
+      }
+      @if ((d.recordCount ?? 0) > 0) {
+        <span class="dataset-editor__hint">Delete its {{ d.recordCount }} records first to delete the dataset.</span>
+      }
     </div>
   </div>
 }

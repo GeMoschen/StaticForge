@@ -68,7 +68,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/pages/{uuid}": {
+    "/api/v1/projects/{projectKey}/record-sets/{uuid}": {
         parameters: {
             query?: never;
             header?: never;
@@ -77,6 +77,22 @@ export interface paths {
         };
         get: operations["detail_2"];
         put: operations["update_3"];
+        post?: never;
+        delete: operations["delete_2"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/pages/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_3"];
+        put: operations["update_4"];
         post?: never;
         delete?: never;
         options?: never;
@@ -107,10 +123,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_3"];
-        put: operations["update_4"];
+        get: operations["detail_4"];
+        put: operations["update_5"];
         post?: never;
-        delete: operations["delete_2"];
+        delete: operations["delete_3"];
         options?: never;
         head?: never;
         patch?: never;
@@ -222,7 +238,7 @@ export interface paths {
         get?: never;
         put: operations["rename"];
         post?: never;
-        delete: operations["delete_4"];
+        delete: operations["delete_5"];
         options?: never;
         head?: never;
         patch?: never;
@@ -235,10 +251,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_5"];
-        put: operations["update_5"];
+        get: operations["detail_6"];
+        put: operations["update_6"];
         post?: never;
-        delete: operations["delete_5"];
+        delete: operations["delete_6"];
         options?: never;
         head?: never;
         patch?: never;
@@ -252,9 +268,9 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_6"];
+        put: operations["update_7"];
         post?: never;
-        delete: operations["delete_6"];
+        delete: operations["delete_7"];
         options?: never;
         head?: never;
         patch?: never;
@@ -267,8 +283,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_7"];
-        put: operations["update_7"];
+        get: operations["detail_8"];
+        put: operations["update_8"];
         post?: never;
         delete?: never;
         options?: never;
@@ -404,6 +420,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/record-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_6"];
+        put?: never;
+        post: operations["create_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/record-sets/{uuid}/preview-query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/preview/section": {
         parameters: {
             query?: never;
@@ -427,9 +475,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_6"];
+        get: operations["list_7"];
         put?: never;
-        post: operations["create_3"];
+        post: operations["create_4"];
         delete?: never;
         options?: never;
         head?: never;
@@ -491,9 +539,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_7"];
+        get: operations["list_8"];
         put?: never;
-        post: operations["create_4"];
+        post: operations["create_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -539,7 +587,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_9"];
         put?: never;
         post: operations["upload"];
         delete?: never;
@@ -635,9 +683,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_10"];
         put?: never;
-        post: operations["create_5"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -717,7 +765,7 @@ export interface paths {
         };
         get: operations["tree_1"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -763,9 +811,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_11"];
         put?: never;
-        post: operations["create_7"];
+        post: operations["create_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -795,9 +843,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_11"];
+        get: operations["list_12"];
         put?: never;
-        post: operations["create_8"];
+        post: operations["create_9"];
         delete?: never;
         options?: never;
         head?: never;
@@ -811,9 +859,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_12"];
+        get: operations["list_13"];
         put?: never;
-        post: operations["create_9"];
+        post: operations["create_10"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1220,6 +1268,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/record-sets/{uuid}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["records"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/preview/share": {
         parameters: {
             query?: never;
@@ -1371,10 +1435,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_4"];
+        get: operations["detail_5"];
         put?: never;
         post?: never;
-        delete: operations["delete_3"];
+        delete: operations["delete_4"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1467,7 +1531,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_13"];
+        get: operations["list_14"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1483,7 +1547,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_14"];
+        get: operations["list_15"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1499,10 +1563,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_6"];
+        get: operations["detail_7"];
         put?: never;
         post?: never;
-        delete: operations["delete_7"];
+        delete: operations["delete_8"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1728,6 +1792,12 @@ export interface components {
             displayName?: string;
             comment?: string;
         };
+        AssetRefView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+        };
         ContentIssue: {
             path?: string;
             code?: string;
@@ -1745,6 +1815,7 @@ export interface components {
             /** Format: uuid */
             datasetUuid?: string;
             datasetUid?: string;
+            recordSet?: components["schemas"]["AssetRefView"];
             /** Format: uuid */
             folderUuid?: string;
             folderPath?: string;
@@ -1757,6 +1828,52 @@ export interface components {
             changedAt?: string;
             deleted?: boolean;
             issues?: components["schemas"]["ContentIssue"][];
+        };
+        RecordSetQuery: {
+            where?: string;
+            sort?: string;
+            /** Format: int32 */
+            limit?: number;
+            /** Format: int32 */
+            offset?: number;
+        };
+        UpdateRecordSetRequest: {
+            displayName?: string;
+            query?: components["schemas"]["RecordSetQuery"];
+            comment?: string;
+        };
+        RecordSetDetailView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            dataset?: components["schemas"]["AssetRefView"];
+            /** Format: uuid */
+            folderUuid?: string;
+            folderPath?: string;
+            query?: components["schemas"]["RecordSetQuery"];
+            queryValid?: boolean;
+            queryDiagnostics?: components["schemas"]["RecordSetQueryDiagnostic"][];
+            /** Format: int64 */
+            recordCount?: number;
+            /** Format: int64 */
+            revision?: number;
+            /** Format: int64 */
+            changedBy?: number;
+            /** Format: date-time */
+            changedAt?: string;
+            deleted?: boolean;
+        };
+        RecordSetQueryDiagnostic: {
+            field?: string;
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING";
+            code?: string;
+            message?: string;
+            /** Format: int32 */
+            line?: number;
+            /** Format: int32 */
+            column?: number;
         };
         PageView: {
             /** Format: uuid */
@@ -1880,6 +1997,9 @@ export interface components {
             path?: string;
             scope?: string;
             protectedFolder?: boolean;
+            type?: string;
+            /** Format: int64 */
+            recordCount?: number;
             children?: components["schemas"]["FolderView"][];
         };
         UpdateDatasetRequest: {
@@ -1887,7 +2007,17 @@ export interface components {
             contentDefinition?: string;
             titleEditor?: string;
             description?: string;
+            channelTemplates?: {
+                [key: string]: string;
+            };
             comment?: string;
+        };
+        BrokenRecordSet: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            diagnostics?: components["schemas"]["RecordSetQueryDiagnostic"][];
         };
         DatasetDetailView: {
             /** Format: uuid */
@@ -1901,6 +2031,11 @@ export interface components {
             compiledDefinition?: components["schemas"]["JsonNode"];
             titleEditor?: string;
             description?: string;
+            channelTemplates?: components["schemas"]["JsonNode"];
+            recordTemplateDiagnostics?: {
+                [key: string]: components["schemas"]["Diagnostic"][];
+            };
+            brokenRecordSets?: components["schemas"]["BrokenRecordSet"][];
             /** Format: int64 */
             recordCount?: number;
             /** Format: int64 */
@@ -2049,6 +2184,24 @@ export interface components {
             comment?: string;
             summary?: components["schemas"]["JsonNode"];
         };
+        CreateRecordSetRequest: {
+            /** Format: uuid */
+            folderUuid?: string;
+            /** Format: uuid */
+            datasetUuid?: string;
+            uid?: string;
+            displayName?: string;
+            query?: components["schemas"]["RecordSetQuery"];
+            comment?: string;
+        };
+        RecordSetQueryPreviewView: {
+            valid?: boolean;
+            diagnostics?: components["schemas"]["RecordSetQueryDiagnostic"][];
+            /** Format: int64 */
+            matchCount?: number;
+            /** Format: int64 */
+            selectedCount?: number;
+        };
         PreviewSectionRequest: {
             /** Format: uuid */
             templateUuid?: string;
@@ -2079,6 +2232,7 @@ export interface components {
             channelKey?: string;
             templateUuid?: string;
             contentDefinition?: string;
+            datasetUuid?: string;
         };
         OctlValidateResponse: {
             diagnostics?: components["schemas"]["Diagnostic"][];
@@ -2128,6 +2282,7 @@ export interface components {
         ConflictReportView: {
             conflicts?: components["schemas"]["ImportConflictView"][];
             hasBlocking?: boolean;
+            blocksImport?: boolean;
         };
         ImportConflictView: {
             severity?: string;
@@ -2136,6 +2291,7 @@ export interface components {
             elementLabel?: string;
             detail?: string;
             explicit?: boolean;
+            blocksImport?: boolean;
         };
         CreateGlobalSetRequest: {
             /** Format: uuid */
@@ -2327,6 +2483,9 @@ export interface components {
             contentDefinition?: string;
             titleEditor?: string;
             description?: string;
+            channelTemplates?: {
+                [key: string]: string;
+            };
             comment?: string;
         };
         RestoreRequest: {
@@ -2335,7 +2494,7 @@ export interface components {
         };
         CreateRecordRequest: {
             /** Format: uuid */
-            folderUuid?: string;
+            recordSetUuid?: string;
             displayName?: string;
             content?: components["schemas"]["JsonNode"];
             comment?: string;
@@ -2456,10 +2615,10 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -2477,12 +2636,12 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            unpaged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
             paged?: boolean;
+            unpaged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -2505,10 +2664,10 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -2618,6 +2777,38 @@ export interface components {
             revisionId?: number;
             assets?: components["schemas"]["AssetDiff"][];
         };
+        RecordSetSummaryView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            dataset?: components["schemas"]["AssetRefView"];
+            /** Format: uuid */
+            folderUuid?: string;
+            folderPath?: string;
+            /** Format: int64 */
+            recordCount?: number;
+            queryValid?: boolean;
+            /** Format: int64 */
+            revision?: number;
+        };
+        RecordPageView: {
+            content?: components["schemas"]["RecordRowView"][];
+            page?: components["schemas"]["PageMeta"];
+        };
+        RecordRowView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            folderPath?: string;
+            /** Format: date-time */
+            changedAt?: string;
+            /** Format: int64 */
+            changedBy?: number;
+            values?: components["schemas"]["JsonNode"];
+            selectedBySet?: boolean;
+        };
         PreviewShareLink: {
             token?: string;
             url?: string;
@@ -2671,10 +2862,10 @@ export interface components {
             textEditable?: boolean;
         };
         PageMediaSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -2723,22 +2914,6 @@ export interface components {
             /** Format: int64 */
             revision?: number;
         };
-        RecordPageView: {
-            content?: components["schemas"]["RecordRowView"][];
-            page?: components["schemas"]["PageMeta"];
-        };
-        RecordRowView: {
-            /** Format: uuid */
-            uuid?: string;
-            uid?: string;
-            displayName?: string;
-            folderPath?: string;
-            /** Format: date-time */
-            changedAt?: string;
-            /** Format: int64 */
-            changedBy?: number;
-            values?: components["schemas"]["JsonNode"];
-        };
         ChannelDeletePreview: {
             affectedTemplates?: components["schemas"]["ChannelTemplateRef"][];
         };
@@ -2761,10 +2936,10 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -3061,6 +3236,83 @@ export interface operations {
     };
     detail_2: {
         parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordSetDetailView"];
+                };
+            };
+        };
+    };
+    update_3: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRecordSetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordSetDetailView"];
+                };
+            };
+        };
+    };
+    delete_2: {
+        parameters: {
+            query?: {
+                cascade?: boolean;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    detail_3: {
+        parameters: {
             query?: never;
             header?: never;
             path: {
@@ -3082,7 +3334,7 @@ export interface operations {
             };
         };
     };
-    update_3: {
+    update_4: {
         parameters: {
             query?: never;
             header?: {
@@ -3141,7 +3393,7 @@ export interface operations {
             };
         };
     };
-    detail_3: {
+    detail_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -3164,7 +3416,7 @@ export interface operations {
             };
         };
     };
-    update_4: {
+    update_5: {
         parameters: {
             query?: {
                 confirmDiscard?: boolean;
@@ -3195,7 +3447,7 @@ export interface operations {
             };
         };
     };
-    delete_2: {
+    delete_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -3473,7 +3725,7 @@ export interface operations {
             };
         };
     };
-    delete_4: {
+    delete_5: {
         parameters: {
             query?: {
                 cascade?: boolean;
@@ -3496,7 +3748,7 @@ export interface operations {
             };
         };
     };
-    detail_5: {
+    detail_6: {
         parameters: {
             query?: {
                 revision?: number;
@@ -3521,7 +3773,7 @@ export interface operations {
             };
         };
     };
-    update_5: {
+    update_6: {
         parameters: {
             query?: {
                 confirmDiscard?: boolean;
@@ -3552,7 +3804,7 @@ export interface operations {
             };
         };
     };
-    delete_5: {
+    delete_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -3573,7 +3825,7 @@ export interface operations {
             };
         };
     };
-    update_6: {
+    update_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -3600,7 +3852,7 @@ export interface operations {
             };
         };
     };
-    delete_6: {
+    delete_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -3621,7 +3873,7 @@ export interface operations {
             };
         };
     };
-    detail_7: {
+    detail_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -3643,7 +3895,7 @@ export interface operations {
             };
         };
     };
-    update_7: {
+    update_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -3982,6 +4234,83 @@ export interface operations {
             };
         };
     };
+    list_6: {
+        parameters: {
+            query?: {
+                dataset?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordSetSummaryView"][];
+                };
+            };
+        };
+    };
+    create_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecordSetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordSetDetailView"];
+                };
+            };
+        };
+    };
+    previewQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RecordSetQuery"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordSetQueryPreviewView"];
+                };
+            };
+        };
+    };
     previewSection: {
         parameters: {
             query?: {
@@ -4010,7 +4339,7 @@ export interface operations {
             };
         };
     };
-    list_6: {
+    list_7: {
         parameters: {
             query?: {
                 folder?: string;
@@ -4036,7 +4365,7 @@ export interface operations {
             };
         };
     };
-    create_3: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -4145,7 +4474,7 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_8: {
         parameters: {
             query?: {
                 page?: number;
@@ -4170,7 +4499,7 @@ export interface operations {
             };
         };
     };
-    create_4: {
+    create_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -4248,7 +4577,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
         parameters: {
             query?: {
                 mimeType?: string;
@@ -4454,7 +4783,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_10: {
         parameters: {
             query?: {
                 folder?: string;
@@ -4478,7 +4807,7 @@ export interface operations {
             };
         };
     };
-    create_5: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -4658,7 +4987,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -4739,7 +5068,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -4761,7 +5090,7 @@ export interface operations {
             };
         };
     };
-    create_7: {
+    create_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -4814,7 +5143,7 @@ export interface operations {
             };
         };
     };
-    list_11: {
+    list_12: {
         parameters: {
             query?: {
                 page?: number;
@@ -4844,7 +5173,7 @@ export interface operations {
             };
         };
     };
-    create_8: {
+    create_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -4871,7 +5200,7 @@ export interface operations {
             };
         };
     };
-    list_12: {
+    list_13: {
         parameters: {
             query?: never;
             header?: never;
@@ -4893,7 +5222,7 @@ export interface operations {
             };
         };
     };
-    create_9: {
+    create_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -5569,6 +5898,38 @@ export interface operations {
             };
         };
     };
+    records: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+                sort?: string[];
+                q?: string;
+                where?: string;
+                applySetQuery?: boolean;
+                locale?: string;
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordPageView"];
+                };
+            };
+        };
+    };
     share: {
         parameters: {
             query: {
@@ -5799,7 +6160,7 @@ export interface operations {
             };
         };
     };
-    detail_4: {
+    detail_5: {
         parameters: {
             query?: {
                 revision?: number;
@@ -5824,7 +6185,7 @@ export interface operations {
             };
         };
     };
-    delete_3: {
+    delete_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -5965,7 +6326,7 @@ export interface operations {
             };
         };
     };
-    list_13: {
+    list_14: {
         parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
@@ -5989,7 +6350,7 @@ export interface operations {
             };
         };
     };
-    list_14: {
+    list_15: {
         parameters: {
             query?: {
                 type?: string;
@@ -6017,7 +6378,7 @@ export interface operations {
             };
         };
     };
-    detail_6: {
+    detail_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -6040,7 +6401,7 @@ export interface operations {
             };
         };
     };
-    delete_7: {
+    delete_8: {
         parameters: {
             query?: {
                 force?: boolean;

@@ -14,12 +14,13 @@ import java.util.UUID;
  * One dataset record as the query model and templates see it (M19.3.1): its identity, its place in
  * the Content store and its editor values.
  *
- * <p>A record's <em>fields</em> are its editor values plus five reserved meta fields, the names a
+ * <p>A record's <em>fields</em> are its editor values plus six reserved meta fields, the names a
  * {@code where}/{@code sort} expression and a loop item use:
- * {@code _uuid}, {@code _uid}, {@code _displayName}, {@code _folderPath} and {@code _changedAt}.
- * {@code _folderPath} is relative to the Content store root, with a leading and trailing slash
- * ({@code /} for a record directly in the store, {@code /team/leads/} deeper down); {@code _changedAt}
- * is an ISO-8601 instant.
+ * {@code _uuid}, {@code _uid}, {@code _displayName}, {@code _folderPath}, {@code _recordSet} and
+ * {@code _changedAt}. {@code _folderPath} is the Content folder path of the record's set (M25), relative
+ * to the Content store root with a leading and trailing slash ({@code /} for a set directly in the store,
+ * {@code /team/leads/} deeper down); {@code _recordSet} is the uid of the record set holding it (M25),
+ * {@code null} when unknown; {@code _changedAt} is an ISO-8601 instant.
  *
  * <p>{@link #item()} is the JSON object a template reads: the fields above plus the {@code _meta}
  * object every cross-asset value carries ({@code uid}, {@code displayName}). It is built once per
@@ -28,25 +29,32 @@ import java.util.UUID;
 public final class RecordView {
 
     /** The reserved meta field names, in the order they are documented. */
-    public static final Set<String> META_FIELDS = Set.of("_uuid", "_uid", "_displayName", "_folderPath", "_changedAt");
+    public static final Set<String> META_FIELDS =
+            Set.of("_uuid", "_uid", "_displayName", "_folderPath", "_recordSet", "_changedAt");
 
     private final UUID uuid;
     private final String uid;
     private final String displayName;
     private final String folderPath;
+    private final String recordSet;
     private final Instant changedAt;
     private final JsonNode content;
     private final ObjectNode item;
 
     /**
-     * @param folderPath the Content-store-relative folder path; normalized to a leading and trailing slash
+     * @param folderPath the Content-store-relative folder path of the record's set; normalized to a
+     *     leading and trailing slash
+     * @param recordSet the uid of the record set holding the record, {@code null} when unknown
      * @param content the record's editor values ({@code payload.content}); {@code null} means none
      */
-    public RecordView(UUID uuid, String uid, String displayName, String folderPath, Instant changedAt, JsonNode content) {
+    public RecordView(
+            UUID uuid, String uid, String displayName, String folderPath, String recordSet, Instant changedAt,
+            JsonNode content) {
         this.uuid = Objects.requireNonNull(uuid, "uuid");
         this.uid = uid == null ? "" : uid;
         this.displayName = displayName == null ? "" : displayName;
         this.folderPath = normalizeFolder(folderPath);
+        this.recordSet = recordSet;
         this.changedAt = changedAt;
         this.content = content != null && content.isObject() ? content : JsonNodeFactory.instance.objectNode();
         this.item = buildItem();
@@ -66,6 +74,11 @@ public final class RecordView {
 
     public String folderPath() {
         return folderPath;
+    }
+
+    /** The uid of the record set holding the record (M25), {@code null} when unknown. */
+    public String recordSet() {
+        return recordSet;
     }
 
     public Instant changedAt() {
@@ -95,6 +108,7 @@ public final class RecordView {
                 uid,
                 displayName,
                 folderPath,
+                recordSet,
                 changedAt,
                 com.acme.staticforge.common.L10nValues.resolveDeep(content, chain));
     }
@@ -133,6 +147,7 @@ public final class RecordView {
         node.set("_uid", TextNode.valueOf(uid));
         node.set("_displayName", TextNode.valueOf(displayName));
         node.set("_folderPath", TextNode.valueOf(folderPath));
+        node.set("_recordSet", recordSet == null ? JsonNodeFactory.instance.nullNode() : TextNode.valueOf(recordSet));
         node.set("_changedAt", changedAt == null ? JsonNodeFactory.instance.nullNode() : TextNode.valueOf(changedAt.toString()));
         ObjectNode meta = node.putObject("_meta");
         meta.put("uid", uid);

@@ -1,0 +1,7 @@
+<section>$CMS_VALUE(featured)$</section>
+<p>$CMS_VALUE(featured._count)$ in $CMS_VALUE(featured._meta.displayName)$ ($CMS_VALUE(featured.assetType)$)</p>
+<ul>$CMS_FOR(m : featured, sort="name", limit=1)$<li>$CMS_VALUE(m.name)$ $CMS_VALUE(m._index)$/$CMS_VALUE(m._count)$</li>$CMS_END_FOR$</ul>
+<p>$CMS_FOR(m : featured.records)$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : unrestricted, where="m.nope == 1")$never$CMS_END_FOR$|$CMS_FOR(m : unrestricted, where="m.role == 'dev'", sort="-joined")$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<ul>$CMS_VALUE(unrestricted)$</ul>
+<p>[$CMS_VALUE(empty)$][$CMS_VALUE(empty._count)$][$CMS_VALUE(person.name)$]</p>

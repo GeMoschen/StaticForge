@@ -154,7 +154,18 @@
   background: var(--sf-paper);
 }
 
+/* Name and dataset badge share the first line; the column layout of the item would stretch the
+   badge across the whole row. */
+.dialog__item-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  min-width: 0;
+}
+
 .dialog__item-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: var(--sf-text-sm);
 }
 
@@ -165,6 +176,7 @@
 }
 
 .dialog__item-badge {
+  flex: none;
   padding: 0 var(--sf-2);
   border: 1px solid var(--sf-line);
   border-radius: 999px;

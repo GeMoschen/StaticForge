@@ -1,0 +1,63 @@
+@use '../../design/dialog-shell';
+
+:host {
+  display: contents;
+}
+
+.move__description,
+.move__empty {
+  margin: 0;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+}
+
+.move__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+}
+
+.move__target {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  padding-top: var(--sf-1);
+  padding-bottom: var(--sf-1);
+  padding-right: var(--sf-3);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+  cursor: pointer;
+}
+
+.move__target:hover {
+  background: var(--sf-paper);
+}
+
+.move__target--current {
+  color: var(--sf-slate);
+  cursor: default;
+}
+
+.move__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move__detail {
+  margin-left: auto;
+  color: var(--sf-slate);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+  white-space: nowrap;
+}
+
+.move__detail + .move__detail {
+  margin-left: var(--sf-1);
+}

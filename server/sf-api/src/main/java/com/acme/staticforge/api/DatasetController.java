@@ -90,7 +90,8 @@ public class DatasetController {
                         body.displayName(),
                         body.contentDefinition(),
                         body.titleEditor(),
-                        body.description()),
+                        body.description(),
+                        body.channelTemplates()),
                 ctx(projectKey, comment(body.comment(), "create dataset")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
@@ -108,14 +109,16 @@ public class DatasetController {
         long expected = RevisionHeaders.expectedRevision(ifMatch);
         DatasetView view = datasetService.update(
                 uuid,
-                new UpdateDatasetCommand(body.displayName(), body.contentDefinition(), body.titleEditor(), body.description()),
+                new UpdateDatasetCommand(
+                        body.displayName(), body.contentDefinition(), body.titleEditor(), body.description(),
+                        body.channelTemplates()),
                 expected,
                 confirmDiscard,
                 ctx(projectKey, comment(body.comment(), "update dataset schema")));
         return ok(view);
     }
 
-    /** {@code 409 SF-DOM-0121} with {@code recordCount} while the dataset still has live records. */
+    /** {@code 409 SF-DOM-0121} with {@code recordCount}/{@code setCount} while the dataset has live records or sets. */
     @DeleteMapping("/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public ResponseEntity<Void> delete(@PathVariable String projectKey, @PathVariable UUID uuid) {
@@ -157,6 +160,9 @@ public class DatasetController {
                 v.compiledDefinition(),
                 v.titleEditor(),
                 v.description(),
+                v.channelTemplates(),
+                v.recordTemplateDiagnostics(),
+                v.brokenRecordSets(),
                 v.recordCount(),
                 v.revision(),
                 v.deleted());

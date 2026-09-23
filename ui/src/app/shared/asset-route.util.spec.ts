@@ -10,6 +10,13 @@ describe('assetRoute', () => {
     });
   });
 
+  it('opens a record set in the Content store set view', () => {
+    expect(assetRoute('acme', { uuid: 's1', type: 'RECORD_SET', folderPath: '/content_root/team/' })).toEqual({
+      commands: ['/p', 'acme', 'content', 'sets', 's1'],
+      queryParams: {},
+    });
+  });
+
   it('selects media, templates, datasets, navigation and globals through ?asset=', () => {
     expect(assetRoute('acme', { uuid: 'm1', type: 'MEDIA' })).toEqual({ commands: ['/p', 'acme', 'media'], queryParams: { asset: 'm1' } });
     for (const type of ['PAGE_TEMPLATE', 'SECTION_TEMPLATE', 'DATASET']) {

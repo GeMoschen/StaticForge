@@ -35,7 +35,8 @@ public record PlanEntryView(
      * One asset of a chain and how it depends on the next one.
      *
      * @param edge {@code PAGE_TEMPLATE}, {@code SECTION_TEMPLATE}, {@code PARENT_TEMPLATE}, {@code REFERENCE},
-     *     {@code NAVIGATION}, {@code DATASET_MEMBERSHIP}, {@code PAGINATION_SOURCE}; clients must tolerate names added later
+     *     {@code NAVIGATION}, {@code DATASET_MEMBERSHIP}, {@code PAGINATION_SOURCE}, {@code RECORD_SET_MEMBERSHIP},
+     *     {@code RECORD_SET_QUERY}, {@code RECORD_TEMPLATE}; clients must tolerate names added later
      * @param referenceKind the reference row's kind for a {@code REFERENCE} edge
      */
     public record StepView(UUID assetUuid, String assetType, String uid, String edge, String referenceKind, String sourcePath) {}

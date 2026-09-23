@@ -15,7 +15,7 @@ public enum FolderScope {
     NAVIGATION,
     TEMPLATES,
     GLOBALS,
-    /** The Content store (M19.1.1): dataset records and their folders. */
+    /** The Content store (M19.1.1): folders holding record sets (M25), which hold the dataset records. */
     CONTENT;
 
     /**
@@ -67,7 +67,7 @@ public enum FolderScope {
             case PAGE_REFERENCE -> NAVIGATION;
             case PAGE_TEMPLATE, SECTION_TEMPLATE, DATASET -> TEMPLATES;
             case GLOBAL_SET -> GLOBALS;
-            case RECORD -> CONTENT;
+            case RECORD, RECORD_SET -> CONTENT;
             default -> null;
         };
     }

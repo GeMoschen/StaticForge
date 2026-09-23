@@ -25,6 +25,18 @@ public enum RebuildEdgeKind {
     DATASET_MEMBERSHIP,
     /** A page paginates the navigation folder or dataset the changed item belongs to (M21). */
     PAGINATION_SOURCE,
+    /**
+     * A template, record template, page, record or global set reads a record set whose query may select the changed
+     * record, now or at the baseline (M25.2.3); the source path is the set's uid.
+     */
+    RECORD_SET_MEMBERSHIP,
+    /** A reader of a record set whose stored query changed (M25.2.3); the source path is the reference row's. */
+    RECORD_SET_QUERY,
+    /**
+     * A reader renders a record set's records through the dataset's record template, which changed or reads a change
+     * (M25.2.3); the source path is the set's uid.
+     */
+    RECORD_TEMPLATE,
     UNKNOWN;
 
     /** The kind named {@code name}; {@link #UNKNOWN} for {@code null} or a name this build doesn't know. */

@@ -64,6 +64,7 @@ public class LiveExtractionContexts {
         private final Map<UUID, Optional<ContentDefinition>> pageTemplates = new ConcurrentHashMap<>();
         private final Map<UUID, Optional<ContentDefinition>> sectionTemplates = new ConcurrentHashMap<>();
         private final Map<UUID, Optional<ContentDefinition>> datasets = new ConcurrentHashMap<>();
+        private final Map<UUID, Optional<String>> datasetNames = new ConcurrentHashMap<>();
 
         Live(long projectId, TemplateHierarchy hierarchy) {
             this.projectId = projectId;
@@ -84,6 +85,15 @@ public class LiveExtractionContexts {
         @Override
         public Optional<ContentDefinition> datasetDefinition(UUID dataset) {
             return datasets.computeIfAbsent(dataset, uuid -> own(uuid, AssetType.DATASET));
+        }
+
+        @Override
+        public Optional<String> datasetName(UUID dataset) {
+            return datasetNames.computeIfAbsent(dataset, uuid -> assets.findByProjectIdAndUuid(projectId, uuid)
+                    .filter(asset -> asset.getAssetType() == AssetType.DATASET)
+                    .flatMap(asset -> versions.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
+                    .filter(version -> !version.isDeleted())
+                    .map(version -> version.getDisplayName()));
         }
 
         @Override

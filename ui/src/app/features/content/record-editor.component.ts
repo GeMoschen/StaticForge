@@ -31,7 +31,10 @@ import { ConflictDrawerComponent } from '../pages/conflict-drawer.component';
 import { diffFields, mergePayload } from '../pages/conflict-util';
 import type { FieldResolveEvent, ResolveMode } from '../pages/types';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { recordMoveTargets, storeFolderPath, type MoveTarget } from './content-tree.util';
+import { ContentStoreRefresh } from './content-store-refresh.service';
 import { ContentService, type DatasetDetailView, type RecordDetailView } from './content.service';
+import { MoveTargetDialogComponent } from './move-target-dialog.component';
 import { RecordAutosaveService, type RecordPayload } from './record-autosave.service';
 
 type AssetHistoryEntry = components['schemas']['AssetHistoryEntry'];
@@ -53,6 +56,9 @@ interface ContentIssue {
  * returns with a save (an empty required field) and structural ones it rejects a save with are shown
  * next to the form. The record's history lets you time-travel to any of its versions; its usages list
  * the pages and templates that read it. Everything is read-only while time travelling.
+ *
+ * <p>A record lives in a record set (M25): the breadcrumb reads folder › set › record, and "Move…"
+ * offers only the other sets of the record's own dataset — the only places the server accepts.
  */
 @Component({
   selector: 'sf-record-editor',
@@ -65,6 +71,7 @@ interface ContentIssue {
     SfRelativeTimePipe,
     SfContentFormComponent,
     ConflictDrawerComponent,
+    MoveTargetDialogComponent,
   ],
   providers: [RecordAutosaveService],
   templateUrl: './record-editor.component.html',
@@ -92,6 +99,7 @@ export class RecordEditorComponent implements OnDestroy {
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthStore);
   private readonly timeTravel = inject(TimeTravelStore);
+  private readonly refresh = inject(ContentStoreRefresh, { optional: true });
   protected readonly autosave = inject(RecordAutosaveService);
 
   protected readonly timeTravelling = this.timeTravel.isTimeTravel;
@@ -111,6 +119,12 @@ export class RecordEditorComponent implements OnDestroy {
   protected readonly history = signal<AssetHistoryEntry[]>([]);
   protected readonly usages = signal<UsageDto[]>([]);
   protected readonly panel = signal<'issues' | 'history' | 'usages'>('issues');
+  protected readonly moveOpen = signal(false);
+  protected readonly moving = signal(false);
+  protected readonly moveTargets = signal<MoveTarget[]>([]);
+
+  /** The record's Content folder, store-relative, for the breadcrumb (`/` at the store root). */
+  protected readonly folderPath = computed(() => storeFolderPath(this.record()?.folderPath));
 
   private formSubscription: Subscription | null = null;
 
@@ -236,6 +250,7 @@ export class RecordEditorComponent implements OnDestroy {
     this.api.deleteAsset(this.projectKey(), record.uuid, referenced).subscribe({
       next: () => {
         this.toasts.show('Record deleted', 'success');
+        this.refresh?.notify();
         this.load(this.projectKey(), record.uuid!, null);
       },
       error: () => this.toasts.show('Could not delete the record — try again in a moment.', 'error'),
@@ -251,9 +266,51 @@ export class RecordEditorComponent implements OnDestroy {
     this.api.restoreAsset(this.projectKey(), record.uuid, { fromRevision: lastLive.revision }).subscribe({
       next: () => {
         this.toasts.show('Record restored', 'success');
+        this.refresh?.notify();
         this.load(this.projectKey(), record.uuid!, null);
       },
       error: () => this.toasts.show('Could not restore the record — try again in a moment.', 'error'),
+    });
+  }
+
+  /** "Move…": the other live sets of this record's dataset, loaded when the dialog opens. */
+  protected openMove(): void {
+    const record = this.record();
+    if (!record?.datasetUuid || this.readOnly() || record.deleted) {
+      return;
+    }
+    this.content.listRecordSets(this.projectKey(), record.datasetUuid).subscribe({
+      next: (sets) => {
+        this.moveTargets.set(recordMoveTargets(sets ?? [], record.datasetUuid, record.recordSet?.uuid));
+        this.moveOpen.set(true);
+      },
+      error: () => this.toasts.show('Could not load the record sets — try again in a moment.', 'error'),
+    });
+  }
+
+  protected closeMove(): void {
+    this.moveOpen.set(false);
+  }
+
+  protected moveTo(setUuid: string | null): void {
+    const record = this.record();
+    if (!record?.uuid || !setUuid || this.readOnly()) {
+      return;
+    }
+    this.autosave.flush();
+    this.moving.set(true);
+    this.content.moveAsset(this.projectKey(), record.uuid, setUuid).subscribe({
+      next: () => {
+        this.moving.set(false);
+        this.moveOpen.set(false);
+        this.toasts.show('Record moved', 'success');
+        this.refresh?.notify();
+        this.load(this.projectKey(), record.uuid!, null);
+      },
+      error: () => {
+        this.moving.set(false);
+        this.toasts.show('Could not move the record — try again in a moment.', 'error');
+      },
     });
   }
 

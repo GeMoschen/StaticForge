@@ -18,6 +18,7 @@ import { ProjectSettingsImportExportComponent } from './features/settings/projec
 import { ProjectSettingsUrlRegistryComponent } from './features/settings/project-settings-url-registry.component';
 import { ContentComponent } from './features/content/content.component';
 import { RecordEditorComponent } from './features/content/record-editor.component';
+import { RecordSetViewComponent } from './features/content/record-set-view.component';
 import { MediaLibraryComponent } from './features/media/media-library.component';
 import { TemplatesComponent } from './features/templates/templates.component';
 import { SearchPageComponent } from './features/search/search-page.component';
@@ -65,6 +66,10 @@ export const routes: Routes = [
         path: 'content',
         component: ContentComponent,
         children: [
+          {
+            path: 'sets/:setUuid',
+            component: RecordSetViewComponent,
+          },
           {
             path: 'records/:recordUuid',
             component: RecordEditorComponent,

@@ -1,11 +1,13 @@
 package com.acme.staticforge.template.render;
 
+import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * A renderer hook for block instructions {@code $CMS_BODY} and {@code $CMS_INCLUDE}
+ * A renderer hook for block instructions {@code $CMS_BODY} and {@code $CMS_INCLUDE}, catalog cards,
+ * navigation and record-set record templates
  * (spec §16.5, §19.1). The {@link OctlRenderer} has no knowledge of how sections are
  * materialized — the generation/preview pipeline owns that (spec §21.3). When a
  * {@link RenderContext} carries no resolver, these instructions render as empty strings
@@ -46,6 +48,22 @@ public interface BlockResolver {
      */
     default String renderCatalog(JsonNode cards) {
         return "";
+    }
+
+    /**
+     * The compiled record template of dataset {@code datasetUuid} for the render's channel (M25.2.2): the markup
+     * each record of a record set renders with when {@code $CMS_VALUE(recordset:uid)$} (or a {@code reference}
+     * editor value pointing at a set) is rendered. The {@link OctlRenderer} selects the set's records and renders
+     * each through this template itself, with the record as the template's scope — so generation and preview only
+     * supply the compiled template, compiled once per (dataset, channel) through their compile tiers, never per
+     * record. The default implementation has none.
+     *
+     * @param datasetUuid the set's dataset
+     * @return the compiled record template, or {@code null} when the dataset has none for the channel (the set
+     *     renders empty with an {@code SF-GEN-0241} warning)
+     */
+    default CompiledTemplate recordTemplate(UUID datasetUuid) {
+        return null;
     }
 
     /**

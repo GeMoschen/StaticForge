@@ -5,8 +5,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Read model of one record at a single revision (M19.1.2). {@code folderPath} is Content-store
- * relative ({@code /team/}); {@code revision} is the {@code ETag: "rev-{n}"} concurrency token.
+ * Read model of one record at a single revision (M19.1.2). {@code recordSetUuid}/{@code recordSetUid}/
+ * {@code recordSetDisplayName} name the set holding it (M25); {@code folderUuid}/{@code folderPath} the set's Content folder, the path
+ * Content-store relative ({@code /team/}); {@code revision} is the {@code ETag: "rev-{n}"} concurrency token.
  */
 public record RecordDetail(
         UUID uuid,
@@ -14,6 +15,9 @@ public record RecordDetail(
         String displayName,
         UUID datasetUuid,
         String datasetUid,
+        UUID recordSetUuid,
+        String recordSetUid,
+        String recordSetDisplayName,
         UUID folderUuid,
         String folderPath,
         JsonNode content,

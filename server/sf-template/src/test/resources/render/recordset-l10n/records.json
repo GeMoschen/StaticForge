@@ -1,0 +1,24 @@
+{
+  "team": {
+    "uuid": "d0000000-0000-0000-0000-000000000001",
+    "recordTemplates": {
+      "html": "<li>$CMS_VALUE(name)$: $CMS_VALUE(title)$</li>"
+    },
+    "recordSets": {
+      "team": { "uuid": "f0000000-0000-0000-0000-000000000001", "displayName": "Team" },
+      "leitung": { "uuid": "f0000000-0000-0000-0000-000000000002", "displayName": "Leitung", "query": { "where": "title == 'Leitung'", "sort": "title" } }
+    },
+    "records": [
+      { "uuid": "e0000000-0000-0000-0000-00000000000a", "uid": "ada", "displayName": "Ada", "folderPath": "/team/", "recordSet": "team",
+        "content": { "name": "Ada", "title": { "type": "L10N", "values": { "de": "Leitung", "en": "Lead" } } } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000b", "uid": "bob", "displayName": "Bob", "folderPath": "/team/", "recordSet": "team",
+        "content": { "name": "Bob", "title": { "type": "L10N", "values": { "de": "Entwicklung", "en": "Development" } } } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000c", "uid": "cy", "displayName": "Cy", "folderPath": "/team/", "recordSet": "team",
+        "content": { "name": "Cy", "title": { "type": "L10N", "values": { "en": "Leitung" } } } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000d", "uid": "dan", "displayName": "Dan", "folderPath": "/team/", "recordSet": "leitung",
+        "content": { "name": "Dan", "title": { "type": "L10N", "values": { "de": "Leitung", "en": "Lead" } } } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000e", "uid": "eli", "displayName": "Eli", "folderPath": "/team/", "recordSet": "leitung",
+        "content": { "name": "Eli", "title": { "type": "L10N", "values": { "de": "Leiterin", "en": "Leitung" } } } }
+    ]
+  }
+}

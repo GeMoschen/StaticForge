@@ -1,5 +1,6 @@
 package com.acme.staticforge.generate.plan;
 
+import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.query.DatasetQuery;
@@ -15,7 +16,8 @@ import java.util.Map;
 /**
  * Which record changes a template's dataset loops render (M19.3.2), for one incremental plan.
  *
- * <p>A template reads a dataset's records only through {@code $CMS_FOR(x : dataset:uid, …)$} loops, and
+ * <p>A template — or a dataset's record template (M25.2.3), which renders once per record of the dataset's sets — reads
+ * a dataset's records only through {@code $CMS_FOR(x : dataset:uid, …)$} loops, and
  * a loop's output depends only on the records its {@code folder} and {@code where} select: sorting,
  * {@code offset}, {@code limit} and {@code _count} all come after the filter. So a record change can
  * alter a loop only if the record version before or after the change passes that filter
@@ -59,7 +61,10 @@ final class DatasetLoopImpact {
             Map.Entry<String, JsonNode> channel = it.next();
             String source = channel.getValue().path("source").asText("");
             if (!source.isBlank()) {
-                queries.addAll(compiler.compile(source, channel.getKey(), null).template().datasetQueries(datasetUid));
+                var compiled = template.type() == AssetType.DATASET
+                        ? compiler.compileRecordTemplate(source, channel.getKey(), null, null)
+                        : compiler.compile(source, channel.getKey(), null);
+                queries.addAll(compiled.template().datasetQueries(datasetUid));
             }
         }
         return queries.isEmpty() ? EVERY_RECORD : List.copyOf(queries);

@@ -34,7 +34,7 @@ public final class SnapshotPagination {
         this.snapshot = snapshot;
         this.hierarchy = SnapshotTemplateHierarchy.of(snapshot, memo);
         this.navigation = new SnapshotNavigationLookup(snapshot);
-        this.records = new SnapshotAssetValueResolver(snapshot);
+        this.records = new SnapshotAssetValueResolver(snapshot, memo);
     }
 
     public static SnapshotPagination of(Snapshot snapshot, TemplateCompileMemo memo) {

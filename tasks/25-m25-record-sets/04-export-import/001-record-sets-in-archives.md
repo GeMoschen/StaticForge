@@ -1,6 +1,6 @@
 ---
 id: M25.4.1
-status: todo
+status: done
 depends: [M25.1.1, M25.2.1]
 epic: m25-record-sets
 feature: export-import
@@ -48,16 +48,16 @@ are never migrated.
 
 ## Acceptance criteria
 
-- [ ] Round trip: dataset (with `html`+`md` record templates) + 2 sets (with queries) + 5 records in
+- [x] Round trip: dataset (with `html`+`md` record templates) + 2 sets (with queries) + 5 records in
       nested Content folders into an empty project — payloads, queries, `datasetRef`s, parents, folder
       paths, references (incl. a page's reference editor → set) intact; generated output identical to the
       source project.
-- [ ] Selecting one record exports its set and dataset as *implicit*; "skip implicit existing" (`M11`)
+- [x] Selecting one record exports its set and dataset as *implicit*; "skip implicit existing" (`M11`)
       skips them in a project that has them.
-- [ ] Each new conflict type appears in `analyze` and blocks the affected assets on import.
-- [ ] A protocol-6 archive fixture with records (checked into test resources): `analyze` lists one
+- [x] Each new conflict type appears in `analyze` and blocks the affected assets on import.
+- [x] A protocol-6 archive fixture with records (checked into test resources): `analyze` lists one
       `RECORD_OUTSIDE_RECORD_SET` per record; import creates none of them, everything else imports.
-- [ ] `ProjectExportImportIntegrationTest` green; UI specs for the icon map / picker updated and green.
+- [x] `ProjectExportImportIntegrationTest` green; UI specs for the icon map / picker updated and green.
 
 ## Out of scope
 
@@ -69,3 +69,70 @@ are never migrated.
   handling as for other assets; never merge records into a set of a different dataset.
 - The uncommitted edits in `ProjectExportImportServiceImpl.java` / `UidGenerator.java` at the time this
   epic was written (git status 2026-09-23) must be committed or resolved before starting.
+
+## Implementation notes (2026-09-23)
+
+- **Export** (`ProjectExportImportServiceImpl.resolveIncludedAssetIds`): a picked `RECORD_SET` is a container
+  pick — the set and its live records (matched by parent id, since records share the set's folder path) are
+  explicit. A picked record pulls in its set as an implicit pick, and every included record or set its dataset;
+  ancestor folders follow as before. A folder pick / `fullStores: CONTENT` already covers sets and records by path.
+  `channelTemplates` travel in the dataset payload unchanged. This matches the UI of `M25.5.3` (set uuid in
+  `assetUuids`).
+- **Import.** Order `DATASET → RECORD_SET → RECORD` (from `M25.1.1`). A record may join a set that is not in the
+  archive but live in the target (resolved like a skipped asset). Placement is judged with
+  `RecordSetContainment.violation` against the parent *as the import will find it* (`placement`: the archive's
+  copy, or the target's current version when that one is skipped as an existing implicit pick or absent).
+- **Conflicts** (`ConflictType`): `RECORD_SET_DATASET_MISSING` (replaces `RECORD_DATASET_MISSING` for sets;
+  records keep `RECORD_DATASET_MISSING`), `RECORD_SET_MISSING` (no parent anywhere, or a soft-deleted target set),
+  `RECORD_SET_DATASET_MISMATCH` (record vs. its set, **and** a set that would overwrite a target set of another
+  dataset — a set's dataset is immutable), `RECORD_OUTSIDE_RECORD_SET` (parent is the Content root or a folder).
+  New warning **`RECORD_SET_QUERY_INVALID`**: the set's stored query is re-validated with `RecordSetQueries.compile`
+  against the dataset it gets in the target (archive payload, or the reused existing dataset); the set imports with
+  its query untouched and reads `queryValid: false`.
+- **Decision — per-asset blocking.** The task wants `RECORD_OUTSIDE_RECORD_SET` blocking *and* "everything else
+  imports" (epic decision 8). `ConflictType` gained `rejectsAssetOnly()` / `blocksImport()`; only
+  `RECORD_OUTSIDE_RECORD_SET` rejects its own asset only. `importProject` refuses on `blocksImport` conflicts and
+  skips rejected assets; such a record gets no other conflict (it is never written). `ConflictReport.blocksImport()`,
+  `ImportConflict.blocksImport()`. The other three new types block the whole import, like their M19/M10 siblings
+  (`RECORD_DATASET_MISSING`, `MISSING_PARENT_FOLDER`) — they only occur with hand-edited archives.
+- **REST:** `ConflictReportView.blocksImport` and `ImportConflictView.blocksImport` (new fields; `hasBlocking` is
+  unchanged). **OpenAPI changes; `ui/src/app/core/api/generated/schema.d.ts` was not regenerated.**
+- **UI follow-up (not changed here):** the import screen disables Proceed on any `BLOCKING` conflict
+  (`project-settings-import.component.ts` `hasBlocking`), so a pre-M25 archive with records can't be committed
+  from the UI although the server accepts it. It should gate on `blocksImport` (after regenerating
+  `schema.d.ts`) and present `RECORD_OUTSIDE_RECORD_SET` as "will not be imported". `RECORD_SET_QUERY_INVALID` has
+  no icon yet (falls back to `info`).
+- **Protocol** `PROTOCOL_VERSION` 6 → 7, reason documented on the constant and in the class Javadoc. Protocol ≤ 6
+  archives are still read; their records yield `RECORD_OUTSIDE_RECORD_SET` through the same containment check (no
+  version-specific code, no migration).
+- **Fixture:** `server/sf-app/src/test/resources/exportimport/protocol-6-records-outside-sets/` — the unpacked
+  entries (manifest, settings, `assets/<uuid>.json`) of a real export in the M14 per-file shape, turned into the
+  pre-M25 shape (set entries removed, records re-parented to Content folder `People` / the Content root, protocol
+  6): dataset `team`, records Ada/Bob/Cy, page template with a `dataset:` loop, page whose reference editor points
+  at Ada. Zipped at test time by the new `ArchiveFixtures` (also `editAsset`, `withoutEntry`).
+- **Tests.** `ProjectExportImportIntegrationTest` (59): new `recordSetsRoundTripIntoAnEmptyProjectAndGenerateIdenticalOutput`
+  (html+md record templates, 2 sets with queries, 5 records in `People`/`People/Leads`, page reference editor →
+  set; payloads, queries, dataset links, sets, folder paths, `CONTENT_REF` row; FULL generation of both projects,
+  html+md files byte-identical), `pickingARecordSetExportsItsRecordsAndItsDatasetImplicitly`,
+  `aRecordWhoseSetIsMissingIsABlockingConflictUnlessTheTargetHasTheSet`,
+  `aRecordOrSetOfAnotherDatasetThanItsSetIsABlockingConflict`,
+  `aSetWhoseUidIsTakenByASetOfAnotherDatasetImportsUnderADerivedUid` (hazard note),
+  `aSetQueryThatDoesNotFitTheTargetSchemaImportsFlaggedWithAWarning` (archive dataset and reused target dataset),
+  `aProtocol6ArchiveRejectsItsRecordsOutsideSetsAndImportsEverythingElse`; changed
+  `aSingleRecordExportCarriesItsSetAndDatasetImplicitly` (set implicit and skipped),
+  `aRecordAndItsSetWithoutTheirDatasetAreBlockingConflicts`, protocol 7 in `manifestReportsTheCurrentProtocolVersion`.
+  The class got a `@DynamicPropertySource` output root for the generation comparison. `ProjectImportAnalyzeApiTest`
+  (+1: fixture → `hasBlocking` true, `blocksImport` false, commit `200` with 4 assets; `blocksImport` asserted on
+  the existing blocking test). UI specs of `M25.5.3` (`project-settings-import/export.component.spec`) re-run green.
+
+### Follow-up (2026-09-23) — import UI gating
+- `schema.d.ts` regenerated (`ConflictReportView.blocksImport`, `ImportConflictView.blocksImport`). The import screen
+  gates "Import" on `blocksImport` (report flag or any conflict that refuses the whole import), not on any
+  `BLOCKING` conflict. Conflicts that reject only their own asset get their own "Not imported" section ("These
+  assets are left out. Everything else in the archive can still be imported."), each row badged "Record will not be
+  imported" for `RECORD_OUTSIDE_RECORD_SET`; `RECORD_SET_QUERY_INVALID` has the icon `filter_alt_off`.
+- The commit `409` body's conflicts now carry `blocksImport` too (`assertNoBlockingConflicts`), so the UI's re-check
+  after a changed archive reads the same flag; a conflict without it counts as refusing.
+- Tests: `ProjectImportAnalyzeApiTest` (409 conflicts carry `blocksImport`), `project-settings-import.component.spec`
+  (+2: pre-M25 archive → "Not imported", Import enabled and committed; refusing conflict next to rejected records
+  keeps it disabled; icon test incl. `RECORD_SET_QUERY_INVALID`).

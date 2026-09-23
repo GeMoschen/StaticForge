@@ -1,0 +1,15 @@
+{
+  "uuid": "ac5685e3-8aa5-4c25-b978-baae20dc37cd",
+  "type": "FOLDER",
+  "uid": "people",
+  "displayName": "People",
+  "parentFolderUuid": "feb70555-c64e-4edb-befb-9235b4b1be50",
+  "folderPath": "/content_root/people/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "CONTENT"
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

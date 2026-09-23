@@ -12,6 +12,8 @@ import com.acme.staticforge.template.octl.NamedArg;
 import com.acme.staticforge.template.octl.OctlNode;
 import com.acme.staticforge.template.query.DatasetQuery;
 import com.acme.staticforge.template.query.DatasetQueryEvaluator;
+import com.acme.staticforge.template.query.DatasetQueryParser;
+import com.acme.staticforge.template.query.RecordSetQueries;
 import com.acme.staticforge.template.query.RecordView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -19,10 +21,14 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.MissingNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -132,10 +138,24 @@ public final class OctlRenderer implements Renderer {
     }
 
     private void renderValue(OctlNode.Value v, State s) {
-        JsonNode value = resolve(v.accessor(), s);
+        Accessor accessor = v.accessor();
+        if (isRecordSetSource(accessor)) {
+            noteReference(accessor, s);
+            UUID set = s.template.references().get(accessor.referenceKey());
+            if (set != null) {
+                renderRecordSetValue(set, accessor.referenceKey(), v, s);
+            }
+            return;
+        }
+        JsonNode value = resolve(accessor, s);
         s.collectDeps(value);
         if (isCatalog(value)) {
             renderCatalogValue(value, s);
+            return;
+        }
+        UUID referencedSet = recordSetReference(value);
+        if (referencedSet != null) {
+            renderRecordSetValue(referencedSet, recordSetKey(referencedSet), v, s);
             return;
         }
         s.append(applyFilters(value, v.filters(), s));
@@ -210,6 +230,196 @@ public final class OctlRenderer implements Renderer {
                 // not a valid uuid value; skip
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Record sets (M25.2.2)
+    // ------------------------------------------------------------------
+
+    /** A path-less {@code recordset:uid}: the set itself, rendered as a value or iterated by a loop. */
+    private static boolean isRecordSetSource(Accessor accessor) {
+        return accessor.isAssetReference()
+                && OctlCompiler.RECORD_SET_PREFIX.equals(accessor.assetType())
+                && accessor.path().isEmpty();
+    }
+
+    /** The set a {@code reference} editor value points at ({@code {type:"ASSET_REF", uuid, assetType:"RECORD_SET"}}), else {@code null}. */
+    private static UUID recordSetReference(JsonNode value) {
+        if (value == null || !value.isObject()
+                || !"ASSET_REF".equals(value.path("type").asText(null))
+                || !"RECORD_SET".equalsIgnoreCase(value.path("assetType").asText(""))) {
+            return null;
+        }
+        return readUuid(value);
+    }
+
+    /** The key a set reached through a {@code reference} value is warned about under (it has no uid in the source). */
+    private static String recordSetKey(UUID set) {
+        return OctlCompiler.RECORD_SET_PREFIX + ":" + set;
+    }
+
+    /**
+     * {@code $CMS_VALUE(recordset:uid)$}, or a {@code reference} editor value pointing at a set: the records the set's
+     * stored query selects, each rendered through the dataset's record template for this channel with the record as
+     * the template's scope, concatenated. The loop meta names {@code _index}, {@code _first}, {@code _last} and
+     * {@code _count} are the record's position in the selected list. Filters ({@code | …}) apply to the concatenated
+     * output, which is rendered markup and so is not escaped again.
+     *
+     * <p>The set is pushed onto the budget's nesting stack like an include: a record template that renders the set it
+     * is rendered for — directly or through other sets — is an {@code SF-TPL-0135} cycle, never a stack overflow, and
+     * every record counts as a loop iteration ({@code SF-TPL-0131}). A set without a record template for the channel
+     * renders empty with {@code SF-GEN-0241}.
+     */
+    private void renderRecordSetValue(UUID set, String key, OctlNode.Value v, State s) {
+        s.appendResolved(() -> {
+            String rendered = renderRecordSet(set, key, v, s);
+            // Like any value: a missing or empty set still runs its filters (a default filter, for example).
+            return v.filters().isEmpty() ? rendered : filterRendered(rendered, v.filters(), s);
+        });
+    }
+
+    /** The set's records rendered through the record template and concatenated; empty when it can't be rendered. */
+    private String renderRecordSet(UUID set, String key, OctlNode.Value v, State s) {
+        SetSelection selection = selectRecordSet(set, key, s);
+        BlockResolver resolver = s.context.blockResolver();
+        if (selection == null || resolver == null) {
+            return "";
+        }
+        RecordSetSource source = selection.source();
+        CompiledTemplate recordTemplate = source.datasetUuid() == null ? null : resolver.recordTemplate(source.datasetUuid());
+        if (recordTemplate == null) {
+            s.warnOnce(Diagnostic.warning(
+                    DiagnosticCodes.GEN_RECORD_TEMPLATE_MISSING,
+                    "Record set '" + source.uid() + "' renders empty: dataset '" + nullToEmpty(source.datasetUid())
+                            + "' has no '" + s.context.channelKey() + "' record template.",
+                    v.line(),
+                    v.col()));
+            return "";
+        }
+        return s.budget.withTemplate(
+                set,
+                OctlCompiler.RECORD_SET_PREFIX + ":" + source.uid(),
+                () -> renderRecords(recordTemplate, selection.records(), v.line(), v.col(), s));
+    }
+
+    /** Renders each record through {@code recordTemplate} in a context nested in this render's (same resolvers and budget). */
+    private String renderRecords(CompiledTemplate recordTemplate, List<RecordView> records, int line, int col, State s) {
+        StringBuilder out = new StringBuilder();
+        int count = records.size();
+        for (int index = 0; index < count; index++) {
+            s.budget.countLoopIteration(line, col);
+            ObjectNode values = JsonNodeFactory.instance.objectNode();
+            records.get(index).item().fields().forEachRemaining(field -> values.set(field.getKey(), field.getValue()));
+            values.put("_index", index);
+            values.put("_first", index == 0);
+            values.put("_last", index == count - 1);
+            values.put("_count", count);
+            // Nested in this render: same resolvers, locale and budget; the record (and its position) is the scope.
+            RenderContext recordContext = s.context.toBuilder().values(values).budget(s.budget).build();
+            RenderResult result = render(recordTemplate, recordContext);
+            s.deps.addAll(result.dependencies());
+            result.warnings().forEach(s::warnOnce);
+            out.append(result.output());
+        }
+        return out.toString();
+    }
+
+    /** A value form's filters over a set's rendered records: applied like on any value, without escaping the markup again. */
+    private String filterRendered(String rendered, List<FilterNode> filters, State s) {
+        return Filters.stringify(pipe(TextNode.valueOf(rendered), filters, s));
+    }
+
+    /**
+     * The set's source and the records its stored query selects for this render's language — memoized per render, so
+     * a template reading {@code recordset:uid._count} in a loop selects once. {@code null} when the set can't be read.
+     */
+    private SetSelection selectRecordSet(UUID set, String key, State s) {
+        SetSelection cached = s.sets.get(set);
+        if (cached != null) {
+            return cached;
+        }
+        RecordSetSource source = recordSetSource(set, key, s);
+        if (source == null) {
+            return null;
+        }
+        List<RecordView> records = RecordSetQueries.select(source.records(), source.query(), s.context.localeChain());
+        SetSelection selection = new SetSelection(source, records, recordSetValue(source, records));
+        s.sets.put(set, selection);
+        return selection;
+    }
+
+    /**
+     * The set from the context's {@link AssetValueResolver#recordSet}, recording the set and its dataset as
+     * dependencies. A missing or deleted set warns {@code SF-TPL-0112} (once per key), a stored query that no longer
+     * validates warns {@code SF-GEN-0240} — such a set selects nothing, it is never shown unfiltered.
+     */
+    private RecordSetSource recordSetSource(UUID set, String key, State s) {
+        AssetValueResolver resolver = s.context.assetValueResolver();
+        s.deps.add(set);
+        if (resolver == null) {
+            return null;
+        }
+        RecordSetSource source = resolver.recordSet(set);
+        if (source == null) {
+            warnMissingTarget(key, s);
+            return null;
+        }
+        if (source.datasetUuid() != null) {
+            s.deps.add(source.datasetUuid());
+        }
+        if (!source.query().valid()) {
+            s.warnOnce(RecordSetQueries.invalidQueryWarning(source.uid(), source.query()));
+        }
+        return source;
+    }
+
+    /** A set's root value object: {@code {records: [...], _count, _meta: {uid, displayName, dataset}}} (see {@link AssetValueResolver}). */
+    private static JsonNode recordSetValue(RecordSetSource source, List<RecordView> records) {
+        ObjectNode root = JsonNodeFactory.instance.objectNode();
+        ArrayNode items = root.putArray("records");
+        records.forEach(record -> items.add(record.item()));
+        root.put("_count", records.size());
+        ObjectNode meta = root.putObject("_meta");
+        meta.put("uid", source.uid());
+        meta.put("displayName", source.displayName());
+        meta.put("dataset", source.datasetUid());
+        return root;
+    }
+
+    /**
+     * The items of a record set loop — {@code $CMS_FOR(x : recordset:uid, …)$} or a loop over a {@code reference}
+     * editor pointing at a set: the set's stored query first, then the loop's arguments narrow its result (epic
+     * decision 5). The items are the objects a dataset loop binds. For a {@code reference} editor ({@code checkFields})
+     * the arguments' fields are checked here, against the referenced set's dataset: an unknown field warns
+     * {@code SF-TPL-0141} (once per loop and render) and reads as missing, so records it filters on are skipped — the
+     * rule a dataset loop's unresolvable fields follow.
+     */
+    private JsonNode recordSetItems(OctlNode.For loop, UUID set, String key, boolean checkFields, State s) {
+        DatasetQuery narrowing = s.template.datasetQuery(loop);
+        List<RecordView> records;
+        if (narrowing == null) {
+            SetSelection selection = selectRecordSet(set, key, s);
+            if (selection == null) {
+                return null;
+            }
+            records = selection.records();
+        } else {
+            RecordSetSource source = recordSetSource(set, key, s);
+            if (source == null) {
+                return null;
+            }
+            if (checkFields && source.datasetDefinition() != null && s.checkedLoops.put(loop, Boolean.TRUE) == null) {
+                for (Diagnostic finding : DatasetQueryParser.validateFields(
+                        narrowing, source.datasetDefinition(), loop.line(), loop.col())) {
+                    s.warnOnce(Diagnostic.warning(finding.code(), finding.message(), finding.line(), finding.column()));
+                }
+            }
+            records = RecordSetQueries.select(
+                    source.records(), source.query(), s.context.localeChain(), narrowing, scopeAccessor -> resolve(scopeAccessor, s));
+        }
+        ArrayNode items = JsonNodeFactory.instance.arrayNode(records.size());
+        records.forEach(record -> items.add(record.item()));
+        return items;
     }
 
     /**
@@ -329,14 +539,21 @@ public final class OctlRenderer implements Renderer {
     /**
      * {@code $CMS_FOR$}'s accessor resolution: a {@code nav:uid} reference bootstraps its
      * top-level children from {@link BlockResolver#resolveNavigationChildren}; a {@code dataset:uid}
-     * reference yields the records its compiled query selects (M19.3.2); every other accessor
-     * (including a cross-asset {@code page:uid.list}) goes through the normal {@link #resolve} path.
+     * reference yields the records its compiled query selects (M19.3.2); a {@code recordset:uid} reference, or a
+     * value that is a {@code reference} to a record set, yields the set's selected records narrowed by the loop's
+     * arguments (M25.2.2); every other accessor (including a cross-asset {@code page:uid.list}) goes through the
+     * normal {@link #resolve} path.
      */
     private JsonNode resolveForList(OctlNode.For loop, State s) {
         Accessor accessor = loop.accessor();
         List<NamedArg> args = loop.args();
         if (accessor.isAssetReference() && "dataset".equals(accessor.assetType())) {
             return datasetItems(loop, s);
+        }
+        if (isRecordSetSource(accessor)) {
+            noteReference(accessor, s);
+            UUID set = s.template.references().get(accessor.referenceKey());
+            return set == null ? null : recordSetItems(loop, set, accessor.referenceKey(), false, s);
         }
         if (accessor.isAssetReference() && "nav".equals(accessor.assetType())) {
             noteReference(accessor, s);
@@ -347,7 +564,9 @@ public final class OctlRenderer implements Renderer {
             BlockResolver resolver = s.context.blockResolver();
             return resolver == null ? null : resolver.resolveNavigationChildren(navFolderUuid, namedArgs(args));
         }
-        return resolve(accessor, s);
+        JsonNode value = resolve(accessor, s);
+        UUID referencedSet = recordSetReference(value);
+        return referencedSet == null ? value : recordSetItems(loop, referencedSet, recordSetKey(referencedSet), true, s);
     }
 
     /**
@@ -497,16 +716,25 @@ public final class OctlRenderer implements Renderer {
         if (resolver == null || uuid == null) {
             return MissingNode.getInstance();
         }
+        if (OctlCompiler.RECORD_SET_PREFIX.equals(accessor.assetType())) {
+            // A set's value object depends on the render language, so the renderer builds it (M25.2.2).
+            SetSelection selection = selectRecordSet(uuid, accessor.referenceKey(), s);
+            return selection == null ? MissingNode.getInstance() : resolveSub(selection.value(), accessor.path(), 0, s);
+        }
         JsonNode root = resolver.valueOf(accessor.assetType(), uuid);
         if (root == null || root.isMissingNode()) {
-            if (s.missingTargets.add(accessor.referenceKey())) {
-                s.warnings.add(Diagnostic.warning(
-                        DiagnosticCodes.OCTL_MISSING_VALUE_TARGET,
-                        "Cross-asset value target is missing or deleted: " + accessor.referenceKey(), 0, 0));
-            }
+            warnMissingTarget(accessor.referenceKey(), s);
             return MissingNode.getInstance();
         }
         return resolveSub(root, accessor.path(), 0, s);
+    }
+
+    /** One {@code SF-TPL-0112} per reference key and render: its target is missing or soft-deleted, it renders empty. */
+    private static void warnMissingTarget(String key, State s) {
+        if (s.missingTargets.add(key)) {
+            s.warnings.add(Diagnostic.warning(
+                    DiagnosticCodes.OCTL_MISSING_VALUE_TARGET, "Cross-asset value target is missing or deleted: " + key, 0, 0));
+        }
     }
 
     private JsonNode resolveMeta(Accessor accessor, State s) {
@@ -532,7 +760,7 @@ public final class OctlRenderer implements Renderer {
             }
             JsonNode next = node.get(path.get(i));
             if (next == null) {
-                next = dereferenceRecord(node, path.get(i), s);
+                next = dereference(node, path.get(i), s);
             }
             if (next == null) {
                 return MissingNode.getInstance();
@@ -545,15 +773,21 @@ public final class OctlRenderer implements Renderer {
     /**
      * Walking a path through a {@code reference} editor value that points at a record continues in
      * the record (M19.3.2): {@code $CMS_VALUE(author.name)$} reads the referenced record's
-     * {@code name}. Only a segment the reference value itself does not have ({@code type},
-     * {@code uuid}, {@code assetType}) dereferences, so {@code author.uuid} keeps meaning the stored
-     * value. Each dereference consumes a path segment, so reference cycles between records cannot
-     * recurse. The record becomes a render dependency.
+     * {@code name}; one that points at a record set continues in the set's root value object (M25.2.2):
+     * {@code $CMS_VALUE(featured._count)$}, {@code featured.records}. Only a segment the reference value
+     * itself does not have ({@code type}, {@code uuid}, {@code assetType}) dereferences, so
+     * {@code author.uuid} keeps meaning the stored value. Each dereference consumes a path segment, so
+     * reference cycles between records cannot recurse. The target becomes a render dependency.
      *
-     * @return the field of the referenced record, or {@code null} when {@code node} is not a record
-     *     reference or the record is missing
+     * @return the field of the referenced record or set, or {@code null} when {@code node} is not a
+     *     record or record set reference or the target is missing
      */
-    private static JsonNode dereferenceRecord(JsonNode node, String segment, State s) {
+    private JsonNode dereference(JsonNode node, String segment, State s) {
+        UUID set = recordSetReference(node);
+        if (set != null) {
+            SetSelection selection = selectRecordSet(set, recordSetKey(set), s);
+            return selection == null ? null : selection.value().get(segment);
+        }
         if (!"ASSET_REF".equals(node.path("type").asText(null))
                 || !"RECORD".equalsIgnoreCase(node.path("assetType").asText(""))) {
             return null;
@@ -787,6 +1021,9 @@ public final class OctlRenderer implements Renderer {
     /** A block being rendered, and which of its definitions (0 = most derived). */
     private record BlockFrame(String name, int depth) {}
 
+    /** A record set as one render sees it: its source, the records its stored query selects, and its root value object. */
+    private record SetSelection(RecordSetSource source, List<RecordView> records, JsonNode value) {}
+
     private static final class State {
         final CompiledTemplate template;
         final RenderContext context;
@@ -798,6 +1035,10 @@ public final class OctlRenderer implements Renderer {
         final Deque<LoopFrame> loops = new ArrayDeque<>();
         final Deque<Map<String, JsonNode>> vars = new ArrayDeque<>();
         final Deque<BlockFrame> blocks = new ArrayDeque<>();
+        /** Record sets selected in this render (M25.2.2), by set UUID: a set is selected once however often it is read. */
+        final Map<UUID, SetSelection> sets = new HashMap<>();
+        /** Reference-editor set loops whose argument fields were already checked in this render (by node identity). */
+        final Map<OctlNode.For, Boolean> checkedLoops = new IdentityHashMap<>();
         final RenderBudget budget;
 
         State(CompiledTemplate template, RenderContext context, RenderBudget budget) {
@@ -809,6 +1050,13 @@ public final class OctlRenderer implements Renderer {
         void append(String s) {
             out.append(s);
             budget.chargeOutput(s.length());
+        }
+
+        /** Adds a warning unless this render already has it: a record set reports once, not once per record or read. */
+        void warnOnce(Diagnostic warning) {
+            if (!warnings.contains(warning)) {
+                warnings.add(warning);
+            }
         }
 
         /**

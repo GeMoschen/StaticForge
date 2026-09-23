@@ -1,0 +1,6 @@
+{
+  "featured": { "type": "ASSET_REF", "uuid": "f0000000-0000-0000-0000-000000000001", "assetType": "RECORD_SET" },
+  "unrestricted": { "type": "ASSET_REF", "uuid": "f0000000-0000-0000-0000-000000000002", "assetType": "RECORD_SET" },
+  "empty": { "type": "ASSET_REF", "uuid": "f0000000-0000-0000-0000-000000000004", "assetType": "RECORD_SET" },
+  "person": { "type": "ASSET_REF", "uuid": "e0000000-0000-0000-0000-00000000000a", "assetType": "RECORD" }
+}

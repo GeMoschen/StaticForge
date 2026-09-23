@@ -24,8 +24,14 @@ import java.util.UUID;
  *       width, height, …}.
  *   <li>{@code page_reference} — {@code {label, …}}.
  *   <li>{@code record} — the record's item: its values plus {@code _uuid}, {@code _uid},
- *       {@code _displayName}, {@code _folderPath}, {@code _changedAt} (M19.3.2), the same object a
+ *       {@code _displayName}, {@code _folderPath}, {@code _recordSet} (M25), {@code _changedAt} (M19.3.2), the same object a
  *       dataset loop binds.
+ *   <li>{@code recordset} (M25.2.2) — {@code {records: [...], _count, _meta: {uid, displayName, dataset}}}:
+ *       {@code records} are the items the set's stored query selects for the render language (each the object a
+ *       dataset loop binds), {@code _count} their number and {@code _meta.dataset} the dataset's uid. Built by the
+ *       renderer from {@link #recordSet}, never from {@link #valueOf}, because the selection depends on the render
+ *       language. A {@code reference} editor value pointing at a set reads the same object
+ *       ({@code $CMS_VALUE(featured._count)$}).
  *   <li>template and folder types — no values: an object holding only the reserved {@code _meta}
  *       sub-object below.
  * </ul>
@@ -62,5 +68,19 @@ public interface AssetValueResolver {
      */
     default java.util.List<com.acme.staticforge.template.query.RecordView> datasetRecords(UUID datasetUuid) {
         return java.util.List.of();
+    }
+
+    /**
+     * A record set (M25.2.2): its dataset, its stored query compiled against the dataset's schema, and its live
+     * records — the source of {@code $CMS_VALUE(recordset:uid)$}, {@code $CMS_FOR(x : recordset:uid, …)$} and of a
+     * {@code reference} editor value pointing at a set. Generation answers from the snapshot's record index (built
+     * once per snapshot), preview from the versions valid at the preview revision. Without an implementation a set
+     * renders nothing.
+     *
+     * @param setUuid the record set's UUID
+     * @return the set, or {@code null} when it is missing or soft-deleted (the renderer warns {@code SF-TPL-0112})
+     */
+    default RecordSetSource recordSet(UUID setUuid) {
+        return null;
     }
 }

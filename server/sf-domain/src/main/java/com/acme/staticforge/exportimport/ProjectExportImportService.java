@@ -21,8 +21,14 @@ public interface ProjectExportImportService {
      *
      * <p>Bumped to {@code 5} by M19 for the same reason: archives can carry {@code DATASET} and
      * {@code RECORD} assets. The file layout itself is unchanged.
+     *
+     * <p>Bumped to {@code 7} by M25: archives can carry {@code RECORD_SET} assets, and a record's
+     * {@code parentFolderUuid} now names its record set — the containment rule changed how an archive must be
+     * read. An older server would place such a record under a set it can't read; this one reads a protocol
+     * {@code <= 6} archive's records (which sit in Content folders) as {@code RECORD_OUTSIDE_RECORD_SET} and
+     * imports everything else. The file layout itself is unchanged.
      */
-    int PROTOCOL_VERSION = 6;
+    int PROTOCOL_VERSION = 7;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP
@@ -40,7 +46,10 @@ public interface ProjectExportImportService {
      * project root, so imported {@code parentFolderUuid} chains never break. A selected
      * asset's own template reference is never auto-included (feature
      * `selective-export`, `M10.1.1`) — that's left for `M10.2`'s conflict detection to
-     * surface on import.
+     * surface on import. Exceptions are the implicit picks an asset can't exist without: a page
+     * template's parent chain (`M20`), a record's dataset (`M19`), and — since `M25` — a record's
+     * record set and a set's dataset. Picking a record set is a container pick like a folder: its
+     * live records are exported with it.
      */
     byte[] exportSelection(long projectId, ExportSelection selection);
 

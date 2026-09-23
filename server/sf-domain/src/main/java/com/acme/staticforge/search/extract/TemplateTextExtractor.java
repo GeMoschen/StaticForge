@@ -11,7 +11,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Developer assets (M23.1.2): page and section templates index their CDL and every channel's OCTL source, dataset
- * schemas their CDL, all as code (neutral analysis only, never stemmed). A dataset's description is prose.
+ * schemas their CDL and per-channel record templates (M25.2.1), all as code (neutral analysis only, never stemmed).
+ * A dataset's description is prose.
  */
 @Component
 public class TemplateTextExtractor implements SearchTextExtractor {

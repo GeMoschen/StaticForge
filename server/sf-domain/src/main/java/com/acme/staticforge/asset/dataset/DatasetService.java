@@ -1,6 +1,7 @@
 package com.acme.staticforge.asset.dataset;
 
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,14 +22,19 @@ public interface DatasetService {
     /**
      * Creates a dataset. CDL errors (and {@code body} declarations, {@code SF-CDL-0108}) abort with
      * {@code 422} and {@code diagnostics} before a revision is allocated; a {@code titleEditor} that is
-     * not a declared {@code text} editor is a {@code 422} too.
+     * not a declared {@code text} editor is a {@code 422} too. Record templates (M25.2.1) compile against
+     * the schema: a channel key the project doesn't define is a {@code 422} with {@code field}, compile
+     * errors a {@code 422} with {@code channel}, {@code diagnostics} and {@code channelDiagnostics}; the
+     * view's {@code recordTemplateDiagnostics} carries the warnings.
      */
     DatasetView create(CreateDatasetCommand cmd, RevisionContext ctx);
 
     /**
      * Replaces the schema. Declared {@code renamedFrom} hops rewrite the content keys of every current
      * record of the dataset; the dataset and every rewritten record share <em>one</em> revision (§12.3,
-     * M15). Values of editors the schema no longer declares are kept, exactly as for pages.
+     * M15). Values of editors the schema no longer declares are kept, exactly as for pages. Record
+     * templates compile against the new schema as on {@link #create} — also the stored ones kept by a
+     * {@code null} {@code channelTemplates}; their sources are never rewritten by a rename.
      */
     DatasetView update(UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, RevisionContext ctx);
 
@@ -41,8 +47,8 @@ public interface DatasetService {
             UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, boolean confirmDiscard, RevisionContext ctx);
 
     /**
-     * Soft-deletes a dataset. {@code 409 SF-DOM-0121} with {@code recordCount} while it still has live
-     * records (no cascade).
+     * Soft-deletes a dataset. {@code 409 SF-DOM-0121} with {@code recordCount} and {@code setCount} while it
+     * still has live records or live record sets (M25) — no cascade.
      */
     void delete(UUID uuid, RevisionContext ctx);
 
@@ -54,4 +60,17 @@ public interface DatasetService {
 
     /** The project's live datasets, by display name. */
     List<DatasetView> list(long projectId);
+
+    /**
+     * The diagnostics saving {@code source} as the dataset's record template for {@code channelKey} would produce
+     * (M25), without saving — the live check of the record template editor. It compiles with the record-template
+     * profile against the dataset's schema: {@code cdlSource} (the unsaved CDL being edited) when not {@code null},
+     * otherwise the stored one, so an undeclared field ({@code SF-TPL-0103}) or {@code SF-TPL-0122} shows while
+     * typing. References resolve against the project, and a {@code dataset:} loop over this dataset is checked
+     * against the same schema, as on save. CDL errors are the CDL editor's to report: names are checked against
+     * the best-effort definition.
+     *
+     * @throws com.acme.staticforge.common.SfException {@code 404} for a uuid that is not a dataset of the project
+     */
+    List<Diagnostic> validateRecordTemplate(long projectId, UUID uuid, String channelKey, String source, String cdlSource);
 }

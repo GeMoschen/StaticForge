@@ -196,7 +196,7 @@ test('journey: one page generates a paginated listing', async ({ page }) => {
     const addedChannel = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/channels/html'));
     await screen.getByRole('combobox', { name: 'Add channel' }).selectOption('html');
     expect((await addedChannel).status()).toBe(200);
-    const channel = screen.locator('textarea[aria-describedby="octl-diagnostics"]');
+    const channel = screen.getByRole('textbox', { name: /^OCTL source for channel / });
     await channel.fill(BLOG_HTML);
     const savedChannel = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/channels/html'));
     await screen.getByRole('button', { name: 'Save channel', exact: true }).click();

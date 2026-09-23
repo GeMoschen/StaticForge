@@ -151,6 +151,6 @@ class PaginationSourceTest {
 
     private static RecordView record(String uid, int rank) {
         ObjectNode content = new ObjectMapper().createObjectNode().put("rank", rank);
-        return new RecordView(UUID.randomUUID(), uid, uid.toUpperCase(), "/", Instant.EPOCH, content);
+        return new RecordView(UUID.randomUUID(), uid, uid.toUpperCase(), "/", "items", Instant.EPOCH, content);
     }
 }

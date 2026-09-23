@@ -50,13 +50,25 @@
           </sf-field>
         }
 
+        @if (showUidField()) {
+          <sf-field label="UID" hint="Derived from the name; templates read the set as recordset:uid.">
+            <input type="text" formControlName="uid" autocomplete="off" spellcheck="false" (input)="onUidInput()" />
+            @if (form.controls.uid.invalid && form.controls.uid.touched) {
+              <span class="error">Use lowercase letters, numbers, and underscores only</span>
+            }
+          </sf-field>
+        }
+
         @if (showDatasetField()) {
-          <sf-field label="Dataset">
+          <sf-field label="Dataset" hint="Every record in the set has this dataset's fields. It can't be changed after the set is created.">
             <select formControlName="datasetUuid">
               @for (dataset of datasets(); track dataset.uuid) {
                 <option [value]="dataset.uuid">{{ dataset.displayName ?? dataset.uid }}</option>
               }
             </select>
+            @if (form.controls.datasetUuid.invalid && form.controls.datasetUuid.touched) {
+              <span class="error">A dataset is required</span>
+            }
           </sf-field>
         }
 

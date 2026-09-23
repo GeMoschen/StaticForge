@@ -14,6 +14,7 @@ import com.acme.staticforge.asset.dataset.CreateRecordCommand;
 import com.acme.staticforge.asset.dataset.DatasetService;
 import com.acme.staticforge.asset.dataset.DatasetView;
 import com.acme.staticforge.asset.dataset.RecordService;
+import com.acme.staticforge.asset.dataset.RecordSetService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRole;
@@ -72,6 +73,7 @@ class DatasetApiTest {
     @Autowired ProjectService projectService;
     @Autowired DatasetService datasetService;
     @Autowired RecordService recordService;
+    @Autowired RecordSetService recordSetService;
     @Autowired RevisionService revisionService;
     @Autowired TransactionTemplate transactionTemplate;
 
@@ -129,7 +131,136 @@ class DatasetApiTest {
         mvc.perform(delete(datasets(fx) + "/" + datasetUuid).header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SF-DOM-0121"))
-                .andExpect(jsonPath("$.recordCount").value(1));
+                .andExpect(jsonPath("$.recordCount").value(1))
+                .andExpect(jsonPath("$.setCount").value(1));
+    }
+
+    /** M25.2.1: record templates travel through the dataset DTOs; save warnings and errors are per channel. */
+    @Test
+    void recordTemplatesRoundTripWithPerChannelDiagnostics() throws Exception {
+        Fixture fx = newFixture();
+        ObjectNode create = objectMapper.createObjectNode().put("displayName", "Team").put("contentDefinition", TEAM_CDL);
+        create.putObject("channelTemplates").put("html", "<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$");
+
+        JsonNode dataset = json(mvc.perform(post(datasets(fx))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(create)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.channelTemplates.html.source").value("<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$"))
+                .andExpect(jsonPath("$.recordTemplateDiagnostics.html[0].code").value(DiagnosticCodes.OCTL_RAW_ON_TEXT)));
+        String uuid = dataset.get("uuid").asText();
+
+        mvc.perform(get(datasets(fx) + "/" + uuid).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.channelTemplates.html.compiledHash").isString())
+                .andExpect(jsonPath("$.recordTemplateDiagnostics").isEmpty());
+
+        ObjectNode broken = objectMapper.createObjectNode().put("displayName", "Team").put("contentDefinition", TEAM_CDL);
+        broken.putObject("channelTemplates").put("html", "<div>\n$CMS_BODY(x)$</div>");
+        mvc.perform(put(datasets(fx) + "/" + uuid)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .header(HttpHeaders.IF_MATCH, "\"rev-" + dataset.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(broken)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SF-API-0422"))
+                .andExpect(jsonPath("$.channel").value("html"))
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE))
+                .andExpect(jsonPath("$.diagnostics[0].line").value(2))
+                .andExpect(jsonPath("$.channelDiagnostics.html[0].code").value(DiagnosticCodes.OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE));
+
+        // A client that doesn't know record templates (no channelTemplates field) keeps them.
+        mvc.perform(put(datasets(fx) + "/" + uuid)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .header(HttpHeaders.IF_MATCH, "\"rev-" + dataset.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(datasetBody("Team", TEAM_CDL, "name")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.channelTemplates.html.source").value("<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$"));
+    }
+
+    /**
+     * M25 follow-up: {@code POST /octl/validate} with {@code datasetUuid} checks a record template while it is
+     * typed — against the unsaved dataset CDL when sent, the stored schema otherwise.
+     */
+    @Test
+    void theRecordTemplateLiveCheckKnowsTheDatasetsFields() throws Exception {
+        Fixture fx = newFixture();
+        DatasetView team = team(fx);
+        String source = "<b>$CMS_VALUE(name)$</b> $CMS_VALUE(squad)$ $CMS_VALUE(_index)$";
+
+        validateOctl(fx, fx.developerToken(), source, team.uuid().toString(), null, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics.length()").value(1))
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.OCTL_UNKNOWN_EDITOR))
+                .andExpect(jsonPath("$.diagnostics[0].line").value(1))
+                .andExpect(jsonPath("$.diagnostics[0].column").value(26));
+        String withSquad = TEAM_CDL.replace("editor date joined", "editor text squad { label \"Squad\" }\n  editor date joined");
+        validateOctl(fx, fx.developerToken(), source, team.uuid().toString(), withSquad, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics").isEmpty());
+        validateOctl(fx, fx.developerToken(), "<div>\n$CMS_BODY(x)$</div>", team.uuid().toString(), null, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE))
+                .andExpect(jsonPath("$.diagnostics[0].line").value(2));
+        // Without a dataset the source compiles on its own (structural checks only), as before.
+        validateOctl(fx, fx.developerToken(), source, null, null, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics").isEmpty());
+
+        validateOctl(fx, fx.developerToken(), source, team.uuid().toString(), null, UUID.randomUUID().toString())
+                .andExpect(status().isUnprocessableEntity());
+        validateOctl(fx, fx.developerToken(), source, "not-a-uuid", null, null).andExpect(status().isUnprocessableEntity());
+        validateOctl(fx, fx.developerToken(), source, UUID.randomUUID().toString(), null, null)
+                .andExpect(status().isNotFound());
+        validateOctl(fx, fx.editorToken(), source, team.uuid().toString(), null, null).andExpect(status().isForbidden());
+    }
+
+    private ResultActions validateOctl(
+            Fixture fx, String token, String source, String datasetUuid, String cdl, String templateUuid)
+            throws Exception {
+        ObjectNode body = objectMapper.createObjectNode().put("source", source).put("channelKey", "html");
+        body.put("datasetUuid", datasetUuid);
+        body.put("contentDefinition", cdl);
+        body.put("templateUuid", templateUuid);
+        return mvc.perform(post(project(fx) + "/octl/validate")
+                .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)));
+    }
+
+    /** M25.1.2 over REST: a schema save that leaves a set query invalid lists the set on the update response. */
+    @Test
+    void aSchemaChangeThatBreaksASetQueryListsTheSetOnTheUpdateResponse() throws Exception {
+        Fixture fx = newFixture();
+        DatasetView team = team(fx);
+        UUID leads = recordSetService.create(
+                        new com.acme.staticforge.asset.dataset.CreateRecordSetCommand(
+                                fx.project().getId(), null, team.uuid(), "leads", "Leads",
+                                new com.acme.staticforge.template.query.RecordSetQuery(null, "-joined", null, null)),
+                        fx.ctx())
+                .uuid();
+        String withoutJoined = TEAM_CDL.replace("  editor date joined { label \"Joined\" }\n", "");
+
+        mvc.perform(put(datasets(fx) + "/" + team.uuid())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .header(HttpHeaders.IF_MATCH, "\"rev-" + team.revision() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(datasetBody("Team", withoutJoined, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.brokenRecordSets.length()").value(1))
+                .andExpect(jsonPath("$.brokenRecordSets[0].uuid").value(leads.toString()))
+                .andExpect(jsonPath("$.brokenRecordSets[0].uid").value("leads"))
+                .andExpect(jsonPath("$.brokenRecordSets[0].diagnostics[0].field").value("sort"))
+                .andExpect(jsonPath("$.brokenRecordSets[0].diagnostics[0].code").value(DiagnosticCodes.OCTL_DATASET_UNKNOWN_FIELD));
+        mvc.perform(get(datasets(fx) + "/" + team.uuid()).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.brokenRecordSets").isEmpty());
+        mvc.perform(get(project(fx) + "/record-sets/" + leads).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.queryValid").value(false))
+                .andExpect(jsonPath("$.queryDiagnostics[0].field").value("sort"));
     }
 
     @Test
@@ -156,8 +287,9 @@ class DatasetApiTest {
         Fixture fx = newFixture();
         Fixture other = newFixture();
         DatasetView foreign = team(other);
+        UUID foreignSet = set(other, foreign.uuid());
         UUID foreignRecord = recordService.create(
-                        new CreateRecordCommand(other.project().getId(), foreign.uuid(), null, "Ada", objectMapper.readTree("{\"name\":\"Ada\"}")),
+                        new CreateRecordCommand(other.project().getId(), foreignSet, "Ada", objectMapper.readTree("{\"name\":\"Ada\"}")),
                         other.ctx())
                 .record()
                 .uuid();
@@ -169,7 +301,8 @@ class DatasetApiTest {
         mvc.perform(get(project(fx) + "/records/" + foreignRecord).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
                 .andExpect(status().isNotFound());
         putRecord(fx, fx.editorToken(), foreignRecord.toString(), 1, "{\"name\":\"Leak\"}").andExpect(status().isNotFound());
-        postRecord(fx, fx.editorToken(), foreign.uuid().toString(), "{\"name\":\"Leak\"}").andExpect(status().isNotFound());
+        postRecord(fx, fx.editorToken(), foreign.uuid().toString(), foreignSet, "{\"name\":\"Leak\"}")
+                .andExpect(status().isNotFound());
 
         // §8.4: without membership a project is not found, exactly like an unknown project key;
         // 403 is reserved for a member whose role is too low (covered above).
@@ -257,10 +390,20 @@ class DatasetApiTest {
                 .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"displayName\":\"Leads\",\"scope\":\"CONTENT\"}")));
+        // M25: a record goes into a record set, never straight into a folder — the pre-M25 shape is a 400.
         mvc.perform(post(datasets(fx) + "/" + team.uuid() + "/records")
                         .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"folderUuid\":\"" + leads.get("uuid").asText() + "\",\"displayName\":\"Ada\",\"content\":{\"name\":\"Ada\"}}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.field").value("recordSetUuid"));
+        UUID leadSet = new RecordSetFixtures(recordSetService)
+                .create(fx.project().getId(), team.uuid(), UUID.fromString(leads.get("uuid").asText()), "Leads", fx.ctx())
+                .uuid();
+        mvc.perform(post(datasets(fx) + "/" + team.uuid() + "/records")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"recordSetUuid\":\"" + leadSet + "\",\"displayName\":\"Ada\",\"content\":{\"name\":\"Ada\"}}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.folderPath").value("/leads/"));
         record(fx, team, "{\"name\":\"Bob\"}");
@@ -285,6 +428,7 @@ class DatasetApiTest {
             transactionTemplate.executeWithoutResult(tx -> {
                 Revision batch = revisionService.beginBatch(fx.project().getId(), ChangeType.CREATE, "seed", fx.admin().getId());
                 RevisionContext batchCtx = RevisionContext.joining(batch, fx.admin().getId(), "seed");
+                UUID members = set(fx, team.uuid());
                 for (int i = offset; i < offset + 200; i++) {
                     ObjectNode content = objectMapper.createObjectNode()
                             .put("name", "Member " + i)
@@ -292,7 +436,7 @@ class DatasetApiTest {
                             .put("level", i % 7);
                     content.putArray("tags").addObject().put("tag", "t" + i);
                     recordService.create(
-                            new CreateRecordCommand(fx.project().getId(), team.uuid(), null, "Member " + i, content), batchCtx);
+                            new CreateRecordCommand(fx.project().getId(), members, "Member " + i, content), batchCtx);
                 }
             });
         }
@@ -315,11 +459,21 @@ class DatasetApiTest {
 
     // ------------------------------------------------------------------
 
+    /** Posts a record into the project's record set of the dataset (created on first use). */
     private ResultActions postRecord(Fixture fx, String token, String datasetUuid, String content) throws Exception {
+        return postRecord(fx, token, datasetUuid, set(fx, UUID.fromString(datasetUuid)), content);
+    }
+
+    private ResultActions postRecord(Fixture fx, String token, String datasetUuid, UUID recordSet, String content)
+            throws Exception {
         return mvc.perform(post(datasets(fx) + "/" + datasetUuid + "/records")
                 .header(HttpHeaders.AUTHORIZATION, bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"displayName\":\"Record\",\"content\":" + content + "}"));
+                .content("{\"recordSetUuid\":\"" + recordSet + "\",\"displayName\":\"Record\",\"content\":" + content + "}"));
+    }
+
+    private UUID set(Fixture fx, UUID dataset) {
+        return new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), dataset, null, fx.ctx());
     }
 
     private ResultActions putRecord(Fixture fx, String token, String uuid, long ifMatch, String content) throws Exception {
@@ -333,7 +487,8 @@ class DatasetApiTest {
     private void record(Fixture fx, DatasetView dataset, String content) throws Exception {
         JsonNode values = objectMapper.readTree(content);
         recordService.create(
-                new CreateRecordCommand(fx.project().getId(), dataset.uuid(), null, values.path("name").asText(), values), fx.ctx());
+                new CreateRecordCommand(fx.project().getId(), set(fx, dataset.uuid()), values.path("name").asText(), values),
+                fx.ctx());
     }
 
     private DatasetView team(Fixture fx) {

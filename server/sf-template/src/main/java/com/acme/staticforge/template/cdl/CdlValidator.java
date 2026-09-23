@@ -263,8 +263,9 @@ final class CdlValidator {
     }
 
     /**
-     * {@code dataset "uid"} (M19.3.2) restricts a {@code reference} editor to one dataset's records,
-     * so it is only meaningful on a reference editor that can pick records at all.
+     * {@code dataset "uid"} (M19.3.2) restricts a {@code reference} editor to one dataset's records — and, when
+     * {@code assetTypes} allows {@code RECORD_SET}, to that dataset's record sets (M25.2.2) — so it is only
+     * meaningful on a reference editor that can pick records or record sets at all.
      */
     private static void checkDataset(CdlParser.EditorNode node, EditorType type, List<Diagnostic> diagnostics) {
         if (node.dataset == null) {
@@ -278,10 +279,13 @@ final class CdlValidator {
             diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
                     "'dataset' needs the dataset's UID", node.datasetLine, node.datasetCol));
-        } else if (!node.assetTypes.isEmpty() && !node.assetTypes.contains("RECORD")) {
+        } else if (!node.assetTypes.isEmpty()
+                && !node.assetTypes.contains("RECORD")
+                && !node.assetTypes.contains("RECORD_SET")) {
             diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.CDL_INVALID_ATTRIBUTE,
-                    "'dataset' restricts the editor to records, but assetTypes does not include RECORD",
+                    "'dataset' restricts the editor to records or record sets, but assetTypes includes neither"
+                            + " RECORD nor RECORD_SET",
                     node.datasetLine, node.datasetCol));
         }
     }

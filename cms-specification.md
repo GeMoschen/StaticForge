@@ -101,11 +101,12 @@ Because rendering is fully separated from content, the same content can be emitt
 | Term | Definition |
 |---|---|
 | **Project** | Top-level isolation unit. Owns assets, revisions, members, channels. |
-| **Asset** | Anything managed by the CMS with an identity: page, media, section template, page template, structure, folder, page reference, global property set, dataset, record. |
-| **Asset type** | Discriminator: `PAGE`, `MEDIA`, `SECTION_TEMPLATE`, `PAGE_TEMPLATE`, `STRUCTURE`, `FOLDER`, `PAGE_REFERENCE`, `GLOBAL_SET`, `DATASET`, `RECORD`. |
+| **Asset** | Anything managed by the CMS with an identity: page, media, section template, page template, structure, folder, page reference, global property set, dataset, record set, record. |
+| **Asset type** | Discriminator: `PAGE`, `MEDIA`, `SECTION_TEMPLATE`, `PAGE_TEMPLATE`, `STRUCTURE`, `FOLDER`, `PAGE_REFERENCE`, `GLOBAL_SET`, `DATASET`, `RECORD_SET`, `RECORD`. |
 | **Property set** | A `GLOBAL_SET` asset in the Globals store: a named group of site-wide values (site title, logo, social links) whose fields are declared in CDL and whose values editors fill in. Templates read it as `CMS_GLOBAL.<set>.<editor>`. |
-| **Dataset** | A `DATASET` asset in the Templates store's fixed `datasets` folder: a CDL record schema (no bodies) for a list many pages show — team members, products, FAQs. Templates loop it as `$CMS_FOR(x : dataset:<uid>, where=…, sort=…, limit=…, offset=…, folder=…)$` (M19). |
-| **Record** | A `RECORD` asset in the Content store: one entry of a dataset, holding editor values only and no page of its own. Read as `record:<uid>.<editor>` or by following a `reference` editor (M19). |
+| **Dataset** | A `DATASET` asset in the Templates store's fixed `datasets` folder: a CDL record schema (no bodies) for a list many pages show — team members, products, FAQs. Templates loop it as `$CMS_FOR(x : dataset:<uid>, where=…, sort=…, limit=…, offset=…, folder=…)$` (M19). It may carry one **record template** per channel (`channelTemplates.<channel>`, OCTL with the record's fields as top-level names) that renders one record wherever a record set of the dataset is rendered as a value (M25). |
+| **Record set** | A `RECORD_SET` asset in a Content-store folder (M25): fixes the dataset of its records for its whole life and stores a query — `where` over bare field names (no render scope), `sort`, `limit`, `offset` — that selects and orders them. Editor content. Rendered as `$CMS_VALUE(recordset:<uid>)$` (each selected record through the dataset's record template), looped as `$CMS_FOR(x : recordset:<uid>, …)$` (loop arguments narrow the set's result), or picked by a `reference` editor with `assetTypes [RECORD_SET]`. |
+| **Record** | A `RECORD` asset in the Content store: one entry of a dataset, holding editor values only and no page of its own. Its parent is always a record set of its dataset (M25; never a folder or the store root). Read as `record:<uid>.<editor>`, by following a `reference` editor (M19), or through its set. |
 | **UID** | Human-readable identifier, unique per (project, asset type), derived from the display name. |
 | **Revision** | Monotonic `long` per project describing one atomic change set. |
 | **Body** | Named content area on a page that holds an ordered list of section instances. |
@@ -206,6 +207,7 @@ Project 1───* Revision
    *          AssetVersion *───1 Asset
 Asset (identity)                  │
    ├─ type: PAGE | MEDIA | SECTION_TEMPLATE | PAGE_TEMPLATE | STRUCTURE | FOLDER
+   │        | PAGE_REFERENCE | GLOBAL_SET | DATASET | RECORD_SET | RECORD
    ├─ uuid (immutable)
    └─ uid  (unique per project+type)
 
@@ -218,6 +220,20 @@ Project 1───* OutputChannel
 Project 1───* ProjectMember *───1 User
 Project 1───* GenerationRun
 ```
+
+Content store containment (M19, M25):
+
+```
+content_root ──* FOLDER ──* FOLDER …
+     │              │
+     └──────────────┴──* RECORD_SET ──* RECORD
+                            │               │
+                            │ datasetRef    │ datasetRef (= its set's)
+                            ▼               ▼
+                          DATASET (Templates store, fixed `datasets` folder: schema + record templates)
+```
+
+Folders hold folders and record sets; a record set holds only records; a record's parent is always a record set of the same dataset, and a set's dataset never changes. Every write path (create, move, restore, import) enforces this (`RecordSetContainment`, `422 SF-DOM-0104`); nothing migrates records that predate it. A set's and a record's `datasetRef` are mirrored into `asset_version.template_asset_id`, so every reader of that column filters on `asset_type`. A record's `folder_path` is its set's folder path.
 
 ### 5.2 Asset: identity vs. state
 
@@ -261,10 +277,10 @@ An edge row carries the same kind of interval as a version row (§7.4): it is op
 
 | `kind` | From → to | `source_path` |
 |---|---|---|
-| `TEMPLATE` | page → page template; page → section template of a body section | `templateRef`, `bodies.<name>[i].templateRef` |
+| `TEMPLATE` | page → page template; page → section template of a body section; record and record set → their dataset (M19, M25) | `templateRef`, `bodies.<name>[i].templateRef`; `datasetRef` |
 | `MEDIA_REF` | page → media (`media` editor values, media links) | editor path, e.g. `content.heroImage`, `bodies.main[0].content.image` |
 | `CONTENT_REF` | page → asset of a `reference` value or internal link; page → section template of a catalog card | editor path; `….templateRef` for a card |
-| `OCTL_VALUE` | template → asset read by `$CMS_VALUE`, or by an asset accessor in `$CMS_IF`/`$CMS_SET`/`$CMS_FOR` (not `nav:`) | `channelTemplates.<channel>` |
+| `OCTL_VALUE` | template (or a dataset, from its record templates, M25) → asset read by `$CMS_VALUE`, or by an asset accessor in `$CMS_IF`/`$CMS_SET`/`$CMS_FOR` (not `nav:`) | `channelTemplates.<channel>` |
 | `OCTL_REF` | template → target of `$CMS_REF`, `$CMS_NAVIGATION(nav:…)`, `$CMS_FOR(x : nav:…)` | `channelTemplates.<channel>` |
 | `OCTL_INCLUDE` | template → section template of `$CMS_INCLUDE` | `channelTemplates.<channel>` |
 | `NAV` | page reference → its target page or pages folder | `target` |
@@ -1090,7 +1106,8 @@ Creating channel `markdown` immediately makes a new tab appear in every template
 |---|---|
 | `$CMS_VALUE(editorName)$` | Value of an editor in the current scope |
 | `$CMS_VALUE(assetType:uid.editorName)$` | Value from another asset's root value object (see §16.4); dotted paths, conditions, loops and filters work as for local values |
-| `$CMS_VALUE(assetType:uid)$` | The whole value object of another asset; stringifies to nothing useful and warns (`SF-TPL-0111`) |
+| `$CMS_VALUE(assetType:uid)$` | The whole value object of another asset; stringifies to nothing useful and warns (`SF-TPL-0111`) — except `recordset:uid`, below |
+| `$CMS_VALUE(recordset:uid)$` | Renders a record set (M25): the records its stored query selects, each through the dataset's record template for the channel; a `reference` editor value pointing at a set renders the same way (`$CMS_VALUE(featured)$`). No record template for the channel → empty with `SF-GEN-0241`; a stored query that no longer validates → empty with `SF-GEN-0240`. A set has no URL (`$CMS_REF(recordset:uid)$` is `SF-TPL-0105`) |
 | `$CMS_REF(assetType:uid)$` | Resolved URL/href to another asset in the current channel |
 | `$CMS_REF(editorName)$` | Resolved URL for a `link`/`media`/`reference` editor value |
 | `$CMS_BODY(name)$` | Renders a page body (page templates only) |
@@ -1099,6 +1116,7 @@ Creating channel `markdown` immediately makes a new tab appear in every template
 | `$CMS_IF(expr)$ … $CMS_ELSEIF(expr)$ … $CMS_ELSE$ … $CMS_END_IF$` | Conditional |
 | `$CMS_FOR(item : listEditor)$ … $CMS_END_FOR$` | Iteration over `list` editors and nav nodes |
 | `$CMS_FOR(item : dataset:uid, where="…", sort="…", limit=n, offset=n, folder="…")$ … $CMS_END_FOR$` | Iteration over a dataset's records (M19): `where` is an OCTL expression over `item.<field>` and the render scope, `sort` a comma list of fields with `-` for descending; all arguments optional, applied folder → where → sort → offset → limit (`SF-TPL-0140`–`0142`) |
+| `$CMS_FOR(item : recordset:uid, where="…", sort="…", limit=n, offset=n)$ … $CMS_END_FOR$` | Iteration over a record set's selected records (M25): the set's query runs first, then the arguments narrow its result — `where` AND-ed, `sort` re-sorts stably, `offset`/`limit` slice; `folder` is `SF-TPL-0140`. Also over a `reference` editor holding a set: `$CMS_FOR(item : featured, …)$` |
 | `$CMS_VALUE(record:uid.editorName)$` | A record's value; a `reference` editor value pointing at a record dereferences the same way (`author.name`) |
 | `$CMS_SET(name = expr)$` | Local variable in the current scope |
 | `$CMS_META(key)$` | Page/system metadata (`uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey`) |
@@ -1122,7 +1140,7 @@ The channel's `default_escaping` is applied automatically as the final step unle
 
 ### 16.4 Reference syntax `assetType:uid`
 
-`assetType` is one of `page`, `media`, `section_template`, `page_template`, `folder`, `page_reference` (the lowercase asset type), `nav` (a navigation folder, resolved through its navigation reference UID), or `global` (a `GLOBAL_SET` property set). `uid` is the asset's UID within the current project. `AssetReferencePrefixes` is the single registry of these prefixes for template save, preview and generation.
+`assetType` is one of `page`, `media`, `section_template`, `page_template`, `folder`, `page_reference` (the lowercase asset type), `nav` (a navigation folder, resolved through its navigation reference UID), `global` (a `GLOBAL_SET` property set), `dataset` and `record` (M19), or `recordset` (a `RECORD_SET`, M25 — the enum-derived `record_set` is not accepted). `uid` is the asset's UID within the current project. `AssetReferencePrefixes` is the single registry of these prefixes for template save, preview and generation.
 
 At **compile time** the reference is resolved to a UUID; the compiled template stores the UUID. On **template save** every resolved reference of every channel source is recorded in `asset_reference` as an `OCTL_VALUE`, `OCTL_REF` or `OCTL_INCLUDE` edge (§5.4). Consequences:
 
@@ -1138,7 +1156,9 @@ At **compile time** the reference is resolved to a UUID; the compiled template s
 | `media` | `altText`, `caption`, `copyright`, `fileName`, `mimeType`, `sizeBytes`, `focalPoint`, and from the image metadata `width`, `height`, `orientation`, `dominantColor`; blob hashes and variants are not exposed |
 | `page_reference` | `label` |
 | `global` | The property set's values (`payload.content`); its CDL is not exposed |
-| `section_template`, `page_template`, `folder` | No values |
+| `record` | The record's values plus `_uuid`, `_uid`, `_displayName`, `_folderPath`, `_recordSet`, `_changedAt` — the item a dataset loop binds |
+| `recordset` | `{records, _count, _meta: {uid, displayName, dataset}}`: the records the set's stored query selects in the render language (M25). Built by the renderer, not by `AssetValueProjection`, because the selection depends on the language |
+| `section_template`, `page_template`, `folder`, `dataset` | No values |
 
 Every root value object also carries the reserved `_meta` object with `uid` and `displayName` (`$CMS_VALUE(page:about._meta.displayName)$`). A value object is raw stored JSON, never rendered output, so reading one cannot trigger a render; a `catalog` value read this way renders its cards through the current page's block resolver, bounded by the include cycle guard (§16.10). Lookups are scoped to the rendering project, and a target whose type does not match the prefix is treated as missing.
 
@@ -1166,6 +1186,7 @@ A `$CMS_REF` on another asset *with* a value path (`$CMS_REF(page:about.heroImag
 | Page channel template | its own editors, bodies, `$CMS_META`, loop variables |
 | Navigation renderer | nav node fields (`label`, `href`, `active`, `level`, `children`, `page`) |
 | List loop | `item.<itemEditorName>`, `item._index`, `item._first`, `item._last`, `item._count` |
+| Dataset record template (M25) | the record's fields as top-level names, `_uuid`, `_uid`, `_displayName`, `_folderPath`, `_recordSet`, `_changedAt`, `_meta`, the position `_index`, `_first`, `_last`, `_count`, `$CMS_META`, `CMS_PAGE`, `CMS_GLOBAL`, loop variables; no `$CMS_EXTENDS`/`$CMS_BLOCK`/`$CMS_PARENT`/`$CMS_BODY` (`SF-TPL-0122`) |
 
 `$CMS_PAGE.headline$` inside a section reads the enclosing page's `headline` editor — a controlled, read-only upward reference; sections never write.
 
@@ -1507,7 +1528,7 @@ Request body:
 
 **Baseline (M22).** An `INCREMENTAL` request builds on the build its target currently serves (the last published or the promoted one) when that build's manifest shows it holds every page in every requested channel. Changes are counted from the build's *consistent revision*: its own revision, or for a scoped build published on top of another, that build's consistent revision, so a scoped run never advances the baseline and a build of another target never counts. Otherwise the request plans a full build and says why (`fallbackCause`): `NO_COMPLETE_BUILD_FOR_TARGET`, `BASE_BUILD_MISSING` (gone, or published before builds had manifests), `CHANNEL_SETTINGS_CHANGED` (every page of that channel may have moved) or `REVISION_BEFORE_BASELINE`.
 
-**Reason chains (M22).** The planner's walk (`RebuildExpansion`) is a breadth-first search seeded in UUID order over neighbours in a stable order, keeping the first edge each asset is reached by. Every planned asset therefore has a deterministic shortest chain back to the change that reached it — `page:about ← section_template:teaser (bodies.main[0].templateRef) ← media:hero (changed in r1842)` — and a `causeCount` of all changes reaching it. Root kinds: `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL` (with the cause), `EXPLICIT_SCOPE` (listed in `assetUuids`), `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD` (nothing it depends on changed, but the base build lacks the output, e.g. the page was held back). Edges: `PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE` (named `TEMPLATE` reference rows), `REFERENCE` (any other row, with its kind and source path), `NAVIGATION`, `DATASET_MEMBERSHIP` (a loop that may select the changed record), `PAGINATION_SOURCE`. Names are served as strings; clients tolerate names added later.
+**Reason chains (M22).** The planner's walk (`RebuildExpansion`) is a breadth-first search seeded in UUID order over neighbours in a stable order, keeping the first edge each asset is reached by. Every planned asset therefore has a deterministic shortest chain back to the change that reached it — `page:about ← section_template:teaser (bodies.main[0].templateRef) ← media:hero (changed in r1842)` — and a `causeCount` of all changes reaching it. Root kinds: `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL` (with the cause), `EXPLICIT_SCOPE` (listed in `assetUuids`), `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD` (nothing it depends on changed, but the base build lacks the output, e.g. the page was held back). Edges: `PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE` (named `TEMPLATE` reference rows), `REFERENCE` (any other row, with its kind and source path), `NAVIGATION`, `DATASET_MEMBERSHIP` (a loop that may select the changed record), `PAGINATION_SOURCE`, `RECORD_SET_MEMBERSHIP` (a reader of the record's set whose stored query — and loop `where` — may select it before or after the change, M25), `RECORD_SET_QUERY` (a reader of a set whose stored query changed), `RECORD_TEMPLATE` (a reader rendering a set through its dataset's record template, when only the record templates changed). Names are served as strings; clients tolerate names added later.
 
 **Walk rules.** A merely reached page stops the walk (its output depends on what it references, not on who references it) unless its output path moved since the base build (a template `outputPath` edit), in which case every page linking it is reached too.
 
@@ -1708,6 +1729,22 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 | `DELETE` | `/projects/{p}/{templateKind}/{uuid}/channels/{channelKey}` | |
 | `POST` | `/projects/{p}/cdl/validate` | `{source}` → diagnostics |
 | `POST` | `/projects/{p}/octl/validate` | `{source, channelKey, templateUuid}` → diagnostics |
+
+**Datasets, record sets and records** (M19, M25) — full request/response shapes in `docs/api.md` §6.2–§6.3
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET`/`POST` | `/projects/{p}/datasets` | Dataset schemas (DEVELOPER writes); `channelTemplates` = per-channel record templates |
+| `GET`/`PUT`/`DELETE` | `/projects/{p}/datasets/{uuid}` | `PUT` returns `brokenRecordSets` (sets whose query no longer validates) and `recordTemplateDiagnostics`; `DELETE` is `409 SF-DOM-0121` while records or sets are live |
+| `GET` | `/projects/{p}/datasets/{uuid}/records` | Every record of the dataset across its sets (set queries not applied); `q`, `folder`, `where`, `sort`, paging |
+| `POST` | `/projects/{p}/datasets/{uuid}/records` | `{recordSetUuid, displayName?, content}` (EDITOR); the set must be a live set of this dataset (`422 SF-DOM-0104`); without `recordSetUuid` `400` |
+| `GET`/`PUT` | `/projects/{p}/records/{uuid}` | A record, with `recordSet {uuid, uid, displayName}` |
+| `GET`/`POST` | `/projects/{p}/record-sets` | Sets (`?dataset=`); create `{folderUuid?, datasetUuid, uid?, displayName, query?}` (EDITOR); an invalid query is `422 SF-API-0422` with `diagnostics` |
+| `GET`/`PUT`/`DELETE` | `/projects/{p}/record-sets/{uuid}` | `?revision=`; `PUT {displayName?, query?}` (the dataset never changes); `DELETE` is `409 SF-DOM-0110` with records unless `?cascade=true` |
+| `GET` | `/projects/{p}/record-sets/{uuid}/records` | The set's grid; `applySetQuery=true` applies the stored query first and the request narrows it |
+| `POST` | `/projects/{p}/record-sets/{uuid}/preview-query` | Checks a draft query without saving: `{valid, diagnostics, matchCount, selectedCount}` (EDITOR) |
+
+Move, rename, uid change, history, usages, generic delete and restore of datasets, sets and records use `/assets/{uuid}`, with the containment rules of §5.1.
 
 **Channels** — see §15.3. **Structures** — same shape as templates under `/structures`.
 
@@ -2588,6 +2625,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 - Consistency: because blobs are written before commit, a DB restore to an earlier point never references a missing blob.
 - Quarterly restore drill, documented in the runbook.
 - Project export/import (`ZIP`: assets JSON + blobs + manifest) as a portability and migration path.
+- **Export protocol 7 (M25).** Archives carry record sets; a record's archive parent is its set. Exporting a record pulls in its set and dataset implicitly, and a picked set brings its records. Import creates datasets, then sets, then records. Older archives (protocol ≤ 6) are still read, but a record whose parent is a Content folder or the store root is reported as the conflict `RECORD_OUTSIDE_RECORD_SET` and **not imported** — records are never grouped into sets automatically — while every other asset imports. `RECORD_SET_MISSING`, `RECORD_SET_DATASET_MISMATCH` and `RECORD_SET_DATASET_MISSING` block the import; a set query that doesn't validate against the target schema imports flagged (`RECORD_SET_QUERY_INVALID`, warning).
 - The search index (M23) is not backed up: it is rebuilt from the database on start, and a restored database with a
   leftover index is detected (the index records the project it was built for) and rebuilt.
 

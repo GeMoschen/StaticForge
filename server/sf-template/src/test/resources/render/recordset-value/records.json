@@ -1,0 +1,29 @@
+{
+  "team": {
+    "uuid": "d0000000-0000-0000-0000-000000000001",
+    "schema": "content { editor text name { label \"Name\" } editor select role { label \"Role\" options [ { value \"lead\", label \"Lead\" }, { value \"dev\", label \"Developer\" } ] } editor date joined { label \"Joined\" } }",
+    "recordTemplates": {
+      "html": "<article class=\"$CMS_IF(_first)$first$CMS_END_IF$\" data-i=\"$CMS_VALUE(_index)$\">$CMS_VALUE(name)$ ($CMS_VALUE(_uid)$, $CMS_VALUE(_index)$/$CMS_VALUE(_count)$$CMS_IF(_last)$, last$CMS_END_IF$)</article>"
+    },
+    "recordSets": {
+      "leads": { "uuid": "f0000000-0000-0000-0000-000000000001", "displayName": "Leadership", "query": { "where": "role == 'lead'", "sort": "-joined" } },
+      "staff": { "uuid": "f0000000-0000-0000-0000-000000000002", "displayName": "Staff" },
+      "broken": { "uuid": "f0000000-0000-0000-0000-000000000003", "displayName": "Broken", "query": { "where": "nope == 1" } },
+      "gone": { "uuid": "f0000000-0000-0000-0000-000000000004", "displayName": "Gone", "deleted": true }
+    },
+    "records": [
+      { "uuid": "e0000000-0000-0000-0000-00000000000a", "uid": "ada", "displayName": "Ada", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Ada", "role": "lead", "joined": "2021-03-01" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000d", "uid": "dee", "displayName": "Dee", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Dee", "role": "lead", "joined": "2019-05-05" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000e", "uid": "eve", "displayName": "Eve", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Eve", "role": "dev", "joined": "2024-02-02" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000b", "uid": "bob", "displayName": "bob", "folderPath": "/team/", "recordSet": "staff",
+        "content": { "name": "bob <b>", "role": "dev", "joined": "2023-07-15" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000c", "uid": "cy", "displayName": "Cy", "folderPath": "/team/", "recordSet": "staff",
+        "content": { "name": "Cy", "role": "dev", "joined": "2022-11-30" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000f", "uid": "fay", "displayName": "Fay", "folderPath": "/team/", "recordSet": "broken",
+        "content": { "name": "Fay", "role": "lead", "joined": "2020-01-01" } }
+    ]
+  }
+}

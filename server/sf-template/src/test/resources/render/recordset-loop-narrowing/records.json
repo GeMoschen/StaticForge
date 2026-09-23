@@ -1,0 +1,27 @@
+{
+  "team": {
+    "uuid": "d0000000-0000-0000-0000-000000000001",
+    "schema": "content { editor text name { label \"Name\" } editor select role { label \"Role\" options [ { value \"lead\", label \"Lead\" }, { value \"dev\", label \"Developer\" } ] } editor number level { label \"Level\" } editor date joined { label \"Joined\" } }",
+    "recordSets": {
+      "leads": { "uuid": "f0000000-0000-0000-0000-000000000001", "displayName": "Leads", "query": { "where": "role == 'lead'", "sort": "-joined", "limit": 3 } },
+      "staff": { "uuid": "f0000000-0000-0000-0000-000000000002", "displayName": "Staff" },
+      "broken": { "uuid": "f0000000-0000-0000-0000-000000000003", "displayName": "Broken", "query": { "sort": "nope" } }
+    },
+    "records": [
+      { "uuid": "e0000000-0000-0000-0000-00000000000a", "uid": "ada", "displayName": "Ada", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Ada", "role": "lead", "level": 3, "joined": "2021-03-01" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000d", "uid": "dee", "displayName": "Dee", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Dee", "role": "lead", "joined": "2019-05-05" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000e", "uid": "eve", "displayName": "Eve", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Eve", "role": "dev", "level": 4, "joined": "2024-02-02" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000f", "uid": "fay", "displayName": "Fay", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Fay", "role": "lead", "level": 5, "joined": "2020-06-01" } },
+      { "uuid": "e0000000-0000-0000-0000-000000000010", "uid": "gus", "displayName": "Gus", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Gus", "role": "lead", "level": 1, "joined": "2018-01-01" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000b", "uid": "bob", "displayName": "bob", "folderPath": "/team/", "recordSet": "staff",
+        "content": { "name": "bob <b>", "role": "dev", "level": 1.5, "joined": "2023-07-15" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000c", "uid": "cy", "displayName": "Cy", "folderPath": "/team/", "recordSet": "staff",
+        "content": { "name": "Cy", "role": "lead", "level": 2, "joined": "2022-11-30" } }
+    ]
+  }
+}

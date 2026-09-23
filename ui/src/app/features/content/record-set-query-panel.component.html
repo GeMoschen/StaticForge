@@ -1,0 +1,169 @@
+<section class="query-panel" aria-labelledby="set-query-heading">
+  <header class="query-panel__head">
+    <h3 id="set-query-heading" class="query-panel__title">
+      <button
+        type="button"
+        class="query-panel__toggle"
+        aria-controls="set-query-body"
+        [attr.aria-expanded]="expanded()"
+        (click)="toggle()"
+      >
+        <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
+        Set query
+      </button>
+    </h3>
+    @if (dirty()) {
+      <span class="query-panel__chip">Unsaved</span>
+    }
+    @if (!expanded()) {
+      <code class="query-panel__summary">{{ summary() }}</code>
+    }
+    <span
+      class="query-panel__status"
+      [class.query-panel__status--invalid]="state() === 'invalid'"
+      role="status"
+      aria-live="polite"
+    >
+      {{ status() }}
+    </span>
+  </header>
+
+  @if (expanded()) {
+    <div id="set-query-body" class="query-panel__body">
+      <label class="query-panel__field query-panel__field--where">
+        <span class="query-panel__label">Where</span>
+        <textarea
+          class="query-panel__where"
+          rows="2"
+          spellcheck="false"
+          placeholder="e.g. role == 'lead' && joined > '2022-01-01' — empty: every record"
+          [value]="draft().where"
+          [disabled]="readOnly()"
+          [attr.aria-invalid]="whereInvalid() ? true : null"
+          aria-describedby="set-query-diagnostics"
+          (input)="onWhereInput($event)"
+        ></textarea>
+      </label>
+
+      <div class="query-panel__field">
+        <span class="query-panel__label" id="set-query-sort-label">Sort</span>
+        @if (draft().sort.length === 0) {
+          <p class="query-panel__hint">Default order: by name, then uid.</p>
+        }
+        <ol class="query-panel__sort" aria-labelledby="set-query-sort-label">
+          @for (key of draft().sort; track key.field; let keyIndex = $index, first = $first, last = $last) {
+            <li class="query-panel__sort-key">
+              <span class="query-panel__sort-pos" aria-hidden="true">{{ keyIndex + 1 }}</span>
+              <select
+                [attr.aria-label]="'Sort key ' + (keyIndex + 1) + ' field'"
+                [value]="key.field"
+                [disabled]="readOnly()"
+                (change)="onSortField(keyIndex, $event)"
+              >
+                @for (option of sortOptions(); track option.field) {
+                  <option
+                    [value]="option.field"
+                    [selected]="option.field === key.field"
+                    [disabled]="option.field !== key.field && isSorted(option.field)"
+                  >
+                    {{ option.label }}
+                  </option>
+                }
+              </select>
+              <select
+                [attr.aria-label]="'Sort key ' + (keyIndex + 1) + ' direction'"
+                [value]="key.direction"
+                [disabled]="readOnly()"
+                (change)="onSortDirection(keyIndex, $event)"
+              >
+                <option value="asc" [selected]="key.direction === 'asc'">Ascending</option>
+                <option value="desc" [selected]="key.direction === 'desc'">Descending</option>
+              </select>
+              @if (!readOnly()) {
+                <button
+                  type="button"
+                  class="query-panel__icon-button"
+                  [attr.aria-label]="'Move sort key ' + (keyIndex + 1) + ' up'"
+                  [disabled]="first"
+                  (click)="moveSortKey(keyIndex, -1)"
+                >
+                  <sf-icon name="arrow_upward" />
+                </button>
+                <button
+                  type="button"
+                  class="query-panel__icon-button"
+                  [attr.aria-label]="'Move sort key ' + (keyIndex + 1) + ' down'"
+                  [disabled]="last"
+                  (click)="moveSortKey(keyIndex, 1)"
+                >
+                  <sf-icon name="arrow_downward" />
+                </button>
+                <button
+                  type="button"
+                  class="query-panel__icon-button"
+                  [attr.aria-label]="'Remove sort key ' + (keyIndex + 1)"
+                  (click)="removeSortKey(keyIndex)"
+                >
+                  <sf-icon name="close" />
+                </button>
+              }
+            </li>
+          }
+        </ol>
+        @if (!readOnly()) {
+          <div>
+            <sf-button variant="ghost" [disabled]="!canAddSortKey()" (click)="addSortKey()">Add sort key</sf-button>
+          </div>
+        }
+      </div>
+
+      <div class="query-panel__numbers">
+        <label class="query-panel__field">
+          <span class="query-panel__label">Offset</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            inputmode="numeric"
+            placeholder="0"
+            [value]="draft().offset"
+            [disabled]="readOnly()"
+            (input)="onOffsetInput($event)"
+          />
+        </label>
+        <label class="query-panel__field">
+          <span class="query-panel__label">Limit</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            inputmode="numeric"
+            placeholder="No limit"
+            [value]="draft().limit"
+            [disabled]="readOnly()"
+            (input)="onLimitInput($event)"
+          />
+        </label>
+      </div>
+
+      <div id="set-query-diagnostics" class="query-panel__diagnostics" aria-live="polite">
+        @for (diag of diagnostics(); track $index) {
+          <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+            <span class="diagnostic__where">{{ diag.field }}{{ diagnosticPosition(diag) }}</span>
+            @if (diag.code) {
+              <code>{{ diag.code }}</code>
+            }
+            <span>{{ diag.message }}</span>
+          </div>
+        }
+      </div>
+
+      @if (!readOnly()) {
+        <div class="query-panel__actions">
+          <sf-button variant="primary" [disabled]="!canSave()" (click)="save()">Save query</sf-button>
+          <sf-button variant="ghost" [disabled]="!dirty() || saving()" (click)="revert()">Revert</sf-button>
+        </div>
+      }
+    </div>
+  }
+</section>

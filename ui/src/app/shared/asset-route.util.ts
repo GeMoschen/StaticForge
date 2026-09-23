@@ -31,6 +31,8 @@ export function assetRoute(projectKey: string, asset: RoutableAsset): AssetRoute
       return { commands: [...base, 'pages', uuid], queryParams: {} };
     case 'RECORD':
       return { commands: [...base, 'content', 'records', uuid], queryParams: {} };
+    case 'RECORD_SET':
+      return { commands: [...base, 'content', 'sets', uuid], queryParams: {} };
     case 'MEDIA':
       return { commands: [...base, 'media'], queryParams: { asset: uuid } };
     case 'PAGE_TEMPLATE':

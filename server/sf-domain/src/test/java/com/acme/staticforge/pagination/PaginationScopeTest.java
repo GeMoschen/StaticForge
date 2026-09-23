@@ -79,7 +79,7 @@ class PaginationScopeTest {
     @Test
     void recordItemsAreTheRecordFields() {
         ObjectNode content = MAPPER.createObjectNode().put("title", "Hello").put("label", "own label");
-        RecordView record = new RecordView(UUID.randomUUID(), "hello", "Hello record", "/", Instant.EPOCH, content);
+        RecordView record = new RecordView(UUID.randomUUID(), "hello", "Hello record", "/", "greetings", Instant.EPOCH, content);
         PaginationItem item = new PaginationItem(
                 record.uuid(), record.uid(), record.displayName(), record.displayName(), null, 0, null, record);
 

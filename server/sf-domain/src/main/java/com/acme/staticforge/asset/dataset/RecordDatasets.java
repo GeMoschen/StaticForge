@@ -38,10 +38,13 @@ public class RecordDatasets {
         this.projectLocales = projectLocales;
     }
 
-    /** The lookup for one project: live records only, a deleted record belongs to no dataset. */
+    /**
+     * The lookup for one project: live records and record sets (M25.2.2) only, a deleted one belongs to no
+     * dataset. Both carry their dataset as {@code payload.datasetRef}.
+     */
     public RecordDatasetLookup forProject(long projectId) {
-        return recordUuid -> assetRepository.findByProjectIdAndUuid(projectId, recordUuid)
-                .filter(asset -> asset.getAssetType() == AssetType.RECORD)
+        return uuid -> assetRepository.findByProjectIdAndUuid(projectId, uuid)
+                .filter(asset -> asset.getAssetType() == AssetType.RECORD || asset.getAssetType() == AssetType.RECORD_SET)
                 .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
                 .filter(version -> !version.isDeleted())
                 .map(version -> RecordValues.datasetRef(version.getPayload()))

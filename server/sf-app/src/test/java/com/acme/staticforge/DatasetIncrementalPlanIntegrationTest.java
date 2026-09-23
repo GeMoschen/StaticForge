@@ -14,6 +14,7 @@ import com.acme.staticforge.asset.dataset.DatasetService;
 import com.acme.staticforge.asset.dataset.DatasetView;
 import com.acme.staticforge.asset.dataset.RecordDetail;
 import com.acme.staticforge.asset.dataset.RecordService;
+import com.acme.staticforge.asset.dataset.RecordSetService;
 import com.acme.staticforge.asset.dataset.UpdateDatasetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
@@ -68,6 +69,7 @@ class DatasetIncrementalPlanIntegrationTest {
     @Autowired AssetService assetService;
     @Autowired DatasetService datasetService;
     @Autowired RecordService recordService;
+    @Autowired RecordSetService recordSetService;
     @Autowired FolderService folderService;
     @Autowired TemplateService templateService;
     @Autowired PageService pageService;
@@ -138,7 +140,10 @@ class DatasetIncrementalPlanIntegrationTest {
 
         baseline = head(fx);
         AssetVersionView leadsFolder = folderService.create(null, "Leads", FolderScope.CONTENT, fx.ctx());
-        assetService.move(editedJane.uuid(), leadsFolder.uuid(), fx.ctx());
+        UUID leadsSet = new RecordSetFixtures(recordSetService)
+                .create(fx.project().getId(), team.uuid(), leadsFolder.uuid(), "Leads", fx.ctx())
+                .uuid();
+        assetService.move(editedJane.uuid(), leadsSet, fx.ctx());
         assertThat(planned(fx, baseline)).containsExactlyInAnyOrder(leads, everyone, scoped, janeProfile);
 
         // Deleting a record the leads loop never selected.
@@ -233,7 +238,12 @@ class DatasetIncrementalPlanIntegrationTest {
 
     private RecordDetail record(Fixture fx, DatasetView dataset, String content) {
         return recordService.create(
-                        new CreateRecordCommand(fx.project().getId(), dataset.uuid(), null, null, json(content)), fx.ctx())
+                        new CreateRecordCommand(
+                                fx.project().getId(),
+                                new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), dataset.uuid(), null, fx.ctx()),
+                                null,
+                                json(content)),
+                        fx.ctx())
                 .record();
     }
 

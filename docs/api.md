@@ -31,6 +31,15 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 | `PUT`/`DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN |
 | `GET` | `/projects/{key}/locales` | VIEWER |
 | `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |
+| `GET` / `POST` | `/projects/{key}/export` / `/projects/{key}/export/selection` | PROJECT_ADMIN |
+| `POST` | `/projects/{key}/import/analyze`, `/projects/{key}/import` (multipart `file`, `?skipExistingImplicit=`) | PROJECT_ADMIN |
+
+**Import conflicts.** `import/analyze` returns `{conflicts: [{severity, type, elementUuid, elementLabel, detail,
+explicit, blocksImport}], hasBlocking, blocksImport}` and writes nothing. `hasBlocking` is true when any conflict is
+`BLOCKING`; `blocksImport` when one refuses the **whole** import. A `BLOCKING` conflict with `blocksImport: false`
+rejects only its own asset, which stays out while the rest of the archive imports — today only
+`RECORD_OUTSIDE_RECORD_SET` (M25: a record from before record sets, never migrated). `import` refuses exactly when
+`blocksImport` is true: `409 SF-API-0409` with those conflicts under `conflicts` (each with `blocksImport`).
 
 ### 3.1 Content languages (M24)
 
@@ -132,19 +141,19 @@ Everything that isn't specific to property sets uses the generic endpoints: fold
 
 ### 6.2 Datasets and records (M19)
 
-A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder of the Templates store; its **records** live in the Content store (folder scope `CONTENT`). Every single-asset response carries `ETag: "rev-{n}"`, and the `PUT`s require `If-Match`.
+A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder of the Templates store; its **records** live in the Content store (folder scope `CONTENT`), always inside a **record set** of the dataset (M25, §6.3). Every single-asset response carries `ETag: "rev-{n}"`, and the `PUT`s require `If-Match`.
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | `GET` | `/projects/{projectKey}/datasets` | `VIEWER` | summaries with `titleEditor`, `description` and live `recordCount` |
-| `GET` | `/projects/{projectKey}/datasets/{uuid}` | `VIEWER` | adds `contentDefinition`, `compiledDefinition`, `deleted`; `?revision=` for time travel |
-| `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, titleEditor?, description?, comment?}` → `201`; the parent defaults to `datasets` |
-| `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentDefinition, titleEditor?, description?, comment?}`; `renamedFrom` rewrites the key in every record, in the same revision |
-| `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount` while it has live records, even with `?force=true` |
+| `GET` | `/projects/{projectKey}/datasets/{uuid}` | `VIEWER` | adds `contentDefinition`, `compiledDefinition`, `channelTemplates` (record templates, `{<channel>: {source, compiledHash}}`, M25), `deleted`; `?revision=` for time travel |
+| `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, titleEditor?, description?, channelTemplates?, comment?}` → `201`; the parent defaults to `datasets`. Record templates compile against the schema: an unknown channel key is `422` with `field`, compile errors `422 SF-API-0422` with `channel`, `diagnostics` and `channelDiagnostics`; warnings come back in `recordTemplateDiagnostics` |
+| `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentDefinition, titleEditor?, description?, channelTemplates?, comment?}`; `renamedFrom` rewrites the key in every record and every record set query, in the same revision (never in record templates: a template still reading the old name fails the save). Without `channelTemplates` the stored record templates are kept and recompiled. The response adds `recordTemplateDiagnostics` (warnings by channel) and `brokenRecordSets` — `[{uuid, uid, displayName, diagnostics}]`, the sets whose stored query no longer validates against the saved schema (a removed or retyped field; the save succeeds, those sets render nothing until fixed). Both are empty on reads |
+| `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount`/`setCount` while it has live records or record sets, even with `?force=true` |
 | `POST` | `/projects/{projectKey}/datasets/{uuid}/restore` | `DEVELOPER` | |
-| `GET` | `/projects/{projectKey}/datasets/{uuid}/records` | `VIEWER` | paged listing, see below |
-| `POST` | `/projects/{projectKey}/datasets/{uuid}/records` | `EDITOR` | `{folderUuid?, displayName?, content, comment?}` → `201`; `folderUuid` defaults to the Content store root; when the dataset has a `titleEditor`, that editor's value names the record and `displayName` is only the fallback while it is empty |
-| `GET` | `/projects/{projectKey}/records/{uuid}` | `VIEWER` | `{uuid, uid, displayName, datasetUuid, datasetUid, folderUuid, folderPath, content, revision, changedBy, changedAt, deleted, issues}`; `?revision=` |
+| `GET` | `/projects/{projectKey}/datasets/{uuid}/records` | `VIEWER` | paged listing of every record of the dataset across all of its record sets (set queries are not applied), see below |
+| `POST` | `/projects/{projectKey}/datasets/{uuid}/records` | `EDITOR` | `{recordSetUuid, displayName?, content, comment?}` → `201`; the record goes into that record set, which must be a live set of this dataset (M25; otherwise `422 SF-DOM-0104`). Without `recordSetUuid` (the pre-M25 shape with `folderUuid`) it is `400 SF-API-0400` with `field: "recordSetUuid"`; when the dataset has a `titleEditor`, that editor's value names the record and `displayName` is only the fallback while it is empty |
+| `GET` | `/projects/{projectKey}/records/{uuid}` | `VIEWER` | `{uuid, uid, displayName, datasetUuid, datasetUid, recordSet: {uuid, uid, displayName}, folderUuid, folderPath, content, revision, changedBy, changedAt, deleted, issues}` — `folderUuid`/`folderPath` are the record set's Content folder; `?revision=` |
 | `PUT` | `/projects/{projectKey}/records/{uuid}` | `EDITOR` | `{content, displayName?, comment?}`; the dataset can't change |
 
 **Listing records.** `GET …/datasets/{uuid}/records?page=0&size=50` (size 1–500) returns `{content: [row…], page: {size, number, totalElements, totalPages}}`; a row is `{uuid, uid, displayName, folderPath, changedAt, changedBy, values}` where `values` holds only the scalar editors, for grid columns. Filters combine:
@@ -159,6 +168,24 @@ A malformed `where` is `400` with `column` (1-based, inside the expression); an 
 **Validation.** Structural findings (wrong value shape, an option outside `options`, a `reference` with `dataset "uid"` pointing outside that dataset — code `dataset`) are `422 SF-API-0422` with `issues`. Completeness findings (`required`, `min`, …) don't block the save; they come back in the response's `issues`. A record doesn't publish anything itself, so they don't hold a page back.
 
 Everything else is generic (§4): delete, restore, move, uid change, history and usages of a record are under `/assets/{uuid}`; a record's usages are the pages and templates that read it, a dataset's usages are the templates that loop it (not its own records). Validate draft CDL with `POST /cdl/validate?kind=DATASET`.
+
+### 6.3 Record sets (M25)
+
+A **record set** (`RECORD_SET`) lives in a Content folder (or the Content store root), fixes the dataset of its records for its whole life and stores a **query** — `{where?, sort?, limit?, offset?}` — deciding which of its records are shown and in which order. `where` is an OCTL expression over bare field names (no render scope: `CMS_*`, `$CMS_SET` variables and asset references are rejected), `sort` the loop sort-key syntax (`"role,-joined"`), `limit`/`offset` non-negative integers; every part is optional and an absent part is left out of the stored and returned `query`. Sets are editor content; every single-set response carries `ETag: "rev-{n}"` and `PUT` requires `If-Match`.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `GET` | `/projects/{projectKey}/record-sets` | `VIEWER` | live sets by display name, `?dataset={uuid}` for one dataset's; `[{uuid, uid, displayName, dataset: {uuid, uid, displayName}, folderUuid, folderPath, recordCount, queryValid, revision}]` |
+| `GET` | `/projects/{projectKey}/record-sets/{uuid}` | `VIEWER` | adds `query`, `queryDiagnostics`, `changedBy`, `changedAt`, `deleted`; `?revision=` for time travel (the query is checked against the dataset schema of that revision); `404` for a revision before the set existed |
+| `POST` | `/projects/{projectKey}/record-sets` | `EDITOR` | `{folderUuid?, datasetUuid, uid?, displayName, query?, comment?}` → `201`; no `datasetUuid` is `400` with `field`; a parent that isn't a Content folder is `422 SF-DOM-0104`; an invalid query is `422 SF-API-0422` with `diagnostics` and nothing is written |
+| `PUT` | `/projects/{projectKey}/record-sets/{uuid}` | `EDITOR` | `{displayName?, query?, comment?}` — replaces the whole query (omitted: every record, default order); the dataset can't change; an invalid query is `422` with `diagnostics` |
+| `DELETE` | `/projects/{projectKey}/record-sets/{uuid}` | `EDITOR` | `409 SF-DOM-0110` with `recordCount` while the set has live records; `?cascade=true` deletes the set and its records in one revision (restoring the set brings them back) |
+| `GET` | `/projects/{projectKey}/record-sets/{uuid}/records` | `VIEWER` | the set's grid: the dataset listing's envelope and `q`/`where`/`sort`/`page`/`size` (same parsers, same `400`s; `folder` does not apply). `applySetQuery=true` runs the stored query first and the request narrows it: `where` is AND-ed, `sort` re-sorts (without one the set's order is kept), `q` filters last; a set whose query no longer validates lists nothing. Otherwise every record of the set is listed. `locale` picks the language values compare in (default: the project default language). Every row carries `selectedBySet`: whether the stored query selects the record, evaluated over the whole set before paging (`false` for every row while the query is invalid) — "All records" dims the rest with it; the dataset listing has no such field. `revision` lists the set as of that revision — membership, values, stored query and schema then (`404` before the set existed or while it was deleted) |
+| `POST` | `/projects/{projectKey}/record-sets/{uuid}/preview-query` | `EDITOR` | body: a draft `query`; nothing is saved. `{valid, diagnostics, matchCount, selectedCount}` — `matchCount` counts the draft's `where` matches before `offset`/`limit`, `selectedCount` what the set would show (both `0` for an invalid draft) |
+
+A query diagnostic is `{field, severity, code, message, line, column}`: `field` is the query part (`where`, `sort`, `limit`, `offset`), `line`/`column` the 1-based position inside that part's text (`0` when unknown, and for `limit`/`offset`), `code` is `SF-TPL-0140` (malformed, or reads the render scope), `SF-TPL-0141` (a field the dataset doesn't declare) or `SF-TPL-0142` (a sort field without a natural order).
+
+Records are added with `POST /datasets/{uuid}/records` and `recordSetUuid` (§6.2). Move, display-name and uid change, generic delete, restore, history and usages of a set are under `/assets/{uuid}` (§4), with the containment rules: a set moves only into a Content folder (or the root), a record only into a live set of its own dataset — anything else is `422 SF-DOM-0104`. Moving a set moves its records' `folderPath` with it. The Content folder tree (`GET /folders?scope=CONTENT`) lists sets as leaves with `type: "RECORD_SET"` and `recordCount`.
 
 ## 7. Media
 
@@ -210,7 +237,7 @@ with the diagnostic in `X-SF-Render-Error`.
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/structures/{uuid}` |
 | `GET` | `/projects/{projectKey}/structures/{uuid}/preview` |
 | `POST` | `/projects/{projectKey}/cdl/validate` (`?kind=GLOBAL_SET` adds the property-set restrictions, `?kind=DATASET` the dataset-schema ones) |
-| `POST` | `/projects/{projectKey}/octl/validate` (body `source`, `channelKey`; with `templateUuid` and optional unsaved `contentDefinition` it returns the diagnostics a save of that template's channel would: references, inheritance chain, effective-definition names) |
+| `POST` | `/projects/{projectKey}/octl/validate` (body `source`, `channelKey`; with `templateUuid` and optional unsaved `contentDefinition` it returns the diagnostics a save of that template's channel would: references, inheritance chain, effective-definition names; with `datasetUuid` (M25) and optional unsaved dataset `contentDefinition` it checks the source as that dataset's record template — record fields and meta names in scope, so an undeclared field is `SF-TPL-0103` and `$CMS_BODY`/`$CMS_EXTENDS`/`$CMS_BLOCK`/`$CMS_PARENT` are `SF-TPL-0122`, as on save. `templateUuid` with `datasetUuid` is `422`; an unknown dataset `404`) |
 
 **Language-dependent editors (M24).** A CDL leaf editor may be `localizable`; a container (`group`, `list`,
 `catalog`, `pagination`) may not (`SF-CDL-0112`). Adding the flag migrates every stored value of that editor into
@@ -262,7 +289,7 @@ A run view carries `planSummary` (`null` for a run that never got past PLAN): `{
   "diagnostics": null }
 ```
 
-`steps` run from the planned asset towards the root and exclude it; each step says how its asset depends on the next (`PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE`, `REFERENCE` with `referenceKind`, `NAVIGATION`, `DATASET_MEMBERSHIP`, `PAGINATION_SOURCE`). Root kinds are `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL`, `EXPLICIT_SCOPE`, `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD`; clients must tolerate names added later. `validate=true` adds `diagnostics` (the VALIDATE findings grouped by code, like a run's). A pruned stored plan has `summary.planAvailable: false` and `entries: null`. Entries of processed media re-rendered by an incremental plan have `channel: null`. `size` is 1–500 (`400` otherwise).
+`steps` run from the planned asset towards the root and exclude it; each step says how its asset depends on the next (`PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE`, `REFERENCE` with `referenceKind`, `NAVIGATION`, `DATASET_MEMBERSHIP`, `PAGINATION_SOURCE`, and for record sets `RECORD_SET_MEMBERSHIP` — the reader's set may select the changed record, `sourcePath` is the set's uid —, `RECORD_SET_QUERY` — the set's stored query changed — and `RECORD_TEMPLATE` — the reader renders a set's records through the dataset's record template, `sourcePath` is the set's uid). Root kinds are `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL`, `EXPLICIT_SCOPE`, `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD`; clients must tolerate names added later. `validate=true` adds `diagnostics` (the VALIDATE findings grouped by code, like a run's). A pruned stored plan has `summary.planAvailable: false` and `entries: null`. Entries of processed media re-rendered by an incremental plan have `channel: null`. `size` is 1–500 (`400` otherwise).
 
 `GET /assets/{uuid}/impact` answers what would rebuild if the asset changed, with the planner's own walk over the current state: `{asset: {uuid, type, uid}, revision, entryCount, pageCount, byFirstEdge, entries}` (entries as above, root = the asset, `rootRevision` null). It is an upper bound — every loop over a record's dataset, a page change counted as navigation-affecting — so a real edit rebuilds the same entries or fewer. `404` for an unknown or deleted asset.
 
@@ -346,7 +373,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 
 | Code | HTTP | Raised by / notes |
 |---|---|---|
-| `SF-API-0400` | 400 | malformed request body — `ProblemFactory`; invalid channel output settings carry a `fieldErrors` array of `{field, message}` — `ChannelServiceImpl` |
+| `SF-API-0400` | 400 | malformed request body — `ProblemFactory`; a missing required member is named in `field` (M25: `recordSetUuid` on record create, `datasetUuid` on record set create); invalid channel output settings carry a `fieldErrors` array of `{field, message}` — `ChannelServiceImpl` |
 | `SF-API-0401` | 401 | missing/expired access token — `ProblemEntryPoint` |
 | `SF-API-0403` | 403 | role insufficient — `ProjectAuthorizationService` |
 | `SF-API-0404` | 404 | not found / not visible (does not leak existence, §8.4) |
@@ -366,9 +393,10 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0101` | 422 | UID already taken (probe exhaustion) — `UidGenerator` |
 | `SF-DOM-0102` | 422 | reserved UID — `UidGenerator` |
 | `SF-DOM-0103` | 422 | folder depth limit exceeded — `PathService.MAX_DEPTH` — *implemented addition* |
-| `SF-DOM-0110` | 409 | folder not empty — `FolderService` |
+| `SF-DOM-0104` | 422 | record set containment violated (M25): a record outside a live record set of its dataset, a record set outside a Content folder, or anything but a record in a set — on create, move, restore — `RecordSetContainment` |
+| `SF-DOM-0110` | 409 | folder not empty — `FolderService`; a record set with live records (delete without `cascade`) carries `recordCount` (M25) |
 | `SF-DOM-0120` | 409 | asset still referenced by an open edge from a non-deleted asset (delete without `force`) — `AssetServiceImpl` |
-| `SF-DOM-0121` | 409 | dataset still has live records (delete, with or without `force`); the problem carries `recordCount` — `AssetServiceImpl` |
+| `SF-DOM-0121` | 409 | dataset still has live records or live record sets (delete, with or without `force`); the problem carries `recordCount` and `setCount` (M25) — `AssetServiceImpl` |
 | `SF-DOM-0122` | 422 | a page template that pages use can't become abstract; carries `pageCount`, `pageUids`, `pageUuids` — `TemplateServiceImpl` |
 | `SF-DOM-0123` | 422 | a page can't be created on, or switched to, an abstract page template — `PageServiceImpl` |
 | `SF-DOM-0124` | 422 | a page template save would break templates that extend it; carries `descendants[]` (`uuid`, `uid`, `channel`, `diagnostics`) — `TemplateServiceImpl` |
@@ -402,6 +430,8 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
 | `SF-GEN-0220` | warning | reference to a deleted asset (`$CMS_REF`, `$CMS_INCLUDE`, body section); renders empty | `GenerationRenderer` |
 | `SF-GEN-0230` | error (per file) | a processed text media file's source blob is missing; the file isn't published, run `PARTIAL` | `GenerationDiagnosticCodes` (`MediaRenderStage`) |
+| `SF-GEN-0240` | warning | a record set's stored query no longer validates against its dataset (a field it reads was removed or retyped); the set renders no records, never all of them (M25) | `DiagnosticCodes.GEN_RECORD_SET_QUERY_INVALID` (`RecordSetQueries.invalidQueryWarning`) |
+| `SF-GEN-0241` | warning | a record set rendered as a value has no record template for the channel in its dataset; the set renders empty (M25) | `DiagnosticCodes.GEN_RECORD_TEMPLATE_MISSING` (`OctlRenderer`) |
 | `SF-GEN-0301` | warning | `raw` filter on a plain-text editor | (spec §16.3 — raised via `SF-TPL-0301` at compile time) |
 | `SF-GEN-0410` | warning | navigation cycle truncated | `GenerationDiagnosticCodes` |
 | `SF-GEN-0500` | 409 | a generation run is already active | `GenerationService` (`CONFLICT_CODE`) |

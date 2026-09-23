@@ -1,0 +1,19 @@
+{
+  "uuid": "3db03ec7-d871-4926-a16e-de386a051e34",
+  "type": "RECORD",
+  "uid": "ada",
+  "displayName": "Ada",
+  "parentFolderUuid": "ac5685e3-8aa5-4c25-b978-baae20dc37cd",
+  "folderPath": "/content_root/people/",
+  "templateUuid": "d5ebd057-7f51-4a70-87ac-4ed885780831",
+  "payload": {
+    "datasetRef": "d5ebd057-7f51-4a70-87ac-4ed885780831",
+    "content": {
+      "name": "Ada",
+      "role": "lead"
+    }
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

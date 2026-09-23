@@ -533,20 +533,28 @@ public final class ContentValidator {
     }
 
     /**
-     * A reference restricted with {@code dataset "uid"} must point at a record of that dataset. A
-     * record of another dataset (or any other asset type) is a structural {@code dataset} finding,
-     * the same as a value outside a select's options.
+     * A reference restricted with {@code dataset "uid"} must point at a record of that dataset — or, when its
+     * {@code assetTypes} allow {@code RECORD_SET}, at a record set of that dataset (M25.2.2). A record or set of
+     * another dataset (or any other asset type) is a structural {@code dataset} finding, the same as a value
+     * outside a select's options. Records stay allowed when {@code assetTypes} is empty or names {@code RECORD}.
      */
     private void validateDataset(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
         String dataset = editor.dataset();
         if (dataset == null || dataset.isBlank()) {
             return;
         }
-        String message = "Editor '" + editor.name() + "' must reference a record of dataset '" + dataset + "'.";
+        boolean records = editor.assetTypes().isEmpty() || editor.assetTypes().contains("RECORD");
+        boolean sets = editor.assetTypes().contains("RECORD_SET");
+        String targets = records && sets ? "a record or record set" : sets ? "a record set" : "a record";
+        String message = "Editor '" + editor.name() + "' must reference " + targets + " of dataset '" + dataset + "'.";
         JsonNode assetType = value.get("assetType");
-        if (assetType != null && assetType.isTextual() && !"RECORD".equalsIgnoreCase(assetType.asText())) {
-            issues.add(new ContentIssue(path, "dataset", Severity.ERROR, message));
-            return;
+        if (assetType != null && assetType.isTextual()) {
+            String type = assetType.asText().toUpperCase(java.util.Locale.ROOT);
+            boolean allowed = (records && "RECORD".equals(type)) || (sets && "RECORD_SET".equals(type));
+            if (!allowed) {
+                issues.add(new ContentIssue(path, "dataset", Severity.ERROR, message));
+                return;
+            }
         }
         if (recordDatasets != null) {
             UUID target = UUID.fromString(value.get("uuid").asText());

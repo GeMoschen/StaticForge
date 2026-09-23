@@ -1,0 +1,16 @@
+{
+  "uuid": "8986b4e8-28f9-46c2-a4a8-f54489a4fc77",
+  "type": "FOLDER",
+  "uid": "media_root",
+  "displayName": "All Media",
+  "parentFolderUuid": "ccb15e4c-7b2d-42db-a1fd-5544c79dddcf",
+  "folderPath": "/media_root/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "MEDIA",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

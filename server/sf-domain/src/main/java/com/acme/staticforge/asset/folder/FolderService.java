@@ -13,7 +13,10 @@ import java.util.UUID;
  */
 public interface FolderService {
 
-    /** All current folders of {@code scope} in the project, nested as a tree up to {@code depth} ({@code -1} = unlimited). */
+    /**
+     * All current folders of {@code scope} in the project, nested as a tree up to {@code depth} ({@code -1} =
+     * unlimited). In the {@code CONTENT} scope a folder's record sets are leaf nodes with their live record count (M25).
+     */
     List<FolderNode> tree(long projectId, FolderScope scope, int depth, RevisionContext ctx);
 
     /**
@@ -47,6 +50,9 @@ public interface FolderService {
     /** Moves a folder and rewrites the entire subtree's paths in a single revision. */
     MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx);
 
-    /** Soft-deletes a folder; blocked while non-empty unless {@code cascade} is true. */
+    /**
+     * Soft-deletes a folder — or a record set (M25), whose subtree is its records — in one revision; blocked
+     * while non-empty unless {@code cascade} is true ({@code 409 SF-DOM-0110}, with {@code recordCount} for a set).
+     */
     void delete(UUID uuid, boolean cascade, RevisionContext ctx);
 }

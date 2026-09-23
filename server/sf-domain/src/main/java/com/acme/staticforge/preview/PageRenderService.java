@@ -6,6 +6,7 @@ import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.dataset.RecordTemplates;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.media.BlobStore;
@@ -43,6 +44,7 @@ import com.acme.staticforge.template.render.OctlRenderer;
 import com.acme.staticforge.template.render.RenderBudget;
 import com.acme.staticforge.template.render.RenderContext;
 import com.acme.staticforge.template.render.RenderLimitException;
+import com.acme.staticforge.template.render.RenderResult;
 import com.acme.staticforge.template.render.Renderer;
 import com.acme.staticforge.template.render.UrlResolver;
 import com.acme.staticforge.urlregistry.UrlArea;
@@ -198,7 +200,7 @@ public class PageRenderService {
     public String renderSection(long projectId, UUID sectionTemplateUuid, JsonNode sampleContent, String channel) {
         return withRenderLimitsAsProblem(() -> renderSectionTemplate(
                 projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, null, channel, false,
-                null, null, new RenderBudget()));
+                null, null, new RenderBudget(), new ArrayList<>(), null));
     }
 
     /**
@@ -316,17 +318,21 @@ public class PageRenderService {
         AssetVersionView pageTemplate = templateAt(projectId, page.pageTemplateUuid(), revision);
         CompiledTemplate compiled = compilePageTemplateChannel(pageTemplate, channel, projectId, revision);
         if (compiled == null) {
-            return new PagePreview("", 1, 1); // missing channel template degrades gracefully to an empty body
+            return new PagePreview("", 1, 1, List.of()); // missing channel template degrades gracefully to an empty body
         }
 
         // One budget for the page and every section/include/catalog card rendered inside it.
         RenderBudget budget = new RenderBudget();
+        // The render warnings of the page and of every section rendered inside it (a section's own render result
+        // would otherwise drop them).
+        List<Diagnostic> warnings = new ArrayList<>();
         UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision);
         AssetValueResolver assetValues = assetValues(projectId, revision);
         Pagination pagination = pagination(
                 projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision, requestedPage, urlResolver, assetValues);
         PageView paginated = page.withPagination(pagination.scope());
-        BlockResolver blocks = blockResolver(projectId, projectKey, paginated, channel, rewriteLinks, baseUrl, revision, budget);
+        BlockResolver blocks = blockResolver(
+                projectId, projectKey, paginated, channel, rewriteLinks, baseUrl, revision, budget, warnings, locale);
 
         RenderContext.Builder builder = RenderContext.builder()
                 .channel(channel)
@@ -355,9 +361,10 @@ public class PageRenderService {
                 builder, projectLocales.forProject(projectId), locale, null);
         RenderContext context = builder.build();
 
-        String html = budget.withTemplate(page.pageTemplateUuid(), pageTemplate.uid(), () -> renderer.render(compiled, context))
-                .output();
-        return new PagePreview(html, pagination.pageNumber(), pagination.totalPages());
+        RenderResult result =
+                budget.withTemplate(page.pageTemplateUuid(), pageTemplate.uid(), () -> renderer.render(compiled, context));
+        addWarnings(warnings, result.warnings());
+        return new PagePreview(result.output(), pagination.pageNumber(), pagination.totalPages(), warnings);
     }
 
     /** The preview's page of a paginated page; {@code scope} is {@code null} (page 1 of 1) for any other page. */
@@ -497,7 +504,9 @@ public class PageRenderService {
             boolean rewriteLinks,
             String baseUrl,
             Long revision,
-            RenderBudget budget) {
+            RenderBudget budget,
+            List<Diagnostic> warnings,
+            String locale) {
         return new BlockResolver() {
             @Override
             public String renderBody(String bodyName) {
@@ -509,7 +518,7 @@ public class PageRenderService {
                 for (JsonNode section : sections) {
                     out.append(renderSectionInstance(
                             projectId, projectKey, page.content(), page.pagination(), section, channel, rewriteLinks, baseUrl,
-                            revision, budget));
+                            revision, budget, warnings, locale));
                 }
                 return out.toString();
             }
@@ -523,7 +532,7 @@ public class PageRenderService {
                 for (JsonNode card : cards) {
                     out.append(renderSectionInstance(
                             projectId, projectKey, page.content(), page.pagination(), card, channel, rewriteLinks, baseUrl,
-                            revision, budget));
+                            revision, budget, warnings, locale));
                 }
                 return out.toString();
             }
@@ -536,7 +545,12 @@ public class PageRenderService {
                 }
                 return renderSectionTemplate(
                         projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, page.pagination(), channel,
-                        rewriteLinks, baseUrl, revision, budget);
+                        rewriteLinks, baseUrl, revision, budget, warnings, locale);
+            }
+
+            @Override
+            public CompiledTemplate recordTemplate(UUID datasetUuid) {
+                return compileRecordTemplate(projectId, datasetUuid, channel, revision);
             }
 
             @Override
@@ -667,7 +681,9 @@ public class PageRenderService {
             boolean rewriteLinks,
             String baseUrl,
             Long revision,
-            RenderBudget budget) {
+            RenderBudget budget,
+            List<Diagnostic> warnings,
+            String locale) {
         String templateRef = section.path("templateRef").asText();
         if (templateRef.isBlank()) {
             return "";
@@ -677,7 +693,7 @@ public class PageRenderService {
         String instanceId = section.path("instanceId").asText();
         return renderSectionTemplate(
                 projectId, projectKey, sectionTemplateUuid, null, instanceId,
-                content, pageContent, pagination, channel, rewriteLinks, baseUrl, revision, budget);
+                content, pageContent, pagination, channel, rewriteLinks, baseUrl, revision, budget, warnings, locale);
     }
 
     private String renderSectionTemplate(
@@ -693,7 +709,9 @@ public class PageRenderService {
             boolean rewriteLinks,
             String baseUrl,
             Long revision,
-            RenderBudget budget) {
+            RenderBudget budget,
+            List<Diagnostic> warnings,
+            String locale) {
         AssetVersionView template = templateAt(projectId, sectionTemplateUuid, revision);
         CompiledTemplate compiled = compileChannel(template, channel, projectId);
         if (compiled == null) {
@@ -713,18 +731,58 @@ public class PageRenderService {
                 .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision))
                 .blockResolver(blockResolver(
                         projectId, projectKey, PageView.contextOnly(pageValues, pagination), channel, rewriteLinks, baseUrl,
-                        revision, budget))
+                        revision, budget, warnings, locale))
                 .assetValueResolver(assetValues(projectId, revision))
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
         }
+        // A section renders in its page's language (M24.3.1): its values — and a record set's records (M25.2.2) —
+        // resolve through the page's fallback chain.
+        com.acme.staticforge.project.LocaleRenderScope.apply(builder, projectLocales.forProject(projectId), locale, null);
         RenderContext context = builder.build();
         // A body section or catalog card (instanceId set) nests by content; only an include can recurse forever.
-        return (instanceId != null && !instanceId.isBlank()
-                        ? budget.withInstance(sectionTemplateUuid, uid, () -> renderer.render(compiled, context))
-                        : budget.withTemplate(sectionTemplateUuid, uid, () -> renderer.render(compiled, context)))
-                .output();
+        RenderResult result = instanceId != null && !instanceId.isBlank()
+                ? budget.withInstance(sectionTemplateUuid, uid, () -> renderer.render(compiled, context))
+                : budget.withTemplate(sectionTemplateUuid, uid, () -> renderer.render(compiled, context));
+        addWarnings(warnings, result.warnings());
+        return result.output();
+    }
+
+    /** Adds render warnings to a page's list, each once: the same finding from several sections is one warning. */
+    private static void addWarnings(List<Diagnostic> warnings, List<Diagnostic> found) {
+        for (Diagnostic warning : found) {
+            if (!warnings.contains(warning)) {
+                warnings.add(warning);
+            }
+        }
+    }
+
+    /**
+     * The compiled record template of dataset {@code datasetUuid} for {@code channel} (M25.2.2), from the dataset
+     * version valid at {@code revision} (current when {@code null}): compiled through the cross-request cache keyed by
+     * that version, like a section template, never per record. {@code null} when the dataset has none for the
+     * channel (or doesn't exist then).
+     */
+    private CompiledTemplate compileRecordTemplate(long projectId, UUID datasetUuid, String channel, Long revision) {
+        if (assetRepository.findByProjectIdAndUuid(projectId, datasetUuid).isEmpty()) {
+            return null;
+        }
+        Optional<AssetVersionView> dataset = revision == null
+                ? Optional.of(assetService.requireCurrent(projectId, datasetUuid))
+                : assetService.findAt(projectId, datasetUuid, revision);
+        return dataset.flatMap(version -> RecordTemplates.source(version.payload(), channel)
+                        .map(source -> compiledTemplates
+                                .compileRecordTemplate(
+                                        projectId,
+                                        datasetUuid,
+                                        version.validFromRevision(),
+                                        channel,
+                                        version.payload().path("contentDefinition").asText(""),
+                                        source,
+                                        referenceResolver(projectId))
+                                .template()))
+                .orElse(null);
     }
 
     // ------------------------------------------------------------------

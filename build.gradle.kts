@@ -69,6 +69,9 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+        // Spring's test-context cache keeps one application context per distinct configuration; the
+        // sf-app suite outgrew Gradle's 512 MB default test heap (OutOfMemoryError loading a context).
+        maxHeapSize = "2g"
         testLogging {
             events(TestLogEvent.FAILED, TestLogEvent.SKIPPED)
             showStandardStreams = false

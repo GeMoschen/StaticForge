@@ -93,6 +93,28 @@
           </section>
         }
 
+        @if (rejected().length > 0) {
+          <section class="conflict-section conflict-section--rejected">
+            <h2 class="conflict-section__title">
+              Not imported
+              <span class="badge badge--warning">{{ rejected().length }}</span>
+            </h2>
+            <p class="conflict-section__note">
+              These assets are left out. Everything else in the archive can still be imported.
+            </p>
+            <ul class="conflict-list">
+              @for (c of rejected(); track $index) {
+                <li class="conflict-item">
+                  <sf-icon [name]="iconFor(c.type)" />
+                  <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+                  <span class="badge badge--blocking">{{ notImportedLabel(c.type) }}</span>
+                  <span class="conflict-item__detail">{{ c.detail }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
         @if (warnings().length > 0) {
           <section class="conflict-section conflict-section--warning">
             <h2 class="conflict-section__title">
@@ -117,7 +139,7 @@
 
       <div class="import__actions">
         <sf-button variant="ghost" (click)="cancel()">Cancel</sf-button>
-        <sf-button variant="primary" [disabled]="hasBlocking() || committing() || readOnly()" (click)="commit()">
+        <sf-button variant="primary" [disabled]="blocksImport() || committing() || readOnly()" (click)="commit()">
           {{ committing() ? 'Importing…' : 'Import' }}
         </sf-button>
       </div>

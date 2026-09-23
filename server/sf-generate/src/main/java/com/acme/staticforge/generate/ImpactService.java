@@ -86,12 +86,15 @@ public class ImpactService {
             throw new SfException(ProblemFactory.notFound("Asset not found."));
         }
 
+        OutputPathResolver paths = OutputPathResolver.forSnapshot(
+                snapshot, channelService.outputSettings(project.getId()), projectLocales.forProject(project.getId()));
+        var memo = compiledTemplates.buildMemo(snapshot);
         RebuildExpansion.Result walk = expansion.expand(
                 snapshot,
                 RebuildExpansion.Changes.upperBound(asset.assetId()),
-                SnapshotPagination.of(snapshot, compiledTemplates.buildMemo(snapshot)));
-        OutputPathResolver paths = OutputPathResolver.forSnapshot(
-                snapshot, channelService.outputSettings(project.getId()), projectLocales.forProject(project.getId()));
+                SnapshotPagination.of(snapshot, memo),
+                memo,
+                paths.locales());
         Set<UUID> pages = new LinkedHashSet<>();
         for (UUID page : walk.pages()) {
             SnapshotAsset reached = snapshot.assetByUuid(page);

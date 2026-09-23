@@ -30,16 +30,19 @@ class GenerationRendererDatasetTest {
     private static final UUID BOB = UUID.fromString("00000000-0000-0000-0000-000000000202");
     private static final UUID GONE = UUID.fromString("00000000-0000-0000-0000-000000000203");
     private static final UUID OTHER = UUID.fromString("00000000-0000-0000-0000-000000000204");
+    private static final UUID LEADS = UUID.fromString("00000000-0000-0000-0000-000000000301");
+    private static final UUID MEMBERS = UUID.fromString("00000000-0000-0000-0000-000000000302");
 
     @Test
     void loopsRecordValuesAndDereferencesReadTheSnapshot() {
         GenerationRenderer renderer = renderer(
-                "[$CMS_FOR(m : dataset:team, sort=\"-name\")$$CMS_VALUE(m.name)$@$CMS_VALUE(m._folderPath)$;$CMS_END_FOR$]"
+                "[$CMS_FOR(m : dataset:team, sort=\"-name\")$$CMS_VALUE(m.name)$@$CMS_VALUE(m._folderPath)$"
+                        + "/$CMS_VALUE(m._recordSet)$;$CMS_END_FOR$]"
                         + "[$CMS_VALUE(record:ada.name)$][$CMS_VALUE(boss.name)$][$CMS_VALUE(record:gone.name)$]");
 
         RenderedFile file = renderer.render(new PlanEntry(page(1), "html", "p1.html"));
 
-        assertThat(text(file)).isEqualTo("[Bob@/team/;Ada@/team/leads/;][Ada][Bob][]");
+        assertThat(text(file)).isEqualTo("[Bob@/team//members;Ada@/team/leads//leads;][Ada][Bob][]");
         assertThat(file.dependencies()).contains(TEAM, ADA, BOB);
     }
 
@@ -66,10 +69,12 @@ class GenerationRendererDatasetTest {
         put(byUuid, asset(TEMPLATE, AssetType.PAGE_TEMPLATE, "tpl", "/",
                 "{\"channelTemplates\":{\"html\":{\"source\":" + MAPPER.valueToTree(source) + "}}}", false));
         put(byUuid, asset(TEAM, AssetType.DATASET, "team", "/templates_root/datasets/", "{}", false));
-        put(byUuid, record(ADA, "ada", "/content_root/team/leads/", "{\"name\":\"Ada\"}", TEAM, false));
-        put(byUuid, record(BOB, "bob", "/content_root/team/", "{\"name\":\"Bob\"}", TEAM, false));
-        put(byUuid, record(GONE, "gone", "/content_root/", "{\"name\":\"Gone\"}", TEAM, true));
-        put(byUuid, record(OTHER, "other", "/content_root/", "{\"name\":\"Other\"}", UUID.randomUUID(), false));
+        put(byUuid, asset(LEADS, AssetType.RECORD_SET, "leads", "/content_root/team/leads/", "{\"datasetRef\":\"" + TEAM + "\"}", false));
+        put(byUuid, asset(MEMBERS, AssetType.RECORD_SET, "members", "/content_root/team/", "{\"datasetRef\":\"" + TEAM + "\"}", false));
+        put(byUuid, record(ADA, "ada", "/content_root/team/leads/", LEADS, "{\"name\":\"Ada\"}", TEAM, false));
+        put(byUuid, record(BOB, "bob", "/content_root/team/", MEMBERS, "{\"name\":\"Bob\"}", TEAM, false));
+        put(byUuid, record(GONE, "gone", "/content_root/team/", MEMBERS, "{\"name\":\"Gone\"}", TEAM, true));
+        put(byUuid, record(OTHER, "other", "/content_root/", null, "{\"name\":\"Other\"}", UUID.randomUUID(), false));
         for (int i = 1; i <= 50; i++) {
             put(byUuid, asset(page(i), AssetType.PAGE, "p" + i, "/pages_root/",
                     "{\"templateRef\":\"" + TEMPLATE + "\",\"content\":{\"boss\":{\"type\":\"ASSET_REF\",\"uuid\":\""
@@ -90,9 +95,12 @@ class GenerationRendererDatasetTest {
         return new SnapshotAsset(uuid, uuid.getLeastSignificantBits(), type, uid, uid, folder, parse(json), deleted);
     }
 
-    private static SnapshotAsset record(UUID uuid, String uid, String folder, String content, UUID dataset, boolean deleted) {
+    /** A record in the record set {@code set} (M25), which the snapshot holds by its asset id. */
+    private static SnapshotAsset record(
+            UUID uuid, String uid, String folder, UUID set, String content, UUID dataset, boolean deleted) {
         return new SnapshotAsset(uuid, uuid.getLeastSignificantBits(), AssetType.RECORD, uid, uid, folder,
-                parse("{\"datasetRef\":\"" + dataset + "\",\"content\":" + content + "}"), deleted, Instant.EPOCH);
+                parse("{\"datasetRef\":\"" + dataset + "\",\"content\":" + content + "}"), deleted, Instant.EPOCH,
+                set == null ? null : set.getLeastSignificantBits());
     }
 
     private static void put(Map<UUID, SnapshotAsset> byUuid, SnapshotAsset asset) {

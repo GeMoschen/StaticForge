@@ -66,3 +66,32 @@ Final acceptance against `cms-specification.md` §2.1 (goals G1–G6) and §27 (
 Goals G2, G3, and G4 are **proven** by committed automated tests. G1 and G5 need honest, time-boxed performance/E2E evidence that is not yet captured in an always-on job; G6 (a11y) is claimed by design and partially unit-tested but needs the axe + manual screen-reader pass from §24.7. All 12 critical journeys of §25.6 are authored; those that exercise the seed-dependent UI are gated behind `SF_RUN_E2E` rather than missing.
 
 **Recommendation:** promote the spec's promised nightly jobs (PostgreSQL dialect, 5,000-page benchmark, axe sweep) into `.github/workflows/` and run the a11y/manual pass before declaring M7 fully met. This is deliberately not done by the documentation agent — those gates are owned by other agents.
+
+## 4. Release notes — breaking changes
+
+### M25 — records live in record sets
+
+Records are now always kept in a **record set** (`RECORD_SET`): a Content-store asset that fixes the dataset of its
+records and stores the query deciding which of them pages show (template developer guide §2.9, user guide
+*Content*, `docs/api.md` §6.3). This changes existing data and clients:
+
+- **No record outside a set.** A record's parent must be a live record set of its dataset. Creating, moving,
+  restoring or importing a record anywhere else — directly in a Content folder or in the store root — is rejected
+  (`422 SF-DOM-0104`).
+- **Record create request.** `POST /projects/{p}/datasets/{uuid}/records` takes `recordSetUuid` instead of
+  `folderUuid`; the old body is `400 SF-API-0400` with `field: "recordSetUuid"`.
+- **No migration.** Records created before M25 sit directly in the Content store and are **not** migrated,
+  converted or grouped into sets — there is no startup job and no compatibility path. **Reset development
+  databases** (or recreate their records inside sets by hand) when upgrading.
+- **Archives.** The export protocol is now **7**. An archive written before M25 (protocol 6 or older) still imports,
+  but each of its records is reported as the conflict `RECORD_OUTSIDE_RECORD_SET` and is **not imported**; every other
+  asset of the archive (datasets, pages, templates, media, …) imports as before. `RECORD_OUTSIDE_RECORD_SET` rejects
+  only its own record (`ImportConflictView.blocksImport` is `false` for it, while the report's `hasBlocking` stays
+  `true`).
+- **`dataset:` loops unchanged.** `$CMS_FOR(x : dataset:uid, …)$` still iterates every record of the dataset (across
+  all of its sets); `folder=` now matches the Content folder of the record's set, and each item gains `_recordSet`.
+
+Evidence: `RecordSetIntegrationTest` (create, move and restore outside a set), `RecordSetApiTest` (the `400` on the old request shape),
+`ProjectExportImportIntegrationTest.aProtocol6ArchiveRejectsItsRecordsOutsideSetsAndImportsEverythingElse` and
+`ProjectImportAnalyzeApiTest` (the protocol-6 fixture under
+`server/sf-app/src/test/resources/exportimport/protocol-6-records-outside-sets/`).

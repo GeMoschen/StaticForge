@@ -1,0 +1,5 @@
+<section>$CMS_VALUE(recordset:leads)$</section>
+<ul>$CMS_VALUE(recordset:staff)$</ul>
+<p>$CMS_VALUE(recordset:leads._count)$ in $CMS_VALUE(recordset:leads._meta.displayName)$ of $CMS_VALUE(recordset:leads._meta.dataset)$$CMS_IF(recordset:leads._count > 1)$, several$CMS_END_IF$</p>
+<p>$CMS_FOR(r : recordset:leads.records)$[$CMS_VALUE(r.name)$ in $CMS_VALUE(r._recordSet)$]$CMS_END_FOR$</p>
+<p>[$CMS_VALUE(recordset:broken)$][$CMS_VALUE(recordset:gone)$][$CMS_VALUE(recordset:broken | default("none"))$][$CMS_VALUE(recordset:gone._count)$]</p>

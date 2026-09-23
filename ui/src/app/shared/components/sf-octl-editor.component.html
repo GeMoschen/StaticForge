@@ -1,0 +1,29 @@
+<textarea
+  #area
+  class="octl-editor__source"
+  spellcheck="false"
+  [value]="value()"
+  [readOnly]="readOnly()"
+  [attr.aria-label]="label()"
+  [attr.aria-invalid]="hasErrors() ? true : null"
+  [attr.aria-describedby]="diagnosticsId"
+  (input)="onInput($event)"
+></textarea>
+<div [id]="diagnosticsId" class="octl-editor__diagnostics" aria-live="polite">
+  @for (diag of diagnostics(); track $index) {
+    <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+      <span>{{ diag.severity }} {{ diag.code }}</span>
+      @if (diag.line) {
+        <button
+          type="button"
+          class="diagnostic__position"
+          [attr.aria-label]="'Go to line ' + diag.line + ', column ' + (diag.column ?? 0)"
+          (click)="goTo(diag)"
+        >
+          ({{ diag.line }}:{{ diag.column ?? 0 }})
+        </button>
+      }
+      <span>— {{ diag.message }}</span>
+    </div>
+  }
+</div>

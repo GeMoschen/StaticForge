@@ -12,4 +12,6 @@ dependencies {
     implementation(libs.micrometer.core)
 
     testImplementation(libs.spring.boot.starter.test)
+    // Architecture guard over the modules generation sees: one record set query evaluator (M25.1.2).
+    testImplementation(libs.archunit)
 }

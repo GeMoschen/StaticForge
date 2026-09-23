@@ -280,4 +280,79 @@ describe('ProjectSettingsExportComponent', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
     expect(screen.getByRole('alert').textContent).toMatch(/Could not export/);
   });
+
+  it('lists record sets as selectable leaves under their Content folders, never their records', async () => {
+    const contentTree = [
+      {
+        uuid: 'content-wrapper',
+        uid: 'content_root',
+        displayName: 'All Content',
+        path: '/content_root/',
+        scope: 'CONTENT',
+        protectedFolder: true,
+        type: 'FOLDER',
+        children: [
+          {
+            uuid: 'folder-team',
+            uid: 'team',
+            displayName: 'Team folder',
+            path: '/content_root/team/',
+            scope: 'CONTENT',
+            type: 'FOLDER',
+            children: [
+              // The folder tree carries sets as leaf nodes (M25) — the export tree must not render them as folders.
+              { uuid: 'set-1', uid: 'leadership', displayName: 'Leadership', path: '/content_root/team/', type: 'RECORD_SET', recordCount: 2, children: [] },
+            ],
+          },
+        ],
+      },
+    ];
+    const store = makeStoreStub({ contentFolderTree: vi.fn().mockReturnValue(contentTree) });
+    const listAssets = vi.fn((_key: string, opts: { type?: string }) =>
+      of({
+        content:
+          opts.type === 'RECORD_SET'
+            ? [{ uuid: 'set-1', uid: 'leadership', displayName: 'Leadership', type: 'RECORD_SET', folderPath: '/content_root/team/' }]
+            : opts.type === 'RECORD'
+              ? [{ uuid: 'rec-1', uid: 'ada', displayName: 'Ada', type: 'RECORD', folderPath: '/content_root/team/' }]
+              : [],
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    );
+    const importExport = makeImportExportStub();
+    await render(ProjectSettingsExportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: ProjectContextStore, useValue: store },
+        { provide: ApiClient, useValue: makeApiStub({ listAssets }) },
+        { provide: ImportExportService, useValue: importExport },
+      ],
+    });
+
+    await waitFor(() => expect(screen.getByText('Team folder')).toBeTruthy());
+    expect(listAssets).toHaveBeenCalledWith('proj', expect.objectContaining({ type: 'RECORD_SET' }));
+    expect(listAssets).not.toHaveBeenCalledWith('proj', expect.objectContaining({ type: 'RECORD' }));
+    // The set is not a folder row of its own.
+    expect(document.getElementById('export-node-set-1')).toBeNull();
+
+    const teamRow = document.getElementById('export-node-folder-team')!.closest('.tree-row') as HTMLElement;
+    (teamRow.querySelector('button[aria-label="Expand folder"]') as HTMLButtonElement).click();
+    await waitFor(() => expect(document.getElementById('export-asset-set-1')).toBeTruthy());
+    expect(screen.queryByText('Ada')).toBeNull();
+    const setRow = document.getElementById('export-asset-set-1')!.closest('.tree-row') as HTMLElement;
+    expect(setRow.textContent).toContain('table_rows');
+
+    (document.getElementById('export-asset-set-1') as HTMLInputElement).click();
+    const exportButton = screen.getByRole('button', { name: /Export/ }) as HTMLButtonElement;
+    await waitFor(() => expect(exportButton.disabled).toBe(false));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    exportButton.click();
+    await waitFor(() =>
+      expect(importExport.exportSelection).toHaveBeenCalledWith('proj', expect.objectContaining({ assetUuids: ['set-1'] })),
+    );
+    vi.restoreAllMocks();
+  });
 });

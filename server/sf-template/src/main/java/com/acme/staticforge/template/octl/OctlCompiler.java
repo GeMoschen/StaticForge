@@ -9,6 +9,7 @@ import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.query.DatasetQuery;
 import com.acme.staticforge.template.query.DatasetQueryParser;
+import com.acme.staticforge.template.query.RecordView;
 import com.acme.staticforge.template.render.Filters;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -48,11 +49,30 @@ public final class OctlCompiler {
      */
     public static final String LOCALES_ROOT = "CMS_LOCALES";
 
+    /**
+     * The per-render position names of a dataset record template (M25): the record's place in the list a
+     * record set renders — {@code _index} (0-based), {@code _first}, {@code _last} and {@code _count}. Known at
+     * compile time, bound by the renderer.
+     */
+    public static final Set<String> RECORD_POSITION_FIELDS = Set.of("_index", "_first", "_last", "_count");
+
+    /** The {@code _meta} object every record item carries ({@code uid}, {@code displayName}). */
+    private static final String RECORD_META_OBJECT = "_meta";
+
+    private static final String INHERITANCE_IS_FOR_PAGE_TEMPLATES =
+            "it renders on its own, inheritance is for page templates";
+
     /** The {@code assetType:uid} prefix of a dataset loop source (M19.3.2). */
     private static final String DATASET_PREFIX = "dataset";
 
     /** The {@code assetType:uid} prefix of a single record (M19.3.2). */
     private static final String RECORD_PREFIX = "record";
+
+    /**
+     * The {@code assetType:uid} prefix of a record set (M25.2.2, epic decision 1): {@code $CMS_VALUE(recordset:uid)$}
+     * renders the set through its dataset's record template, {@code $CMS_FOR(x : recordset:uid, …)$} loops it.
+     */
+    public static final String RECORD_SET_PREFIX = "recordset";
 
     /** A text media file has no editors and no bodies: every bare name is unknown. */
     private static final ContentDefinition NO_EDITORS = new ContentDefinition(List.of(), List.of());
@@ -108,6 +128,30 @@ public final class OctlCompiler {
     }
 
     /**
+     * Compiles a dataset's per-channel record template (M25): the markup one record renders with when a record
+     * set is rendered. The record is the local scope — the dataset's fields are top-level names like a section
+     * template's editors, next to the record meta fields ({@link RecordView#META_FIELDS},
+     * {@code _meta}) and the per-render position ({@link #RECORD_POSITION_FIELDS}); any other bare name is the
+     * usual {@code SF-TPL-0103}. On top of the template checks:
+     *
+     * <ul>
+     *   <li>{@code $CMS_EXTENDS}, {@code $CMS_BLOCK}, {@code $CMS_PARENT} and {@code $CMS_BODY} are
+     *       {@code SF-TPL-0122} errors: a record template is standalone and has no bodies;
+     *   <li>{@code SF-TPL-0310} (field declared but unused) is not raised — a record template shows the fields it
+     *       wants.
+     * </ul>
+     *
+     * @param datasetDefinition the dataset's schema, may be {@code null} to skip name checks
+     */
+    public OctlResult compileRecordTemplate(
+            String source, String channelKey, ReferenceResolver references, ContentDefinition datasetDefinition) {
+        String channel = channelKey == null ? "html" : channelKey;
+        Link link = link(new LayerSource(null, null, source, datasetDefinition), channel, references, null, true,
+                new Inheritance(null, null, null, null), new ArrayList<>());
+        return new OctlResult(link.template(), link.diagnostics());
+    }
+
+    /**
      * Compiles a page template's channel source against its inheritance chain (M20): the ancestors its
      * {@code $CMS_EXTENDS} names are loaded through {@code parents}, compiled and linked, and names are
      * checked against the effective definition (own + inherited). A template that doesn't extend compiles
@@ -157,7 +201,7 @@ public final class OctlCompiler {
     private OctlResult compile(
             LayerSource layer, String channelKey, ReferenceResolver references, TextMedia textMedia, Inheritance inheritance) {
         String channel = channelKey == null ? "html" : channelKey;
-        Link link = link(layer, channel, references, textMedia, inheritance, new ArrayList<>());
+        Link link = link(layer, channel, references, textMedia, false, inheritance, new ArrayList<>());
         return new OctlResult(link.template(), link.diagnostics());
     }
 
@@ -202,13 +246,15 @@ public final class OctlCompiler {
 
     /**
      * Compiles {@code layer} and, when it extends, its chain. {@code path} holds the descendants that led
-     * here (entry template first) for cycle detection by UUID and the depth cap.
+     * here (entry template first) for cycle detection by UUID and the depth cap. A {@code recordTemplate}
+     * (M25) never extends: its inheritance instructions are reported by the validation walk instead.
      */
     private Link link(
             LayerSource layer,
             String channel,
             ReferenceResolver references,
             TextMedia textMedia,
+            boolean recordTemplate,
             Inheritance inheritance,
             List<LayerSource> path) {
         String text = layer.source();
@@ -218,8 +264,8 @@ public final class OctlCompiler {
 
         List<Diagnostic> diagnostics = new ArrayList<>(lexed.diagnostics());
         diagnostics.addAll(parsed.diagnostics());
-        OctlNode.Extends extendsNode = InheritanceRules.check(nodes, diagnostics);
-        boolean extending = nodes.stream().anyMatch(OctlNode.Extends.class::isInstance);
+        OctlNode.Extends extendsNode = recordTemplate ? null : InheritanceRules.check(nodes, diagnostics);
+        boolean extending = !recordTemplate && nodes.stream().anyMatch(OctlNode.Extends.class::isInstance);
         if (textMedia != null && extending) {
             nodes.stream()
                     .filter(OctlNode.Extends.class::isInstance)
@@ -302,7 +348,8 @@ public final class OctlCompiler {
 
         Map<String, UUID> refMap = new LinkedHashMap<>();
         ValidateCtx ctx = new ValidateCtx(
-                references, effective == null ? null : effective.definition(), refMap, diagnostics, textMedia, namesUnknown);
+                references, effective == null ? null : effective.definition(), refMap, diagnostics, textMedia,
+                recordTemplate, namesUnknown);
         validate(nodes, new HashSet<>(), ctx);
 
         Set<String> usedEditors = new HashSet<>(ctx.usedEditors);
@@ -311,7 +358,7 @@ public final class OctlCompiler {
             usedEditors.addAll(parent.usedEditors());
             usedBodies.addAll(parent.usedBodies());
         }
-        if (effective != null) {
+        if (effective != null && !recordTemplate) {
             emitDeclaredNeverUsed(layer.ownDefinition(), effective, usedEditors, usedBodies, diagnostics);
         }
         if (textMedia != null) {
@@ -411,7 +458,7 @@ public final class OctlCompiler {
         }
         Link link = link(
                 new LayerSource(source.uuid(), source.uid(), source.channelSource(), source.ownDefinition()),
-                channel, references, null, inheritance, path);
+                channel, references, null, false, inheritance, path);
         if (memo != null && link.cycle() == null && !link.truncated()) {
             memo.put(uuid, channel, link);
         }
@@ -480,7 +527,9 @@ public final class OctlCompiler {
                     checkRefHasUrl(r.accessor(), r.line(), r.col(), ctx);
                 }
                 case OctlNode.Body b -> {
-                    if (ctx.textMedia != null) {
+                    if (ctx.recordTemplate) {
+                        notInRecordTemplate("$CMS_BODY", "a record has values only, no bodies", b.line(), b.col(), ctx);
+                    } else if (ctx.textMedia != null) {
                         notInTextMedia("$CMS_BODY", b.line(), b.col(), ctx.diagnostics);
                     } else {
                         checkBody(b, ctx);
@@ -530,6 +579,10 @@ public final class OctlCompiler {
                     checkAccessorRoot(f.accessor(), shadowed, f.line(), f.col(), ctx);
                     if (f.accessor().isAssetReference() && DATASET_PREFIX.equals(f.accessor().assetType())) {
                         compileDatasetLoop(f, shadowed, ctx);
+                    } else if (isRecordSetSource(f.accessor())) {
+                        compileRecordSetLoop(f, shadowed, ctx);
+                    } else if (!f.accessor().isAssetReference() && !f.args().isEmpty()) {
+                        compileReferenceLoop(f, shadowed, ctx);
                     }
                     checkNotPaginationRoot(f.variable(), f.line(), f.col(), ctx);
                     Set<String> inner = new HashSet<>(shadowed);
@@ -544,13 +597,25 @@ public final class OctlCompiler {
                 case OctlNode.Meta m -> checkFilters(m.filters(), m.line(), m.col(), ctx);
                 case OctlNode.Comment c -> { /* nothing */ }
                 case OctlNode.Extends e -> {
-                    if (InheritanceRules.PAGE_TEMPLATE_PREFIX.equals(e.accessor().assetType())
+                    if (ctx.recordTemplate) {
+                        notInRecordTemplate("$CMS_EXTENDS", INHERITANCE_IS_FOR_PAGE_TEMPLATES, e.line(), e.col(), ctx);
+                    } else if (InheritanceRules.PAGE_TEMPLATE_PREFIX.equals(e.accessor().assetType())
                             && e.accessor().uid() != null && !e.accessor().uid().isBlank()) {
                         resolveReference(e.accessor(), e.line(), e.col(), ctx);
                     }
                 }
-                case OctlNode.Block b -> validate(b.body(), shadowed, ctx);
-                case OctlNode.Parent p -> { /* placement checked by InheritanceRules */ }
+                case OctlNode.Block b -> {
+                    if (ctx.recordTemplate) {
+                        notInRecordTemplate("$CMS_BLOCK", INHERITANCE_IS_FOR_PAGE_TEMPLATES, b.line(), b.col(), ctx);
+                    }
+                    validate(b.body(), shadowed, ctx);
+                }
+                case OctlNode.Parent p -> {
+                    // Otherwise placement is checked by InheritanceRules.
+                    if (ctx.recordTemplate) {
+                        notInRecordTemplate("$CMS_PARENT", INHERITANCE_IS_FOR_PAGE_TEMPLATES, p.line(), p.col(), ctx);
+                    }
+                }
             }
         }
     }
@@ -629,6 +694,9 @@ public final class OctlCompiler {
             ctx.usedEditors.add(name);
             return;
         }
+        if (ctx.recordTemplate && isRecordScopeName(name)) {
+            return;
+        }
         ctx.diagnostics.add(Diagnostic.error(
                 DiagnosticCodes.OCTL_UNKNOWN_EDITOR, "Unknown editor name: " + name, line, col));
     }
@@ -638,7 +706,8 @@ public final class OctlCompiler {
      * value object — never useful output, almost always a forgotten {@code .editorName}.
      */
     private void checkCrossAssetPath(Accessor accessor, int line, int col, ValidateCtx ctx) {
-        if (accessor.isAssetReference() && accessor.path().isEmpty()) {
+        // A path-less record set is its rendered records (M25.2.2), not a value object to stringify.
+        if (accessor.isAssetReference() && accessor.path().isEmpty() && !isRecordSetSource(accessor)) {
             ctx.diagnostics.add(Diagnostic.warning(
                     DiagnosticCodes.OCTL_CROSS_ASSET_VALUE_WITHOUT_PATH,
                     "Cross-asset value without an editor path: " + accessor.referenceKey()
@@ -652,7 +721,7 @@ public final class OctlCompiler {
      * equivalent {@code global:site}) can only ever render empty. The value path is what carries
      * the link — {@code $CMS_REF(CMS_GLOBAL.site.logo)$} refs the media the {@code logo} editor
      * holds — so the path-less form is a compile error rather than a silent blank (M17.3.1).
-     * Records and datasets (M19.3.2) have no URL either.
+     * Records and datasets (M19.3.2) and record sets (M25.2.2) have no URL either.
      */
     private void checkRefHasUrl(Accessor accessor, int line, int col, ValidateCtx ctx) {
         if (!accessor.isAssetReference() || !accessor.path().isEmpty()) {
@@ -664,7 +733,8 @@ public final class OctlCompiler {
                     "$CMS_REF on a property set needs the editor holding the link, e.g. "
                             + Accessor.GLOBAL_ROOT + "." + accessor.uid() + ".logo",
                     line, col));
-        } else if (DATASET_PREFIX.equals(accessor.assetType()) || RECORD_PREFIX.equals(accessor.assetType())) {
+        } else if (DATASET_PREFIX.equals(accessor.assetType()) || RECORD_PREFIX.equals(accessor.assetType())
+                || RECORD_SET_PREFIX.equals(accessor.assetType())) {
             ctx.diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.OCTL_GLOBAL_REFERENCE_MISUSE,
                     "$CMS_REF on a " + accessor.assetType() + " needs the editor holding the link, e.g. "
@@ -689,6 +759,61 @@ public final class OctlCompiler {
                             + String.join(".", loop.accessor().path()),
                     loop.line(), loop.col()));
         }
+        DatasetQuery query = compileLoopQuery(loop, shadowed, ctx);
+        UUID dataset = ctx.refMap.get(loop.accessor().referenceKey());
+        if (dataset != null && ctx.references != null) {
+            checkLoopFields(loop, query, ctx.references.datasetDefinition(dataset), ctx);
+        }
+    }
+
+    /**
+     * {@code $CMS_FOR(x : recordset:uid, where=…, sort=…, limit=…, offset=…)$} (M25.2.2): the set's stored query
+     * runs first, the loop's arguments narrow its result (epic decision 5) — compiled here exactly like a dataset
+     * loop's, except that {@code folder} is {@code SF-TPL-0140} (the set is the scope). With the save-time resolver
+     * the fields are checked against the set's dataset.
+     */
+    private void compileRecordSetLoop(OctlNode.For loop, Set<String> shadowed, ValidateCtx ctx) {
+        DatasetQuery query = compileLoopQuery(loop, shadowed, ctx);
+        rejectFolderOnSet(loop, query, loop.accessor().referenceKey(), ctx);
+        UUID set = ctx.refMap.get(loop.accessor().referenceKey());
+        if (set != null && ctx.references != null) {
+            ReferenceResolver references = ctx.references;
+            checkLoopFields(loop, query, references.recordSetDataset(set).flatMap(references::datasetDefinition), ctx);
+        }
+    }
+
+    /**
+     * {@code $CMS_FOR(x : editor, where=…, sort=…, limit=…, offset=…)$} over a local value (M25.2.2): loop arguments
+     * only ever narrow a record set a {@code reference} editor points at, so they compile like a set loop's and the
+     * renderer applies them when the value turns out to be a set (on any other list they are ignored, as before).
+     * When the accessor is a {@code reference} editor declaring {@code dataset "uid"}, the fields are checked against
+     * that dataset here; otherwise the renderer checks them against the referenced set's dataset.
+     */
+    private void compileReferenceLoop(OctlNode.For loop, Set<String> shadowed, ValidateCtx ctx) {
+        DatasetQuery query = compileLoopQuery(loop, shadowed, ctx);
+        rejectFolderOnSet(loop, query, String.join(".", loop.accessor().path()), ctx);
+        List<String> path = loop.accessor().path();
+        if (ctx.contentDef == null || ctx.references == null || path.size() != 1 || shadowed.contains(path.get(0))) {
+            return;
+        }
+        String restriction = ctx.contentDef.findEditor(path.get(0))
+                .filter(editor -> editor.type() == EditorType.REFERENCE)
+                .map(EditorDefinition::dataset)
+                .filter(dataset -> !dataset.isBlank())
+                .orElse(null);
+        if (restriction != null) {
+            ReferenceResolver references = ctx.references;
+            checkLoopFields(
+                    loop, query, references.resolve(DATASET_PREFIX, restriction).flatMap(references::datasetDefinition), ctx);
+        }
+    }
+
+    /**
+     * Parses a loop's named arguments into the query the renderer applies (M19.3.2), once per compile, so a bad
+     * argument is a compile-time {@code SF-TPL-0140} instead of a render-time surprise. Accessors of {@code where}
+     * not rooted at the loop variable are ordinary scope accessors and are checked like any other.
+     */
+    private DatasetQuery compileLoopQuery(OctlNode.For loop, Set<String> shadowed, ValidateCtx ctx) {
         Map<String, String> args = new LinkedHashMap<>();
         loop.args().forEach(arg -> args.put(arg.name(), arg.value()));
         DatasetQueryParser.Result parsed = DatasetQueryParser.parse(args, loop.variable(), loop.line(), loop.col());
@@ -705,12 +830,30 @@ public final class OctlCompiler {
                 checkFilters(access.filters(), loop.line(), loop.col(), ctx);
             }
         }
+        return parsed.query();
+    }
 
-        UUID dataset = ctx.refMap.get(loop.accessor().referenceKey());
-        if (dataset != null && ctx.references != null) {
-            ctx.references.datasetDefinition(dataset).ifPresent(definition -> ctx.diagnostics.addAll(
-                    DatasetQueryParser.validateFields(parsed.query(), definition, loop.line(), loop.col())));
+    /** {@code SF-TPL-0141}/{@code 0142} for a loop's {@code where}/{@code sort} fields, when the schema is known. */
+    private static void checkLoopFields(
+            OctlNode.For loop, DatasetQuery query, Optional<ContentDefinition> definition, ValidateCtx ctx) {
+        definition.ifPresent(schema -> ctx.diagnostics.addAll(
+                DatasetQueryParser.validateFields(query, schema, loop.line(), loop.col())));
+    }
+
+    /** A record set is its own scope (epic decision 5): {@code folder=} on a set loop is {@code SF-TPL-0140}. */
+    private static void rejectFolderOnSet(OctlNode.For loop, DatasetQuery query, String source, ValidateCtx ctx) {
+        if (query.folder() != null) {
+            ctx.diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_DATASET_QUERY,
+                    "Argument folder is not available on a record set loop (" + source
+                            + "): the set is the scope; filter with where instead",
+                    loop.line(), loop.col()));
         }
+    }
+
+    /** A path-less {@code recordset:uid}: the set itself, rendered as a value or iterated by a loop (M25.2.2). */
+    private static boolean isRecordSetSource(Accessor accessor) {
+        return accessor.isAssetReference() && RECORD_SET_PREFIX.equals(accessor.assetType()) && accessor.path().isEmpty();
     }
 
     private void resolveReference(Accessor accessor, int line, int col, ValidateCtx ctx) {
@@ -747,6 +890,20 @@ public final class OctlCompiler {
                     line,
                     col));
         }
+    }
+
+    /** A record template's own names besides the dataset's fields: the record meta fields and its position. */
+    private static boolean isRecordScopeName(String name) {
+        return RecordView.META_FIELDS.contains(name) || RECORD_META_OBJECT.equals(name)
+                || RECORD_POSITION_FIELDS.contains(name);
+    }
+
+    private static void notInRecordTemplate(String what, String reason, int line, int col, ValidateCtx ctx) {
+        ctx.diagnostics.add(Diagnostic.error(
+                DiagnosticCodes.OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE,
+                what + " is not available in a dataset record template: " + reason,
+                line,
+                col));
     }
 
     private static void notInTextMedia(String what, int line, int col, List<Diagnostic> diagnostics) {
@@ -867,6 +1024,8 @@ public final class OctlCompiler {
         final Map<OctlNode.For, DatasetQuery> datasetQueries = new IdentityHashMap<>();
         /** The text media profile, or {@code null} when compiling a template. */
         final TextMedia textMedia;
+        /** Compiling a dataset record template (M25): the record is the scope, inheritance and bodies are errors. */
+        final boolean recordTemplate;
         /** A template that extends but whose chain didn't link: inherited names are unknown, so none are checked. */
         final boolean namesUnknown;
 
@@ -876,12 +1035,14 @@ public final class OctlCompiler {
                 Map<String, UUID> refMap,
                 List<Diagnostic> diagnostics,
                 TextMedia textMedia,
+                boolean recordTemplate,
                 boolean namesUnknown) {
             this.references = references;
             this.contentDef = contentDef;
             this.refMap = refMap;
             this.diagnostics = diagnostics;
             this.textMedia = textMedia;
+            this.recordTemplate = recordTemplate;
             this.namesUnknown = namesUnknown;
         }
 

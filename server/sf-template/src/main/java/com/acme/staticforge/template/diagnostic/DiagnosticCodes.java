@@ -18,6 +18,8 @@ public final class DiagnosticCodes {
     public static final String OCTL_BODY_IN_SECTION = "SF-TPL-0120";
     /** {@code $CMS_BODY}, {@code $CMS_INCLUDE}, leaf {@code $CMS_NAVIGATION} or {@code CMS_PAGE} in a processed text media file (M18.2.1). */
     public static final String OCTL_NOT_ALLOWED_IN_TEXT_MEDIA = "SF-TPL-0121";
+    /** {@code $CMS_EXTENDS}, {@code $CMS_BLOCK}, {@code $CMS_PARENT} or {@code $CMS_BODY} in a dataset record template (M25.2.1). */
+    public static final String OCTL_NOT_ALLOWED_IN_RECORD_TEMPLATE = "SF-TPL-0122";
     public static final String OCTL_UNKNOWN_NAV_VARIABLE = "SF-TPL-0134";
     /** A dataset loop's query arguments are invalid: unknown argument, bad {@code where}/{@code sort}, negative {@code limit} (M19.3.1). */
     public static final String OCTL_DATASET_QUERY = "SF-TPL-0140";
@@ -25,6 +27,22 @@ public final class DiagnosticCodes {
     public static final String OCTL_DATASET_UNKNOWN_FIELD = "SF-TPL-0141";
     /** A dataset loop sorts by an editor with no natural order (list, richtext, reference, …) (M19.3.1). */
     public static final String OCTL_DATASET_UNSORTABLE_FIELD = "SF-TPL-0142";
+
+    /**
+     * Render warning (generation and preview alike, hence here rather than in {@code GenerationDiagnosticCodes}):
+     * a record set's stored query no longer validates against its dataset — typically a field removed from the
+     * schema — so the set renders no records rather than all of them (M25.1.2,
+     * {@code RecordSetQueries.invalidQueryWarning}).
+     */
+    public static final String GEN_RECORD_SET_QUERY_INVALID = "SF-GEN-0240";
+
+    /**
+     * Render warning (generation and preview alike): a record set is rendered as a value
+     * ({@code $CMS_VALUE(recordset:uid)$}, or a {@code reference} editor pointing at a set) but its dataset has no
+     * record template for the channel, so the set renders empty (M25.2.2). The {@code SF-GEN-0210} counterpart for
+     * record templates, with its own code because a page whose only finding is {@code 0210} is skipped entirely.
+     */
+    public static final String GEN_RECORD_TEMPLATE_MISSING = "SF-GEN-0241";
 
     // OCTL template inheritance (M20). The epic proposed 0140–0149, which M19 had already taken.
     /** {@code $CMS_EXTENDS} is not the template's first instruction, is nested, or appears more than once. */

@@ -35,7 +35,7 @@ export class ProjectContextStore {
   readonly templateFolderTree = signal<FolderView[]>([]);
   /** The Globals store's folders (`GLOBAL_SET` leaves). Entirely separate from the other four. */
   readonly globalsFolderTree = signal<FolderView[]>([]);
-  /** The Content store's folders (`RECORD` leaves, M19.4.1). Entirely separate from the other five. */
+  /** The Content store's folders, with its record sets as `type: RECORD_SET` leaf nodes (M25). Entirely separate from the other five. */
   readonly contentFolderTree = signal<FolderView[]>([]);
   readonly pageTemplates = signal<TemplateSummary[]>([]);
   readonly sectionTemplates = signal<TemplateSummary[]>([]);
@@ -75,6 +75,18 @@ export class ProjectContextStore {
     }
     return Math.max(...revs.map((r) => r.revisionId ?? 0));
   });
+
+  /**
+   * Replaces the Content store's tree with one the Content screen just loaded (M25). Its folder and record-set
+   * writes don't go through {@link loadFor}, so without this the shared tree — which the export picker and the
+   * search page read — kept the folders of the project's first load. Ignored for another project than the
+   * active one.
+   */
+  updateContentFolderTree(projectKey: string, tree: FolderView[]): void {
+    if (this.activeProjectKey() === projectKey) {
+      this.contentFolderTree.set(sortFolderTree(tree));
+    }
+  }
 
   loadFor(projectKey: string, force = false): Observable<void> {
     if (!force && this.activeProjectKey() === projectKey && this.project() !== null) {
