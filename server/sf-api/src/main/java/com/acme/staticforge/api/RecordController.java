@@ -1,5 +1,6 @@
 package com.acme.staticforge.api;
 
+import com.acme.staticforge.api.dto.AssetRefView;
 import com.acme.staticforge.api.dto.CreateRecordRequest;
 import com.acme.staticforge.api.dto.RecordDetailView;
 import com.acme.staticforge.api.dto.RecordPageView;
@@ -48,6 +49,10 @@ import org.springframework.web.bind.annotation.RestController;
  * ({@code sort=role,asc&sort=_displayName,desc}). An invalid {@code where} or an unknown or
  * unsortable sort field is a {@code 400} (with {@code column} for a syntax error).
  *
+ * <p>{@code GET /datasets/{uuid}/records} lists every record of the dataset across all of its record sets
+ * (set queries are not applied — the {@code dataset:} loop view); a set's own grid is
+ * {@link RecordSetController}'s {@code GET /record-sets/{uuid}/records}.
+ *
  * <p>Delete, restore, move, uid change, usages and history are the generic
  * {@link AssetController} endpoints.
  */
@@ -83,39 +88,35 @@ public class RecordController {
             @RequestParam(value = "where", required = false) String where,
             @RequestParam(value = "folder", required = false) String folder,
             HttpServletRequest request) {
-        // The raw values, not the bound list: Spring splits a single "field,desc" at the comma.
-        String[] rawSort = request.getParameterValues("sort");
         RecordPage result = recordService.list(
                 projectId(projectKey),
                 datasetUuid,
-                new RecordListQuery(q, folder, where, sortKeys(rawSort == null ? List.of() : List.of(rawSort))),
+                new RecordListQuery(q, folder, where, sortKeys(request)),
                 page,
                 size);
-        List<RecordRowView> rows = result.rows().stream()
-                .map(r -> new RecordRowView(
-                        r.uuid(), r.uid(), r.displayName(), r.folderPath(), r.changedAt(), r.changedBy(), r.values()))
-                .toList();
-        return new RecordPageView(
-                rows,
-                new RecordPageView.PageMeta(result.size(), result.page(), result.totalElements(), result.totalPages()));
+        return toPageView(result);
     }
 
     /**
-     * Adds a record to the record set {@code recordSetUuid} (M25), which must be a set of the dataset in
-     * the path; without a set, or with a set of another dataset, it is {@code 422 SF-DOM-0104}.
+     * Adds a record to the record set {@code recordSetUuid} (M25), which must be a live set of the dataset in
+     * the path: a set of another dataset is {@code 422 SF-DOM-0104}. A request without {@code recordSetUuid}
+     * (the pre-M25 shape with {@code folderUuid}) is {@code 400} with {@code field: recordSetUuid}.
      */
     @PostMapping("/datasets/{datasetUuid}/records")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<RecordDetailView> create(
             @PathVariable String projectKey, @PathVariable UUID datasetUuid, @RequestBody CreateRecordRequest body) {
-        long projectId = projectId(projectKey);
-        if (body.recordSetUuid() != null) {
-            recordSetService.find(projectId, body.recordSetUuid(), null)
-                    .filter(set -> !datasetUuid.equals(set.datasetUuid()))
-                    .ifPresent(set -> {
-                        throw RecordSetContainment.error("Record set '" + set.uid() + "' holds records of another dataset.");
-                    });
+        if (body.recordSetUuid() == null) {
+            throw new SfException(ProblemFactory.badRequest(
+                    "recordSetUuid is required: a record is always created in a record set of its dataset.",
+                    "recordSetUuid"));
         }
+        long projectId = projectId(projectKey);
+        recordSetService.find(projectId, body.recordSetUuid(), null)
+                .filter(set -> !datasetUuid.equals(set.datasetUuid()))
+                .ifPresent(set -> {
+                    throw RecordSetContainment.error("Record set '" + set.uid() + "' holds records of another dataset.");
+                });
         RecordWriteResult result = recordService.create(
                 new CreateRecordCommand(projectId, body.recordSetUuid(), body.displayName(), body.content()),
                 ctx(projectKey, comment(body.comment(), "create record")));
@@ -152,6 +153,27 @@ public class RecordController {
                 .body(toDetail(result.record(), result.issues()));
     }
 
+    /** The paging envelope of a record listing; shared with {@link RecordSetController}'s set grid. */
+    static RecordPageView toPageView(RecordPage result) {
+        List<RecordRowView> rows = result.rows().stream()
+                .map(r -> new RecordRowView(
+                        r.uuid(), r.uid(), r.displayName(), r.folderPath(), r.changedAt(), r.changedBy(), r.values()))
+                .toList();
+        return new RecordPageView(
+                rows,
+                new RecordPageView.PageMeta(result.size(), result.page(), result.totalElements(), result.totalPages()));
+    }
+
+    /**
+     * The request's raw {@code sort} values as sort keys — read from the servlet request, not the bound list,
+     * because Spring splits a single {@code field,desc} at the comma. Shared with {@link RecordSetController}
+     * so both listings parse {@code sort} identically.
+     */
+    static List<SortKey> sortKeys(HttpServletRequest request) {
+        String[] raw = request.getParameterValues("sort");
+        return sortKeys(raw == null ? List.of() : List.of(raw));
+    }
+
     /** {@code field}, {@code field,asc} or {@code field,desc}; anything else is a {@code 400}. */
     static List<SortKey> sortKeys(List<String> params) {
         List<SortKey> keys = new ArrayList<>();
@@ -180,6 +202,9 @@ public class RecordController {
                 r.displayName(),
                 r.datasetUuid(),
                 r.datasetUid(),
+                r.recordSetUuid() == null
+                        ? null
+                        : new AssetRefView(r.recordSetUuid(), r.recordSetUid(), r.recordSetDisplayName()),
                 r.folderUuid(),
                 r.folderPath(),
                 r.content(),

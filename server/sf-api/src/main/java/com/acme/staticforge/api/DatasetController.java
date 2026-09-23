@@ -162,6 +162,7 @@ public class DatasetController {
                 v.description(),
                 v.channelTemplates(),
                 v.recordTemplateDiagnostics(),
+                v.brokenRecordSets(),
                 v.recordCount(),
                 v.revision(),
                 v.deleted());

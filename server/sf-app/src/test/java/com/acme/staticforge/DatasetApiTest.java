@@ -180,6 +180,39 @@ class DatasetApiTest {
                 .andExpect(jsonPath("$.channelTemplates.html.source").value("<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$"));
     }
 
+    /** M25.1.2 over REST: a schema save that leaves a set query invalid lists the set on the update response. */
+    @Test
+    void aSchemaChangeThatBreaksASetQueryListsTheSetOnTheUpdateResponse() throws Exception {
+        Fixture fx = newFixture();
+        DatasetView team = team(fx);
+        UUID leads = recordSetService.create(
+                        new com.acme.staticforge.asset.dataset.CreateRecordSetCommand(
+                                fx.project().getId(), null, team.uuid(), "leads", "Leads",
+                                new com.acme.staticforge.template.query.RecordSetQuery(null, "-joined", null, null)),
+                        fx.ctx())
+                .uuid();
+        String withoutJoined = TEAM_CDL.replace("  editor date joined { label \"Joined\" }\n", "");
+
+        mvc.perform(put(datasets(fx) + "/" + team.uuid())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .header(HttpHeaders.IF_MATCH, "\"rev-" + team.revision() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(datasetBody("Team", withoutJoined, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.brokenRecordSets.length()").value(1))
+                .andExpect(jsonPath("$.brokenRecordSets[0].uuid").value(leads.toString()))
+                .andExpect(jsonPath("$.brokenRecordSets[0].uid").value("leads"))
+                .andExpect(jsonPath("$.brokenRecordSets[0].diagnostics[0].field").value("sort"))
+                .andExpect(jsonPath("$.brokenRecordSets[0].diagnostics[0].code").value(DiagnosticCodes.OCTL_DATASET_UNKNOWN_FIELD));
+        mvc.perform(get(datasets(fx) + "/" + team.uuid()).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.brokenRecordSets").isEmpty());
+        mvc.perform(get(project(fx) + "/record-sets/" + leads).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.queryValid").value(false))
+                .andExpect(jsonPath("$.queryDiagnostics[0].field").value("sort"));
+    }
+
     @Test
     void schemaErrorsAre422WithDiagnosticsAndTheValidateEndpointAgrees() throws Exception {
         Fixture fx = newFixture();
@@ -307,13 +340,13 @@ class DatasetApiTest {
                 .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"displayName\":\"Leads\",\"scope\":\"CONTENT\"}")));
-        // M25: a record goes into a record set, never straight into a folder.
+        // M25: a record goes into a record set, never straight into a folder — the pre-M25 shape is a 400.
         mvc.perform(post(datasets(fx) + "/" + team.uuid() + "/records")
                         .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"folderUuid\":\"" + leads.get("uuid").asText() + "\",\"displayName\":\"Ada\",\"content\":{\"name\":\"Ada\"}}"))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("SF-DOM-0104"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.field").value("recordSetUuid"));
         UUID leadSet = new RecordSetFixtures(recordSetService)
                 .create(fx.project().getId(), team.uuid(), UUID.fromString(leads.get("uuid").asText()), "Leads", fx.ctx())
                 .uuid();

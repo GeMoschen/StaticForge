@@ -25,6 +25,21 @@ public final class ProblemFactory {
         return of(400, "SF-API-0400", "Bad Request", detail);
     }
 
+    /**
+     * A 400 for a malformed request that names the offending request member under {@code field}
+     * (e.g. a required property that is missing).
+     */
+    public static Problem badRequest(String detail, String field) {
+        return Problem.builder()
+                .type(PROBLEMS_BASE + "sf-api-0400")
+                .title("Bad Request")
+                .status(400)
+                .detail(detail)
+                .property("code", "SF-API-0400")
+                .property("field", field)
+                .build();
+    }
+
     public static Problem unauthorized(String detail) {
         return of(401, "SF-API-0401", "Unauthorized", detail);
     }

@@ -261,7 +261,9 @@ public class RecordServiceImpl implements RecordService {
                 : assetRepository.findByProjectIdAndUuid(projectId, datasetUuid).map(Asset::getUid).orElse(null);
         // A record's parent is its set (M25); the set's own parent is the Content folder it lives in.
         Optional<Asset> set = view.folderId() == null ? Optional.empty() : assetRepository.findById(view.folderId());
-        UUID folderUuid = set.flatMap(s -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(s.getId()))
+        Optional<AssetVersion> setVersion =
+                set.flatMap(s -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(s.getId()));
+        UUID folderUuid = setVersion
                 .map(AssetVersion::getFolderId)
                 .flatMap(assetRepository::findById)
                 .map(Asset::getUuid)
@@ -275,6 +277,7 @@ public class RecordServiceImpl implements RecordService {
                 datasetUid,
                 set.map(Asset::getUuid).orElse(null),
                 set.map(Asset::getUid).orElse(null),
+                setVersion.map(AssetVersion::getDisplayName).orElse(null),
                 folderUuid,
                 ContentStorePaths.relative(view.folderPath()),
                 content == null ? objectMapper.createObjectNode() : content,
