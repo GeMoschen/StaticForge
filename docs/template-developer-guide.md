@@ -788,7 +788,7 @@ build-insight plan says which languages a narrowed entry covers.
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
 | `SF-TPL-0121` | error | processed text media (§2.8): `$CMS_BODY`, `$CMS_INCLUDE`, the leaf `$CMS_NAVIGATION(nav:…)$` or `CMS_PAGE`, none of which exist outside a page |
 | `SF-TPL-0122` | error | dataset record template (M25): `$CMS_EXTENDS`, `$CMS_BLOCK`, `$CMS_PARENT` or `$CMS_BODY` — a record template renders on its own and a record has no bodies |
-| `SF-TPL-0140` | error | dataset loop (§2.9): a malformed `where`, `sort`, `limit`, `offset` or `folder`, an unknown loop argument, or a path after `dataset:uid`; the message carries the column inside the argument |
+| `SF-TPL-0140` | error | dataset loop (§2.9): a malformed `where`, `sort`, `limit`, `offset` or `folder`, an unknown loop argument, or a path after `dataset:uid`; the message carries the column inside the argument. On a record set loop (`recordset:uid`, or a `reference` editor pointing at a set, M25) `folder` is rejected too: the set is the scope |
 | `SF-TPL-0141` | error | dataset loop: `where` or `sort` names a field the dataset's schema doesn't declare (checked when the template is saved) |
 | `SF-TPL-0142` | error | dataset loop: `sort` by a field with no order — `list`, `richtext`, `media`, `reference` and other structured editors |
 | `SF-TPL-0134` | error | `$CMS_NAVIGATION_RECURSE(name)$` references a variable not bound by an enclosing `$CMS_NAVIGATION(...) as name$` |
@@ -810,7 +810,7 @@ build-insight plan says which languages a narrowed entry covers.
 | `SF-TPL-0132` | error (render) | output size limit (32 MB) exceeded |
 | `SF-TPL-0133` | error (render) | render time budget (5 s) exceeded |
 | `SF-TPL-0135` | error (render) | include cycle: a template is `$CMS_INCLUDE`d while it is already rendering (`a → b → a`). Body sections and catalog cards nest by content and are not cycles: a card may hold cards of its own template, as deep as the content goes, bounded by `SF-TPL-0130` |
-| `SF-TPL-0111` | warning | cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path |
+| `SF-TPL-0111` | warning | cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path (not for `recordset:uid`, which renders the set through its dataset's record template, M25) |
 | `SF-TPL-0112` | warning | render time: a cross-asset value's target is missing or soft-deleted (renders empty) |
 | `SF-TPL-0157` | warning | a template overrides a block no ancestor defines, so the override never renders; carries a "did you mean" suggestion |
 | `SF-TPL-0201` | warning | body declared but never rendered |
@@ -851,6 +851,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-GEN-0220` | warning | reference to a deleted asset: a `$CMS_REF`, `$CMS_INCLUDE` or body section target is soft-deleted and renders empty |
 | `SF-GEN-0230` | error (per file) | a processed text media file's source blob can't be read; the file is not published and the run ends `PARTIAL`. A processed file that fails to compile or render keeps its own `SF-TPL-*` code, with `Media '<uid>': ` in the message |
 | `SF-GEN-0240` | warning | a record set's stored query no longer validates against its dataset (a field it reads was removed or retyped since the set was saved): the set renders no records — never all of them — until an editor saves it with a valid query |
+| `SF-GEN-0241` | warning | a record set is rendered as a value (`$CMS_VALUE(recordset:uid)$`, or a `reference` editor pointing at a set) but its dataset has no record template for the channel: the set renders empty (M25) |
 | `SF-GEN-0410` | warning | navigation cycle truncated |
 | `SF-GEN-0411` | error | `$CMS_NAVIGATION` tree contains a dangling `PAGE_REFERENCE` (target missing/deleted, or an empty folder subtree) |
 | `SF-GEN-0412` | warning | a paginated page's navigation source holds a `PAGE_REFERENCE` that resolves to no page; the item is skipped and the page still renders (§2.11) |

@@ -68,6 +68,29 @@ public final class RenderContext {
         return new Builder();
     }
 
+    /**
+     * A builder preset with every setting of this context, resolvers and budget included: how a render nested in
+     * this one (a record of a record set, M25.2.2) starts from the context it appears in and replaces only what
+     * differs.
+     */
+    public Builder toBuilder() {
+        Builder builder = new Builder();
+        builder.channel = channelKey;
+        builder.escaping = escaping;
+        builder.values = values;
+        builder.meta.putAll(meta);
+        builder.pageValues = pageValues;
+        builder.pagination = pagination;
+        builder.locale = locale;
+        builder.localeChain = localeChain;
+        builder.localesScope = localesScope;
+        builder.urlResolver = urlResolver;
+        builder.blockResolver = blockResolver;
+        builder.assetValueResolver = assetValueResolver;
+        builder.budget = budget;
+        return builder;
+    }
+
     /** The channel key, default {@code "html"}. */
     public String channelKey() {
         return channelKey;

@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate.render;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.dataset.RecordTemplates;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.media.MediaPaths;
@@ -139,7 +140,7 @@ final class GenerationRenderer {
         this.urlRegistryService = urlRegistryService;
         this.generationUserId = generationUserId;
         this.compiledTemplates = compiledTemplates;
-        this.assetValues = new SnapshotAssetValueResolver(snapshot);
+        this.assetValues = new SnapshotAssetValueResolver(snapshot, compiledTemplates);
     }
 
     /**
@@ -560,21 +561,10 @@ final class GenerationRenderer {
     // Blocks (bodies + includes)
     // ------------------------------------------------------------------
 
-    private BlockResolver blockResolver(
-            JsonNode pageContent,
-            JsonNode bodies,
-            String channel,
-            UUID activePageUuid,
-            String pagePath,
-            JsonNode pagination,
-            Set<UUID> deps,
-            List<Diagnostic> warnings,
-            RenderBudget budget) {
-        return blockResolver(
-                pageContent, bodies, channel, activePageUuid, pagePath, pagination, deps, warnings, budget, null);
-    }
-
-    /** @param locale the render language, threaded into nested navigation renders (M24.3.2) */
+    /**
+     * @param locale the render language, threaded into nested navigation renders (M24.3.2) and into the sections,
+     *     includes and catalog cards rendered inside the page, whose values resolve through its chain
+     */
     private BlockResolver blockResolver(
             JsonNode pageContent,
             JsonNode bodies,
@@ -596,7 +586,8 @@ final class GenerationRenderer {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
                     out.append(renderSectionInstance(
-                            pageContent, section, channel, activePageUuid, pagePath, pagination, deps, warnings, budget));
+                            pageContent, section, channel, activePageUuid, pagePath, pagination, deps, warnings, budget,
+                            locale));
                 }
                 return out.toString();
             }
@@ -609,7 +600,8 @@ final class GenerationRenderer {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
                     out.append(renderSectionInstance(
-                            pageContent, card, channel, activePageUuid, pagePath, pagination, deps, warnings, budget));
+                            pageContent, card, channel, activePageUuid, pagePath, pagination, deps, warnings, budget,
+                            locale));
                 }
                 return out.toString();
             }
@@ -622,7 +614,7 @@ final class GenerationRenderer {
                 }
                 return renderSection(
                         uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, pagination, deps,
-                        warnings, budget);
+                        warnings, budget, locale);
             }
 
             @Override
@@ -643,7 +635,34 @@ final class GenerationRenderer {
                         navFolderUuid, args, channel, activePageUuid, pagePath, deps, warnings, locale);
                 return json == null ? null : json.path("children");
             }
+
+            @Override
+            public CompiledTemplate recordTemplate(UUID datasetUuid) {
+                return GenerationRenderer.this.recordTemplate(datasetUuid, channel);
+            }
         };
+    }
+
+    /**
+     * The compiled record template of dataset {@code datasetUuid} for {@code channel} (M25.2.2), from the snapshot:
+     * compiled once per (dataset, channel) and build through the build memo and shared by every record of every set
+     * rendered with it. {@code null} when the dataset has none for the channel.
+     */
+    private CompiledTemplate recordTemplate(UUID datasetUuid, String channel) {
+        SnapshotAsset dataset = snapshot.assetByUuid(datasetUuid);
+        if (dataset == null || dataset.type() != AssetType.DATASET) {
+            return null;
+        }
+        return RecordTemplates.source(dataset.payload(), channel)
+                .map(source -> compiledTemplates
+                        .compileRecordTemplate(
+                                datasetUuid,
+                                channel,
+                                dataset.payload().path("contentDefinition").asText(""),
+                                source,
+                                referenceResolver())
+                        .template())
+                .orElse(null);
     }
 
     // ------------------------------------------------------------------
@@ -759,7 +778,8 @@ final class GenerationRenderer {
             JsonNode pagination,
             Set<UUID> deps,
             List<Diagnostic> warnings,
-            RenderBudget budget) {
+            RenderBudget budget,
+            String locale) {
         String templateRef = section.path("templateRef").asText();
         if (templateRef.isBlank()) {
             return "";
@@ -773,7 +793,8 @@ final class GenerationRenderer {
         JsonNode values = section.path("content");
         String instanceId = section.path("instanceId").asText();
         return renderSection(
-                sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, pagination, deps, warnings, budget);
+                sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, pagination, deps, warnings, budget,
+                locale);
     }
 
     private String renderSection(
@@ -787,7 +808,8 @@ final class GenerationRenderer {
             JsonNode pagination,
             Set<UUID> deps,
             List<Diagnostic> warnings,
-            RenderBudget budget) {
+            RenderBudget budget,
+            String locale) {
         SnapshotAsset template = snapshot.assetByUuid(sectionUuid);
         if (template == null) {
             return "";
@@ -810,12 +832,16 @@ final class GenerationRenderer {
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
                 .pagination(pagination)
                 .urlResolver(urlResolver(channel, pagePath, warnings))
-                .blockResolver(blockResolver(pageValues, null, channel, activePageUuid, pagePath, pagination, deps, warnings, budget))
+                .blockResolver(blockResolver(
+                        pageValues, null, channel, activePageUuid, pagePath, pagination, deps, warnings, budget, locale))
                 .assetValueResolver(assetValues)
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
         }
+        // A section renders in its page's language (M24.3.1): its values — and a record set's records (M25.2.2) —
+        // resolve through the page's fallback chain.
+        com.acme.staticforge.project.LocaleRenderScope.apply(builder, localeConfig, locale, null);
 
         RenderContext context = builder.build();
         // A body section or catalog card (instanceId set) nests by content; only an include can recurse forever.

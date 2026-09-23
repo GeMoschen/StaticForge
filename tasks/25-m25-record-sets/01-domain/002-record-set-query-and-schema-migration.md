@@ -41,8 +41,9 @@ compound revision (`RecordRenameMigration`). Epic decision 3 is binding.
 - [x] Integration test: dataset `team` with sets A (`where "role == 'lead'"`, `sort "-joined"`) and B;
       schema renames `role → position` → one revision contains the dataset, the rewritten records and
       set A with `where "position == 'lead'"`.
-- [ ] Removing `joined` from the schema → dataset save 200 with `brokenRecordSets` naming A; `find(A)`
+- [x] Removing `joined` from the schema → dataset save 200 with `brokenRecordSets` naming A; `find(A)`
       reports `queryValid: false`; rendering A yields empty output + warning.
+      (Render part proved by `M25.2.2`: `RecordSetRenderIntegrationTest` — empty output + `SF-GEN-0240` in generation and preview.)
 - [x] The evaluator is shared: an ArchUnit/grep-style test or code review note confirms the grid, render
       and planner call `RecordSetQueries`.
 

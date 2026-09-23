@@ -373,6 +373,11 @@ public class DatasetServiceImpl implements DatasetService {
             public Optional<ContentDefinition> datasetDefinition(UUID datasetUuid) {
                 return self.equals(datasetUuid) ? Optional.of(definition) : project.datasetDefinition(datasetUuid);
             }
+
+            @Override
+            public Optional<UUID> recordSetDataset(UUID setUuid) {
+                return project.recordSetDataset(setUuid);
+            }
         };
     }
 

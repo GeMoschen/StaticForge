@@ -422,6 +422,7 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | `SF-GEN-0220` | warning | reference to a deleted asset (`$CMS_REF`, `$CMS_INCLUDE`, body section); renders empty | `GenerationRenderer` |
 | `SF-GEN-0230` | error (per file) | a processed text media file's source blob is missing; the file isn't published, run `PARTIAL` | `GenerationDiagnosticCodes` (`MediaRenderStage`) |
 | `SF-GEN-0240` | warning | a record set's stored query no longer validates against its dataset (a field it reads was removed or retyped); the set renders no records, never all of them (M25) | `DiagnosticCodes.GEN_RECORD_SET_QUERY_INVALID` (`RecordSetQueries.invalidQueryWarning`) |
+| `SF-GEN-0241` | warning | a record set rendered as a value has no record template for the channel in its dataset; the set renders empty (M25) | `DiagnosticCodes.GEN_RECORD_TEMPLATE_MISSING` (`OctlRenderer`) |
 | `SF-GEN-0301` | warning | `raw` filter on a plain-text editor | (spec §16.3 — raised via `SF-TPL-0301` at compile time) |
 | `SF-GEN-0410` | warning | navigation cycle truncated | `GenerationDiagnosticCodes` |
 | `SF-GEN-0500` | 409 | a generation run is already active | `GenerationService` (`CONFLICT_CODE`) |

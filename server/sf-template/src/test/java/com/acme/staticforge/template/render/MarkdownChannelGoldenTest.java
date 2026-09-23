@@ -7,16 +7,13 @@ import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
-import com.acme.staticforge.template.query.RecordView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.MissingNode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -55,13 +52,11 @@ class MarkdownChannelGoldenTest {
 
             Map<String, UUID> uuids = new HashMap<>();
             Map<UUID, JsonNode> assetValues = new HashMap<>();
-            Map<UUID, List<RecordView>> datasets = new HashMap<>();
+            GoldenRecordFixture records = new GoldenRecordFixture(uuids, assetValues);
             if (Files.exists(dir.resolve("records.json"))) {
-                GoldenFileRenderTest.loadRecords(mapper.readTree(read(dir.resolve("records.json"))), uuids, assetValues, datasets);
+                records.load(mapper.readTree(read(dir.resolve("records.json"))));
             }
-            ReferenceResolver references = uuids.isEmpty()
-                    ? null
-                    : (assetType, uid) -> Optional.ofNullable(uuids.get(assetType + ":" + uid));
+            ReferenceResolver references = records.references();
 
             OctlResult result = GoldenFileRenderTest.compile(compiler, dir, octl, "markdown", references);
             List<Diagnostic> errors = result.diagnostics().stream()
@@ -76,18 +71,9 @@ class MarkdownChannelGoldenTest {
                     .channel("markdown")
                     .escaping(Escaping.MARKDOWN)
                     .values(content);
-            if (!datasets.isEmpty()) {
-                builder.assetValueResolver(new AssetValueResolver() {
-                    @Override
-                    public JsonNode valueOf(String assetType, UUID uuid) {
-                        return assetValues.getOrDefault(uuid, MissingNode.getInstance());
-                    }
-
-                    @Override
-                    public List<RecordView> datasetRecords(UUID datasetUuid) {
-                        return datasets.getOrDefault(datasetUuid, List.of());
-                    }
-                });
+            if (records.hasRecords()) {
+                builder.assetValueResolver(records.assetValueResolver());
+                builder.blockResolver(records.blockResolver(compiler, "markdown"));
             }
             RenderContext context = builder.build();
             String actual = renderer.render(result.template(), context).output();

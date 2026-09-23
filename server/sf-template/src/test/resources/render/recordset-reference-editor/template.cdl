@@ -1,0 +1,6 @@
+content {
+  editor reference featured { label "Featured" assetTypes [RECORD_SET] dataset "team" }
+  editor reference unrestricted { label "Any set" assetTypes [RECORD_SET] }
+  editor reference empty { label "Empty" assetTypes [RECORD_SET] }
+  editor reference person { label "Person" dataset "team" }
+}

@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
  * record grid and the incremental planner because all of them evaluate set queries through
  * {@link RecordSetQueries} — never by calling {@link DatasetQueryEvaluator} themselves. Every direct caller
  * of the dataset evaluator outside {@code template.query} is listed here with the reason it is not about
- * record sets; a new caller (a set renderer, a planner rule) fails this test until it goes through
- * {@code RecordSetQueries}.
+ * record sets; a new caller (a planner rule) fails this test until it goes through {@code RecordSetQueries}.
+ * Set rendering (M25.2.2) goes through it.
  *
  * <p>Imports the modules generation sees ({@code sf-template}, {@code sf-domain}, {@code sf-generate}),
  * which is every module that renders, lists or plans records.
@@ -60,6 +60,25 @@ class RecordSetQueryEvaluatorGuardTest {
         classes()
                 .that()
                 .haveFullyQualifiedName("com.acme.staticforge.asset.dataset.RecordSetServiceImpl")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(RecordSetQueries.class)
+                .check(CLASSES);
+    }
+
+    /**
+     * M25.2.2: rendering a set selects through the shared evaluator — the renderer (value form, loops, root value
+     * object) and both pipelines' set sources, which compile the stored query with it.
+     */
+    @Test
+    void setRenderingAndBothPipelinesUseTheSharedEvaluator() {
+        classes()
+                .that()
+                .haveFullyQualifiedName("com.acme.staticforge.template.render.OctlRenderer")
+                .or()
+                .haveFullyQualifiedName("com.acme.staticforge.generate.render.SnapshotAssetValueResolver")
+                .or()
+                .haveFullyQualifiedName("com.acme.staticforge.preview.LiveAssetValueResolver")
                 .should()
                 .dependOnClassesThat()
                 .areAssignableTo(RecordSetQueries.class)

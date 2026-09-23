@@ -68,6 +68,12 @@ public final class OctlCompiler {
     /** The {@code assetType:uid} prefix of a single record (M19.3.2). */
     private static final String RECORD_PREFIX = "record";
 
+    /**
+     * The {@code assetType:uid} prefix of a record set (M25.2.2, epic decision 1): {@code $CMS_VALUE(recordset:uid)$}
+     * renders the set through its dataset's record template, {@code $CMS_FOR(x : recordset:uid, …)$} loops it.
+     */
+    public static final String RECORD_SET_PREFIX = "recordset";
+
     /** A text media file has no editors and no bodies: every bare name is unknown. */
     private static final ContentDefinition NO_EDITORS = new ContentDefinition(List.of(), List.of());
 
@@ -573,6 +579,10 @@ public final class OctlCompiler {
                     checkAccessorRoot(f.accessor(), shadowed, f.line(), f.col(), ctx);
                     if (f.accessor().isAssetReference() && DATASET_PREFIX.equals(f.accessor().assetType())) {
                         compileDatasetLoop(f, shadowed, ctx);
+                    } else if (isRecordSetSource(f.accessor())) {
+                        compileRecordSetLoop(f, shadowed, ctx);
+                    } else if (!f.accessor().isAssetReference() && !f.args().isEmpty()) {
+                        compileReferenceLoop(f, shadowed, ctx);
                     }
                     checkNotPaginationRoot(f.variable(), f.line(), f.col(), ctx);
                     Set<String> inner = new HashSet<>(shadowed);
@@ -696,7 +706,8 @@ public final class OctlCompiler {
      * value object — never useful output, almost always a forgotten {@code .editorName}.
      */
     private void checkCrossAssetPath(Accessor accessor, int line, int col, ValidateCtx ctx) {
-        if (accessor.isAssetReference() && accessor.path().isEmpty()) {
+        // A path-less record set is its rendered records (M25.2.2), not a value object to stringify.
+        if (accessor.isAssetReference() && accessor.path().isEmpty() && !isRecordSetSource(accessor)) {
             ctx.diagnostics.add(Diagnostic.warning(
                     DiagnosticCodes.OCTL_CROSS_ASSET_VALUE_WITHOUT_PATH,
                     "Cross-asset value without an editor path: " + accessor.referenceKey()
@@ -710,7 +721,7 @@ public final class OctlCompiler {
      * equivalent {@code global:site}) can only ever render empty. The value path is what carries
      * the link — {@code $CMS_REF(CMS_GLOBAL.site.logo)$} refs the media the {@code logo} editor
      * holds — so the path-less form is a compile error rather than a silent blank (M17.3.1).
-     * Records and datasets (M19.3.2) have no URL either.
+     * Records and datasets (M19.3.2) and record sets (M25.2.2) have no URL either.
      */
     private void checkRefHasUrl(Accessor accessor, int line, int col, ValidateCtx ctx) {
         if (!accessor.isAssetReference() || !accessor.path().isEmpty()) {
@@ -722,7 +733,8 @@ public final class OctlCompiler {
                     "$CMS_REF on a property set needs the editor holding the link, e.g. "
                             + Accessor.GLOBAL_ROOT + "." + accessor.uid() + ".logo",
                     line, col));
-        } else if (DATASET_PREFIX.equals(accessor.assetType()) || RECORD_PREFIX.equals(accessor.assetType())) {
+        } else if (DATASET_PREFIX.equals(accessor.assetType()) || RECORD_PREFIX.equals(accessor.assetType())
+                || RECORD_SET_PREFIX.equals(accessor.assetType())) {
             ctx.diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.OCTL_GLOBAL_REFERENCE_MISUSE,
                     "$CMS_REF on a " + accessor.assetType() + " needs the editor holding the link, e.g. "
@@ -747,6 +759,61 @@ public final class OctlCompiler {
                             + String.join(".", loop.accessor().path()),
                     loop.line(), loop.col()));
         }
+        DatasetQuery query = compileLoopQuery(loop, shadowed, ctx);
+        UUID dataset = ctx.refMap.get(loop.accessor().referenceKey());
+        if (dataset != null && ctx.references != null) {
+            checkLoopFields(loop, query, ctx.references.datasetDefinition(dataset), ctx);
+        }
+    }
+
+    /**
+     * {@code $CMS_FOR(x : recordset:uid, where=…, sort=…, limit=…, offset=…)$} (M25.2.2): the set's stored query
+     * runs first, the loop's arguments narrow its result (epic decision 5) — compiled here exactly like a dataset
+     * loop's, except that {@code folder} is {@code SF-TPL-0140} (the set is the scope). With the save-time resolver
+     * the fields are checked against the set's dataset.
+     */
+    private void compileRecordSetLoop(OctlNode.For loop, Set<String> shadowed, ValidateCtx ctx) {
+        DatasetQuery query = compileLoopQuery(loop, shadowed, ctx);
+        rejectFolderOnSet(loop, query, loop.accessor().referenceKey(), ctx);
+        UUID set = ctx.refMap.get(loop.accessor().referenceKey());
+        if (set != null && ctx.references != null) {
+            ReferenceResolver references = ctx.references;
+            checkLoopFields(loop, query, references.recordSetDataset(set).flatMap(references::datasetDefinition), ctx);
+        }
+    }
+
+    /**
+     * {@code $CMS_FOR(x : editor, where=…, sort=…, limit=…, offset=…)$} over a local value (M25.2.2): loop arguments
+     * only ever narrow a record set a {@code reference} editor points at, so they compile like a set loop's and the
+     * renderer applies them when the value turns out to be a set (on any other list they are ignored, as before).
+     * When the accessor is a {@code reference} editor declaring {@code dataset "uid"}, the fields are checked against
+     * that dataset here; otherwise the renderer checks them against the referenced set's dataset.
+     */
+    private void compileReferenceLoop(OctlNode.For loop, Set<String> shadowed, ValidateCtx ctx) {
+        DatasetQuery query = compileLoopQuery(loop, shadowed, ctx);
+        rejectFolderOnSet(loop, query, String.join(".", loop.accessor().path()), ctx);
+        List<String> path = loop.accessor().path();
+        if (ctx.contentDef == null || ctx.references == null || path.size() != 1 || shadowed.contains(path.get(0))) {
+            return;
+        }
+        String restriction = ctx.contentDef.findEditor(path.get(0))
+                .filter(editor -> editor.type() == EditorType.REFERENCE)
+                .map(EditorDefinition::dataset)
+                .filter(dataset -> !dataset.isBlank())
+                .orElse(null);
+        if (restriction != null) {
+            ReferenceResolver references = ctx.references;
+            checkLoopFields(
+                    loop, query, references.resolve(DATASET_PREFIX, restriction).flatMap(references::datasetDefinition), ctx);
+        }
+    }
+
+    /**
+     * Parses a loop's named arguments into the query the renderer applies (M19.3.2), once per compile, so a bad
+     * argument is a compile-time {@code SF-TPL-0140} instead of a render-time surprise. Accessors of {@code where}
+     * not rooted at the loop variable are ordinary scope accessors and are checked like any other.
+     */
+    private DatasetQuery compileLoopQuery(OctlNode.For loop, Set<String> shadowed, ValidateCtx ctx) {
         Map<String, String> args = new LinkedHashMap<>();
         loop.args().forEach(arg -> args.put(arg.name(), arg.value()));
         DatasetQueryParser.Result parsed = DatasetQueryParser.parse(args, loop.variable(), loop.line(), loop.col());
@@ -763,12 +830,30 @@ public final class OctlCompiler {
                 checkFilters(access.filters(), loop.line(), loop.col(), ctx);
             }
         }
+        return parsed.query();
+    }
 
-        UUID dataset = ctx.refMap.get(loop.accessor().referenceKey());
-        if (dataset != null && ctx.references != null) {
-            ctx.references.datasetDefinition(dataset).ifPresent(definition -> ctx.diagnostics.addAll(
-                    DatasetQueryParser.validateFields(parsed.query(), definition, loop.line(), loop.col())));
+    /** {@code SF-TPL-0141}/{@code 0142} for a loop's {@code where}/{@code sort} fields, when the schema is known. */
+    private static void checkLoopFields(
+            OctlNode.For loop, DatasetQuery query, Optional<ContentDefinition> definition, ValidateCtx ctx) {
+        definition.ifPresent(schema -> ctx.diagnostics.addAll(
+                DatasetQueryParser.validateFields(query, schema, loop.line(), loop.col())));
+    }
+
+    /** A record set is its own scope (epic decision 5): {@code folder=} on a set loop is {@code SF-TPL-0140}. */
+    private static void rejectFolderOnSet(OctlNode.For loop, DatasetQuery query, String source, ValidateCtx ctx) {
+        if (query.folder() != null) {
+            ctx.diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.OCTL_DATASET_QUERY,
+                    "Argument folder is not available on a record set loop (" + source
+                            + "): the set is the scope; filter with where instead",
+                    loop.line(), loop.col()));
         }
+    }
+
+    /** A path-less {@code recordset:uid}: the set itself, rendered as a value or iterated by a loop (M25.2.2). */
+    private static boolean isRecordSetSource(Accessor accessor) {
+        return accessor.isAssetReference() && RECORD_SET_PREFIX.equals(accessor.assetType()) && accessor.path().isEmpty();
     }
 
     private void resolveReference(Accessor accessor, int line, int col, ValidateCtx ctx) {

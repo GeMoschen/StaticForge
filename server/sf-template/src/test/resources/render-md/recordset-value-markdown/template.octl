@@ -1,0 +1,5 @@
+# $CMS_VALUE(recordset:leads._meta.displayName)$
+
+$CMS_VALUE(recordset:leads)$
+Staff: $CMS_VALUE(recordset:staff)$
+Total: $CMS_VALUE(recordset:leads._count)$

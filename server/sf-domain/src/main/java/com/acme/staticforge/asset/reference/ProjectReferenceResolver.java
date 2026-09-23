@@ -4,6 +4,7 @@ import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionRepository;
+import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.template.cdl.CdlCompiler;
@@ -61,6 +62,16 @@ public class ProjectReferenceResolver {
                         .filter(version -> !version.isDeleted())
                         .map(version -> cdlCompiler.compile(version.getPayload().path("contentDefinition").asText(""))
                                 .definition());
+            }
+
+            /** The dataset of a live record set, so template save checks set loop fields against it (M25.2.2). */
+            @Override
+            public Optional<UUID> recordSetDataset(UUID setUuid) {
+                return assetRepository.findByProjectIdAndUuid(projectId, setUuid)
+                        .filter(asset -> asset.getAssetType() == AssetType.RECORD_SET)
+                        .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
+                        .filter(version -> !version.isDeleted())
+                        .map(version -> RecordValues.datasetRef(version.getPayload()));
             }
         };
     }

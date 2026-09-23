@@ -1,0 +1,9 @@
+$CMS_SET(minLevel = 3)$$CMS_SET(wanted = 'dev')$<ul>
+$CMS_FOR(m : recordset:leads, where="m.level >= minLevel", sort="name")$<li>$CMS_VALUE(m._index)$:$CMS_VALUE(m.name)$/$CMS_VALUE(m._count)$</li>
+$CMS_END_FOR$</ul>
+<p>$CMS_FOR(m : recordset:leads)$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:leads, offset=1, limit=1)$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:leads, sort="name", limit=2)$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:leads, where="m.level >= 1")$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:staff, where="m.role == wanted")$[$CMS_VALUE(m._uid)$ $CMS_VALUE(m.name)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:broken)$never$CMS_END_FOR$</p>

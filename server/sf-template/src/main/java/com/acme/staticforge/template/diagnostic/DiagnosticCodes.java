@@ -36,6 +36,14 @@ public final class DiagnosticCodes {
      */
     public static final String GEN_RECORD_SET_QUERY_INVALID = "SF-GEN-0240";
 
+    /**
+     * Render warning (generation and preview alike): a record set is rendered as a value
+     * ({@code $CMS_VALUE(recordset:uid)$}, or a {@code reference} editor pointing at a set) but its dataset has no
+     * record template for the channel, so the set renders empty (M25.2.2). The {@code SF-GEN-0210} counterpart for
+     * record templates, with its own code because a page whose only finding is {@code 0210} is skipped entirely.
+     */
+    public static final String GEN_RECORD_TEMPLATE_MISSING = "SF-GEN-0241";
+
     // OCTL template inheritance (M20). The epic proposed 0140–0149, which M19 had already taken.
     /** {@code $CMS_EXTENDS} is not the template's first instruction, is nested, or appears more than once. */
     public static final String OCTL_EXTENDS_POSITION = "SF-TPL-0150";

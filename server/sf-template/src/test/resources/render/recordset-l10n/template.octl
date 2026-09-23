@@ -1,0 +1,4 @@
+<ul>$CMS_VALUE(recordset:team)$</ul>
+<p>$CMS_FOR(m : recordset:team, where="m.title == 'Leitung'")$[$CMS_VALUE(m._uid)$ $CMS_VALUE(m.title)$]$CMS_END_FOR$</p>
+<ul>$CMS_VALUE(recordset:leitung)$</ul>
+<p>$CMS_VALUE(recordset:leitung._count)$</p>
