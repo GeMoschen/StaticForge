@@ -112,31 +112,55 @@ During time travel the whole Globals screen is read-only and shows each set as i
 
 ### Content
 
-Lists that many pages show — team members, products, FAQs, office locations — live in **Content** as **records**, not on any page. Each list is a **dataset**: a developer decides which fields its records have, and you fill them in. Edit a record once and every page that shows it follows.
+Lists that many pages show — team members, products, FAQs, office locations — live in **Content** as **records**, not on any page. Each kind of list is a **dataset**: a developer decides which fields its records have, and you fill them in. Records are kept in **record sets**: a set holds the records of one dataset and decides which of them a page shows, and in which order — "Leadership", "Featured products", "FAQ: shipping". Edit a record once and every page that shows it follows.
 
-1. Open **Content** from the nav. The chips at the top pick a dataset (**All** shows a card per dataset with its record count); the tree on the left holds folders, which only keep records tidy.
-2. A dataset's records are a grid. **Search by name** filters as you type. For more precise filters, type an expression such as `role == 'lead' && joined > '2022-01-01'` and choose **Apply** — a mistake is shown with its column. Click a column header to sort (again to reverse, Shift+click to add a second sort); the column chooser hides columns you don't need, and remembers that on this device.
-3. **New record** asks for a name and a dataset, then opens the record. Records autosave like pages; **Save now** or `Cmd/Ctrl+S` saves at once. If the dataset has a title field, the record's name follows that field.
-4. The panel beside the form has **Checks** (empty required fields and similar findings — they don't block saving), **History** (every save is a revision, with restore) and **Usages** (the pages and templates that show this record).
-5. **Delete** asks first, and says how many pages or templates still show the record; a deleted record disappears from every list on the next preview or publish, and can be restored from its history.
-6. In a page, a field that points at a record opens a picker that lists only that dataset's records.
+**Finding your way.** Open **Content** from the nav. The tree on the left holds folders and, inside them, record sets (each with its record count; a warning sign means its query needs fixing). Folders only keep sets tidy. With nothing opened, the main area lists the record sets of the selected folder; the chips at the top narrow the list to one dataset (**All** shows every set).
 
-During time travel a record opens read-only, as it was at that revision, and page previews loop the records of that revision. The grid itself always lists today's records.
+**Creating a record set.**
 
-| Role | Records | Dataset fields, create and delete datasets |
+1. Choose **New record set** in the toolbar, or right-click a folder → **New record set**.
+2. Give it a name (the UID follows the name until you type your own) and **choose its dataset**. The dataset can't be changed later: every record in the set has that dataset's fields.
+3. The set opens. **New record** asks for a name and opens the record; the record belongs to this set. Records autosave like pages; **Save now** or `Cmd/Ctrl+S` saves at once. If the dataset has a title field, the record's name follows that field.
+
+A record always lives in exactly one record set — there are no records loose in a folder. Right-click a set for **New record**, **Rename**, **Move to…** (another folder), **History**, **Used by** and **Delete…**; you can also drag a set onto a folder.
+
+**The set query** (the **Set query** panel above the records) decides what pages show:
+
+- **Where** — an expression over the dataset's fields, such as `role == 'lead' && joined > '2022-01-01'`. Empty means every record.
+- **Sort** — **Add sort key**, pick a field and **Ascending**/**Descending**; the arrows change the order of the keys. Without a key, records are sorted by name.
+- **Offset** and **Limit** — skip the first records, or show at most this many (for "the three newest").
+
+While you type, the panel checks the query and says what it would do: "4 of 9 records match · the set shows 3". A mistake is shown with the part and column it is in, and a set with errors can't be saved. **Save query** saves it as one revision; **Revert** throws your edits away. If a developer later removes a field the query uses, the set gets a warning and **shows no records** on any page until you fix and save the query.
+
+**The records grid** has two views:
+
+- **All records** (the default) lists every record of the set. The ones the set query leaves out are dimmed, with a tooltip saying why.
+- **Show as rendered** lists only what pages show, in the order they show it — the set query applied.
+
+**Search by name** filters as you type. For more precise filters, type an expression such as `role == 'lead'` and choose **Apply** — a mistake is shown with its column. Click a column header to sort (again to reverse, Shift+click to add a second sort); **Columns** hides columns you don't need. These filters only change what the grid shows. **Use as set query** copies them into the set query, where you can check and save them. Below the grid, the snippet (`$CMS_VALUE(recordset:leadership)$`) is what a developer puts in a template to show the set.
+
+**Records.** The panel beside a record's form has **Checks** (empty required fields and similar findings — they don't block saving), **History** (every save is a revision, with restore) and **Usages** (the pages and templates that show this record). **Move…** moves the record into another record set of the same dataset. **Delete** asks first, and says how many pages or templates still show the record; a deleted record disappears from every list on the next preview or publish, and can be restored from its history.
+
+**Deleting a set** asks first and names how many records go with it; the set and its records are deleted together, and restoring the set from its history brings them all back.
+
+**In a page**, a field that points at a record or a record set opens a picker. A field meant for one dataset lists only that dataset's records or sets; a set shows its dataset and record count. Pick a set and the page shows that set's records the way its query says, in the look the developer gave the dataset.
+
+During time travel a set and its records open read-only, as they were at that revision, and page previews show the records of that revision. The records grid itself always lists today's records.
+
+| Role | Record sets and records | Dataset fields and look, create and delete datasets |
 |---|---|---|
 | Viewer | read | read |
 | Editor | edit | read |
 | Developer and project admin | edit | edit (Templates → Datasets) |
 
-A dataset that still has records can't be deleted — delete its records first.
+A dataset that still has records or record sets can't be deleted — delete its sets first.
 
 ### Search
 
 Search finds anything in the current project by what it contains, not only by its name.
 
 - **Quick open.** Press `Ctrl+K` (`Cmd+K` on a Mac) anywhere in a project and type. Results appear as you type, grouped
-  by kind (Pages, Records, Media, Globals, Navigation, Folders, Page templates, Section templates, Datasets), five per
+  by kind (Pages, Records, Record sets, Media, Globals, Navigation, Folders, Page templates, Section templates, Datasets), five per
   group, each with its UID, folder and a line of text with your words highlighted. `↑`/`↓` move, `Enter` opens,
   `Ctrl+Enter` opens the search page with your words, `Esc` closes and puts you back where you were. "See all 12 pages"
   opens the search page filtered to that kind. Outside a project the palette only reminds you to open one.
@@ -150,7 +174,8 @@ Search finds anything in the current project by what it contains, not only by it
     link titles, and the page's SEO title and description.
   - Media: file name, alt text, caption, copyright, and the content of text files processed by the CMS.
   - Page and section templates and datasets: name, UID, content definition and channel sources.
-  - Navigation page references: label. Folders: name. Global property sets and dataset records: their values.
+  - Navigation page references: label. Folders: name. Global property sets and dataset records: their values. Record
+    sets: name and their dataset's name.
 
   References, media pickers, JSON, numbers, dates, colors and switches aren't searched.
 - **How words match.** Upper and lower case don't matter, and neither do accents: `Häuser`, `hauser` and `haeuser` find
@@ -232,6 +257,7 @@ An incremental run renders only what changed and publishes the complete site: th
 - **Before a run.** In the generation dialog press **Preview plan** (`Alt+P`). It shows how many files would rebuild, how many assets changed (expand the list), the counts by reason and the largest groups ("412 via section_template:teaser"), and the revision the preview was computed at. The table lists every file with its reason; open a reason to read its chain from the page to the change, e.g. `page:about — places section` → `section_template:teaser`, with a link to the revision the change was made in ("+ 2 other changes" when several changes reach the same page). Tick **Validate templates** to also compile what the plan needs. If incremental can't be used — no previous complete build for this target, the build is gone, channel output settings changed — a warning says so: the run will be a full build. Changing the mode, target or channels marks the preview out of date; starting still works, and if content was saved after the preview you get a notice.
 - **After a run.** In the run history each run shows "Incremental · 37 pages (via 2 changes)" or "Full · 5,000 pages". **Details → Rebuilt pages** lists what the run rebuilt and why, with the same filters. Plans of older runs are removed after a while ("Plan details were pruned").
 - **While editing.** The **Impact** panel in the template editor, the media drawer (below **Referenced by**) and the page editor answers "if I change this, what rebuilds?": "Changing this rebuilds 12 pages (24 files)", by kind of dependency, and a table with each page's chain back to this asset (pages link to their editor). It loads when you open it, always reflects the current state (also while viewing an old revision), and reloads after you save. It counts the most a change could rebuild; a small edit may rebuild less. Navigation matters: renaming a page that a navigation lists, or editing the navigation, rebuilds every page showing that navigation.
+- **Record sets.** Editing a record rebuilds the pages showing its set only if the set's query shows that record (before or after the edit); changing the set's query, name or place rebuilds every page showing the set. The reasons read "reads record set containing", "reads record set with changed query" and, after a developer changes how a dataset's records look, "renders through record template of".
 
 ### Revisions, spine, and time travel
 

@@ -130,7 +130,7 @@ The server validates page, section, catalog-card and record content against thes
 
 | Kind | Codes | Effect |
 |---|---|---|
-| `STRUCTURAL` | `type` (wrong JSON type or malformed `link`/`media`/`reference`/`catalog`/list-item shape), `option` (value outside `options`), `allow` (section or card template outside the body's/editor's `allow` list), `template` (card template not found), `dataset` (a `reference` with `dataset "uid"` pointing outside that dataset, M19) | the save is rejected with `422 SF-API-0422`, listing the findings under `issues` |
+| `STRUCTURAL` | `type` (wrong JSON type or malformed `link`/`media`/`reference`/`catalog`/list-item shape), `option` (value outside `options`), `allow` (section or card template outside the body's/editor's `allow` list), `template` (card template not found), `dataset` (a `reference` with `dataset "uid"` pointing outside that dataset, M19 — or at a record set when its `assetTypes` don't name `RECORD_SET`, M25) | the save is rejected with `422 SF-API-0422`, listing the findings under `issues` |
 | `COMPLETENESS` | `required`, `min`, `max`, `maxLength`, `maxChars`, `pattern`, `mimeType` | the save succeeds and the page view lists the findings under `issues`; `ERROR` findings keep the page from being published (`SF-GEN-0120`), while other pages still publish (run `PARTIAL`) |
 
 Editors hidden by `visibleWhen` are skipped. An untouched `media`/`reference`/`link` value (no

@@ -32,7 +32,7 @@ OCTL renders content into a channel. One template per (template asset, channel).
 | Construct | Meaning |
 |---|---|
 | `$CMS_VALUE(editorName)$` | editor value in scope |
-| `$CMS_VALUE(assetType:uid.editorName)$` | value from another asset (see §2.6); without an editor path it warns `SF-TPL-0111` |
+| `$CMS_VALUE(assetType:uid.editorName)$` | value from another asset (see §2.6); without an editor path it warns `SF-TPL-0111` (except `recordset:uid`, which renders the set) |
 | `$CMS_VALUE(CMS_GLOBAL.set.editorName)$` | value from a global property set (see §2.7); same as `global:set.editorName` |
 | `$CMS_REF(assetType:uid)$` | resolved URL/href |
 | `$CMS_REF(editorName)$` | URL for a link/media/reference value |
@@ -42,6 +42,9 @@ OCTL renders content into a channel. One template per (template asset, channel).
 | `$CMS_NAVIGATION(nav:uid [, depth=N] [, channel=key])$` | render a navigation folder's tree — see `navigation-template-syntax.md` / `navigation-html-output.md` |
 | `$CMS_IF(expr)$ … $CMS_ELSEIF(expr)$ … $CMS_ELSE$ … $CMS_END_IF$` | conditional |
 | `$CMS_FOR(item : listEditor)$ … $CMS_END_FOR$` | iteration over lists/nav nodes |
+| `$CMS_FOR(item : dataset:uid, where=…, sort=…, limit=…, offset=…, folder=…)$` | iteration over every record of a dataset (§2.9) |
+| `$CMS_VALUE(recordset:uid)$` | render a record set: each selected record through its dataset's record template (§2.9, M25); a `reference` editor holding a set renders the same way |
+| `$CMS_FOR(item : recordset:uid, where=…, sort=…, limit=…, offset=…)$` | iteration over a record set's selected records, narrowed by the arguments (§2.9, M25); also `$CMS_FOR(item : refEditor, …)$` |
 | `$CMS_SET(name = expr)$` | local variable |
 | `$CMS_META(key)$` | `uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey`; `pageNumber`, `totalPages` on a paginated page (§2.11) |
 | `$CMS_COMMENT$ … $CMS_END_COMMENT$` | not emitted |
@@ -117,6 +120,8 @@ $CMS_END_FOR$
 
 `$CMS_PAGE.headline$` inside a section reads the enclosing page's `headline` editor (read-only upward reference). Loop scope exposes `item.<editor>`, `item._index`, `item._first`, `item._last`, `item._count`.
 
+A dataset's **record template** (§2.9, M25) sees the record's fields as top-level names (`$CMS_VALUE(name)$`), plus `_uuid`, `_uid`, `_displayName`, `_folderPath`, `_recordSet`, `_changedAt`, `_meta` and the position `_index`, `_first`, `_last`, `_count` among the records being rendered; `CMS_PAGE` is the page the set is rendered on.
+
 `CMS_PAGINATION.*` reads the current page of a paginated page: its items and page links (§2.11).
 
 `CMS_GLOBAL.<set>.<editor>` reads a global property set from any template (§2.7). Like `CMS_PAGE` it is an *accessor root* used inside an instruction — `$CMS_VALUE(CMS_GLOBAL.site.title)$`, `$CMS_IF(CMS_GLOBAL.site.showBanner)$` — not an instruction of its own; there is no `$CMS_GLOBAL.site.title$` form.
@@ -125,7 +130,20 @@ $CMS_END_FOR$
 
 `assetType:uid` resolves to a UUID at compile time; saving the template records one `asset_reference` row per resolved reference and use (`OCTL_VALUE`, `OCTL_REF`, `OCTL_INCLUDE`, source path `channelTemplates.<channel>`), so usages of the target list your template immediately. An unresolvable UID is a compile error (`SF-TPL-0110`). A reference to a soft-deleted asset renders empty with a warning, in preview and generation alike: `SF-TPL-0112` for a cross-asset value, `SF-GEN-0220` for a `$CMS_REF`, `$CMS_INCLUDE` or body section target in generation. `$CMS_REF` resolves pages → output path (per URL strategy), media → public path (`?variant=w800`), folders → index page.
 
-Cross-asset values walk the target's *root value object* exactly like a local value, so paths, `$CMS_IF`, `$CMS_SET`, `$CMS_FOR` and filters work unchanged (`$CMS_FOR(link : page:about.links)$`). The root value object is: `page` → the page's editor values (bodies, nav, output and meta are not exposed); `media` → `altText`, `caption`, `copyright`, `fileName`, `mimeType`, `sizeBytes`, `focalPoint`, `width`, `height`, `orientation`, `dominantColor`; `page_reference` → `label`; `global` → the property set's values (never its CDL); template and folder types → no values. Every asset also exposes a reserved `_meta` object with `uid` and `displayName` (`$CMS_VALUE(page:about._meta.displayName)$`). Values are escaped by the channel default like any other value. A target deleted after compile renders empty with a warning (`SF-TPL-0112`). A path-less `$CMS_VALUE(page:about)$` is a warning (`SF-TPL-0111`).
+Cross-asset values walk the target's *root value object* exactly like a local value, so paths, `$CMS_IF`, `$CMS_SET`, `$CMS_FOR` and filters work unchanged (`$CMS_FOR(link : page:about.links)$`). The prefixes (`AssetReferencePrefixes` is their single registry) and what each reads:
+
+| Prefix | Asset | Root value object |
+|---|---|---|
+| `page` | page | the page's editor values (bodies, nav, output and meta are not exposed) |
+| `media` | media file | `altText`, `caption`, `copyright`, `fileName`, `mimeType`, `sizeBytes`, `focalPoint`, `width`, `height`, `orientation`, `dominantColor` |
+| `page_reference` | navigation page reference | `label` |
+| `global` (or the `CMS_GLOBAL.` root) | property set (§2.7) | the set's values (never its CDL) |
+| `record` | dataset record (§2.9) | the record's values plus `_uuid`, `_uid`, `_displayName`, `_folderPath`, `_recordSet`, `_changedAt` — the item a dataset loop binds |
+| `recordset` | record set (§2.9, M25) | `{records, _count, _meta: {uid, displayName, dataset}}` — the records its stored query selects in the render language; the path-less `$CMS_VALUE(recordset:uid)$` renders the set |
+| `dataset` | dataset schema | no values; used as a loop source, `$CMS_FOR(x : dataset:uid, …)$` |
+| `section_template`, `page_template`, `folder`, `nav` | templates and folders | no values (`nav:` is a navigation folder, for `$CMS_NAVIGATION` and loops) |
+
+The record set prefix is `recordset`, not `record_set`. Every asset also exposes a reserved `_meta` object with `uid` and `displayName` (`$CMS_VALUE(page:about._meta.displayName)$`). Values are escaped by the channel default like any other value. A target deleted after compile renders empty with a warning (`SF-TPL-0112`). A path-less `$CMS_VALUE(page:about)$` is a warning (`SF-TPL-0111`).
 
 `$CMS_REF` on another asset follows the same rule as a local editor: path-less (`$CMS_REF(page:about)$`) links the asset itself, while a path (`$CMS_REF(page:about.heroImage)$`) links whatever that editor holds — the image, not the page. The media that is linked this way is a dependency of the rendering page, so generation copies the file to the output.
 
@@ -307,8 +325,10 @@ rendering, so a value can't bring back `<script>` or event handlers.
 
 A **dataset** is a list of structured entries that many pages show: team members, products, FAQs,
 locations. A developer declares the fields once as a **dataset schema** (Templates store, fixed
-**Datasets** folder); editors add one **record** per entry in the **Content** store. Records have no
-page of their own — templates loop over them, read single ones, or follow a `reference` to one.
+**Datasets** folder); editors add one **record** per entry in the **Content** store, always inside a
+**record set** of the dataset (M25, see [Record sets](#record-sets-m25) below). Records have no page of
+their own — templates loop over them, read single ones, follow a `reference` to one, or render a record
+set.
 
 **Declaring a dataset.** A schema is ordinary CDL with one restriction: no `bodies { … }` (records have
 values only, `SF-CDL-0108`). Every editor type works, `renamedFrom` included: renaming a field rewrites
@@ -473,21 +493,300 @@ only; editing a sibling record does not rebuild it. Changing the schema rebuilds
 the dataset. A 5,000-record dataset looped
 by 500 pages generates in about 2.6 s (full) on the development machine.
 
-**Rebuilds with record sets (M25).** A page reading a record set — `$CMS_VALUE(recordset:leads)$`, a
-`$CMS_FOR(m : recordset:leads, …)$` loop, or a `reference` editor pointing at the set — rebuilds when a record
-of the set (or moved into or out of it) changes **and the set's stored query selects that record before or after
-the change**; a loop's own `where` narrows further, like on a dataset loop. The set's query can't read the render
-scope, so this is always decided exactly. Changing a set (its query, name or uid) rebuilds every page reading it.
-Changing only a dataset's record template rebuilds the pages rendering a set of it *through* the template (the
-value form and `reference` editor values) — not set loops, which bring their own markup, and not `dataset:` loops.
-A record whose `reference` editor points at a set is a reader too, so a set rendered inside another record's
-template rebuilds the pages showing that record. The build insight names the chain: *record `jane` in record set
-`leads`* (`RECORD_SET_MEMBERSHIP`), *record set `leads` query changed* (`RECORD_SET_QUERY`), *record template of
-dataset `team`* (`RECORD_TEMPLATE`).
-
 **Not the `visibleWhen` grammar.** `where` is the OCTL expression grammar `$CMS_IF` uses. The CDL
 `visibleWhen` attribute has its own, deliberately tiny grammar shared with the editor UI (§14.4) — no
 filters, no `in`, no dates — and the two are not interchangeable.
+
+#### Record sets (M25)
+
+A **record set** (`RECORD_SET`) is the list an editor hands to pages: "the leadership team", "the
+featured products". It fixes the **dataset** of its records and stores a **query** that decides
+which of them are shown and in which order. Sets are **editor** content (Content store); the markup
+belongs to the developer (the dataset's record templates, below, or your own loop).
+
+**Containment.** Every record lives in exactly one set — its direct parent — and has that set's
+dataset. Sets live in Content folders (or the store root); folders hold folders and sets, sets hold
+only records (no subfolders, no nested sets). A set's dataset can't change after it is created, and a
+record moves only into another live set of the same dataset. Anything else — a record directly in a
+folder or the root, a record in a set of another dataset, a set inside a set or outside the Content
+store — is rejected on create, move and restore with `422 SF-DOM-0104` ([API error
+catalogue](api.md#15-error-catalogue)). A record's `_folderPath` is the Content folder of its set, so
+a `dataset:` loop's `folder=` matches the folder the set is in; `_recordSet` names the set. Deleting a
+set that still has records needs `cascade` (the set and its records go in one revision, and restoring
+the set brings them back); a dataset can't be deleted while it has records or sets (`SF-DOM-0121`).
+
+**The stored query.** `{where, sort, limit, offset}`, every part optional. It is the grammar of a
+dataset loop's arguments with three differences, all because the query is stored once and read by
+every page:
+
+| | Set query | Loop arguments (`$CMS_FOR(m : …, where=…)$`) |
+|---|---|---|
+| Field names | bare: `role == 'lead'` | through the loop variable: `m.role == 'lead'` |
+| Render scope (`CMS_PAGE`, `CMS_GLOBAL`, `$CMS_SET` variables, outer loops, `page:…` accessors) | not allowed — the query has no page | allowed |
+| `folder` | none — the set is the scope | `dataset:` loops only |
+
+Everything else is shared: the comparison and sorting rules above, meta fields such as
+`_displayName` or `_changedAt`, `sort="-joined,name"` (then `_displayName`, then `_uid`), and the
+evaluation order `where` → `sort` → `offset` → `limit`. The query is checked against the dataset's
+schema when the set is saved, with the loop codes: malformed or reading the render scope
+`SF-TPL-0140`, an undeclared field (a `$CMS_SET` name included) `SF-TPL-0141`, a sort field without an
+order `SF-TPL-0142`; the save is refused (`422 SF-API-0422` with the findings). Language-dependent
+fields compare in the **render language**, so one set can select different records on the German and
+the English page (golden case `render/recordset-l10n`).
+
+**Schema changes.** A `renamedFrom` rename rewrites the field in every set query of the dataset in the
+same revision as the schema and the records. Removing or retyping a field a query reads doesn't block
+the schema save — the response lists those sets under `brokenRecordSets` and each set reads
+`queryValid: false` — but such a set renders **no** records, never all of them, with warning
+`SF-GEN-0240`, until an editor saves it with a valid query.
+
+<!-- Tests: RecordSetIntegrationTest, RecordSetContainmentTest, RecordSetQueriesTest, RecordSetQueryIntegrationTest -->
+
+#### Record templates (M25)
+
+A dataset can carry one **record template** per channel: the OCTL that renders one record wherever a
+set of that dataset is rendered as a value. It lives in the dataset (developer content, the
+**Record template** tabs of the dataset editor; `channelTemplates.<channel>` over
+the API) and compiles when the dataset is saved, against the schema being saved:
+
+- **Scope.** The record's fields are top-level names, like a section template's editors:
+  `$CMS_VALUE(name)$`. Also in scope: `_uuid`, `_uid`, `_displayName`, `_folderPath`, `_recordSet`,
+  `_changedAt`, `_meta`, and the record's position among the records being rendered — `_index`,
+  `_first`, `_last`, `_count`. Any other bare name is `SF-TPL-0103` at its line and column.
+- **Everything a section template can do** works: filters, `$CMS_IF`, loops, `CMS_PAGE`,
+  `CMS_GLOBAL`, `$CMS_INCLUDE`, cross-asset values, even a `dataset:` loop or another set.
+- **No inheritance, no bodies.** `$CMS_EXTENDS`, `$CMS_BLOCK`, `$CMS_PARENT` and `$CMS_BODY` are
+  `SF-TPL-0122`: a record template renders on its own, and a record has values only.
+- **Channels.** The key must be one of the project's channels; a channel without a record template
+  renders a set value as nothing there (`SF-GEN-0241`). Set loops don't need one.
+- **Renames.** A schema rename never rewrites record-template sources: a template still reading the
+  old name fails the dataset save with `SF-TPL-0103`, so save the schema and the fixed template together.
+
+The golden fixture below is a `team` dataset with an HTML record template, a `leads` set storing
+`where "role == 'lead'"` and `sort "-joined"`, a `staff` set with no query, a set whose query reads a
+field the schema doesn't have (`broken`) and a deleted set (`gone`):
+
+<!-- golden: render/recordset-value/records.json -->
+```json
+{
+  "team": {
+    "uuid": "d0000000-0000-0000-0000-000000000001",
+    "schema": "content { editor text name { label \"Name\" } editor select role { label \"Role\" options [ { value \"lead\", label \"Lead\" }, { value \"dev\", label \"Developer\" } ] } editor date joined { label \"Joined\" } }",
+    "recordTemplates": {
+      "html": "<article class=\"$CMS_IF(_first)$first$CMS_END_IF$\" data-i=\"$CMS_VALUE(_index)$\">$CMS_VALUE(name)$ ($CMS_VALUE(_uid)$, $CMS_VALUE(_index)$/$CMS_VALUE(_count)$$CMS_IF(_last)$, last$CMS_END_IF$)</article>"
+    },
+    "recordSets": {
+      "leads": { "uuid": "f0000000-0000-0000-0000-000000000001", "displayName": "Leadership", "query": { "where": "role == 'lead'", "sort": "-joined" } },
+      "staff": { "uuid": "f0000000-0000-0000-0000-000000000002", "displayName": "Staff" },
+      "broken": { "uuid": "f0000000-0000-0000-0000-000000000003", "displayName": "Broken", "query": { "where": "nope == 1" } },
+      "gone": { "uuid": "f0000000-0000-0000-0000-000000000004", "displayName": "Gone", "deleted": true }
+    },
+    "records": [
+      { "uuid": "e0000000-0000-0000-0000-00000000000a", "uid": "ada", "displayName": "Ada", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Ada", "role": "lead", "joined": "2021-03-01" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000d", "uid": "dee", "displayName": "Dee", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Dee", "role": "lead", "joined": "2019-05-05" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000e", "uid": "eve", "displayName": "Eve", "folderPath": "/team/", "recordSet": "leads",
+        "content": { "name": "Eve", "role": "dev", "joined": "2024-02-02" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000b", "uid": "bob", "displayName": "bob", "folderPath": "/team/", "recordSet": "staff",
+        "content": { "name": "bob <b>", "role": "dev", "joined": "2023-07-15" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000c", "uid": "cy", "displayName": "Cy", "folderPath": "/team/", "recordSet": "staff",
+        "content": { "name": "Cy", "role": "dev", "joined": "2022-11-30" } },
+      { "uuid": "e0000000-0000-0000-0000-00000000000f", "uid": "fay", "displayName": "Fay", "folderPath": "/team/", "recordSet": "broken",
+        "content": { "name": "Fay", "role": "lead", "joined": "2020-01-01" } }
+    ]
+  }
+}
+```
+
+<!-- Tests: OctlCompilerRecordTemplateTest, DatasetRecordTemplateIntegrationTest -->
+
+#### Rendering a set (M25)
+
+**As a value.** `$CMS_VALUE(recordset:<uid>)$` renders the records the set's query selects, each
+through the dataset's record template for the current channel, in the set's order. The wrapping markup
+is yours:
+
+<!-- golden: render/recordset-value/template.octl -->
+```
+<section>$CMS_VALUE(recordset:leads)$</section>
+<ul>$CMS_VALUE(recordset:staff)$</ul>
+<p>$CMS_VALUE(recordset:leads._count)$ in $CMS_VALUE(recordset:leads._meta.displayName)$ of $CMS_VALUE(recordset:leads._meta.dataset)$$CMS_IF(recordset:leads._count > 1)$, several$CMS_END_IF$</p>
+<p>$CMS_FOR(r : recordset:leads.records)$[$CMS_VALUE(r.name)$ in $CMS_VALUE(r._recordSet)$]$CMS_END_FOR$</p>
+<p>[$CMS_VALUE(recordset:broken)$][$CMS_VALUE(recordset:gone)$][$CMS_VALUE(recordset:broken | default("none"))$][$CMS_VALUE(recordset:gone._count)$]</p>
+```
+
+<!-- golden: render/recordset-value/expected.html -->
+```html
+<section><article class="first" data-i="0">Ada (ada, 0/2)</article><article class="" data-i="1">Dee (dee, 1/2, last)</article></section>
+<ul><article class="first" data-i="0">bob &lt;b&gt; (bob, 0/2)</article><article class="" data-i="1">Cy (cy, 1/2, last)</article></ul>
+<p>2 in Leadership of team, several</p>
+<p>[Ada in leads][Dee in leads]</p>
+<p>[][][none][]</p>
+```
+
+- The output is the record templates' rendered markup, escaped once inside them — it isn't escaped
+  again. Filters still apply to it, so `| default("none")` covers an empty set.
+- The path-less form is not `SF-TPL-0111` for a set. A set has no URL: `$CMS_REF(recordset:leads)$`
+  is `SF-TPL-0105`.
+- **Root value object.** With a path, `recordset:<uid>` reads
+  `{records, _count, _meta: {uid, displayName, dataset}}`: `records` are the selected records (each the
+  item a loop binds), `_count` their number, `_meta.dataset` the dataset's uid. It works in
+  `$CMS_IF`, `$CMS_SET` and as a loop source like any value.
+- A set whose query no longer validates renders nothing (`SF-GEN-0240`), a dataset without a record
+  template for the channel nothing (`SF-GEN-0241`), a deleted set nothing (`SF-TPL-0112`).
+- A record template that renders its own set — directly, through a record's `reference`, or via other
+  sets — is an `SF-TPL-0135` cycle. Every rendered record counts toward the loop iteration limit.
+
+The Markdown channel renders through the dataset's `markdown` record template (in this fixture
+`- **$CMS_VALUE(name)$** — joined $CMS_VALUE(joined)$ ($CMS_VALUE(_index)$/$CMS_VALUE(_count)$)`, then
+` last` on the last record and a line break):
+
+<!-- golden: render-md/recordset-value-markdown/template.octl -->
+```
+# $CMS_VALUE(recordset:leads._meta.displayName)$
+
+$CMS_VALUE(recordset:leads)$
+Staff: $CMS_VALUE(recordset:staff)$
+Total: $CMS_VALUE(recordset:leads._count)$
+```
+
+<!-- golden: render-md/recordset-value-markdown/expected.md -->
+```markdown
+# Leadership
+
+- **Ada** — joined 2021-03-01 (0/2)
+- **Dee** — joined 2019-05-05 (1/2) last
+
+Staff: - **bob_the*dev** — joined 2023-07-15 (0/1) last
+
+Total: 2
+```
+
+**As a loop.** `$CMS_FOR(m : recordset:<uid>, where=…, sort=…, limit=…, offset=…)$` iterates the
+selected records with your own markup and needs no record template. The set's query runs **first**;
+the loop's arguments then narrow its result: `where` is AND-ed with the set's, `sort` re-sorts it
+(stably — ties keep the set's order), and `offset`/`limit` slice what the set selected. `folder` is
+`SF-TPL-0140`: the set is the scope. The loop's `where` reads the loop variable and may read the
+render scope, like a dataset loop's; its fields are checked against the set's dataset on save
+(`SF-TPL-0141`/`0142`). `_index`, `_first`, `_last` and `_count` count the narrowed result. With a
+`leads` set storing `where "role == 'lead'"`, `sort "-joined"` and `limit 3` (it selects Ada, Fay and
+Dee of the five records it holds), a `staff` set without a query and a `broken` set sorting by a field the
+schema lacks:
+
+<!-- golden: render/recordset-loop-narrowing/template.octl -->
+```
+$CMS_SET(minLevel = 3)$$CMS_SET(wanted = 'dev')$<ul>
+$CMS_FOR(m : recordset:leads, where="m.level >= minLevel", sort="name")$<li>$CMS_VALUE(m._index)$:$CMS_VALUE(m.name)$/$CMS_VALUE(m._count)$</li>
+$CMS_END_FOR$</ul>
+<p>$CMS_FOR(m : recordset:leads)$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:leads, offset=1, limit=1)$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:leads, sort="name", limit=2)$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:leads, where="m.level >= 1")$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:staff, where="m.role == wanted")$[$CMS_VALUE(m._uid)$ $CMS_VALUE(m.name)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : recordset:broken)$never$CMS_END_FOR$</p>
+```
+
+<!-- golden: render/recordset-loop-narrowing/expected.html -->
+```html
+<ul>
+<li>0:Ada/2</li>
+<li>1:Fay/2</li>
+</ul>
+<p>[ada][fay][dee]</p>
+<p>[fay]</p>
+<p>[ada][dee]</p>
+<p>[ada][fay]</p>
+<p>[bob bob &lt;b&gt;]</p>
+<p></p>
+```
+
+**Through a `reference` editor.** An editor declared with `assetTypes [RECORD_SET]` holds a set (see
+[`editors/reference.md`](editors/reference.md)); `dataset "uid"` restricts it to the sets of one
+dataset. The editor's name then works exactly like `recordset:<uid>`: `$CMS_VALUE(featured)$` renders
+the set, `featured._count`, `featured.records` and `featured._meta.…` read the root value object
+(`featured.uuid` and `featured.assetType` stay the stored value's own fields), and
+`$CMS_FOR(m : featured, …)$` loops it with the same narrowing. With `dataset "team"` the loop's fields
+are checked on save; without it they can't be, so a field the referenced set's dataset doesn't declare
+warns `SF-TPL-0141` when the page renders and reads as missing (the records filtered on it are
+skipped). Loop arguments on an editor that holds anything but a set are ignored, as before (`folder`
+is `SF-TPL-0140` on any `reference` editor loop).
+
+<!-- golden: render/recordset-reference-editor/template.cdl -->
+```
+content {
+  editor reference featured { label "Featured" assetTypes [RECORD_SET] dataset "team" }
+  editor reference unrestricted { label "Any set" assetTypes [RECORD_SET] }
+  editor reference empty { label "Empty" assetTypes [RECORD_SET] }
+  editor reference person { label "Person" dataset "team" }
+}
+```
+
+<!-- golden: render/recordset-reference-editor/template.octl -->
+```
+<section>$CMS_VALUE(featured)$</section>
+<p>$CMS_VALUE(featured._count)$ in $CMS_VALUE(featured._meta.displayName)$ ($CMS_VALUE(featured.assetType)$)</p>
+<ul>$CMS_FOR(m : featured, sort="name", limit=1)$<li>$CMS_VALUE(m.name)$ $CMS_VALUE(m._index)$/$CMS_VALUE(m._count)$</li>$CMS_END_FOR$</ul>
+<p>$CMS_FOR(m : featured.records)$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<p>$CMS_FOR(m : unrestricted, where="m.nope == 1")$never$CMS_END_FOR$|$CMS_FOR(m : unrestricted, where="m.role == 'dev'", sort="-joined")$[$CMS_VALUE(m._uid)$]$CMS_END_FOR$</p>
+<ul>$CMS_VALUE(unrestricted)$</ul>
+<p>[$CMS_VALUE(empty)$][$CMS_VALUE(empty._count)$][$CMS_VALUE(person.name)$]</p>
+```
+
+with `featured` pointing at `leads`, `unrestricted` at `staff`, `empty` at the deleted set and `person`
+at the record `ada`:
+
+<!-- golden: render/recordset-reference-editor/expected.html -->
+```html
+<section><article class="first" data-i="0">Ada (ada, 0/2)</article><article class="" data-i="1">Dee (dee, 1/2, last)</article></section>
+<p>2 in Leadership (RECORD_SET)</p>
+<ul><li>Ada 0/1</li></ul>
+<p>[ada][dee]</p>
+<p>|[bob][cy]</p>
+<ul><article class="first" data-i="0">bob &lt;b&gt; (bob, 0/2)</article><article class="" data-i="1">Cy (cy, 1/2, last)</article></ul>
+<p>[][][Ada]</p>
+```
+
+Generation and preview render sets identically (they share one renderer; `RecordSetRenderIntegrationTest`
+compares the bytes), and preview time travel shows the sets, queries and records of that revision.
+
+**`dataset:` loops are unchanged.** `$CMS_FOR(x : dataset:team, …)$` still iterates every live record of
+the dataset across all of its sets; set queries are not applied. Use it for "all team members", a set for
+"the list an editor curated".
+
+Every fenced snippet in these subsections is checked against its golden file by `DocsGoldenSnippetsTest`.
+
+<!-- Tests: RecordSetRenderTest, GenerationRendererRecordSetTest, RecordSetRenderIntegrationTest -->
+
+#### Incremental builds with record sets (M25)
+
+A page reading a record set — `$CMS_VALUE(recordset:leads)$`, a `$CMS_FOR(m : recordset:leads, …)$`
+loop, or a `reference` editor pointing at the set — rebuilds when a record of the set (or moved into or
+out of it) is created, edited, moved or deleted **and the set's stored query selects that record before or
+after the change**; a loop's own `where` narrows further, like on a dataset loop (a `where` that reads the
+render scope stays conservative). The set's query can't read the render scope, so this is always decided
+exactly. With the golden `leads` set, editing a `dev` record of it rebuilds nothing that reads `leads`;
+promoting it to `lead` does.
+
+| Change | Rebuilds |
+|---|---|
+| a record in set S (edit, create, delete, move in or out) | the readers of S whose set query (and loop `where`) selects it before or after; `dataset:` loops as in M19 |
+| S itself (query, display name, uid, move) | every page reading S |
+| only a dataset's record templates | the pages rendering a set of that dataset *through* the template (value form, `reference` editor values) — not set loops, which bring their own markup, and not `dataset:` loops |
+| the dataset's schema | every page reading the dataset or any of its sets |
+
+A `reference` editor value is followed as far as the editor, not into the template around it: a page
+whose editor points at S rebuilds for every record S may select, whatever a `$CMS_FOR(m : editor, where=…)$`
+narrows. A record whose `reference` editor points at a set is a reader too, so a set rendered inside
+another record's template rebuilds the pages showing that record.
+
+The build insight names the chain: *record `jane` in record set `leads`* (edge `RECORD_SET_MEMBERSHIP`,
+"reads record set containing"), *record set `leads` query changed* (`RECORD_SET_QUERY`), *record template
+of dataset `team`* (`RECORD_TEMPLATE`, "renders through record template of"). 5,000 records in 10 sets
+rendered by 500 pages generate in under a second (full) on the development machine, and an edit to one
+lead rebuilds only the 50 pages of its set.
+
+<!-- Tests: RecordSetIncrementalPlanIntegrationTest, DatasetBenchmark.recordsInSetsRenderedByPages -->
 
 ### 2.10 Layouts and inheritance (M20)
 
@@ -793,16 +1092,16 @@ build-insight plan says which languages a narrowed entry covers.
 |---|---|---|
 | `SF-TPL-0101` | error | unknown instruction |
 | `SF-TPL-0102` | error | unbalanced block (missing `$CMS_END_IF$`) |
-| `SF-TPL-0103` | error | unknown editor name in scope |
+| `SF-TPL-0103` | error | unknown editor name in scope; in a dataset's record template (M25), a name that is neither a field of the dataset being saved nor a record meta or position name |
 | `SF-TPL-0104` | error | unknown filter |
-| `SF-TPL-0105` | error | `CMS_GLOBAL` without a property set (`$CMS_VALUE(CMS_GLOBAL)$`), or `$CMS_REF` without an editor path on a property set (`$CMS_REF(CMS_GLOBAL.site)$`), a record (`$CMS_REF(record:dee)$`) or a dataset — none has a URL |
+| `SF-TPL-0105` | error | `CMS_GLOBAL` without a property set (`$CMS_VALUE(CMS_GLOBAL)$`), or `$CMS_REF` without an editor path on a property set (`$CMS_REF(CMS_GLOBAL.site)$`), a record (`$CMS_REF(record:dee)$`), a dataset or a record set (`$CMS_REF(recordset:leads)$`, M25) — none has a URL |
 | `SF-TPL-0110` | error | unresolvable asset reference |
 | `SF-TPL-0120` | error | `$CMS_BODY` used in a section template |
 | `SF-TPL-0121` | error | processed text media (§2.8): `$CMS_BODY`, `$CMS_INCLUDE`, the leaf `$CMS_NAVIGATION(nav:…)$` or `CMS_PAGE`, none of which exist outside a page |
 | `SF-TPL-0122` | error | dataset record template (M25): `$CMS_EXTENDS`, `$CMS_BLOCK`, `$CMS_PARENT` or `$CMS_BODY` — a record template renders on its own and a record has no bodies |
-| `SF-TPL-0140` | error | dataset loop (§2.9): a malformed `where`, `sort`, `limit`, `offset` or `folder`, an unknown loop argument, or a path after `dataset:uid`; the message carries the column inside the argument. On a record set loop (`recordset:uid`, or a `reference` editor pointing at a set, M25) `folder` is rejected too: the set is the scope |
-| `SF-TPL-0141` | error | dataset loop: `where` or `sort` names a field the dataset's schema doesn't declare (checked when the template is saved) |
-| `SF-TPL-0142` | error | dataset loop: `sort` by a field with no order — `list`, `richtext`, `media`, `reference` and other structured editors |
+| `SF-TPL-0140` | error | dataset loop (§2.9): a malformed `where`, `sort`, `limit`, `offset` or `folder`, an unknown loop argument, or a path after `dataset:uid`; the message carries the column inside the argument. On a record set loop (`recordset:uid`, or a `reference` editor pointing at a set, M25) `folder` is rejected too: the set is the scope. A record set's stored query (M25) that is malformed, has a negative `limit`/`offset`, or reads the render scope (`CMS_*`, an asset reference) is rejected with it on save, positioned inside the query part |
+| `SF-TPL-0141` | error | dataset loop: `where` or `sort` names a field the dataset's schema doesn't declare (checked when the template is saved). Also a record set loop, a loop over a `reference` editor declaring `dataset "uid"`, and a record set's stored query on save (any root that isn't a field or meta name, `$CMS_SET` variables included, M25). A loop over a `reference` editor *without* `dataset` is checked when the page renders instead: there it is a **warning**, once per loop and render, and the field reads as missing |
+| `SF-TPL-0142` | error | dataset loop, record set loop or record set query (M25): `sort` by a field with no order — `list`, `richtext`, `media`, `reference` and other structured editors |
 | `SF-TPL-0134` | error | `$CMS_NAVIGATION_RECURSE(name)$` references a variable not bound by an enclosing `$CMS_NAVIGATION(...) as name$` |
 | `SF-TPL-0150` | error | inheritance (§2.10): `$CMS_EXTENDS` is not the first instruction, is nested in another instruction, or appears twice |
 | `SF-TPL-0151` | error | text or an instruction other than `$CMS_BLOCK`, `$CMS_SET` or `$CMS_COMMENT$` outside the top-level blocks of a template that extends |
@@ -821,9 +1120,9 @@ build-insight plan says which languages a narrowed entry covers.
 | `SF-TPL-0131` | error (render) | loop iteration limit (100,000) exceeded |
 | `SF-TPL-0132` | error (render) | output size limit (32 MB) exceeded |
 | `SF-TPL-0133` | error (render) | render time budget (5 s) exceeded |
-| `SF-TPL-0135` | error (render) | include cycle: a template is `$CMS_INCLUDE`d while it is already rendering (`a → b → a`). Body sections and catalog cards nest by content and are not cycles: a card may hold cards of its own template, as deep as the content goes, bounded by `SF-TPL-0130` |
+| `SF-TPL-0135` | error (render) | include cycle: a template is `$CMS_INCLUDE`d while it is already rendering (`a → b → a`), or a record set is rendered while it is already rendering — a record template showing its own set, directly or through a record's `reference` (M25). Body sections and catalog cards nest by content and are not cycles: a card may hold cards of its own template, as deep as the content goes, bounded by `SF-TPL-0130` |
 | `SF-TPL-0111` | warning | cross-asset `$CMS_VALUE(assetType:uid)$` without an editor path (not for `recordset:uid`, which renders the set through its dataset's record template, M25) |
-| `SF-TPL-0112` | warning | render time: a cross-asset value's target is missing or soft-deleted (renders empty) |
+| `SF-TPL-0112` | warning | render time: a cross-asset value's target is missing or soft-deleted (renders empty) — also a missing or deleted record set, in the value and the loop form (M25) |
 | `SF-TPL-0157` | warning | a template overrides a block no ancestor defines, so the override never renders; carries a "did you mean" suggestion |
 | `SF-TPL-0201` | warning | body declared but never rendered |
 | `SF-TPL-0301` | warning | `raw` filter on a plain-text editor |
@@ -875,4 +1174,4 @@ The UI copies this philosophy (§24.6): a diagnostic includes "did you mean?" su
 
 ## Part 4 — Worked end-to-end
 
-The full `teaser` template, stored page content, and generated HTML + Markdown are worked through in `cms-specification.md` Appendix A. Golden-file triples (`template + content + expected output`) live under `server/sf-template/src/test/resources/render/` (`value-basic`, `value-filters`, `if-elseif-else`, `for-list-nested`, `escaping-xss`, `value-cross-asset`, `global-value`, …) and `render-md/` — adding an OCTL feature is adding a directory there (§25.4).
+The full `teaser` template, stored page content, and generated HTML + Markdown are worked through in `cms-specification.md` Appendix A. Golden-file triples (`template + content + expected output`) live under `server/sf-template/src/test/resources/render/` (`value-basic`, `value-filters`, `if-elseif-else`, `for-list-nested`, `escaping-xss`, `value-cross-asset`, `global-value`, `for-dataset-where-sort`, `recordset-value`, `recordset-loop-narrowing`, `recordset-reference-editor`, `recordset-l10n`, …) and `render-md/` (`recordset-value-markdown`, …) — adding an OCTL feature is adding a directory there (§25.4).
