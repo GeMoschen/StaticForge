@@ -82,7 +82,7 @@ public class AssetServiceImpl implements AssetService {
     @Transactional
     public AssetVersionView create(CreateAssetCommand cmd, RevisionContext ctx) {
         String displayName = validatedDisplayName(cmd.displayName());
-        UUID uuid = UUID.randomUUID();
+        UUID uuid = cmd.uuid() == null ? UUID.randomUUID() : cmd.uuid();
         String uid = cmd.uid() == null
                 ? uidGenerator.deriveUid(displayName, cmd.projectId(), cmd.type())
                 : requireAvailableUid(cmd.projectId(), cmd.type(), cmd.uid(), null);
@@ -550,6 +550,9 @@ public class AssetServiceImpl implements AssetService {
     @Transactional
     public UidChangeResult changeUid(UUID uuid, String newUid, RevisionContext ctx) {
         Asset asset = require(ctx.projectId(), uuid);
+        if (asset.getAssetType() == AssetType.RECORD) {
+            throw new SfException(RecordNaming.derived());
+        }
         String oldUid = asset.getUid();
         String uid = requireAvailableUid(asset.getProjectId(), asset.getAssetType(), newUid, asset.getId());
 

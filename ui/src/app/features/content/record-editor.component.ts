@@ -114,7 +114,6 @@ export class RecordEditorComponent implements OnDestroy {
    * one language; the fallback hint needs the others (M24.4.1).
    */
   protected readonly storedContent = signal<Record<string, unknown>>({});
-  protected readonly displayName = signal('');
   protected readonly issues = signal<ContentIssue[]>([]);
   protected readonly history = signal<AssetHistoryEntry[]>([]);
   protected readonly usages = signal<UsageDto[]>([]);
@@ -130,8 +129,8 @@ export class RecordEditorComponent implements OnDestroy {
 
   private readonly canEditRole = computed(() => roleRank(this.auth.roleFor(this.projectKey())) >= roleRank('EDITOR'));
   protected readonly readOnly = computed(() => this.timeTravelling() || !this.canEditRole());
-  /** With a title editor the record's name follows that field; otherwise it is edited here. */
-  protected readonly nameFromTitle = computed(() => !!this.dataset()?.titleEditor);
+  /** The field that names the record; without one the record keeps its uuid as its name (M25). */
+  protected readonly titleEditor = computed(() => this.dataset()?.titleEditor ?? null);
 
   protected readonly statusLabel = computed(() => {
     if (this.timeTravelling()) {
@@ -209,11 +208,6 @@ export class RecordEditorComponent implements OnDestroy {
   ngOnDestroy(): void {
     this.autosave.flush();
     this.formSubscription?.unsubscribe();
-  }
-
-  protected onNameInput(event: Event): void {
-    this.displayName.set((event.target as HTMLInputElement).value);
-    this.autosave.markDirty();
   }
 
   protected saveNow(): void {
@@ -332,7 +326,7 @@ export class RecordEditorComponent implements OnDestroy {
   private payload(): RecordPayload {
     const form = this.form();
     const content = form ? this.forms.valueOf(this.definition(), form) : ((this.record()?.content ?? {}) as Record<string, unknown>);
-    return this.nameFromTitle() ? { content } : { content, displayName: this.displayName().trim() || undefined };
+    return { content };
   }
 
   private load(projectKey: string, uuid: string, revision: number | null): void {
@@ -380,7 +374,6 @@ export class RecordEditorComponent implements OnDestroy {
   private apply(record: RecordDetailView, dataset: DatasetDetailView | null): void {
     this.record.set(record);
     this.dataset.set(dataset);
-    this.displayName.set(record.displayName ?? '');
     const definition = (dataset?.compiledDefinition as unknown as ContentDefinition | undefined) ?? EMPTY_DEF;
     this.definition.set(definition);
     this.autosave.configure(this.projectKey(), record.uuid ?? '', record.revision ?? null);
@@ -406,9 +399,6 @@ export class RecordEditorComponent implements OnDestroy {
       this.panel.set('issues');
     }
     this.record.update((current) => (current ? { ...current, ...view } : view));
-    if (this.nameFromTitle()) {
-      this.displayName.set(view.displayName ?? '');
-    }
   }
 
   private onSaveError(err: unknown): void {
@@ -433,7 +423,6 @@ export class RecordEditorComponent implements OnDestroy {
   private onRefetched(view: RecordDetailView, mode: ResolveMode): void {
     if (mode === 'theirs') {
       this.record.set(view);
-      this.displayName.set(view.displayName ?? '');
       this.buildForm(this.definition(), view.content);
       return;
     }

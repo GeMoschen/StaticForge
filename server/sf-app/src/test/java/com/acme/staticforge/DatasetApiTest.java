@@ -289,7 +289,7 @@ class DatasetApiTest {
         DatasetView foreign = team(other);
         UUID foreignSet = set(other, foreign.uuid());
         UUID foreignRecord = recordService.create(
-                        new CreateRecordCommand(other.project().getId(), foreignSet, "Ada", objectMapper.readTree("{\"name\":\"Ada\"}")),
+                        new CreateRecordCommand(other.project().getId(), foreignSet, objectMapper.readTree("{\"name\":\"Ada\"}")),
                         other.ctx())
                 .record()
                 .uuid();
@@ -436,7 +436,7 @@ class DatasetApiTest {
                             .put("level", i % 7);
                     content.putArray("tags").addObject().put("tag", "t" + i);
                     recordService.create(
-                            new CreateRecordCommand(fx.project().getId(), members, "Member " + i, content), batchCtx);
+                            new CreateRecordCommand(fx.project().getId(), members, content), batchCtx);
                 }
             });
         }
@@ -487,13 +487,13 @@ class DatasetApiTest {
     private void record(Fixture fx, DatasetView dataset, String content) throws Exception {
         JsonNode values = objectMapper.readTree(content);
         recordService.create(
-                new CreateRecordCommand(fx.project().getId(), set(fx, dataset.uuid()), values.path("name").asText(), values),
+                new CreateRecordCommand(fx.project().getId(), set(fx, dataset.uuid()), values),
                 fx.ctx());
     }
 
     private DatasetView team(Fixture fx) {
         return datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, null, null), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
     }
 
     private String datasetBody(String displayName, String cdl, String titleEditor) throws Exception {

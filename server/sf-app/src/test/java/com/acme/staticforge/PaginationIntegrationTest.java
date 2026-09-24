@@ -283,7 +283,7 @@ class PaginationIntegrationTest {
                 "content { editor text name { label \"Name\" } }", "name", null), fx.ctx());
         UUID members = new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), team.uuid(), null, fx.ctx());
         for (String name : List.of("Cy", "Ada", "Bo")) {
-            recordService.create(new CreateRecordCommand(fx.project().getId(), members, null,
+            recordService.create(new CreateRecordCommand(fx.project().getId(), members,
                     mapper.createObjectNode().put("name", name)), fx.ctx());
         }
         TemplateView template = pageTemplate(fx, "Team page", BLOG_CDL,
@@ -324,7 +324,7 @@ class PaginationIntegrationTest {
                 .andExpect(status().isUnprocessableEntity());
 
         long baseline = head(fx);
-        recordService.create(new CreateRecordCommand(fx.project().getId(), members, null,
+        recordService.create(new CreateRecordCommand(fx.project().getId(), members,
                 mapper.createObjectNode().put("name", "Dee")), fx.ctx());
         assertThat(plannedEntries(fx, baseline, page.uuid())).extracting(PlanEntry::pageNumber).containsExactlyInAnyOrder(1, 2);
     }

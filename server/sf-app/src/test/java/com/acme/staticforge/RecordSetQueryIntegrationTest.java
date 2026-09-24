@@ -270,9 +270,9 @@ class RecordSetQueryIntegrationTest {
 
         // After "then": Ann becomes a dev, Bob leaves the set, Cyd joins it, the query flips to devs.
         recordService.update(ann.uuid(), mapper.createObjectNode().put("name", "Ann").put("role", "dev")
-                .put("joined", "2021-03-01"), "Ann", ann.revision(), fx.ctx());
+                .put("joined", "2021-03-01"), ann.revision(), fx.ctx());
         recordService.update(bob.uuid(), mapper.createObjectNode().put("name", "Bob").put("role", "dev")
-                .put("joined", "2022-01-01"), "Bob", bob.revision(), fx.ctx());
+                .put("joined", "2022-01-01"), bob.revision(), fx.ctx());
         assetService.move(bob.uuid(), staff.uuid(), fx.ctx());
         assetService.move(cyd.uuid(), leads.uuid(), fx.ctx());
         RecordSetView current = find(fx, leads);
@@ -356,7 +356,7 @@ class RecordSetQueryIntegrationTest {
 
     private RecordDetail record(Fixture fx, RecordSetView set, String name, String role, String joined) {
         return recordService.create(
-                        new CreateRecordCommand(fx.projectId(), set.uuid(), name,
+                        new CreateRecordCommand(fx.projectId(), set.uuid(),
                                 mapper.createObjectNode().put("name", name).put("role", role).put("joined", joined)),
                         fx.ctx())
                 .record();

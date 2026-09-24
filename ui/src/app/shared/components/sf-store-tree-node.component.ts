@@ -28,6 +28,8 @@ export interface StoreTreeNode {
   badge?: { text: string; broken?: boolean; label?: string };
   /** A problem with this node, shown as a warning icon with this text as its tooltip. */
   warning?: string;
+  /** The node's current revision, sent as `If-Match` when it is renamed — the endpoints require it. */
+  revision?: number;
   children?: StoreTreeNode[];
 }
 
@@ -43,8 +45,16 @@ export interface StoreTreeMoveEvent {
  */
 export type StoreTreeMenuFn = (node: StoreTreeNode) => ContextMenuItem[];
 
-/** How a folder rename is persisted; stores whose folders have a dedicated endpoint pass their own. */
-export type FolderRenameFn = (projectKey: string, uuid: string, displayName: string) => Observable<unknown>;
+/**
+ * How a folder rename is persisted; stores whose folders have a dedicated endpoint pass their own.
+ * `revision` is the folder's current revision, to be sent as `If-Match`.
+ */
+export type FolderRenameFn = (
+  projectKey: string,
+  uuid: string,
+  displayName: string,
+  revision: number | undefined,
+) => Observable<unknown>;
 
 /**
  * The recursive tree row shared by the project's store screens.
@@ -203,10 +213,11 @@ export class SfStoreTreeNodeComponent {
       return;
     }
     this.renamingName.set(true);
+    const revision = this.node().revision;
     const rename = this.isFolder() ? this.renameFolder() : null;
     const request$ = rename
-      ? rename(key, uuid, displayName)
-      : this.api.renameAsset(key, uuid, { displayName });
+      ? rename(key, uuid, displayName, revision)
+      : this.api.renameAsset(key, uuid, { displayName }, revision);
     request$.subscribe({
       next: () => {
         this.renamingName.set(false);

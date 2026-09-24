@@ -32,10 +32,13 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Thread-safe, side-effect-free stack-machine renderer (spec §16.5, §16.10). Walks the
@@ -167,7 +170,15 @@ public final class OctlRenderer implements Renderer {
     }
 
     private void renderRef(OctlNode.Ref r, State s) {
-        RefTarget target = resolveRefTarget(r.accessor(), s);
+        Accessor accessor = r.accessor();
+        boolean assetItself = accessor.isAssetReference() && accessor.path().isEmpty();
+        JsonNode value = assetItself ? null : resolve(accessor, s);
+        String direct = directLinkUrl(value);
+        if (direct != null) {
+            s.append(Filters.escape(direct, s.context.escaping()));
+            return;
+        }
+        RefTarget target = resolveRefTarget(accessor, value, s);
         if (target == null) {
             s.append("");
             return;
@@ -829,7 +840,7 @@ public final class OctlRenderer implements Renderer {
      * rendering page without a second, globals-only code path; before M17.3.1 a path'd reference
      * silently ignored its path and linked the target asset instead.
      */
-    private RefTarget resolveRefTarget(Accessor accessor, State s) {
+    private RefTarget resolveRefTarget(Accessor accessor, JsonNode value, State s) {
         if (accessor.isAssetReference() && accessor.path().isEmpty()) {
             String key = accessor.referenceKey();
             UUID uuid = s.template.references().get(key);
@@ -840,7 +851,6 @@ public final class OctlRenderer implements Renderer {
             String kind = mapKind(accessor.assetType());
             return new RefTarget(kind, accessor.uid(), uuid);
         }
-        JsonNode value = resolve(accessor, s);
         s.collectDeps(value);
         if (value == null || value.isMissingNode() || value.isNull() || !value.isObject()) {
             return null;
@@ -856,6 +866,45 @@ public final class OctlRenderer implements Renderer {
                 : accessor.path().get(accessor.path().size() - 1);
         return new RefTarget(kind, uid, uuid);
     }
+
+    /**
+     * The URL of a {@code link} value that points at no asset: an {@code EXTERNAL} link's {@code url}, a
+     * {@code MAIL} link as {@code mailto:}, an {@code ANCHOR} as {@code #anchor} — {@code ""} while it is
+     * blank. {@code null} for anything else ({@code INTERNAL}/{@code MEDIA} links and the other editor
+     * values go through the {@link UrlResolver}). An external URL with a scheme other than
+     * {@link #SAFE_SCHEMES} renders empty: link values are not validated on save, and a
+     * {@code javascript:} URL must never reach an {@code href}.
+     */
+    static String directLinkUrl(JsonNode value) {
+        if (value == null || !value.isObject() || value.has("type")) {
+            return null;
+        }
+        return switch (value.path("kind").asText("")) {
+            case "EXTERNAL" -> {
+                String url = value.path("url").asText("").trim();
+                Matcher scheme = URL_SCHEME.matcher(url);
+                yield scheme.lookingAt() && !SAFE_SCHEMES.contains(scheme.group(1).toLowerCase(Locale.ROOT))
+                        ? ""
+                        : url;
+            }
+            case "MAIL" -> {
+                String address = value.path("url").asText("").trim();
+                if (address.regionMatches(true, 0, "mailto:", 0, 7)) {
+                    address = address.substring(7);
+                }
+                yield address.isEmpty() ? "" : "mailto:" + address;
+            }
+            case "ANCHOR" -> {
+                String anchor = value.path("anchor").asText("").trim();
+                anchor = anchor.startsWith("#") ? anchor.substring(1) : anchor;
+                yield anchor.isEmpty() ? "" : "#" + anchor;
+            }
+            default -> null;
+        };
+    }
+
+    private static final Pattern URL_SCHEME = Pattern.compile("([a-zA-Z][a-zA-Z0-9+.-]*):");
+    private static final Set<String> SAFE_SCHEMES = Set.of("http", "https", "mailto", "tel");
 
     private static String mapKind(String assetType) {
         return switch (assetType) {
@@ -954,6 +1003,9 @@ public final class OctlRenderer implements Renderer {
             case ">=" -> cmp(left, right) >= 0;
             case "<=" -> cmp(left, right) <= 0;
             case "in" -> inArray(right, left);
+            case "contains" -> inArray(left, right);
+            case "startsWith" -> left.isTextual() && right.isTextual() && left.asText().startsWith(right.asText());
+            case "endsWith" -> left.isTextual() && right.isTextual() && left.asText().endsWith(right.asText());
             default -> false;
         };
     }

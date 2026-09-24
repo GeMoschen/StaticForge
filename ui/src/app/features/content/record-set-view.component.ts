@@ -18,7 +18,6 @@ import { roleRank } from '../../core/auth/auth.guard';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
@@ -59,7 +58,6 @@ function isPanel(value: string | undefined): value is RecordSetPanel {
   imports: [
     RouterLink,
     SfButtonComponent,
-    SfCreateAssetDialogComponent,
     SfIconComponent,
     SfRelativeTimePipe,
     RecordGridComponent,
@@ -98,7 +96,6 @@ export class RecordSetViewComponent {
   protected readonly usages = signal<UsageDto[]>([]);
   protected readonly activePanel = signal<RecordSetPanel>('records');
   protected readonly gridRefresh = signal(0);
-  protected readonly newRecordOpen = signal(false);
   protected readonly creatingRecord = signal(false);
 
   protected readonly invalidQueryWarning = INVALID_QUERY_WARNING;
@@ -155,7 +152,7 @@ export class RecordSetViewComponent {
           return;
         }
         untracked(() => {
-          this.openNewRecord();
+          this.createRecord();
           consumeQueryParam(this.router, this.route, 'newRecord');
         });
       },
@@ -185,33 +182,22 @@ export class RecordSetViewComponent {
     this.queryPanel()?.adopt(filter.where, filter.sort);
   }
 
-  protected openNewRecord(): void {
-    if (!this.readOnly()) {
-      this.newRecordOpen.set(true);
-    }
-  }
-
-  protected closeNewRecord(): void {
-    this.newRecordOpen.set(false);
-  }
-
-  protected submitNewRecord(value: CreateAssetFormValue): void {
+  /**
+   * Adds an empty record to the set and opens it. There is nothing to ask first: a record's uid comes
+   * from its uuid and its name from its title field (else the uuid), both set by the server (M25).
+   */
+  protected createRecord(): void {
     const set = this.set();
     const datasetUuid = set?.dataset?.uuid;
-    if (!set?.uuid || !datasetUuid || this.readOnly()) {
+    if (!set?.uuid || !datasetUuid || this.readOnly() || this.creatingRecord()) {
       return;
     }
     this.creatingRecord.set(true);
     this.content
-      .createRecord(this.projectKey(), datasetUuid, {
-        recordSetUuid: set.uuid,
-        displayName: value.displayName,
-        content: {},
-      })
+      .createRecord(this.projectKey(), datasetUuid, { recordSetUuid: set.uuid, content: {} })
       .subscribe({
         next: (created) => {
           this.creatingRecord.set(false);
-          this.newRecordOpen.set(false);
           this.toasts.show('Record created', 'success');
           this.refresh?.notify();
           if (created.uuid) {

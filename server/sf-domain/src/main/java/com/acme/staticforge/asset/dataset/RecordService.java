@@ -24,8 +24,9 @@ import java.util.UUID;
 public interface RecordService {
 
     /**
-     * Adds a record to the record set {@code recordSetUuid}; the set's dataset is the record's. The display
-     * name is the dataset's title editor value when that is set, else {@code displayName}.
+     * Adds a record to the record set {@code recordSetUuid}; the set's dataset is the record's. Its uid is
+     * derived from its uuid (hex digits, {@code _} for the dashes) and never changes; its display name is the
+     * dataset's title editor value when that is set, else the uuid.
      *
      * @throws com.acme.staticforge.common.SfException {@code 422 SF-DOM-0104} without a set, or when the
      *     uuid names a folder or a deleted set; {@code 404} for an unknown uuid or a deleted dataset
@@ -33,10 +34,10 @@ public interface RecordService {
     RecordWriteResult create(CreateRecordCommand cmd, RevisionContext ctx);
 
     /**
-     * Replaces a record's content. With a title editor the display name follows its value; without
-     * one, a non-blank {@code displayName} renames the record. The uid never changes here.
+     * Replaces a record's content. With a title editor value set the display name follows it; otherwise it
+     * stays as it is. The uid never changes.
      */
-    RecordWriteResult update(UUID uuid, JsonNode content, String displayName, long expectedRevision, RevisionContext ctx);
+    RecordWriteResult update(UUID uuid, JsonNode content, long expectedRevision, RevisionContext ctx);
 
     /** The record as of {@code revision} (current when {@code null}); empty for another asset type. */
     Optional<RecordDetail> find(long projectId, UUID uuid, Long revision);

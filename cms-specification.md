@@ -106,7 +106,7 @@ Because rendering is fully separated from content, the same content can be emitt
 | **Property set** | A `GLOBAL_SET` asset in the Globals store: a named group of site-wide values (site title, logo, social links) whose fields are declared in CDL and whose values editors fill in. Templates read it as `CMS_GLOBAL.<set>.<editor>`. |
 | **Dataset** | A `DATASET` asset in the Templates store's fixed `datasets` folder: a CDL record schema (no bodies) for a list many pages show — team members, products, FAQs. Templates loop it as `$CMS_FOR(x : dataset:<uid>, where=…, sort=…, limit=…, offset=…, folder=…)$` (M19). It may carry one **record template** per channel (`channelTemplates.<channel>`, OCTL with the record's fields as top-level names) that renders one record wherever a record set of the dataset is rendered as a value (M25). |
 | **Record set** | A `RECORD_SET` asset in a Content-store folder (M25): fixes the dataset of its records for its whole life and stores a query — `where` over bare field names (no render scope), `sort`, `limit`, `offset` — that selects and orders them. Editor content. Rendered as `$CMS_VALUE(recordset:<uid>)$` (each selected record through the dataset's record template), looped as `$CMS_FOR(x : recordset:<uid>, …)$` (loop arguments narrow the set's result), or picked by a `reference` editor with `assetTypes [RECORD_SET]`. |
-| **Record** | A `RECORD` asset in the Content store: one entry of a dataset, holding editor values only and no page of its own. Its parent is always a record set of its dataset (M25; never a folder or the store root). Read as `record:<uid>.<editor>`, by following a `reference` editor (M19), or through its set. |
+| **Record** | A `RECORD` asset in the Content store: one entry of a dataset, holding editor values only and no page of its own. Its parent is always a record set of its dataset (M25; never a folder or the store root). Read as `record:<uid>.<editor>`, by following a `reference` editor (M19), or through its set. It is never named by hand: its UID is its UUID in UID form and never changes, its display name is the dataset's title editor value, else the UUID (records created before this keep theirs). |
 | **UID** | Human-readable identifier, unique per (project, asset type), derived from the display name. |
 | **Revision** | Monotonic `long` per project describing one atomic change set. |
 | **Body** | Named content area on a page that holds an ordered list of section instances. |
@@ -1109,7 +1109,7 @@ Creating channel `markdown` immediately makes a new tab appear in every template
 | `$CMS_VALUE(assetType:uid)$` | The whole value object of another asset; stringifies to nothing useful and warns (`SF-TPL-0111`) — except `recordset:uid`, below |
 | `$CMS_VALUE(recordset:uid)$` | Renders a record set (M25): the records its stored query selects, each through the dataset's record template for the channel; a `reference` editor value pointing at a set renders the same way (`$CMS_VALUE(featured)$`). No record template for the channel → empty with `SF-GEN-0241`; a stored query that no longer validates → empty with `SF-GEN-0240`. A set has no URL (`$CMS_REF(recordset:uid)$` is `SF-TPL-0105`) |
 | `$CMS_REF(assetType:uid)$` | Resolved URL/href to another asset in the current channel |
-| `$CMS_REF(editorName)$` | Resolved URL for a `link`/`media`/`reference` editor value |
+| `$CMS_REF(editorName)$` | Resolved URL for a `link`/`media`/`reference` editor value. A link to no asset renders its own target, escaped: `EXTERNAL` its `url` (a scheme other than `http`, `https`, `mailto`, `tel` renders empty), `MAIL` `mailto:` + the address, `ANCHOR` `#anchor` |
 | `$CMS_BODY(name)$` | Renders a page body (page templates only) |
 | `$CMS_INCLUDE(section_template:uid)$` | Renders another template inline |
 | `$CMS_NAV(structure:uid)$` | Renders a navigation |
@@ -1316,12 +1316,14 @@ forBlock      = "FOR(" , identifier , ":" , accessor , ")$" , template , "$CMS_E
 expr          = orExpr ;
 orExpr        = andExpr , { "||" , andExpr } ;
 andExpr       = cmpExpr , { "&&" , cmpExpr } ;
-cmpExpr       = unary , [ ( "==" | "!=" | "<" | ">" | "<=" | ">=" | "in" ) , unary ] ;
+cmpExpr       = unary , [ ( "==" | "!=" | "<" | ">" | "<=" | ">=" | "in" | "contains" | "startsWith" | "endsWith" ) , unary ] ;
 unary         = [ "!" ] , ( literal | accessorWithFilters | "(" , expr , ")" ) ;
 filter        = identifier , [ "(" , argList , ")" ] ;
 ```
 
 Truthiness: `null`/absent → false; empty string/list/object → false; `0` → false; everything else true.
+
+`a in b` is true when list `b` has an element equal to `a`, or text `b` contains `a`; `a contains b` is `b in a`. `a startsWith b` / `a endsWith b` is true when both are text and `a` begins / ends with `b`. All four are case-sensitive (use `| lower`) and false for a missing value. The same operators work in `$CMS_IF`, `$CMS_SET` and a dataset or record set `where`.
 
 ### 16.10 Engine implementation
 
@@ -1737,7 +1739,7 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 | `GET`/`POST` | `/projects/{p}/datasets` | Dataset schemas (DEVELOPER writes); `channelTemplates` = per-channel record templates |
 | `GET`/`PUT`/`DELETE` | `/projects/{p}/datasets/{uuid}` | `PUT` returns `brokenRecordSets` (sets whose query no longer validates) and `recordTemplateDiagnostics`; `DELETE` is `409 SF-DOM-0121` while records or sets are live |
 | `GET` | `/projects/{p}/datasets/{uuid}/records` | Every record of the dataset across its sets (set queries not applied); `q`, `folder`, `where`, `sort`, paging |
-| `POST` | `/projects/{p}/datasets/{uuid}/records` | `{recordSetUuid, displayName?, content}` (EDITOR); the set must be a live set of this dataset (`422 SF-DOM-0104`); without `recordSetUuid` `400` |
+| `POST` | `/projects/{p}/datasets/{uuid}/records` | `{recordSetUuid, content}` (EDITOR); the set must be a live set of this dataset (`422 SF-DOM-0104`); without `recordSetUuid` `400` |
 | `GET`/`PUT` | `/projects/{p}/records/{uuid}` | A record, with `recordSet {uuid, uid, displayName}` |
 | `GET`/`POST` | `/projects/{p}/record-sets` | Sets (`?dataset=`); create `{folderUuid?, datasetUuid, uid?, displayName, query?}` (EDITOR); an invalid query is `422 SF-API-0422` with `diagnostics` |
 | `GET`/`PUT`/`DELETE` | `/projects/{p}/record-sets/{uuid}` | `?revision=`; `PUT {displayName?, query?}` (the dataset never changes); `DELETE` is `409 SF-DOM-0110` with records unless `?cascade=true` |
@@ -2788,6 +2790,7 @@ Same content. Two channels. No duplication.
 | `SF-API-0429` | 429 | Rate limit exceeded |
 | `SF-DOM-0101` | 422 | UID already taken (after probe exhaustion) |
 | `SF-DOM-0102` | 422 | Reserved UID |
+| `SF-DOM-0105` | 422 | A record's UID and display name are derived; a rename or UID change of a record is refused |
 | `SF-DOM-0110` | 409 | Folder not empty |
 | `SF-DOM-0120` | 409 | Asset still referenced (delete without `force`); for a page template that others extend, the detail and `children` name them |
 | `SF-DOM-0122` | 422 | Page template still used by pages can't become abstract (`pageCount`, `pageUids`, `pageUuids`, §13.3) |

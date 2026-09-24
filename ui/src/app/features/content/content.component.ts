@@ -14,6 +14,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import {
   SfStoreTreeNodeComponent,
+  type FolderRenameFn,
   type StoreTreeMoveEvent,
   type StoreTreeNode,
 } from '../../shared/components/sf-store-tree-node.component';
@@ -34,6 +35,7 @@ import {
 import { ContentStoreRefresh } from './content-store-refresh.service';
 import {
   ContentService,
+  etagFor,
   type DatasetSummaryView,
   type FolderView,
   type RecordSetSummaryView,
@@ -206,8 +208,8 @@ export class ContentComponent {
     ];
   };
 
-  protected readonly renameFolder = (projectKey: string, uuid: string, displayName: string) =>
-    this.content.renameFolder(projectKey, uuid, displayName);
+  protected readonly renameFolder: FolderRenameFn = (projectKey, uuid, displayName, revision) =>
+    this.content.renameFolder(projectKey, uuid, displayName, revision === undefined ? undefined : etagFor(revision));
 
   constructor() {
     effect(() => {

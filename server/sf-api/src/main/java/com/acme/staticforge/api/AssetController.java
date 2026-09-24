@@ -15,9 +15,11 @@ import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetSummary;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.RecordNaming;
 import com.acme.staticforge.asset.UidLiteralReference;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.UsageView;
+import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
@@ -139,6 +141,9 @@ public class AssetController {
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody RenameAssetRequest body) {
         AssetVersionView current = assetService.requireCurrent(projectId(projectKey), uuid);
+        if (current.type() == AssetType.RECORD) {
+            throw new SfException(RecordNaming.derived());
+        }
         AssetVersionView view = assetService.update(
                 uuid,
                 new UpdateAssetCommand(body.displayName(), current.payload()),

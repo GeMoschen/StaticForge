@@ -3,6 +3,7 @@ package com.acme.staticforge.asset.dataset;
 import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
+import com.acme.staticforge.asset.RecordNaming;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
@@ -81,22 +82,19 @@ public class RecordServiceImpl implements RecordService {
         payload.put("datasetRef", dataset.uuid().toString());
         payload.set("content", content);
 
-        String displayName = titleOf(dataset, content).orElse(cmd.displayName());
-        if (displayName == null || displayName.isBlank()) {
-            throw new SfException(ProblemFactory.badRequest(
-                    "displayName must not be blank (the dataset has no title editor value to use)."));
-        }
+        UUID uuid = UUID.randomUUID();
+        String displayName = titleOf(dataset, content).orElse(uuid.toString());
         AssetVersionView created = assetService.create(
                 new CreateAssetCommand(
-                        cmd.projectId(), AssetType.RECORD, displayName, cmd.recordSetUuid(), payload, dataset.uuid()),
+                        cmd.projectId(), AssetType.RECORD, displayName, cmd.recordSetUuid(), payload, dataset.uuid(),
+                        RecordNaming.uidOf(uuid), uuid),
                 ctx);
         return new RecordWriteResult(toDetail(cmd.projectId(), created), issues);
     }
 
     @Override
     @Transactional
-    public RecordWriteResult update(
-            UUID uuid, JsonNode content, String displayName, long expectedRevision, RevisionContext ctx) {
+    public RecordWriteResult update(UUID uuid, JsonNode content, long expectedRevision, RevisionContext ctx) {
         AssetVersion current = requireOpenRecord(ctx.projectId(), uuid);
         UUID datasetUuid = RecordValues.datasetRef(current.getPayload());
         Dataset dataset = requireDataset(ctx.projectId(), datasetUuid);
@@ -107,8 +105,7 @@ public class RecordServiceImpl implements RecordService {
         ObjectNode payload = current.getPayload().deepCopy();
         payload.set("content", values);
 
-        String name = titleOf(dataset, values)
-                .orElse(displayName == null || displayName.isBlank() ? current.getDisplayName() : displayName);
+        String name = titleOf(dataset, values).orElse(current.getDisplayName());
         AssetVersionView updated = assetService.update(uuid, new UpdateAssetCommand(name, payload), expectedRevision, ctx);
         return new RecordWriteResult(toDetail(ctx.projectId(), updated), issues);
     }

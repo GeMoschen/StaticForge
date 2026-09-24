@@ -6,7 +6,6 @@ import { ContentService, etagFor, type RecordDetailView } from './content.servic
 /** What a record save sends: its values, and a display name for datasets without a title editor. */
 export interface RecordPayload {
   content: Record<string, unknown>;
-  displayName?: string;
 }
 
 /**

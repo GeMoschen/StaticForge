@@ -249,6 +249,11 @@ public final class DatasetQueryEvaluator {
             case "==" -> same(l, r);
             case "!=" -> !same(l, r);
             case "in" -> in(l, right);
+            case "contains" -> in(r, left);
+            case "startsWith" -> !isAbsent(l) && !isAbsent(r) && l.isTextual() && r.isTextual()
+                    && l.asText().startsWith(r.asText());
+            case "endsWith" -> !isAbsent(l) && !isAbsent(r) && l.isTextual() && r.isTextual()
+                    && l.asText().endsWith(r.asText());
             case "<", ">", "<=", ">=" -> {
                 Integer order = order(l, r);
                 yield order != null && switch (operator) {

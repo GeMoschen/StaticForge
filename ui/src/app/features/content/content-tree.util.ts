@@ -36,6 +36,7 @@ function folderNode(folder: FolderView, sets: ReadonlyMap<string, RecordSetSumma
     displayName: folder.displayName,
     kind: 'FOLDER',
     protectedFolder: folder.protectedFolder === true,
+    revision: folder.revision,
     children: childNodes(folder.children ?? [], sets),
   };
 }
@@ -50,6 +51,7 @@ function setNode(set: FolderView, summary: RecordSetSummaryView | undefined): St
     icon: RECORD_SET_ICON,
     badge: { text: String(count), label: `${count} ${count === 1 ? 'record' : 'records'}` },
     warning: summary?.queryValid === false ? INVALID_QUERY_WARNING : undefined,
+    revision: summary?.revision,
   };
 }
 

@@ -10,6 +10,7 @@ import java.util.UUID;
  * value the Pages API exposes — M8.2 will replace this with a real URL). {@code type} is
  * {@code FOLDER} or {@code PAGE_REFERENCE}; {@code resolvedPageUuid}/{@code resolvedPagePath}
  * are both {@code null} for a grouping-only folder or an unresolvable/dangling target.
+ * {@code revision} is the node's current revision, sent back as {@code If-Match} on a rename.
  */
 public record NavTreeView(
         UUID uuid,
@@ -20,4 +21,5 @@ public record NavTreeView(
         UUID resolvedPageUuid,
         String resolvedPagePath,
         boolean protectedFolder,
+        long revision,
         List<NavTreeView> children) {}

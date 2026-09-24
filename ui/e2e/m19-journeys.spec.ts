@@ -89,7 +89,7 @@ class Api {
   }
 
   record(datasetUuid: string, recordSetUuid: string, content: Json): Promise<Json> {
-    return this.post(`/datasets/${datasetUuid}/records`, { recordSetUuid, displayName: content['name'], content });
+    return this.post(`/datasets/${datasetUuid}/records`, { recordSetUuid, content });
   }
 
   async updateRecord(uuid: string, content: Json): Promise<Json> {
@@ -198,11 +198,9 @@ test('journey 2: an editor creates and edits records and filters the grid', asyn
     const grid = setView.locator('sf-record-grid');
     await expect(grid.locator('tbody tr')).toHaveCount(2);
 
-    // A new record through the set's dialog opens in the record editor.
+    // A new record opens in the record editor at once, named by its uuid until its title field is set.
     await setView.getByRole('button', { name: 'New record' }).click();
-    await page.locator('sf-create-asset-dialog input').first().fill('Cy');
-    await page.locator('sf-create-asset-dialog').getByRole('button', { name: /create/i }).click();
-    await expect(page.locator('sf-record-editor h2')).toHaveText('Cy');
+    await expect(page.locator('sf-record-editor h2')).toHaveText(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 
     // Autosave: the title field names the record.
     const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/records/'));

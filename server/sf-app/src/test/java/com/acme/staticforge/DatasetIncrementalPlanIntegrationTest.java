@@ -109,7 +109,7 @@ class DatasetIncrementalPlanIntegrationTest {
         // filter), the loop whose where reads the render scope, and the page referencing the record.
         long baseline = head(fx);
         RecordDetail editedJane = recordService.update(
-                        jane.uuid(), json("{\"name\":\"Jane D.\",\"role\":\"lead\"}"), null, jane.revision(), fx.ctx())
+                        jane.uuid(), json("{\"name\":\"Jane D.\",\"role\":\"lead\"}"), jane.revision(), fx.ctx())
                 .record();
         assertThat(planned(fx, baseline)).containsExactlyInAnyOrder(leads, everyone, scoped, janeProfile);
 
@@ -121,12 +121,12 @@ class DatasetIncrementalPlanIntegrationTest {
         // Promoting a record: it is selected after the change; demoting it: it was selected before.
         baseline = head(fx);
         RecordDetail promotedJoe = recordService.update(
-                        joe.uuid(), json("{\"name\":\"Joe\",\"role\":\"lead\"}"), null, joe.revision(), fx.ctx())
+                        joe.uuid(), json("{\"name\":\"Joe\",\"role\":\"lead\"}"), joe.revision(), fx.ctx())
                 .record();
         assertThat(planned(fx, baseline)).containsExactlyInAnyOrder(leads, everyone, scoped, joeProfile);
         baseline = head(fx);
         RecordDetail demotedJoe = recordService.update(
-                        joe.uuid(), json("{\"name\":\"Joe\",\"role\":\"dev\"}"), null, promotedJoe.revision(), fx.ctx())
+                        joe.uuid(), json("{\"name\":\"Joe\",\"role\":\"dev\"}"), promotedJoe.revision(), fx.ctx())
                 .record();
         assertThat(planned(fx, baseline)).containsExactlyInAnyOrder(leads, everyone, scoped, joeProfile);
 
@@ -190,7 +190,7 @@ class DatasetIncrementalPlanIntegrationTest {
 
         // Ada is in another dataset: only the loop selecting a record that references her renders her.
         long baseline = head(fx);
-        recordService.update(ada.uuid(), json("{\"name\":\"Ada L.\",\"role\":\"mentor\"}"), null, ada.revision(), fx.ctx());
+        recordService.update(ada.uuid(), json("{\"name\":\"Ada L.\",\"role\":\"mentor\"}"), ada.revision(), fx.ctx());
         assertThat(planned(fx, baseline)).containsExactly(leads);
         assertThat(render(fx, leads, null)).isEqualTo("Jane (Ada L.)");
     }
@@ -241,7 +241,6 @@ class DatasetIncrementalPlanIntegrationTest {
                         new CreateRecordCommand(
                                 fx.project().getId(),
                                 new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), dataset.uuid(), null, fx.ctx()),
-                                null,
                                 json(content)),
                         fx.ctx())
                 .record();

@@ -366,7 +366,11 @@ order). An unknown dataset uid is `SF-TPL-0110`. Loops count toward the 100,000 
   strings case-sensitively. A `reference` or `media` value compares as its uuid. A missing field is
   `null`: `member.joined == null` tests absence; `<`/`>` against a missing value, or across types
   (`member.level > 'x'`), are simply false. `in` tests membership: `member.role in ['lead', 'cto']`,
-  `'vip' in member.tags`, or a substring: `'Love' in member.name`. Filters work: `member.name | lower == 'ada'`.
+  `'vip' in member.tags`, or a substring: `'Love' in member.name`. `contains` is the same test the other way
+  round (`member.tags contains 'vip'`, `member.name contains 'Love'`), and `startsWith`/`endsWith` test a
+  text prefix or suffix (`member.website startsWith 'https://'`, `member.file endsWith '.pdf'`); all are
+  case-sensitive, `startsWith`/`endsWith` text only, and false for a missing value. They work in `$CMS_IF` and `$CMS_SET` too. Filters work:
+  `member.name | lower == 'ada'`, `url | lower startsWith 'http://'`.
 - **Sorting** is stable; missing values sort last in both directions; strings sort case-insensitively
   with a fixed, locale-independent order, so output is identical on every server.
 - **Loop scope.** Each item has the record's fields plus `_uuid`, `_uid`, `_displayName`,

@@ -116,6 +116,7 @@ public class NavigationController {
         return new NavTreeView(
                 node.assetUuid(), node.type().name(), node.uid(), node.displayName(), node.label(),
                 node.resolvedPageUuid(), path, node.protectedFolder(),
+                assetService.requireCurrent(projectId, node.assetUuid()).validFromRevision(),
                 node.children().stream().map(c -> toView(projectId, c)).toList());
     }
 

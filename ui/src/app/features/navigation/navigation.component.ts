@@ -10,13 +10,14 @@ import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component
 import { SfTreeComponent } from '../../shared/components/sf-tree.component';
 import {
   SfStoreTreeNodeComponent,
+  type FolderRenameFn,
   type StoreTreeMoveEvent,
   type StoreTreeNode,
 } from '../../shared/components/sf-store-tree-node.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { NavFolderDetailComponent } from './nav-folder-detail.component';
 import { NavReferenceDetailComponent } from './nav-reference-detail.component';
-import { NavigationService, type NavigationFolderView, type NavTreeView, type PageReferenceView } from './navigation.service';
+import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView, type PageReferenceView } from './navigation.service';
 import { sortNavTree } from '../../shared/tree-sort.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { consumeQueryParam } from '../../shared/deep-link';
@@ -110,8 +111,8 @@ export class NavigationComponent {
   readonly treeNodes = computed<StoreTreeNode[]>(() => this.topLevelNodes().map(toStoreNode));
 
   /** Navigation folders rename through the folder endpoint, not the generic asset one. */
-  protected readonly renameFolder = (projectKey: string, uuid: string, displayName: string) =>
-    this.nav.renameFolder(projectKey, uuid, displayName);
+  protected readonly renameFolder: FolderRenameFn = (projectKey, uuid, displayName, revision) =>
+    this.nav.renameFolder(projectKey, uuid, displayName, revision === undefined ? undefined : etagFor(revision));
 
   /** The folder currently targeted by "New folder"/"New reference" — the selected folder, or
    * `undefined` (the project root — matches Pages' `selectedFolder() ?? undefined`) if nothing
@@ -393,6 +394,7 @@ function toStoreNode(node: NavTreeView): StoreTreeNode {
     kind: isFolder ? 'FOLDER' : 'LEAF',
     icon: 'link',
     protectedFolder: node.protectedFolder === true,
+    revision: node.revision,
     badge: path
       ? { text: `→ ${path}` }
       : isFolder

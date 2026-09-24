@@ -68,7 +68,7 @@ export class FolderDetailComponent {
       return;
     }
     this.savingName.set(true);
-    this.api.renameFolder(this.projectKey(), uuid, { displayName: name }).subscribe({
+    this.api.renameFolder(this.projectKey(), uuid, { displayName: name }, this.folder().revision).subscribe({
       next: () => {
         this.savingName.set(false);
         this.editingName.set(false);
