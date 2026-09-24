@@ -118,7 +118,7 @@ public class RecordController {
                     throw RecordSetContainment.error("Record set '" + set.uid() + "' holds records of another dataset.");
                 });
         RecordWriteResult result = recordService.create(
-                new CreateRecordCommand(projectId, body.recordSetUuid(), body.displayName(), body.content()),
+                new CreateRecordCommand(projectId, body.recordSetUuid(), body.content()),
                 ctx(projectKey, comment(body.comment(), "create record")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.record().revision()))
@@ -147,7 +147,7 @@ public class RecordController {
             @RequestBody UpdateRecordRequest body) {
         long expected = RevisionHeaders.expectedRevision(ifMatch);
         RecordWriteResult result = recordService.update(
-                uuid, body.content(), body.displayName(), expected, ctx(projectKey, comment(body.comment(), "update record")));
+                uuid, body.content(), expected, ctx(projectKey, comment(body.comment(), "update record")));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.record().revision()))
                 .body(toDetail(result.record(), result.issues()));

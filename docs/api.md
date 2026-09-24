@@ -122,6 +122,8 @@ answers with an empty list.
 | `PUT`/`DELETE` | `/projects/{projectKey}/folders/{uuid}` |
 | `POST` | `/projects/{projectKey}/folders/{uuid}/move` |
 
+Every node of the folder tree (and of `GET /navigation/tree`) carries its current `revision`, the `If-Match` a rename from the tree sends back.
+
 ### 6.1 Globals (M17)
 
 Global property sets. Schema and values are separate endpoints because they need different roles. Every response carries `ETag: "rev-{n}"`, and both `PUT`s require `If-Match`, as for pages.
@@ -152,9 +154,9 @@ A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder
 | `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount`/`setCount` while it has live records or record sets, even with `?force=true` |
 | `POST` | `/projects/{projectKey}/datasets/{uuid}/restore` | `DEVELOPER` | |
 | `GET` | `/projects/{projectKey}/datasets/{uuid}/records` | `VIEWER` | paged listing of every record of the dataset across all of its record sets (set queries are not applied), see below |
-| `POST` | `/projects/{projectKey}/datasets/{uuid}/records` | `EDITOR` | `{recordSetUuid, displayName?, content, comment?}` → `201`; the record goes into that record set, which must be a live set of this dataset (M25; otherwise `422 SF-DOM-0104`). Without `recordSetUuid` (the pre-M25 shape with `folderUuid`) it is `400 SF-API-0400` with `field: "recordSetUuid"`; when the dataset has a `titleEditor`, that editor's value names the record and `displayName` is only the fallback while it is empty |
+| `POST` | `/projects/{projectKey}/datasets/{uuid}/records` | `EDITOR` | `{recordSetUuid, content, comment?}` → `201`; the record goes into that record set, which must be a live set of this dataset (M25; otherwise `422 SF-DOM-0104`). Without `recordSetUuid` (the pre-M25 shape with `folderUuid`) it is `400 SF-API-0400` with `field: "recordSetUuid"`. A record is never named by hand: its `uid` is its uuid in uid form (`3f2a9c1e_8b7d_…`), and its `displayName` is the dataset's `titleEditor` value, else the uuid |
 | `GET` | `/projects/{projectKey}/records/{uuid}` | `VIEWER` | `{uuid, uid, displayName, datasetUuid, datasetUid, recordSet: {uuid, uid, displayName}, folderUuid, folderPath, content, revision, changedBy, changedAt, deleted, issues}` — `folderUuid`/`folderPath` are the record set's Content folder; `?revision=` |
-| `PUT` | `/projects/{projectKey}/records/{uuid}` | `EDITOR` | `{content, displayName?, comment?}`; the dataset can't change |
+| `PUT` | `/projects/{projectKey}/records/{uuid}` | `EDITOR` | `{content, comment?}`; the dataset can't change. The display name follows the `titleEditor` value when it is set and stays as it is otherwise. The generic `PATCH /assets/{uuid}/display-name` and `/uid` refuse a record with `422 SF-DOM-0105`; a `displayName` sent here or on create is ignored |
 
 **Listing records.** `GET …/datasets/{uuid}/records?page=0&size=50` (size 1–500) returns `{content: [row…], page: {size, number, totalElements, totalPages}}`; a row is `{uuid, uid, displayName, folderPath, changedAt, changedBy, values}` where `values` holds only the scalar editors, for grid columns. Filters combine:
 
@@ -394,6 +396,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0102` | 422 | reserved UID — `UidGenerator` |
 | `SF-DOM-0103` | 422 | folder depth limit exceeded — `PathService.MAX_DEPTH` — *implemented addition* |
 | `SF-DOM-0104` | 422 | record set containment violated (M25): a record outside a live record set of its dataset, a record set outside a Content folder, or anything but a record in a set — on create, move, restore — `RecordSetContainment` |
+| `SF-DOM-0105` | 422 | a record's uid and display name are derived and can't be set or changed (M25) — `RecordNaming` |
 | `SF-DOM-0110` | 409 | folder not empty — `FolderService`; a record set with live records (delete without `cascade`) carries `recordCount` (M25) |
 | `SF-DOM-0120` | 409 | asset still referenced by an open edge from a non-deleted asset (delete without `force`) — `AssetServiceImpl` |
 | `SF-DOM-0121` | 409 | dataset still has live records or live record sets (delete, with or without `force`); the problem carries `recordCount` and `setCount` (M25) — `AssetServiceImpl` |

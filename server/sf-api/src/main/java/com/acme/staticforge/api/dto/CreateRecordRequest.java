@@ -5,7 +5,7 @@ import java.util.UUID;
 
 /**
  * Create a record of a dataset (M19.2.1) in the record set {@code recordSetUuid} (M25) — required, a
- * record never lives outside a set of its dataset. {@code displayName} may be omitted when the dataset's
- * title editor has a value in {@code content}.
+ * record never lives outside a set of its dataset. There is no name to give: the record's uid comes from its
+ * uuid and its display name from the dataset's title editor, else the uuid (M25).
  */
-public record CreateRecordRequest(UUID recordSetUuid, String displayName, JsonNode content, String comment) {}
+public record CreateRecordRequest(UUID recordSetUuid, JsonNode content, String comment) {}

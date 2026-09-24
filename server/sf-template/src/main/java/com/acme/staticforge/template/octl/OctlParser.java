@@ -23,6 +23,13 @@ import java.util.Set;
  */
 final class OctlParser {
 
+    /**
+     * The comparison operators spelled as words: {@code in}, {@code contains} (text containment, or list
+     * membership — {@code a contains b} is {@code b in a}), {@code startsWith} and {@code endsWith} (text prefix
+     * and suffix).
+     */
+    private static final Set<String> WORD_OPERATORS = Set.of("in", "contains", "startsWith", "endsWith");
+
     record ParseResult(List<OctlNode> nodes, List<Diagnostic> diagnostics) {}
 
     private final List<OctlLexer.Token> tokens;
@@ -512,8 +519,8 @@ final class OctlParser {
         c.skipWs();
         int mark = c.pos;
         String word = c.readWord();
-        if ("in".equals(word)) {
-            return "in";
+        if (WORD_OPERATORS.contains(word)) {
+            return word;
         }
         c.pos = mark;
         return null;

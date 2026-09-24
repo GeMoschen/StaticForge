@@ -1,9 +1,11 @@
 package com.acme.staticforge;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -199,6 +201,55 @@ class NavigationApiIntegrationTest {
 
     /** A fresh top-level `NAVIGATION` folder — nothing is pre-provisioned any more, so each test
      * that needs one creates its own. */
+    /**
+     * The store trees rename straight from their nodes, so the folder and navigation trees must expose
+     * each node's revision — the {@code If-Match} both rename endpoints require.
+     */
+    @Test
+    void treesExposeTheRevisionTheirRenamesSendAsIfMatch() throws Exception {
+        Fixture fx = newFixture();
+        AssetVersionView navRoot = navRoot(fx);
+        AssetVersionView page = createPage(fx, "About");
+        String key = fx.project().getKey();
+        String createBody = """
+                {"displayName":"About Link","folderUuid":"%s","targetKind":"PAGE","targetAssetUuid":"%s","label":null}
+                """.formatted(navRoot.uuid(), page.uuid());
+        mvc.perform(post("/api/v1/projects/" + key + "/navigation/references")
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody))
+                .andExpect(status().isOk());
+
+        JsonNode navTree = objectMapper.readTree(mvc.perform(get("/api/v1/projects/" + key + "/navigation/tree")
+                        .header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        JsonNode reference = navTree.get(0).get("children").get(0).get("children").get(0);
+        mvc.perform(patch("/api/v1/projects/" + key + "/assets/" + reference.get("uuid").asText() + "/display-name")
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + reference.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"About Us Link\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("About Us Link"));
+
+        JsonNode folderTree = objectMapper.readTree(mvc.perform(get("/api/v1/projects/" + key + "/folders")
+                        .param("scope", "NAVIGATION")
+                        .header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        JsonNode folder = folderTree.get(0).get("children").get(0);
+        assertThat(folder.get("uuid").asText()).isEqualTo(navRoot.uuid().toString());
+        assertThat(folder.get("revision").asLong()).isEqualTo(navRoot.validFromRevision());
+        mvc.perform(put("/api/v1/projects/" + key + "/folders/" + navRoot.uuid())
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + folder.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Main Menu\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("Main Menu"));
+    }
+
     private AssetVersionView navRoot(Fixture fx) {
         return folderService.create(null, "Nav Root " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
     }

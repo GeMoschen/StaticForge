@@ -417,6 +417,14 @@ class RecordSetApiTest {
         send(fx, fx.developerToken(), patch(assets + staff.uuid() + "/uid"), "{\"uid\":\"all_staff\"}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.newUid").value("all_staff"));
+        // A record's name and uid are derived: neither generic endpoint changes them (M25).
+        long adaRevision = json(send(fx, fx.viewerToken(), get(project(fx) + "/records/" + ada), null)).get("revision").asLong();
+        send(fx, fx.editorToken(), withIfMatch(patch(assets + ada + "/display-name"), adaRevision), "{\"displayName\":\"Ada\"}")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SF-DOM-0105"));
+        send(fx, fx.developerToken(), patch(assets + ada + "/uid"), "{\"uid\":\"ada\"}")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SF-DOM-0105"));
         send(fx, fx.viewerToken(), get(sets(fx) + "/" + staff.uuid()), null)
                 .andExpect(jsonPath("$.uid").value("all_staff"))
                 .andExpect(jsonPath("$.displayName").value("All staff"))
@@ -472,7 +480,7 @@ class RecordSetApiTest {
 
     private DatasetView team(Fixture fx) {
         return datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, null, null), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
     }
 
     private RecordSetView set(Fixture fx, DatasetView dataset, String name, RecordSetQuery query) {
@@ -482,7 +490,7 @@ class RecordSetApiTest {
 
     private UUID record(Fixture fx, UUID set, String name, String role, String joined) {
         ObjectNode content = objectMapper.createObjectNode().put("name", name).put("role", role).put("joined", joined);
-        return recordService.create(new CreateRecordCommand(fx.project().getId(), set, name, content), fx.ctx())
+        return recordService.create(new CreateRecordCommand(fx.project().getId(), set, content), fx.ctx())
                 .record()
                 .uuid();
     }

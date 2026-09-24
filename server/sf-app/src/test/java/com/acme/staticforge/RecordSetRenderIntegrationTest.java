@@ -141,7 +141,7 @@ class RecordSetRenderIntegrationTest {
         // 2. A soft-deleted record never renders; a record edit shows; generation and preview agree.
         assetService.softDelete(site.dee().uuid(), false, fx.ctx());
         RecordDetail ada = recordService.find(fx.projectId(), site.ada().uuid(), null).orElseThrow();
-        recordService.update(ada.uuid(), json("{\"name\":\"Ada L.\",\"role\":\"lead\",\"joined\":\"2021-03-01\"}"), null,
+        recordService.update(ada.uuid(), json("{\"name\":\"Ada L.\",\"role\":\"lead\",\"joined\":\"2021-03-01\"}"),
                 ada.revision(), fx.ctx());
         String afterEdits = "<section><li>Ada L. (0/1)</li></section><p>1</p><ol><li>Ada L.</li></ol>"
                 + "<div><li>Bob (0/2)</li><li>Cy (1/2)</li>|2|Cy</div>";
@@ -187,6 +187,30 @@ class RecordSetRenderIntegrationTest {
                 .containsExactly(DiagnosticCodes.GEN_RECORD_SET_QUERY_INVALID);
         // Before the schema change the same set rendered its records.
         assertThat(preview(fx, site.page(), beforeBreak).html()).startsWith("<section><li>Eve (0/3)</li>");
+    }
+
+    /** A set loop's item carries the record's link fields: {@code $CMS_REF} renders an external one's URL. */
+    @Test
+    void aSetLoopRendersARecordsExternalLink() {
+        Fixture fx = newFixture();
+        DatasetView projects = datasetService.create(
+                new CreateDatasetCommand(fx.projectId(), null, "Project",
+                        "content { editor text name { label \"Name\" } editor link store { label \"Store\" } }", "name", null),
+                fx.ctx());
+        UUID set = recordSetService.create(new CreateRecordSetCommand(fx.projectId(), null, projects.uuid(), "projects",
+                        "Projects", RecordSetQuery.ALL), fx.ctx())
+                .uuid();
+        record(fx, set, """
+                {"name": "Axon.Quest", "store": {"kind": "EXTERNAL", "uuid": null, "url": "https://assetstore.unity.com/packages/slug/372984",
+                  "anchor": null, "target": "_blank", "title": "Get it"}}
+                """);
+        TemplateView template = pageTemplate(fx, "Projects Page", "",
+                "$CMS_FOR(item : recordset:projects)$<a href=\"$CMS_REF(item.store)$\" target=\"$CMS_VALUE(item.store.target)$\">"
+                        + "$CMS_VALUE(item.name)$</a>$CMS_END_FOR$");
+        AssetVersionView page = pageService.create(new CreatePageCommand("Projects", null, template.uuid()), fx.ctx());
+
+        assertThat(preview(fx, page.uuid(), null).html())
+                .contains("<a href=\"https://assetstore.unity.com/packages/slug/372984\" target=\"_blank\">Axon.Quest</a>");
     }
 
     @Test
@@ -275,7 +299,7 @@ class RecordSetRenderIntegrationTest {
     private record Site(DatasetView team, UUID leads, UUID staff, RecordDetail ada, RecordDetail dee, RecordDetail bob, UUID page) {}
 
     private RecordDetail record(Fixture fx, UUID set, String content) {
-        return recordService.create(new CreateRecordCommand(fx.projectId(), set, null, json(content)), fx.ctx()).record();
+        return recordService.create(new CreateRecordCommand(fx.projectId(), set, json(content)), fx.ctx()).record();
     }
 
     private ObjectNode setRef(UUID set) {

@@ -92,7 +92,7 @@ export class TemplateNavNodeComponent {
       return;
     }
     this.renamingName.set(true);
-    this.api.renameAsset(key, uuid, { displayName }).subscribe({
+    this.api.renameAsset(key, uuid, { displayName }, this.summary().revision).subscribe({
       next: () => {
         this.renamingName.set(false);
         this.renameOpen.set(false);

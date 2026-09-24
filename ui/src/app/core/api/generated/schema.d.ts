@@ -1789,7 +1789,6 @@ export interface components {
         };
         UpdateRecordRequest: {
             content?: components["schemas"]["JsonNode"];
-            displayName?: string;
             comment?: string;
         };
         AssetRefView: {
@@ -2000,6 +1999,8 @@ export interface components {
             type?: string;
             /** Format: int64 */
             recordCount?: number;
+            /** Format: int64 */
+            revision?: number;
             children?: components["schemas"]["FolderView"][];
         };
         UpdateDatasetRequest: {
@@ -2495,7 +2496,6 @@ export interface components {
         CreateRecordRequest: {
             /** Format: uuid */
             recordSetUuid?: string;
-            displayName?: string;
             content?: components["schemas"]["JsonNode"];
             comment?: string;
         };
@@ -2619,8 +2619,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -2630,6 +2628,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
@@ -2668,8 +2668,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -2679,6 +2677,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -2840,6 +2840,8 @@ export interface components {
             resolvedPageUuid?: string;
             resolvedPagePath?: string;
             protectedFolder?: boolean;
+            /** Format: int64 */
+            revision?: number;
             children?: components["schemas"]["NavTreeView"][];
         };
         PageReferenceResolveView: {
@@ -2866,8 +2868,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -2877,6 +2877,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -2940,8 +2942,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -2951,6 +2951,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {

@@ -13,11 +13,11 @@
     @if (open()) {
       <div class="sf-link__dialog">
         <select
-          [formControl]="field('kind')"
-          [attr.disabled]="definition().readOnly ? '' : null"
+          [disabled]="definition().readOnly"
+          (change)="selectKind($any($event.target).value)"
         >
           @for (k of kinds; track k) {
-            <option [ngValue]="k">{{ k.toLowerCase() }}</option>
+            <option [value]="k" [selected]="k === kind()">{{ k.toLowerCase() }}</option>
           }
         </select>
 

@@ -11,7 +11,8 @@ import java.util.UUID;
  *
  * <p>{@code type} is {@code FOLDER}, or {@code RECORD_SET} for a record set in the Content store (M25):
  * a leaf node whose {@code recordCount} is its live record count (its records are never tree nodes).
- * {@code recordCount} is {@code null} for folders.
+ * {@code recordCount} is {@code null} for folders. {@code revision} is the node's current
+ * {@code validFromRevision}, the concurrency token a rename sends back as {@code If-Match}.
  */
 public record FolderNode(
         UUID uuid,
@@ -22,4 +23,5 @@ public record FolderNode(
         boolean protectedFolder,
         AssetType type,
         Long recordCount,
+        long revision,
         List<FolderNode> children) {}

@@ -196,6 +196,46 @@ class RendererTest {
         assertThat(codes(result.diagnostics())).contains(DiagnosticCodes.OCTL_UNKNOWN_FILTER);
     }
 
+    /**
+     * A link that points at no asset has no uuid for the {@link UrlResolver}: {@code $CMS_REF} renders its own
+     * URL — escaped like a value — also for a loop item's link, and never an unsafe scheme.
+     */
+    @Test
+    void refRendersExternalMailAndAnchorLinksDirectly() {
+        JsonNode values = values("""
+                {"items": [
+                  {"link": {"kind": "EXTERNAL", "url": "https://example.com/a?x=1&y=2", "target": "_blank"}},
+                  {"link": {"kind": "MAIL", "url": "hi@example.com"}},
+                  {"link": {"kind": "MAIL", "url": "mailto:hi@example.com"}},
+                  {"link": {"kind": "ANCHOR", "anchor": "#top"}},
+                  {"link": {"kind": "EXTERNAL", "url": "/relative/path"}},
+                  {"link": {"kind": "EXTERNAL", "url": "JavaScript:alert(1)"}},
+                  {"link": {"kind": "EXTERNAL", "url": null}}
+                ]}
+                """);
+        RenderContext context = RenderContext.builder()
+                .values(values)
+                .urlResolver((kind, uid, uuid, args) -> "/resolved/")
+                .build();
+
+        assertThat(render("$CMS_FOR(item : items)$[$CMS_REF(item.link)$]$CMS_END_FOR$", context))
+                .isEqualTo("[https://example.com/a?x=1&amp;y=2][mailto:hi@example.com][mailto:hi@example.com][#top]"
+                        + "[/relative/path][][]");
+    }
+
+    @Test
+    void ifTestsStartsWithEndsWithAndContains() {
+        String source = "$CMS_IF(url startsWith 'https://')$secure$CMS_ELSEIF(url | lower startsWith 'http://')$plain"
+                + "$CMS_ELSE$other$CMS_END_IF$|$CMS_IF(url contains 'unity')$unity$CMS_END_IF$"
+                + "|$CMS_IF(tags contains 'new')$new$CMS_END_IF$|$CMS_IF(url endsWith '/x')$x$CMS_END_IF$";
+
+        assertThat(render(source, values("{\"url\":\"https://assetstore.unity.com/x\",\"tags\":[\"new\"]}")))
+                .isEqualTo("secure|unity|new|x");
+        assertThat(render(source, values("{\"url\":\"HTTP://example.com\",\"tags\":[\"old\"]}")))
+                .isEqualTo("plain|||");
+        assertThat(render(source, values("{}"))).isEqualTo("other|||");
+    }
+
     @Test
     void unresolvableRefReports0110() {
         OctlResult result = compiler.compile("$CMS_REF(page:nope)$", "html", (assetType, uid) -> Optional.empty());

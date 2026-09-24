@@ -32,7 +32,6 @@ export const RECORD_SET_TYPE = 'RECORD_SET';
  */
 export interface CreateRecordBody {
   recordSetUuid: string;
-  displayName?: string;
   content: Record<string, unknown>;
 }
 
@@ -185,7 +184,7 @@ export class ContentService {
   updateRecord(
     projectKey: string,
     uuid: string,
-    req: { content: Record<string, unknown>; displayName?: string },
+    req: { content: Record<string, unknown> },
     etag: string,
   ): Observable<RecordDetailView> {
     return this.http.put<RecordDetailView>(`${BASE}/projects/${projectKey}/records/${uuid}`, req, {
@@ -273,11 +272,11 @@ export class ContentService {
     );
   }
 
-  renameFolder(projectKey: string, uuid: string, displayName: string): Observable<FolderView> {
+  renameFolder(projectKey: string, uuid: string, displayName: string, etag?: string): Observable<FolderView> {
     return this.http.put<FolderView>(
       `${BASE}/projects/${projectKey}/folders/${uuid}`,
       { displayName },
-      { withCredentials: true },
+      etag ? { withCredentials: true, headers: { 'If-Match': etag } } : { withCredentials: true },
     );
   }
 

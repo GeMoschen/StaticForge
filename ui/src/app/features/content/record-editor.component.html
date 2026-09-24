@@ -47,13 +47,10 @@
 
       <div class="record-editor__body">
         <section class="record-editor__form" aria-label="Record values">
-          @if (!nameFromTitle()) {
-            <label class="record-editor__name">
-              <span>Display name</span>
-              <input type="text" [value]="displayName()" [disabled]="readOnly() || rec.deleted" (input)="onNameInput($event)" />
-            </label>
+          @if (titleEditor(); as title) {
+            <p class="record-editor__hint">The display name follows the “{{ title }}” field.</p>
           } @else {
-            <p class="record-editor__hint">The display name follows the “{{ dataset()?.titleEditor }}” field.</p>
+            <p class="record-editor__hint">The dataset has no title field, so the record is named by its UUID.</p>
           }
 
           @if (definition().editors.length === 0) {

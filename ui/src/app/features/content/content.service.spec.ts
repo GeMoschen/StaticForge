@@ -109,11 +109,11 @@ describe('ContentService', () => {
 
   /** M25: a record is created in a set — the pre-M25 `folderUuid` body is a 400 now. */
   it('creates a record in its record set', () => {
-    service.createRecord('p1', 'ds1', { recordSetUuid: 'set1', displayName: 'Ada', content: {} }).subscribe();
+    service.createRecord('p1', 'ds1', { recordSetUuid: 'set1', content: {} }).subscribe();
 
     const req = httpMock.expectOne('/api/v1/projects/p1/datasets/ds1/records');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ recordSetUuid: 'set1', displayName: 'Ada', content: {} });
+    expect(req.request.body).toEqual({ recordSetUuid: 'set1', content: {} });
     expect(req.request.body).not.toHaveProperty('folderUuid');
     req.flush({});
   });

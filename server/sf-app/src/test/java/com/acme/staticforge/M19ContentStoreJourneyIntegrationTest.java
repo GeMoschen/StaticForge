@@ -185,7 +185,7 @@ class M19ContentStoreJourneyIntegrationTest {
         // 5. Editing a non-lead record rebuilds the looping page (dataset dependency), not the others.
         long beforeBobEdit = head(fx.project());
         RecordDetail editedBob = recordService.update(
-                        bob.uuid(), json("{\"name\":\"Bob\",\"role\":\"lead\",\"joined\":\"2024-01-01\"}"), null, bob.revision(), fx.ctx())
+                        bob.uuid(), json("{\"name\":\"Bob\",\"role\":\"lead\",\"joined\":\"2024-01-01\"}"), bob.revision(), fx.ctx())
                 .record();
         assertThat(planned(fx.project(), beforeBobEdit)).containsExactly(teamPage.uuid());
         GenerationRun incremental = generate(fx.project(), target, fx.user(), GenerationMode.INCREMENTAL);
@@ -251,7 +251,7 @@ class M19ContentStoreJourneyIntegrationTest {
     /** A record in the record set of {@code dataset} in {@code folder} (M25: records always live in a set). */
     private RecordDetail record(Fixture fx, DatasetView dataset, UUID folder, String content) throws IOException {
         UUID set = new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), dataset.uuid(), folder, fx.ctx());
-        return recordService.create(new CreateRecordCommand(fx.project().getId(), set, null, mapper.readTree(content)), fx.ctx())
+        return recordService.create(new CreateRecordCommand(fx.project().getId(), set, mapper.readTree(content)), fx.ctx())
                 .record();
     }
 

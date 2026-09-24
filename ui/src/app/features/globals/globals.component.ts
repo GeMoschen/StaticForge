@@ -9,6 +9,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import {
   SfStoreTreeNodeComponent,
+  type FolderRenameFn,
   type StoreTreeMoveEvent,
   type StoreTreeNode,
 } from '../../shared/components/sf-store-tree-node.component';
@@ -17,7 +18,7 @@ import { ContextMenuItem, ContextMenuService } from '../../shared/services/conte
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { GlobalSetDetailComponent } from './global-set-detail.component';
-import { GlobalsService, type FolderView, type GlobalSetSummaryView } from './globals.service';
+import { etagFor, GlobalsService, type FolderView, type GlobalSetSummaryView } from './globals.service';
 
 /** The CDL a newly created property set starts with — one field, so the Values tab is never blank. */
 const STARTER_CDL = `content {
@@ -107,8 +108,8 @@ export class GlobalsComponent {
   });
 
   /** Globals folders rename through the folder endpoint, not the generic asset one. */
-  protected readonly renameFolder = (projectKey: string, uuid: string, displayName: string) =>
-    this.globals.renameFolder(projectKey, uuid, displayName);
+  protected readonly renameFolder: FolderRenameFn = (projectKey, uuid, displayName, revision) =>
+    this.globals.renameFolder(projectKey, uuid, displayName, revision === undefined ? undefined : etagFor(revision));
 
   constructor() {
     effect(() => {
@@ -312,6 +313,7 @@ function leavesOf(folder: FolderView, byFolder: Map<string, GlobalSetSummaryView
       displayName: set.displayName,
       kind: 'LEAF' as const,
       icon: 'tune',
+      revision: set.revision,
     }));
 }
 
@@ -322,6 +324,7 @@ function folderNode(folder: FolderView, byFolder: Map<string, GlobalSetSummaryVi
     displayName: folder.displayName,
     kind: 'FOLDER',
     protectedFolder: folder.protectedFolder === true,
+    revision: folder.revision,
     children: [
       ...(folder.children ?? []).map((child) => folderNode(child, byFolder)),
       ...leavesOf(folder, byFolder),

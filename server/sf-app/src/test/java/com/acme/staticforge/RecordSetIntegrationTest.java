@@ -150,11 +150,11 @@ class RecordSetIntegrationTest {
                 .getUuid();
 
         assertContainmentViolation(() -> recordService.create(
-                new CreateRecordCommand(fx.project().getId(), null, "Ada", values("Ada")), fx.ctx()));
+                new CreateRecordCommand(fx.project().getId(), null, values("Ada")), fx.ctx()));
         assertContainmentViolation(() -> recordService.create(
-                new CreateRecordCommand(fx.project().getId(), contentRoot, "Ada", values("Ada")), fx.ctx()));
+                new CreateRecordCommand(fx.project().getId(), contentRoot, values("Ada")), fx.ctx()));
         assertContainmentViolation(() -> recordService.create(
-                new CreateRecordCommand(fx.project().getId(), people.uuid(), "Ada", values("Ada")), fx.ctx()));
+                new CreateRecordCommand(fx.project().getId(), people.uuid(), values("Ada")), fx.ctx()));
         // The generic create path enforces the same rule.
         ObjectNode payload = mapper.createObjectNode().put("datasetRef", team.uuid().toString());
         payload.set("content", values("Ada"));
@@ -173,7 +173,7 @@ class RecordSetIntegrationTest {
         recordSetService.delete(members.uuid(), true, fx.ctx());
         assertContainmentViolation(() -> assetService.restore(ada.uuid(), ada.revision(), fx.ctx()));
         assertContainmentViolation(() -> recordService.create(
-                new CreateRecordCommand(fx.project().getId(), members.uuid(), "Bob", values("Bob")), fx.ctx()));
+                new CreateRecordCommand(fx.project().getId(), members.uuid(), values("Bob")), fx.ctx()));
         assertThat(current(fx, ada).deleted()).isTrue();
 
         assetService.restore(members.uuid(), members.revision(), fx.ctx());
@@ -433,7 +433,7 @@ class RecordSetIntegrationTest {
     }
 
     private RecordDetail record(Fixture fx, RecordSetView set, String name) {
-        return recordService.create(new CreateRecordCommand(fx.project().getId(), set.uuid(), name, values(name)), fx.ctx())
+        return recordService.create(new CreateRecordCommand(fx.project().getId(), set.uuid(), values(name)), fx.ctx())
                 .record();
     }
 

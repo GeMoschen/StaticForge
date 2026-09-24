@@ -11,6 +11,7 @@ import java.util.UUID;
  *
  * <p>{@code type} is {@code FOLDER}, or {@code RECORD_SET} for a record set in the {@code CONTENT} tree
  * (M25): a leaf whose {@code recordCount} is its live record count ({@code null} for folders).
+ * {@code revision} is the node's current revision, sent back as {@code If-Match} on a rename.
  */
 public record FolderView(
         UUID uuid,
@@ -21,4 +22,5 @@ public record FolderView(
         boolean protectedFolder,
         String type,
         Long recordCount,
+        long revision,
         List<FolderView> children) {}

@@ -2216,7 +2216,7 @@ class ProjectExportImportIntegrationTest {
                 new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
                 source.ctx());
         var ada = createRecord(source, team, null, "{\"name\":\"Ada\",\"role\":\"dev\"}");
-        var updated = recordService.update(ada.uuid(), json("{\"name\":\"Ada\",\"role\":\"lead\"}"), null, ada.revision(), source.ctx()).record();
+        var updated = recordService.update(ada.uuid(), json("{\"name\":\"Ada\",\"role\":\"lead\"}"), ada.revision(), source.ctx()).record();
 
         AssetDiff recordDiff = onlyAssetDiff(diffService.diff(source.project().getId(), updated.revision()));
         assertThat(recordDiff.type()).isEqualTo("RECORD");
@@ -2340,11 +2340,13 @@ class ProjectExportImportIntegrationTest {
         Map<String, Boolean> explicitByUid = parseAssets(archive).stream()
                 .filter(a -> !"FOLDER".equals(a.type()))
                 .collect(Collectors.toMap(a -> a.type() + ":" + a.uid(), ExportedAsset::isExplicit));
+        // Ada, Dee and Eve are the leads set's records; a record's uid is its uuid in uid form.
+        java.util.function.Function<UUID, String> recordKey = uuid -> "RECORD:" + uuid.toString().replace('-', '_');
         assertThat(explicitByUid).containsExactlyInAnyOrderEntriesOf(Map.of(
                 "RECORD_SET:leads", true,
-                "RECORD:ada", true,
-                "RECORD:dee", true,
-                "RECORD:eve", true,
+                recordKey.apply(site.records().get(0)), true,
+                recordKey.apply(site.records().get(1)), true,
+                recordKey.apply(site.records().get(2)), true,
                 "DATASET:team", false));
         assertThat(parseAssets(archive).stream().filter(a -> "FOLDER".equals(a.type())).map(ExportedAsset::uid))
                 .as("the set's folders ride along as ancestors")
@@ -2380,7 +2382,7 @@ class ProjectExportImportIntegrationTest {
         assertThat(assetRepository.findByProjectIdAndUuid(target.project().getId(), ada.uuid())).isEmpty();
 
         // Into the source project, which has the set: no conflict, the record keeps its set and folder path.
-        var edited = recordService.update(ada.uuid(), json("{\"name\":\"Ada Lovelace\"}"), null, ada.revision(), source.ctx()).record();
+        var edited = recordService.update(ada.uuid(), json("{\"name\":\"Ada Lovelace\"}"), ada.revision(), source.ctx()).record();
         assertThat(exportImportService.analyzeImport(source.project().getId(), archive, ImportOptions.DEFAULT).conflicts())
                 .noneMatch(c -> c.severity() == ConflictSeverity.BLOCKING);
         exportImportService.importProject(source.project().getId(), archive, source.ctx(), ImportOptions.DEFAULT);
@@ -2610,7 +2612,7 @@ class ProjectExportImportIntegrationTest {
 
     private UUID setRecord(Fixture fx, UUID set, String content) {
         return recordService.create(
-                        new com.acme.staticforge.asset.dataset.CreateRecordCommand(fx.project().getId(), set, null, json(content)),
+                        new com.acme.staticforge.asset.dataset.CreateRecordCommand(fx.project().getId(), set, json(content)),
                         fx.ctx())
                 .record()
                 .uuid();
@@ -2655,7 +2657,7 @@ class ProjectExportImportIntegrationTest {
         UUID set = new RecordSetFixtures(recordSetService).setFor(fixture.project().getId(), dataset.uuid(), folder, fixture.ctx());
         return recordService.create(
                         new com.acme.staticforge.asset.dataset.CreateRecordCommand(
-                                fixture.project().getId(), set, values.path("name").asText(), values),
+                                fixture.project().getId(), set, values),
                         fixture.ctx())
                 .record();
     }

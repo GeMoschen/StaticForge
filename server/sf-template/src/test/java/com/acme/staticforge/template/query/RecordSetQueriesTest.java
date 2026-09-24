@@ -331,6 +331,8 @@ class RecordSetQueriesTest {
                     "a == 1 || b != 2.5 && !(c < -3)",
                     "name == \"O'Brien\" || name == 'back\\\\slash\\nline'",
                     "tags in ['a', 1, true] && 'x' in name",
+                    "url startsWith 'https://' || tags contains 'x' && name | lower contains 'y'",
+                    "!(file endsWith '.pdf') && name endsWith \"'s\"",
                     "name|truncate(40, '...')|lower == 'x'",
                     "!done && (x >= 2 || y <= 3) && z > 1 && w < 0",
                     "joined > '2024-01-01' && value == null && flag == false",

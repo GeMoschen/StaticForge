@@ -32,7 +32,7 @@
           }
         </div>
         @if (!readOnly() && !rs.deleted) {
-          <sf-button variant="primary" (click)="openNewRecord()">New record</sf-button>
+          <sf-button variant="primary" [disabled]="creatingRecord()" (click)="createRecord()">New record</sf-button>
           <sf-button variant="danger" (click)="deleteSet()">Delete set</sf-button>
         }
         @if (rs.deleted && !timeTravelling()) {
@@ -147,12 +147,3 @@
   }
 }
 
-<sf-create-asset-dialog
-  kind="RECORD"
-  scope="CONTENT"
-  [open]="newRecordOpen()"
-  [submitting]="creatingRecord()"
-  [projectKey]="projectKey()"
-  (create)="submitNewRecord($event)"
-  (closed)="closeNewRecord()"
-/>

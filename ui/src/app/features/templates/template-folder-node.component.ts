@@ -283,7 +283,7 @@ export class TemplateFolderNodeComponent {
       return;
     }
     this.renamingName.set(true);
-    this.api.renameFolder(this.projectKey(), uuid, { displayName }).subscribe({
+    this.api.renameFolder(this.projectKey(), uuid, { displayName }, this.node().revision).subscribe({
       next: () => {
         this.renamingName.set(false);
         this.renameOpen.set(false);

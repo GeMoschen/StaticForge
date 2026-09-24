@@ -154,7 +154,7 @@ class DatasetRecordIntegrationTest {
         AssetVersion sectionTemplates = currentFolder(fx, FolderScope.SECTION_TEMPLATES_UID);
 
         assertThatThrownBy(() -> recordService.create(
-                        new CreateRecordCommand(fx.project().getId(), pageFolder.uuid(), "Ada", content("{\"name\":\"Ada\"}")),
+                        new CreateRecordCommand(fx.project().getId(), pageFolder.uuid(), content("{\"name\":\"Ada\"}")),
                         fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(422));
         assertThatThrownBy(() -> sets().create(fx.project().getId(), team.uuid(), pageFolder.uuid(), "Docs set", fx.ctx()))
@@ -282,7 +282,7 @@ class DatasetRecordIntegrationTest {
                 fx.ctx());
 
         assertThatThrownBy(() -> recordService.update(
-                        ada.uuid(), content("{\"name\":\"Ada L.\",\"role\":\"lead\"}"), null, ada.revision(), fx.ctx()))
+                        ada.uuid(), content("{\"name\":\"Ada L.\",\"role\":\"lead\"}"), ada.revision(), fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
         assertThat(current(fx, ada).content().path("position").asText()).isEqualTo("lead");
     }
@@ -323,16 +323,16 @@ class DatasetRecordIntegrationTest {
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(issuePaths(ex)).containsExactly("content.role"));
 
         RecordWriteResult incomplete = recordService.create(
-                new CreateRecordCommand(fx.project().getId(), set(fx, team), "Nameless", content("{\"level\":2}")),
+                new CreateRecordCommand(fx.project().getId(), set(fx, team), content("{\"level\":2}")),
                 fx.ctx());
         assertThat(incomplete.issues()).extracting(ContentIssue::path, ContentIssue::code)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("content.name", "required"));
 
         RecordDetail updated = recordService.update(
-                        incomplete.record().uuid(), content("{\"level\":3}"), null, incomplete.record().revision(), fx.ctx())
+                        incomplete.record().uuid(), content("{\"level\":3}"), incomplete.record().revision(), fx.ctx())
                 .record();
         assertThatThrownBy(() -> recordService.update(
-                        incomplete.record().uuid(), content("{\"level\":4}"), null, incomplete.record().revision(), fx.ctx()))
+                        incomplete.record().uuid(), content("{\"level\":4}"), incomplete.record().revision(), fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
         assertThat(updated.content().path("level").asInt()).isEqualTo(3);
     }
@@ -372,7 +372,7 @@ class DatasetRecordIntegrationTest {
                         org.assertj.core.groups.Tuple.tuple(ReferenceKind.MEDIA_REF, assetId(fx, photo.uuid()), "content.photo"));
 
         // Clearing the photo closes its row; the dataset edge stays.
-        recordService.update(ada.uuid(), content("{\"name\":\"Ada\"}"), null, ada.revision(), fx.ctx());
+        recordService.update(ada.uuid(), content("{\"name\":\"Ada\"}"), ada.revision(), fx.ctx());
         assertThat(openRows(fx, ada.uuid())).extracting(AssetReference::getKind).containsExactly(ReferenceKind.TEMPLATE);
     }
 
@@ -405,27 +405,45 @@ class DatasetRecordIntegrationTest {
     }
 
     @Test
-    void theTitleEditorNamesRecordsButTheUidIsOnlyDerivedOnCreate() {
+    void aRecordIsNamedByItsTitleFieldElseItsUuidAndItsUidIsItsUuid() {
         Fixture fx = newFixture();
         DatasetView team = datasetService.create(
                 new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
 
         RecordDetail jane = recordService.create(
-                        new CreateRecordCommand(fx.project().getId(), set(fx, team), null, content("{\"name\":\"Jane Doe\"}")),
+                        new CreateRecordCommand(fx.project().getId(), set(fx, team), content("{\"name\":\"Jane Doe\"}")),
                         fx.ctx())
                 .record();
         assertThat(jane.displayName()).isEqualTo("Jane Doe");
-        assertThat(jane.uid()).isEqualTo("jane_doe");
+        assertThat(jane.uid()).isEqualTo(jane.uuid().toString().replace('-', '_'));
 
         RecordDetail renamed = recordService.update(
-                        jane.uuid(), content("{\"name\":\"Jane Smith\"}"), "ignored", jane.revision(), fx.ctx())
+                        jane.uuid(), content("{\"name\":\"Jane Smith\"}"), jane.revision(), fx.ctx())
                 .record();
         assertThat(renamed.displayName()).isEqualTo("Jane Smith");
-        assertThat(renamed.uid()).isEqualTo("jane_doe");
+        assertThat(renamed.uid()).isEqualTo(jane.uid());
 
-        assertThatThrownBy(() -> recordService.create(
-                        new CreateRecordCommand(fx.project().getId(), set(fx, team), null, content("{}")), fx.ctx()))
-                .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(400));
+        // No title value (and no dataset title editor at all): the uuid names it, and an update keeps that name.
+        RecordDetail untitled = recordService.create(
+                        new CreateRecordCommand(fx.project().getId(), set(fx, team), content("{}")), fx.ctx())
+                .record();
+        assertThat(untitled.displayName()).isEqualTo(untitled.uuid().toString());
+        RecordDetail nameless = recordService.create(
+                        new CreateRecordCommand(fx.project().getId(), set(fx, team(fx)), content("{\"name\":\"Ada\"}")),
+                        fx.ctx())
+                .record();
+        assertThat(nameless.displayName()).isEqualTo(nameless.uuid().toString());
+        assertThat(recordService.update(nameless.uuid(), content("{\"name\":\"Ada L.\"}"), nameless.revision(), fx.ctx())
+                        .record()
+                        .displayName())
+                .isEqualTo(nameless.uuid().toString());
+
+        // Neither can be changed by hand.
+        assertThatThrownBy(() -> assetService.changeUid(jane.uuid(), "jane", fx.ctx()))
+                .isInstanceOfSatisfying(SfException.class, ex -> {
+                    assertThat(ex.getStatus()).isEqualTo(422);
+                    assertThat(ex.getProblem().getExtensions()).containsEntry("code", "SF-DOM-0105");
+                });
     }
 
     @Test
@@ -474,7 +492,7 @@ class DatasetRecordIntegrationTest {
         DatasetView team = team(fx);
         RecordDetail ada = record(fx, team, null, "{\"name\":\"Ada\"}").record();
         TemplateView loop = sectionTemplate(fx, "$CMS_FOR(x : dataset:team)$$CMS_VALUE(x.name)$$CMS_END_FOR$");
-        TemplateView single = sectionTemplate(fx, "$CMS_VALUE(record:ada.name)$");
+        TemplateView single = sectionTemplate(fx, "$CMS_VALUE(record:" + ada.uid() + ".name)$");
         TemplateView pageTemplate = templateService.create(
                 new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Profile",
                         "content { editor reference person { label \"Person\" dataset \"team\" } }",
@@ -511,7 +529,7 @@ class DatasetRecordIntegrationTest {
         JsonNode values = content(json);
         String name = values.path("name").asText(values.path("sku").asText("Record"));
         return recordService.create(
-                new CreateRecordCommand(fx.project().getId(), set(fx, dataset, folder), name, values), fx.ctx());
+                new CreateRecordCommand(fx.project().getId(), set(fx, dataset, folder), values), fx.ctx());
     }
 
     private RecordSetFixtures sets() {

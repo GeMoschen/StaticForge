@@ -83,6 +83,23 @@ class DatasetQueryEvaluatorTest {
     }
 
     @Test
+    void startsWithAndContainsOnTextAndLists() {
+        assertThat(uids("member.name startsWith 'D'")).containsExactly("dee");
+        assertThat(uids("member.name startsWith 'd'")).as("case-sensitive").isEmpty();
+        assertThat(uids("member.name | lower startsWith 'd'")).containsExactly("dee");
+        assertThat(uids("member.joined startsWith '2021'")).as("a null joined never matches").containsExactly("ada");
+        assertThat(uids("member.level startsWith '3'")).as("text only").isEmpty();
+        assertThat(uids("member.nope startsWith ''")).as("a missing value never matches").isEmpty();
+        assertThat(uids("member.name endsWith 'y'")).containsExactly("cy");
+        assertThat(uids("member.name endsWith 'Y'")).as("case-sensitive").isEmpty();
+        assertThat(uids("member.joined endsWith '-01'")).as("a null joined never matches").containsExactly("ada");
+        assertThat(uids("member.level endsWith '5'")).as("text only").isEmpty();
+        assertThat(uids("member.role contains 'ea'")).containsExactly("ada", "dee");
+        assertThat(uids("member.tags contains 'vip'")).as("list membership, the mirror of in").containsExactly("ada");
+        assertThat(uids("!(member.role contains 'ea') && member.name startsWith 'C'")).containsExactly("cy");
+    }
+
+    @Test
     void referencesCompareByUuid() {
         assertThat(uids("member.photo == '" + PHOTO + "'")).containsExactly("ada");
     }

@@ -81,6 +81,43 @@ describe('SfStoreTreeNodeComponent', () => {
     expect(row?.getAttribute('draggable')).toBeNull();
   });
 
+  /** The display-name endpoint answers `412` without `If-Match`, so a leaf rename must carry its revision. */
+  it('renames a leaf with its revision as the concurrency token', async () => {
+    const renameAsset = vi.fn().mockReturnValue(of({}));
+    const { fixture } = await render(SfStoreTreeNodeComponent, {
+      componentInputs: {
+        node: { uuid: 'set-uuid', displayName: 'Site', kind: 'LEAF', revision: 42 } satisfies StoreTreeNode,
+        projectKey: 'proj',
+        leafNoun: 'Property set',
+      },
+      providers: [{ provide: ApiClient, useValue: { renameAsset } }],
+    });
+
+    (fixture.componentInstance as unknown as { submitRenameDisplayName(name: string): void }).submitRenameDisplayName(
+      'Site settings',
+    );
+
+    expect(renameAsset).toHaveBeenCalledWith('proj', 'set-uuid', { displayName: 'Site settings' }, 42);
+  });
+
+  it("hands a folder's revision to the store's folder rename", async () => {
+    const renameFolder = vi.fn().mockReturnValue(of({}));
+    const { fixture } = await render(SfStoreTreeNodeComponent, {
+      componentInputs: {
+        node: { uuid: 'folder-uuid', displayName: 'Branding', kind: 'FOLDER', revision: 7 } satisfies StoreTreeNode,
+        projectKey: 'proj',
+        renameFolder,
+      },
+      providers: [{ provide: ApiClient, useValue: { renameAsset: vi.fn() } }],
+    });
+
+    (fixture.componentInstance as unknown as { submitRenameDisplayName(name: string): void }).submitRenameDisplayName(
+      'Brand',
+    );
+
+    expect(renameFolder).toHaveBeenCalledWith('proj', 'folder-uuid', 'Brand', 7);
+  });
+
   describe('record set leaves (M25.5.1)', () => {
     const SETS: StoreTreeNode = {
       uuid: 'folder-uuid',

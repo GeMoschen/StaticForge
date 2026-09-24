@@ -39,8 +39,7 @@ export type CreateAssetKind =
   | 'PAGE_REFERENCE'
   | 'GLOBAL_SET'
   | 'DATASET'
-  | 'RECORD_SET'
-  | 'RECORD';
+  | 'RECORD_SET';
 export type CreateAssetScope = 'PAGES' | 'MEDIA' | 'NAVIGATION' | 'GLOBALS' | 'CONTENT';
 
 /** A dataset a new record set is of (the dialog's dataset chooser, M25.5.1). */
@@ -83,7 +82,6 @@ const TITLES: Record<CreateAssetKind, string> = {
   GLOBAL_SET: 'New property set',
   DATASET: 'New dataset',
   RECORD_SET: 'New record set',
-  RECORD: 'New record',
 };
 
 /**

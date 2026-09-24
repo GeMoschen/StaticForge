@@ -92,22 +92,19 @@ describe('RecordSetViewComponent', () => {
     expect(await screen.findByText('Query invalid')).toBeTruthy();
   });
 
-  /** A record is created in this set: the set's dataset in the path, the set in the body, no dataset choice. */
-  it('creates a record in this set and opens it', async () => {
+  /**
+   * A record is created in this set at once — the set's dataset in the path, the set in the body. Nothing
+   * is asked: the server derives its uid from its uuid and its name from its title field.
+   */
+  it('creates a record in this set and opens it, without asking for a name', async () => {
     const content = contentStub();
     const { navigate } = await setup(content);
     await screen.findByRole('heading', { name: 'Leads' });
 
     fireEvent.click(screen.getByRole('button', { name: 'New record' }));
-    expect(screen.queryByLabelText(/^Dataset/)).toBeNull();
-    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Ada' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
-    expect(content.createRecord).toHaveBeenCalledWith('proj', 'ds-team', {
-      recordSetUuid: 'set-uuid',
-      displayName: 'Ada',
-      content: {},
-    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(content.createRecord).toHaveBeenCalledWith('proj', 'ds-team', { recordSetUuid: 'set-uuid', content: {} });
     expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'content', 'records', 'rec-new']);
   });
 

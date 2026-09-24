@@ -241,7 +241,7 @@ class RecordSetIncrementalPlanIntegrationTest {
         ObjectNode core = mapper.createObjectNode().put("name", "Core");
         core.set("members", setRef(staff.uuid()));
         RecordDetail coreGroup = recordService.create(
-                new CreateRecordCommand(fx.projectId(), groupSet.uuid(), null, core), fx.ctx()).record();
+                new CreateRecordCommand(fx.projectId(), groupSet.uuid(), core), fx.ctx()).record();
 
         TemplateView t6 = pageTemplate(fx, "Groups", "", "$CMS_VALUE(recordset:groups)$");
         TemplateView t7 = pageTemplate(fx, "Alumni", "",
@@ -350,11 +350,11 @@ class RecordSetIncrementalPlanIntegrationTest {
     }
 
     private RecordDetail record(Fixture fx, UUID set, String content) {
-        return recordService.create(new CreateRecordCommand(fx.projectId(), set, null, json(content)), fx.ctx()).record();
+        return recordService.create(new CreateRecordCommand(fx.projectId(), set, json(content)), fx.ctx()).record();
     }
 
     private RecordDetail update(Fixture fx, RecordDetail record, String content) {
-        return recordService.update(record.uuid(), json(content), null, record.revision(), fx.ctx()).record();
+        return recordService.update(record.uuid(), json(content), record.revision(), fx.ctx()).record();
     }
 
     private JsonNode json(String content) {

@@ -76,7 +76,8 @@ public class FolderServiceImpl implements FolderService {
             }
             info.put(asset.getId(), new FolderInfo(
                     asset.getUuid(), asset.getUid(), version.getDisplayName(), version.getFolderPath(),
-                    FolderScope.fromPayload(version.getPayload()), FolderScope.isProtected(version.getPayload())));
+                    FolderScope.fromPayload(version.getPayload()), FolderScope.isProtected(version.getPayload()),
+                    version.getValidFromRevision()));
             children.put(asset.getId(), new java.util.ArrayList<>());
         }
         java.util.Map<Long, List<FolderNode>> setsByFolder = scope == FolderScope.CONTENT
@@ -119,7 +120,7 @@ public class FolderServiceImpl implements FolderService {
             Asset asset = set.getAsset();
             byFolder.computeIfAbsent(set.getFolderId(), id -> new java.util.ArrayList<>()).add(new FolderNode(
                     asset.getUuid(), asset.getUid(), set.getDisplayName(), set.getFolderPath(), FolderScope.CONTENT,
-                    false, AssetType.RECORD_SET, counts.getOrDefault(asset.getId(), 0L), List.of()));
+                    false, AssetType.RECORD_SET, counts.getOrDefault(asset.getId(), 0L), set.getValidFromRevision(), List.of()));
         }
         return byFolder;
     }
@@ -134,10 +135,11 @@ public class FolderServiceImpl implements FolderService {
         }
         return new FolderNode(
                 f.uuid(), f.uid(), f.displayName(), f.path(), f.scope(), f.protectedFolder(), AssetType.FOLDER, null,
-                List.copyOf(childNodes));
+                f.revision(), List.copyOf(childNodes));
     }
 
-    private record FolderInfo(UUID uuid, String uid, String displayName, String path, FolderScope scope, boolean protectedFolder) {}
+    private record FolderInfo(UUID uuid, String uid, String displayName, String path, FolderScope scope, boolean protectedFolder,
+            long revision) {}
 
     @Override
     @Transactional

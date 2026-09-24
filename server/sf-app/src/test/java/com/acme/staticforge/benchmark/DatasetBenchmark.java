@@ -113,7 +113,7 @@ class DatasetBenchmark {
                     .put("role", i % 5 == 0 ? "lead" : "dev")
                     .put("level", i % 7);
             var created = recordService.create(
-                    new CreateRecordCommand(project.getId(), members, null, content), ctx).record();
+                    new CreateRecordCommand(project.getId(), members, content), ctx).record();
             if (first == null) {
                 first = created;
             } else if (developer == null) {
@@ -152,15 +152,13 @@ class DatasetBenchmark {
         GenerationRun full = generate(project, target, user, GenerationMode.FULL);
         long fullMs = millisSince(start);
 
-        recordService.update(first.uuid(), mapper.createObjectNode().put("name", "Member zero").put("role", "lead"),
-                null, first.revision(), ctx);
+        recordService.update(first.uuid(), mapper.createObjectNode().put("name", "Member zero").put("role", "lead"), first.revision(), ctx);
         start = System.nanoTime();
         GenerationRun incremental = generate(project, target, user, GenerationMode.INCREMENTAL);
         long incrementalMs = millisSince(start);
 
         // A record every page's loop filters out: planning proves no page renders it (M19.3.2).
-        recordService.update(developer.uuid(), mapper.createObjectNode().put("name", "Member one").put("role", "dev"),
-                null, developer.revision(), ctx);
+        recordService.update(developer.uuid(), mapper.createObjectNode().put("name", "Member one").put("role", "dev"), developer.revision(), ctx);
         start = System.nanoTime();
         GenerationRun unselected = generate(project, target, user, GenerationMode.INCREMENTAL);
         long unselectedMs = millisSince(start);
@@ -228,7 +226,7 @@ class DatasetBenchmark {
                     .put("role", (i / sets) % 5 == 0 ? "lead" : "dev")
                     .put("level", i % 7);
             var created = recordService.create(
-                    new CreateRecordCommand(project.getId(), setUuids.get(i % sets), null, content), ctx).record();
+                    new CreateRecordCommand(project.getId(), setUuids.get(i % sets), content), ctx).record();
             if (i == 0) {
                 lead = created;
             } else if (i == sets) {
@@ -257,15 +255,13 @@ class DatasetBenchmark {
         GenerationRun full = generate(project, target, user, GenerationMode.FULL);
         long fullMs = millisSince(start);
 
-        recordService.update(lead.uuid(), mapper.createObjectNode().put("name", "Member zero").put("role", "lead").put("level", 6),
-                null, lead.revision(), ctx);
+        recordService.update(lead.uuid(), mapper.createObjectNode().put("name", "Member zero").put("role", "lead").put("level", 6), lead.revision(), ctx);
         start = System.nanoTime();
         GenerationRun incremental = generate(project, target, user, GenerationMode.INCREMENTAL);
         long incrementalMs = millisSince(start);
 
         recordService.update(developer.uuid(),
-                mapper.createObjectNode().put("name", "Member ten").put("role", "dev").put("level", 3),
-                null, developer.revision(), ctx);
+                mapper.createObjectNode().put("name", "Member ten").put("role", "dev").put("level", 3), developer.revision(), ctx);
         start = System.nanoTime();
         GenerationRun unselected = generate(project, target, user, GenerationMode.INCREMENTAL);
         long unselectedMs = millisSince(start);

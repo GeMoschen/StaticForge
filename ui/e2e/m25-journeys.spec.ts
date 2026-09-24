@@ -314,10 +314,8 @@ test('journey: record sets end to end', async ({ page }) => {
     const grid = setView.locator('sf-record-grid');
     for (const member of MEMBERS) {
       await setView.getByRole('button', { name: 'New record' }).click();
-      await page.locator('sf-create-asset-dialog input').first().fill(member.name);
-      await page.locator('sf-create-asset-dialog').getByRole('button', { name: /create/i }).click();
       const recordEditor = page.locator('sf-record-editor');
-      await expect(recordEditor.locator('h2')).toHaveText(member.name);
+      await expect(recordEditor.locator('h2')).toHaveText(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       await expect(recordEditor.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('Leadership');
       const saved = page.waitForResponse(
         (r) => r.request().method() === 'PUT' && r.url().includes('/records/') && r.ok(),
@@ -327,6 +325,7 @@ test('journey: record sets end to end', async ({ page }) => {
       await recordField(page, 'Joined').fill(member.joined);
       await saved;
       await expect(recordEditor.locator('.record-editor__status')).toContainText('Saved', { timeout: 10_000 });
+      await expect(recordEditor.locator('h2')).toHaveText(member.name);
       await recordEditor.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Leadership' }).click();
       await expect(setView.getByRole('heading', { name: 'Leadership' })).toBeVisible();
     }
@@ -465,7 +464,7 @@ test('journey: record sets end to end', async ({ page }) => {
     await expect(leadEntries.locator('td.entries__path')).toHaveText(['team.html']);
     await leadEntries.first().getByRole('button', { name: /Changed|Show chain/ }).click();
     const chain = details.getByRole('list', { name: /Why this is rebuilt/ });
-    await expect(chain).toContainText('record:ada');
+    await expect(chain).toContainText(`record:${ada.uid}`);
     await expect(chain).toContainText('reads record set containing');
     await expect(chain).toContainText('leadership');
     await snap(page, 'j5-lead-rebuilt');
