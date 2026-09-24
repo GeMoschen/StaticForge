@@ -96,6 +96,10 @@ export class AdminAuditComponent {
     this.apply({ actions });
   }
 
+  protected removeAction(action: string): void {
+    this.apply({ actions: this.filter().actions.filter((a) => a !== action) });
+  }
+
   protected setProject(value: string): void {
     this.apply({ project: value === '' ? null : value });
   }

@@ -1,12 +1,24 @@
 <div class="filters" role="group" aria-label="Audit filters">
-  <label class="filter">
+  <div class="filter filter--actions">
     <span class="filter__label">Actions</span>
     <select class="select select--multi" multiple size="4" aria-label="Actions" (change)="setActions($any($event.target))">
       @for (action of actions(); track action) {
         <option [value]="action" [selected]="filter().actions.includes(action)">{{ action }}</option>
       }
     </select>
-  </label>
+    @if (filter().actions.length > 0) {
+      <span class="chosen" aria-label="Chosen actions">
+        @for (action of filter().actions; track action) {
+          <span class="chip chip--signal">
+            {{ action }}
+            <button type="button" class="chip__clear" (click)="removeAction(action)" [attr.aria-label]="'Remove ' + action">×</button>
+          </span>
+        }
+      </span>
+    } @else {
+      <span class="muted">Ctrl/⌘-click to choose several</span>
+    }
+  </div>
 
   <div class="filter filter--actor">
     <span class="filter__label" id="actor-label">User</span>

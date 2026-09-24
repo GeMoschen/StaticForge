@@ -1,3 +1,25 @@
+# M26 feature 5 — Docs and journey (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/05-docs-e2e/`.
+
+- [x] M26.5.1 — spec §8.1–8.4, §9.2, §9.4, §20.2, §23, §24, §26 against the implemented behaviour; `infra/README.md`
+      (`sf.security.password.*`, seeded admin, first steps in prod); `docs/administration.md`; deviations noted
+- [x] M26.5.2 — `ui/e2e/m26-journeys.spec.ts` (two contexts, self-seeding), green twice on a clean dev stack;
+      defects fixed with tests
+- [x] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run`
+
+## Review
+
+- Docs: spec §8–§9, §20.2, §23, §24.5, §26.3, Appendix B; `docs/api.md`, `infra/README.md`, new
+  `docs/administration.md`, `docs/user-guide.md`. Deviations between plan and code recorded in `M26.5.1`'s notes
+  (epoch claim vs `iat`, own password change ends sessions, `LOCKED` keeps the session, `SF-API-0423` missing, no
+  project-audit UI, no audit purge).
+- Journey `ui/e2e/m26-journeys.spec.ts` green twice on a clean dev stack; defect found and fixed: the audit action
+  filter hid the chosen actions (now chips, spec added).
+- `./gradlew build test --rerun` 1185 tests green; `npm run build` green; `npx vitest run` 79 files, 536 tests green.
+
+---
+
 # M26 feature 4 — UI (implementation, branch `m26-user-management`)
 
 Spec: `tasks/26-m26-user-management/04-ui/`. Frontend only; order 4.1 → 4.3 → 4.2 → 4.4.

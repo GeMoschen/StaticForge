@@ -134,6 +134,19 @@ describe('AdminAuditComponent', () => {
     await waitFor(() => expect(api.adminAudit).toHaveBeenLastCalledWith(expect.objectContaining({ project: 'acme', page: 0 })));
   });
 
+  it('shows the chosen actions and removes one from the filter', async () => {
+    const { navigate } = await setup({ action: ['USER_DELETED', 'MEMBER_ROLE_SET'] });
+
+    const chosen = screen.getByLabelText('Chosen actions');
+    expect(chosen).toHaveTextContent('USER_DELETED');
+    expect(chosen).toHaveTextContent('MEMBER_ROLE_SET');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove USER_DELETED' }));
+
+    expect(navigate).toHaveBeenLastCalledWith([], expect.objectContaining({
+      queryParams: expect.objectContaining({ action: ['MEMBER_ROLE_SET'] }),
+    }));
+  });
+
   it('picks the user filter from a lookup', async () => {
     const { navigate } = await setup();
 

@@ -487,6 +487,13 @@ project
 
 Projects are hard isolation boundaries. Every asset query is filtered by `project_id` at the repository level via a mandatory parameter — there is no repository method that can read across projects except instance-admin reports.
 
+**Archived projects (M26).** `POST /projects/{key}/archive` (instance admin) makes a project read-only and hides it from its members; `POST /projects/{key}/unarchive` reverses it. Both record a revision, audit `PROJECT_ARCHIVED` / `PROJECT_UNARCHIVED` and bump the token epoch of every member (§9.2), so the change applies on each member's next request. While a project is archived:
+
+- **Members** get `404` for every endpoint of the project, as for a non-member (it is left out of the token's `projects` claim); it is missing from their `GET /projects` and from the memberships of `/auth/me`. Their memberships stay and come back with unarchive.
+- **Instance admins** see it (`archived: true`) and can read everything, but every write answers `409 SF-DOM-0141` "Project is archived" — theirs too. The guard is central (every revision allocation) plus explicit checks on the writes that allocate no revision (generation start and promote, share-link creation, search reindex, URL-registry overrides, generation targets). The API admits only: unarchive, archive (a no-op), requests that change nothing (`/generations/plan`, `/cdl/validate`, `/octl/validate`, text-media validation, section preview, record-set `preview-query`, `export/selection`, `import/analyze`) and cancelling a run started before archiving, which may also finish.
+- Share links issued earlier answer `404`; the search index is closed and catches up on unarchive; published output is left as it is.
+- Deleting an account (§8.2) still removes its memberships of archived projects.
+
 ### 8.2 Users
 
 ```
@@ -496,10 +503,28 @@ app_user
   email         varchar(255) UNIQUE
   display_name  varchar(200)
   password_hash varchar(255)          -- BCrypt cost 12 (Argon2id configurable)
-  status        ACTIVE | DISABLED | LOCKED
+  status        ACTIVE | LOCKED | DISABLED | DELETED
   system_role   USER | INSTANCE_ADMIN
+  must_change_password boolean        -- M26: a temporary password is pending
+  token_epoch   bigint                -- bumped to revoke every access token at once (§9.2)
   failed_logins, locked_until, last_login_at, created_at
 ```
+
+Usernames consist of letters, digits and `. _ @ + -` (at most 100 characters) and are unique ignoring case; emails are unique ignoring case. Usernames starting with `deleted-user-` and addresses at `@invalid` are reserved for deleted accounts.
+
+**Statuses.**
+
+- `LOCKED` — set automatically after 15 failed sign-ins in a row, for 30 minutes; a successful sign-in afterwards, or an admin's *unlock*, returns the account to `ACTIVE`. (Per IP and username, sign-ins are also rate limited, §26.3.)
+- `DISABLED` — set by an instance admin: sign-in is refused and every session is revoked at once; memberships stay, so *enable* restores access.
+- `DELETED` — *delete* anonymizes the account, irreversibly: username `deleted-user-<id>`, email `deleted-<id>@invalid`, display name `Deleted user`, no password, system role `USER`, no lockout state, no pending password change; every membership is removed (one revision per project, archived projects included) and every session revoked. The row stays, because revisions, audit entries and grants reference it; audit entries about the account lose its name (their target becomes `user:deleted-user-<id>`). Deleted accounts are hidden from user lists unless asked for, and no action applies to them. The API requires `?confirm=<current username>`.
+
+**Forced password change.** While `must_change_password` is set, every authenticated call answers **`428 SF-API-0428`** "Password change required", except exactly `GET /auth/me`, `POST /auth/password`, `POST /auth/logout`, `POST /auth/refresh` and `GET /auth/password-policy`. The flag is read from the account on every request, not from the token, and a successful password change clears it. An instance admin sets it by default when creating an account or resetting its password.
+
+**Password policy.** `sf.security.password.min-length` (default `12` characters, counted as code points) and `sf.security.password.require-mixed` (default `false`; when `true`, at least one letter and at least one digit or symbol). A password is always at most **72 UTF-8 bytes** (BCrypt's input limit) and is rejected, not truncated, past it. A violation is `400 SF-API-0400` with one message per broken rule under `errors`. The policy applies to the own password change and to an admin's create and reset — never to sign-in, so existing passwords keep working. `GET /auth/password-policy` (public) serves `{minLength, requireMixed, maxBytes}`. Generated passwords are 16 characters from a secure random source and always satisfy the policy.
+
+**Seeded administrator.** A fresh installation gets `Admin` / `Admin` (instance admin) — but only while `app_user` is **empty**: after a rename, or once another admin exists and this one is deleted, nothing is seeded again. Outside the `dev`, `demo` and `test` profiles the seeded account must change its password before it can do anything else.
+
+**Guard rails.** The last `ACTIVE` instance admin can't be disabled, deleted or demoted (`409 SF-DOM-0131`), and an admin can't disable, delete or demote themselves (`409 SF-DOM-0132`). There is no "last project admin" rule.
 
 ### 8.3 Project membership & roles
 
@@ -523,6 +548,8 @@ A user may hold exactly one role per project.
 
 `INSTANCE_ADMIN` (system role) may create/archive projects, manage users, and holds implicit `PROJECT_ADMIN` everywhere. Instance admin actions on project content are recorded with an `onBehalf` marker in the revision summary.
 
+**Who manages what (M26).** Only instance admins create, edit, disable and delete accounts and change system roles (`/api/v1/admin/users`). A `PROJECT_ADMIN` adds **existing** accounts to their project — found through `GET /users/lookup`, which never returns emails — changes roles and removes members; a disabled or deleted account can't be added (`409`). Instance admins reach every project without a membership and are not listed as members. The members list shows emails to project admins and instance admins only; everyone else gets them as `null`.
+
 **No per-asset rights in v1.** Authorization is `(user, project) → role`, evaluated once per request and cached in the security context.
 
 ### 8.4 Authorization implementation
@@ -533,7 +560,7 @@ A user may hold exactly one role per project.
 public TemplateDto update(...) { … }
 ```
 
-`ProjectAuthorizationService.has(projectKey, minimumRole)` resolves the membership (cached per request in a `ThreadLocal`/request scope), compares against the role ordinal, and throws `ProjectAccessDeniedException` → `403` with a problem document. A missing membership yields `404` rather than `403` when the user has no read access at all, so project existence is not leaked.
+`ProjectAuthorizationService.has(projectKey, minimumRole)` reads the role from the access token's `projects` claim (§9.2; an instance admin passes everywhere), compares against the role ordinal, and answers `403` with a problem document when the role is too low. A missing membership yields `404` rather than `403`, so project existence is not leaked. Archived projects are left out of the claim, so their members get `404` (§8.1); instance admins pass and then meet the read-only guard (`409 SF-DOM-0141`).
 
 ---
 
@@ -543,7 +570,7 @@ public TemplateDto update(...) { … }
 
 | Token | Lifetime | Storage (browser) | Contents |
 |---|---|---|---|
-| Access token | 15 min | in-memory only (Angular signal) | `sub`, `uid`, `name`, `sysRole`, `projects: {key: role}`, `jti`, `iat`, `exp` |
+| Access token | 15 min | in-memory only (Angular signal) | `sub`, `uid`, `name`, `sysRole`, `projects: {key: role}`, `epoch`, `jti`, `iat`, `exp` |
 | Refresh token | 8 h sliding, 30 d absolute | `HttpOnly; Secure; SameSite=Strict` cookie, path `/api/v1/auth` | opaque, server-side row |
 
 **Rationale:** the access token never touches `localStorage` (XSS exfiltration), and the refresh cookie is unreachable to JS. A CSRF token is not needed for the Bearer-authenticated API; the refresh endpoint is protected by `SameSite=Strict` plus an `X-Requested-With` header check.
@@ -558,13 +585,16 @@ public TemplateDto update(...) { … }
   "name": "Elena Farkas",
   "sysRole": "USER",
   "projects": { "acme_site": "EDITOR", "acme_docs": "DEVELOPER" },
+  "epoch": 3,
   "jti": "018f6a3d-…",
   "iat": 1755561600,
   "exp": 1755562500
 }
 ```
 
-Embedding project roles keeps authorization at O(1) without a DB hit. Membership changes therefore take effect at most one access-token lifetime later; a membership change bumps the user's `tokenEpoch`, and the filter rejects tokens whose `iat` predates it — so revocation is immediate for removals.
+Embedding project roles keeps authorization at O(1). Archived projects are left out of `projects` (§8.1).
+
+**Immediate revocation (M26).** The token carries the account's `epoch` (`app_user.token_epoch`). The authentication converter loads the account on every request — it also refuses a disabled or deleted one (a lock only blocks sign-in) — and rejects a token whose `epoch` differs with `401`; the client then refreshes and gets the current roles. The epoch is bumped, revoking every access token of the account, on: a member role set or removed, a system role change, disable, delete, an admin password reset, admin "revoke sessions", "sign out everywhere", the own password change, and archive/unarchive (for every member of the project). A rename, a profile edit, enable and unlock don't bump it. A plain epoch bump leaves the refresh cookie valid; disable, delete, password reset and change, system role change and both "revoke sessions" actions also drop every refresh-token family, which ends the session. Login, refresh and the password policy ignore a `Bearer` header, so a revoked access token a client sends along can't block the refresh that replaces it.
 
 ### 9.3 Signing
 
@@ -580,8 +610,11 @@ Embedding project roles keeps authorization at O(1) without a DB hit. Membership
 | `POST` | `/api/v1/auth/login` | username+password → access token + refresh cookie |
 | `POST` | `/api/v1/auth/refresh` | refresh cookie → new access token (rotates refresh) |
 | `POST` | `/api/v1/auth/logout` | revokes refresh token family |
-| `GET` | `/api/v1/auth/me` | current principal, memberships, capabilities |
-| `POST` | `/api/v1/auth/password` | change own password |
+| `GET` | `/api/v1/auth/me` | current principal from the account row: `id, username, displayName, email, systemRole, mustChangePassword, projectRoles, memberships[{projectKey, projectName, role}]` (archived projects only for instance admins) |
+| `PATCH` | `/api/v1/auth/me` | own profile `{displayName?, username?, email?, currentPassword?}` — username and email need the current password (`400` with `field: currentPassword` otherwise), duplicates are `409` with `field`; sessions stay valid (M26) |
+| `POST` | `/api/v1/auth/password` | change own password `{currentPassword, newPassword}`: password policy (§8.2), clears `mustChangePassword`, revokes every session including this one — the client signs in again |
+| `POST` | `/api/v1/auth/sessions/revoke` | sign out everywhere, this session included; clears the refresh cookie (M26) |
+| `GET` | `/api/v1/auth/password-policy` | public: `{minLength, requireMixed, maxBytes}` (M26) |
 
 Refresh tokens are **rotated** on each use and stored as a family. Reuse of a consumed refresh token invalidates the entire family and forces re-login (detects theft).
 
@@ -1660,14 +1693,36 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| `GET` | `/projects` | authenticated | Only projects the user is a member of |
+| `GET` | `/projects` | authenticated | Only projects the user is a member of, archived ones left out; every project for instance admins |
 | `POST` | `/projects` | INSTANCE_ADMIN | Creates revision 1 |
 | `GET` | `/projects/{key}` | VIEWER | |
 | `PUT` | `/projects/{key}` | PROJECT_ADMIN | |
-| `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN | |
-| `GET` | `/projects/{key}/members` | VIEWER | |
-| `PUT` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN | Set role |
+| `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN | Read-only and hidden from members (§8.1); `204` |
+| `POST` | `/projects/{key}/unarchive` | INSTANCE_ADMIN | Reverses archive; `204` |
+| `GET` | `/projects/{key}/members` | VIEWER | `{userId, username, displayName, email, status, role, grantedAt, grantedBy}`; `email` only for PROJECT_ADMIN and instance admins |
+| `PUT` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN | Add or set role `{role}`; a disabled or deleted account is `409` |
 | `DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN | |
+| `GET` | `/projects/{key}/audit` | PROJECT_ADMIN | The project's audit entries, newest first |
+
+**Users and administration (M26)** — `/admin/**` is instance admin only (`403` otherwise).
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `GET` | `/users/lookup?projectKey=&q=` | PROJECT_ADMIN of `projectKey` | At most 20 `ACTIVE`/`LOCKED` accounts `{id, username, displayName, member}`, never emails |
+| `GET` | `/admin/users?q=&status=&systemRole=&includeDeleted=&page=&size=&sort=` | INSTANCE_ADMIN | Paged (`size` ≤ 200, default sort `username`); `q` matches username, email, display name; row `{id, username, displayName, email, status, systemRole, mustChangePassword, lastLoginAt, projectCount}` |
+| `GET` | `/admin/users/{id}` | INSTANCE_ADMIN | Row plus `createdAt, failedLogins, lockedUntil, memberships[{projectKey, projectName, archived, role, grantedAt, grantedBy}]` |
+| `POST` | `/admin/users` | INSTANCE_ADMIN | `{username, email, displayName?, systemRole, password? \| generatePassword: true, mustChangePassword = true, memberships?: [{projectKey, role}]}` → `201` detail; `generatedPassword` only in this response |
+| `PATCH` | `/admin/users/{id}` | INSTANCE_ADMIN | `{username?, email?, displayName?}`; duplicates `409` with `field` |
+| `POST` | `/admin/users/{id}/disable` · `/enable` · `/unlock` | INSTANCE_ADMIN | → detail; disable revokes every session |
+| `POST` | `/admin/users/{id}/password` | INSTANCE_ADMIN | `{password? \| generatePassword, mustChangePassword = true}` → detail (+ `generatedPassword`); revokes every session |
+| `POST` | `/admin/users/{id}/revoke-sessions` | INSTANCE_ADMIN | `204` |
+| `PUT` | `/admin/users/{id}/system-role` | INSTANCE_ADMIN | `{systemRole}`; revokes every session |
+| `DELETE` | `/admin/users/{id}?confirm=<username>` | INSTANCE_ADMIN | Anonymizing delete (§8.2); `400` when `confirm` doesn't match |
+| `GET` | `/admin/projects?q=&includeArchived=true` | INSTANCE_ADMIN | Every project by key: `{key, name, description, archived, createdAt, memberCount, headRevision, lastChangeAt}` |
+| `GET` | `/admin/audit?action=&userId=&project=&from=&to=&page=&size=` | INSTANCE_ADMIN | Every audit entry, newest first; `action` repeatable, `project` a key or `_instance`, `from` inclusive / `to` exclusive ISO instants; row `{id, timestamp, action, actor{id, username}, projectKey, target, detail}` (`Deleted user` for a deleted actor) |
+| `GET` | `/admin/audit/actions` | INSTANCE_ADMIN | Distinct action names |
+
+Guard rails on disable, delete and system role: `409 SF-DOM-0131` (last active instance admin), `409 SF-DOM-0132` (yourself); any action on a deleted account is `409`.
 
 **Assets (generic)**
 
@@ -2191,16 +2246,17 @@ public class AssetVersion {
 ```
 ui/src/app/
 ├── core/
-│   ├── auth/           auth.store.ts, jwt.interceptor.ts, refresh.interceptor.ts, guards
+│   ├── auth/           auth.store.ts, session.service.ts, jwt/refresh/password-required interceptors, guards
 │   ├── api/            generated/, api-error.interceptor.ts, etag.interceptor.ts
-│   ├── project/        project-context.store.ts, project.resolver.ts
+│   ├── project/        project-context.store.ts, project-access.store.ts, project.resolver.ts
 │   └── ui/             toast.service.ts, dialog.service.ts, shortcut.service.ts
 ├── shared/
 │   ├── components/     sf-button, sf-field, sf-table, sf-tree, sf-empty-state, sf-diff
 │   ├── directives/     sfAutofocus, sfTooltip, sfDropTarget
 │   └── pipes/          sfRelativeTime, sfFileSize
 ├── features/
-│   ├── auth/           login, password change
+│   ├── auth/           login
+│   ├── account/        user menu, My account, set new password (forced change)
 │   ├── dashboard/      project picker, recent activity
 │   ├── pages/          page-list (tree), page-editor (split view), body-editor
 │   ├── media/          library grid, uploader, detail drawer
@@ -2209,17 +2265,20 @@ ui/src/app/
 │   ├── channels/       channel CRUD
 │   ├── revisions/      timeline, diff viewer, restore
 │   ├── generation/     run dialog, live log (SSE), run history
-│   └── admin/          users, projects, members
+│   ├── settings/       project settings tabs, incl. Members
+│   └── admin/          users, projects, audit (lazy-loaded, instance admins only)
 └── design/             tokens.scss, typography.scss, themes/
 ```
 
 ### 23.3 Auth handling
 
 - `authStore` holds the access token in a signal — **never** in `localStorage`.
-- `jwtInterceptor` attaches `Authorization: Bearer …`.
+- `jwtInterceptor` attaches `Authorization: Bearer …` — never to login and refresh (§9.2).
 - `refreshInterceptor` catches `401`, pauses concurrent requests in a single-flight refresh, retries once, and routes to `/login` on failure while preserving `returnUrl`.
 - A silent refresh timer fires at 80% of token lifetime.
-- Route guards: `authGuard`, `projectMemberGuard(minRole)`. Guards read roles from the decoded token, so navigation never waits on a network call.
+- Route guards: `authGuard`, `projectMemberGuard(minRole)`, `instanceAdminGuard` (`/admin`) and `passwordChangeGuard`. Guards read roles from the decoded token, so navigation never waits on a network call.
+- **Effective role (M26).** `authStore.roleFor(projectKey)` is what every role-gated control reads: an instance admin acts as `PROJECT_ADMIN` everywhere, and in an archived project everyone acts as `VIEWER`. `projectAccessStore.readOnly` (time travel or archived) gates the editors that aren't role-gated; an archived project shows a banner (with *Unarchive* for instance admins).
+- **Forced password change (M26).** While `/auth/me` reports `mustChangePassword` — or any call answers `428` — every route leads to `/account/set-password`, which offers only the password form and *Sign out*, then continues to the URL the user was heading for. The own password change signs in again with the new password, since the server revokes every session.
 - `canDeactivate` guard on editors warns on unsaved changes (with "Save and leave" / "Discard" / "Stay").
 
 ### 23.4 Project context
@@ -2406,7 +2465,9 @@ Breakpoints: 1600 / 1280 / 1100 / 840 / 600. Below 840 px the app is **review-or
 8. **Channels.** Small table + form. Deleting shows the exact list of templates that will lose a channel body.
 9. **Revisions.** Full-page timeline (the spine, expanded) with filters by user, asset and type; side-by-side diff; restore.
 10. **Generate.** Dialog (mode, channels, target, comment) → live log with per-stage progress, error/warning grouping by code, and a file-count summary. Errors link straight to the offending template line.
-11. **Admin.** Users, projects, members.
+11. **Admin** (`/admin`, instance admins). *Users*: server-paged list with search and status/role filters; create (generated password shown once, or typed with the policy as live checks; "must change password"; first project memberships); a user page with profile, account state, actions (disable/enable, unlock, reset password, sign out everywhere, grant/revoke instance admin, delete by typing the username) whose guard rails show as disabled buttons with the reason, and memberships. *Projects*: every project with members and last change; archive and unarchive. *Audit*: every entry, filterable by action, user, project (or instance only) and day range, the filters kept in the URL.
+12. **Account.** A user menu in the dashboard header and at the foot of the project rail (initials only when collapsed): *My account*, *Administration* for instance admins, *Sign out*. *My account* holds the profile (username and email ask for the current password), the password with live policy checks, the user's projects, and *Sign out everywhere*.
+13. **Members** (project settings tab). Everyone in the project sees the members; project admins add existing accounts through a lookup, change roles and remove members (removing yourself warns and leaves the project). Disabled members show greyed; emails only for project admins.
 
 ### 24.6 Interaction rules
 
@@ -2600,7 +2661,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 | Area | Control |
 |---|---|
 | Transport | TLS 1.3 only, HSTS, secure cookies |
-| Auth | §9; BCrypt cost 12; lockout; refresh rotation with reuse detection |
+| Auth | §9; BCrypt cost 12; password policy and server-enforced forced change (§8.2); lockout (15 failures → 30 min); refresh rotation with reuse detection; immediate revocation by token epoch (§9.2) |
 | AuthZ | Per-project role check on every endpoint; deny-by-default; project existence not leaked |
 | Injection | Parameterized JPQL/SQL only; no string-built queries; OCTL cannot reach Java |
 | XSS | Channel-default escaping in OCTL; TipTap schema-constrained input; Angular sanitization; strict CSP on preview |
@@ -2608,7 +2669,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 | SSRF | No server-side fetch of user-supplied URLs in v1 |
 | Path traversal | Output paths normalized and asserted to stay under the target root; `..` rejected at validation |
 | Secrets | Env/secret-manager only; never in the DB or logs |
-| Audit | Revisions cover content; a separate `audit_log` covers auth, membership, channel and target changes; retained 1 year |
+| Audit | Revisions cover content; a separate `audit_log` covers auth (`AUTH_LOGIN`, `AUTH_LOGIN_FAILED`), accounts (`USER_CREATED`, `USER_UPDATED`, `USER_RENAMED`, `USER_DISABLED`, `USER_ENABLED`, `USER_UNLOCKED`, `USER_PASSWORD_RESET`, `USER_PASSWORD_CHANGED`, `USER_SYSTEM_ROLE_SET`, `USER_SESSIONS_REVOKED`, `USER_DELETED` — instance-level, no project), membership (`MEMBER_ROLE_SET`, `MEMBER_REMOVED`), `PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`, channel and target changes. Instance admins read all of it (`/admin/audit`), project admins their project's. Intended retention 1 year — no purge job exists yet |
 | Rate limits | Login, preview render, generation start |
 | Headers | CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` |
 
@@ -2787,6 +2848,8 @@ Same content. Two channels. No duplication.
 | `SF-API-0413` | 413 | Upload exceeds the configured limit |
 | `SF-API-0415` | 415 | MIME type not allowed |
 | `SF-API-0422` | 422 | Content fails CDL validation (field-level details attached; structural page content findings in `issues`, §10.5) |
+| `SF-API-0423` | 423 | Account temporarily locked after repeated failed sign-ins (§8.2) |
+| `SF-API-0428` | 428 | Password change required: every call but the forced-change allowlist while `mustChangePassword` is set (§8.2) |
 | `SF-API-0429` | 429 | Rate limit exceeded |
 | `SF-DOM-0101` | 422 | UID already taken (after probe exhaustion) |
 | `SF-DOM-0102` | 422 | Reserved UID |
@@ -2797,6 +2860,8 @@ Same content. Two channels. No duplication.
 | `SF-DOM-0123` | 422 | A page can't use an abstract page template |
 | `SF-DOM-0124` | 422 | A page template save would break templates that extend it (`descendants[]`, §13.3) |
 | `SF-DOM-0130` | 422 | Page reference folder target has no page in its subtree (a section template outside the body's `allow` list is `SF-API-0422` with an `allow` issue, §10.5) |
+| `SF-DOM-0131` | 409 | The last active instance admin can't be disabled, deleted or demoted (§8.2) |
+| `SF-DOM-0132` | 409 | An admin can't disable, delete or demote their own account (§8.2) |
 | `SF-DOM-0141` | 409 | Project is archived: every write to an archived project is refused (M26); only `unarchive` and read-only requests (dry runs, validations, previews, exports) pass |
 | `SF-TPL-01xx` | 422 | CDL/OCTL compile errors (§16.11) |
 | `SF-TPL-0111` | — | Cross-asset value without an editor path (compile warning) |
