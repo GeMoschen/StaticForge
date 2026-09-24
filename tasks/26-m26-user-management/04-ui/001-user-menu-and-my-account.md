@@ -1,6 +1,6 @@
 ---
 id: M26.4.1
-status: todo
+status: done
 depends: [M26.1.1, M26.1.3]
 epic: m26-user-management
 feature: ui
@@ -35,13 +35,13 @@ Epic decisions 3, 4, 7, 10.
 
 ## Acceptance criteria
 
-- [ ] Vitest specs: menu items per system role, sign-out flow, profile form (password field appears only for
+- [x] Vitest specs: menu items per system role, sign-out flow, profile form (password field appears only for
       username/email changes; dirty gating), policy rule checks, forced-change guard + 428 interceptor redirect and
       return URL, sign out everywhere.
-- [ ] Spec fixtures built from `schema.d.ts` shapes (lessons "Spec fixtures must have the API's real shape").
-- [ ] Manual check in the running app: log in, open My account from the dashboard and from a project, change display
+- [x] Spec fixtures built from `schema.d.ts` shapes (lessons "Spec fixtures must have the API's real shape").
+- [x] Manual check in the running app: log in, open My account from the dashboard and from a project, change display
       name, sign out; a user with `mustChangePassword` can't reach a project until changed.
-- [ ] `npm run build` green.
+- [x] `npm run build` green.
 
 ## Out of scope
 
@@ -53,3 +53,23 @@ Epic decisions 3, 4, 7, 10.
   `/auth/me` into `AuthStore` instead of decoding the token.
 - A self password change bumps the epoch server-side: make sure the UI ends in a signed-in state (silent refresh
   with the new cookie, or re-login) and not in a `401` loop — mirror what `M26.1.3` settles.
+
+## Implementation notes
+
+- `features/account/`: `sf-user-menu` (panel `position: fixed`, so the rail's `overflow: hidden` can't clip it;
+  `compact` in the collapsed rail), `AccountComponent` (`/account`), `SetPasswordComponent` (`/account/set-password`),
+  `sf-own-password-form` (shared by both), `sf-password-rules` + `password-rules.util.ts` (mirrors `PasswordPolicy`:
+  code points, UTF-8 bytes, letter / digit-or-symbol), `PasswordPolicyStore` (fetched once).
+- `core/auth/`: `SessionService` (sign out, sign out everywhere, own password change), `passwordChangeGuard` on `''`,
+  `account`, `admin`, `p/:projectKey`; `setPasswordGuard`; `passwordRequiredInterceptor` (`428` → set-password with
+  `returnUrl`; no error toast). `AuthStore` gains `email`, `mustChangePassword`, `memberships`, `isInstanceAdmin`.
+- **Own password change:** the server revokes every session on it, so `SessionService.changeOwnPassword` signs in again
+  with the new password (the user stays signed in here, nowhere else).
+- **Found on the way (fixed):** the JWT interceptor attached the access token to `/auth/login` and `/auth/refresh`. After
+  any epoch bump (membership change, M26.1) that token is revoked, and Spring's bearer filter refused the refresh with
+  `401` — the browser signed the user out instead of refreshing (reproduced against the dev server). The interceptor no
+  longer sends it there, and the server ignores a bearer on login/refresh/password-policy
+  (`SecurityConfig.publicAuthEndpointsIgnoreBearer`, test in `AccountSessionRulesIntegrationTest`).
+- `409` duplicate username/email and a wrong current password now carry `field` (`ProblemFactory.conflict(detail,
+  field)`), so the forms put them on the right input.
+- `/account/password` redirects to `/account#password`; the old `PasswordChangeComponent` is gone.

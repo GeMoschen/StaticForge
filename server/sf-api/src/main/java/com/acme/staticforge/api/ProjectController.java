@@ -19,6 +19,7 @@ import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.AuthenticatedUser;
+import com.acme.staticforge.security.ProjectAuthorizationService;
 import com.acme.staticforge.security.SecuritySupport;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -53,12 +54,18 @@ public class ProjectController {
 
     private final ProjectService projectService;
     private final UserService userService;
+    private final ProjectAuthorizationService projectAuth;
     private final SecuritySupport securitySupport;
 
-    public ProjectController(ProjectService projectService, UserService userService, SecuritySupport securitySupport) {
+    public ProjectController(
+            ProjectService projectService,
+            UserService userService,
+            SecuritySupport securitySupport,
+            ProjectAuthorizationService projectAuth) {
         this.projectService = projectService;
         this.userService = userService;
         this.securitySupport = securitySupport;
+        this.projectAuth = projectAuth;
     }
 
     @GetMapping
@@ -72,8 +79,9 @@ public class ProjectController {
 
         Map<Long, ProjectRole> roleByProject = projectService.membershipsOf(user.id()).stream()
                 .collect(Collectors.toMap(ProjectMember::getProjectId, ProjectMember::getRole));
+        // Archived projects are hidden from everyone but instance admins (M26).
         return projectService.listAll().stream()
-                .filter(p -> roleByProject.containsKey(p.getId()))
+                .filter(p -> roleByProject.containsKey(p.getId()) && !p.isArchived())
                 .sorted(Comparator.comparing(Project::getKey))
                 .map(p -> toSummary(p, roleByProject.get(p.getId())))
                 .collect(Collectors.toList());
@@ -165,6 +173,7 @@ public class ProjectController {
                 .collect(Collectors.toList());
     }
 
+    @AllowedOnArchivedProject("Archiving an archived project changes nothing.")
     @PostMapping("/{key}/archive")
     @PreAuthorize("hasAuthority('SYS_INSTANCE_ADMIN')")
     public ResponseEntity<Void> archive(@PathVariable("key") String projectKey) {
@@ -172,10 +181,22 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Reverses {@code archive} (M26): the project is writable again and back in its members' lists. */
+    @AllowedOnArchivedProject("The one write that reverses archiving.")
+    @PostMapping("/{key}/unarchive")
+    @PreAuthorize("hasAuthority('SYS_INSTANCE_ADMIN')")
+    public ResponseEntity<Void> unarchive(@PathVariable("key") String projectKey) {
+        projectService.unarchive(projectKey, ctx(projectKey, null));
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{key}/members")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ROLE_EXPR + ".VIEWER)")
     public List<ProjectMemberView> members(@PathVariable("key") String projectKey) {
-        return projectService.members(projectKey).stream().map(this::toMemberView).collect(Collectors.toList());
+        boolean showEmails = projectAuth.role(projectKey) == ProjectRole.PROJECT_ADMIN;
+        return projectService.members(projectKey).stream()
+                .map(member -> toMemberView(member, showEmails))
+                .collect(Collectors.toList());
     }
 
     @PutMapping("/{key}/members/{userId}")
@@ -191,7 +212,7 @@ public class ProjectController {
                 .filter(m -> m.getUserId().equals(userId))
                 .findFirst()
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Member not found.")));
-        return toMemberView(member);
+        return toMemberView(member, true);
     }
 
     @DeleteMapping("/{key}/members/{userId}")
@@ -207,13 +228,15 @@ public class ProjectController {
         return RevisionContext.of(projectService.requireByKey(projectKey).getId(), securitySupport.currentUserId(), comment);
     }
 
-    private ProjectMemberView toMemberView(ProjectMember member) {
+    /** Emails are private (M26): only project admins and instance admins see them. */
+    private ProjectMemberView toMemberView(ProjectMember member, boolean showEmail) {
         AppUser user = userService.findById(member.getUserId()).orElse(null);
         return new ProjectMemberView(
                 member.getUserId(),
                 user != null ? user.getUsername() : null,
                 user != null ? user.getDisplayName() : null,
-                user != null ? user.getEmail() : null,
+                user != null && showEmail ? user.getEmail() : null,
+                user != null ? user.getStatus().name() : null,
                 member.getRole().name(),
                 member.getGrantedAt(),
                 member.getGrantedBy());

@@ -103,6 +103,40 @@ class SfJwtAuthenticationConverterTest {
     }
 
     @Test
+    void rejectsDeletedUser() {
+        AppUser user = new AppUser("deleted-user-7", "deleted-7@invalid", Instant.now());
+        user.setStatus(UserStatus.DELETED);
+        when(userService.findById(7L)).thenReturn(Optional.of(user));
+
+        Jwt jwt = Jwt.withTokenValue("t")
+                .header("alg", "HS256")
+                .subject("7")
+                .claim("uid", 7L)
+                .claim("epoch", 0L)
+                .build();
+
+        assertThatThrownBy(() -> converter.convert(jwt)).isInstanceOf(InvalidBearerTokenException.class);
+    }
+
+    @Test
+    void mustChangePasswordComesFromTheAccountNotTheToken() {
+        AppUser user = new AppUser("newbie", "newbie@example.com", Instant.now());
+        user.setMustChangePassword(true);
+        when(userService.findById(7L)).thenReturn(Optional.of(user));
+
+        Jwt jwt = Jwt.withTokenValue("t")
+                .header("alg", "HS256")
+                .subject("7")
+                .claim("uid", 7L)
+                .claim("epoch", 0L)
+                .build();
+
+        AuthenticatedUser principal = (AuthenticatedUser) converter.convert(jwt).getPrincipal();
+
+        assertThat(principal.mustChangePassword()).isTrue();
+    }
+
+    @Test
     void rejectsDisabledUser() {
         AppUser user = new AppUser("bob", "bob@example.com", Instant.now());
         user.setStatus(UserStatus.DISABLED);

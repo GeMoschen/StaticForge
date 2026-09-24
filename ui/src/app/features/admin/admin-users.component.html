@@ -1,0 +1,82 @@
+<div class="toolbar">
+  <input
+    class="input"
+    type="search"
+    placeholder="Search username, name or email…"
+    aria-label="Search users"
+    (input)="onSearch($any($event.target).value)"
+  />
+  <select class="select" aria-label="Status" (change)="setStatus($any($event.target).value)">
+    <option value="" [selected]="status() === ''">Any status</option>
+    @for (s of statuses; track s.value) {
+      <option [value]="s.value" [selected]="status() === s.value">{{ s.label }}</option>
+    }
+  </select>
+  <select class="select" aria-label="Role" (change)="setRole($any($event.target).value)">
+    <option value="" [selected]="systemRole() === ''">Any role</option>
+    <option value="INSTANCE_ADMIN" [selected]="systemRole() === 'INSTANCE_ADMIN'">Instance admins</option>
+    <option value="USER" [selected]="systemRole() === 'USER'">Users</option>
+  </select>
+  <label class="checkbox-label">
+    <input type="checkbox" [checked]="includeDeleted()" (change)="setIncludeDeleted($any($event.target).checked)" />
+    Show deleted
+  </label>
+  <span class="toolbar__spacer"></span>
+  <sf-button variant="primary" (click)="creating.set(true)">New user</sf-button>
+</div>
+
+@if (loading() && rows().length === 0) {
+  <sf-spinner label="Loading users…" />
+} @else {
+  <div class="table sf-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">User</th>
+          <th scope="col">Email</th>
+          <th scope="col">Status</th>
+          <th scope="col">Last login</th>
+          <th scope="col">Projects</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.id) {
+          <tr class="row--link" [class.row--muted]="row.status === 'DELETED'" (click)="open(row)">
+            <td>
+              <a class="user-link" [routerLink]="['/admin/users', row.id]" (click)="$event.stopPropagation()">
+                {{ row.displayName || row.username }}
+              </a>
+              <span class="muted">&#64;{{ row.username }}</span>
+              @if (row.systemRole === 'INSTANCE_ADMIN') {
+                <span class="chip chip--signal">Instance admin</span>
+              }
+              @if (row.mustChangePassword) {
+                <span class="chip chip--warn" title="Must set a new password at the next sign-in">Password change pending</span>
+              }
+            </td>
+            <td>{{ row.email }}</td>
+            <td><span [class]="statusChipClass(row.status)">{{ statusLabel(row.status) }}</span></td>
+            <td>{{ row.lastLoginAt ? (row.lastLoginAt | date: 'medium') : 'Never' }}</td>
+            <td>{{ row.projectCount ?? 0 }}</td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5" class="muted">No users match.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (meta(); as m) {
+    <div class="pager">
+      <span>{{ m.totalElements ?? 0 }} user(s) · page {{ (m.number ?? 0) + 1 }} of {{ m.totalPages || 1 }}</span>
+      <sf-button variant="ghost" [disabled]="(m.number ?? 0) === 0" (click)="goTo((m.number ?? 0) - 1)">Previous</sf-button>
+      <sf-button variant="ghost" [disabled]="(m.number ?? 0) + 1 >= (m.totalPages ?? 1)" (click)="goTo((m.number ?? 0) + 1)">Next</sf-button>
+    </div>
+  }
+}
+
+@if (creating()) {
+  <sf-admin-create-user-dialog (created)="created($event)" (closed)="creating.set(false)" />
+}

@@ -4,6 +4,8 @@ import com.acme.staticforge.api.dto.ChangePasswordRequest;
 import com.acme.staticforge.api.dto.LoginRequest;
 import com.acme.staticforge.api.dto.LoginResponse;
 import com.acme.staticforge.api.dto.MeResponse;
+import com.acme.staticforge.api.dto.PasswordPolicyView;
+import com.acme.staticforge.api.dto.UpdateMeRequest;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.security.AuthService;
@@ -11,14 +13,20 @@ import com.acme.staticforge.security.AuthenticatedUser;
 import com.acme.staticforge.security.JwtProperties;
 import com.acme.staticforge.security.RefreshCookieService;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.user.AppUser;
+import com.acme.staticforge.user.PasswordPolicy;
+import com.acme.staticforge.user.UserAdministrationService;
+import com.acme.staticforge.user.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,16 +44,25 @@ public class AuthController {
     private final RefreshCookieService cookies;
     private final SecuritySupport securitySupport;
     private final JwtProperties jwtProperties;
+    private final UserService userService;
+    private final UserAdministrationService userAdministration;
+    private final PasswordPolicy passwordPolicy;
 
     public AuthController(
             AuthService authService,
             RefreshCookieService cookies,
             SecuritySupport securitySupport,
-            JwtProperties jwtProperties) {
+            JwtProperties jwtProperties,
+            UserService userService,
+            UserAdministrationService userAdministration,
+            PasswordPolicy passwordPolicy) {
         this.authService = authService;
         this.cookies = cookies;
         this.securitySupport = securitySupport;
         this.jwtProperties = jwtProperties;
+        this.userService = userService;
+        this.userAdministration = userAdministration;
+        this.passwordPolicy = passwordPolicy;
     }
 
     @PostMapping("/login")
@@ -78,11 +95,33 @@ public class AuthController {
 
     @GetMapping("/me")
     public MeResponse me() {
-        AuthenticatedUser user = securitySupport.requireUser();
-        Map<String, String> projectRoles = new LinkedHashMap<>();
-        user.projectRoles().forEach((key, role) -> projectRoles.put(key, role.name()));
-        return new MeResponse(
-                user.id(), user.username(), user.displayName(), user.systemRole().name(), projectRoles);
+        AuthenticatedUser principal = securitySupport.requireUser();
+        return toMe(principal, userService.requireById(principal.id()));
+    }
+
+    /** Self-service profile edit (M26); answers the updated profile so the client needs no second read. */
+    @PatchMapping("/me")
+    public MeResponse updateMe(@RequestBody UpdateMeRequest body) {
+        AuthenticatedUser principal = securitySupport.requireUser();
+        AppUser user = authService.updateProfile(
+                principal,
+                new UserService.ProfileUpdate(body.username(), body.email(), body.displayName()),
+                body.currentPassword());
+        return toMe(principal, user);
+    }
+
+    /** Sign out everywhere (M26), this session included: every token of the account stops working. */
+    @PostMapping("/sessions/revoke")
+    public ResponseEntity<Void> revokeSessions(HttpServletResponse response) {
+        authService.revokeAllSessions(securitySupport.requireUser());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookies.clear().toString());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** The rules a new password must meet (M26); public, so a client can show them before anyone signs in. */
+    @GetMapping("/password-policy")
+    public PasswordPolicyView passwordPolicy() {
+        return new PasswordPolicyView(passwordPolicy.minLength(), passwordPolicy.requireMixed(), PasswordPolicy.MAX_BYTES);
     }
 
     @PostMapping("/password")
@@ -90,6 +129,26 @@ public class AuthController {
         AuthenticatedUser user = securitySupport.requireUser();
         authService.changePassword(user, body.currentPassword(), body.newPassword());
         return ResponseEntity.noContent().build();
+    }
+
+    private MeResponse toMe(AuthenticatedUser principal, AppUser user) {
+        Map<String, String> projectRoles = new LinkedHashMap<>();
+        principal.projectRoles().forEach((key, role) -> projectRoles.put(key, role.name()));
+        boolean instanceAdmin = principal.isInstanceAdmin();
+        List<MeResponse.Membership> memberships = userAdministration.memberships(user.getId()).stream()
+                // Archived projects are hidden from everyone but instance admins (M26), like GET /projects.
+                .filter(m -> instanceAdmin || !m.archived())
+                .map(m -> new MeResponse.Membership(m.projectKey(), m.projectName(), m.role().name()))
+                .toList();
+        return new MeResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getDisplayName(),
+                user.getEmail(),
+                user.getSystemRole().name(),
+                user.isMustChangePassword(),
+                projectRoles,
+                memberships);
     }
 
     private long accessTtlSeconds() {

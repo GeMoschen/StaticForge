@@ -28,7 +28,6 @@ import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ChannelsService } from '../channels/channels.service';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import { SfAssetImpactComponent } from '../generation/insight/sf-asset-impact.component';
 import { ContentService } from '../content/content.service';
 import { DatasetSchemaEditorComponent } from '../content/dataset-schema-editor.component';
@@ -71,6 +70,7 @@ import {
   paginationPathsForSave,
   readPaginationPaths,
 } from './pagination-path.util';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type ChannelView = components['schemas']['ChannelView'];
 type FolderView = components['schemas']['FolderView'];
@@ -135,10 +135,11 @@ export class TemplatesComponent {
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
   private readonly api = inject(ApiClient);
-  private readonly timeTravel = inject(TimeTravelStore);
   private readonly destroyRef = inject(DestroyRef);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
+  protected readonly readOnlyLabel = inject(ProjectAccessStore).readOnlyLabel;
 
   /** `ProjectContextStore.pageTemplates`/`sectionTemplates` (used by the "new page" template picker and the page editor's "add section" palette) — AND, as of M13.3, `templateFolderTree` — are only loaded once per project — force a refresh whenever a template or folder is created/renamed/moved/deleted here so those stay in sync without an F5. */
   private refreshTemplateStore(): void {

@@ -47,6 +47,7 @@ public class ProjectExportController {
         return zipResponse(projectKey, archive);
     }
 
+    @AllowedOnArchivedProject("Builds an export archive, changes nothing.")
     @PostMapping("/export/selection")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
     public ResponseEntity<byte[]> exportSelection(

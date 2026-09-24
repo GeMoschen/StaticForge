@@ -66,7 +66,8 @@ class GenerationServiceTest {
                 mock(com.acme.staticforge.project.ProjectLocales.class));
 
         Project project = project(1L);
-        when(projects.requireByKey("p")).thenReturn(project);
+        lenient().when(projects.requireByKey("p")).thenReturn(project);
+        lenient().when(projects.requireWritable("p")).thenReturn(project);
         lenient().when(runs.findById(any())).thenReturn(Optional.empty());
     }
 

@@ -1,6 +1,6 @@
 ---
 id: M26.1.3
-status: todo
+status: done
 depends: [M26.1.1]
 epic: m26-user-management
 feature: accounts
@@ -32,12 +32,12 @@ Epic decisions 4, 7, 9, 10.
 
 ## Acceptance criteria
 
-- [ ] API tests: profile edit with/without password, wrong password, duplicate username/email, display-name-only
+- [x] API tests: profile edit with/without password, wrong password, duplicate username/email, display-name-only
       edit without password.
-- [ ] After `sessions/revoke`, the old access token and the old refresh cookie are both rejected.
-- [ ] `password-policy` reachable without a token and reflects configured values.
-- [ ] Password change enforces the policy (`400 SF-API-0400` with `errors`).
-- [ ] `./gradlew build` green.
+- [x] After `sessions/revoke`, the old access token and the old refresh cookie are both rejected.
+- [x] `password-policy` reachable without a token and reflects configured values.
+- [x] Password change enforces the policy (`400 SF-API-0400` with `errors`).
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -48,3 +48,10 @@ Epic decisions 4, 7, 9, 10.
 - `SecurityConfig` must add `permitAll` for `/api/v1/auth/password-policy` next to the existing public auth routes.
 - A username change does not bump the epoch: the token's `preferred_username` is stale until the next refresh; the
   UI reloads `/auth/me` after saving instead of reading the claim.
+
+## Implementation notes
+
+- `/auth/me` keeps `projectRoles` (the UI `AuthStore` reads it) next to the new `email`, `mustChangePassword` and
+  `memberships`; `displayName` is the stored value (`null` when unset), no longer the username fallback.
+- `POST /auth/password` still revokes every session: verified that the UI's next call gets `401`, its refresh fails
+  and it routes to the login page (`refresh.interceptor.ts`). Kept as is; M26.4 may want to route explicitly.

@@ -1,5 +1,6 @@
 package com.acme.staticforge.urlregistry;
 
+import com.acme.staticforge.project.ProjectWriteGuard;
 import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
 import com.acme.staticforge.asset.navigation.NavigationService;
 import com.acme.staticforge.channel.ChannelOutputSettings;
@@ -81,6 +82,7 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
     private final RevisionService revisionService;
     private final ChannelService channelService;
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
+    private final ProjectWriteGuard writeGuard;
 
     public UrlRegistryServiceImpl(
             UrlRegistryRepository repository,
@@ -89,8 +91,10 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
             LiveOutputPathResolver outputPathResolver,
             RevisionService revisionService,
             ChannelService channelService,
-            com.acme.staticforge.project.ProjectLocales projectLocales) {
+            com.acme.staticforge.project.ProjectLocales projectLocales,
+            ProjectWriteGuard writeGuard) {
         this.repository = repository;
+        this.writeGuard = writeGuard;
         this.navigationService = navigationService;
         this.navigationLookup = navigationLookup;
         this.outputPathResolver = outputPathResolver;
@@ -139,6 +143,8 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
     @Transactional
     public UrlRegistryEntry override(
             UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, String url, RevisionContext ctx) {
+        // An override or reset allocates no revision (see the class comment), so it checks the archived state itself.
+        writeGuard.requireWritable(ctx.projectId());
         if (url == null || url.isBlank()) {
             throw new SfException(ProblemFactory.badRequest("url must not be blank."));
         }
@@ -156,6 +162,7 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
     @Override
     @Transactional
     public void reset(long projectId, ResetScope scope, RevisionContext ctx) {
+        writeGuard.requireWritable(projectId);
         switch (scope.kind()) {
             case ENTRY -> repository.deleteById(scope.entryId());
             case CHANNEL -> repository.deleteByProjectIdAndChannelKey(projectId, scope.channelKey());

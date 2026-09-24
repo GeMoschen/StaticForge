@@ -1,0 +1,110 @@
+@use '../../design/interactive';
+
+:host {
+  display: block;
+}
+
+.user-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-2);
+  max-width: 100%;
+  padding: var(--sf-1) var(--sf-2);
+  border: 1px solid transparent;
+  border-radius: var(--sf-radius-md);
+  background: transparent;
+  color: var(--sf-ink);
+  font: inherit;
+  font-size: var(--sf-text-sm);
+  cursor: pointer;
+  @include interactive.sf-interactive;
+
+  &:hover {
+    background: color-mix(in srgb, var(--sf-ink) 5%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-signal);
+    outline-offset: 2px;
+  }
+}
+
+.user-menu__trigger--compact {
+  padding: var(--sf-1);
+}
+
+.user-menu__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sf-signal) 18%, var(--sf-surface));
+  color: var(--sf-signal);
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.user-menu__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu__panel {
+  position: fixed;
+  z-index: 70;
+  min-width: 14rem;
+  padding: var(--sf-1);
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-lg);
+  box-shadow: var(--sf-shadow-2);
+}
+
+.user-menu__who {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sf-2) var(--sf-3);
+  margin-bottom: var(--sf-1);
+  border-bottom: 1px solid var(--sf-line);
+}
+
+.user-menu__who-name {
+  color: var(--sf-ink);
+  font-weight: 600;
+  font-size: var(--sf-text-sm);
+}
+
+.user-menu__who-username {
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}
+
+.user-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  width: 100%;
+  padding: var(--sf-2) var(--sf-3);
+  border: none;
+  border-radius: var(--sf-radius-md);
+  background: transparent;
+  color: var(--sf-ink);
+  font: inherit;
+  font-size: var(--sf-text-sm);
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  @include interactive.sf-interactive;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--sf-ink) 6%, transparent);
+    outline: none;
+  }
+}

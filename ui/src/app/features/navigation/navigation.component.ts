@@ -19,8 +19,8 @@ import { NavFolderDetailComponent } from './nav-folder-detail.component';
 import { NavReferenceDetailComponent } from './nav-reference-detail.component';
 import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView, type PageReferenceView } from './navigation.service';
 import { sortNavTree } from '../../shared/tree-sort.util';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import { consumeQueryParam } from '../../shared/deep-link';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 interface RawFolderPayload {
   scope?: string;
@@ -73,9 +73,9 @@ export class NavigationComponent {
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   readonly loading = signal(false);
   readonly forest = signal<NavTreeView[]>([]);

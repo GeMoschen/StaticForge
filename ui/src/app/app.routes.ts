@@ -1,8 +1,11 @@
-import { Routes } from '@angular/router';
-import { authGuard, loginGuard, projectMemberGuard } from './core/auth/auth.guard';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
+import { authGuard, instanceAdminGuard, loginGuard, projectMemberGuard } from './core/auth/auth.guard';
+import { passwordChangeGuard, setPasswordGuard } from './core/auth/password-change.guard';
 import { projectResolver } from './core/project/project.resolver';
 import { LoginComponent } from './features/auth/login.component';
-import { PasswordChangeComponent } from './features/auth/password-change.component';
+import { AccountComponent } from './features/account/account.component';
+import { SetPasswordComponent } from './features/account/set-password.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { ProjectShellComponent } from './features/dashboard/project-shell.component';
 import { PagesListComponent } from './features/pages/pages-list.component';
@@ -12,6 +15,7 @@ import { GlobalsComponent } from './features/globals/globals.component';
 import { ProjectSettingsShellComponent } from './features/settings/project-settings-shell.component';
 import { ProjectSettingsGeneralViewComponent } from './features/settings/project-settings-general-view.component';
 import { ProjectSettingsGenerationViewComponent } from './features/settings/project-settings-generation-view.component';
+import { ProjectSettingsMembersComponent } from './features/settings/project-settings-members.component';
 import { RevisionsListComponent } from './features/revisions/revisions-list.component';
 import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
 import { ProjectSettingsImportExportComponent } from './features/settings/project-settings-import-export.component';
@@ -36,18 +40,35 @@ export const routes: Routes = [
     component: LoginComponent,
   },
   {
+    path: 'account/set-password',
+    canMatch: [authGuard, setPasswordGuard],
+    component: SetPasswordComponent,
+  },
+  // The old standalone password page is a section of My account now (M26).
+  {
     path: 'account/password',
-    canMatch: [authGuard],
-    component: PasswordChangeComponent,
+    redirectTo: () => inject(Router).createUrlTree(['/account'], { fragment: 'password' }),
+  },
+  {
+    path: 'account',
+    canMatch: [authGuard, passwordChangeGuard],
+    component: AccountComponent,
   },
   {
     path: '',
-    canMatch: [authGuard],
+    canMatch: [authGuard, passwordChangeGuard],
     component: DashboardComponent,
+  },
+  // Instance administration (M26) is the one lazy chunk: only instance admins open it, and it shares no editor
+  // components with the rest of the app (the reason for the single bundle, see above).
+  {
+    path: 'admin',
+    canMatch: [authGuard, passwordChangeGuard, instanceAdminGuard],
+    loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
   },
   {
     path: 'p/:projectKey',
-    canMatch: [authGuard, projectMemberGuard('VIEWER')],
+    canMatch: [authGuard, passwordChangeGuard, projectMemberGuard('VIEWER')],
     resolve: { project: projectResolver },
     component: ProjectShellComponent,
     children: [
@@ -104,6 +125,10 @@ export const routes: Routes = [
           {
             path: 'general',
             component: ProjectSettingsGeneralViewComponent,
+          },
+          {
+            path: 'members',
+            component: ProjectSettingsMembersComponent,
           },
           {
             path: 'generation',

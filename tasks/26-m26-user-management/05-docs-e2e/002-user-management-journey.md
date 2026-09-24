@@ -1,6 +1,6 @@
 ---
 id: M26.5.2
-status: todo
+status: done
 depends: [M26.4.1, M26.4.2, M26.4.3, M26.4.4]
 epic: m26-user-management
 feature: docs-e2e
@@ -35,9 +35,9 @@ click what a user wouldn't):
 
 ## Acceptance criteria
 
-- [ ] Journey green against a clean dev stack, twice in a row (self-seeding, unique names per run).
-- [ ] Defects found are fixed in their task's code with a unit/integration test each, and listed in the notes.
-- [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
+- [x] Journey green against a clean dev stack, twice in a row (self-seeding, unique names per run).
+- [x] Defects found are fixed in their task's code with a unit/integration test each, and listed in the notes.
+- [x] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
 
 ## Out of scope
 
@@ -47,3 +47,22 @@ click what a user wouldn't):
 
 - Two browser contexts (admin + user) in one test; the "disable while open" step must wait for the user's next
   request, not a timer.
+
+## Implementation notes
+
+- `ui/e2e/m26-journeys.spec.ts`: three browser contexts (admin, editor, project admin), `window.confirm` accepted like
+  a user would; the only seeding through the API is the fresh project. Every name — usernames *and* display names,
+  which the lookup and the user list search by — carries a per-run suffix.
+- The "disable while open" step waits for the editor's next click (rail → Content) to end on `/login`, not a timer.
+- Green twice in a row on a clean dev stack (fresh `SF_DB_FILE`, media, output and search roots), and once more after
+  the layout fix below.
+
+**Defect found and fixed:** the audit view's action filter is a 4-row multi-select, so with several actions chosen
+most of the selection was scrolled out of sight — the admin couldn't see what the list was filtered by. The chosen
+actions now show as removable chips under the list (a hint says how to pick several when none is chosen), in a
+fixed-width column so the other filters stay on one row; spec `shows the chosen actions and removes one from the
+filter`.
+
+Journey-only adjustments (not app defects): a 15 s allowance after sign-in (as the M25 journeys; BCrypt plus the
+profile load with three contexts open), rail links scoped to the project navigation (the skip link is also named
+"…content").

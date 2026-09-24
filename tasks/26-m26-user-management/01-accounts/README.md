@@ -20,13 +20,13 @@ Tasks 2 and 3 touch different controllers but share `UserService`; run them sequ
 
 ## Feature exit criteria
 
-- [ ] `DELETED` status, `must_change_password` and the configurable password policy exist; `428 SF-API-0428` is
+- [x] `DELETED` status, `must_change_password` and the configurable password policy exist; `428 SF-API-0428` is
       enforced with the exact allowlist.
-- [ ] Membership changes, system-role changes, disable, delete and resets revoke immediately (epoch bump).
-- [ ] `/api/v1/admin/users/**` covers list, detail, create, edit, rename, disable/enable, unlock, reset password,
+- [x] Membership changes, system-role changes, disable, delete and resets revoke immediately (epoch bump).
+- [x] `/api/v1/admin/users/**` covers list, detail, create, edit, rename, disable/enable, unlock, reset password,
       system role, revoke sessions, delete (anonymize); `GET /users/lookup` serves project admins.
-- [ ] `/auth/me` (read + `PATCH`), `/auth/password`, `/auth/sessions/revoke`, `/auth/password-policy` work.
-- [ ] Seeded `Admin` only into an empty user table.
+- [x] `/auth/me` (read + `PATCH`), `/auth/password`, `/auth/sessions/revoke`, `/auth/password-policy` work.
+- [x] Seeded `Admin` only into an empty user table.
 
 ## Dependencies
 

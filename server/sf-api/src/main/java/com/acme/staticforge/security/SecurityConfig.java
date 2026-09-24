@@ -7,6 +7,7 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.util.Set;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -27,7 +28,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 
 /**
  * Stateless security posture (spec §9.5). CSRF is disabled for the Bearer-authenticated API,
@@ -45,6 +49,10 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     private static final Logger LOG = LoggerFactory.getLogger(SecurityConfig.class);
+
+    /** Reachable without a session; they authenticate by password or refresh cookie, if at all. */
+    private static final Set<String> PUBLIC_AUTH_ENDPOINTS =
+            Set.of("/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/password-policy");
 
     private static final String PLACEHOLDER_SECRET = "staticforge-deferred-rs256-not-for-production";
 
@@ -69,7 +77,8 @@ public class SecurityConfig {
                 // SAMEORIGIN). Setting the one true default here, instead of fighting it per-controller,
                 // avoids the duplicate header entirely.
                 .headers(h -> h.frameOptions(frame -> frame.sameOrigin()))
-                .authorizeHttpRequests(a -> a.requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh")
+                .authorizeHttpRequests(a -> a.requestMatchers(
+                                PUBLIC_AUTH_ENDPOINTS.toArray(String[]::new))
                         .permitAll()
                         .requestMatchers("/api/v1/auth/**")
                         .authenticated()
@@ -85,13 +94,29 @@ public class SecurityConfig {
                         .permitAll()
                         .anyRequest()
                         .authenticated())
-                .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(jwtDecoder)
-                        .jwtAuthenticationConverter(jwtAuthenticationConverter)))
+                .oauth2ResourceServer(o -> o.bearerTokenResolver(publicAuthEndpointsIgnoreBearer())
+                        .jwt(j -> j.decoder(jwtDecoder).jwtAuthenticationConverter(jwtAuthenticationConverter)))
+                // A pending forced password change (M26) blocks everything but its allowlist; it needs the
+                // authenticated principal, so it runs right after bearer authentication.
+                .addFilterAfter(new PasswordChangeRequiredFilter(objectMapper), BearerTokenAuthenticationFilter.class)
                 .exceptionHandling(e -> e.authenticationEntryPoint((request, response, authException) ->
                                 writeProblem(response, objectMapper, ProblemFactory.unauthorized("Authentication required.")))
                         .accessDeniedHandler((request, response, accessDeniedException) ->
                                 writeProblem(response, objectMapper, ProblemFactory.forbidden("Access denied."))))
                 .build();
+    }
+
+    /**
+     * Login, refresh and the password policy authenticate by password or refresh cookie, never by access token: a
+     * bearer header on them is ignored. Otherwise a token revoked by an epoch bump (a membership change, M26) would get
+     * the very refresh that is meant to replace it refused with {@code 401}.
+     */
+    static BearerTokenResolver publicAuthEndpointsIgnoreBearer() {
+        DefaultBearerTokenResolver bearer = new DefaultBearerTokenResolver();
+        return request -> {
+            String path = request.getRequestURI().substring(request.getContextPath().length());
+            return PUBLIC_AUTH_ENDPOINTS.contains(path) ? null : bearer.resolve(request);
+        };
     }
 
     @Bean

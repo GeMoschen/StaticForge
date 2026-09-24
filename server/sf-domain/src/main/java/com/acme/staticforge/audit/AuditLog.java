@@ -79,6 +79,12 @@ public class AuditLog {
         return detail;
     }
 
+    /** Replaces the name-bearing parts of an entry when its account is deleted (M26); nothing else ever changes. */
+    void anonymize(String target, JsonNode detail) {
+        this.target = target;
+        this.detail = detail;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

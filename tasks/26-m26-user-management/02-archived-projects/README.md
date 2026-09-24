@@ -15,9 +15,9 @@ reversible by an instance admin.
 
 ## Feature exit criteria
 
-- [ ] Non-admin members get `404` for every endpoint of an archived project on their next request.
-- [ ] Every mutating endpoint rejects writes with `409 SF-DOM-0130` (endpoint walk test).
-- [ ] Share links stop working; generation can't start; unarchive restores everything.
+- [x] Non-admin members get `404` for every endpoint of an archived project on their next request.
+- [x] Every mutating endpoint rejects writes with `409 SF-DOM-0141` (endpoint walk test).
+- [x] Share links stop working; generation can't start; unarchive restores everything.
 
 ## Dependencies
 

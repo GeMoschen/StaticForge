@@ -43,6 +43,7 @@ import {
   positionLabel,
   withLineEnding,
 } from './text-media.util';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type MediaView = components['schemas']['MediaView'];
 type MediaMetadataRequest = components['schemas']['MediaMetadataRequest'];
@@ -97,7 +98,9 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   }
   private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
+  protected readonly readOnlyLabel = inject(ProjectAccessStore).readOnlyLabel;
 
   protected readonly DELETE_TOKEN = 'DELETE';
 

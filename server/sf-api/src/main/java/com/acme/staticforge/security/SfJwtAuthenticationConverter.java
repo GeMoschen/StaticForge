@@ -47,7 +47,7 @@ public class SfJwtAuthenticationConverter implements Converter<Jwt, JwtAuthentic
         Map<String, ProjectRole> projectRoles = parseProjects(jwt);
 
         AppUser user = userService.findById(id).orElseThrow(() -> new InvalidBearerTokenException("Unknown user: " + id));
-        if (user.getStatus() == UserStatus.DISABLED) {
+        if (user.getStatus() == UserStatus.DISABLED || user.getStatus() == UserStatus.DELETED) {
             throw new InvalidBearerTokenException("User is disabled.");
         }
         Object epoch = jwt.getClaim("epoch");
@@ -55,7 +55,8 @@ public class SfJwtAuthenticationConverter implements Converter<Jwt, JwtAuthentic
             throw new InvalidBearerTokenException("Token epoch is stale.");
         }
 
-        AuthenticatedUser principal = new AuthenticatedUser(id, username, displayName, systemRole, projectRoles);
+        AuthenticatedUser principal = new AuthenticatedUser(
+                id, username, displayName, systemRole, projectRoles, user.isMustChangePassword());
 
         Collection<GrantedAuthority> authorities =
                 systemRole == SystemRole.INSTANCE_ADMIN

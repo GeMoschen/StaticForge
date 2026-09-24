@@ -6,6 +6,7 @@ import type { components } from '../api/generated/schema.d.ts';
 
 type LoginResponse = components['schemas']['LoginResponse'];
 type MeResponse = components['schemas']['MeResponse'];
+type Membership = components['schemas']['Membership'];
 
 /**
  * Base64url-decodes a JWT segment to a raw string.
@@ -67,8 +68,16 @@ export class AuthStore {
   readonly displayName = signal<string | null>(null);
   readonly systemRole = signal<string | null>(null);
   readonly projectRoles = signal<Record<string, string>>({});
+  readonly email = signal<string | null>(null);
+  /** The server refuses every call but the password change until this is cleared (M26, `428 SF-API-0428`). */
+  readonly mustChangePassword = signal(false);
+  /** The projects the user is a member of, with their names (from `/auth/me`). */
+  readonly memberships = signal<Membership[]>([]);
+  /** Projects known to be archived (M26): read-only for everyone, so every role in them acts as `VIEWER`. */
+  readonly archivedProjects = signal<ReadonlySet<string>>(new Set());
 
   readonly isAuthenticated = computed(() => this.accessToken() !== null);
+  readonly isInstanceAdmin = computed(() => this.systemRole() === 'INSTANCE_ADMIN');
 
   /**
    * Stores the access token in memory only (never localStorage/sessionStorage)
@@ -106,10 +115,37 @@ export class AuthStore {
     this.displayName.set(user.displayName ?? null);
     this.systemRole.set(user.systemRole ?? null);
     this.projectRoles.set(user.projectRoles ?? {});
+    this.email.set(user.email ?? null);
+    this.mustChangePassword.set(user.mustChangePassword === true);
+    this.memberships.set(user.memberships ?? []);
   }
 
+  /**
+   * The effective role in a project — what the UI gates edit controls on (M26). An instance admin acts as
+   * `PROJECT_ADMIN` everywhere, like the server; in an archived project everyone acts as `VIEWER`, since the server
+   * refuses every write there. `null` for a project the user can't reach.
+   */
   roleFor(projectKey: string): string | null {
-    return this.projectRoles()[projectKey] ?? null;
+    const role = this.isInstanceAdmin() ? 'PROJECT_ADMIN' : (this.projectRoles()[projectKey] ?? null);
+    return role !== null && this.archivedProjects().has(projectKey) ? 'VIEWER' : role;
+  }
+
+  isArchived(projectKey: string | null | undefined): boolean {
+    return !!projectKey && this.archivedProjects().has(projectKey);
+  }
+
+  /** Records what the server said about a project's archived state (project load, archive, unarchive). */
+  setProjectArchived(projectKey: string, archived: boolean): void {
+    if (this.archivedProjects().has(projectKey) === archived) {
+      return;
+    }
+    const next = new Set(this.archivedProjects());
+    if (archived) {
+      next.add(projectKey);
+    } else {
+      next.delete(projectKey);
+    }
+    this.archivedProjects.set(next);
   }
 
   clear(): void {
@@ -119,6 +155,10 @@ export class AuthStore {
     this.displayName.set(null);
     this.systemRole.set(null);
     this.projectRoles.set({});
+    this.email.set(null);
+    this.mustChangePassword.set(false);
+    this.memberships.set([]);
+    this.archivedProjects.set(new Set());
   }
 
   loadUser(http: HttpClient): Observable<MeResponse> {

@@ -17,7 +17,7 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTableComponent } from '../../shared/components/sf-table.component';
 import { UrlArea, UrlRegistryEntryView, UrlRegistryService } from './url-registry.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 const PAGE_SIZE = 20;
 
@@ -54,9 +54,9 @@ export class ProjectSettingsUrlRegistryComponent {
   private readonly channelsApi = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
   protected readonly dialog = inject(DialogService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   protected readonly entries = signal<UrlRegistryEntryView[]>([]);
   protected readonly loading = signal(false);

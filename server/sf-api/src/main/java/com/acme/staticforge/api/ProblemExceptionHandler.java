@@ -6,6 +6,7 @@ import com.acme.staticforge.common.SfException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -20,6 +21,15 @@ public class ProblemExceptionHandler {
     @ExceptionHandler(SfException.class)
     public ResponseEntity<Problem> handleSfException(SfException ex) {
         return respond(ex.getProblem(), ex.getStatus());
+    }
+
+    /**
+     * A method-security refusal ({@code @PreAuthorize("hasAuthority(...)")}) thrown out of a controller. Without this
+     * the catch-all below would turn it into a 500; the filter chain's own access-denied handler never sees it.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Problem> handleAccessDenied(AccessDeniedException ex) {
+        return respond(ProblemFactory.forbidden("Access denied."), HttpStatus.FORBIDDEN.value());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

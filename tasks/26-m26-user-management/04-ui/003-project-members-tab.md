@@ -1,6 +1,6 @@
 ---
 id: M26.4.3
-status: todo
+status: done
 depends: [M26.1.2]
 epic: m26-user-management
 feature: ui
@@ -29,10 +29,10 @@ Epic decisions 1, 6, 13.
 
 ## Acceptance criteria
 
-- [ ] Vitest specs: read-only vs editable per role, typeahead (debounce, member rows disabled), add/change/remove
+- [x] Vitest specs: read-only vs editable per role, typeahead (debounce, member rows disabled), add/change/remove
       calls, self-removal warning and navigation, email column presence follows the payload.
-- [ ] Manual check in the running app as a project admin and as an editor.
-- [ ] `npm run build` green.
+- [x] Manual check in the running app as a project admin and as an editor.
+- [x] `npm run build` green.
 
 ## Out of scope
 
@@ -43,3 +43,10 @@ Epic decisions 1, 6, 13.
 - Removing or changing your own membership invalidates your token (epoch bump): the refresh interceptor gets a `401`,
   refreshes, and the new claim lacks the project → the next project call is `404`. Navigate away before that
   surfaces as an error toast.
+
+## Implementation notes
+
+- `project-settings-members.component` at `settings/members`; editable when the effective role
+  (`AuthStore.roleFor`) is `PROJECT_ADMIN`, which covers instance admins and turns read-only in an archived project.
+- Changing your own role refreshes the token right away; removing yourself navigates to the dashboard.
+- Role selects use `[selected]` on the options (lessons "A `<select>` that shows an option the model never chose").

@@ -4,9 +4,12 @@
       <h1 class="dashboard__title">Projects</h1>
       <p class="dashboard__subtitle">{{ projects().length }} project(s)</p>
     </div>
-    @if (isAdmin()) {
-      <sf-button variant="primary" (click)="openCreate()">New project</sf-button>
-    }
+    <div class="dashboard__header-actions">
+      @if (isAdmin()) {
+        <sf-button variant="primary" (click)="openCreate()">New project</sf-button>
+      }
+      <sf-user-menu />
+    </div>
   </header>
 
   @if (formOpen()) {
@@ -76,7 +79,9 @@
         <a class="card" [routerLink]="['/p', p.key, 'pages']">
           <div class="card__top">
             <h2 class="card__name">{{ p.name ?? p.key }}</h2>
-            @if (p.yourRole) {
+            @if (p.archived) {
+              <span class="card__role card__role--archived">Archived</span>
+            } @else if (p.yourRole) {
               <span class="card__role">{{ p.yourRole }}</span>
             }
           </div>

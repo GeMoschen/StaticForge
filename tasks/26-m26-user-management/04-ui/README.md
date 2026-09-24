@@ -20,11 +20,11 @@ Task 3 can run in parallel with 1–2 (different feature folders).
 
 ## Feature exit criteria
 
-- [ ] User menu in the dashboard header and project nav rail; sign out works; forced password change can't be skipped.
-- [ ] `/admin/users`, `/admin/projects`, `/admin/audit` behind an instance-admin guard.
-- [ ] Members tab in project settings, editable for project admins only.
-- [ ] Archived projects: banner, every edit control disabled, hidden from non-admin dashboards.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] User menu in the dashboard header and project nav rail; sign out works; forced password change can't be skipped.
+- [x] `/admin/users`, `/admin/projects`, `/admin/audit` behind an instance-admin guard.
+- [x] Members tab in project settings, editable for project admins only.
+- [x] Archived projects: banner, every edit control disabled, hidden from non-admin dashboards.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Dependencies
 

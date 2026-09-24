@@ -15,8 +15,8 @@ Bring the spec and operator docs in line with the new account rules and prove th
 
 ## Feature exit criteria
 
-- [ ] Spec and `infra/README.md` describe the new rules and endpoints.
-- [ ] The Playwright journey is green against the dev stack.
+- [x] Spec and `infra/README.md` describe the new rules and endpoints.
+- [x] The Playwright journey is green against the dev stack.
 
 ## Dependencies
 

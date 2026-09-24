@@ -1,0 +1,12 @@
+@use 'admin';
+
+.user-link {
+  color: var(--sf-ink);
+  font-weight: 500;
+  text-decoration: none;
+  margin-right: var(--sf-1);
+
+  &:hover {
+    text-decoration: underline;
+  }
+}

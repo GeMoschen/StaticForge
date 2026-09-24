@@ -1,0 +1,105 @@
+@use 'admin';
+
+.filters {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sf-3);
+}
+
+.filter {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+
+  .select,
+  .input {
+    width: auto;
+    min-width: 10rem;
+  }
+}
+
+.filter__label {
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}
+
+.filter--actions {
+  width: 16rem;
+
+  .select {
+    width: 100%;
+  }
+}
+
+.filters > sf-button {
+  align-self: flex-end;
+}
+
+.chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-1);
+
+  .chip {
+    margin-left: 0;
+  }
+}
+
+.chip__clear {
+  margin-left: var(--sf-1);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--sf-text-sm);
+}
+
+.hits {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 14rem;
+  margin: 4px 0 0;
+  padding: var(--sf-1);
+  list-style: none;
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  box-shadow: var(--sf-shadow-2);
+}
+
+.hit {
+  padding: var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  font-size: var(--sf-text-sm);
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--sf-ink) 6%, transparent);
+  }
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.table__actions {
+  text-align: right;
+}
+
+.detail-row td {
+  background: var(--sf-paper);
+}
+
+.detail {
+  margin: 0;
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

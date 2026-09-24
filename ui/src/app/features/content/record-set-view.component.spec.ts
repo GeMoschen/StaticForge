@@ -136,6 +136,27 @@ describe('RecordSetViewComponent', () => {
     expect(content.previewSetQuery).not.toHaveBeenCalled();
   });
 
+  it('offers no edits to an editor of an archived project (M26)', async () => {
+    const content = contentStub();
+    await render(RecordSetViewComponent, {
+      componentInputs: { projectKey: 'proj', setUuid: 'set-uuid' },
+      providers: [
+        provideRouter([]),
+        { provide: ContentService, useValue: content },
+        { provide: ApiClient, useValue: apiStub() },
+      ],
+      configureTestBed: (tb) => {
+        const auth = tb.inject(AuthStore);
+        auth.setUser({ id: 2, username: 'ed', systemRole: 'USER', projectRoles: { proj: 'EDITOR' } });
+        auth.setProjectArchived('proj', true);
+      },
+    });
+
+    await screen.findByRole('heading', { name: 'Leads' });
+    expect(screen.queryByRole('button', { name: 'New record' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete set' })).toBeNull();
+  });
+
   it('opens the tab the tree asked for', async () => {
     await setup(contentStub(), { panel: 'history' });
 

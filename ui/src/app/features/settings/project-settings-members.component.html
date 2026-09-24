@@ -1,0 +1,141 @@
+<section class="members">
+  <header class="members__header">
+    <div>
+      <h2 class="members__title">Members</h2>
+      <p class="members__subtitle">
+        Instance administrators have access to every project and are not listed.
+      </p>
+    </div>
+  </header>
+
+  @if (canManage()) {
+    <div class="members__add" role="group" aria-label="Add member">
+      <div class="members__lookup">
+        <label class="members__label" for="sf-member-lookup">Add member</label>
+        <input
+          id="sf-member-lookup"
+          class="input"
+          type="search"
+          autocomplete="off"
+          placeholder="Search by name or username…"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="sf-member-hits"
+          [attr.aria-expanded]="hits().length > 0"
+          [value]="query()"
+          (input)="onQuery($any($event.target).value)"
+        />
+        @if (hits().length > 0) {
+          <ul id="sf-member-hits" class="members__hits" role="listbox" aria-label="Matching accounts">
+            @for (hit of hits(); track hit.id) {
+              <li
+                class="members__hit"
+                role="option"
+                [class.members__hit--member]="hit.member"
+                [attr.aria-disabled]="hit.member ? true : null"
+                [attr.aria-selected]="false"
+                (click)="pick(hit)"
+              >
+                <span>{{ hit.displayName || hit.username }}</span>
+                <span class="members__muted">&#64;{{ hit.username }}</span>
+                @if (hit.member) {
+                  <span class="members__muted">· already a member</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </div>
+      <label class="members__label" for="sf-member-role">Role</label>
+      <select
+        id="sf-member-role"
+        class="select"
+        (change)="newRole.set($any($event.target).value)"
+      >
+        @for (role of roles; track role.value) {
+          <option [value]="role.value" [selected]="role.value === newRole()">{{ role.label }}</option>
+        }
+      </select>
+      <sf-button variant="primary" [disabled]="!selected() || adding()" (click)="add()">
+        {{ adding() ? 'Adding…' : 'Add' }}
+      </sf-button>
+    </div>
+  }
+
+  @if (loading() && members().length === 0) {
+    <sf-spinner label="Loading members…" />
+  } @else {
+    <div class="table sf-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Member</th>
+            @if (showEmail()) {
+              <th scope="col">Email</th>
+            }
+            <th scope="col">Role</th>
+            <th scope="col">Granted</th>
+            <th scope="col">Granted by</th>
+            @if (canManage()) {
+              <th scope="col"><span class="sf-sr-only">Actions</span></th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (member of members(); track member.userId) {
+            <tr [class.members__row--inactive]="member.status === 'DISABLED'">
+              <td>
+                <span class="members__name">{{ nameOf(member) }}</span>
+                <span class="members__muted">&#64;{{ member.username }}</span>
+                @if (member.userId === selfId()) {
+                  <span class="chip">You</span>
+                }
+                @if (member.status === 'DISABLED') {
+                  <span class="chip chip--muted">Disabled</span>
+                } @else if (member.status === 'LOCKED') {
+                  <span class="chip chip--warn">Locked</span>
+                }
+              </td>
+              @if (showEmail()) {
+                <td>{{ member.email ?? '—' }}</td>
+              }
+              <td>
+                @if (canManage()) {
+                  <select
+                    class="select select--inline"
+                    [attr.aria-label]="'Role of ' + nameOf(member)"
+                    [disabled]="busyUserId() === member.userId"
+                    (change)="changeRole(member, $any($event.target).value)"
+                  >
+                    @for (role of roles; track role.value) {
+                      <option [value]="role.value" [selected]="role.value === member.role">{{ role.label }}</option>
+                    }
+                  </select>
+                } @else {
+                  {{ roleLabel(member.role) }}
+                }
+              </td>
+              <td>{{ member.grantedAt ? (member.grantedAt | date: 'mediumDate') : '—' }}</td>
+              <td>{{ grantedByName(member) }}</td>
+              @if (canManage()) {
+                <td class="table__actions">
+                  <sf-button
+                    variant="ghost"
+                    [disabled]="busyUserId() === member.userId"
+                    (click)="remove(member)"
+                  >
+                    Remove<span class="sf-sr-only"> {{ nameOf(member) }}</span>
+                  </sf-button>
+                </td>
+              }
+            </tr>
+          } @empty {
+            <tr>
+              <td [attr.colspan]="6" class="members__muted">No members.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

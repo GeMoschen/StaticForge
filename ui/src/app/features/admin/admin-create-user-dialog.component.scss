@@ -1,0 +1,60 @@
+@use '../../design/dialog-shell';
+@use 'admin';
+
+.dialog--wide {
+  width: min(34rem, 94vw);
+  max-height: 90vh;
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding: var(--sf-4);
+  overflow: auto;
+}
+
+.dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+  padding: var(--sf-3) var(--sf-4);
+  border-top: 1px solid var(--sf-line);
+}
+
+ul.error {
+  padding-left: var(--sf-5);
+}
+
+.memberships {
+  // A fieldset is min-content wide by default: let the row shrink to the dialog instead.
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  margin: 0;
+  padding: var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+}
+
+.memberships__legend {
+  padding: 0 var(--sf-1);
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+}
+
+.memberships__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+
+  .select {
+    width: auto;
+  }
+
+  .select:first-child {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

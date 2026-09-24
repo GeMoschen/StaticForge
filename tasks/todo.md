@@ -1,3 +1,136 @@
+# M26 feature 5 — Docs and journey (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/05-docs-e2e/`.
+
+- [x] M26.5.1 — spec §8.1–8.4, §9.2, §9.4, §20.2, §23, §24, §26 against the implemented behaviour; `infra/README.md`
+      (`sf.security.password.*`, seeded admin, first steps in prod); `docs/administration.md`; deviations noted
+- [x] M26.5.2 — `ui/e2e/m26-journeys.spec.ts` (two contexts, self-seeding), green twice on a clean dev stack;
+      defects fixed with tests
+- [x] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run`
+
+## Review
+
+- Docs: spec §8–§9, §20.2, §23, §24.5, §26.3, Appendix B; `docs/api.md`, `infra/README.md`, new
+  `docs/administration.md`, `docs/user-guide.md`. Deviations between plan and code recorded in `M26.5.1`'s notes
+  (epoch claim vs `iat`, own password change ends sessions, `LOCKED` keeps the session, `SF-API-0423` missing, no
+  project-audit UI, no audit purge).
+- Journey `ui/e2e/m26-journeys.spec.ts` green twice on a clean dev stack; defect found and fixed: the audit action
+  filter hid the chosen actions (now chips, spec added).
+- `./gradlew build test --rerun` 1185 tests green; `npm run build` green; `npx vitest run` 79 files, 536 tests green.
+
+---
+
+# M26 feature 4 — UI (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/04-ui/`. Frontend only; order 4.1 → 4.3 → 4.2 → 4.4.
+
+- [x] M26.4.1 — `sf-user-menu` (dashboard header + nav rail), sign out, `/account` (profile, password with live
+      policy checks, my projects, sign out everywhere), `/account/set-password` + `passwordChangeGuard` + `428`
+      interceptor with return URL; self password change re-signs in with the new password (server revokes sessions)
+- [x] M26.4.3 — Members tab (`settings/members`): read-only below `PROJECT_ADMIN`, lookup typeahead, role select,
+      remove with self-removal warning
+- [x] M26.4.2 — lazy `features/admin` (`/admin`, instance-admin guard): users list (server paging, debounced search,
+      filters), create dialog (generate/set password, memberships, one-time password panel), detail (profile, actions
+      with guard-rail reasons, delete by typing the username, memberships)
+- [x] M26.4.4 — admin projects (archive/unarchive) and audit (filters in the URL); archived mode: `AuthStore.roleFor`
+      is the effective role (instance admin → `PROJECT_ADMIN`, archived → `VIEWER`), `ProjectAccessStore.readOnly`
+      (time travel or archived) replaces the `readOnly = timeTravel.isTimeTravel` aliases, banner + Unarchive
+- [x] `npm run build`, `npx vitest run`; manual check in the running app (every task's manual list)
+
+## Review
+
+- UI: 79 spec files, 535 tests green (`npx vitest run`); `npm run build` green, `/admin` a lazy chunk (85 kB raw).
+- Manual check: scripted Playwright walk against a dev backend on a scratch DB — every step of the four task files'
+  manual lists, three green runs in a row; screenshots reviewed (fixed: create-dialog project row overflow, projects
+  table action cell, "Viewing a past revision" notices in archived projects, raw role names on My account).
+- Found and fixed: a revoked access token sent to `/auth/refresh` made the refresh fail (users signed out on every
+  membership change since M26.1) — client no longer sends it, server ignores it (test added).
+- Backend touch-ups for the forms: `field` on `409` duplicate username/email and on a wrong current password.
+
+---
+
+# M26 feature 3 — Admin API (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/03-admin-api/001-admin-projects-and-audit-api.md`. Backend only.
+
+- [x] Domain: `AuditService.search(AuditFilter, page)` (JPA `Specification`, newest first by `created_at, id`),
+      `AuditService.actions()`; `ProjectService.overview(q, includeArchived)` with member counts and head revisions
+- [x] Changelog: indexes `audit_log(action, created_at)` and `(actor_user_id, created_at)` (`created_at` exists)
+- [x] `GET /admin/projects`, `GET /admin/audit`, `GET /admin/audit/actions` (instance admin only)
+- [x] API tests: each filter, combined, `_instance`, stable paging, `403`, member count / last change
+- [x] Docs (`docs/api.md`), OpenAPI + `schema.d.ts`, `./gradlew build` (`test --rerun`), UI build + vitest
+
+## Review
+
+- Backend: 1184 tests green (`./gradlew build test --rerun`); new `AdminProjectsAndAuditApiTest` (7): every audit
+  filter alone and combined, `_instance`, stable paging with equal timestamps, bad input, `403`/`401`, member counts
+  and last change before and after membership revisions, text and archived filters.
+- UI: `schema.d.ts` regenerated (three admin endpoints); `npm run build`, `npx vitest run` (63 files, 460 tests) green.
+
+---
+
+# M26 feature 2 — Archived projects (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/02-archived-projects/001-archived-projects-read-only.md`. Backend only.
+
+- [x] Error code for "Project is archived": `SF-DOM-0141` (user decision; `SF-DOM-0130` is taken)
+- [x] `ProjectWriteGuard` (sf-domain): one place that throws `409` for an archived project
+- [x] Central guard in `RevisionServiceImpl.allocate` (covers `allocateOrJoin`/`beginBatch`)
+- [x] `archive`: allocate first, then flip; new `unarchive`: flip first, then allocate; both audit
+      (`PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`) and bump every member's epoch; `POST /projects/{key}/unarchive`
+- [x] Hidden: `JwtServiceImpl` omits archived projects from `projects`; `GET /projects` filters for non-admins
+- [x] Explicit guards on writes without a revision: generation start/promote/retry, share links (issue → 409,
+      render → 404), search reindex, plus whatever the walk finds
+- [x] User delete removes memberships of archived projects on purpose (guard bypass), with a test
+- [x] Startup runners don't fail on an archived project
+- [x] Endpoint walk test (`RequestMappingHandlerMapping`, allowlist with reasons)
+- [x] Integration tests per acceptance criterion (still-valid token → 404, admin reads + writes 409,
+      share link 404, generation 409, unarchive restores role + search)
+- [x] Spec Appendix B row, OpenAPI + `schema.d.ts`, `./gradlew spotlessApply build` (`test --rerun`), `npm run build`
+- [x] Early `ArchivedProjectInterceptor` + `@AllowedOnArchivedProject` (needed for a meaningful walk: validation
+      otherwise answers `400` before the revision guard is reached)
+
+## Review
+
+- Backend: 1177 tests green (`./gradlew build test --rerun`); new `ArchivedProjectIntegrationTest` (7) and
+  `ArchivedProjectEndpointWalkTest` (60+ handlers), `RevisionServiceImplTest` +2.
+- Walk negative control (interceptor off) failed as expected and exposed an unguarded write: URL-registry
+  reset/override and generation targets allocate no revision — now guarded in the domain/controller.
+- UI: `schema.d.ts` regenerated (`unarchive`); `npm run build` and `npx vitest run` (63 files, 460 tests) green.
+- Not changed: search stays unavailable for an archived project (index closed, pre-existing M23 behaviour).
+
+---
+
+# M26 feature 1 — Accounts (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/01-accounts/`. Backend lane, sequential (shared `UserService`,
+`AuthService`, Gradle build). Implemented and committed as one change (the three tasks share `UserService`).
+
+- [x] M26.1.1 — account model, password policy, forced change (`428`), immediate revocation, admin seeding
+  - [x] changelog `019-user-management.xml` (`must_change_password`), `UserStatus.DELETED`
+  - [x] `PasswordPolicy` + `sf.security.password.*` (+ unit tests)
+  - [x] `PasswordChangeRequiredFilter` after bearer auth, exact allowlist; `/auth/me` gains `mustChangePassword`
+  - [x] epoch bump in `setMemberRole`/`removeMember`; refresh rejects `DISABLED`/`DELETED` and drops the family
+  - [x] `DELETED` treated like `DISABLED` in login and converter
+  - [x] `DevAdminInitializer`: only into an empty table, `mustChangePassword` outside dev/demo/test
+  - [x] audit `USER_PASSWORD_CHANGED`; integration tests per acceptance criterion
+- [x] M26.1.2 — `/admin/users/**`, member lookup, private member emails
+- [x] M26.1.3 — self-service `/auth/me` PATCH, password policy on change, `sessions/revoke`, `password-policy`
+- [x] `./gradlew spotlessApply build` (`test --rerun`), OpenAPI + `schema.d.ts`, `npm run build`
+
+## Review
+
+- Backend: M26.1.1–1.3 together. New tests: `PasswordPolicyTest`, `UserAdministrationServiceTest`,
+  `DevAdminInitializerTest`, converter cases, `AccountSessionRulesIntegrationTest`, `AdminUserApiTest`,
+  `SelfServiceAccountApiTest`, `ConfiguredPasswordPolicyIntegrationTest`. Full `./gradlew build` green.
+- UI: regenerated `schema.d.ts`; `npm run build` and `npx vitest run` (63 files, 460 tests) green. No UI code yet
+  (M26.4): with a forced password change pending, today's UI would just see `428`s.
+- Found on the way: a non-admin hitting any `hasAuthority` endpoint got `500` (fixed: `AccessDeniedException` → `403`).
+  For M26.2.1 (noted in its task file): `SF-DOM-0130` is already taken, and the anonymizing delete must be able to
+  remove memberships of archived projects once the central write guard exists.
+
+---
+
 # M25 — Record sets (implementation, branch `m25-record-sets`)
 
 Spec: `tasks/25-m25-record-sets/`. One subagent per task; backend lane sequential (shared Gradle build and

@@ -23,6 +23,7 @@ import { DiagnosticGroup, parseDiagnostics } from './generation-diagnostics';
 import { GenerationRunEvent } from './generation-sse';
 import { planSummaryLine, rootKindRows, type EntryPage, type PlanEntryQuery } from './insight/insight.util';
 import { SfPlanEntriesTableComponent } from './insight/sf-plan-entries-table.component';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type GenerationRunView = components['schemas']['GenerationRunView'];
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
@@ -63,6 +64,8 @@ export class GenerationComponent implements OnDestroy {
   private readonly api = inject(GenerationService);
   private readonly auth = inject(AuthStore);
   private readonly toasts = inject(ToastService);
+  /** No new runs or promotes in time travel or in an archived project (M26); running ones may still be cancelled. */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   readonly runs = signal<GenerationRunView[]>([]);
   readonly loading = signal(false);

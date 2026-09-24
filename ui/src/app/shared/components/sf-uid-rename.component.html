@@ -6,7 +6,7 @@
         class="uid-rename__edit"
         type="button"
         [disabled]="readOnly()"
-        [title]="readOnly() ? 'Viewing a past revision — exit time travel to make changes' : ''"
+        [title]="readOnlyReason()"
         (click)="startEdit()"
       >
         Change UID

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
+import { ArchivedBannerComponent } from './archived-banner.component';
 import { NavRailComponent } from './nav-rail.component';
 import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
@@ -10,7 +11,7 @@ import { TimeTravelStore } from '../revisions/time-travel.store';
 @Component({
   selector: 'sf-project-shell',
   standalone: true,
-  imports: [RouterOutlet, NavRailComponent, RevisionSpineComponent],
+  imports: [RouterOutlet, NavRailComponent, RevisionSpineComponent, ArchivedBannerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-shell.component.html',
   styleUrl: './project-shell.component.scss',

@@ -1,0 +1,19 @@
+@use 'admin';
+
+.project-name {
+  margin-right: var(--sf-1);
+  color: var(--sf-ink);
+  font-weight: 500;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+}
+
+.open-link {
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+}

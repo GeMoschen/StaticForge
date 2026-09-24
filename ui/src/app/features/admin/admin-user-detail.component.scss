@@ -1,0 +1,126 @@
+@use '../../design/dialog-shell';
+@use 'admin';
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  margin-bottom: var(--sf-3);
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--sf-ink);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sf-4);
+}
+
+.head__title {
+  margin: 0 var(--sf-2) 0 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-xl);
+  color: var(--sf-ink);
+}
+
+.notice {
+  margin: 0 0 var(--sf-4);
+  padding: var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-slate) 10%, transparent);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: var(--sf-4);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+}
+
+.form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--sf-1) var(--sf-4);
+  margin: 0;
+  font-size: var(--sf-text-sm);
+
+  dt {
+    color: var(--sf-slate);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--sf-ink);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-2);
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  flex-wrap: wrap;
+
+  .select {
+    width: auto;
+  }
+}
+
+.table .select {
+  width: auto;
+  padding: var(--sf-1) var(--sf-2);
+}
+
+.table__actions {
+  text-align: right;
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding: var(--sf-4);
+  overflow: auto;
+  font-size: var(--sf-text-sm);
+
+  p {
+    margin: 0;
+  }
+}
+
+.dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+  padding: var(--sf-3) var(--sf-4);
+  border-top: 1px solid var(--sf-line);
+}
+
+ul.error {
+  padding-left: var(--sf-5);
+}

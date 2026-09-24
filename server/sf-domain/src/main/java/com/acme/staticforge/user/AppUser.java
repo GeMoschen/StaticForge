@@ -54,6 +54,10 @@ public class AppUser {
     @Column(name = "token_epoch", nullable = false)
     private long tokenEpoch;
 
+    /** Set for an admin-issued temporary password: the API answers 428 until the user changes it (M26). */
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
     protected AppUser() {}
 
     public AppUser(String username, String email, Instant createdAt) {
@@ -70,8 +74,16 @@ public class AppUser {
         return username;
     }
 
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
     public String getEmail() {
         return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public String getDisplayName() {
@@ -140,5 +152,13 @@ public class AppUser {
 
     public void setTokenEpoch(long tokenEpoch) {
         this.tokenEpoch = tokenEpoch;
+    }
+
+    public boolean isMustChangePassword() {
+        return mustChangePassword;
+    }
+
+    public void setMustChangePassword(boolean mustChangePassword) {
+        this.mustChangePassword = mustChangePassword;
     }
 }

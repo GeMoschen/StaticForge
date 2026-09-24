@@ -88,7 +88,7 @@ This milestone delivers:
       them, and archive/unarchive bumps every member's epoch, so `ProjectAuthorizationService` answers 404
       with no extra per-request lookup.
     - Instance admins see archived projects (badge) and open them read-only with a banner.
-    - Every write fails with **`409 SF-DOM-0130` "Project is archived"**: centrally in
+    - Every write fails with **`409 SF-DOM-0141` "Project is archived"**: centrally in
       `RevisionService.allocate`/`allocateOrJoin`, plus explicit guards on writes that allocate no revision
       (starting/promoting generation runs, creating preview share links, and whatever the endpoint walk in
       `M26.2.1` finds). Existing preview share links stop working (`404`). Published output is untouched.
@@ -103,19 +103,20 @@ This milestone delivers:
 
 ## Exit criteria (epic is done when)
 
-- [ ] An instance admin can create a user (typed or generated temporary password, optional initial memberships),
+- [x] An instance admin can create a user (typed or generated temporary password, optional initial memberships),
       and that user must set a compliant password before any other API call succeeds.
-- [ ] An instance admin can rename, edit, disable/enable, unlock, reset the password of, grant/revoke instance
+- [x] An instance admin can rename, edit, disable/enable, unlock, reset the password of, grant/revoke instance
       admin for, revoke sessions of and delete (anonymize) users; guard rails hold (last active admin, self).
-- [ ] Role changes, removals, disable, delete, reset and archive take effect on the **next request** of the affected
+- [x] Role changes, removals, disable, delete, reset and archive take effect on the **next request** of the affected
       user (proven by tests with a still-valid access token).
-- [ ] A project admin manages members from the Members tab; other members see it read-only, without emails.
-- [ ] Every user has a user menu (My account, Administration for instance admins, Sign out) and a My account page.
-- [ ] An archived project is invisible to non-admin members and read-only for everyone; an endpoint walk proves no
+- [x] A project admin manages members from the Members tab; other members see it read-only, without emails.
+- [x] Every user has a user menu (My account, Administration for instance admins, Sign out) and a My account page.
+- [x] An archived project is invisible to non-admin members and read-only for everyone; an endpoint walk proves no
       mutating endpoint accepts a write; unarchive restores it.
-- [ ] Instance audit view and admin projects page work with filters and paging.
-- [ ] `Admin`/`Admin` is only seeded into an empty user table; forced to change outside dev/demo/test.
-- [ ] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey green.
+- [x] Instance audit view and admin projects page work with filters and paging. *(Audit: server paging. Projects: text
+      and archived filters over the whole list, no paging — `M26.3.1` defines `GET /admin/projects` unpaged.)*
+- [x] `Admin`/`Admin` is only seeded into an empty user table; forced to change outside dev/demo/test.
+- [x] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey green.
 
 ## Features (dependency order)
 

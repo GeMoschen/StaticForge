@@ -13,22 +13,32 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 
 | Method | Path | Notes |
 |---|---|---|
-| `POST` | `/api/v1/auth/login` | username+password → access token + refresh cookie |
-| `POST` | `/api/v1/auth/refresh` | rotates refresh, returns access token |
+| `POST` | `/api/v1/auth/login` | username+password → access token + refresh cookie; a `Bearer` header is ignored |
+| `POST` | `/api/v1/auth/refresh` | rotates refresh, returns access token; a `Bearer` header is ignored (a revoked one can't block its replacement) |
 | `POST` | `/api/v1/auth/logout` | revokes refresh family |
-| `GET` | `/api/v1/auth/me` | principal, memberships, capabilities |
-| `POST` | `/api/v1/auth/password` | change own password |
+| `GET` | `/api/v1/auth/me` | `id, username, displayName, email, systemRole, mustChangePassword, projectRoles, memberships[{projectKey, projectName, role}]` |
+| `PATCH` | `/api/v1/auth/me` | own profile `{displayName?, username?, email?, currentPassword?}`; username/email need `currentPassword` — M26 |
+| `POST` | `/api/v1/auth/password` | change own password (policy applies); revokes every session, this one included |
+| `POST` | `/api/v1/auth/sessions/revoke` | sign out everywhere, this session included — M26 |
+| `GET` | `/api/v1/auth/password-policy` | public `{minLength, requireMixed, maxBytes}` — M26 |
+
+While `mustChangePassword` is set, every other authenticated call answers `428 SF-API-0428` (spec §8.2). Membership,
+role and status changes revoke access tokens at once through the token epoch (spec §9.2): the next call is `401`, and a
+refresh returns a token with the current roles.
 
 ## 3. Projects & membership
 
 | Method | Path | Role |
 |---|---|---|
-| `GET` | `/projects` | authenticated (member projects only) |
+| `GET` | `/projects` | authenticated (member projects only; archived projects only for INSTANCE_ADMIN) |
 | `POST` | `/projects` | INSTANCE_ADMIN |
 | `GET`/`PUT` | `/projects/{key}` | VIEWER / PROJECT_ADMIN |
-| `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN |
-| `GET` | `/projects/{key}/members` | VIEWER |
-| `PUT`/`DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN |
+| `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN — read-only (`409 SF-DOM-0141` on every write) and `404` for members until unarchived |
+| `POST` | `/projects/{key}/unarchive` | INSTANCE_ADMIN |
+| `GET` | `/projects/{key}/members` | VIEWER — `email` only for PROJECT_ADMIN and instance admins, `status` per member |
+| `PUT`/`DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN — `PUT {role}` adds or changes; a disabled/deleted account is `409` |
+| `GET` | `/projects/{key}/audit` | PROJECT_ADMIN — the project's audit entries, newest first |
+| `GET` | `/users/lookup?projectKey=&q=` | PROJECT_ADMIN of `projectKey` — up to 20 active/locked accounts `{id, username, displayName, member}`, no emails (M26) |
 | `GET` | `/projects/{key}/locales` | VIEWER |
 | `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |
 | `GET` / `POST` | `/projects/{key}/export` / `/projects/{key}/export/selection` | PROJECT_ADMIN |
@@ -367,6 +377,24 @@ while one is queued or running, `503` when the index is unavailable.
 |---|---|
 | `GET` | `/api/v1/status` (liveness/readiness; in addition to `/actuator/health`) |
 
+### 14.1 Instance administration (M26)
+
+All `INSTANCE_ADMIN` only (`403` otherwise).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/admin/users` (`?q=&status=&systemRole=&includeDeleted=&page=&size=&sort=`) | paged accounts (`size` ≤ 200, default sort `username`), deleted ones only on request |
+| `GET` | `/api/v1/admin/users/{id}` | detail incl. `createdAt, failedLogins, lockedUntil, memberships` |
+| `POST` | `/api/v1/admin/users` | create `{username, email, displayName?, systemRole, password? \| generatePassword, mustChangePassword = true, memberships?}` → `201`; `generatedPassword` only in this response |
+| `PATCH` | `/api/v1/admin/users/{id}` | `{username?, email?, displayName?}`; duplicates `409` with `field` |
+| `POST` | `/api/v1/admin/users/{id}/disable`, `/enable`, `/unlock`, `/revoke-sessions` | disable and revoke-sessions end every session |
+| `POST` | `/api/v1/admin/users/{id}/password` | reset `{password? \| generatePassword, mustChangePassword = true}`; ends every session |
+| `PUT` | `/api/v1/admin/users/{id}/system-role` | `{systemRole}`; ends every session |
+| `DELETE` | `/api/v1/admin/users/{id}?confirm=<username>` | anonymizing delete (spec §8.2) |
+| `GET` | `/api/v1/admin/projects` (`?q=&includeArchived=true`) | every project sorted by key: `key, name, description, archived, createdAt, memberCount, headRevision, lastChangeAt`; `q` matches key, name, description ignoring case |
+| `GET` | `/api/v1/admin/audit` (`?action=&action=&userId=&project=&from=&to=&page=&size=`) | every audit entry, newest first (paged, `size` ≤ 200, `sort` ignored); `project` is a key or `_instance` (entries without a project); `from` inclusive, `to` exclusive ISO instants; row `id, timestamp, action, actor{id, username}, projectKey, target, detail` — a deleted actor reads `Deleted user` |
+| `GET` | `/api/v1/admin/audit/actions` | the distinct action names, alphabetically |
+
 ## 15. Error catalogue
 
 Codes from `cms-specification.md` Appendix B, annotated with where they are raised in code. `ProblemFactory` (in `sf-common`) constructs the `problem+json` bodies.
@@ -385,6 +413,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-API-0415` | 415 | MIME type not allowed (Tika sniff, §11.4) |
 | `SF-API-0422` | 422 | CDL validation failed (field-level details); structural page content findings on save carry an `issues` array — `PageContentValidation` |
 | `SF-API-0423` | 423 | account locked (login lockout, §9.5) — *implemented addition* |
+| `SF-API-0428` | 428 | password change required (forced change pending, spec §8.2) — `PasswordChangeRequiredFilter` |
 | `SF-API-0429` | 429 | rate limit exceeded (login) |
 | `SF-API-0500` | 500 | internal error — *implemented addition* |
 
@@ -404,7 +433,10 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0123` | 422 | a page can't be created on, or switched to, an abstract page template — `PageServiceImpl` |
 | `SF-DOM-0124` | 422 | a page template save would break templates that extend it; carries `descendants[]` (`uuid`, `uid`, `channel`, `diagnostics`) — `TemplateServiceImpl` |
 | `SF-DOM-0130` | 422 | page reference folder target has no page in its subtree — `PageReferenceServiceImpl` (a section template outside a body's `allow` list is `SF-API-0422` with an `allow` issue) |
+| `SF-DOM-0131` | 409 | the last active instance admin can't be disabled, deleted or demoted — `UserAdministrationService` |
+| `SF-DOM-0132` | 409 | an admin can't disable, delete or demote themselves — `UserAdministrationService` |
 | `SF-DOM-0140` | 409 | project key already exists — *implemented addition* |
+| `SF-DOM-0141` | 409 | project is archived: every write is refused (M26) — `ArchivedProjectInterceptor`, `RevisionService.allocate`, `ProjectWriteGuard` |
 
 ### Template (`SF-TPL-*`, `SF-CDL-*`)
 

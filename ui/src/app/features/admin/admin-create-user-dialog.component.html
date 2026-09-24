@@ -1,0 +1,90 @@
+<div class="scrim" (click)="oneTimePassword() ? null : cancel()"></div>
+<div class="dialog dialog--wide" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+  <header class="dialog__header">
+    <h2 id="create-user-title" class="dialog__title">
+      {{ oneTimePassword() ? 'User created' : 'New user' }}
+    </h2>
+  </header>
+
+  @if (oneTimePassword(); as pw) {
+    <div class="dialog__body">
+      <sf-admin-one-time-password [password]="pw" [username]="createdUser()?.username ?? 'the user'" (done)="passwordShown()" />
+    </div>
+  } @else {
+    <form class="dialog__body" (submit)="$event.preventDefault(); submit()">
+      <sf-field label="Username">
+        <input class="input" type="text" autocomplete="off" [value]="username()" (input)="username.set($any($event.target).value)" />
+      </sf-field>
+      @if (fieldErrors().username) {
+        <p class="field-error" role="alert">{{ fieldErrors().username }}</p>
+      }
+      <sf-field label="Email">
+        <input class="input" type="email" autocomplete="off" [value]="email()" (input)="email.set($any($event.target).value)" />
+      </sf-field>
+      @if (fieldErrors().email) {
+        <p class="field-error" role="alert">{{ fieldErrors().email }}</p>
+      }
+      <sf-field label="Display name">
+        <input class="input" type="text" autocomplete="off" [value]="displayName()" (input)="displayName.set($any($event.target).value)" />
+      </sf-field>
+      <label class="checkbox-label">
+        <input type="checkbox" [checked]="instanceAdmin()" (change)="instanceAdmin.set($any($event.target).checked)" />
+        Instance administrator
+      </label>
+
+      <sf-admin-password-choice [(mode)]="mode" [(password)]="password" [(mustChange)]="mustChange" />
+      @if (ruleErrors().length > 0) {
+        <ul class="error" role="alert">
+          @for (message of ruleErrors(); track message) {
+            <li>{{ message }}</li>
+          }
+        </ul>
+      }
+
+      <fieldset class="memberships">
+        <legend class="memberships__legend">Projects (optional)</legend>
+        @for (row of memberships(); track $index; let rowIndex = $index) {
+          <div class="memberships__row">
+            <select
+              class="select"
+              [attr.aria-label]="'Project ' + (rowIndex + 1)"
+              (change)="updateMembership(rowIndex, { projectKey: $any($event.target).value })"
+            >
+              <option value="" [selected]="row.projectKey === ''">Choose a project…</option>
+              @for (p of availableProjects(rowIndex); track p.key) {
+                <option [value]="p.key" [selected]="p.key === row.projectKey">{{ p.name }} ({{ p.key }})</option>
+              }
+            </select>
+            <select
+              class="select"
+              [attr.aria-label]="'Role in project ' + (rowIndex + 1)"
+              (change)="updateMembership(rowIndex, { role: $any($event.target).value })"
+            >
+              @for (role of roles; track role.value) {
+                <option [value]="role.value" [selected]="role.value === row.role">{{ role.label }}</option>
+              }
+            </select>
+            <sf-button variant="ghost" (click)="removeMembership(rowIndex)">
+              Remove<span class="sf-sr-only"> project {{ rowIndex + 1 }}</span>
+            </sf-button>
+          </div>
+        }
+        <div>
+          <sf-button variant="secondary" [disabled]="memberships().length >= projects().length" (click)="addMembership()">
+            Add project
+          </sf-button>
+        </div>
+      </fieldset>
+
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+    </form>
+    <footer class="dialog__footer">
+      <sf-button variant="ghost" (click)="cancel()">Cancel</sf-button>
+      <sf-button variant="primary" [disabled]="!valid() || submitting()" (click)="submit()">
+        {{ submitting() ? 'Creating…' : 'Create user' }}
+      </sf-button>
+    </footer>
+  }
+</div>

@@ -270,6 +270,20 @@ An incremental run renders only what changed and publishes the complete site: th
 
 When two people edit the same asset, the second save shows a conflict drawer with both versions field by field, "keep mine / take theirs" per field, and who changed what when (§24.6). Your changes are never silently lost.
 
+### Your account and project members (M26)
+
+- **User menu** — your initials top right on the dashboard and at the bottom of the project rail: *My account*,
+  *Administration* (instance admins), *Sign out*.
+- **First sign-in** — with a password an administrator gave you, you first see *Set a new password*; the rules show as
+  you type. Nothing else opens until you have chosen your own.
+- **My account** — change your display name (username and email ask for your current password), change your password
+  (every other session is signed out), see your projects, and *Sign out everywhere* if you think someone else has
+  access.
+- **Settings → Members** — who is in the project and with which role. Project admins add existing accounts (search by
+  name), change roles and remove members; new accounts are created by an instance administrator.
+- **Archived projects** are read-only for everyone and hidden from members; a banner says so. Ask an instance
+  administrator to unarchive one.
+
 ## Keyboard
 
 Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` search (see [Search](#search)), `g p` pages, `g m` media, `g t` templates, `g r` revisions, `Cmd/Ctrl+S` save, `Cmd/Ctrl+Enter` refresh preview, `Alt+↑/↓` move section, `?` shortcut sheet.

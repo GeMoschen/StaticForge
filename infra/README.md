@@ -38,6 +38,29 @@ degraded app, per spec §26.6). Then open **http://localhost:8080** (or your `WE
 
 Stop with `docker compose down` (add `-v` to also drop the Postgres data volume).
 
+## First sign-in and accounts
+
+A fresh installation seeds one instance administrator, **`Admin` / `Admin`**, but only while the user table is
+**empty** (spec §8.2): once any account exists — including this one after a rename — nothing is seeded again, so a
+deleted or renamed `Admin` never comes back.
+
+- In `dev`, `demo` and `test` the seeded account can use `Admin` right away.
+- In every other profile (`prod`) it must set a new password at its first sign-in before anything else works (the API
+  answers `428 SF-API-0428` until then; the UI shows the "Set a new password" screen).
+
+**First steps in production:**
+
+1. Sign in as `Admin` / `Admin` and set a strong password (the password policy applies, see below).
+2. Under **Administration → Users**, create a personal account for each administrator with **Instance
+   administrator** checked, and let each set their own password at first sign-in.
+3. Rename `Admin` to a personal account, or delete it once another instance admin exists — the last active instance
+   admin can't be deleted, disabled or demoted.
+4. Create projects on the dashboard and add people there or under **Administration → Users**; project admins add
+   existing accounts from the project's **Settings → Members** tab. There is no email delivery: give new users the
+   temporary password yourself (a generated one is shown once).
+
+See [`docs/administration.md`](../docs/administration.md) for day-to-day account administration.
+
 ## Database connection
 
 - **Host/port:** `localhost:5432` when reaching the `db` service directly (add a `ports`
@@ -122,6 +145,21 @@ npm test
 | `SF_MEDIA_ROOT`     | backend  | Media blob store root (mounted volume in compose)             |
 | `SF_SEARCH_INDEX_ROOT` | backend | Root of the embedded search indexes, one directory per project (`search-index` volume in compose; default `./build/search-index`). Derived data: safe to delete, rebuilt on start. **One backend instance per index root** — see [Search: single-instance constraint](#search-single-instance-constraint) |
 | `SF_OUTPUT_ROOT`    | backend  | Generated output root; each target publishes to `{projectKey}/{path}/current` beneath it. Old shared-root output (`builds/`, `current`, `s3/`) is deleted at startup unless `sf.generate.cleanup-legacy-output=false` — repoint web servers first |
+
+## Configuration properties
+
+Spring properties, settable in `application-*.yml` or as environment variables (relaxed binding, e.g.
+`SF_SECURITY_PASSWORD_MIN_LENGTH`):
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `sf.security.password.min-length` | `12` | Minimum password length in characters (code points). Applies to new passwords only — own change, admin create and reset — never to sign-in, so existing passwords keep working |
+| `sf.security.password.require-mixed` | `false` | When `true`, a new password needs at least one letter and at least one digit or symbol |
+
+Always enforced, not configurable: at most **72 bytes** (UTF-8) per password — BCrypt's input limit; longer ones are
+rejected rather than silently truncated. Sign-in lockout is fixed as well: 15 failed attempts lock an account for 30
+minutes (an instance admin can unlock it earlier), and per IP and username more than 10 failures in 5 minutes are
+answered with `429` and a growing back-off.
 
 ## Search: single-instance constraint
 

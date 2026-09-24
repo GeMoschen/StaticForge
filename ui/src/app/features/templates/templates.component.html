@@ -30,7 +30,7 @@
   <section class="templates__detail">
     <div class="templates__toolbar">
       @if (readOnly()) {
-        <span class="templates__toolbar-readonly">Viewing a past revision — read-only</span>
+        <span class="templates__toolbar-readonly">{{ readOnlyLabel() }}</span>
       }
       <span class="templates__toolbar-spacer"></span>
       <sf-button variant="primary" [disabled]="readOnly()" (click)="newTemplate()">

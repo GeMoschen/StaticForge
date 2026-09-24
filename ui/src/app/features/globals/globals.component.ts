@@ -15,10 +15,10 @@ import {
 } from '../../shared/components/sf-store-tree-node.component';
 import { SfTreeComponent } from '../../shared/components/sf-tree.component';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { GlobalSetDetailComponent } from './global-set-detail.component';
 import { etagFor, GlobalsService, type FolderView, type GlobalSetSummaryView } from './globals.service';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 /** The CDL a newly created property set starts with — one field, so the Values tab is never blank. */
 const STARTER_CDL = `content {
@@ -64,9 +64,9 @@ export class GlobalsComponent {
   private readonly globals = inject(GlobalsService);
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   protected readonly loading = signal(false);
   protected readonly folders = signal<FolderView[]>([]);

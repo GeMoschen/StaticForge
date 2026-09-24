@@ -11,6 +11,7 @@ import {
 } from 'rxjs';
 import type { components } from '../api/generated/schema.d.ts';
 import { sortFolderTree } from '../../shared/tree-sort.util';
+import { ProjectAccessStore } from './project-access.store';
 
 type ProjectDetail = components['schemas']['ProjectDetail'];
 type FolderView = components['schemas']['FolderView'];
@@ -21,6 +22,7 @@ type PageTemplateSummary = components['schemas']['PageTemplateSummary'];
 @Injectable({ providedIn: 'root' })
 export class ProjectContextStore {
   private readonly http = inject(HttpClient);
+  private readonly access = inject(ProjectAccessStore);
 
   readonly activeProjectKey = signal<string | null>(null);
   readonly project = signal<ProjectDetail | null>(null);
@@ -129,6 +131,8 @@ export class ProjectContextStore {
     }).pipe(
       tap((res) => {
         this.project.set(res.detail);
+        // Archived projects are read-only (M26): the effective role in them drops to VIEWER.
+        this.access.enterProject(projectKey, res.detail.archived === true);
         this.pageFolderTree.set(sortFolderTree(res.pageFolders ?? []));
         this.mediaFolderTree.set(sortFolderTree(res.mediaFolders ?? []));
         this.navigationFolderTree.set(sortFolderTree(res.navigationFolders ?? []));

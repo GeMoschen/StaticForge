@@ -75,7 +75,7 @@ async function setup(options: { role?: string; revision?: number } = {}) {
       { provide: TemplatesService, useValue: templates },
       { provide: ChannelsService, useValue: { list: vi.fn().mockReturnValue(of(CHANNELS)) } },
       { provide: ApiClient, useValue: {} },
-      { provide: AuthStore, useValue: { roleFor: () => options.role ?? 'DEVELOPER' } },
+      { provide: AuthStore, useValue: { roleFor: () => options.role ?? 'DEVELOPER', isArchived: () => false } },
       { provide: TimeTravelStore, useValue: timeTravel },
     ],
   });

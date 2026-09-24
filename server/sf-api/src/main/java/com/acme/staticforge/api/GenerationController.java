@@ -77,6 +77,7 @@ public class GenerationController {
      * Dry run (M22.2.1): the plan a run started now with the same request would build, with every entry's reason. Nothing
      * is rendered, written, stored or locked, so it also works while a run is active.
      */
+    @AllowedOnArchivedProject("A dry run: plans a build, writes nothing.")
     @PostMapping("/plan")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public GenerationPlanView plan(
@@ -130,6 +131,7 @@ public class GenerationController {
         return toView(generationService.status(projectKey, runId));
     }
 
+    @AllowedOnArchivedProject("Stops a run queued or started before the project was archived; creates nothing.")
     @PostMapping("/{runId}/cancel")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public GenerationRunView cancel(@PathVariable String projectKey, @PathVariable long runId) {

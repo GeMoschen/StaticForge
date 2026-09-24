@@ -39,6 +39,7 @@ import { composePagePayload } from './page-payload.util';
 import { mergePayload } from './conflict-util';
 import { SfPreviewFrameComponent } from '../preview';
 import type { BodiesMap, FieldResolveEvent, ResolveMode, SectionInstance } from './types';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type PageView = components['schemas']['PageView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
@@ -124,13 +125,17 @@ export class PageEditorComponent {
   protected readonly centreFlex = computed(() => `${this.splitRatio()} 1 0%`);
   protected readonly previewFlex = computed(() => `${1 - this.splitRatio()} 1 0%`);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
   /** The preview's revision pin: set only while time travelling, so a live preview reads current state. */
   protected readonly timeTravelRevision = this.timeTravel.activeRevision;
 
   protected readonly statusLabel = computed(() => {
-    if (this.readOnly()) {
+    if (this.timeTravel.isTimeTravel()) {
       return 'Viewing revision ' + (this.timeTravel.activeRevision() ?? '—');
+    }
+    if (this.readOnly()) {
+      return 'Archived — read-only';
     }
     switch (this.autosave.saveState()) {
       case 'dirty':

@@ -154,6 +154,9 @@ public class GenerationService {
     /**
      * Queues a generation run (spec §18.5, §20.1). Enforces one active run per project and
      * idempotent re-submission by {@code Idempotency-Key}, then submits the run to the executor.
+     *
+     * <p>An archived project starts no run and promotes none ({@code 409 SF-DOM-0141}, M26); a run already queued or
+     * running when the project was archived is allowed to finish, and can still be cancelled.
      */
     @Transactional
     public GenerationRun start(String projectKey, GenerationRequest request, Long userId) {
@@ -166,7 +169,7 @@ public class GenerationService {
                 }
             }
 
-            long projectId = projectService.requireByKey(projectKey).getId();
+            long projectId = projectService.requireWritable(projectKey).getId();
             runs.findActive(projectId).ifPresent(active -> {
                 throw new SfException(ProblemFactory.other(
                         409, CONFLICT_CODE, "Conflict", "A generation is already running (run " + active.getId() + ")."));
@@ -235,6 +238,7 @@ public class GenerationService {
     }
 
     public GenerationRun promote(String projectKey, long runId) {
+        projectService.requireWritable(projectKey);
         GenerationRun run = requireRun(projectKey, runId);
         GenerationTarget target = resolveTarget(run);
         TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);

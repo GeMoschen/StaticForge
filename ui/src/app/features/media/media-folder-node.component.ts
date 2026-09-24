@@ -16,7 +16,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { MediaNavNodeComponent } from './media-nav-node.component';
-import { TimeTravelStore } from '../revisions/time-travel.store';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type FolderView = components['schemas']['FolderView'];
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
@@ -55,9 +55,9 @@ export class MediaFolderNodeComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   readonly node = input.required<FolderView>();
   readonly depth = input<number>(0);
