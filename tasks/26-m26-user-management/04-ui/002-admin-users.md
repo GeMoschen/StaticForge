@@ -1,6 +1,6 @@
 ---
 id: M26.4.2
-status: todo
+status: done
 depends: [M26.1.2, M26.4.1]
 epic: m26-user-management
 feature: ui
@@ -38,12 +38,12 @@ building blocks: `sf-button`, `sf-field`, dialogs (`sf-create-asset-dialog` patt
 
 ## Acceptance criteria
 
-- [ ] Vitest specs: guard, list query params (paging, search debounce, filters, show deleted), create payloads for
+- [x] Vitest specs: guard, list query params (paging, search debounce, filters, show deleted), create payloads for
       both password modes with and without memberships, one-time password panel, detail action enablement per
       status/self/last-admin, delete confirmation matching, membership add/change/remove.
-- [ ] Manual check in the running app: create a user with a generated password and a membership, log in as them
+- [x] Manual check in the running app: create a user with a generated password and a membership, log in as them
       (forced change), disable and re-enable, delete.
-- [ ] `npm run build` green; bundle budget note if the eager bundle grows (lazy-load `features/admin`).
+- [x] `npm run build` green; bundle budget note if the eager bundle grows (lazy-load `features/admin`).
 
 ## Out of scope
 
@@ -54,3 +54,15 @@ building blocks: `sf-button`, `sf-field`, dialogs (`sf-create-asset-dialog` patt
 - Lazy-load the admin feature route: it's only for instance admins and should not grow the eager bundle
   (M25 raised the budget already).
 - The generated password must never be kept in a store or logged; clear it when the panel closes.
+
+## Implementation notes
+
+- `features/admin/` is the app's one lazy chunk (`loadChildren`, ~85 kB raw / 14 kB transfer): it shares no editor
+  components, the reason the rest of the app is one bundle (see the `app.routes.ts` comment). `instanceAdminGuard`.
+- Guard rails are computed client-side in `admin-user.util.ts` (`userActionStates`) from the user, the caller's id and
+  the number of `ACTIVE` instance admins (`GET /admin/users?systemRole=INSTANCE_ADMIN&status=ACTIVE&size=1`), and shown
+  as disabled buttons with one reason; the server's `409`s still toast if they happen.
+- The generated password lives only in the create/reset dialog until "Done" (`sf-admin-one-time-password`); the
+  dialog reports the new account without it.
+- Memberships of archived projects show read-only (the server refuses writes there); the add-project select offers
+  only non-archived projects the user isn't in.

@@ -1,0 +1,69 @@
+<div class="toolbar">
+  <input
+    class="input"
+    type="search"
+    placeholder="Search key, name or description…"
+    aria-label="Search projects"
+    [value]="query()"
+    (input)="query.set($any($event.target).value)"
+  />
+  <label class="checkbox-label">
+    <input type="checkbox" [checked]="showArchived()" (change)="showArchived.set($any($event.target).checked)" />
+    Show archived
+  </label>
+</div>
+
+@if (loading() && projects().length === 0) {
+  <sf-spinner label="Loading projects…" />
+} @else {
+  <div class="table sf-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Project</th>
+          <th scope="col">Members</th>
+          <th scope="col">Last change</th>
+          <th scope="col"><span class="sf-sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (p of visible(); track p.key) {
+          <tr [class.row--muted]="p.archived">
+            <td>
+              <span class="project-name">{{ p.name }}</span>
+              <span class="muted mono">{{ p.key }}</span>
+              @if (p.archived) {
+                <span class="chip">Archived</span>
+              }
+            </td>
+            <td>{{ p.memberCount ?? 0 }}</td>
+            <td>
+              {{ p.lastChangeAt ? (p.lastChangeAt | date: 'medium') : '—' }}
+              @if (p.headRevision != null) {
+                <span class="muted">· r{{ p.headRevision }}</span>
+              }
+            </td>
+            <td>
+              <div class="row-actions">
+                <a class="open-link" [routerLink]="['/p', p.key, 'pages']">Open<span class="sf-sr-only"> {{ p.name }}</span></a>
+                @if (p.archived) {
+                  <sf-button variant="secondary" [disabled]="busyKey() !== null" (click)="unarchive(p)">
+                    Unarchive<span class="sf-sr-only"> {{ p.name }}</span>
+                  </sf-button>
+                } @else {
+                  <sf-button variant="ghost" [disabled]="busyKey() !== null" (click)="archive(p)">
+                    Archive<span class="sf-sr-only"> {{ p.name }}</span>
+                  </sf-button>
+                }
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="4" class="muted">No projects match.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

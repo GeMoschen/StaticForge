@@ -1,0 +1,139 @@
+// Shared visual language of the administration pages (M26). `@use`d by each admin component so the
+// rules stay scoped per component, like `design/_dialog-shell.scss`.
+@use '../../design/forms';
+@use '../../design/table';
+
+:host {
+  display: block;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sf-3);
+}
+
+.toolbar__spacer {
+  flex: 1;
+}
+
+.input,
+.select {
+  @include forms.sf-form-control;
+}
+
+.toolbar .input {
+  width: min(20rem, 100%);
+}
+
+.toolbar .select {
+  width: auto;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+}
+
+.table {
+  @include table.sf-table-base;
+}
+
+.row--link {
+  cursor: pointer;
+}
+
+.row--muted td {
+  color: var(--sf-slate);
+}
+
+.muted {
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}
+
+.mono {
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--sf-1);
+  padding: 0 var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  background: color-mix(in srgb, var(--sf-slate) 16%, transparent);
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.chip--ok {
+  background: color-mix(in srgb, var(--sf-jade) 16%, transparent);
+  color: var(--sf-jade);
+}
+
+.chip--warn {
+  background: color-mix(in srgb, var(--sf-amber) 18%, transparent);
+  color: var(--sf-amber);
+}
+
+.chip--danger {
+  background: color-mix(in srgb, var(--sf-rust) 14%, transparent);
+  color: var(--sf-rust);
+}
+
+.chip--signal {
+  background: color-mix(in srgb, var(--sf-signal) 14%, transparent);
+  color: var(--sf-signal);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+  margin-top: var(--sf-3);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.error {
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+  font-size: var(--sf-text-sm);
+}
+
+.field-error {
+  margin: calc(-1 * var(--sf-2)) 0 0;
+  color: var(--sf-rust);
+  font-size: var(--sf-text-xs);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding: var(--sf-4);
+  margin-bottom: var(--sf-4);
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-lg);
+}
+
+.panel__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}

@@ -25,7 +25,7 @@ import { PageNavNodeComponent } from './page-nav-node.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { FolderMoveEvent } from './types';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
-import { TimeTravelStore } from '../revisions/time-travel.store';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
@@ -61,9 +61,9 @@ export class PagesListComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   protected readonly clipboard = inject(TreeClipboardService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   readonly projectKey = input.required<string>();
   /** `?folder=<uuid>` selects that folder (search deep link, M23.4.1). */

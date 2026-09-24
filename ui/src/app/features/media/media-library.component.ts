@@ -34,8 +34,8 @@ import { MediaFolderDetailComponent } from './media-folder-detail.component';
 import { MediaFolderNodeComponent, FolderMoveEvent } from './media-folder-node.component';
 import { MediaNavNodeComponent } from './media-nav-node.component';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import { consumeQueryParam } from '../../shared/deep-link';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type MediaView = components['schemas']['MediaView'];
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
@@ -86,9 +86,10 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   protected readonly clipboard = inject(TreeClipboardService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
+  protected readonly readOnlyLabel = inject(ProjectAccessStore).readOnlyLabel;
 
   private readonly search$ = new Subject<string>();
   private uploadSeq = 0;

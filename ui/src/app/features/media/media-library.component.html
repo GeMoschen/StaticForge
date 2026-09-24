@@ -125,7 +125,7 @@
       <span class="toolbar__spacer"></span>
 
       @if (readOnly()) {
-        <span class="toolbar__readonly">Viewing a past revision — read-only</span>
+        <span class="toolbar__readonly">{{ readOnlyLabel() }}</span>
       }
 
       <sf-button variant="secondary" [disabled]="readOnly()" (click)="fileInput.click()">Upload</sf-button>

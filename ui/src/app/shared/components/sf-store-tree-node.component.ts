@@ -2,10 +2,10 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output, si
 import { Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
-import { TimeTravelStore } from '../../features/revisions/time-travel.store';
 import { ContextMenuItem, ContextMenuService } from '../services/context-menu.service';
 import { SfIconComponent } from './sf-icon.component';
 import { SfRenameAssetDialogComponent } from './sf-rename-asset-dialog.component';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 /**
  * One node of a store tree, in the store-agnostic shape this component renders. A store maps its
@@ -82,9 +82,9 @@ export class SfStoreTreeNodeComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   readonly node = input.required<StoreTreeNode>();
   readonly depth = input<number>(0);

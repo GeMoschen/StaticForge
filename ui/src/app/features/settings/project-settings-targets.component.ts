@@ -16,7 +16,7 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTableComponent } from '../../shared/components/sf-table.component';
 import { GenerationService } from '../generation/generation.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
 type GenerationTargetRequest = components['schemas']['GenerationTargetRequest'];
@@ -59,9 +59,9 @@ export class ProjectSettingsTargetsComponent {
   private readonly api = inject(GenerationService);
   private readonly toasts = inject(ToastService);
   private readonly fb = inject(FormBuilder);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
   protected readonly types = TARGET_TYPES;
 
   readonly targets = signal<GenerationTargetView[]>([]);

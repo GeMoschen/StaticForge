@@ -56,6 +56,18 @@ public final class ProblemFactory {
         return of(409, "SF-API-0409", "Conflict", detail);
     }
 
+    /** A 409 about one request member, named under {@code field} (e.g. a username that is already taken). */
+    public static Problem conflict(String detail, String field) {
+        return Problem.builder()
+                .type(PROBLEMS_BASE + "sf-api-0409")
+                .title("Conflict")
+                .status(409)
+                .detail(detail)
+                .property("code", "SF-API-0409")
+                .property("field", field)
+                .build();
+    }
+
     public static Problem unprocessableEntity(String detail) {
         return of(422, "SF-API-0422", "Validation Failed", detail);
     }

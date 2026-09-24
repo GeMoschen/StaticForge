@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { PagesListComponent } from './pages-list.component';
 
@@ -75,5 +76,19 @@ describe('PagesListComponent', () => {
       parentFolderUuid: undefined,
       scope: 'PAGES',
     });
+  });
+
+  it('offers no page or folder creation in an archived project (M26)', async () => {
+    await render(PagesListComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: ApiClient, useValue: apiStub() },
+        { provide: ProjectContextStore, useValue: projectStoreStub() },
+      ],
+      configureTestBed: (tb) => tb.inject(ProjectAccessStore).enterProject('proj', true),
+    });
+
+    expect((screen.getByRole('button', { name: 'New page' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTitle('New folder') as HTMLButtonElement).disabled).toBe(true);
   });
 });

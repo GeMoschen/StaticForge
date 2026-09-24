@@ -100,6 +100,40 @@ class AccountSessionRulesIntegrationTest {
     }
 
     @Test
+    void refreshIgnoresTheRevokedAccessTokenABrowserSendsAlong() throws Exception {
+        AppUser admin = newUser("rules-admin");
+        Project project = newProject(admin);
+        AppUser member = newUser("rules-member");
+        RevisionContext ctx = RevisionContext.of(project.getId(), admin.getId(), null);
+        projectService.setMemberRole(project.getKey(), member.getId(), ProjectRole.EDITOR, ctx);
+        Session session = login(member, PASSWORD);
+
+        // A membership change bumps the epoch: the access token is revoked, the refresh cookie is not.
+        projectService.setMemberRole(project.getKey(), member.getId(), ProjectRole.VIEWER, ctx);
+        mvc.perform(get("/api/v1/projects/" + project.getKey()).header("Authorization", bearer(session)))
+                .andExpect(status().isUnauthorized());
+
+        // The refresh that replaces it still carries it (a client's JWT interceptor): ignored, not refused.
+        MvcResult refreshed = mvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(session.refreshCookie())
+                        .header("X-Requested-With", "XMLHttpRequest")
+                        .header("Authorization", bearer(session)))
+                .andExpect(status().isOk())
+                .andReturn();
+        String token = objectMapper.readTree(refreshed.getResponse().getContentAsString()).get("accessToken").asText();
+        mvc.perform(get("/api/v1/projects/" + project.getKey()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        // Login ignores it as well.
+        mvc.perform(post("/api/v1/auth/login")
+                        .header("Authorization", bearer(session))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                java.util.Map.of("username", member.getUsername(), "password", PASSWORD))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void pendingPasswordChangeBlocksEverythingButTheAllowlist() throws Exception {
         AppUser admin = newUser("rules-admin");
         Project project = newProject(admin);

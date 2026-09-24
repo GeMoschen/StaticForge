@@ -6,7 +6,7 @@
         Restoring never rewrites history: it appends a new revision on top.
       </p>
     </div>
-    <sf-button variant="danger" [disabled]="restoring()" (click)="requestRollback()">
+    <sf-button variant="danger" [disabled]="restoring() || archived()" (click)="requestRollback()">
       Roll back project
     </sf-button>
   </header>
@@ -23,7 +23,7 @@
             <span class="diff__asset-uid">{{ asset.uid ?? asset.uuid }}</span>
             <span class="diff__asset-type">{{ asset.type }} · {{ asset.action }}</span>
           </span>
-          <sf-button variant="secondary" (click)="restoreAsset(asset)">
+          <sf-button variant="secondary" [disabled]="archived()" (click)="restoreAsset(asset)">
             Restore this asset
           </sf-button>
         </header>

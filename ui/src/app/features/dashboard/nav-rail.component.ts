@@ -10,6 +10,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ThemeService } from '../../core/ui/theme.service';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { UserMenuComponent } from '../account/user-menu.component';
 
 const STORAGE_KEY = 'sf-nav-rail-expanded';
 
@@ -24,7 +25,7 @@ interface NavItem {
 @Component({
   selector: 'sf-nav-rail',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, SfIconComponent],
+  imports: [RouterLink, RouterLinkActive, SfIconComponent, UserMenuComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav-rail.component.html',
   styleUrl: './nav-rail.component.scss',

@@ -10,7 +10,7 @@
 <div class="generation">
   <div class="toolbar">
     <h2 class="toolbar__title">Generation</h2>
-    <sf-button variant="primary" (click)="openDialog()">New generation</sf-button>
+    <sf-button variant="primary" [disabled]="readOnly()" (click)="openDialog()">New generation</sf-button>
   </div>
 
   @if (loading()) {
@@ -82,7 +82,7 @@
                     Cancel
                   </sf-button>
                 } @else if (run.status === 'SUCCESS' || run.status === 'PARTIAL') {
-                  <sf-button variant="secondary" (click)="promote(run)">
+                  <sf-button variant="secondary" [disabled]="readOnly()" (click)="promote(run)">
                     Promote
                   </sf-button>
                 }

@@ -50,7 +50,13 @@
     </button>
 
     @if (pageUuid()) {
-      <button type="button" class="preview-toolbar__button" (click)="share()">
+      <button
+        type="button"
+        class="preview-toolbar__button"
+        [disabled]="archived()"
+        [title]="archived() ? 'An archived project has no share links.' : ''"
+        (click)="share()"
+      >
         Share
       </button>
     }

@@ -4,8 +4,8 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView } from './navigation.service';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 interface StartNodeOption {
   value: string;
@@ -46,9 +46,9 @@ export class NavFolderDetailComponent {
 
   private readonly nav = inject(NavigationService);
   private readonly toast = inject(ToastService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   protected readonly savingName = signal(false);
   protected readonly nameDraft = signal('');

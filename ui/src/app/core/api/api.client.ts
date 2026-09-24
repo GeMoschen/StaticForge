@@ -1,6 +1,7 @@
-import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { SKIP_ERROR_TOAST } from './error.interceptor';
 import type { components } from './generated/schema.d.ts';
 
 type S = components['schemas'];
@@ -77,12 +78,34 @@ export class ApiClient {
     });
   }
 
+  /**
+   * Changes the caller's own password. The server revokes every session of the account on success, so the caller
+   * signs in again with the new password (`SessionService.changeOwnPassword`). Errors are shown by the form.
+   */
   changePassword(currentPassword: string, newPassword: string): Observable<void> {
     return this.http.post<void>(
       `${BASE}/auth/password`,
       { currentPassword, newPassword },
-      { withCredentials: true },
+      { withCredentials: true, context: new HttpContext().set(SKIP_ERROR_TOAST, true) },
     );
+  }
+
+  /** Edits the caller's profile (M26); answers the updated profile. Errors are shown by the form. */
+  updateMe(body: S['UpdateMeRequest']): Observable<S['MeResponse']> {
+    return this.http.patch<S['MeResponse']>(`${BASE}/auth/me`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** The rules a new password must meet (public). */
+  passwordPolicy(): Observable<S['PasswordPolicyView']> {
+    return this.http.get<S['PasswordPolicyView']>(`${BASE}/auth/password-policy`, { withCredentials: true });
+  }
+
+  /** Signs the caller out of every session, this one included. */
+  revokeAllSessions(): Observable<void> {
+    return this.http.post<void>(`${BASE}/auth/sessions/revoke`, null, { withCredentials: true });
   }
 
   // ── Projects ────────────────────────────────────────────────────────────
@@ -161,6 +184,143 @@ export class ApiClient {
       `${BASE}/projects/${key}/members`,
       { withCredentials: true },
     );
+  }
+
+  /** Adds a member or changes their role (M26). */
+  setMemberRole(key: string, userId: number, role: string): Observable<S['ProjectMemberView']> {
+    return this.http.put<S['ProjectMemberView']>(
+      `${BASE}/projects/${key}/members/${userId}`,
+      { role },
+      { withCredentials: true },
+    );
+  }
+
+  removeMember(key: string, userId: number): Observable<void> {
+    return this.http.delete<void>(`${BASE}/projects/${key}/members/${userId}`, { withCredentials: true });
+  }
+
+  /** Accounts a project admin can add to `projectKey` (M26): at most 20, never with emails. */
+  lookupUsers(projectKey: string, q: string): Observable<S['UserLookupHit'][]> {
+    return this.http.get<S['UserLookupHit'][]>(`${BASE}/users/lookup`, {
+      withCredentials: true,
+      params: this.params({ projectKey, q }),
+    });
+  }
+
+  /** Makes the project read-only and hides it from its members (instance admin, M26). */
+  archiveProject(key: string): Observable<void> {
+    return this.http.post<void>(`${BASE}/projects/${key}/archive`, null, { withCredentials: true });
+  }
+
+  unarchiveProject(key: string): Observable<void> {
+    return this.http.post<void>(`${BASE}/projects/${key}/unarchive`, null, { withCredentials: true });
+  }
+
+  // ── Administration (instance admins, M26) ─────────────────────────────────
+
+  adminListUsers(query: {
+    q?: string;
+    status?: string;
+    systemRole?: string;
+    includeDeleted?: boolean;
+    page?: number;
+    size?: number;
+    sort?: string;
+  }): Observable<S['AdminUserPage']> {
+    return this.http.get<S['AdminUserPage']>(`${BASE}/admin/users`, {
+      withCredentials: true,
+      params: this.params(query),
+    });
+  }
+
+  adminGetUser(id: number): Observable<S['AdminUserDetail']> {
+    return this.http.get<S['AdminUserDetail']>(`${BASE}/admin/users/${id}`, { withCredentials: true });
+  }
+
+  /** Errors are shown by the create dialog. */
+  adminCreateUser(body: S['CreateUserRequest']): Observable<S['AdminUserDetail']> {
+    return this.http.post<S['AdminUserDetail']>(`${BASE}/admin/users`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** Errors are shown by the profile form. */
+  adminUpdateUser(id: number, body: S['UpdateUserRequest']): Observable<S['AdminUserDetail']> {
+    return this.http.patch<S['AdminUserDetail']>(`${BASE}/admin/users/${id}`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  adminUserAction(id: number, action: 'disable' | 'enable' | 'unlock'): Observable<S['AdminUserDetail']> {
+    return this.http.post<S['AdminUserDetail']>(`${BASE}/admin/users/${id}/${action}`, null, {
+      withCredentials: true,
+    });
+  }
+
+  adminRevokeSessions(id: number): Observable<void> {
+    return this.http.post<void>(`${BASE}/admin/users/${id}/revoke-sessions`, null, { withCredentials: true });
+  }
+
+  /** Errors are shown by the reset dialog. */
+  adminResetPassword(id: number, body: S['ResetPasswordRequest']): Observable<S['AdminUserDetail']> {
+    return this.http.post<S['AdminUserDetail']>(`${BASE}/admin/users/${id}/password`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  adminSetSystemRole(id: number, systemRole: string): Observable<S['AdminUserDetail']> {
+    return this.http.put<S['AdminUserDetail']>(
+      `${BASE}/admin/users/${id}/system-role`,
+      { systemRole },
+      { withCredentials: true },
+    );
+  }
+
+  /** Anonymizes the account; `confirm` must be its current username. Errors are shown by the delete dialog. */
+  adminDeleteUser(id: number, confirm: string): Observable<void> {
+    return this.http.delete<void>(`${BASE}/admin/users/${id}`, {
+      withCredentials: true,
+      params: this.params({ confirm }),
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  adminListProjects(query: { q?: string; includeArchived?: boolean } = {}): Observable<S['AdminProjectRow'][]> {
+    return this.http.get<S['AdminProjectRow'][]>(`${BASE}/admin/projects`, {
+      withCredentials: true,
+      params: this.params(query),
+    });
+  }
+
+  /** The instance audit trail, newest first; `action` may repeat. */
+  adminAudit(query: {
+    action?: string[];
+    userId?: number;
+    project?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    size?: number;
+  }): Observable<S['AdminAuditPage']> {
+    let params = this.params({
+      userId: query.userId,
+      project: query.project,
+      from: query.from,
+      to: query.to,
+      page: query.page,
+      size: query.size,
+    });
+    for (const action of query.action ?? []) {
+      params = params.append('action', action);
+    }
+    return this.http.get<S['AdminAuditPage']>(`${BASE}/admin/audit`, { withCredentials: true, params });
+  }
+
+  adminAuditActions(): Observable<string[]> {
+    return this.http.get<string[]>(`${BASE}/admin/audit/actions`, { withCredentials: true });
   }
 
   // ── Folders ─────────────────────────────────────────────────────────────

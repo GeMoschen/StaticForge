@@ -91,10 +91,10 @@ public class UserService {
     @Transactional
     public AppUser create(String username, String email, String displayName, String rawPassword) {
         if (users.findByUsername(username).isPresent()) {
-            throw new SfException(ProblemFactory.conflict("Username already taken."));
+            throw new SfException(ProblemFactory.conflict("Username already taken.", "username"));
         }
         if (users.findByEmail(email).isPresent()) {
-            throw new SfException(ProblemFactory.conflict("Email already in use."));
+            throw new SfException(ProblemFactory.conflict("Email already in use.", "email"));
         }
         AppUser user = new AppUser(username, email, Instant.now());
         user.setDisplayName(displayName);
@@ -217,7 +217,7 @@ public class UserService {
         users.findByUsernameIgnoreCase(username)
                 .filter(other -> !other.getId().equals(exceptUserId))
                 .ifPresent(other -> {
-                    throw new SfException(ProblemFactory.conflict("Username already taken."));
+                    throw new SfException(ProblemFactory.conflict("Username already taken.", "username"));
                 });
         return username;
     }
@@ -239,7 +239,7 @@ public class UserService {
         users.findByEmailIgnoreCase(email)
                 .filter(other -> !other.getId().equals(exceptUserId))
                 .ifPresent(other -> {
-                    throw new SfException(ProblemFactory.conflict("Email already in use."));
+                    throw new SfException(ProblemFactory.conflict("Email already in use.", "email"));
                 });
         return email;
     }

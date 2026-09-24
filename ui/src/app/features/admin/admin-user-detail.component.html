@@ -1,0 +1,238 @@
+<a class="back" routerLink="/admin/users"><sf-icon name="arrow_back" /> All users</a>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (!user()) {
+  <sf-spinner label="Loading user…" />
+} @else {
+  @let u = user()!;
+  <header class="head">
+    <h2 class="head__title">{{ deleted() ? 'Deleted user' : name(u) }}</h2>
+    <span [class]="statusChipClass(u.status)">{{ statusLabel(u.status) }}</span>
+    @if (u.systemRole === 'INSTANCE_ADMIN') {
+      <span class="chip chip--signal">Instance admin</span>
+    }
+    @if (u.mustChangePassword) {
+      <span class="chip chip--warn">Password change pending</span>
+    }
+    @if (isSelf()) {
+      <span class="chip">You</span>
+    }
+  </header>
+
+  @if (deleted()) {
+    <p class="notice">
+      This account was deleted. Its name and email were removed; it stays only so that history and audit entries still
+      point at an account. Nothing can be changed.
+    </p>
+  }
+
+  <div class="columns">
+    <section class="panel" aria-labelledby="profile-title">
+      <h3 id="profile-title" class="panel__title">Profile</h3>
+      <form class="form" (submit)="$event.preventDefault(); saveProfile()">
+        <sf-field label="Username">
+          <input class="input" type="text" autocomplete="off" [disabled]="deleted()" [value]="username()" (input)="username.set($any($event.target).value)" />
+        </sf-field>
+        @if (fieldErrors().username) {
+          <p class="field-error" role="alert">{{ fieldErrors().username }}</p>
+        }
+        <sf-field label="Email">
+          <input class="input" type="email" autocomplete="off" [disabled]="deleted()" [value]="email()" (input)="email.set($any($event.target).value)" />
+        </sf-field>
+        @if (fieldErrors().email) {
+          <p class="field-error" role="alert">{{ fieldErrors().email }}</p>
+        }
+        <sf-field label="Display name">
+          <input class="input" type="text" autocomplete="off" [disabled]="deleted()" [value]="displayName()" (input)="displayName.set($any($event.target).value)" />
+        </sf-field>
+        @if (profileError()) {
+          <p class="error" role="alert">{{ profileError() }}</p>
+        }
+        @if (!deleted()) {
+          <div class="form__actions">
+            <sf-button variant="ghost" [disabled]="!profileDirty() || savingProfile()" (click)="discardProfile()">Discard</sf-button>
+            <sf-button type="submit" variant="primary" [disabled]="!profileDirty() || !profileValid() || savingProfile()">
+              {{ savingProfile() ? 'Saving…' : 'Save profile' }}
+            </sf-button>
+          </div>
+        }
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="account-title">
+      <h3 id="account-title" class="panel__title">Account</h3>
+      <dl class="facts">
+        <dt>Created</dt>
+        <dd>{{ u.createdAt ? (u.createdAt | date: 'medium') : '—' }}</dd>
+        <dt>Last sign-in</dt>
+        <dd>{{ u.lastLoginAt ? (u.lastLoginAt | date: 'medium') : 'Never' }}</dd>
+        <dt>Failed sign-ins</dt>
+        <dd>{{ u.failedLogins ?? 0 }}</dd>
+        <dt>Locked until</dt>
+        <dd>{{ u.lockedUntil ? (u.lockedUntil | date: 'medium') : '—' }}</dd>
+      </dl>
+
+      @if (actions(); as a) {
+        @if (!deleted()) {
+          <div class="actions" role="group" aria-label="Account actions">
+            @if (a.enable.shown) {
+              <sf-button variant="secondary" [disabled]="busy()" (click)="setStatus('enable')">Enable</sf-button>
+            }
+            @if (a.unlock.shown) {
+              <sf-button variant="secondary" [disabled]="busy()" (click)="setStatus('unlock')">Unlock</sf-button>
+            }
+            <sf-button variant="secondary" [disabled]="busy()" (click)="openReset()">Reset password</sf-button>
+            <sf-button variant="secondary" [disabled]="busy()" (click)="revokeSessions()">Sign out everywhere</sf-button>
+            <span class="action">
+              <sf-button variant="secondary" [disabled]="busy() || !a.toggleAdmin.allowed" (click)="toggleAdmin()">
+                {{ u.systemRole === 'INSTANCE_ADMIN' ? 'Revoke instance admin' : 'Make instance admin' }}
+              </sf-button>
+            </span>
+            @if (a.disable.shown) {
+              <sf-button variant="danger" [disabled]="busy() || !a.disable.allowed" (click)="setStatus('disable')">Disable</sf-button>
+            }
+            <sf-button variant="danger" [disabled]="busy() || !a.delete.allowed" (click)="openDelete()">Delete user</sf-button>
+          </div>
+          @if (guardReason(); as reason) {
+            <p class="muted" role="note">{{ reason }}</p>
+          }
+        }
+      }
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="memberships-title">
+    <h3 id="memberships-title" class="panel__title">Project memberships</h3>
+    <div class="table sf-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Project</th>
+            <th scope="col">Role</th>
+            <th scope="col">Granted</th>
+            <th scope="col">Granted by</th>
+            @if (!deleted()) {
+              <th scope="col"><span class="sf-sr-only">Actions</span></th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of u.memberships ?? []; track m.projectKey) {
+            <tr>
+              <td>
+                {{ m.projectName ?? m.projectKey }} <span class="muted">{{ m.projectKey }}</span>
+                @if (m.archived) {
+                  <span class="chip">Archived</span>
+                }
+              </td>
+              <td>
+                @if (deleted() || m.archived) {
+                  {{ m.role }}
+                } @else {
+                  <select
+                    class="select"
+                    [attr.aria-label]="'Role in ' + (m.projectName ?? m.projectKey)"
+                    [disabled]="busy()"
+                    (change)="changeMembershipRole(m, $any($event.target).value)"
+                  >
+                    @for (role of roles; track role.value) {
+                      <option [value]="role.value" [selected]="role.value === m.role">{{ role.label }}</option>
+                    }
+                  </select>
+                }
+              </td>
+              <td>{{ m.grantedAt ? (m.grantedAt | date: 'mediumDate') : '—' }}</td>
+              <td>{{ m.grantedBy ?? '—' }}</td>
+              @if (!deleted()) {
+                <td class="table__actions">
+                  @if (!m.archived) {
+                    <sf-button variant="ghost" [disabled]="busy()" (click)="removeMembership(m)">
+                      Remove<span class="sf-sr-only"> from {{ m.projectName ?? m.projectKey }}</span>
+                    </sf-button>
+                  }
+                </td>
+              }
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5" class="muted">Not a member of any project.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (!deleted()) {
+      <div class="add" role="group" aria-label="Add to project">
+        <select class="select" aria-label="Project to add" (change)="newProjectKey.set($any($event.target).value)">
+          <option value="" [selected]="newProjectKey() === ''">Add to project…</option>
+          @for (p of joinableProjects(); track p.key) {
+            <option [value]="p.key" [selected]="p.key === newProjectKey()">{{ p.name }} ({{ p.key }})</option>
+          }
+        </select>
+        <select class="select" aria-label="Role for the new project" (change)="newRole.set($any($event.target).value)">
+          @for (role of roles; track role.value) {
+            <option [value]="role.value" [selected]="role.value === newRole()">{{ role.label }}</option>
+          }
+        </select>
+        <sf-button variant="secondary" [disabled]="!newProjectKey() || busy()" (click)="addMembership()">Add</sf-button>
+      </div>
+    }
+  </section>
+
+  @if (resetting()) {
+    <div class="scrim" (click)="oneTimePassword() ? null : closeReset()"></div>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+      <header class="dialog__header">
+        <h2 id="reset-title" class="dialog__title">Reset password</h2>
+      </header>
+      <div class="dialog__body">
+        @if (oneTimePassword(); as pw) {
+          <sf-admin-one-time-password [password]="pw" [username]="u.username ?? 'the user'" (done)="closeReset()" />
+        } @else {
+          <p class="muted">The user is signed out of every session.</p>
+          <sf-admin-password-choice [(mode)]="resetMode" [(password)]="resetPasswordValue" [(mustChange)]="resetMustChange" />
+          @if (resetErrors().length > 0) {
+            <ul class="error" role="alert">
+              @for (message of resetErrors(); track message) {
+                <li>{{ message }}</li>
+              }
+            </ul>
+          }
+        }
+      </div>
+      @if (!oneTimePassword()) {
+        <footer class="dialog__footer">
+          <sf-button variant="ghost" (click)="closeReset()">Cancel</sf-button>
+          <sf-button variant="primary" [disabled]="!resetValid() || busy()" (click)="submitReset()">Reset password</sf-button>
+        </footer>
+      }
+    </div>
+  }
+
+  @if (deleting()) {
+    <div class="scrim" (click)="deleting.set(false)"></div>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+      <header class="dialog__header">
+        <h2 id="delete-title" class="dialog__title">Delete {{ u.username }}?</h2>
+      </header>
+      <div class="dialog__body">
+        <p>
+          The account is anonymized: its username, email and display name are removed, it loses every project
+          membership and every session. Revisions and audit entries stay, credited to "Deleted user".
+        </p>
+        <p><strong>This can't be undone.</strong></p>
+        <sf-field [label]="'Type ' + u.username + ' to confirm'">
+          <input class="input" type="text" autocomplete="off" [value]="deleteConfirm()" (input)="deleteConfirm.set($any($event.target).value)" />
+        </sf-field>
+        @if (deleteError()) {
+          <p class="error" role="alert">{{ deleteError() }}</p>
+        }
+      </div>
+      <footer class="dialog__footer">
+        <sf-button variant="ghost" (click)="deleting.set(false)">Cancel</sf-button>
+        <sf-button variant="danger" [disabled]="!deleteMatches() || busy()" (click)="submitDelete()">Delete user</sf-button>
+      </footer>
+    </div>
+  }
+}

@@ -153,11 +153,14 @@ class SelfServiceAccountApiTest {
                 .andExpect(jsonPath("$.field").value("currentPassword"));
         patchMe(session, body("username", renamed, "currentPassword", "wrong-password"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("Current password is incorrect."));
+                .andExpect(jsonPath("$.detail").value("Current password is incorrect."))
+                .andExpect(jsonPath("$.field").value("currentPassword"));
         patchMe(session, body("username", other.getUsername(), "currentPassword", PASSWORD))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.field").value("username"));
         patchMe(session, body("email", other.getEmail().toUpperCase(), "currentPassword", PASSWORD))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.field").value("email"));
         assertThat(users.findById(user.getId()).orElseThrow().getUsername()).isEqualTo(user.getUsername());
 
         patchMe(session, body("username", renamed, "email", "x-" + user.getEmail(), "currentPassword", PASSWORD))

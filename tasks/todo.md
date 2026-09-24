@@ -1,3 +1,32 @@
+# M26 feature 4 — UI (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/04-ui/`. Frontend only; order 4.1 → 4.3 → 4.2 → 4.4.
+
+- [x] M26.4.1 — `sf-user-menu` (dashboard header + nav rail), sign out, `/account` (profile, password with live
+      policy checks, my projects, sign out everywhere), `/account/set-password` + `passwordChangeGuard` + `428`
+      interceptor with return URL; self password change re-signs in with the new password (server revokes sessions)
+- [x] M26.4.3 — Members tab (`settings/members`): read-only below `PROJECT_ADMIN`, lookup typeahead, role select,
+      remove with self-removal warning
+- [x] M26.4.2 — lazy `features/admin` (`/admin`, instance-admin guard): users list (server paging, debounced search,
+      filters), create dialog (generate/set password, memberships, one-time password panel), detail (profile, actions
+      with guard-rail reasons, delete by typing the username, memberships)
+- [x] M26.4.4 — admin projects (archive/unarchive) and audit (filters in the URL); archived mode: `AuthStore.roleFor`
+      is the effective role (instance admin → `PROJECT_ADMIN`, archived → `VIEWER`), `ProjectAccessStore.readOnly`
+      (time travel or archived) replaces the `readOnly = timeTravel.isTimeTravel` aliases, banner + Unarchive
+- [x] `npm run build`, `npx vitest run`; manual check in the running app (every task's manual list)
+
+## Review
+
+- UI: 79 spec files, 535 tests green (`npx vitest run`); `npm run build` green, `/admin` a lazy chunk (85 kB raw).
+- Manual check: scripted Playwright walk against a dev backend on a scratch DB — every step of the four task files'
+  manual lists, three green runs in a row; screenshots reviewed (fixed: create-dialog project row overflow, projects
+  table action cell, "Viewing a past revision" notices in archived projects, raw role names on My account).
+- Found and fixed: a revoked access token sent to `/auth/refresh` made the refresh fail (users signed out on every
+  membership change since M26.1) — client no longer sends it, server ignores it (test added).
+- Backend touch-ups for the forms: `field` on `409` duplicate username/email and on a wrong current password.
+
+---
+
 # M26 feature 3 — Admin API (implementation, branch `m26-user-management`)
 
 Spec: `tasks/26-m26-user-management/03-admin-api/001-admin-projects-and-audit-api.md`. Backend only.

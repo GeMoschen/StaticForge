@@ -10,12 +10,12 @@ import {
 } from './import-export.service';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfDropTargetDirective } from '../../shared/directives/sf-drop-target.directive';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 /**
  * Material Symbols icon per `ConflictType` — a reasonable visual cue, not meant to be pixel-perfect. Keyed by the
@@ -84,9 +84,9 @@ export class ProjectSettingsImportComponent {
   private readonly api = inject(ImportExportService);
   private readonly toasts = inject(ToastService);
   private readonly store = inject(ProjectContextStore);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   protected readonly dragCounter = signal(0);
   protected readonly dragActive = computed(() => this.dragCounter() > 0);

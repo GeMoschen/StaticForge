@@ -6,6 +6,7 @@ import { provideRouter, withComponentInputBinding, withRouterConfig } from '@ang
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { routes } from './app.routes';
 import { jwtInterceptor } from './core/auth/jwt.interceptor';
+import { passwordRequiredInterceptor } from './core/auth/password-required.interceptor';
 import { refreshInterceptor } from './core/auth/refresh.interceptor';
 import { errorInterceptor } from './core/api/error.interceptor';
 import { etagInterceptor } from './core/api/etag.interceptor';
@@ -18,6 +19,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withInterceptors([
         jwtInterceptor,
+        passwordRequiredInterceptor,
         refreshInterceptor,
         errorInterceptor,
         // Downstream of errorInterceptor so a blocked (time-travel) request still gets

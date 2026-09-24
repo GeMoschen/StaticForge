@@ -20,6 +20,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         err instanceof HttpErrorResponse &&
         !req.context.get(SKIP_ERROR_TOAST) &&
         err.status !== 401 &&
+        // A pending password change is not an error to toast: the app goes to the password screen instead.
+        err.status !== 428 &&
         !(err.url ?? '').includes('/auth/login')
       ) {
         let message = 'Something went wrong';

@@ -112,7 +112,7 @@ export class SearchPageComponent {
   protected readonly rebuilding = signal(false);
 
   protected readonly isAdmin = computed(
-    () => this.auth.roleFor(this.projectKey()) === 'PROJECT_ADMIN' || this.auth.systemRole() === 'INSTANCE_ADMIN',
+    () => this.auth.roleFor(this.projectKey()) === 'PROJECT_ADMIN',
   );
 
   protected readonly result = computed<SearchResultView | null>(() => {

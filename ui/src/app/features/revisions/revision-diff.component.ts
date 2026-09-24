@@ -15,6 +15,7 @@ import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.co
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfVisualDiffComponent } from './visual-diff/visual-diff.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type RevisionDiff = components['schemas']['RevisionDiff'];
 type AssetDiff = components['schemas']['AssetDiff'];
@@ -31,6 +32,8 @@ export class RevisionDiffComponent {
   private readonly api = inject(ApiClient);
   protected readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
+  /** Restoring writes a revision: not in an archived project (M26). */
+  protected readonly archived = inject(ProjectAccessStore).archived;
 
   readonly projectKey = input.required<string>();
   readonly revisionId = input.required<string>();

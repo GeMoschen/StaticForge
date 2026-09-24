@@ -18,6 +18,12 @@
   margin-bottom: var(--sf-5);
 }
 
+.dashboard__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-3);
+}
+
 .dashboard__title {
   font-family: var(--sf-font-display);
   font-size: var(--sf-text-2xl);
@@ -124,6 +130,11 @@
   background: color-mix(in srgb, var(--sf-signal) 12%, transparent);
   border-radius: 999px;
   padding: var(--sf-1) var(--sf-2);
+}
+
+.card__role--archived {
+  color: var(--sf-slate);
+  background: color-mix(in srgb, var(--sf-slate) 14%, transparent);
 }
 
 .card__desc {

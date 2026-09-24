@@ -1,0 +1,126 @@
+@use '../../design/forms';
+
+:host {
+  display: block;
+}
+
+.account {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: var(--sf-5) var(--sf-6) var(--sf-7);
+}
+
+.account__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-3);
+  margin-bottom: var(--sf-4);
+}
+
+.account__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--sf-ink);
+  }
+}
+
+.account__title {
+  margin: 0 0 var(--sf-5);
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-2xl);
+  color: var(--sf-ink);
+}
+
+.account__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding: var(--sf-4);
+  margin-bottom: var(--sf-4);
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-lg);
+  scroll-margin-top: var(--sf-4);
+}
+
+.account__heading {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}
+
+.account__note {
+  margin: 0;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+}
+
+.account__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  max-width: 28rem;
+}
+
+.input {
+  @include forms.sf-form-control;
+}
+
+.account__field-error {
+  margin: calc(-1 * var(--sf-2)) 0 0;
+  color: var(--sf-rust);
+  font-size: var(--sf-text-xs);
+}
+
+.account__error {
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+  font-size: var(--sf-text-sm);
+}
+
+.account__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+}
+
+.account__projects {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account__project {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-3);
+  padding: var(--sf-2) 0;
+  border-bottom: 1px solid var(--sf-line);
+  font-size: var(--sf-text-sm);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  a {
+    color: var(--sf-ink);
+  }
+}
+
+.account__role {
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+  letter-spacing: 0.04em;
+}

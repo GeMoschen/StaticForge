@@ -1,0 +1,122 @@
+<div class="filters" role="group" aria-label="Audit filters">
+  <label class="filter">
+    <span class="filter__label">Actions</span>
+    <select class="select select--multi" multiple size="4" aria-label="Actions" (change)="setActions($any($event.target))">
+      @for (action of actions(); track action) {
+        <option [value]="action" [selected]="filter().actions.includes(action)">{{ action }}</option>
+      }
+    </select>
+  </label>
+
+  <div class="filter filter--actor">
+    <span class="filter__label" id="actor-label">User</span>
+    @if (filter().userId !== null) {
+      <span class="chip chip--signal">
+        {{ actorLabel() ?? 'User #' + filter().userId }}
+        <button type="button" class="chip__clear" (click)="clearActor()" aria-label="Clear the user filter">×</button>
+      </span>
+    } @else {
+      <input
+        class="input"
+        type="search"
+        placeholder="Username…"
+        aria-labelledby="actor-label"
+        [value]="actorQuery()"
+        (input)="onActorQuery($any($event.target).value)"
+      />
+      @if (actorHits().length > 0) {
+        <ul class="hits" role="listbox" aria-label="Matching users">
+          @for (hit of actorHits(); track hit.id) {
+            <li class="hit" role="option" [attr.aria-selected]="false" (click)="pickActor(hit)">
+              {{ hit.username }} <span class="muted">{{ hit.displayName }}</span>
+            </li>
+          }
+        </ul>
+      }
+    }
+  </div>
+
+  <label class="filter">
+    <span class="filter__label">Project</span>
+    <select class="select" aria-label="Project" (change)="setProject($any($event.target).value)">
+      <option value="" [selected]="filter().project === null">Any</option>
+      <option [value]="instanceOnly" [selected]="filter().project === instanceOnly">Instance only</option>
+      @for (p of projects(); track p.key) {
+        <option [value]="p.key" [selected]="filter().project === p.key">{{ p.name }} ({{ p.key }})</option>
+      }
+    </select>
+  </label>
+
+  <label class="filter">
+    <span class="filter__label">From</span>
+    <input class="input" type="date" aria-label="From" [value]="filter().from ?? ''" (change)="setFrom($any($event.target).value)" />
+  </label>
+  <label class="filter">
+    <span class="filter__label">To</span>
+    <input class="input" type="date" aria-label="To" [value]="filter().to ?? ''" (change)="setTo($any($event.target).value)" />
+  </label>
+
+  @if (hasFilters()) {
+    <sf-button variant="ghost" (click)="clearFilters()">Clear filters</sf-button>
+  }
+</div>
+
+@if (loading() && entries().length === 0) {
+  <sf-spinner label="Loading the audit trail…" />
+} @else {
+  <div class="table sf-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Time</th>
+          <th scope="col">Action</th>
+          <th scope="col">User</th>
+          <th scope="col">Project</th>
+          <th scope="col">Target</th>
+          <th scope="col"><span class="sf-sr-only">Detail</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of entries(); track entry.id) {
+          <tr>
+            <td class="nowrap">{{ entry.timestamp | date: 'medium' }}</td>
+            <td><span class="mono">{{ entry.action }}</span></td>
+            <td>{{ entry.actor?.username ?? (entry.actor ? 'User #' + entry.actor.id : '—') }}</td>
+            <td>
+              @if (entry.projectKey) {
+                {{ projectLabel(entry.projectKey) }}
+              } @else {
+                <span class="muted">Instance</span>
+              }
+            </td>
+            <td class="mono">{{ entry.target ?? '—' }}</td>
+            <td class="table__actions">
+              @if (entry.detail) {
+                <sf-button variant="ghost" (click)="toggle(entry.id)">
+                  {{ expanded().has(entry.id!) ? 'Hide' : 'Detail' }}
+                </sf-button>
+              }
+            </td>
+          </tr>
+          @if (entry.detail && expanded().has(entry.id!)) {
+            <tr class="detail-row">
+              <td colspan="6"><pre class="detail">{{ entry.detail | json }}</pre></td>
+            </tr>
+          }
+        } @empty {
+          <tr>
+            <td colspan="6" class="muted">No audit entries match.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (meta(); as m) {
+    <div class="pager">
+      <span>{{ m.totalElements ?? 0 }} entries · page {{ (m.number ?? 0) + 1 }} of {{ m.totalPages || 1 }}</span>
+      <sf-button variant="ghost" [disabled]="(m.number ?? 0) === 0" (click)="goTo((m.number ?? 0) - 1)">Newer</sf-button>
+      <sf-button variant="ghost" [disabled]="(m.number ?? 0) + 1 >= (m.totalPages ?? 1)" (click)="goTo((m.number ?? 0) + 1)">Older</sf-button>
+    </div>
+  }
+}

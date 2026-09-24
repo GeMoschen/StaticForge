@@ -15,6 +15,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { UserMenuComponent } from '../account/user-menu.component';
 
 type ProjectSummary = components['schemas']['ProjectSummary'];
 
@@ -28,6 +29,7 @@ type ProjectSummary = components['schemas']['ProjectSummary'];
     SfEmptyStateComponent,
     SfFieldComponent,
     SfSpinnerComponent,
+    UserMenuComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dashboard.component.html',

@@ -87,7 +87,7 @@ async function setup(
       provideRouter([]),
       { provide: ContentService, useValue: content },
       { provide: ApiClient, useValue: { renameAsset: vi.fn() } },
-      { provide: AuthStore, useValue: { roleFor: () => role } },
+      { provide: AuthStore, useValue: { roleFor: () => role, isArchived: () => false } },
       { provide: TimeTravelStore, useValue: new TimeTravelStore() },
       { provide: ContextMenuService, useValue: menu },
       { provide: ProjectContextStore, useValue: projectContext },

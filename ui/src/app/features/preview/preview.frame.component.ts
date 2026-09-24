@@ -16,6 +16,7 @@ import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { ApiClient } from '../../core/api/api.client';
 import { previewErrorDocument, previewProblem } from './preview-error';
 import { pageNumbers, readPageHeaders, requestedPage } from './preview-pagination.util';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type ViewportPreset = 'mobile' | 'tablet' | 'desktop' | 'full';
 
@@ -100,6 +101,8 @@ const HIGHLIGHT_SCRIPT = `<script>
 })
 export class SfPreviewFrameComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
+  /** An archived project creates no share links (M26); links made earlier stop working. */
+  protected readonly archived = inject(ProjectAccessStore).archived;
   /** The language this preview renders — the one the editor is working in (M24.4.1). */
   protected readonly editingLocale = inject(EditingLocaleStore);
   private readonly sanitizer = inject(DomSanitizer);

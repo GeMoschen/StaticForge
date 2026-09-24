@@ -1,6 +1,6 @@
 ---
 id: M26.4.4
-status: todo
+status: done
 depends: [M26.2.1, M26.3.1, M26.4.2]
 epic: m26-user-management
 feature: ui
@@ -33,12 +33,12 @@ area: frontend
 
 ## Acceptance criteria
 
-- [ ] Vitest specs: projects table actions and confirmations, audit filter → query params round trip, effective-role
+- [x] Vitest specs: projects table actions and confirmations, audit filter → query params round trip, effective-role
       downgrade for archived projects (a representative editor, e.g. page editor + record editor become read-only),
       banner visibility per role.
-- [ ] Manual check in the running app: archive a project as admin → banner, no edit control enabled in pages,
+- [x] Manual check in the running app: archive a project as admin → banner, no edit control enabled in pages,
       content, templates, settings, generation; as a member the project is gone; unarchive restores it.
-- [ ] `npm run build` green.
+- [x] `npm run build` green.
 
 ## Out of scope
 
@@ -49,3 +49,27 @@ area: frontend
 - Walk every feature's primary edit action during the manual check (pages, content, media upload, navigation,
   globals, templates, settings tabs, generation start, share link) — the effective-role trick only covers controls
   that use the role; list any exceptions fixed in the implementation notes.
+
+## Implementation notes
+
+- **Effective role, once:** `AuthStore.roleFor` — instance admin → `PROJECT_ADMIN` (like the server; also lets admins
+  open projects they aren't members of, which the route guard refused before), archived project → `VIEWER`.
+  `AuthStore.archivedProjects` is the one archived flag, fed by `ProjectContextStore.loadFor` through
+  `ProjectAccessStore.enterProject` and by the admin projects page.
+- **Read-only, once:** `ProjectAccessStore.readOnly` (time travel or archived) replaced the 26
+  `readOnly = timeTravel.isTimeTravel` aliases (pages, media, navigation, globals list, templates, channels, every
+  settings tab, tree nodes, UID rename); `readOnlyLabel` gives the right notice ("Viewing a past revision" vs
+  "Archived project"). Role-gated editors (records, record sets, datasets, content, global sets, search reindex, members)
+  follow the effective role.
+- **Found by the walk and fixed:** generation "New generation"/"Promote" (were ungated; cancel stays allowed), preview
+  "Share" (disabled when archived), revision "Restore this asset"/rollback (disabled when archived), three
+  "Viewing a past revision" notices that showed in archived projects, the members tab bypassing archived mode for
+  instance admins.
+- `sf-archived-banner` in the project shell, with Unarchive for instance admins; dashboard shows an "Archived" chip.
+- Audit filters live in the URL (`admin-audit.util.ts`: `action` repeatable, `user`, `project` incl. `_instance`,
+  `from`/`to` as local days — `to` inclusive, sent as the next local midnight).
+- Manual check: a scripted Playwright walk against the dev server, not kept in the repo — `M26.5.2` turns it into the
+  journey (create user with generated password + membership → forced change →
+  my account → members read-only → promote with a live session (no sign-out) → archive: member loses it, admin sees
+  banner and disabled pages/content/media/templates/members/generation → unarchive → audit → disable/enable/delete),
+  green three runs in a row.

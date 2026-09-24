@@ -55,6 +55,12 @@ export function projectMemberGuard(minRole: string): CanMatchFn {
   };
 }
 
+/** The administration area (M26) is for instance admins only; anyone else lands on the dashboard. */
+export const instanceAdminGuard: CanMatchFn = () => {
+  const store = inject(AuthStore);
+  return store.isInstanceAdmin() ? true : inject(Router).createUrlTree(['/']);
+};
+
 export const loginGuard: CanMatchFn = () => {
   const store = inject(AuthStore);
   const router = inject(Router);

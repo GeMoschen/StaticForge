@@ -106,7 +106,7 @@ public class AuthService {
     public void changePassword(AuthenticatedUser principal, String currentPassword, String newPassword) {
         AppUser user = userService.requireById(principal.id());
         if (!passwordService.matches(currentPassword, user.getPasswordHash())) {
-            throw new SfException(ProblemFactory.badRequest("Current password is incorrect."));
+            throw new SfException(ProblemFactory.badRequest("Current password is incorrect.", "currentPassword"));
         }
         userService.changePassword(user.getId(), newPassword);
         userService.revokeAccess(user.getId());

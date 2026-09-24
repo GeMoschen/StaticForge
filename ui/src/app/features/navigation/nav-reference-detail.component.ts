@@ -19,8 +19,8 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import { etagFor, NavigationService, type PageReferenceView } from './navigation.service';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type FolderView = components['schemas']['FolderView'];
 
@@ -65,9 +65,9 @@ export class NavReferenceDetailComponent implements OnInit {
   private readonly nav = inject(NavigationService);
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   protected readonly targetKind = signal<TargetKind>('PAGE');
   protected readonly targetUuid = signal<string>('');

@@ -57,7 +57,7 @@
   <div class="drawer__body">
     @if (readOnly()) {
       <div class="banner banner--warning">
-        Viewing a past revision — exit time travel to make changes.
+        {{ readOnlyLabel() }}
       </div>
     }
 

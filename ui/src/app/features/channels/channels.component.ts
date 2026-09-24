@@ -19,8 +19,8 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTableComponent } from '../../shared/components/sf-table.component';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ChannelsService } from './channels.service';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type ChannelView = components['schemas']['ChannelView'];
 type ChannelTemplateRef = components['schemas']['ChannelTemplateRef'];
@@ -88,9 +88,9 @@ export class ChannelsComponent {
   private readonly api = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
   private readonly fb = inject(FormBuilder);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   readonly escapingOptions: readonly string[] = ESCAPING_OPTIONS;
   readonly urlStrategyOptions: readonly string[] = URL_STRATEGY_OPTIONS;

@@ -15,7 +15,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
-import { TimeTravelStore } from '../revisions/time-travel.store';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type ProjectLocalesView = components['schemas']['ProjectLocalesView'];
 
@@ -41,10 +41,10 @@ export class ProjectSettingsLocalesComponent implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
   private readonly locales = inject(LocalesStore);
-  private readonly timeTravel = inject(TimeTravelStore);
   protected readonly dialog = inject(DialogService);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);

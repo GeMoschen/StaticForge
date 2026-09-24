@@ -11,7 +11,6 @@ import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
@@ -26,6 +25,7 @@ import {
   type TemplateAssetKind,
   type TemplateFolderSelectEvent,
 } from './types';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type FolderView = components['schemas']['FolderView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
@@ -61,9 +61,9 @@ export class TemplateFolderNodeComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
-  private readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly readOnly = this.timeTravel.isTimeTravel;
+  /** Time travel or an archived project (M26). */
+  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   readonly node = input.required<FolderView>();
   readonly depth = input<number>(0);
