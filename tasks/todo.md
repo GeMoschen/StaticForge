@@ -1,3 +1,23 @@
+# M26 feature 3 — Admin API (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/03-admin-api/001-admin-projects-and-audit-api.md`. Backend only.
+
+- [x] Domain: `AuditService.search(AuditFilter, page)` (JPA `Specification`, newest first by `created_at, id`),
+      `AuditService.actions()`; `ProjectService.overview(q, includeArchived)` with member counts and head revisions
+- [x] Changelog: indexes `audit_log(action, created_at)` and `(actor_user_id, created_at)` (`created_at` exists)
+- [x] `GET /admin/projects`, `GET /admin/audit`, `GET /admin/audit/actions` (instance admin only)
+- [x] API tests: each filter, combined, `_instance`, stable paging, `403`, member count / last change
+- [x] Docs (`docs/api.md`), OpenAPI + `schema.d.ts`, `./gradlew build` (`test --rerun`), UI build + vitest
+
+## Review
+
+- Backend: 1184 tests green (`./gradlew build test --rerun`); new `AdminProjectsAndAuditApiTest` (7): every audit
+  filter alone and combined, `_instance`, stable paging with equal timestamps, bad input, `403`/`401`, member counts
+  and last change before and after membership revisions, text and archived filters.
+- UI: `schema.d.ts` regenerated (three admin endpoints); `npm run build`, `npx vitest run` (63 files, 460 tests) green.
+
+---
+
 # M26 feature 2 — Archived projects (implementation, branch `m26-user-management`)
 
 Spec: `tasks/26-m26-user-management/02-archived-projects/001-archived-projects-read-only.md`. Backend only.

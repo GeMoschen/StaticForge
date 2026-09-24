@@ -3,13 +3,18 @@ package com.acme.staticforge.audit;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Appended-only audit trail (spec §26.3). Recent entries are ordered newest-first. */
-public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
+public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSpecificationExecutor<AuditLog> {
 
     List<AuditLog> findByProjectIdOrderByIdDesc(Long projectId, Pageable pageable);
+
+    /** Every action name that occurs in the trail, alphabetically (the instance audit view's filter, M26). */
+    @Query("select distinct a.action from AuditLog a order by a.action")
+    List<String> findDistinctActions();
 
     /**
      * Entries that may be about the account (M26 anonymize): {@code user:} targets it acted in, plus every

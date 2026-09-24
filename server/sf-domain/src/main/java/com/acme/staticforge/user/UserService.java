@@ -8,11 +8,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -70,6 +73,13 @@ public class UserService {
     @Transactional(readOnly = true)
     public Optional<AppUser> findById(Long id) {
         return users.findById(id);
+    }
+
+    /** The accounts with these ids, by id; unknown ids are absent. One query (listings that show many actors). */
+    @Transactional(readOnly = true)
+    public Map<Long, AppUser> findAllById(Collection<Long> ids) {
+        return users.findAllById(ids).stream()
+                .collect(Collectors.toMap(AppUser::getId, user -> user));
     }
 
     @Transactional(readOnly = true)

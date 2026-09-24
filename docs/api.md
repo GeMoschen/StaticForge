@@ -368,6 +368,16 @@ while one is queued or running, `503` when the index is unavailable.
 |---|---|
 | `GET` | `/api/v1/status` (liveness/readiness; in addition to `/actuator/health`) |
 
+### 14.1 Instance administration (M26)
+
+All `INSTANCE_ADMIN` only (`403` otherwise).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/admin/projects` (`?q=&includeArchived=true`) | every project sorted by key: `key, name, description, archived, createdAt, memberCount, headRevision, lastChangeAt`; `q` matches key, name, description ignoring case |
+| `GET` | `/api/v1/admin/audit` (`?action=&action=&userId=&project=&from=&to=&page=&size=`) | every audit entry, newest first (paged, `size` ≤ 200, `sort` ignored); `project` is a key or `_instance` (entries without a project); `from` inclusive, `to` exclusive ISO instants; row `id, timestamp, action, actor{id, username}, projectKey, target, detail` — a deleted actor reads `Deleted user` |
+| `GET` | `/api/v1/admin/audit/actions` | the distinct action names, alphabetically |
+
 ## 15. Error catalogue
 
 Codes from `cms-specification.md` Appendix B, annotated with where they are raised in code. `ProblemFactory` (in `sf-common`) constructs the `problem+json` bodies.

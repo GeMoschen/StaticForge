@@ -15,7 +15,7 @@ the instance.
 
 ## Feature exit criteria
 
-- [ ] `GET /admin/projects` and `GET /admin/audit` with filters and paging, instance admin only.
+- [x] `GET /admin/projects` and `GET /admin/audit` with filters and paging, instance admin only.
 
 ## Dependencies
 

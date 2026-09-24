@@ -1860,6 +1860,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_17"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_18"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["actions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/pages/{uuid}/bodies/{body}/sections/{instanceId}": {
         parameters: {
             query?: never;
@@ -3292,6 +3340,40 @@ export interface components {
             lastLoginAt?: string;
             /** Format: int64 */
             projectCount?: number;
+        };
+        AdminProjectRow: {
+            key?: string;
+            name?: string;
+            description?: string;
+            archived?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: int64 */
+            memberCount?: number;
+            /** Format: int64 */
+            headRevision?: number;
+            /** Format: date-time */
+            lastChangeAt?: string;
+        };
+        Actor: {
+            /** Format: int64 */
+            id?: number;
+            username?: string;
+        };
+        AdminAuditEntry: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: date-time */
+            timestamp?: string;
+            action?: string;
+            actor?: components["schemas"]["Actor"];
+            projectKey?: string;
+            target?: string;
+            detail?: components["schemas"]["JsonNode"];
+        };
+        AdminAuditPage: {
+            content?: components["schemas"]["AdminAuditEntry"][];
+            page?: components["schemas"]["PageMeta"];
         };
     };
     responses: never;
@@ -7229,6 +7311,81 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PasswordPolicyView"];
+                };
+            };
+        };
+    };
+    list_17: {
+        parameters: {
+            query?: {
+                q?: string;
+                includeArchived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminProjectRow"][];
+                };
+            };
+        };
+    };
+    list_18: {
+        parameters: {
+            query?: {
+                action?: string[];
+                userId?: number;
+                project?: string;
+                from?: string;
+                to?: string;
+                /** @description Zero-based page index (0..N) */
+                page?: number;
+                /** @description The size of the page to be returned */
+                size?: number;
+                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
+                sort?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminAuditPage"];
+                };
+            };
+        };
+    };
+    actions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string[];
                 };
             };
         };

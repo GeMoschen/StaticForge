@@ -22,6 +22,11 @@ public interface RevisionRepository extends JpaRepository<Revision, Revision.Rev
     @Query("SELECT MAX(r.revisionId) FROM Revision r WHERE r.projectId = :projectId")
     Optional<Long> findHeadRevisionId(@Param("projectId") Long projectId);
 
+    /** {@code [projectId, revisionId, createdAt]} of every project's newest revision (admin projects overview, M26). */
+    @Query("SELECT r.projectId, r.revisionId, r.createdAt FROM Revision r WHERE r.revisionId ="
+            + " (SELECT MAX(h.revisionId) FROM Revision h WHERE h.projectId = r.projectId)")
+    List<Object[]> findHeads();
+
     /**
      * Revision spine filtered by an incremental {@code since} cursor and/or author, newest first
      * (spec §20.2). The asset filter is applied in the service layer because it inspects the JSON

@@ -16,4 +16,20 @@
         </addColumn>
     </changeSet>
 
+    <!-- M26.3.1: the instance audit view filters by action and by actor, newest first
+         (idx_audit_log_created from 011 already serves the unfiltered and date-range listing). -->
+    <changeSet id="019-audit-log-index-action-created" author="sf">
+        <createIndex tableName="audit_log" indexName="idx_audit_log_action_created">
+            <column name="action"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="019-audit-log-index-actor-created" author="sf">
+        <createIndex tableName="audit_log" indexName="idx_audit_log_actor_created">
+            <column name="actor_user_id"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
 </databaseChangeLog>

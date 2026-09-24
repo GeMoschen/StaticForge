@@ -4,7 +4,13 @@ import com.acme.staticforge.revision.RevisionAware;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +42,46 @@ public class AuditServiceImpl implements AuditService {
     @Transactional(readOnly = true)
     public List<AuditLog> findRecent(long projectId, Pageable pageable) {
         return repository.findByProjectIdOrderByIdDesc(projectId, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AuditLog> search(AuditFilter filter, Pageable pageable) {
+        Pageable newestFirst = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        return repository.findAll(specification(filter), newestFirst);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> actions() {
+        return repository.findDistinctActions();
+    }
+
+    private static Specification<AuditLog> specification(AuditFilter filter) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (filter.actions() != null && !filter.actions().isEmpty()) {
+                predicates.add(root.get("action").in(filter.actions()));
+            }
+            if (filter.actorUserId() != null) {
+                predicates.add(cb.equal(root.get("actorUserId"), filter.actorUserId()));
+            }
+            if (filter.instanceOnly()) {
+                predicates.add(cb.isNull(root.get("projectId")));
+            } else if (filter.projectId() != null) {
+                predicates.add(cb.equal(root.get("projectId"), filter.projectId()));
+            }
+            if (filter.from() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.<Instant>get("createdAt"), filter.from()));
+            }
+            if (filter.to() != null) {
+                predicates.add(cb.lessThan(root.<Instant>get("createdAt"), filter.to()));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
     }
 
     private static final String USER_TARGET = "user:";
