@@ -27,6 +27,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -69,7 +70,8 @@ public class SecurityConfig {
                 // SAMEORIGIN). Setting the one true default here, instead of fighting it per-controller,
                 // avoids the duplicate header entirely.
                 .headers(h -> h.frameOptions(frame -> frame.sameOrigin()))
-                .authorizeHttpRequests(a -> a.requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh")
+                .authorizeHttpRequests(a -> a.requestMatchers(
+                                "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/password-policy")
                         .permitAll()
                         .requestMatchers("/api/v1/auth/**")
                         .authenticated()
@@ -87,6 +89,9 @@ public class SecurityConfig {
                         .authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(jwtDecoder)
                         .jwtAuthenticationConverter(jwtAuthenticationConverter)))
+                // A pending forced password change (M26) blocks everything but its allowlist; it needs the
+                // authenticated principal, so it runs right after bearer authentication.
+                .addFilterAfter(new PasswordChangeRequiredFilter(objectMapper), BearerTokenAuthenticationFilter.class)
                 .exceptionHandling(e -> e.authenticationEntryPoint((request, response, authException) ->
                                 writeProblem(response, objectMapper, ProblemFactory.unauthorized("Authentication required.")))
                         .accessDeniedHandler((request, response, accessDeniedException) ->

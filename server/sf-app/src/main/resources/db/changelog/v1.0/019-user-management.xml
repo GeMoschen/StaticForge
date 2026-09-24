@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M26.1.1: an account created or reset by an instance admin carries a temporary password; while
+         this flag is set every API call except the password-change allowlist answers 428 SF-API-0428.
+         The DELETED status needs no DDL: app_user.status is a plain VARCHAR(30) without a CHECK. -->
+    <changeSet id="019-app-user-must-change-password" author="sf">
+        <addColumn tableName="app_user">
+            <column name="must_change_password" type="BOOLEAN" defaultValueBoolean="false" valueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

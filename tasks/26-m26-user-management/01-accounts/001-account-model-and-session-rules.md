@@ -1,6 +1,6 @@
 ---
 id: M26.1.1
-status: todo
+status: done
 depends: []
 epic: m26-user-management
 feature: accounts
@@ -41,17 +41,17 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Changelog applies on H2; `ddl-auto: validate` passes.
-- [ ] `PasswordPolicy` unit tests: min length, `require-mixed` on/off, 72-byte limit with multi-byte characters,
+- [x] Changelog applies on H2; `ddl-auto: validate` passes.
+- [x] `PasswordPolicy` unit tests: min length, `require-mixed` on/off, 72-byte limit with multi-byte characters,
       several broken rules reported together.
-- [ ] Integration: a user with `must_change_password` gets `428 SF-API-0428` on a project endpoint and on
+- [x] Integration: a user with `must_change_password` gets `428 SF-API-0428` on a project endpoint and on
       `PATCH /auth/me`, succeeds on each allowlisted endpoint, and after `POST /auth/password` reaches the project.
-- [ ] Integration with a **still-valid access token**: after `setMemberRole` (downgrade) and `removeMember`, the
+- [x] Integration with a **still-valid access token**: after `setMemberRole` (downgrade) and `removeMember`, the
       next request with the old token is `401` (stale epoch); after refresh the new role applies.
-- [ ] Refresh of a disabled user fails and revokes the family.
-- [ ] Seeder: seeds into an empty table; seeds nothing when any user exists (e.g. `Admin` renamed); prod-like
+- [x] Refresh of a disabled user fails and revokes the family.
+- [x] Seeder: seeds into an empty table; seeds nothing when any user exists (e.g. `Admin` renamed); prod-like
       profile sets `must_change_password`, `dev`/`test` don't.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -64,3 +64,14 @@ area: backend
 - Tests that rely on the seeded `Admin` in the `test` profile keep working because each test DB starts empty; check
   fixtures that create users *before* the runner fires (`CommandLineRunner` order).
 - Lessons "default interface method is not behind the Spring proxy": new `@Transactional` overloads are abstract.
+
+## Implementation notes
+
+- The epoch bump is `UserService.revokeAccess(userId)` (renamed from `bumpTokenEpoch`).
+- `JwtServiceImpl.issueAccessToken` now reads every claim, `epoch` included, from the account's current row: a
+  caller holding an entity loaded before a membership change would otherwise issue a token that is dead on arrival.
+- `/auth/me` reads `mustChangePassword` from the account row (the converter loads it per request; it is on
+  `AuthenticatedUser`, never in a claim). `PasswordChangeRequiredFilter` is not a bean on purpose (it would also be
+  registered on the servlet container); `SecurityConfig` adds it after `BearerTokenAuthenticationFilter`.
+- Self-removal hazard verified: a project admin removing themselves gets `401` on the next call and a working token
+  from `/auth/refresh` (`AccountSessionRulesIntegrationTest`).

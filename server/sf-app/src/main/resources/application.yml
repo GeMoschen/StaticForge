@@ -47,6 +47,10 @@ sf:
       issuer: https://cms.example.com
       secret: "${SF_JWT_SECRET:}"
       # access-token-ttl/refresh-token-ttl/… populated in M1
+    # Rules for a new password (M26): self change, admin create and admin reset. Always at most 72 UTF-8 bytes.
+    # password:
+    #   min-length: 12
+    #   require-mixed: false   # true: at least one letter and at least one digit or symbol
   media:
     store: filesystem
     root: "${SF_MEDIA_ROOT:./build/media}"

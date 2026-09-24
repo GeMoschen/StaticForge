@@ -14,6 +14,8 @@ import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionCounterRepository;
 import com.acme.staticforge.revision.RevisionService;
+import com.acme.staticforge.user.UserService;
+import com.acme.staticforge.user.UserStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
@@ -45,6 +47,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ObjectMapper objectMapper;
     private final AssetService assetService;
     private final LocalizationMigrationService localizationMigrations;
+    private final UserService userService;
     /**
      * Lazily resolved: the search index is an optional companion of the project service, and a hard
      * dependency here would tie project writes to the index being constructible.
@@ -63,6 +66,7 @@ public class ProjectServiceImpl implements ProjectService {
             ObjectMapper objectMapper,
             AssetService assetService,
             LocalizationMigrationService localizationMigrations,
+            UserService userService,
             org.springframework.beans.factory.ObjectProvider<com.acme.staticforge.search.SearchIndexer> searchIndexer) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -71,6 +75,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.channelService = channelService;
         this.auditService = auditService;
         this.localizationMigrations = localizationMigrations;
+        this.userService = userService;
         this.searchIndexer = searchIndexer;
         this.objectMapper = objectMapper;
         this.assetService = assetService;
@@ -301,7 +306,15 @@ public class ProjectServiceImpl implements ProjectService {
 
         ProjectMember member = projectMemberRepository
                 .findByProjectIdAndUserId(project.getId(), userId)
-                .orElseGet(() -> new ProjectMember(project.getId(), userId, role, Instant.now()));
+                .orElseGet(() -> {
+                    UserStatus status = userService.requireById(userId).getStatus();
+                    if (status == UserStatus.DISABLED || status == UserStatus.DELETED) {
+                        throw new SfException(ProblemFactory.conflict(
+                                "A " + status.name().toLowerCase(java.util.Locale.ROOT)
+                                        + " account can't be added to a project."));
+                    }
+                    return new ProjectMember(project.getId(), userId, role, Instant.now());
+                });
         member.setRole(role);
         member.setGrantedBy(ctx.userId());
         projectMemberRepository.save(member);
@@ -314,6 +327,8 @@ public class ProjectServiceImpl implements ProjectService {
 
         auditService.record(
                 project.getId(), ctx.userId(), "MEMBER_ROLE_SET", "member:" + userId, memberDetail(userId, role.name()));
+        // The access token carries the project roles: the change applies on the user's next request (spec §9.2).
+        userService.revokeAccess(userId);
     }
 
     @Override
@@ -329,6 +344,7 @@ public class ProjectServiceImpl implements ProjectService {
                 AssetChange.create(memberUuid(userId), MEMBER_ASSET_TYPE, "DELETE", List.of()));
 
         auditService.record(project.getId(), ctx.userId(), "MEMBER_REMOVED", "member:" + userId, memberDetail(userId, null));
+        userService.revokeAccess(userId);
     }
 
     @Override

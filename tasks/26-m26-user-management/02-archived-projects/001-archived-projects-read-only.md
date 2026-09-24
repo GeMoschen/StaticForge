@@ -56,3 +56,10 @@ Epic decision 12.
   re-indexes — verify a searched asset appears again without a manual reindex, otherwise trigger one on unarchive.
 - Background jobs that write (startup runners like `ReferenceBackfillRunner`, `LegacyOutputCleanupRunner`) must not
   fail startup on an archived project: they either skip archived projects or bypass the guard deliberately.
+- **Error code clash (found in M26.1, needs a decision with the user):** `SF-DOM-0130` is already taken — spec
+  Appendix B and `PageReferenceServiceImpl` use it for "page reference folder target has no page" (422). Pick a free
+  code for "Project is archived" (e.g. `SF-DOM-0133`) before implementing; `0131`/`0132` are now the admin guard rails.
+- **Deleting a user who is a member of an archived project (M26.1.2):** `UserAdministrationService.delete` removes
+  every membership through `ProjectService.removeMember`, which allocates a revision. With the central archived guard
+  in `RevisionService.allocate` that delete would fail with 409. Let the anonymizing delete remove memberships of
+  archived projects on purpose (bypass the guard for that path) and cover it with a test.

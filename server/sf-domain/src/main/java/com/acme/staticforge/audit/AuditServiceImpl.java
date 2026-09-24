@@ -2,6 +2,7 @@ package com.acme.staticforge.audit;
 
 import com.acme.staticforge.revision.RevisionAware;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
@@ -35,5 +36,29 @@ public class AuditServiceImpl implements AuditService {
     @Transactional(readOnly = true)
     public List<AuditLog> findRecent(long projectId, Pageable pageable) {
         return repository.findByProjectIdOrderByIdDesc(projectId, pageable);
+    }
+
+    private static final String USER_TARGET = "user:";
+
+    @Override
+    @Transactional
+    public void anonymizeUser(Long userId, String anonymizedTarget) {
+        String name = anonymizedTarget.startsWith(USER_TARGET) ? anonymizedTarget.substring(USER_TARGET.length()) : null;
+        for (AuditLog entry : repository.findUserTargetedCandidates(userId)) {
+            JsonNode detail = entry.getDetail();
+            boolean about = userId.equals(entry.getActorUserId())
+                    || (detail != null && detail.path("userId").asLong(Long.MIN_VALUE) == userId);
+            if (!about) {
+                continue;
+            }
+            JsonNode anonymizedDetail = detail;
+            if (detail instanceof ObjectNode object && (object.has("from") || object.has("to"))) {
+                ObjectNode copy = object.deepCopy();
+                copy.put("from", name);
+                copy.put("to", name);
+                anonymizedDetail = copy;
+            }
+            entry.anonymize(anonymizedTarget, anonymizedDetail);
+        }
     }
 }

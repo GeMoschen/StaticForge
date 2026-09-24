@@ -4,5 +4,7 @@ package com.acme.staticforge.user;
 public enum UserStatus {
     ACTIVE,
     DISABLED,
-    LOCKED
+    LOCKED,
+    /** Anonymized by an instance admin (M26): kept for history, never signs in again. */
+    DELETED
 }

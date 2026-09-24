@@ -21,4 +21,12 @@ public interface AuditService {
 
     /** Most recent entries for a project, newest first. */
     List<AuditLog> findRecent(long projectId, Pageable pageable);
+
+    /**
+     * The one exception to append-only (M26, delete = anonymize): every entry about the account — those it acted in
+     * with a {@code user:} target, and the instance-level {@code USER_*} entries whose {@code detail.userId} is it —
+     * gets {@code anonymizedTarget}, and a rename's old and new names in {@code detail} are replaced as well. Entries
+     * keep their action, actor id and time. {@code member:<id>} targets carry no name and stay.
+     */
+    void anonymizeUser(Long userId, String anonymizedTarget);
 }

@@ -1,3 +1,33 @@
+# M26 feature 1 — Accounts (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/01-accounts/`. Backend lane, sequential (shared `UserService`,
+`AuthService`, Gradle build). Implemented and committed as one change (the three tasks share `UserService`).
+
+- [x] M26.1.1 — account model, password policy, forced change (`428`), immediate revocation, admin seeding
+  - [x] changelog `019-user-management.xml` (`must_change_password`), `UserStatus.DELETED`
+  - [x] `PasswordPolicy` + `sf.security.password.*` (+ unit tests)
+  - [x] `PasswordChangeRequiredFilter` after bearer auth, exact allowlist; `/auth/me` gains `mustChangePassword`
+  - [x] epoch bump in `setMemberRole`/`removeMember`; refresh rejects `DISABLED`/`DELETED` and drops the family
+  - [x] `DELETED` treated like `DISABLED` in login and converter
+  - [x] `DevAdminInitializer`: only into an empty table, `mustChangePassword` outside dev/demo/test
+  - [x] audit `USER_PASSWORD_CHANGED`; integration tests per acceptance criterion
+- [x] M26.1.2 — `/admin/users/**`, member lookup, private member emails
+- [x] M26.1.3 — self-service `/auth/me` PATCH, password policy on change, `sessions/revoke`, `password-policy`
+- [x] `./gradlew spotlessApply build` (`test --rerun`), OpenAPI + `schema.d.ts`, `npm run build`
+
+## Review
+
+- Backend: M26.1.1–1.3 together. New tests: `PasswordPolicyTest`, `UserAdministrationServiceTest`,
+  `DevAdminInitializerTest`, converter cases, `AccountSessionRulesIntegrationTest`, `AdminUserApiTest`,
+  `SelfServiceAccountApiTest`, `ConfiguredPasswordPolicyIntegrationTest`. Full `./gradlew build` green.
+- UI: regenerated `schema.d.ts`; `npm run build` and `npx vitest run` (63 files, 460 tests) green. No UI code yet
+  (M26.4): with a forced password change pending, today's UI would just see `428`s.
+- Found on the way: a non-admin hitting any `hasAuthority` endpoint got `500` (fixed: `AccessDeniedException` → `403`).
+  For M26.2.1 (noted in its task file): `SF-DOM-0130` is already taken, and the anonymizing delete must be able to
+  remove memberships of archived projects once the central write guard exists.
+
+---
+
 # M25 — Record sets (implementation, branch `m25-record-sets`)
 
 Spec: `tasks/25-m25-record-sets/`. One subagent per task; backend lane sequential (shared Gradle build and
