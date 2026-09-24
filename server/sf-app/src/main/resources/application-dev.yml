@@ -2,11 +2,13 @@ spring:
   config:
     activate:
       on-profile: dev
+  # File-based H2 so content survives restarts. SF_DB_FILE is the H2 database path without the `.mv.db` suffix;
+  # a relative path must start with `./` and resolves against the working directory, like SF_MEDIA_ROOT.
   datasource:
-    url: jdbc:h2:mem:sf;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:file:${SF_DB_FILE:./build/db/staticforge};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
     driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
+    username: ${SF_DB_USER:sa}
+    password: ${SF_DB_PASSWORD:}
 
 sf:
   security:

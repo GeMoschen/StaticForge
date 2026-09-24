@@ -50,15 +50,21 @@ The schema is owned by Liquibase; nothing is created manually. The `prod` profil
 
 ## Running the backend locally (no Docker)
 
-The backend runs standalone against in-memory H2 under the `dev` profile:
+The backend runs standalone against a file-based H2 database under the `dev` profile:
 
 ```sh
 ./gradlew :server:sf-app:bootRun
 ```
 
 `dev` uses H2 in PostgreSQL compatibility mode and **HS256** signing with a bundled
-dev-only secret (spec §9.3 — never use HS256 in `prod`). The app listens on port 8080;
-health is at `http://localhost:8080/actuator/health`.
+dev-only secret (spec §9.3 — never use HS256 in `prod`). The database is kept in
+`server/sf-app/build/db/staticforge.mv.db` (next to the default media, output and search-index roots),
+so content survives restarts; `./gradlew clean` or deleting that file starts from an empty database.
+Point `SF_DB_FILE` elsewhere to keep it out of `build/`, e.g. `SF_DB_FILE=~/staticforge-dev/staticforge`
+(set `SF_MEDIA_ROOT` alongside it, since the database references the media blobs).
+H2 locks the file while the backend runs, so a second backend needs its own `SF_DB_FILE` (and
+`SF_SEARCH_INDEX_ROOT`, see [Search: single-instance constraint](#search-single-instance-constraint)).
+The app listens on port 8080; health is at `http://localhost:8080/actuator/health`.
 
 ## Running the frontend dev server
 
@@ -78,7 +84,7 @@ The backend has four Spring profiles (spec §26.6):
 
 | Profile | Database | Signing | Liquibase contexts |
 |---------|----------|---------|--------------------|
-| `dev`   | H2 in-memory | HS256 (dev-only) | default |
+| `dev`   | H2 file (`SF_DB_FILE`) | HS256 (dev-only) | default |
 | `test`  | H2 in-memory | HS256 (dev-only) | default |
 | `demo`  | H2 in-memory | HS256 (dev-only) | `demo` (seeds sample data) |
 | `prod`  | PostgreSQL    | **RS256** (keystore) | `prod` |
@@ -109,6 +115,8 @@ npm test
 | `DB_USER`           | db, backend | Database role (default `staticforge`)                        |
 | `DB_PASSWORD`       | db, backend | Database password (required)                                 |
 | `SPRING_PROFILES_ACTIVE` | backend | Profile (`prod` in compose)                               |
+| `SF_DB_FILE`        | backend  | H2 database path of the `dev` profile, without the `.mv.db` suffix (default `./build/db/staticforge`). A relative path must start with `./`; `~` means the home directory |
+| `SF_DB_USER` / `SF_DB_PASSWORD` | backend | Credentials of the `dev` H2 database (default `sa` / empty). H2 stores them when it creates the file, so changing them later needs a fresh file |
 | `SF_JWT_SECRET`     | backend  | HS256 secret (dev/demo only)                                  |
 | `SF_JWT_KEYSTORE`   | backend  | RS256 keystore location (prod; provisioned in M1)             |
 | `SF_MEDIA_ROOT`     | backend  | Media blob store root (mounted volume in compose)             |
