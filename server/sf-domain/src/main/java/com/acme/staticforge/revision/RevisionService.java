@@ -11,8 +11,17 @@ import org.springframework.data.domain.Pageable;
  */
 public interface RevisionService {
 
-    /** Allocates a new revision id, records the {@link Revision} row, and returns it. */
+    /**
+     * Allocates a new revision id, records the {@link Revision} row, and returns it. Refuses an archived project with
+     * {@code 409 SF-DOM-0141} (M26): the central read-only guard for every write that allocates a revision.
+     */
     Revision allocate(long projectId, ChangeType type, String comment, Long userId);
+
+    /**
+     * {@link #allocate} without the archived check, for the writes an archived project must still accept (M26):
+     * archiving and unarchiving it, and removing the memberships of an account that is being deleted.
+     */
+    Revision allocateEvenIfArchived(long projectId, ChangeType type, String comment, Long userId);
 
     /**
      * Allocates a new revision id exactly like {@link #allocate}, named to signal that the

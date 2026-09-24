@@ -1,5 +1,6 @@
 package com.acme.staticforge.revision;
 
+import com.acme.staticforge.project.ProjectWriteGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.micrometer.core.instrument.Counter;
@@ -20,6 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Every allocation publishes one {@link RevisionCommittedEvent}, delivered to after-commit listeners (search
  * indexing, M23.2.1); joining an open batch publishes nothing.
+ *
+ * <p>Allocation is also where an archived project turns read-only (M26): {@link #allocate} refuses it with
+ * {@code 409 SF-DOM-0141} ({@link ProjectWriteGuard}), which covers every write that allocates a revision.
  */
 @Service
 @RevisionAware
@@ -30,14 +34,17 @@ public class RevisionServiceImpl implements RevisionService {
     private final ObjectMapper objectMapper;
     private final Counter allocateCounter;
     private final ApplicationEventPublisher events;
+    private final ProjectWriteGuard writeGuard;
 
     public RevisionServiceImpl(
             RevisionCounterRepository counterRepository,
             RevisionRepository revisionRepository,
             ObjectMapper objectMapper,
             MeterRegistry meterRegistry,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            ProjectWriteGuard writeGuard) {
         this.counterRepository = counterRepository;
+        this.writeGuard = writeGuard;
         this.revisionRepository = revisionRepository;
         this.objectMapper = objectMapper;
         this.events = events;
@@ -49,6 +56,17 @@ public class RevisionServiceImpl implements RevisionService {
     @Override
     @Transactional
     public Revision allocate(long projectId, ChangeType type, String comment, Long userId) {
+        writeGuard.requireWritable(projectId);
+        return record(projectId, type, comment, userId);
+    }
+
+    @Override
+    @Transactional
+    public Revision allocateEvenIfArchived(long projectId, ChangeType type, String comment, Long userId) {
+        return record(projectId, type, comment, userId);
+    }
+
+    private Revision record(long projectId, ChangeType type, String comment, Long userId) {
         allocateCounter.increment();
         ObjectNode summary = objectMapper.createObjectNode();
         summary.putArray("assets");

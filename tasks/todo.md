@@ -1,3 +1,35 @@
+# M26 feature 2 — Archived projects (implementation, branch `m26-user-management`)
+
+Spec: `tasks/26-m26-user-management/02-archived-projects/001-archived-projects-read-only.md`. Backend only.
+
+- [x] Error code for "Project is archived": `SF-DOM-0141` (user decision; `SF-DOM-0130` is taken)
+- [x] `ProjectWriteGuard` (sf-domain): one place that throws `409` for an archived project
+- [x] Central guard in `RevisionServiceImpl.allocate` (covers `allocateOrJoin`/`beginBatch`)
+- [x] `archive`: allocate first, then flip; new `unarchive`: flip first, then allocate; both audit
+      (`PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`) and bump every member's epoch; `POST /projects/{key}/unarchive`
+- [x] Hidden: `JwtServiceImpl` omits archived projects from `projects`; `GET /projects` filters for non-admins
+- [x] Explicit guards on writes without a revision: generation start/promote/retry, share links (issue → 409,
+      render → 404), search reindex, plus whatever the walk finds
+- [x] User delete removes memberships of archived projects on purpose (guard bypass), with a test
+- [x] Startup runners don't fail on an archived project
+- [x] Endpoint walk test (`RequestMappingHandlerMapping`, allowlist with reasons)
+- [x] Integration tests per acceptance criterion (still-valid token → 404, admin reads + writes 409,
+      share link 404, generation 409, unarchive restores role + search)
+- [x] Spec Appendix B row, OpenAPI + `schema.d.ts`, `./gradlew spotlessApply build` (`test --rerun`), `npm run build`
+- [x] Early `ArchivedProjectInterceptor` + `@AllowedOnArchivedProject` (needed for a meaningful walk: validation
+      otherwise answers `400` before the revision guard is reached)
+
+## Review
+
+- Backend: 1177 tests green (`./gradlew build test --rerun`); new `ArchivedProjectIntegrationTest` (7) and
+  `ArchivedProjectEndpointWalkTest` (60+ handlers), `RevisionServiceImplTest` +2.
+- Walk negative control (interceptor off) failed as expected and exposed an unguarded write: URL-registry
+  reset/override and generation targets allocate no revision — now guarded in the domain/controller.
+- UI: `schema.d.ts` regenerated (`unarchive`); `npm run build` and `npx vitest run` (63 files, 460 tests) green.
+- Not changed: search stays unavailable for an archived project (index closed, pre-existing M23 behaviour).
+
+---
+
 # M26 feature 1 — Accounts (implementation, branch `m26-user-management`)
 
 Spec: `tasks/26-m26-user-management/01-accounts/`. Backend lane, sequential (shared `UserService`,

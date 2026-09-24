@@ -23,6 +23,7 @@ import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
+import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
@@ -234,6 +235,7 @@ public class MediaController {
     }
 
     /** Compiles draft text as this text media file's CMS syntax source, without saving (M18.2.1). */
+    @AllowedOnArchivedProject("Validates a draft, stores nothing.")
     @PostMapping("/{uuid}/text/validate")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public OctlValidateResponse validateText(
@@ -307,7 +309,7 @@ public class MediaController {
         if (!target.pageUuid().equals(uuid) || (target.projectKey() != null && !target.projectKey().equals(projectKey))) {
             throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
         }
-        long projectId = projectId(projectKey);
+        long projectId = sharedProjectId(projectKey);
         if (variant == null || variant.isBlank()) {
             AssetVersionView media = mediaService.requireAt(projectId, uuid, target.revision());
             if (TextMediaTypes.isProcessed(media.payload())) {
@@ -382,6 +384,15 @@ public class MediaController {
 
     private long projectId(String key) {
         return projectService.requireByKey(key).getId();
+    }
+
+    /** A share link of an archived project stops working (M26): {@code 404}, like a project that doesn't exist. */
+    private long sharedProjectId(String key) {
+        Project project = projectService.requireByKey(key);
+        if (project.isArchived()) {
+            throw new SfException(ProblemFactory.notFound("Project not found."));
+        }
+        return project.getId();
     }
 
     private RevisionContext ctx(String key, String comment) {

@@ -23,13 +23,29 @@ public interface ProjectService {
     /** Returns the project or throws a 404 problem when absent. */
     Project requireByKey(String key);
 
+    /**
+     * {@link #requireByKey} for a write that allocates no revision (starting a generation run, creating a share
+     * link, …): {@code 409 SF-DOM-0141} when the project is archived (M26, {@link ProjectWriteGuard}).
+     */
+    Project requireWritable(String key);
+
     /** All projects ordered by key (used by INSTANCE_ADMIN listing). */
     List<Project> listAll();
 
     /** {@code allowedMimeTypes} is always fully replaced; an empty/null list clears the override back to the instance-wide default. */
     Project update(String key, String name, String description, List<String> allowedMimeTypes, RevisionContext ctx);
 
+    /**
+     * Archives the project (M26, epic decision 12): read-only for everyone ({@code 409 SF-DOM-0141} on every write,
+     * see {@link ProjectWriteGuard}) and hidden from every member but instance admins. Records an {@code UPDATE}
+     * revision, audits {@code PROJECT_ARCHIVED} and bumps every member's token epoch, so each member's next request
+     * already resolves the project as inaccessible. A generation run already queued or running is allowed to finish;
+     * only new runs and promotes are refused. Archiving an archived project changes nothing.
+     */
     void archive(String key, RevisionContext ctx);
+
+    /** Reverses {@link #archive}: records a revision, audits {@code PROJECT_UNARCHIVED}, bumps members' epochs. */
+    void unarchive(String key, RevisionContext ctx);
 
     /**
      * Replaces the project's content locale configuration (M24) and allocates one
@@ -77,6 +93,12 @@ public interface ProjectService {
 
     /** Removes a membership and records an {@code UPDATE} revision + summary entry. */
     void removeMember(String key, Long userId, RevisionContext ctx);
+
+    /**
+     * {@link #removeMember} for the anonymizing delete of an account (M26): also removes the membership of an
+     * archived project, which {@link #removeMember} refuses like every other write to it.
+     */
+    void removeMemberOfDeletedAccount(String key, Long userId, RevisionContext ctx);
 
     List<ProjectMember> membershipsOf(Long userId);
 }

@@ -79,8 +79,9 @@ public class ProjectController {
 
         Map<Long, ProjectRole> roleByProject = projectService.membershipsOf(user.id()).stream()
                 .collect(Collectors.toMap(ProjectMember::getProjectId, ProjectMember::getRole));
+        // Archived projects are hidden from everyone but instance admins (M26).
         return projectService.listAll().stream()
-                .filter(p -> roleByProject.containsKey(p.getId()))
+                .filter(p -> roleByProject.containsKey(p.getId()) && !p.isArchived())
                 .sorted(Comparator.comparing(Project::getKey))
                 .map(p -> toSummary(p, roleByProject.get(p.getId())))
                 .collect(Collectors.toList());
@@ -172,10 +173,20 @@ public class ProjectController {
                 .collect(Collectors.toList());
     }
 
+    @AllowedOnArchivedProject("Archiving an archived project changes nothing.")
     @PostMapping("/{key}/archive")
     @PreAuthorize("hasAuthority('SYS_INSTANCE_ADMIN')")
     public ResponseEntity<Void> archive(@PathVariable("key") String projectKey) {
         projectService.archive(projectKey, ctx(projectKey, null));
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Reverses {@code archive} (M26): the project is writable again and back in its members' lists. */
+    @AllowedOnArchivedProject("The one write that reverses archiving.")
+    @PostMapping("/{key}/unarchive")
+    @PreAuthorize("hasAuthority('SYS_INSTANCE_ADMIN')")
+    public ResponseEntity<Void> unarchive(@PathVariable("key") String projectKey) {
+        projectService.unarchive(projectKey, ctx(projectKey, null));
         return ResponseEntity.noContent().build();
     }
 

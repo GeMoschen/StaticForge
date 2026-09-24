@@ -23,10 +23,11 @@ Human-readable summary of the REST surface. The machine-readable contract is gen
 
 | Method | Path | Role |
 |---|---|---|
-| `GET` | `/projects` | authenticated (member projects only) |
+| `GET` | `/projects` | authenticated (member projects only; archived projects only for INSTANCE_ADMIN) |
 | `POST` | `/projects` | INSTANCE_ADMIN |
 | `GET`/`PUT` | `/projects/{key}` | VIEWER / PROJECT_ADMIN |
-| `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN |
+| `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN — read-only (`409 SF-DOM-0141` on every write) and `404` for members until unarchived |
+| `POST` | `/projects/{key}/unarchive` | INSTANCE_ADMIN |
 | `GET` | `/projects/{key}/members` | VIEWER |
 | `PUT`/`DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN |
 | `GET` | `/projects/{key}/locales` | VIEWER |
@@ -405,6 +406,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0124` | 422 | a page template save would break templates that extend it; carries `descendants[]` (`uuid`, `uid`, `channel`, `diagnostics`) — `TemplateServiceImpl` |
 | `SF-DOM-0130` | 422 | page reference folder target has no page in its subtree — `PageReferenceServiceImpl` (a section template outside a body's `allow` list is `SF-API-0422` with an `allow` issue) |
 | `SF-DOM-0140` | 409 | project key already exists — *implemented addition* |
+| `SF-DOM-0141` | 409 | project is archived: every write is refused (M26) — `ArchivedProjectInterceptor`, `RevisionService.allocate`, `ProjectWriteGuard` |
 
 ### Template (`SF-TPL-*`, `SF-CDL-*`)
 

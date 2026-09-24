@@ -59,6 +59,7 @@ public class ProjectImportController {
                 result.sourceProjectKey(), result.importedAssetCount(), result.updatedAssetCount(), result.importedBlobCount());
     }
 
+    @AllowedOnArchivedProject("Analyzes an archive against the project, imports nothing.")
     @PostMapping("/import/analyze")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
     public ConflictReportView analyzeImport(

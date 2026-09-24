@@ -16,7 +16,7 @@ area: qa
 ## Goals
 
 - Spec: §8.2 (`DELETED`, `must_change_password`, anonymization), §8.1/§8.4 (archived: hidden → 404, read-only
-  `SF-DOM-0130`), §9.2 (the full epoch-bump list), §9.4 + §20.2 (admin, self-service, lookup, unarchive, audit
+  `SF-DOM-0141`), §9.2 (the full epoch-bump list), §9.4 + §20.2 (admin, self-service, lookup, unarchive, audit
   endpoints), §23/§24 (admin area, members tab, user menu, My account), §26 (password policy, audit actions).
 - `infra/README.md`: `sf.security.password.*` keys, the seeded `Admin`/`Admin` rule (empty table only; forced change
   outside dev/demo/test) and what an operator does first in prod.

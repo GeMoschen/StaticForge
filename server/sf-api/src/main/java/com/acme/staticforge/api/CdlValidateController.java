@@ -42,6 +42,7 @@ public class CdlValidateController {
 
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
+    @AllowedOnArchivedProject("Validates a draft, stores nothing.")
     @PostMapping(value = "/validate", produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public CdlValidateResponse validate(

@@ -72,7 +72,9 @@ public class SearchController {
     @PostMapping("/reindex")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
     public ResponseEntity<SearchStatusView> reindex(@PathVariable String projectKey) {
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(toStatus(searchService.reindex(projectId(projectKey))));
+        // An archived project has no index to rebuild (M26): 409 SF-DOM-0141 like every other write.
+        long projectId = projectService.requireWritable(projectKey).getId();
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(toStatus(searchService.reindex(projectId)));
     }
 
     private long projectId(String projectKey) {

@@ -50,6 +50,7 @@ public class OctlValidateController {
         this.datasetService = datasetService;
     }
 
+    @AllowedOnArchivedProject("Validates a draft, stores nothing.")
     @PostMapping(value = "/validate", produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public OctlValidateResponse validate(

@@ -27,7 +27,7 @@ area: frontend
   button for instance admins). The effective role in an archived project is `VIEWER`: implement it once where the UI
   resolves the role (`AuthStore.roleFor` or a project-aware wrapper), so every role-gated control turns read-only
   without per-component changes. Controls gated only on time travel or not at all must be found and fixed (the
-  backend answers `409 SF-DOM-0130` anyway — surface that message if it slips through).
+  backend answers `409 SF-DOM-0141` anyway — surface that message if it slips through).
 - **Dashboard:** instance admins see archived projects with an "Archived" chip; members never see them (the API
   omits them).
 

@@ -88,7 +88,7 @@ This milestone delivers:
       them, and archive/unarchive bumps every member's epoch, so `ProjectAuthorizationService` answers 404
       with no extra per-request lookup.
     - Instance admins see archived projects (badge) and open them read-only with a banner.
-    - Every write fails with **`409 SF-DOM-0130` "Project is archived"**: centrally in
+    - Every write fails with **`409 SF-DOM-0141` "Project is archived"**: centrally in
       `RevisionService.allocate`/`allocateOrJoin`, plus explicit guards on writes that allocate no revision
       (starting/promoting generation runs, creating preview share links, and whatever the endpoint walk in
       `M26.2.1` finds). Existing preview share links stop working (`404`). Published output is untouched.

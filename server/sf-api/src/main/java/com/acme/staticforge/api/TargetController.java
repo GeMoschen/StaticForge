@@ -28,7 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Generation-target endpoints (spec §18.4, §20.2). {@code generation_target} is a project config
  * table (not a revisioned content asset), so CRUD goes straight through
- * {@link GenerationTargetRepository} and allocates no revision.
+ * {@link GenerationTargetRepository} and allocates no revision; each write therefore refuses an archived project itself
+ * ({@code 409 SF-DOM-0141}, M26).
  *
  * <p>Writes enforce two per-project invariants the generator relies on: at most one default
  * target, and no two targets whose output directories ({@link TargetLocations}) coincide or nest.
@@ -65,7 +66,7 @@ public class TargetController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public ResponseEntity<GenerationTargetView> create(
             @PathVariable String projectKey, @RequestBody GenerationTargetRequest body) {
-        long projectId = projectId(projectKey);
+        long projectId = projectService.requireWritable(projectKey).getId();
         GenerationTarget target = new GenerationTarget(
                 projectId, requireName(body.name()), parseType(body.type()), body.config(), body.isDefault());
         List<GenerationTarget> siblings = targets.findByProjectId(projectId);
@@ -82,6 +83,7 @@ public class TargetController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
     public GenerationTargetView update(
             @PathVariable String projectKey, @PathVariable Long id, @RequestBody GenerationTargetRequest body) {
+        projectService.requireWritable(projectKey);
         GenerationTarget target = requireTarget(projectKey, id);
         target.setName(requireName(body.name()));
         target.setType(parseType(body.type()));
@@ -100,6 +102,7 @@ public class TargetController {
     @DeleteMapping("/{id}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
     public ResponseEntity<Void> delete(@PathVariable String projectKey, @PathVariable Long id) {
+        projectService.requireWritable(projectKey);
         targets.delete(requireTarget(projectKey, id));
         auditService.record(projectId(projectKey), securitySupport.currentUserId(), "TARGET_DELETE", "target:" + id);
         return ResponseEntity.noContent().build();

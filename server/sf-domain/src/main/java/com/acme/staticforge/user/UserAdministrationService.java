@@ -335,7 +335,8 @@ public class UserAdministrationService {
         for (ProjectMember member : members.findByUserId(userId)) {
             Project project = projects.findById(member.getProjectId()).orElse(null);
             if (project != null) {
-                projectService.removeMember(
+                // Also from an archived project: the account goes, whatever state its projects are in.
+                projectService.removeMemberOfDeletedAccount(
                         project.getKey(), userId, RevisionContext.of(project.getId(), actorId, null));
             }
         }

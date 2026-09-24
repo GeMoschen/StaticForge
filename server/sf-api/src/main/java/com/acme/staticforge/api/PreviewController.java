@@ -2,9 +2,12 @@ package com.acme.staticforge.api;
 
 import com.acme.staticforge.api.dto.PreviewSectionRequest;
 import com.acme.staticforge.api.dto.PreviewShareLink;
+import com.acme.staticforge.common.ProblemFactory;
+import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.preview.PagePreview;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
+import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.SecureRandom;
@@ -79,7 +82,7 @@ public class PreviewController {
         return respond(preview, channel);
     }
 
-    /** Creates a signed, expiring share link for a saved page (spec §19.3). */
+    /** Creates a signed, expiring share link for a saved page (spec §19.3); none for an archived project (M26). */
     @GetMapping("/pages/{uuid}/share")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public PreviewShareLink share(
@@ -88,6 +91,7 @@ public class PreviewController {
             @RequestParam(required = false) Long revision,
             @RequestParam(defaultValue = "html") String channel,
             @RequestParam(required = false) String locale) {
+        projectService.requireWritable(projectKey);
         String token = previewTokenService.issueShareToken(uuid, revision, channel, projectKey, locale);
         String url = "/api/v1/projects/" + projectKey + "/preview/share?t=" + token;
         return new PreviewShareLink(token, url);
@@ -115,12 +119,13 @@ public class PreviewController {
         }
         String resolvedChannel = target.channel() != null ? target.channel() : channel;
         PagePreview preview = pageRenderService.renderPage(
-                projectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request),
+                sharedProjectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request),
                 page, target.locale());
         return respond(preview, resolvedChannel);
     }
 
     /** Section template preview against sample content (spec §19.1). */
+    @AllowedOnArchivedProject("Renders a preview, stores nothing.")
     @PostMapping("/section")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<String> previewSection(
@@ -178,5 +183,14 @@ public class PreviewController {
 
     private long projectId(String key) {
         return projectService.requireByKey(key).getId();
+    }
+
+    /** A share link of an archived project stops working (M26): {@code 404}, like a project that doesn't exist. */
+    private long sharedProjectId(String key) {
+        Project project = projectService.requireByKey(key);
+        if (project.isArchived()) {
+            throw new SfException(ProblemFactory.notFound("Project not found."));
+        }
+        return project.getId();
     }
 }

@@ -58,7 +58,7 @@ class UrlRegistryServiceImplTest {
         when(projectLocales.forProject(PROJECT_ID)).thenReturn(com.acme.staticforge.project.LocaleConfig.EMPTY);
         service = new UrlRegistryServiceImpl(
                 repository, navigationService, lookup, outputPathResolver, revisionService, channelService,
-                projectLocales);
+                projectLocales, org.mockito.Mockito.mock(com.acme.staticforge.project.ProjectWriteGuard.class));
 
         when(navigationService.resolve(eq(PROJECT_ID), eq(PAGE_REF), any())).thenReturn(PAGE);
         when(channelService.outputSettings(PROJECT_ID, "html")).thenReturn(PRETTY);

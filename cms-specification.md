@@ -2797,6 +2797,7 @@ Same content. Two channels. No duplication.
 | `SF-DOM-0123` | 422 | A page can't use an abstract page template |
 | `SF-DOM-0124` | 422 | A page template save would break templates that extend it (`descendants[]`, §13.3) |
 | `SF-DOM-0130` | 422 | Page reference folder target has no page in its subtree (a section template outside the body's `allow` list is `SF-API-0422` with an `allow` issue, §10.5) |
+| `SF-DOM-0141` | 409 | Project is archived: every write to an archived project is refused (M26); only `unarchive` and read-only requests (dry runs, validations, previews, exports) pass |
 | `SF-TPL-01xx` | 422 | CDL/OCTL compile errors (§16.11) |
 | `SF-TPL-0111` | — | Cross-asset value without an editor path (compile warning) |
 | `SF-TPL-0112` | — | Cross-asset value target missing or soft-deleted (render warning) |

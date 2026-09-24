@@ -48,6 +48,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final AssetService assetService;
     private final LocalizationMigrationService localizationMigrations;
     private final UserService userService;
+    private final ProjectWriteGuard writeGuard;
     /**
      * Lazily resolved: the search index is an optional companion of the project service, and a hard
      * dependency here would tie project writes to the index being constructible.
@@ -67,6 +68,7 @@ public class ProjectServiceImpl implements ProjectService {
             AssetService assetService,
             LocalizationMigrationService localizationMigrations,
             UserService userService,
+            ProjectWriteGuard writeGuard,
             org.springframework.beans.factory.ObjectProvider<com.acme.staticforge.search.SearchIndexer> searchIndexer) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -76,6 +78,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.auditService = auditService;
         this.localizationMigrations = localizationMigrations;
         this.userService = userService;
+        this.writeGuard = writeGuard;
         this.searchIndexer = searchIndexer;
         this.objectMapper = objectMapper;
         this.assetService = assetService;
@@ -163,6 +166,14 @@ public class ProjectServiceImpl implements ProjectService {
     public Project requireByKey(String key) {
         return projectRepository.findByKey(key)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Project not found.")));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Project requireWritable(String key) {
+        Project project = requireByKey(key);
+        writeGuard.requireWritable(project);
+        return project;
     }
 
     @Override
@@ -286,10 +297,37 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public void archive(String key, RevisionContext ctx) {
+        setArchived(key, true, "PROJECT_ARCHIVED", ctx);
+    }
+
+    @Override
+    @Transactional
+    public void unarchive(String key, RevisionContext ctx) {
+        setArchived(key, false, "PROJECT_UNARCHIVED", ctx);
+    }
+
+    private void setArchived(String key, boolean archived, String auditAction, RevisionContext ctx) {
         Project project = requireByKey(key);
-        project.setArchived(true);
+        if (project.isArchived() == archived) {
+            return;
+        }
+        project.setArchived(archived);
         projectRepository.save(project);
-        revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+
+        // Flipping the flag is the one write the archived guard admits, in both directions.
+        Revision revision =
+                revisionService.allocateEvenIfArchived(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        revisionService.appendSummary(
+                project.getId(),
+                revision.getRevisionId(),
+                AssetChange.create("project-" + project.getId(), "PROJECT", "UPDATE", List.of("archived")));
+        auditService.record(project.getId(), ctx.userId(), auditAction, "project:" + key);
+
+        // Access tokens list only the projects that aren't archived: every member's next request must resolve the
+        // new state (spec §9.2) instead of the one their current token was issued with.
+        for (ProjectMember member : projectMemberRepository.findByProjectIdOrderByUserIdAsc(project.getId())) {
+            userService.revokeAccess(member.getUserId());
+        }
     }
 
     @Override
@@ -334,10 +372,22 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public void removeMember(String key, Long userId, RevisionContext ctx) {
+        removeMembership(key, userId, ctx, false);
+    }
+
+    @Override
+    @Transactional
+    public void removeMemberOfDeletedAccount(String key, Long userId, RevisionContext ctx) {
+        removeMembership(key, userId, ctx, true);
+    }
+
+    private void removeMembership(String key, Long userId, RevisionContext ctx, boolean evenIfArchived) {
         Project project = requireByKey(key);
         projectMemberRepository.deleteByProjectIdAndUserId(project.getId(), userId);
 
-        Revision revision = revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        Revision revision = evenIfArchived
+                ? revisionService.allocateEvenIfArchived(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId())
+                : revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
         revisionService.appendSummary(
                 project.getId(),
                 revision.getRevisionId(),

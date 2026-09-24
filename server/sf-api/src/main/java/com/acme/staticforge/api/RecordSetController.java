@@ -180,6 +180,7 @@ public class RecordSetController {
      * Checks a draft query against the set's dataset without saving: diagnostics and match counts. Tooling for
      * the query editor, so {@code EDITOR} like the validate endpoints of the other stores' owners.
      */
+    @AllowedOnArchivedProject("Evaluates a draft query, stores nothing.")
     @PostMapping("/{uuid}/preview-query")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public RecordSetQueryPreviewView previewQuery(

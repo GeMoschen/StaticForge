@@ -94,7 +94,10 @@ public class JwtServiceImpl implements JwtService {
         }
         Set<Long> projectIds =
                 members.stream().map(ProjectMember::getProjectId).collect(Collectors.toSet());
+        // An archived project is hidden from its members (M26): it isn't in the claim, so every project endpoint
+        // answers 404 like for a non-member. Instance admins don't need the claim to reach it.
         Map<Long, String> keysById = projectRepository.findAllById(projectIds).stream()
+                .filter(project -> !project.isArchived())
                 .collect(Collectors.toMap(Project::getId, Project::getKey, (a, b) -> a));
 
         Map<String, ProjectRole> roles = new LinkedHashMap<>();

@@ -1,6 +1,7 @@
 package com.acme.staticforge.revision;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -8,9 +9,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.project.ProjectRepository;
+import com.acme.staticforge.project.ProjectWriteGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
@@ -30,14 +35,17 @@ class RevisionServiceImplTest {
     private RevisionRepository revisionRepository;
     private RevisionServiceImpl service;
     private ApplicationEventPublisher events;
+    private ProjectRepository projects;
 
     @BeforeEach
     void setUp() {
         counterRepository = mock(RevisionCounterRepository.class);
         revisionRepository = mock(RevisionRepository.class);
         events = mock(ApplicationEventPublisher.class);
+        projects = mock(ProjectRepository.class);
         service = new RevisionServiceImpl(
-                counterRepository, revisionRepository, new ObjectMapper(), new SimpleMeterRegistry(), events);
+                counterRepository, revisionRepository, new ObjectMapper(), new SimpleMeterRegistry(), events,
+                new ProjectWriteGuard(projects));
 
         when(counterRepository.nextRevision(anyLong())).thenReturn(1L);
         when(revisionRepository.save(any(Revision.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -78,5 +86,28 @@ class RevisionServiceImplTest {
         assertThat(batch.getProjectId()).isEqualTo(PROJECT_ID);
         assertThat(batch.getChangeType()).isEqualTo(ChangeType.CREATE);
         verify(counterRepository).nextRevision(PROJECT_ID);
+    }
+
+    @Test
+    void allocate_refusesAnArchivedProjectBeforeTouchingTheCounter() {
+        when(projects.findArchivedById(PROJECT_ID)).thenReturn(Optional.of(true));
+
+        assertThatThrownBy(() -> service.allocateOrJoin(RevisionContext.of(PROJECT_ID, 5L, null), ChangeType.UPDATE))
+                .isInstanceOfSatisfying(SfException.class, e -> {
+                    assertThat(e.getProblem().getStatus()).isEqualTo(409);
+                    assertThat(e.getProblem().getExtensions()).containsEntry("code", "SF-DOM-0141");
+                });
+        verify(counterRepository, never()).nextRevision(anyLong());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void allocateEvenIfArchived_allocatesOnAnArchivedProject() {
+        when(projects.findArchivedById(PROJECT_ID)).thenReturn(Optional.of(true));
+
+        Revision revision = service.allocateEvenIfArchived(PROJECT_ID, ChangeType.UPDATE, null, 5L);
+
+        assertThat(revision.getRevisionId()).isEqualTo(1L);
+        verify(events).publishEvent(new RevisionCommittedEvent(PROJECT_ID, 1L));
     }
 }
