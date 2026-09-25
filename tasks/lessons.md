@@ -69,6 +69,14 @@
   alias throughout the outer block. Implicit contextual variables are the first suspect whenever an action lands on
   the wrong item of a list.
 
+## Concurrent actions in one scheduler tick race (2026-09-25)
+- **Mistake (M27.4, found in M27.5):** a scheduler test expected two generation actions that are due in the same tick
+  to both start there. The engine runs claimed actions concurrently, and a project allows one run at a time, so the
+  loser waits. The test passed only when the first run happened to finish before the second tried: 1 of 3 runs.
+- **Rule:** a test that ticks several actions touching one exclusive resource (a project's generation run, a lock)
+  must not assume an order or a same-tick outcome. It ticks until each has reached its state, and awaits the resource
+  in between. Before calling a failing test "flaky", run it 3+ times on master to separate an old race from a new bug.
+
 ## Spec fixtures must have the API's real shape (2026-09-23)
 - **Mistake (M25, found by the e2e journey):** the Content UI ran record/set `folderPath` values through a helper
   that expects stored paths (`/content_root/…`), but the REST API sends them store-relative (`/staff/`). Every unit

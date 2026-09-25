@@ -3029,11 +3029,15 @@ export interface components {
             updatedAssetCount?: number;
             /** Format: int32 */
             importedBlobCount?: number;
+            /** Format: int32 */
+            releasedCount?: number;
         };
         ConflictReportView: {
             conflicts?: components["schemas"]["ImportConflictView"][];
             hasBlocking?: boolean;
             blocksImport?: boolean;
+            releaseState?: boolean;
+            releaseMode?: string;
         };
         ImportConflictView: {
             severity?: string;
@@ -3425,12 +3429,10 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -3440,6 +3442,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
@@ -3448,9 +3452,9 @@ export interface components {
             sort?: components["schemas"]["SortObject"][];
             paged?: boolean;
             /** Format: int32 */
-            pageNumber?: number;
-            /** Format: int32 */
             pageSize?: number;
+            /** Format: int32 */
+            pageNumber?: number;
             unpaged?: boolean;
         };
         SortObject: {
@@ -3474,12 +3478,10 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -3489,6 +3491,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -3599,8 +3603,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            add?: boolean;
             remove?: boolean;
+            add?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -3717,12 +3721,10 @@ export interface components {
             scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageMediaSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -3732,6 +3734,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -3834,12 +3838,10 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -3849,6 +3851,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -6118,6 +6122,7 @@ export interface operations {
         parameters: {
             query?: {
                 skipExistingImplicit?: boolean;
+                releaseMode?: "KEEP" | "DRAFT";
             };
             header?: never;
             path: {
@@ -6149,6 +6154,7 @@ export interface operations {
         parameters: {
             query?: {
                 skipExistingImplicit?: boolean;
+                releaseMode?: "KEEP" | "DRAFT";
             };
             header?: never;
             path: {

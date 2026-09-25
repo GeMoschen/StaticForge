@@ -64,6 +64,23 @@ public interface AssetReleaseRepository extends JpaRepository<AssetRelease, Long
             @Param("projectId") long projectId, @Param("revision") long revision);
 
     /**
+     * The released versions valid at revision {@code R} that are valid at no revision themselves ({@code validFrom =
+     * validTo}), asset joined: a released version an import wrote next to its draft (M27.5.1). Their reference edges
+     * are not in {@code asset_reference} — the import revision's edge set is the draft's — so a reader that needs a
+     * released version's edges extracts them from these payloads.
+     */
+    @Query("""
+            SELECT DISTINCT v FROM AssetVersion v JOIN FETCH v.asset, AssetRelease r
+            WHERE r.projectId = :projectId
+              AND r.validFromRevision <= :revision
+              AND (r.validToRevision IS NULL OR r.validToRevision > :revision)
+              AND v.id = r.releasedVersionId
+              AND v.validToRevision = v.validFromRevision
+            """)
+    List<com.acme.staticforge.asset.AssetVersion> findUnmaterializedReleasedVersionsValidAt(
+            @Param("projectId") long projectId, @Param("revision") long revision);
+
+    /**
      * The released children of a folder at revision {@code R} for locale key {@code key} (or the shared {@code ""}
      * key) as {@code [pointer, version, asset]}: the assets whose released version sits in the folder (M27.2.3).
      */

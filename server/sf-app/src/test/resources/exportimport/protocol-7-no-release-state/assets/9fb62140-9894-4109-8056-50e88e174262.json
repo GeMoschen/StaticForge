@@ -1,0 +1,17 @@
+{
+  "uuid": "9fb62140-9894-4109-8056-50e88e174262",
+  "type": "FOLDER",
+  "uid": "page_templates",
+  "displayName": "Page Templates",
+  "parentFolderUuid": "bf373fab-6665-421b-8db8-87375fff3406",
+  "folderPath": "/templates_root/page_templates/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "TEMPLATES",
+    "templateKind": "PAGE_TEMPLATE",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

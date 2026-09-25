@@ -1,3 +1,64 @@
+# M27 feature 5 — Export/import protocol 8 (implementation, branch `m27-release-and-scheduling`)
+
+Spec: `tasks/27-m27-release-and-scheduling/05-export-import/`. Order 5.1 (backend) → 5.2 (UI).
+
+Design (beyond the task text):
+- `ExportedAsset` gains `release: [ExportedRelease]` (open pointers) and `draftDeleted`. `ExportedRelease` =
+  `{locale, state: DRAFT_EQUALS | PAYLOAD | UNPUBLISHED, uid?}` plus, for `PAYLOAD`, the released version's payload, display name,
+  parent folder uuid, folder path, template uuid, MIME type and size. `uid` only when the released uid differs from
+  the asset's. `DELETION_PENDING` assets (deleted draft, open pointer) are exported with the tombstone as the draft.
+- Media blobs: export/import walk `localeFiles` and released payloads too.
+- Import `KEEP`: every distinct released `PAYLOAD` becomes one extra version of the asset *closed in the import
+  revision* (`validFrom = validTo = R`: never the version valid at any revision, so "at most one valid version" holds
+  and nothing but the pointer reads it); pointers open in the import revision (one revision, hazard note). Released
+  payloads get the same remap + `origin` as the draft, so the per-locale projections — and statuses — match the
+  source. Released folder paths are rebased from archive paths to target paths (longest imported-folder prefix).
+- Locale keys: an entry is kept when its key is one the asset has in the target (effective config: the target's
+  locales, or the archive's when the import brings them); `""` → every target locale; anything else is
+  `RELEASE_LOCALE_MISSING` (warning, one per asset, pointer dropped).
+- An overwritten asset: `KEEP` replaces the target's open pointers with the archive's (import wins); `DRAFT` leaves
+  them alone (the live site is untouched by a draft import). Skipped implicit assets: untouched. `DRAFT` skips
+  deletion-pending assets (a tombstone is not a draft).
+- Analysis: `ConflictReport` gains `releaseState` (archive carries it) and `releaseMode` (the effective default);
+  protocol ≤ 7 adds an `INFO` entry `ARCHIVE_WITHOUT_RELEASE_STATE` (new severity `INFO`).
+- Import is a restore, not a release: no completeness gate.
+
+- [x] M27.5.1 — protocol 8 export/import, `releaseMode` option (API param), analysis fields, `RELEASE_LOCALE_MISSING`,
+      protocol-7 fixture; tests: round trip (statuses + identical full build), `DRAFT`, protocol 7, missing locale
+- [x] M27.5.2 — import dialog: release-state radios / protocol ≤ 7 note, `releaseMode` sent; vitest
+- [x] OpenAPI + `schema.d.ts`; full `./gradlew build` (`test --rerun`), `ui` `npm run build` + `npx vitest run`;
+      manual check in the running app
+
+
+## Review
+
+- As planned, plus two additions found by the tests:
+  - **`UNPUBLISHED` entries.** Open pointers can't tell `UNPUBLISHED` from `NEW`. The round-trip test failed on this, so
+    the archive also lists locale keys that were released once. An import writes each one as a pointer opened and
+    closed in the import revision (history only).
+  - **Reference edges of imported released versions.** `asset_reference` has one edge set per asset and revision. An
+    imported released version therefore got its draft's edges, so the incremental planner missed pages whose released
+    version alone referenced a newly released asset. `RebuildExpansion` now extracts those versions' edges from their
+    payloads. A test proved the gap first (empty plan).
+- Decisions to confirm: `KEEP` over an existing asset replaces the target's release state with the archive's (import
+  wins); `DRAFT` leaves it alone and skips deletion-pending assets. An import is a restore, so there is no
+  completeness gate. Other missing locales are a warning.
+- Changed after review (user): a `""` (all languages) pointer releases only the target languages the archive has;
+  the manifest now lists the archive's languages (`locales`). An archive without languages counts as the target's
+  default language: its pointers release that language only.
+- **Fixed on the way (pre-existing, M27.4):** `ScheduledActionsIntegrationTest.busyProject` failed 2 of 3 runs, on
+  master too. In its last tick the one-off and the coalesced hourly generation are both due. A project runs one
+  generation at a time (epic decision 27), so whichever starts second waits, and closing the engine then recorded
+  `SKIPPED`. The product behaves as decided, but the test assumed both start in one tick. It now ticks until both have
+  started, awaiting each run in between. It passed 5 of 5 runs after the fix.
+- Verification: `./gradlew build test --rerun` green: 1321 tests, 0 failures, 5 skipped benchmarks. `ui` `npx vitest run`: 79 files, 540 tests. Manual
+  check on a scratch dev stack (8082/4301): with a protocol-8 archive the radios show `KEEP` as default. Switching
+  re-analyzes with `DRAFT`. Committing `KEEP` kept 2 releases, and only the never-released page appears in Changes.
+  With the protocol-7 fixture the UI shows the note and no radios, and the import succeeds.
+
+
+---
+
 # M27 feature 4 — Scheduler (implementation, branch `m27-release-and-scheduling`)
 
 Spec: `tasks/27-m27-release-and-scheduling/04-scheduler/`. Backend only; order 4.1 → 4.2/4.3 → 4.4.

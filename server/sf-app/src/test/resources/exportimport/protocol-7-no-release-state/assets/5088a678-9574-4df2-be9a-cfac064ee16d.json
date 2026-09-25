@@ -1,0 +1,17 @@
+{
+  "uuid": "5088a678-9574-4df2-be9a-cfac064ee16d",
+  "type": "FOLDER",
+  "uid": "section_templates",
+  "displayName": "Section Templates",
+  "parentFolderUuid": "bf373fab-6665-421b-8db8-87375fff3406",
+  "folderPath": "/templates_root/section_templates/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "TEMPLATES",
+    "templateKind": "SECTION_TEMPLATE",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

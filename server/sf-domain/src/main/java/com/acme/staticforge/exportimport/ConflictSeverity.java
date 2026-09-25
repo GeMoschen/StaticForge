@@ -8,5 +8,7 @@ public enum ConflictSeverity {
     /** The import cannot proceed while this conflict is present. */
     BLOCKING,
     /** The import can proceed; the affected element will be skipped or otherwise handled safely. */
-    WARNING
+    WARNING,
+    /** Nothing is wrong; the entry tells how the archive will be read (M27.5.1). */
+    INFO
 }

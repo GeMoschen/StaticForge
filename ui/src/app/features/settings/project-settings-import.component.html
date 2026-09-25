@@ -40,6 +40,9 @@
         <span>
           Imported {{ r.importedAssetCount ?? 0 }} asset(s), {{ r.importedBlobCount ?? 0 }}
           blob(s) from "{{ r.sourceProjectKey }}".
+          @if ((r.releasedCount ?? 0) > 0) {
+            Kept {{ r.releasedCount }} release(s).
+          }
         </span>
       </div>
     }
@@ -57,6 +60,43 @@
       />
       Skip ancestor folders that already exist
     </label>
+
+    @if (archiveHasReleaseState() === true) {
+      <fieldset class="release-mode" [disabled]="committing()">
+        <legend class="release-mode__legend">Release state</legend>
+        <label class="release-mode__option">
+          <input
+            type="radio"
+            name="releaseMode"
+            value="KEEP"
+            [checked]="releaseMode() === 'KEEP'"
+            (change)="onReleaseModeChange('KEEP')"
+          />
+          <span class="release-mode__text">
+            <span class="release-mode__label">Keep release state from the archive</span>
+            <span class="release-mode__hint">What was released when the archive was made is released here too.</span>
+          </span>
+        </label>
+        <label class="release-mode__option">
+          <input
+            type="radio"
+            name="releaseMode"
+            value="DRAFT"
+            [checked]="releaseMode() === 'DRAFT'"
+            (change)="onReleaseModeChange('DRAFT')"
+          />
+          <span class="release-mode__text">
+            <span class="release-mode__label">Import everything as draft</span>
+            <span class="release-mode__hint">Nothing goes live until you release it; overwritten assets keep their release state.</span>
+          </span>
+        </label>
+      </fieldset>
+    } @else if (archiveHasReleaseState() === false) {
+      <p class="release-mode__note" role="note">
+        <sf-icon name="info" />
+        This archive has no release state — everything is imported as draft.
+      </p>
+    }
 
     @if (analyzing()) {
       <sf-spinner label="Checking archive…" />

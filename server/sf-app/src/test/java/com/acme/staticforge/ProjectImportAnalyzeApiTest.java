@@ -187,6 +187,44 @@ class ProjectImportAnalyzeApiTest {
                 .andExpect(jsonPath("$.importedAssetCount").value(4));
     }
 
+    /**
+     * Release state in the analysis (M27.5.1): a protocol 8 archive reports {@code releaseState} and the requested
+     * {@code releaseMode}; a protocol 7 archive reports {@code DRAFT} whatever was asked, with an {@code INFO} entry
+     * that neither blocks nor warns.
+     */
+    @Test
+    void analysisReportsTheReleaseStateAndTheModeThatApplies() throws Exception {
+        Fixture source = newFixture("an_rel_src");
+        byte[] current = exportImportService.exportProject(source.project().getId());
+        byte[] protocol7 = ArchiveFixtures.zipResourceDirectory("exportimport/protocol-7-no-release-state");
+        Fixture target = newFixture("an_rel_tgt");
+
+        mvc.perform(multipart("/api/v1/projects/" + target.project().getKey() + "/import/analyze")
+                        .file(new MockMultipartFile("file", "archive.zip", "application/zip", current))
+                        .param("releaseMode", "DRAFT")
+                        .header("Authorization", "Bearer " + target.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.releaseState").value(true))
+                .andExpect(jsonPath("$.releaseMode").value("DRAFT"));
+
+        mvc.perform(multipart("/api/v1/projects/" + target.project().getKey() + "/import/analyze")
+                        .file(new MockMultipartFile("file", "archive.zip", "application/zip", protocol7))
+                        .header("Authorization", "Bearer " + target.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.releaseState").value(false))
+                .andExpect(jsonPath("$.releaseMode").value("DRAFT"))
+                .andExpect(jsonPath("$.hasBlocking").value(false))
+                .andExpect(jsonPath("$.conflicts[?(@.type == 'ARCHIVE_WITHOUT_RELEASE_STATE')].severity")
+                        .value(org.hamcrest.Matchers.contains("INFO")));
+
+        mvc.perform(multipart("/api/v1/projects/" + target.project().getKey() + "/import")
+                        .file(new MockMultipartFile("file", "archive.zip", "application/zip", protocol7))
+                        .param("releaseMode", "KEEP")
+                        .header("Authorization", "Bearer " + target.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.releasedCount").value(0));
+    }
+
     private long assetCount(Fixture fixture) {
         return assetService.search(
                         new AssetQuery(fixture.project().getId(), null, null, null), PageRequest.of(0, 200))

@@ -76,6 +76,20 @@ describe('ImportExportService', () => {
     req.flush({ conflicts: [], hasBlocking: false });
   });
 
+  it('sends releaseMode (M27.5.2): KEEP by default, DRAFT when asked, on analyze and on import', () => {
+    const file = new File(['content'], 'export.zip', { type: 'application/zip' });
+
+    service.analyzeImport('proj1', file).subscribe();
+    const keep = httpMock.expectOne('/api/v1/projects/proj1/import/analyze');
+    expect((keep.request.body as FormData).get('releaseMode')).toBe('KEEP');
+    keep.flush({ conflicts: [], hasBlocking: false, blocksImport: false, releaseState: true, releaseMode: 'KEEP' });
+
+    service.commitImport('proj1', file, false, 'DRAFT').subscribe();
+    const draft = httpMock.expectOne('/api/v1/projects/proj1/import');
+    expect((draft.request.body as FormData).get('releaseMode')).toBe('DRAFT');
+    draft.flush({ sourceProjectKey: 'src1', importedAssetCount: 1, updatedAssetCount: 0, importedBlobCount: 0, releasedCount: 0 });
+  });
+
   it('commitImport posts multipart form data and returns the import result', () => {
     const file = new File(['content'], 'export.zip', { type: 'application/zip' });
     let result: ImportResultView | undefined;

@@ -1,0 +1,20 @@
+{
+  "channels": [
+    {
+      "key": "html",
+      "name": "HTML",
+      "fileExtension": "html",
+      "mimeType": "text/html",
+      "defaultEscaping": "HTML",
+      "enabled": true,
+      "isDefault": true,
+      "position": 0,
+      "settings": {
+        "indexFileName": "index.html",
+        "urlStrategy": "RELATIVE"
+      }
+    }
+  ],
+  "targets": [],
+  "locales": null
+}

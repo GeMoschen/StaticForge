@@ -1,0 +1,67 @@
+{
+  "uuid": "5175344f-20bf-4eb9-93ef-4b0311d7d58c",
+  "type": "PAGE_TEMPLATE",
+  "uid": "team_page",
+  "displayName": "Team Page",
+  "parentFolderUuid": "9fb62140-9894-4109-8056-50e88e174262",
+  "folderPath": "/templates_root/page_templates/",
+  "templateUuid": null,
+  "payload": {
+    "contentDefinition": "content { editor reference lead { label \"Lead\" assetTypes [RECORD] dataset \"team\" } }",
+    "compiledDefinition": {
+      "editors": [
+        {
+          "name": "lead",
+          "type": "REFERENCE",
+          "label": "Lead",
+          "help": null,
+          "required": false,
+          "readOnly": false,
+          "hidden": false,
+          "defaultValue": null,
+          "min": null,
+          "max": null,
+          "maxLength": null,
+          "maxChars": null,
+          "pattern": null,
+          "patternMessage": null,
+          "mimeTypes": [],
+          "assetTypes": [
+            "RECORD"
+          ],
+          "options": [],
+          "features": [],
+          "allow": [],
+          "visibleWhen": null,
+          "renamedFrom": null,
+          "localizable": false,
+          "items": [],
+          "dataset": "team",
+          "pagination": false,
+          "container": false,
+          "group": false,
+          "list": false,
+          "catalog": false
+        }
+      ],
+      "bodies": []
+    },
+    "channelTemplates": {
+      "html": {
+        "source": "<ul>$CMS_FOR(m : dataset:team, sort=\"name\")$<li>$CMS_VALUE(m.name)$</li>$CMS_END_FOR$</ul><p>$CMS_VALUE(lead.name)$</p>",
+        "compiledHash": "74f3d0abc2cce46deb4f67d2b286e0467770ce154ad118139ee5597d29eb1bf1"
+      }
+    },
+    "category": "",
+    "bodies": [],
+    "outputPath": {
+      "html": "{displayNameSlug}.{ext}"
+    },
+    "paginationPath": {},
+    "abstract": false,
+    "parentTemplateRef": null
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

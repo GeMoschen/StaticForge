@@ -1,6 +1,7 @@
 package com.acme.staticforge.exportimport;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.List;
 
 /**
  * Serialized state of a single asset in the {@code assets.json} payload of an export
@@ -21,6 +22,12 @@ import com.fasterxml.jackson.databind.JsonNode;
  * same as {@code true} (every pre-M11 asset was, in effect, explicit — there was no such
  * thing as an implicit-only ancestor-provenance distinction yet). Never call {@link
  * #explicit()} directly outside this record.
+ *
+ * <p>{@code release} (M27.5.1, protocol {@code 8}) lists the asset's release state per locale key — its open pointers
+ * and the locale keys it was unpublished in; {@code null} in an archive of protocol {@code <= 7} and for an asset that
+ * isn't releasable, empty for one that was never released. {@code draftDeleted} marks an
+ * asset whose draft is deleted while a released version is still live ({@code DELETION_PENDING}): the exported
+ * fields are the tombstone's, and every release entry carries its released version.
  */
 public record ExportedAsset(
         String uuid,
@@ -33,10 +40,22 @@ public record ExportedAsset(
         JsonNode payload,
         String mimeType,
         Long sizeBytes,
-        Boolean explicit) {
+        Boolean explicit,
+        List<ExportedRelease> release,
+        Boolean draftDeleted) {
 
     /** {@code true} unless this asset was recorded as a non-explicit (ancestor-only) pick. */
     public boolean isExplicit() {
         return explicit == null || explicit;
+    }
+
+    /** {@code true} when the exported draft is a tombstone whose released version is still live. */
+    public boolean isDraftDeleted() {
+        return draftDeleted != null && draftDeleted;
+    }
+
+    /** The release entries; empty when there are none (or the archive predates release state). */
+    public List<ExportedRelease> releases() {
+        return release == null ? List.of() : release;
     }
 }
