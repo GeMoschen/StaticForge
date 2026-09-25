@@ -1,3 +1,54 @@
+# M27 feature 4 — Scheduler (implementation, branch `m27-release-and-scheduling`)
+
+Spec: `tasks/27-m27-release-and-scheduling/04-scheduler/`. Backend only; order 4.1 → 4.2/4.3 → 4.4.
+
+Design (beyond the task text):
+- `sf-domain/scheduler`: tables + entities, `LeaseClaimer` (reusable conditional-update claim/extend, JDBC),
+  `ScheduleTiming` (cron normalize, zone, DST via `CronExpression` on `ZonedDateTime`), SPI
+  (`ScheduledActionHandler`, `ActionSpec`, `ActionRequirements`, `ExecutionContext`, `ExecutionResult`),
+  `ActionAuthority` (DB-read owner/caller check of a handler's requirements — API and engine share it),
+  `SchedulerEngine` (plain class, `tick()` returns a future; tests build their own engines with a mutable clock and
+  node id), `ScheduleService` (API operations), side table `scheduled_action_asset` (the assets an action touches:
+  `scheduled` on DTOs and the `assetUuid` filter in one indexed query).
+- A handler that meets a busy project returns `WAITING`: the execution stays open with its progress in `detail`,
+  the action returns to `PENDING` with `next_run_at` unchanged (due → retried every tick; later recurring slots
+  coalesce). A re-claim resumes the open execution; release/run starts write their progress in the same
+  transaction as the release revision / run row, so a retry never repeats a finished step.
+- `RELEASE`/`UNPUBLISH` handlers in `sf-domain` (use `ReleaseService`), then-generate through the port
+  `ScheduledGenerationStarter` implemented in `sf-generate` next to the `GENERATION`/`RECURRING_GENERATION` handlers.
+
+- [x] M27.4.1 — `022-scheduler.xml`, entities/repositories, `SchedulerProperties`, `LeaseClaimer`,
+      `ScheduleTiming`, SPI, `ActionAuthority`, `SchedulerEngine` (claim, missed policy, owner re-check, archived,
+      audit, metrics, lease extension); tests: two engines × 50 actions, crashed lease, missed policies, DST, owner
+      lost, archived
+- [x] M27.4.2 — `RELEASE` (pin/latest, per-item skip, one revision, progress) / `UNPUBLISH` handlers, then-generate
+      with busy wait, `ScheduleDrift`, re-pin; tests
+- [x] M27.4.3 — `GENERATION` / `RECURRING_GENERATION` handlers (validation `0161`, owner start, idempotency key,
+      busy wait/skip/coalesce, target gone `0162`); tests
+- [x] M27.4.4 — `ScheduleController` + DTOs, `scheduled` on asset DTOs and Changes rows, audit, walk test,
+      problems `0164`–`0168`, OpenAPI + `schema.d.ts`; MockMvc tests
+- [x] Full `./gradlew build` (`test --rerun`), `ui` `npm run build` + `npx vitest run`
+
+
+## Review
+
+- Backend as planned. Design points beyond the task text are in each task's implementation notes. The engine is a
+  plain class tests run with their own node ids and clocks. Handlers report `WAITING` for a busy project, and the
+  execution stays open. Progress is checkpointed in the transaction of each step. The side table
+  `scheduled_action_asset` answers `scheduled` in one query. The then-generate port lives in `sf-domain` and is
+  implemented in `sf-generate`. Permissions come only from `handler.requirements`, for the API caller and for the
+  owner at execution.
+- Fixed or aligned on the way: a `LOCKED` instance admin may release (same rule as the owner check), and a `@Version`
+  conflict at commit is `409 SF-API-0409` instead of a 500. `ReleasePermissions.canSchedule` was removed (unused).
+  Asset DTOs' `scheduled` is now `ScheduledRefView[]`.
+- `./gradlew build test --rerun`: 1312 tests, 0 failures (5 skipped benchmarks). New suites: `ScheduleTimingTest` (4),
+  `SchedulerEngineIntegrationTest` (8), `ScheduledActionsIntegrationTest` (9), `ScheduleApiTest` (6) and
+  `ProblemExceptionHandlerTest` (1). `ui` `npm run build` and `npx vitest run` (79 files, 536 tests) are green after
+  regenerating `schema.d.ts`.
+
+
+---
+
 # M27 feature 3 — Localized media (implementation, branch `m27-release-and-scheduling`)
 
 Spec: `tasks/27-m27-release-and-scheduling/03-localized-media/`. Backend only; order 3.1 → 3.2.

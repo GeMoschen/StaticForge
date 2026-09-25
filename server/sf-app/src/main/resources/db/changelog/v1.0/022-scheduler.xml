@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M27.4.1: a scheduled project action (release, unpublish, one-off or recurring generation). One-offs carry
+         run_at, recurring actions cron + zone_id (the creator's IANA zone). next_run_at is the UTC instant the
+         action is next due; a node claims it with a conditional update of lease_owner / lease_until / version, so
+         several nodes can poll the same table. Recurring actions stay PENDING between slots; one-offs end in a
+         terminal status. max_lateness_seconds bounds SKIP_IF_LATER_THAN. The JSON columns (params, then_generate)
+         are declared per dialect like generation_run.diagnostics. -->
+    <changeSet id="022-scheduler-action" author="sf">
+        <createTable tableName="scheduled_action">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="project_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_scheduled_action_project" references="project(id)"/>
+            </column>
+            <column name="type" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="run_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="cron" type="VARCHAR(120)"/>
+            <column name="zone_id" type="VARCHAR(64)"/>
+            <column name="pin_policy" type="VARCHAR(20)"/>
+            <column name="missed_policy" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_lateness_seconds" type="BIGINT"/>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="next_run_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="lease_owner" type="VARCHAR(120)"/>
+            <column name="lease_until" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="created_by" type="BIGINT">
+                <constraints foreignKeyName="fk_scheduled_action_created_by" references="app_user(id)"/>
+            </column>
+            <column name="owner_user_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_scheduled_action_owner" references="app_user(id)"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="scheduled_action" indexName="idx_scheduled_action_due">
+            <column name="status"/>
+            <column name="next_run_at"/>
+        </createIndex>
+        <createIndex tableName="scheduled_action" indexName="idx_scheduled_action_project">
+            <column name="project_id"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- M27.4.1: one attempt of an action at one slot (scheduled_for). An execution that waits for a busy project
+         (epic decision 27) stays open (finished_at null) and keeps its progress in detail, so a retry or a re-claim
+         after a lease expiry resumes it instead of repeating a finished step. outcome is what the execution ends
+         with if it ends now (null until known). -->
+    <changeSet id="022-scheduler-execution" author="sf">
+        <createTable tableName="scheduled_action_execution">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="action_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_scheduled_execution_action"
+                        referencedTableName="scheduled_action" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="scheduled_for" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finished_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="outcome" type="VARCHAR(20)"/>
+            <column name="late_by_ms" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="VARCHAR(2000)"/>
+            <column name="revision_id" type="BIGINT"/>
+            <column name="generation_run_id" type="BIGINT"/>
+            <column name="executed_as_user_id" type="BIGINT"/>
+        </createTable>
+        <createIndex tableName="scheduled_action_execution" indexName="idx_scheduled_execution_action">
+            <column name="action_id"/>
+            <column name="finished_at"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- M27.4.4: the (asset, locale) pairs an action touches, written with the action: the "scheduled" block of asset
+         views and the assetUuid filter of the schedules list are one indexed lookup instead of a scan of params.
+         locale_key '' = every locale of the asset. -->
+    <changeSet id="022-scheduler-action-asset" author="sf">
+        <createTable tableName="scheduled_action_asset">
+            <column name="action_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_scheduled_asset_action"
+                        referencedTableName="scheduled_action" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="project_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_uuid" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="locale_key" type="VARCHAR(35)" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="scheduled_action_asset" columnNames="action_id, asset_uuid, locale_key"
+                constraintName="pk_scheduled_action_asset"/>
+        <createIndex tableName="scheduled_action_asset" indexName="idx_scheduled_asset_lookup">
+            <column name="project_id"/>
+            <column name="asset_uuid"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="022-scheduler-json-postgresql" author="sf" dbms="postgresql">
+        <comment>Scheduler JSON columns (M27.4.1) — PostgreSQL (jsonb).</comment>
+        <addColumn tableName="scheduled_action">
+            <column name="params" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="then_generate" type="JSONB"/>
+        </addColumn>
+        <addColumn tableName="scheduled_action_execution">
+            <column name="detail" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="022-scheduler-json-h2" author="sf" dbms="h2">
+        <comment>Scheduler JSON columns (M27.4.1) — H2 (json).</comment>
+        <addColumn tableName="scheduled_action">
+            <column name="params" type="JSON">
+                <constraints nullable="false"/>
+            </column>
+            <column name="then_generate" type="JSON"/>
+        </addColumn>
+        <addColumn tableName="scheduled_action_execution">
+            <column name="detail" type="JSON"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

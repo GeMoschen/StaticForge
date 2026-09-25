@@ -52,7 +52,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/records/{uuid}": {
+    "/api/v1/projects/{projectKey}/schedules/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -68,7 +68,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/record-sets/{uuid}": {
+    "/api/v1/projects/{projectKey}/records/{uuid}": {
         parameters: {
             query?: never;
             header?: never;
@@ -77,6 +77,22 @@ export interface paths {
         };
         get: operations["detail_2"];
         put: operations["update_3"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/record-sets/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_3"];
+        put: operations["update_4"];
         post?: never;
         delete: operations["delete_2"];
         options?: never;
@@ -91,8 +107,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_3"];
-        put: operations["update_4"];
+        get: operations["detail_4"];
+        put: operations["update_5"];
         post?: never;
         delete?: never;
         options?: never;
@@ -123,8 +139,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_4"];
-        put: operations["update_5"];
+        get: operations["detail_5"];
+        put: operations["update_6"];
         post?: never;
         delete: operations["delete_3"];
         options?: never;
@@ -267,8 +283,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_6"];
-        put: operations["update_6"];
+        get: operations["detail_7"];
+        put: operations["update_7"];
         post?: never;
         delete: operations["delete_6"];
         options?: never;
@@ -284,7 +300,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_7"];
+        put: operations["update_8"];
         post?: never;
         delete: operations["delete_7"];
         options?: never;
@@ -299,8 +315,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_8"];
-        put: operations["update_8"];
+        get: operations["detail_9"];
+        put: operations["update_9"];
         post?: never;
         delete?: never;
         options?: never;
@@ -436,6 +452,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_5"];
+        put?: never;
+        post: operations["create_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/schedules/{id}/take-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["takeOver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/schedules/{id}/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["runNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/schedules/{id}/repin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["repin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/schedules/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/schedules/preview-times": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewTimes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/restore": {
         parameters: {
             query?: never;
@@ -523,9 +635,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_6"];
+        get: operations["list_7"];
         put?: never;
-        post: operations["create_3"];
+        post: operations["create_4"];
         delete?: never;
         options?: never;
         head?: never;
@@ -571,9 +683,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_7"];
+        get: operations["list_8"];
         put?: never;
-        post: operations["create_4"];
+        post: operations["create_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -635,9 +747,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_9"];
         put?: never;
-        post: operations["create_5"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -683,7 +795,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_10"];
         put?: never;
         post: operations["upload"];
         delete?: never;
@@ -795,9 +907,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_11"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -845,7 +957,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["cancel"];
+        post: operations["cancel_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -877,7 +989,7 @@ export interface paths {
         };
         get: operations["tree_1"];
         put?: never;
-        post: operations["create_7"];
+        post: operations["create_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -923,9 +1035,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_11"];
+        get: operations["list_12"];
         put?: never;
-        post: operations["create_8"];
+        post: operations["create_9"];
         delete?: never;
         options?: never;
         head?: never;
@@ -955,9 +1067,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_12"];
+        get: operations["list_13"];
         put?: never;
-        post: operations["create_9"];
+        post: operations["create_10"];
         delete?: never;
         options?: never;
         head?: never;
@@ -971,9 +1083,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_13"];
+        get: operations["list_14"];
         put?: never;
-        post: operations["create_10"];
+        post: operations["create_11"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1179,9 +1291,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_17"];
+        get: operations["list_18"];
         put?: never;
-        post: operations["create_11"];
+        post: operations["create_12"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1387,13 +1499,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_9"];
+        get: operations["detail_10"];
         put?: never;
         post?: never;
         delete: operations["delete_9"];
         options?: never;
         head?: never;
-        patch: operations["update_9"];
+        patch: operations["update_10"];
         trace?: never;
     };
     "/api/v1/users/lookup": {
@@ -1508,6 +1620,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/schedules/{id}/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["executions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/revisions": {
         parameters: {
             query?: never;
@@ -1515,7 +1643,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_6"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1723,7 +1851,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_5"];
+        get: operations["detail_6"];
         put?: never;
         post?: never;
         delete: operations["delete_4"];
@@ -1819,7 +1947,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_14"];
+        get: operations["list_15"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1867,7 +1995,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_15"];
+        get: operations["list_16"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1883,7 +2011,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_16"];
+        get: operations["list_17"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1899,7 +2027,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_7"];
+        get: operations["detail_8"];
         put?: never;
         post?: never;
         delete: operations["delete_8"];
@@ -2011,7 +2139,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_18"];
+        get: operations["list_19"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2027,7 +2155,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_19"];
+        get: operations["list_20"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2171,6 +2299,84 @@ export interface components {
             compiled?: components["schemas"]["JsonNode"];
             descendantWarnings?: components["schemas"]["DescendantIssueDto"][];
         };
+        ScheduleRequest: {
+            type?: string;
+            /** Format: date-time */
+            runAt?: string;
+            cron?: string;
+            zoneId?: string;
+            pinPolicy?: string;
+            missedPolicy?: string;
+            maxLateness?: string;
+            thenGenerate?: components["schemas"]["JsonNode"];
+            params?: components["schemas"]["JsonNode"];
+        };
+        ScheduleExecutionView: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: date-time */
+            scheduledFor?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            outcome?: string;
+            /** Format: int64 */
+            lateByMs?: number;
+            message?: string;
+            detail?: components["schemas"]["JsonNode"];
+            /** Format: int64 */
+            revisionId?: number;
+            /** Format: int64 */
+            generationRunId?: number;
+            /** Format: int64 */
+            executedAsUserId?: number;
+        };
+        ScheduleItemView: {
+            /** Format: uuid */
+            assetUuid?: string;
+            assetType?: string;
+            uid?: string;
+            displayName?: string;
+            locale?: string;
+            /** Format: int64 */
+            pinnedVersionId?: number;
+            draftChangedSinceScheduled?: boolean;
+            status?: string;
+        };
+        ScheduleView: {
+            /** Format: int64 */
+            id?: number;
+            type?: string;
+            status?: string;
+            /** Format: date-time */
+            runAt?: string;
+            cron?: string;
+            zoneId?: string;
+            /** Format: date-time */
+            nextRunAt?: string;
+            pinPolicy?: string;
+            missedPolicy?: string;
+            maxLateness?: string;
+            thenGenerate?: components["schemas"]["JsonNode"];
+            params?: components["schemas"]["JsonNode"];
+            /** Format: int64 */
+            ownerUserId?: number;
+            /** Format: int64 */
+            createdBy?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: int64 */
+            version?: number;
+            /** Format: int32 */
+            itemCount?: number;
+            /** Format: int32 */
+            driftCount?: number;
+            items?: components["schemas"]["ScheduleItemView"][];
+            lastExecution?: components["schemas"]["ScheduleExecutionView"];
+        };
         UpdateRecordRequest: {
             content?: components["schemas"]["JsonNode"];
             comment?: string;
@@ -2223,7 +2429,17 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
+        };
+        ScheduledRefView: {
+            /** Format: int64 */
+            actionId?: number;
+            type?: string;
+            locale?: string;
+            /** Format: date-time */
+            runAt?: string;
+            /** Format: date-time */
+            nextRunAt?: string;
         };
         RecordSetQuery: {
             where?: string;
@@ -2262,7 +2478,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         RecordSetQueryDiagnostic: {
             field?: string;
@@ -2293,7 +2509,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         TemplateView: {
             /** Format: uuid */
@@ -2377,7 +2593,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         MediaTextRequest: {
             text?: string;
@@ -2412,7 +2628,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         UpdateGlobalSetContentRequest: {
             content?: components["schemas"]["JsonNode"];
@@ -2438,7 +2654,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         UpdateDatasetRequest: {
             displayName?: string;
@@ -2640,6 +2856,17 @@ export interface components {
             /** Format: date-time */
             lastRebuildAt?: string;
         };
+        PreviewTimesRequest: {
+            cron?: string;
+            zoneId?: string;
+            /** Format: int32 */
+            count?: number;
+        };
+        PreviewTimesView: {
+            cron?: string;
+            zoneId?: string;
+            times?: string[];
+        };
         ProjectRestoreRequest: {
             /** Format: int64 */
             toRevision?: number;
@@ -2784,7 +3011,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         MediaBulkItemResult: {
             fileName?: string;
@@ -3060,7 +3287,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         LoginResponse: {
             accessToken?: string;
@@ -3202,6 +3429,8 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -3211,20 +3440,18 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            pageSize?: number;
+            paged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
+            /** Format: int32 */
+            pageSize?: number;
             unpaged?: boolean;
-            paged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -3251,6 +3478,8 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -3260,8 +3489,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -3323,6 +3550,28 @@ export interface components {
             /** Format: int64 */
             latestRevision?: number;
         };
+        SchedulePageView: {
+            rows?: components["schemas"]["ScheduleView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        ScheduleExecutionPageView: {
+            rows?: components["schemas"]["ScheduleExecutionView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
         Pageable: {
             /** Format: int32 */
             page?: number;
@@ -3350,8 +3599,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            remove?: boolean;
             add?: boolean;
+            remove?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -3377,7 +3626,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         RecordPageView: {
             content?: components["schemas"]["RecordRowView"][];
@@ -3398,7 +3647,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PreviewShareLink: {
             token?: string;
@@ -3422,7 +3671,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         NavTreeView: {
             /** Format: uuid */
@@ -3441,7 +3690,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageReferenceResolveView: {
             /** Format: uuid */
@@ -3465,13 +3714,15 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageMediaSummaryView: {
             /** Format: int32 */
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -3481,8 +3732,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -3503,7 +3752,7 @@ export interface components {
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         SseEmitter: {
             /** Format: int64 */
@@ -3551,7 +3800,7 @@ export interface components {
             releasedBy?: number;
             /** Format: date-time */
             releasedAt?: string;
-            scheduled?: components["schemas"]["JsonNode"];
+            scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         ChangesPageView: {
             rows?: components["schemas"]["ChangeRowView"][];
@@ -3589,6 +3838,8 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -3598,8 +3849,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -3880,6 +4129,58 @@ export interface operations {
     };
     detail_1: {
         parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ScheduleView"];
+                };
+            };
+        };
+    };
+    update_2: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ScheduleView"];
+                };
+            };
+        };
+    };
+    detail_2: {
+        parameters: {
             query?: {
                 revision?: number;
             };
@@ -3903,7 +4204,7 @@ export interface operations {
             };
         };
     };
-    update_2: {
+    update_3: {
         parameters: {
             query?: never;
             header?: {
@@ -3932,7 +4233,7 @@ export interface operations {
             };
         };
     };
-    detail_2: {
+    detail_3: {
         parameters: {
             query?: {
                 revision?: number;
@@ -3957,7 +4258,7 @@ export interface operations {
             };
         };
     };
-    update_3: {
+    update_4: {
         parameters: {
             query?: never;
             header?: {
@@ -4009,7 +4310,7 @@ export interface operations {
             };
         };
     };
-    detail_3: {
+    detail_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -4032,7 +4333,7 @@ export interface operations {
             };
         };
     };
-    update_4: {
+    update_5: {
         parameters: {
             query?: never;
             header?: {
@@ -4091,7 +4392,7 @@ export interface operations {
             };
         };
     };
-    detail_4: {
+    detail_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -4114,7 +4415,7 @@ export interface operations {
             };
         };
     };
-    update_5: {
+    update_6: {
         parameters: {
             query?: {
                 confirmDiscard?: boolean;
@@ -4480,7 +4781,7 @@ export interface operations {
             };
         };
     };
-    detail_6: {
+    detail_7: {
         parameters: {
             query?: {
                 revision?: number;
@@ -4505,7 +4806,7 @@ export interface operations {
             };
         };
     };
-    update_6: {
+    update_7: {
         parameters: {
             query?: {
                 confirmDiscard?: boolean;
@@ -4557,7 +4858,7 @@ export interface operations {
             };
         };
     };
-    update_7: {
+    update_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -4605,7 +4906,7 @@ export interface operations {
             };
         };
     };
-    detail_8: {
+    detail_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -4627,7 +4928,7 @@ export interface operations {
             };
         };
     };
-    update_8: {
+    update_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -4966,6 +5267,181 @@ export interface operations {
             };
         };
     };
+    list_5: {
+        parameters: {
+            query?: {
+                type?: string[];
+                status?: string[];
+                owner?: number;
+                assetUuid?: string;
+                from?: string;
+                to?: string;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SchedulePageView"];
+                };
+            };
+        };
+    };
+    create_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ScheduleView"];
+                };
+            };
+        };
+    };
+    takeOver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ScheduleView"];
+                };
+            };
+        };
+    };
+    runNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ScheduleView"];
+                };
+            };
+        };
+    };
+    repin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ScheduleView"];
+                };
+            };
+        };
+    };
+    cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ScheduleView"];
+                };
+            };
+        };
+    };
+    previewTimes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewTimesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PreviewTimesView"];
+                };
+            };
+        };
+    };
     restore: {
         parameters: {
             query?: never;
@@ -5096,7 +5572,7 @@ export interface operations {
             };
         };
     };
-    list_6: {
+    list_7: {
         parameters: {
             query?: {
                 dataset?: string;
@@ -5120,7 +5596,7 @@ export interface operations {
             };
         };
     };
-    create_3: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -5201,7 +5677,7 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_8: {
         parameters: {
             query?: {
                 folder?: string;
@@ -5227,7 +5703,7 @@ export interface operations {
             };
         };
     };
-    create_4: {
+    create_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -5336,7 +5812,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
         parameters: {
             query?: {
                 page?: number;
@@ -5361,7 +5837,7 @@ export interface operations {
             };
         };
     };
-    create_5: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -5439,7 +5915,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_10: {
         parameters: {
             query?: {
                 mimeType?: string;
@@ -5700,7 +6176,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_11: {
         parameters: {
             query?: {
                 folder?: string;
@@ -5724,7 +6200,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -5823,7 +6299,7 @@ export interface operations {
             };
         };
     };
-    cancel: {
+    cancel_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -5904,7 +6380,7 @@ export interface operations {
             };
         };
     };
-    create_7: {
+    create_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -5985,7 +6461,7 @@ export interface operations {
             };
         };
     };
-    list_11: {
+    list_12: {
         parameters: {
             query?: never;
             header?: never;
@@ -6007,7 +6483,7 @@ export interface operations {
             };
         };
     };
-    create_8: {
+    create_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -6060,7 +6536,7 @@ export interface operations {
             };
         };
     };
-    list_12: {
+    list_13: {
         parameters: {
             query?: {
                 page?: number;
@@ -6090,7 +6566,7 @@ export interface operations {
             };
         };
     };
-    create_9: {
+    create_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -6117,7 +6593,7 @@ export interface operations {
             };
         };
     };
-    list_13: {
+    list_14: {
         parameters: {
             query?: never;
             header?: never;
@@ -6139,7 +6615,7 @@ export interface operations {
             };
         };
     };
-    create_10: {
+    create_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -6435,7 +6911,7 @@ export interface operations {
             };
         };
     };
-    list_17: {
+    list_18: {
         parameters: {
             query?: {
                 q?: string;
@@ -6466,7 +6942,7 @@ export interface operations {
             };
         };
     };
-    create_11: {
+    create_12: {
         parameters: {
             query?: never;
             header?: never;
@@ -6841,7 +7317,7 @@ export interface operations {
             };
         };
     };
-    detail_9: {
+    detail_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -6885,7 +7361,7 @@ export interface operations {
             };
         };
     };
-    update_9: {
+    update_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -7085,7 +7561,33 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    executions: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ScheduleExecutionPageView"];
+                };
+            };
+        };
+    };
+    list_6: {
         parameters: {
             query: {
                 since?: number;
@@ -7425,7 +7927,7 @@ export interface operations {
             };
         };
     };
-    detail_5: {
+    detail_6: {
         parameters: {
             query?: {
                 revision?: number;
@@ -7591,7 +8093,7 @@ export interface operations {
             };
         };
     };
-    list_14: {
+    list_15: {
         parameters: {
             query?: {
                 type?: string[];
@@ -7672,7 +8174,7 @@ export interface operations {
             };
         };
     };
-    list_15: {
+    list_16: {
         parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
@@ -7696,7 +8198,7 @@ export interface operations {
             };
         };
     };
-    list_16: {
+    list_17: {
         parameters: {
             query?: {
                 type?: string;
@@ -7724,7 +8226,7 @@ export interface operations {
             };
         };
     };
-    detail_7: {
+    detail_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -7912,7 +8414,7 @@ export interface operations {
             };
         };
     };
-    list_18: {
+    list_19: {
         parameters: {
             query?: {
                 q?: string;
@@ -7935,7 +8437,7 @@ export interface operations {
             };
         };
     };
-    list_19: {
+    list_20: {
         parameters: {
             query?: {
                 action?: string[];

@@ -159,11 +159,13 @@ public class RecordController {
 
     /** The paging envelope of a record listing; shared with {@link RecordSetController}'s set grid. */
     static RecordPageView toPageView(RecordPage result, ReleaseBlocks releaseBlocks, long projectId) {
-        var release = releaseBlocks.of(projectId, result.rows().stream().map(r -> r.uuid()).toList());
+        List<UUID> uuids = result.rows().stream().map(r -> r.uuid()).toList();
+        var release = releaseBlocks.of(projectId, uuids);
+        var scheduled = releaseBlocks.scheduled(projectId, uuids);
         List<RecordRowView> rows = result.rows().stream()
                 .map(r -> new RecordRowView(
                         r.uuid(), r.uid(), r.displayName(), r.folderPath(), r.changedAt(), r.changedBy(), r.values(),
-                        r.selectedBySet(), release.get(r.uuid()), null))
+                        r.selectedBySet(), release.get(r.uuid()), scheduled.getOrDefault(r.uuid(), List.of())))
                 .toList();
         return new RecordPageView(
                 rows,
@@ -220,7 +222,7 @@ public class RecordController {
                 r.deleted(),
                 issues,
                 releaseBlocks.of(projectId(projectKey), r.uuid()),
-                null);
+                releaseBlocks.scheduled(projectId(projectKey), r.uuid()));
     }
 
     private static String comment(String supplied, String fallback) {

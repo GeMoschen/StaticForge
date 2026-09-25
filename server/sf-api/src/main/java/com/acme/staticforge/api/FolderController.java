@@ -6,6 +6,7 @@ import com.acme.staticforge.api.dto.LocaleReleaseView;
 import com.acme.staticforge.api.dto.MoveRequest;
 import com.acme.staticforge.api.dto.MoveResultDto;
 import com.acme.staticforge.api.dto.RenameFolderRequest;
+import com.acme.staticforge.api.dto.ScheduledRefView;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.folder.FolderNode;
@@ -66,7 +67,8 @@ public class FolderController {
         List<UUID> uuids = new java.util.ArrayList<>();
         collect(nodes, uuids);
         Map<UUID, Map<String, LocaleReleaseView>> release = releaseBlocks.of(projectId, uuids);
-        return nodes.stream().map(node -> toView(node, release)).toList();
+        Map<UUID, List<ScheduledRefView>> scheduled = releaseBlocks.scheduled(projectId, uuids);
+        return nodes.stream().map(node -> toView(node, release, scheduled)).toList();
     }
 
     @PostMapping
@@ -78,7 +80,7 @@ public class FolderController {
                 : parseTemplateKind(body.templateKind());
         AssetVersionView view = folderService.create(
                 body.parentFolderUuid(), body.displayName(), scope, templateKind, ctx(projectKey, "create folder"));
-        return ResponseEntity.ok(toView(view, releaseBlocks.of(projectId(projectKey), view.uuid())));
+        return ResponseEntity.ok(toView(projectId(projectKey), view));
     }
 
     private static FolderScope parseScope(String scope) {
@@ -111,7 +113,7 @@ public class FolderController {
             @RequestBody RenameFolderRequest body) {
         AssetVersionView view = folderService.update(
                 uuid, body.displayName(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "rename folder"));
-        return toView(view, releaseBlocks.of(projectId(projectKey), view.uuid()));
+        return toView(projectId(projectKey), view);
     }
 
     @PostMapping("/{uuid}/move")
@@ -150,17 +152,25 @@ public class FolderController {
         }
     }
 
-    private static FolderView toView(FolderNode node, Map<UUID, Map<String, LocaleReleaseView>> release) {
+    private static FolderView toView(
+            FolderNode node,
+            Map<UUID, Map<String, LocaleReleaseView>> release,
+            Map<UUID, List<ScheduledRefView>> scheduled) {
         return new FolderView(node.uuid(), node.uid(), node.displayName(), node.path(),
                 node.scope() == null ? null : node.scope().name(), node.protectedFolder(), node.type().name(),
-                node.recordCount(), node.revision(), node.children().stream().map(child -> toView(child, release)).toList(),
-                release.get(node.uuid()), null);
+                node.recordCount(), node.revision(), node.children().stream().map(child -> toView(child, release, scheduled)).toList(),
+                release.get(node.uuid()), scheduled.getOrDefault(node.uuid(), List.of()));
     }
 
-    private static FolderView toView(AssetVersionView v, Map<String, LocaleReleaseView> release) {
+    private FolderView toView(long projectId, AssetVersionView v) {
+        return toView(v, releaseBlocks.of(projectId, v.uuid()), releaseBlocks.scheduled(projectId, v.uuid()));
+    }
+
+    private static FolderView toView(
+            AssetVersionView v, Map<String, LocaleReleaseView> release, List<ScheduledRefView> scheduled) {
         FolderScope scope = FolderScope.fromPayload(v.payload());
         return new FolderView(v.uuid(), v.uid(), v.displayName(), v.folderPath(), scope == null ? null : scope.name(),
                 FolderScope.isProtected(v.payload()), AssetType.FOLDER.name(), null, v.validFromRevision(), List.of(),
-                release, null);
+                release, scheduled);
     }
 }

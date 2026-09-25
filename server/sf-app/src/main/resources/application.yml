@@ -74,6 +74,14 @@ sf:
     rebuild-batch-size: 500
     ram-buffer-mb: 64
     live-indexing: true
+  scheduler:
+    # Scheduled releases and builds (M27.4). Every node that polls may execute due actions; a conditional-update
+    # lease makes each one run once. node-id defaults to hostname:pid and must differ between nodes.
+    enabled: true
+    poll-interval: 15s
+    batch-size: 20
+    lease: 2m
+    # node-id: cms-1
   revision:
     retention-days: unlimited
   cache:

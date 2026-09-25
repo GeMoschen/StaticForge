@@ -81,11 +81,14 @@ public class RecordSetController {
             @PathVariable String projectKey, @RequestParam(value = "dataset", required = false) UUID dataset) {
         long projectId = projectId(projectKey);
         var sets = recordSetService.list(projectId, dataset);
-        var release = releaseBlocks.of(projectId, sets.stream().map(v -> v.uuid()).toList());
+        List<UUID> uuids = sets.stream().map(v -> v.uuid()).toList();
+        var release = releaseBlocks.of(projectId, uuids);
+        var scheduled = releaseBlocks.scheduled(projectId, uuids);
         return sets.stream()
                 .map(v -> new RecordSetSummaryView(
                         v.uuid(), v.uid(), v.displayName(), datasetRef(v), v.folderUuid(), v.folderPath(),
-                        v.recordCount(), v.queryValid(), v.revision(), release.get(v.uuid()), null))
+                        v.recordCount(), v.queryValid(), v.revision(), release.get(v.uuid()),
+                        scheduled.getOrDefault(v.uuid(), List.of())))
                 .toList();
     }
 
@@ -227,7 +230,7 @@ public class RecordSetController {
                 v.changedAt(),
                 v.deleted(),
                 releaseBlocks.of(projectId(projectKey), v.uuid()),
-                null);
+                releaseBlocks.scheduled(projectId(projectKey), v.uuid()));
     }
 
     private static AssetRefView datasetRef(RecordSetView v) {

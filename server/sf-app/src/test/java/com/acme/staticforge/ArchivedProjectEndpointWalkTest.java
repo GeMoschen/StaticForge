@@ -58,6 +58,7 @@ class ArchivedProjectEndpointWalkTest {
             Map.entry("ProjectController#unarchive", "the one admitted write: reverses the archiving"),
             Map.entry("GenerationController#plan", "dry run: plans a build, writes nothing"),
             Map.entry("ReleaseController#plan", "dry run: computes a release plan, writes nothing"),
+            Map.entry("ScheduleController#previewTimes", "computes the next run times of a cron, stores nothing"),
             Map.entry("GenerationController#cancel", "stops a run started before archiving; a run is not content"),
             Map.entry("CdlValidateController#validate", "validates a draft CDL, stores nothing"),
             Map.entry("OctlValidateController#validate", "validates a draft template, stores nothing"),

@@ -1,6 +1,6 @@
 ---
 id: M27.4.3
-status: todo
+status: done
 depends: [M27.4.1]
 epic: m27-release-and-scheduling
 feature: scheduler
@@ -37,13 +37,13 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] One-off full build at T starts one run as the owner with the scheduled comment; the execution links the run.
-- [ ] Recurring `0 0 3 * * *` Europe/Berlin starts one run per day at 03:00 local (clock-driven test across a DST switch).
-- [ ] With a run active: the scheduled run starts right after it ends; with `SKIP_IF_LATER_THAN 15m` and a 30-minute
+- [x] One-off full build at T starts one run as the owner with the scheduled comment; the execution links the run.
+- [x] Recurring `0 0 3 * * *` Europe/Berlin starts one run per day at 03:00 local (clock-driven test across a DST switch).
+- [x] With a run active: the scheduled run starts right after it ends; with `SKIP_IF_LATER_THAN 15m` and a 30-minute
       run it is skipped; overlapping recurring slots coalesce.
-- [ ] Lease expiry mid-execution → no second run.
-- [ ] Deleted target → `FAILED SF-DOM-0162`, recurring action paused.
-- [ ] `./gradlew build` green.
+- [x] Lease expiry mid-execution → no second run.
+- [x] Deleted target → `FAILED SF-DOM-0162`, recurring action paused.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -55,3 +55,22 @@ area: backend
 - `GenerationService` is single-node (JVM `startLock`): with several app nodes, the scheduler claim guarantees only one
   node starts the run, but two nodes could still race with a manual start — acceptable (the `findActive` check under the
   lock on each node + DB state); note it, don't solve distributed generation here.
+
+## Implementation notes
+
+- `sf-generate/generate/schedule`: `GenerationActionHandler` (`ONE_OFF`) and `RecurringGenerationActionHandler`
+  (`RECURRING`) over `AbstractGenerationActionHandler`; `ScheduledGenerations` implements the port
+  `ScheduledGenerationStarter` (validation, busy check, `GenerationService.start` as the owner).
+- **Params** stored normalized: `{mode, channels[], targetId|null, scope: {folderPath|null, assetUuids[]}, comment?}`.
+  Validation (`422 SF-DOM-0161` with `field`): `revision` present, unknown mode, target not in the project (or no
+  target at all), channel unknown or disabled, no page under the scope folder, unknown scope pages; `pinPolicy` and
+  `thenGenerate` are refused for generation types.
+- **Start**: busy is detected before starting (`findActive` → `Busy(runId)`); a lost race with a manual start
+  (`SF-GEN-0500` thrown by `start`) is caught outside the transaction and treated as busy. The run id is checkpointed in
+  the transaction that creates the run, plus the idempotency key `schedule-{id}-{scheduledFor}`. Target gone at
+  execution → `FAILED SF-DOM-0162`, paused; a channel disabled since → `FAILED 0161`, paused.
+- The run comment ("Scheduled generation #id: …") is passed to `start` but not persisted (see Out of scope), so tests
+  assert the owner, mode, target and link instead.
+- Tests (`ScheduledActionsIntegrationTest`): one-off as owner + crash re-run starts no second run; recurring 03:00
+  Europe/Berlin over the 2025 spring-forward switch (three runs at 03:00 local); busy with `RUN_LATE`,
+  `SKIP_IF_LATER_THAN 15m` and a coalesced hourly slot; deleted target.
