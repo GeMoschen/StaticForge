@@ -19,6 +19,9 @@ public interface AssetReferenceRepository extends JpaRepository<AssetReference, 
     /** The open (current) outgoing edge set of an asset. */
     List<AssetReference> findByFromAssetIdAndValidToRevisionIsNull(Long fromAssetId);
 
+    /** The open outgoing edges of several assets (M27.1.4: a release plan's dependency walk, one query per layer). */
+    List<AssetReference> findByFromAssetIdInAndValidToRevisionIsNull(java.util.Collection<Long> fromAssetIds);
+
     /** Outgoing edges closed at exactly {@code validToRevision}. */
     List<AssetReference> findByFromAssetIdAndValidToRevision(Long fromAssetId, Long validToRevision);
 

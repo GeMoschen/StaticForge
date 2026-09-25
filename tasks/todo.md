@@ -1,3 +1,26 @@
+# M27.1.4 — Release performance for large selections (branch `m27-release-and-scheduling`)
+
+Spec: `tasks/27-m27-release-and-scheduling/01-release-model/004-release-performance-large-selections.md`. Backend.
+
+- [x] `ReleaseBenchmark` (`SF_PERF`): Changes list, plan and release timed separately with statement/flush/load counts
+- [x] Baseline, 5,000 pages × 2 locales = 10,101 items: release 328.7 s / 40,224 statements, plan 2.5 s / 40,222
+- [x] Fix: bulk `resolve`, per-call completeness checker (`PageContentValidation.Session`), layered dependency walk,
+      batched pointer close
+- [x] After: release 1.8 s (reads ~44 + one insert per pointer), plan 1.0 s / 40 statements
+- [x] `ReleaseQueryCountIntegrationTest` (bounded reads; refusal writes nothing), fails on the old code
+- [x] Full `./gradlew build` (`test --rerun`)
+
+
+## Review
+
+- Cause confirmed by measurement: ~4 queries per item, and in the read-write release transaction each query
+  auto-flushed with a dirty check of everything loaded so far — quadratic. Plan (read-only) ran the same queries in
+  2.5 s. Fixed by removing the per-item queries; no flush-mode change.
+- Pointer inserts stay one statement each (`IDENTITY` ids); the whole 10,101-item release, inserts included, takes 1.8 s.
+
+
+---
+
 # M27 feature 5 — Export/import protocol 8 (implementation, branch `m27-release-and-scheduling`)
 
 Spec: `tasks/27-m27-release-and-scheduling/05-export-import/`. Order 5.1 (backend) → 5.2 (UI).

@@ -29,6 +29,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,6 +49,13 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@code valid_to_revision}) and, for a release, opens the new one at the same revision. Discard goes through the
  * asset services (restore, move, uid change, update) joined into the batch, so containment rules, folder paths and
  * reference rows stay exactly as every other write keeps them.
+ *
+ * <p><strong>Large selections</strong> (M27.1.4): resolving a selection, checking completeness and releasing cost a
+ * fixed number of reads however many items there are — assets, drafts, pointers and versions are loaded in bulk
+ * ({@link Chunks}), the completeness gate shares one {@link ReleaseCompleteness.Checker} per call, and the plan's
+ * dependency walk queries edges and drafts once per breadth-first layer. Besides the round trips this matters for
+ * the write paths: every query in a read-write transaction first auto-flushes, and Hibernate dirty-checks every
+ * entity the transaction holds to do so — per-item queries made a 10,000-item release quadratic.
  */
 @Service
 @RevisionAware
@@ -101,11 +109,12 @@ public class ReleaseServiceImpl implements ReleaseService {
     @Transactional(readOnly = true)
     public ReleasePlan plan(long projectId, List<ReleaseItem> items) {
         Resolution resolution = resolve(projectId, items);
+        ReleaseCompleteness.Checker checker = completeness.checker(projectId);
         List<ReleasePlan.Incomplete> incomplete = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         for (Resolved item : resolution.items()) {
             if (needsRelease(item)) {
-                List<ContentIssue> issues = blocking(projectId, item);
+                List<ContentIssue> issues = blocking(checker, item);
                 if (!issues.isEmpty()) {
                     incomplete.add(new ReleasePlan.Incomplete(item.asset().getUuid(), item.key(), issues));
                 }
@@ -128,6 +137,7 @@ public class ReleaseServiceImpl implements ReleaseService {
     public ReleaseOutcome release(List<ReleaseItem> items, RevisionContext ctx) {
         permissions.requireRelease(ctx);
         Resolution resolution = resolve(ctx.projectId(), items);
+        ReleaseCompleteness.Checker checker = completeness.checker(ctx.projectId());
 
         List<Resolved> toOpen = new ArrayList<>();
         List<Resolved> toClose = new ArrayList<>();
@@ -137,7 +147,7 @@ public class ReleaseServiceImpl implements ReleaseService {
             if (item.status() == ReleaseStatus.DELETION_PENDING) {
                 toClose.add(item);
             } else if (needsRelease(item)) {
-                List<ContentIssue> issues = blocking(ctx.projectId(), item);
+                List<ContentIssue> issues = blocking(checker, item);
                 if (!issues.isEmpty()) {
                     incomplete.add(Map.of("uuid", item.asset().getUuid().toString(), "locale", item.key(), "issues", issues));
                 }
@@ -156,11 +166,12 @@ public class ReleaseServiceImpl implements ReleaseService {
         Revision revision = revisionService.beginBatch(ctx.projectId(), ChangeType.RELEASE, ctx.comment(), ctx.userId());
         long rev = revision.getRevisionId();
         Instant now = Instant.now();
+        List<AssetRelease> closed = new ArrayList<>();
         List<AssetRelease> opened = new ArrayList<>();
         List<AssetChange> summary = new ArrayList<>();
         List<ReleaseTarget> applied = new ArrayList<>();
         for (Resolved item : toOpen) {
-            closeIfOpen(item.pointer(), rev);
+            close(item.pointer(), rev, closed);
             AssetVersion version = item.releaseVersion();
             opened.add(new AssetRelease(
                     ctx.projectId(), item.asset().getId(), item.key(), version.getId(), item.asset().getUid(), rev,
@@ -170,11 +181,12 @@ public class ReleaseServiceImpl implements ReleaseService {
             applied.add(item.target());
         }
         for (Resolved item : toClose) {
-            closeIfOpen(item.pointer(), rev);
+            close(item.pointer(), rev, closed);
             summary.add(AssetChange.release(item.asset().getUuid().toString(), item.asset().getAssetType().name(),
                     item.asset().getUid(), "UNPUBLISH", item.key(), null));
             applied.add(item.target());
         }
+        releaseRepository.saveAll(closed);
         releaseRepository.saveAll(opened);
         revisionService.appendSummaries(ctx.projectId(), rev, summary);
         return new ReleaseOutcome(rev, applied, skipped, List.of());
@@ -200,11 +212,13 @@ public class ReleaseServiceImpl implements ReleaseService {
         Revision revision = revisionService.beginBatch(ctx.projectId(), ChangeType.UNPUBLISH, ctx.comment(), ctx.userId());
         long rev = revision.getRevisionId();
         List<AssetChange> summary = new ArrayList<>();
+        List<AssetRelease> closed = new ArrayList<>();
         for (Resolved item : toClose) {
-            closeIfOpen(item.pointer(), rev);
+            close(item.pointer(), rev, closed);
             summary.add(AssetChange.release(item.asset().getUuid().toString(), item.asset().getAssetType().name(),
                     item.asset().getUid(), "UNPUBLISH", item.key(), null));
         }
+        releaseRepository.saveAll(closed);
         revisionService.appendSummaries(ctx.projectId(), rev, summary);
         return new ReleaseOutcome(rev, toClose.stream().map(Resolved::target).toList(), skipped, List.of());
     }
@@ -380,32 +394,62 @@ public class ReleaseServiceImpl implements ReleaseService {
             throw ReleaseProblems.emptySelection();
         }
         LocaleConfig config = projectLocales.forProject(projectId);
-        Map<UUID, Asset> assets = new LinkedHashMap<>();
-        Map<Long, AssetVersion> drafts = new HashMap<>();
+        Set<UUID> uuids = new LinkedHashSet<>();
+        Set<Long> pinnedIds = new HashSet<>();
         for (ReleaseItem item : items) {
             if (item == null || item.assetUuid() == null) {
                 throw ReleaseProblems.unknownItem("Every item needs an asset.");
             }
-            Asset asset = assets.computeIfAbsent(item.assetUuid(), uuid -> assetRepository
-                    .findByProjectIdAndUuid(projectId, uuid)
-                    .orElseThrow(() -> ReleaseProblems.unknownItem("Asset " + uuid + " not found.")));
-            AssetVersion draft = drafts.computeIfAbsent(asset.getId(), id -> versionRepository
-                    .findByAssetIdAndValidToRevisionIsNull(id)
-                    .orElseThrow(() -> ReleaseProblems.unknownItem("Asset " + asset.getUuid() + " has no version.")));
+            uuids.add(item.assetUuid());
+            if (item.pinnedVersionId() != null) {
+                pinnedIds.add(item.pinnedVersionId());
+            }
+        }
+        // Everything the selection needs, in bulk: a read per asset would make a large release quadratic (class comment).
+        Map<UUID, Asset> byUuid = new HashMap<>();
+        Chunks.flatMap(uuids, chunk -> assetRepository.findByProjectIdAndUuidIn(projectId, chunk))
+                .forEach(asset -> byUuid.put(asset.getUuid(), asset));
+        Map<Long, AssetVersion> openVersions = new HashMap<>();
+        Set<Long> assetIds = byUuid.values().stream().map(Asset::getId).collect(Collectors.toSet());
+        if (!assetIds.isEmpty()) {
+            Chunks.flatMap(assetIds, versionRepository::findOpenWithAssetByAssetIdIn)
+                    .forEach(version -> openVersions.put(version.getAssetId(), version));
+        }
+        Map<Long, AssetVersion> pinnedVersions = new HashMap<>();
+        if (!pinnedIds.isEmpty()) {
+            Chunks.flatMap(pinnedIds, versionRepository::findAllById).forEach(v -> pinnedVersions.put(v.getId(), v));
+        }
+
+        Map<UUID, Asset> assets = new LinkedHashMap<>();
+        Map<Long, AssetVersion> drafts = new HashMap<>();
+        for (UUID uuid : uuids) {
+            Asset asset = byUuid.get(uuid);
+            if (asset == null) {
+                throw ReleaseProblems.unknownItem("Asset " + uuid + " not found.");
+            }
+            AssetVersion draft = openVersions.get(asset.getId());
+            if (draft == null) {
+                throw ReleaseProblems.unknownItem("Asset " + asset.getUuid() + " has no version.");
+            }
             if (!ReleasableTypes.isReleasable(asset.getAssetType(), draft.getPayload(), asset.getUid())) {
                 throw ReleaseProblems.unknownItem(
                         "'" + asset.getUid() + "' (" + asset.getAssetType() + ") has no release state: it is always live.");
             }
+            assets.put(uuid, asset);
+            drafts.put(asset.getId(), draft);
         }
         Map<Long, Map<String, LocaleRelease>> statuses = statusService.of(projectId,
                 assets.values().stream().map(a -> new ReleaseStatusService.Draft(a, drafts.get(a.getId()))).toList());
         Map<Long, AssetRelease> pointersById = new HashMap<>();
-        releaseRepository.findByAssetIdInAndValidToRevisionIsNull(drafts.keySet()).forEach(p -> pointersById.put(p.getId(), p));
+        Chunks.flatMap(drafts.keySet(), releaseRepository::findByAssetIdInAndValidToRevisionIsNull)
+                .forEach(p -> pointersById.put(p.getId(), p));
         Map<String, AssetRelease> openPointers = new HashMap<>();
         pointersById.values().forEach(p -> openPointers.put(p.getAssetId() + "|" + p.getLocaleKey(), p));
         Map<Long, AssetVersion> releasedVersions = new HashMap<>();
         Set<Long> releasedIds = pointersById.values().stream().map(AssetRelease::getReleasedVersionId).collect(Collectors.toSet());
-        versionRepository.findAllById(releasedIds).forEach(v -> releasedVersions.put(v.getId(), v));
+        if (!releasedIds.isEmpty()) {
+            Chunks.flatMap(releasedIds, versionRepository::findAllById).forEach(v -> releasedVersions.put(v.getId(), v));
+        }
 
         Map<String, Resolved> resolved = new LinkedHashMap<>();
         for (ReleaseItem item : items) {
@@ -413,7 +457,7 @@ public class ReleaseServiceImpl implements ReleaseService {
             AssetVersion draft = drafts.get(asset.getId());
             List<String> keys = ReleaseLocales.keysFor(config, asset.getAssetType(), draft.getPayload());
             List<String> selected = selectKeys(item, keys, config, asset);
-            AssetVersion pinned = pinnedVersion(item, asset);
+            AssetVersion pinned = pinnedVersion(item, asset, pinnedVersions);
             for (String key : selected) {
                 LocaleRelease status = statuses.getOrDefault(asset.getId(), Map.of()).get(key);
                 AssetRelease pointer = openPointers.get(asset.getId() + "|" + key);
@@ -447,11 +491,11 @@ public class ReleaseServiceImpl implements ReleaseService {
         throw ReleaseProblems.unknownItem("'" + asset.getUid() + "' has no locale '" + item.locale() + "'.");
     }
 
-    private AssetVersion pinnedVersion(ReleaseItem item, Asset asset) {
+    private static AssetVersion pinnedVersion(ReleaseItem item, Asset asset, Map<Long, AssetVersion> pinnedVersions) {
         if (item.pinnedVersionId() == null) {
             return null;
         }
-        AssetVersion pinned = versionRepository.findById(item.pinnedVersionId())
+        AssetVersion pinned = Optional.ofNullable(pinnedVersions.get(item.pinnedVersionId()))
                 .filter(v -> v.getAssetId().equals(asset.getId()))
                 .orElseThrow(() -> ReleaseProblems.foreignVersion(
                         "Version " + item.pinnedVersionId() + " is not a version of '" + asset.getUid() + "'."));
@@ -472,14 +516,15 @@ public class ReleaseServiceImpl implements ReleaseService {
         return item.pinned() != null && !item.pinned().getId().equals(item.pointer().getReleasedVersionId());
     }
 
-    private List<ContentIssue> blocking(long projectId, Resolved item) {
-        return completeness.blockingIssues(projectId, item.asset().getAssetType(), item.releaseVersion());
+    private static List<ContentIssue> blocking(ReleaseCompleteness.Checker checker, Resolved item) {
+        return checker.blockingIssues(item.asset().getAssetType(), item.releaseVersion());
     }
 
-    private void closeIfOpen(AssetRelease pointer, long revision) {
+    /** Closes {@code pointer} at {@code revision} when it is open, collecting it for one {@code saveAll}. */
+    private static void close(AssetRelease pointer, long revision, List<AssetRelease> closed) {
         if (pointer != null && pointer.isOpen()) {
             pointer.setValidToRevision(revision);
-            releaseRepository.save(pointer);
+            closed.add(pointer);
         }
     }
 
@@ -522,29 +567,65 @@ public class ReleaseServiceImpl implements ReleaseService {
             }
         }
 
+        /**
+         * Walks the queue one breadth-first layer at a time — the same order as node by node — so each layer's
+         * outgoing edges and the drafts they (and the nodes' folders) lead to are read in bulk.
+         */
         List<ReleasePlan.Dependency> propose() {
             Set<String> descendantsOffered = new HashSet<>();
             while (!queue.isEmpty()) {
-                Node node = queue.poll();
-                for (AssetReference edge : referenceRepository.findByFromAssetIdAndValidToRevisionIsNull(node.asset().getId())) {
-                    consider(edge.getToAssetId(), node, ReleasePlan.Reason.REFERENCE, TO_PROPOSE, true);
-                }
-                if (node.version().getFolderId() != null) {
-                    considerContainers(node);
-                }
-                if (node.asset().getAssetType() == AssetType.RECORD_SET) {
-                    for (AssetVersion member : versionRepository.findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(node.asset().getId())) {
-                        consider(member.getAssetId(), node, ReleasePlan.Reason.SET_MEMBER, TO_PROPOSE, true);
+                List<Node> layer = new ArrayList<>(queue);
+                queue.clear();
+                Map<Long, List<AssetReference>> edges = new HashMap<>();
+                Set<Long> from = layer.stream().map(node -> node.asset().getId()).collect(Collectors.toSet());
+                Chunks.flatMap(from, referenceRepository::findByFromAssetIdInAndValidToRevisionIsNull)
+                        .forEach(edge -> edges.computeIfAbsent(edge.getFromAssetId(), id -> new ArrayList<>()).add(edge));
+                Set<Long> needed = new HashSet<>();
+                edges.values().forEach(list -> list.forEach(edge -> needed.add(edge.getToAssetId())));
+                layer.stream().map(node -> node.version().getFolderId()).filter(Objects::nonNull).forEach(needed::add);
+                prefetch(needed);
+                for (Node node : layer) {
+                    for (AssetReference edge : edges.getOrDefault(node.asset().getId(), List.of())) {
+                        consider(edge.getToAssetId(), node, ReleasePlan.Reason.REFERENCE, TO_PROPOSE, true);
                     }
-                }
-                if (node.asset().getAssetType() == AssetType.FOLDER
-                        && selected.contains(id(node.asset().getId(), node.key()))
-                        && statusOf(node.asset().getId(), node.key()) == ReleaseStatus.CHANGED
-                        && descendantsOffered.add(id(node.asset().getId(), node.key()))) {
-                    offerDescendants(node);
+                    if (node.version().getFolderId() != null) {
+                        considerContainers(node);
+                    }
+                    if (node.asset().getAssetType() == AssetType.RECORD_SET) {
+                        List<AssetVersion> members =
+                                versionRepository.findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(node.asset().getId());
+                        prefetch(members.stream().map(AssetVersion::getAssetId).toList());
+                        for (AssetVersion member : members) {
+                            consider(member.getAssetId(), node, ReleasePlan.Reason.SET_MEMBER, TO_PROPOSE, true);
+                        }
+                    }
+                    if (node.asset().getAssetType() == AssetType.FOLDER
+                            && selected.contains(id(node.asset().getId(), node.key()))
+                            && statusOf(node.asset().getId(), node.key()) == ReleaseStatus.CHANGED
+                            && descendantsOffered.add(id(node.asset().getId(), node.key()))) {
+                        offerDescendants(node);
+                    }
                 }
             }
             return List.copyOf(proposed.values());
+        }
+
+        /** Loads the drafts and statuses of the {@code assetIds} not known yet, in a fixed number of queries. */
+        private void prefetch(java.util.Collection<Long> assetIds) {
+            Set<Long> missing = assetIds.stream().filter(id -> !drafts.containsKey(id)).collect(Collectors.toSet());
+            if (missing.isEmpty()) {
+                return;
+            }
+            List<AssetVersion> releasable = Chunks.flatMap(missing, versionRepository::findOpenWithAssetByAssetIdIn).stream()
+                    .filter(v -> v.getAsset().getProjectId().equals(projectId))
+                    .filter(v -> ReleasableTypes.isReleasable(v.getAsset().getAssetType(), v.getPayload(), v.getAsset().getUid()))
+                    .toList();
+            Map<Long, Map<String, LocaleRelease>> statuses = statusService.ofVersions(projectId, releasable);
+            for (AssetVersion version : releasable) {
+                drafts.put(version.getAssetId(), Optional.of(
+                        new Draft(version.getAsset(), version, statuses.getOrDefault(version.getAssetId(), Map.of()))));
+            }
+            missing.forEach(id -> drafts.putIfAbsent(id, Optional.empty()));
         }
 
         private void considerContainers(Node node) {
@@ -568,7 +649,9 @@ public class ReleaseServiceImpl implements ReleaseService {
                 if (!seen.add(current)) {
                     continue;
                 }
-                for (AssetVersion child : versionRepository.findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(current)) {
+                List<AssetVersion> children = versionRepository.findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(current);
+                prefetch(children.stream().map(AssetVersion::getAssetId).toList());
+                for (AssetVersion child : children) {
                     consider(child.getAssetId(), folder, ReleasePlan.Reason.DESCENDANT, Set.of(ReleaseStatus.CHANGED), false);
                     folders.add(child.getAssetId());
                 }

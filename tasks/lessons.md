@@ -77,6 +77,13 @@
   must not assume an order or a same-tick outcome. It ticks until each has reached its state, and awaits the resource
   in between. Before calling a failing test "flaky", run it 3+ times on master to separate an old race from a new bug.
 
+## Count a call's SQL on its own thread (2026-09-26)
+- **Mistake (M27.1.4):** a query-count test used Hibernate's statistics, which are global to the session factory. It
+  passed alone and failed in the full suite, because the scheduler poll and the search indexer query in the
+  background of the same context. Also, the first calls in a context pay one-time cache reads.
+- **Rule:** assert statement counts with `ThreadStatementCounter` (per-thread `StatementInspector`), warm the
+  project's caches with an unmeasured call right before each measured one, and prove the test fails on the old code.
+
 ## Spec fixtures must have the API's real shape (2026-09-23)
 - **Mistake (M25, found by the e2e journey):** the Content UI ran record/set `folderPath` values through a helper
   that expects stored paths (`/content_root/…`), but the REST API sends them store-relative (`/staff/`). Every unit
