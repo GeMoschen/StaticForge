@@ -50,6 +50,14 @@ public class Project {
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
 
+    /**
+     * {@code true} once every releasable asset that existed before M27 has its release pointers (M27.1.1). A new
+     * project starts empty, so it is created initialized; rows migrated from before M27 start {@code false} until
+     * {@code ReleaseStateInitializer} has run for them.
+     */
+    @Column(name = "release_state_initialized", nullable = false)
+    private boolean releaseStateInitialized = true;
+
     protected Project() {}
 
     public Project(String key, String name, Instant createdAt, Long createdBy) {
@@ -113,6 +121,14 @@ public class Project {
 
     public void setAllowedMimeTypes(String allowedMimeTypes) {
         this.allowedMimeTypes = allowedMimeTypes;
+    }
+
+    public boolean isReleaseStateInitialized() {
+        return releaseStateInitialized;
+    }
+
+    public void setReleaseStateInitialized(boolean releaseStateInitialized) {
+        this.releaseStateInitialized = releaseStateInitialized;
     }
 
     /** Parses {@link #getAllowedMimeTypes()} into a list, empty when unset. */

@@ -14,6 +14,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionRepository;
 import com.acme.staticforge.search.SearchIndexService;
 import com.acme.staticforge.search.SearchIndexer;
+import com.acme.staticforge.search.SearchSchemaVersion;
 import com.acme.staticforge.search.SearchService;
 import com.acme.staticforge.search.SearchStatus;
 import com.acme.staticforge.user.UserService;
@@ -173,7 +174,7 @@ class SearchIndexRecoveryIntegrationTest {
             writer.deleteAll();
             writer.setLiveCommitData(Map.of(
                             "sf.indexedRevision", Long.toString(head(fx)),
-                            "sf.schemaVersion", "1",
+                            "sf.schemaVersion", Integer.toString(SearchSchemaVersion.CURRENT),
                             "sf.owner", "someone-else@0")
                     .entrySet());
             writer.commit();

@@ -74,18 +74,21 @@ public class MediaController {
     private final SecuritySupport securitySupport;
     private final PreviewTokenService previewTokenService;
     private final PageRenderService pageRenderService;
+    private final ReleaseBlocks releaseBlocks;
 
     public MediaController(
             ProjectService projectService,
             MediaService mediaService,
             SecuritySupport securitySupport,
             PreviewTokenService previewTokenService,
-            PageRenderService pageRenderService) {
+            PageRenderService pageRenderService,
+            ReleaseBlocks releaseBlocks) {
         this.projectService = projectService;
         this.mediaService = mediaService;
         this.securitySupport = securitySupport;
         this.previewTokenService = previewTokenService;
         this.pageRenderService = pageRenderService;
+        this.releaseBlocks = releaseBlocks;
     }
 
     @GetMapping
@@ -98,9 +101,11 @@ public class MediaController {
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        return mediaService
-                .list(projectId(projectKey), mimeType, folder, recursive, q, PageRequest.of(page, size))
-                .map(this::toSummary);
+        long projectId = projectId(projectKey);
+        Page<AssetVersionView> result =
+                mediaService.list(projectId, mimeType, folder, recursive, q, PageRequest.of(page, size));
+        var release = releaseBlocks.of(projectId, result.getContent().stream().map(AssetVersionView::uuid).toList());
+        return result.map(v -> toSummary(v, release.get(v.uuid())));
     }
 
     @PostMapping
@@ -120,7 +125,7 @@ public class MediaController {
                 caption,
                 bytes(file),
                 ctx(projectKey, "upload media"));
-        return ResponseEntity.status(HttpStatus.CREATED).body(toMediaView(view));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toMediaView(projectKey, view));
     }
 
     @PostMapping("/bulk")
@@ -135,7 +140,7 @@ public class MediaController {
             try {
                 AssetVersionView view = mediaService.upload(projectId, folderUuid, file.getOriginalFilename(),
                         file.getContentType(), null, null, bytes(file), ctx(projectKey, "bulk upload media"));
-                results.add(new MediaBulkItemResult(file.getOriginalFilename(), toMediaView(view), null, null, null));
+                results.add(new MediaBulkItemResult(file.getOriginalFilename(), toMediaView(projectKey, view), null, null, null));
             } catch (SfException e) {
                 results.add(new MediaBulkItemResult(file.getOriginalFilename(), null, e.getStatus(),
                         e.getProblem().getExtensions().get("code") == null ? null
@@ -166,7 +171,7 @@ public class MediaController {
                 ctx(projectKey, "update media metadata"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toMediaView(view));
+                .body(toMediaView(projectKey, view));
     }
 
     /**
@@ -182,7 +187,7 @@ public class MediaController {
             @RequestParam("file") MultipartFile file) {
         MediaWriteResult result = mediaService.replace(
                 uuid, file.getOriginalFilename(), file.getContentType(), bytes(file), ctx(projectKey, "replace media"));
-        return saved(result);
+        return saved(projectKey, result);
     }
 
     /**
@@ -202,7 +207,7 @@ public class MediaController {
                 body.processCms(),
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, body.processCms() ? "enable CMS processing" : "disable CMS processing"));
-        return saved(result);
+        return saved(projectKey, result);
     }
 
     /** A text media file's content, current or at {@code ?revision=} (M18.1.2); non-text files are a {@code 400}. */
@@ -231,7 +236,7 @@ public class MediaController {
             @org.springframework.web.bind.annotation.RequestBody MediaTextRequest body) {
         MediaWriteResult result = mediaService.writeText(
                 uuid, body.text(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "edit media text"));
-        return saved(result);
+        return saved(projectKey, result);
     }
 
     /** Compiles draft text as this text media file's CMS syntax source, without saving (M18.2.1). */
@@ -376,10 +381,11 @@ public class MediaController {
                 .body(thumb.bytes());
     }
 
-    private static ResponseEntity<MediaSaveResponse> saved(MediaWriteResult result) {
+    private ResponseEntity<MediaSaveResponse> saved(String projectKey, MediaWriteResult result) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.media().validFromRevision()))
-                .body(new MediaSaveResponse(toMediaView(result.media()), result.warnings(), result.processCmsCleared()));
+                .body(new MediaSaveResponse(
+                        toMediaView(projectKey, result.media()), result.warnings(), result.processCmsCleared()));
     }
 
     private long projectId(String key) {
@@ -422,7 +428,8 @@ public class MediaController {
                 || "application/javascript".equals(mimeType);
     }
 
-    private MediaSummaryView toSummary(AssetVersionView v) {
+    private MediaSummaryView toSummary(
+            AssetVersionView v, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
         JsonNode payload = v.payload();
         return new MediaSummaryView(
                 v.uuid(),
@@ -433,18 +440,23 @@ public class MediaController {
                 v.folderPath(),
                 v.validFromRevision(),
                 TextMediaTypes.isProcessed(payload),
-                payload != null && TextMediaTypes.isText(text(payload, "mimeType")));
+                payload != null && TextMediaTypes.isText(text(payload, "mimeType")),
+                release,
+                null);
     }
 
-    private static MediaView toMediaView(AssetVersionView v) {
-        return toMediaView(v, null);
+    private MediaView toMediaView(String projectKey, AssetVersionView v) {
+        return toMediaView(v, null, releaseBlocks.of(projectId(projectKey), v.uuid()));
     }
 
     /**
      * {@code locale} resolves {@code altText}/{@code caption} for one language; {@code null} takes
      * the first stored language, which is what a project without locales has anyway (M24.2.2).
      */
-    private static MediaView toMediaView(AssetVersionView v, java.util.List<String> locale) {
+    private static MediaView toMediaView(
+            AssetVersionView v,
+            java.util.List<String> locale,
+            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
         JsonNode payload = v.payload();
         return new MediaView(
                 v.uuid(),
@@ -464,7 +476,9 @@ public class MediaController {
                 focalPoint(payload),
                 variants(payload),
                 TextMediaTypes.isProcessed(payload),
-                TextMediaTypes.isText(text(payload, "mimeType")));
+                TextMediaTypes.isText(text(payload, "mimeType")),
+                release,
+                null);
     }
 
     private static MediaImageView image(JsonNode payload) {

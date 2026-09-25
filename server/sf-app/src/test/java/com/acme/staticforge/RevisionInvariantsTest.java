@@ -16,6 +16,13 @@ import com.acme.staticforge.asset.reference.ReferenceEdge;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.release.AssetRelease;
+import com.acme.staticforge.release.AssetReleaseRepository;
+import com.acme.staticforge.release.ReleaseItem;
+import com.acme.staticforge.release.ReleaseLocales;
+import com.acme.staticforge.release.ReleaseService;
+import com.acme.staticforge.release.ReleaseState;
+import com.acme.staticforge.release.ReleaseStates;
 import com.acme.staticforge.revision.AssetChange;
 import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
@@ -260,6 +267,103 @@ class RevisionInvariantsTest {
                 .isEqualTo(pre.displayName());
         assertThat(restored.payload()).isEqualTo(pre.payload());
     }
+
+    /**
+     * M27.1.2: release pointers follow the same interval discipline as versions and references. Random sequences of
+     * edits, releases, unpublishes and discards must leave at most one pointer valid per asset at every revision, and
+     * the release state read at each revision ({@code ReleaseStates.at}) must equal what a model of the sequence
+     * says was released then — which proves time travel of release state.
+     */
+    @Property(tries = 20)
+    void randomReleaseSequencesKeepPointerInvariants(@ForAll("releaseOps") List<ReleaseOp> ops) {
+        CtxHolder h = context();
+        ReleaseService releases = h.ctx.getBean(ReleaseService.class);
+        ReleaseStates states = h.ctx.getBean(ReleaseStates.class);
+        AssetReleaseRepository pointers = h.ctx.getBean(AssetReleaseRepository.class);
+        AppUser actor = h.fixtures.user("u-" + suffix());
+        Project project = h.fixtures.project("p-" + suffix(), actor);
+        RevisionContext ctx = RevisionContext.of(project.getId(), actor.getId(), "release invariants");
+
+        List<UUID> uuids = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            AssetVersionView page = h.assets.create(
+                    new CreateAssetCommand(project.getId(), AssetType.PAGE, "r" + i, null, h.mapper.createObjectNode(), null),
+                    ctx);
+            uuids.add(page.uuid());
+            ids.add(h.assetRepository.findByProjectIdAndUuid(project.getId(), page.uuid()).orElseThrow().getId());
+        }
+
+        // Model: the released version id of each page (null = not released), recorded after every revision.
+        Map<Integer, Long> released = new HashMap<>();
+        Map<Long, Map<Integer, Long>> modelAt = new HashMap<>();
+        for (ReleaseOp op : ops) {
+            UUID uuid = uuids.get(op.index());
+            Long draft = h.versionRepository.findByAssetIdAndValidToRevisionIsNull(ids.get(op.index())).orElseThrow().getId();
+            switch (op.kind()) {
+                case EDIT -> h.assets.update(
+                        uuid,
+                        new UpdateAssetCommand("n" + op.name(), h.mapper.createObjectNode().put("name", op.name())),
+                        h.assets.requireCurrent(project.getId(), uuid).validFromRevision(),
+                        ctx);
+                case RELEASE -> {
+                    if (releases.release(List.of(ReleaseItem.of(uuid)), ctx).revision() != null) {
+                        released.put(op.index(), draft);
+                    }
+                }
+                case UNPUBLISH -> releases.unpublish(List.of(ReleaseItem.of(uuid)), ctx);
+                case DISCARD -> {
+                    if (released.get(op.index()) != null) {
+                        releases.discard(List.of(ReleaseItem.of(uuid)), ctx);
+                    }
+                }
+            }
+            if (op.kind() == ReleaseKind.UNPUBLISH) {
+                released.remove(op.index());
+            }
+            long head = h.revisionRepository.findByProjectIdOrderByRevisionIdDesc(project.getId()).get(0).getRevisionId();
+            modelAt.put(head, new HashMap<>(released));
+        }
+
+        long head = h.revisionRepository.findByProjectIdOrderByRevisionIdDesc(project.getId()).get(0).getRevisionId();
+        for (int i = 0; i < ids.size(); i++) {
+            List<AssetRelease> rows = pointers.findByAssetIdAndValidToRevisionIsNull(ids.get(i));
+            assertThat(rows).as("at most one open pointer for page %s", i).hasSizeLessThanOrEqualTo(1);
+        }
+        List<AssetRelease> history = pointers.findByProjectIdOrderByAssetIdAscLocaleKeyAscValidFromRevisionAsc(project.getId());
+        for (long r = 1; r <= head; r++) {
+            final long rr = r;
+            for (Long id : ids) {
+                long valid = history.stream()
+                        .filter(p -> p.getAssetId().equals(id))
+                        .filter(p -> p.getValidFromRevision() <= rr && (p.getValidToRevision() == null || p.getValidToRevision() > rr))
+                        .count();
+                assertThat(valid).as("at most one pointer valid at r=%s", r).isLessThanOrEqualTo(1);
+            }
+        }
+        for (Map.Entry<Long, Map<Integer, Long>> expected : modelAt.entrySet()) {
+            ReleaseState state = states.at(project.getId(), expected.getKey());
+            for (int i = 0; i < ids.size(); i++) {
+                assertThat(state.releasedVersionId(ids.get(i), ReleaseLocales.ALL))
+                        .as("page %s released at r=%s", i, expected.getKey())
+                        .isEqualTo(expected.getValue().get(i));
+            }
+        }
+    }
+
+    @Provide
+    Arbitrary<List<ReleaseOp>> releaseOps() {
+        Arbitrary<ReleaseOp> op = Combinators.combine(
+                        Arbitraries.of(ReleaseKind.class),
+                        Arbitraries.integers().between(0, 2),
+                        Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(6))
+                .as(ReleaseOp::new);
+        return op.list().ofMinSize(1).ofMaxSize(12);
+    }
+
+    private enum ReleaseKind { EDIT, RELEASE, UNPUBLISH, DISCARD }
+
+    private record ReleaseOp(ReleaseKind kind, int index, String name) {}
 
     @Provide
     Arbitrary<List<Op>> ops() {

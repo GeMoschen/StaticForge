@@ -20,4 +20,6 @@ public record RecordRowView(
         Instant changedAt,
         Long changedBy,
         JsonNode values,
-        @JsonInclude(JsonInclude.Include.NON_NULL) Boolean selectedBySet) {}
+        @JsonInclude(JsonInclude.Include.NON_NULL) Boolean selectedBySet,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

@@ -1,3 +1,32 @@
+# M27 feature 1 — Release model (implementation, branch `m27-release-and-scheduling`)
+
+Spec: `tasks/27-m27-release-and-scheduling/01-release-model/`. Backend only; order 1.1 → 1.2 → 1.3.
+
+- [x] M27.1.1 — `asset_release` (+ `released_uid`: a uid change writes no version), `AssetRelease`/repository,
+      `ReleasableTypes`, `ReleaseLocales`, pure `LocaleProjection`, `ReleaseStatusService` (bulk, cached projections),
+      `ReleaseState.at`, `ChangeType` RELEASE/UNPUBLISH/DISCARD, migration runner guarded by
+      `project.release_state_initialized`, locale-set transitions (0→N copies `""` pointers to every locale,
+      N→0 keeps the default locale's, removed locales close)
+- [x] M27.1.2 — `ReleaseService` release/unpublish/discard/plan, dependency closure, completeness gate, delete
+      semantics, `carryForward` for system migrations, restore untouched
+- [x] M27.1.3 — `ReleaseController`, `ChangesController` (candidate query + diff), `release` block on DTOs, search
+      facet, problems, OpenAPI + `schema.d.ts`
+- [x] Full `./gradlew build` (`test --rerun`)
+
+## Review
+
+- Backend only, as planned. Design points beyond the task text (all in the task files' implementation notes):
+  `released_uid` on the pointer (uid changes write no version); migration by startup runner + project flag;
+  first/last locale transitions carry pointers; `ReleaseCarryForward` as its own component (bean cycle);
+  restore/uid change/moves join an open batch so a discard is one revision; store roots not releasable.
+- Follow-up for M27.3: `findChangeCandidates` counts one key for every media asset — localized media needs its
+  locale count there.
+- `./gradlew build test --rerun`: 1246 tests, 0 failures (4 skipped); re-run of the two late-edited test classes
+  green; `ui` `npm run build` and `npx vitest run` (79 files, 536 tests) green after regenerating `schema.d.ts`.
+- Benchmark 5,000 pages × 2 locales: migration 915 ms, project status 508 ms, Changes list 114 ms.
+
+---
+
 # M26 feature 5 — Docs and journey (implementation, branch `m26-user-management`)
 
 Spec: `tasks/26-m26-user-management/05-docs-e2e/`.

@@ -1,5 +1,6 @@
 package com.acme.staticforge.search;
 
+import com.acme.staticforge.release.ReleaseStatus;
 import com.acme.staticforge.asset.AssetType;
 import java.util.EnumSet;
 import java.util.List;
@@ -48,6 +49,20 @@ public class SearchService {
      */
     public Result search(
             long projectId, String q, List<String> types, String folder, int page, int size, String sort, String locale) {
+        return search(projectId, q, types, folder, page, size, sort, locale, List.of());
+    }
+
+    /** As above, restricted to assets with one of {@code releaseStatuses} in some locale (M27.1.3). */
+    public Result search(
+            long projectId,
+            String q,
+            List<String> types,
+            String folder,
+            int page,
+            int size,
+            String sort,
+            String locale,
+            List<String> releaseStatuses) {
         String text = q == null ? "" : q.strip();
         if (text.isEmpty()) {
             throw SearchProblems.badRequest("Parameter 'q' is required.");
@@ -69,7 +84,8 @@ public class SearchService {
         if (status.state() == SearchStatus.State.UNAVAILABLE) {
             throw SearchProblems.unavailable();
         }
-        SearchQuery query = new SearchQuery(text, parseTypes(types), folder, page, size, locale);
+        SearchQuery query =
+                new SearchQuery(text, parseTypes(types), folder, page, size, locale, parseStatuses(releaseStatuses));
         return new Result(index.search(projectId, query), page, size, status);
     }
 
@@ -86,6 +102,29 @@ public class SearchService {
             throw SearchProblems.reindexRunning();
         }
         return indexer.status(projectId);
+    }
+
+    private static Set<String> parseStatuses(List<String> statuses) {
+        Set<String> parsed = new java.util.LinkedHashSet<>();
+        if (statuses == null) {
+            return parsed;
+        }
+        for (String raw : statuses) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            for (String part : raw.split(",")) {
+                if (part.isBlank()) {
+                    continue;
+                }
+                try {
+                    parsed.add(ReleaseStatus.valueOf(part.strip().toUpperCase(Locale.ROOT)).name());
+                } catch (IllegalArgumentException e) {
+                    throw SearchProblems.badRequest("Unknown release status '" + part.strip() + "'.");
+                }
+            }
+        }
+        return parsed;
     }
 
     private static Set<AssetType> parseTypes(List<String> types) {

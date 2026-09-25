@@ -7,7 +7,8 @@ package com.acme.staticforge.search;
  */
 public final class SearchSchemaVersion {
 
-    public static final int CURRENT = 1;
+    /** 2: documents carry the release statuses of their asset (M27.1.3). */
+    public static final int CURRENT = 2;
 
     private SearchSchemaVersion() {}
 }

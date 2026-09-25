@@ -16,4 +16,6 @@ public record GlobalSetDetailView(
         String contentDefinition,
         JsonNode compiledDefinition,
         JsonNode content,
-        long revision) {}
+        long revision,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

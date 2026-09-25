@@ -11,5 +11,10 @@ public enum ChangeType {
     UID_CHANGE,
     BULK,
     IMPORT,
-    PUBLISH
+    /** Release: opens release pointers of (asset, locale) pairs at a version (M27.1.2). */
+    RELEASE,
+    /** Unpublish: closes release pointers; the drafts stay (M27.1.2). */
+    UNPUBLISH,
+    /** Discard changes: writes the released version of a locale back as a new version (M27.1.2). */
+    DISCARD
 }

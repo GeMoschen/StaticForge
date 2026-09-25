@@ -436,6 +436,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/releases/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unpublish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/releases/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["plan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/releases/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["discard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/record-sets": {
         parameters: {
             query?: never;
@@ -765,7 +829,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["plan"];
+        post: operations["plan_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1083,7 +1147,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_16"];
+        get: operations["list_17"];
         put?: never;
         post: operations["create_11"];
         delete?: never;
@@ -1716,7 +1780,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/audit": {
+    "/api/v1/projects/{projectKey}/changes": {
         parameters: {
             query?: never;
             header?: never;
@@ -1732,7 +1796,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/assets": {
+    "/api/v1/projects/{projectKey}/changes/{uuid}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["diff_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/changes/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["count_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/audit": {
         parameters: {
             query?: never;
             header?: never;
@@ -1740,6 +1836,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_15"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_16"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1867,7 +1979,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_17"];
+        get: operations["list_18"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1883,7 +1995,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_18"];
+        get: operations["list_19"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2046,6 +2158,15 @@ export interface components {
             /** @enum {string} */
             kind?: "STRUCTURAL" | "COMPLETENESS";
         };
+        LocaleReleaseView: {
+            status?: string;
+            /** Format: int64 */
+            releasedRevision?: number;
+            /** Format: date-time */
+            releasedAt?: string;
+            /** Format: int64 */
+            releasedBy?: number;
+        };
         RecordDetailView: {
             /** Format: uuid */
             uuid?: string;
@@ -2067,6 +2188,10 @@ export interface components {
             changedAt?: string;
             deleted?: boolean;
             issues?: components["schemas"]["ContentIssue"][];
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         RecordSetQuery: {
             where?: string;
@@ -2102,6 +2227,10 @@ export interface components {
             /** Format: date-time */
             changedAt?: string;
             deleted?: boolean;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         RecordSetQueryDiagnostic: {
             field?: string;
@@ -2129,6 +2258,10 @@ export interface components {
             output?: components["schemas"]["JsonNode"];
             meta?: components["schemas"]["JsonNode"];
             issues?: components["schemas"]["ContentIssue"][];
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         TemplateView: {
             /** Format: uuid */
@@ -2193,6 +2326,10 @@ export interface components {
             variants?: components["schemas"]["MediaVariantView"][];
             processCms?: boolean;
             textEditable?: boolean;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         MediaTextRequest: {
             text?: string;
@@ -2220,6 +2357,10 @@ export interface components {
             content?: components["schemas"]["JsonNode"];
             /** Format: int64 */
             revision?: number;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         UpdateGlobalSetContentRequest: {
             content?: components["schemas"]["JsonNode"];
@@ -2242,6 +2383,10 @@ export interface components {
             /** Format: int64 */
             revision?: number;
             children?: components["schemas"]["FolderView"][];
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         UpdateDatasetRequest: {
             displayName?: string;
@@ -2460,6 +2605,53 @@ export interface components {
             comment?: string;
             summary?: components["schemas"]["JsonNode"];
         };
+        Item: {
+            /** Format: uuid */
+            assetUuid?: string;
+            locale?: string;
+        };
+        ReleaseRequest: {
+            items?: components["schemas"]["Item"][];
+            includeDependencies?: components["schemas"]["Item"][];
+            comment?: string;
+        };
+        ReleaseResultView: {
+            /** Format: int64 */
+            revision?: number;
+            applied?: components["schemas"]["ReleaseTargetView"][];
+            skipped?: components["schemas"]["ReleaseTargetView"][];
+            sharedFieldsKept?: components["schemas"]["ReleaseTargetView"][];
+        };
+        ReleaseTargetView: {
+            /** Format: uuid */
+            uuid?: string;
+            type?: string;
+            uid?: string;
+            displayName?: string;
+            locale?: string;
+            status?: string;
+            /** Format: int64 */
+            versionId?: number;
+        };
+        Dependency: {
+            target?: components["schemas"]["ReleaseTargetView"];
+            reason?: string;
+            /** Format: uuid */
+            via?: string;
+            includedByDefault?: boolean;
+        };
+        Incomplete: {
+            /** Format: uuid */
+            uuid?: string;
+            locale?: string;
+            issues?: components["schemas"]["ContentIssue"][];
+        };
+        ReleasePlanView: {
+            items?: components["schemas"]["ReleaseTargetView"][];
+            dependencies?: components["schemas"]["Dependency"][];
+            incomplete?: components["schemas"]["Incomplete"][];
+            warnings?: string[];
+        };
         CreateRecordSetRequest: {
             /** Format: uuid */
             folderUuid?: string;
@@ -2537,6 +2729,10 @@ export interface components {
             labelL10n?: {
                 [key: string]: string;
             };
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         MediaBulkItemResult: {
             fileName?: string;
@@ -2808,6 +3004,10 @@ export interface components {
             changedBy?: number;
             /** Format: date-time */
             changedAt?: string;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         LoginResponse: {
             accessToken?: string;
@@ -2945,18 +3145,18 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -2966,12 +3166,12 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
+            unpaged?: boolean;
             paged?: boolean;
             /** Format: int32 */
-            pageNumber?: number;
-            /** Format: int32 */
             pageSize?: number;
-            unpaged?: boolean;
+            /** Format: int32 */
+            pageNumber?: number;
         };
         SortObject: {
             direction?: string;
@@ -2994,18 +3194,18 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -3121,6 +3321,10 @@ export interface components {
             queryValid?: boolean;
             /** Format: int64 */
             revision?: number;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         RecordPageView: {
             content?: components["schemas"]["RecordRowView"][];
@@ -3138,6 +3342,10 @@ export interface components {
             changedBy?: number;
             values?: components["schemas"]["JsonNode"];
             selectedBySet?: boolean;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         PreviewShareLink: {
             token?: string;
@@ -3158,6 +3366,10 @@ export interface components {
             folderPath?: string;
             /** Format: int64 */
             revision?: number;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         NavTreeView: {
             /** Format: uuid */
@@ -3173,6 +3385,10 @@ export interface components {
             /** Format: int64 */
             revision?: number;
             children?: components["schemas"]["NavTreeView"][];
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         PageReferenceResolveView: {
             /** Format: uuid */
@@ -3192,20 +3408,24 @@ export interface components {
             revision?: number;
             processCms?: boolean;
             textEditable?: boolean;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         PageMediaSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -3226,6 +3446,10 @@ export interface components {
             folderPath?: string;
             /** Format: int64 */
             revision?: number;
+            release?: {
+                [key: string]: components["schemas"]["LocaleReleaseView"];
+            };
+            scheduled?: components["schemas"]["JsonNode"];
         };
         SseEmitter: {
             /** Format: int64 */
@@ -3254,6 +3478,45 @@ export interface components {
             uid?: string;
             displayName?: string;
         };
+        ChangeRowView: {
+            /** Format: uuid */
+            uuid?: string;
+            type?: string;
+            uid?: string;
+            displayName?: string;
+            folderPath?: string;
+            locale?: string;
+            status?: string;
+            /** Format: int64 */
+            changedBy?: number;
+            /** Format: date-time */
+            changedAt?: string;
+            /** Format: int64 */
+            releasedRevision?: number;
+            /** Format: int64 */
+            releasedBy?: number;
+            /** Format: date-time */
+            releasedAt?: string;
+            scheduled?: components["schemas"]["JsonNode"];
+        };
+        ChangesPageView: {
+            rows?: components["schemas"]["ChangeRowView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        ChangeDiffView: {
+            /** Format: uuid */
+            uuid?: string;
+            locale?: string;
+            status?: string;
+            changes?: components["schemas"]["FieldChange"][];
+        };
         AuditEntryView: {
             /** Format: int64 */
             id?: number;
@@ -3268,18 +3531,18 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -4641,6 +4904,110 @@ export interface operations {
             };
         };
     };
+    release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReleaseResultView"];
+                };
+            };
+        };
+    };
+    unpublish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReleaseResultView"];
+                };
+            };
+        };
+    };
+    plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReleasePlanView"];
+                };
+            };
+        };
+    };
+    discard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReleaseResultView"];
+                };
+            };
+        };
+    };
     list_6: {
         parameters: {
             query?: {
@@ -5336,7 +5703,7 @@ export interface operations {
             };
         };
     };
-    plan: {
+    plan_1: {
         parameters: {
             query?: {
                 page?: number;
@@ -5925,7 +6292,7 @@ export interface operations {
             };
         };
     };
-    list_16: {
+    list_17: {
         parameters: {
             query?: {
                 q?: string;
@@ -6532,6 +6899,7 @@ export interface operations {
                 size?: number;
                 sort?: string;
                 locale?: string;
+                releaseStatus?: string[];
             };
             header?: never;
             path: {
@@ -7077,6 +7445,87 @@ export interface operations {
     };
     list_14: {
         parameters: {
+            query?: {
+                type?: string[];
+                status?: string[];
+                locale?: string[];
+                changedBy?: number;
+                folderUuid?: string;
+                q?: string;
+                sort?: string;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ChangesPageView"];
+                };
+            };
+        };
+    };
+    diff_1: {
+        parameters: {
+            query?: {
+                locale?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ChangeDiffView"];
+                };
+            };
+        };
+    };
+    count_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: number;
+                    };
+                };
+            };
+        };
+    };
+    list_15: {
+        parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
             };
@@ -7099,7 +7548,7 @@ export interface operations {
             };
         };
     };
-    list_15: {
+    list_16: {
         parameters: {
             query?: {
                 type?: string;
@@ -7315,7 +7764,7 @@ export interface operations {
             };
         };
     };
-    list_17: {
+    list_18: {
         parameters: {
             query?: {
                 q?: string;
@@ -7338,7 +7787,7 @@ export interface operations {
             };
         };
     };
-    list_18: {
+    list_19: {
         parameters: {
             query?: {
                 action?: string[];

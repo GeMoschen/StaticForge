@@ -66,6 +66,7 @@ public class NavigationController {
     private final SecuritySupport securitySupport;
 
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
+    private final ReleaseBlocks releaseBlocks;
 
     public NavigationController(
             ProjectService projectService,
@@ -75,7 +76,9 @@ public class NavigationController {
             AssetService assetService,
             LiveNavigationLookup navigationLookup,
             SecuritySupport securitySupport,
-            com.acme.staticforge.project.ProjectLocales projectLocales) {
+            com.acme.staticforge.project.ProjectLocales projectLocales,
+            ReleaseBlocks releaseBlocks) {
+        this.releaseBlocks = releaseBlocks;
         this.projectService = projectService;
         this.folderService = folderService;
         this.pageReferenceService = pageReferenceService;
@@ -102,14 +105,28 @@ public class NavigationController {
         long projectId = projectId(projectKey);
         List<Diagnostic> diagnostics = new ArrayList<>();
         List<String> chain = projectLocales.forProject(projectId).effectiveChain(locale);
-        return topLevelNavigationUuids(projectKey).stream()
+        List<NavTreeNode> roots = topLevelNavigationUuids(projectKey).stream()
                 .map(uuid -> navigationService.tree(projectId, uuid, d, navigationLookup, diagnostics, chain))
                 .filter(Objects::nonNull)
-                .map(node -> toView(projectId, node))
                 .toList();
+        List<UUID> uuids = new ArrayList<>();
+        collect(roots, uuids);
+        java.util.Map<UUID, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView>> release =
+                releaseBlocks.of(projectId, uuids);
+        return roots.stream().map(node -> toView(projectId, node, release)).toList();
     }
 
-    private NavTreeView toView(long projectId, NavTreeNode node) {
+    private static void collect(List<NavTreeNode> nodes, List<UUID> into) {
+        for (NavTreeNode node : nodes) {
+            into.add(node.assetUuid());
+            collect(node.children(), into);
+        }
+    }
+
+    private NavTreeView toView(
+            long projectId,
+            NavTreeNode node,
+            java.util.Map<UUID, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView>> release) {
         String path = node.resolvedPageUuid() == null
                 ? null
                 : assetService.requireCurrent(projectId, node.resolvedPageUuid()).folderPath();
@@ -117,7 +134,9 @@ public class NavigationController {
                 node.assetUuid(), node.type().name(), node.uid(), node.displayName(), node.label(),
                 node.resolvedPageUuid(), path, node.protectedFolder(),
                 assetService.requireCurrent(projectId, node.assetUuid()).validFromRevision(),
-                node.children().stream().map(c -> toView(projectId, c)).toList());
+                node.children().stream().map(c -> toView(projectId, c, release)).toList(),
+                release.get(node.assetUuid()),
+                null);
     }
 
     /** Renames a navigation folder and/or sets (or clears) its {@code startNode}. */
@@ -154,7 +173,7 @@ public class NavigationController {
                 new CreatePageReferenceCommand(
                         body.displayName(), body.folderUuid(), parseTargetKind(body.targetKind()), body.targetAssetUuid(), body.label()),
                 ctx(projectKey, "create page reference"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toReferenceView(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toReferenceView(view, List.of(), releaseBlocks.of(projectId(projectKey), view.uuid())));
     }
 
     @PatchMapping("/references/{uuid}")
@@ -174,7 +193,10 @@ public class NavigationController {
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, "update page reference"));
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toReferenceView(view, projectLocales.forProject(projectId(projectKey)).effectiveChain(locale)));
+                .body(toReferenceView(
+                        view,
+                        projectLocales.forProject(projectId(projectKey)).effectiveChain(locale),
+                        releaseBlocks.of(projectId(projectKey), view.uuid())));
     }
 
     @DeleteMapping("/references/{uuid}")
@@ -250,12 +272,13 @@ public class NavigationController {
                 FolderScope.isProtected(v.payload()), startNodeView);
     }
 
-    private static PageReferenceView toReferenceView(AssetVersionView v) {
-        return toReferenceView(v, List.of());
-    }
+
 
     /** {@code chain} resolves a language-dependent label; an empty chain takes it as stored (M24.2.2). */
-    private static PageReferenceView toReferenceView(AssetVersionView v, List<String> chain) {
+    private static PageReferenceView toReferenceView(
+            AssetVersionView v,
+            List<String> chain,
+            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
         JsonNode payload = v.payload();
         String targetKind = payload.path("target").path("kind").asText(null);
         String targetUuidText = payload.path("target").path("assetUuid").asText(null);
@@ -276,6 +299,6 @@ public class NavigationController {
         }
         return new PageReferenceView(
                 v.uuid(), v.uid(), v.displayName(), v.validFromRevision(), v.folderPath(), targetKind, targetUuid,
-                label, labelL10n);
+                label, labelL10n, release, null);
     }
 }

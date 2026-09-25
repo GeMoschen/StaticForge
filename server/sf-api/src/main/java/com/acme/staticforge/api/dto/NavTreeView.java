@@ -22,4 +22,6 @@ public record NavTreeView(
         String resolvedPagePath,
         boolean protectedFolder,
         long revision,
-        List<NavTreeView> children) {}
+        List<NavTreeView> children,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

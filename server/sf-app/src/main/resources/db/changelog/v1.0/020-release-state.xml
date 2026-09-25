@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M27.1.1: the release pointer of an editorial (asset, locale). A row is revisioned exactly like
+         asset_reference: a release or unpublish closes the open row (valid_to_revision) and, for a release,
+         opens a new one in the same revision. "No open row" means "not released in that locale".
+         locale_key '' is the single key of a non-localized project and of non-localized media.
+         released_uid is the uid as released: a uid change writes no asset_version (M22.4.1), so the version
+         alone can't tell which uid the released state renders. As with asset_version, "at most one open row
+         per (asset_id, locale_key)" is kept by the writer (ReleaseService) and proven by the invariant suite. -->
+    <changeSet id="020-release-state-asset-release" author="sf">
+        <createTable tableName="asset_release">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="project_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_release_project" references="project(id)"/>
+            </column>
+            <column name="asset_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_release_asset" references="asset(id)"/>
+            </column>
+            <column name="locale_key" type="VARCHAR(35)" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+            <column name="released_version_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_asset_release_version" references="asset_version(id)"/>
+            </column>
+            <column name="released_uid" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_from_revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_to_revision" type="BIGINT"/>
+            <column name="released_by" type="BIGINT">
+                <constraints foreignKeyName="fk_asset_release_released_by" references="app_user(id)"/>
+            </column>
+            <column name="released_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="asset_release" indexName="idx_release_asset_open">
+            <column name="asset_id"/>
+            <column name="valid_to_revision"/>
+        </createIndex>
+        <createIndex tableName="asset_release" indexName="idx_release_project_open">
+            <column name="project_id"/>
+            <column name="valid_to_revision"/>
+        </createIndex>
+        <createIndex tableName="asset_release" indexName="idx_release_project_from">
+            <column name="project_id"/>
+            <column name="valid_from_revision"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- M27.1.1: existing projects start with release_state_initialized = false, and ReleaseStateInitializer
+         marks every non-deleted releasable asset released at its open version in one revision per project,
+         then sets the flag. Projects created afterwards start empty and are created with the flag set. -->
+    <changeSet id="020-release-state-project-flag" author="sf">
+        <addColumn tableName="project">
+            <column name="release_state_initialized" type="BOOLEAN" defaultValueBoolean="false"
+                    valueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

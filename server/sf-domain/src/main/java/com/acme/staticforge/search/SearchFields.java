@@ -46,6 +46,9 @@ public final class SearchFields {
     /** Code (CDL, OCTL, processed text media), neutral analyzer only: no stemming on code. */
     public static final String SOURCE = "source";
 
+    /** The asset's release statuses, one term per distinct status over its locales (M27.1.3); filter only. */
+    public static final String RELEASE_STATUS = "releaseStatus";
+
     /** The plain text snippets are cut from: prose, then code, capped. Stored only. */
     public static final String SNIPPET_SOURCE = "snippetSource";
 

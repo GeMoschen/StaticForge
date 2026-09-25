@@ -64,12 +64,15 @@ public class RecordController {
     private final RecordService recordService;
     private final RecordSetService recordSetService;
     private final SecuritySupport securitySupport;
+    private final ReleaseBlocks releaseBlocks;
 
     public RecordController(
             ProjectService projectService,
             RecordService recordService,
             RecordSetService recordSetService,
-            SecuritySupport securitySupport) {
+            SecuritySupport securitySupport,
+            ReleaseBlocks releaseBlocks) {
+        this.releaseBlocks = releaseBlocks;
         this.projectService = projectService;
         this.recordService = recordService;
         this.recordSetService = recordSetService;
@@ -88,13 +91,14 @@ public class RecordController {
             @RequestParam(value = "where", required = false) String where,
             @RequestParam(value = "folder", required = false) String folder,
             HttpServletRequest request) {
+        long projectId = projectId(projectKey);
         RecordPage result = recordService.list(
-                projectId(projectKey),
+                projectId,
                 datasetUuid,
                 new RecordListQuery(q, folder, where, sortKeys(request)),
                 page,
                 size);
-        return toPageView(result);
+        return toPageView(result, releaseBlocks, projectId);
     }
 
     /**
@@ -122,7 +126,7 @@ public class RecordController {
                 ctx(projectKey, comment(body.comment(), "create record")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.record().revision()))
-                .body(toDetail(result.record(), result.issues()));
+                .body(toDetail(projectKey, result.record(), result.issues()));
     }
 
     @GetMapping("/records/{uuid}")
@@ -135,7 +139,7 @@ public class RecordController {
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record not found.")));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(record.revision()))
-                .body(toDetail(record, List.of()));
+                .body(toDetail(projectKey, record, List.of()));
     }
 
     @PutMapping("/records/{uuid}")
@@ -150,15 +154,16 @@ public class RecordController {
                 uuid, body.content(), expected, ctx(projectKey, comment(body.comment(), "update record")));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.record().revision()))
-                .body(toDetail(result.record(), result.issues()));
+                .body(toDetail(projectKey, result.record(), result.issues()));
     }
 
     /** The paging envelope of a record listing; shared with {@link RecordSetController}'s set grid. */
-    static RecordPageView toPageView(RecordPage result) {
+    static RecordPageView toPageView(RecordPage result, ReleaseBlocks releaseBlocks, long projectId) {
+        var release = releaseBlocks.of(projectId, result.rows().stream().map(r -> r.uuid()).toList());
         List<RecordRowView> rows = result.rows().stream()
                 .map(r -> new RecordRowView(
                         r.uuid(), r.uid(), r.displayName(), r.folderPath(), r.changedAt(), r.changedBy(), r.values(),
-                        r.selectedBySet()))
+                        r.selectedBySet(), release.get(r.uuid()), null))
                 .toList();
         return new RecordPageView(
                 rows,
@@ -196,7 +201,7 @@ public class RecordController {
         return keys;
     }
 
-    private static RecordDetailView toDetail(RecordDetail r, List<ContentIssue> issues) {
+    private RecordDetailView toDetail(String projectKey, RecordDetail r, List<ContentIssue> issues) {
         return new RecordDetailView(
                 r.uuid(),
                 r.uid(),
@@ -213,7 +218,9 @@ public class RecordController {
                 r.changedBy(),
                 r.changedAt(),
                 r.deleted(),
-                issues);
+                issues,
+                releaseBlocks.of(projectId(projectKey), r.uuid()),
+                null);
     }
 
     private static String comment(String supplied, String fallback) {

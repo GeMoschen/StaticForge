@@ -17,11 +17,11 @@ locale, release (with dependencies), unpublish and discard, and list every unrel
 
 ## Feature exit criteria
 
-- [ ] `asset_release` exists, is revisioned and migrated: every existing editorial asset is `PUBLISHED` in every locale.
-- [ ] Status per (asset, locale) is correct for content, structural, localized-only and shared edits.
-- [ ] Release (with dependency closure), unpublish and discard work, each as one revision; incomplete content is refused.
-- [ ] Release, Changes and diff endpoints and the `release` block on asset DTOs are served; `schema.d.ts` regenerated.
-- [ ] `./gradlew build` green.
+- [x] `asset_release` exists, is revisioned and migrated: every existing editorial asset is `PUBLISHED` in every locale.
+- [x] Status per (asset, locale) is correct for content, structural, localized-only and shared edits.
+- [x] Release (with dependency closure), unpublish and discard work, each as one revision; incomplete content is refused.
+- [x] Release, Changes and diff endpoints and the `release` block on asset DTOs are served; `schema.d.ts` regenerated.
+- [x] `./gradlew build` green.
 
 ## Dependencies
 

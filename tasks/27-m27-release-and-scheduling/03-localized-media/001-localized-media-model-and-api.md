@@ -47,6 +47,12 @@ is needed — prefer payload). Epic decisions 4, 18, 19.
   the FR file changes only FR's status.
 - Regenerate OpenAPI and `schema.d.ts`.
 
+- **Changes candidates.** `AssetVersionRepository.findChangeCandidates` (M27.1.3) expects one pointer for every media
+  asset (`CASE WHEN a.assetType = MEDIA THEN 1 ELSE :keys END`), so a localized media asset whose pointers all sit at
+  its draft except one missing locale would never become a candidate. Count a localized media asset's keys like a
+  page's (the project's locale count), e.g. by reading the flag in the query or by passing both counts; keep the query
+  a single statement.
+
 ## Acceptance criteria
 
 - [ ] Localize → upload an EN file → EN resolves to it, `de-CH` falls back to `de`, a locale without own file falls back
@@ -56,6 +62,8 @@ is needed — prefer payload). Epic decisions 4, 18, 19.
 - [ ] Status: replacing only the EN file makes only EN `CHANGED`.
 - [ ] Upload pipeline rules apply to locale files (MIME sniffing, SVG sanitizing, size cap) — tests reuse the
       existing upload test fixtures.
+- [ ] Changes list: a localized media asset released in DE only lists EN as `NEW`; one released in every locale
+      at its draft is not a candidate; non-localized media still counts one key.
 - [ ] Existing media endpoints and payload readers unchanged for non-localized media (regression suite green).
 - [ ] `./gradlew build` green.
 
