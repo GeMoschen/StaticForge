@@ -10,9 +10,11 @@ import com.acme.staticforge.asset.content.SectionTemplateLookup;
 import com.acme.staticforge.asset.content.TemplateContentDefinitions;
 import com.acme.staticforge.asset.dataset.RecordDatasets;
 import com.acme.staticforge.asset.template.TemplateHierarchies;
+import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.template.content.ContentDefinition;
+import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.List;
@@ -59,8 +61,44 @@ public class PageContentValidation {
 
     /** Every finding on the page, structural and completeness; empty when its template doesn't resolve. */
     public List<ContentIssue> issues(long projectId, JsonNode payload) {
-        PageContentValidator validator = validator(projectId);
-        return validate(projectId, payload, (definition, sections) -> validator.validatePage(definition, payload, sections));
+        return session(projectId).issues(payload);
+    }
+
+    /**
+     * A validation session for many pages of one project (M27.1.4): the template hierarchy, the validator, the
+     * section templates and each page template's effective definition are resolved once, however many pages it
+     * checks — a release of thousands of pages costs a fixed number of reads. It reads the live state as it is when
+     * a template is first needed, so it belongs to one transaction.
+     */
+    public Session session(long projectId) {
+        return new Session(projectId);
+    }
+
+    /** See {@link #session}. Not thread-safe. */
+    public final class Session {
+
+        private final TemplateHierarchy hierarchy;
+        private final PageContentValidator validator;
+        private final SectionTemplateLookup sections;
+        private final Map<UUID, Optional<ContentDefinition>> definitions = new HashMap<>();
+
+        private Session(long projectId) {
+            this.hierarchy = hierarchies.live(projectId);
+            this.validator = validator(projectId);
+            this.sections = sectionTemplates(projectId);
+        }
+
+        /** Every finding on the page, structural and completeness; empty when its template doesn't resolve. */
+        public List<ContentIssue> issues(JsonNode payload) {
+            UUID templateUuid = templateRef(payload);
+            if (templateUuid == null) {
+                return List.of();
+            }
+            return definitions
+                    .computeIfAbsent(templateUuid, uuid -> hierarchy.effectiveDefinition(uuid).map(EffectiveDefinition::definition))
+                    .map(definition -> validator.validatePage(definition, payload, sections))
+                    .orElse(List.of());
+        }
     }
 
     /** Rejects structural findings anywhere on the page. */
@@ -90,10 +128,8 @@ public class PageContentValidation {
 
     /** Page content validates against the page template's effective definition: own and inherited editors (M20). */
     private List<ContentIssue> validate(long projectId, JsonNode payload, Check check) {
-        UUID templateUuid;
-        try {
-            templateUuid = UUID.fromString(payload.path("templateRef").asText(""));
-        } catch (IllegalArgumentException e) {
+        UUID templateUuid = templateRef(payload);
+        if (templateUuid == null) {
             return List.of();
         }
         return hierarchies.live(projectId).effectiveDefinition(templateUuid)
@@ -128,6 +164,14 @@ public class PageContentValidation {
                 .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId())
                         .filter(version -> !version.isDeleted())
                         .map(version -> new SectionTemplate(asset.getUid(), TemplateContentDefinitions.of(version.getPayload()))));
+    }
+
+    private static UUID templateRef(JsonNode payload) {
+        try {
+            return UUID.fromString(payload.path("templateRef").asText(""));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static void reject(List<ContentIssue> issues) {
