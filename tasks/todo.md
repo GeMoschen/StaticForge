@@ -11,7 +11,7 @@ Spec: `tasks/27-m27-release-and-scheduling/03-localized-media/`. Backend only; o
       copy when the owner doesn't publish it), references/processed media per render locale, manifest media locale,
       carry-forward per (media, locale), collision check, planner seeds locales that fall back to a changed locale,
       preview share URL serves the locale's file
-- [ ] OpenAPI + `schema.d.ts`; full `./gradlew build` (`test --rerun`), `ui` `npm run build` + `npx vitest run`
+- [x] OpenAPI + `schema.d.ts`; full `./gradlew build` (`test --rerun`), `ui` `npm run build` + `npx vitest run`
 
 
 ## Review
@@ -28,6 +28,8 @@ Spec: `tasks/27-m27-release-and-scheduling/03-localized-media/`. Backend only; o
   `mime_type` column (the library's MIME filter and image pickers dropped them); `replace` lost localized alt text and
   caption; the per-build and preview text-media compile caches were keyed by media only (would have mixed locale
   sources).
+- `./gradlew build test --rerun`: 1283 tests, 0 failures (5 skipped benchmarks); late-edited classes re-run green;
+  `ui` `ng build` (in the Gradle build) and `npx vitest run` (79 files, 536 tests) green.
 
 ---
 
