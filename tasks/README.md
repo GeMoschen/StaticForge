@@ -84,7 +84,7 @@ Rules of thumb:
 | 06 | [m6-revision-ux](06-m6-revision-ux/README.md) | 17, 24 | Journeys 5–8 pass |
 | 07 | [m7-hardening](07-m7-hardening/README.md) | 2, 25, 26 | Quality gates (§25.7) met; pen-test findings closed |
 
-### Post-roadmap feature epics (M16–M26)
+### Post-roadmap feature epics (M16–M30)
 
 Inserted after the §27 roadmap the same way `M8`–`M15` were. Decisions and the binding
 feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M24").
@@ -102,6 +102,10 @@ feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M2
 | 24 | [m24-multi-language](24-m24-multi-language/README.md) | 2.2, 14–18 | Localizable editors, per-locale output + hreflang |
 | 25 | [m25-record-sets](25-m25-record-sets/README.md) | 5, 14, 16, 26.5 | Records live in typed, queryable record sets rendered via `$CMS_VALUE(recordset:uid)$` / reference editors |
 | 26 | [m26-user-management](26-m26-user-management/README.md) | 8, 9, 20, 23, 24, 26 | Instance admins manage users/projects/audit, project admins manage members, archived projects read-only |
+| 27 | [m27-release-and-scheduling](27-m27-release-and-scheduling/README.md) | 7, 10, 11, 18, 19, 20, 24, 26.5 | Editorial content is released per asset and locale; builds render the released state; scheduled release/unpublish/generation run |
+| 28 | [m28-editor-publishing](28-m28-editor-publishing/README.md) | 8.3, 18.1, 20, 24 | Per-project publish policy lets editors release, schedule and build; UI gated by effective permissions |
+| 29 | [m29-housekeeping-jobs](29-m29-housekeeping-jobs/README.md) | 7.7, 11.2, 18, 26 | Housekeeping jobs (blob sweep, purges, recovery, retention, compaction) run on schedule and are managed on the admin Jobs page |
+| 30 | [m30-quality-checks-and-redirects](30-m30-quality-checks-and-redirects/README.md) | 16, 18, 24 | Builds check links/SEO/accessibility per configurable rule; moved pages get automatic redirects in per-target formats |
 
 Epics are sequential **hard** dependencies. Within an epic, features and tasks declare
 their own `depends` graph; anything with no dependencies can be parallelised across
