@@ -90,6 +90,15 @@ describe('build insight reasons', () => {
       reasonText(entry({ rootKind: 'ASSET_CHANGED', rootAsset: { uuid: 'p1', type: 'PAGE', uid: 'about' }, steps: [] })),
     ).toBe('about.html · changed');
     expect(reasonText(entry({ rootKind: 'FULL_BUILD', causeCount: 1, steps: [] }))).toBe('about.html · full build');
+    // A release names its revision and the language of the output it rebuilds (M27.2.2).
+    const released = { ...twoHops, rootKind: 'ASSET_RELEASED', rootRevision: 1902 };
+    expect(reasonText({ ...entry(released, 'en/about.html'), locale: 'en' })).toBe(
+      'en/about.html ← page_template:article ← media:hero · released in r1902, en',
+    );
+    expect(reasonText(entry({ ...released, rootKind: 'ASSET_UNPUBLISHED' }))).toBe(
+      'about.html ← page_template:article ← media:hero · unpublished in r1902',
+    );
+    expect(reasonBadge({ rootKind: 'ASSET_RELEASED' })).toBe('Released');
     expect(reasonText(entry(twoHops), true)).toBe('about.html ← page_template:article ← this asset');
     expect(otherCausesLabel({ causeCount: 2 })).toBe('+ 1 other change');
     expect(otherCausesLabel({ causeCount: 1 })).toBe('');

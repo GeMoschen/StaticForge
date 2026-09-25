@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -112,10 +113,28 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
     @Override
     @Transactional
     public String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, RevisionContext ctx) {
+        return resolve(pageReferenceUuid, channelKey, area, locale, () -> null, ctx);
+    }
+
+    @Override
+    @Transactional
+    public String resolve(
+            UUID pageReferenceUuid,
+            String channelKey,
+            UrlArea area,
+            String locale,
+            Supplier<String> computed,
+            RevisionContext ctx) {
         String localeKey = localeKey(ctx.projectId(), locale);
         return find(ctx.projectId(), channelKey, pageReferenceUuid, area, localeKey)
                 .map(UrlRegistryEntry::getUrl)
-                .orElseGet(() -> computeAndPersist(pageReferenceUuid, channelKey, area, localeKey, ctx).getUrl());
+                .orElseGet(() -> {
+                    String url = computed.get();
+                    return (url == null
+                                    ? computeAndPersist(pageReferenceUuid, channelKey, area, localeKey, ctx)
+                                    : persist(pageReferenceUuid, channelKey, area, localeKey, url, ctx))
+                            .getUrl();
+                });
     }
 
     /**
@@ -209,6 +228,11 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
                         channelService.outputSettings(ctx.projectId(), channelKey),
                         localeContext(ctx.projectId(), localeKey))
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Resolved page not found.")));
+        return persist(pageReferenceUuid, channelKey, area, localeKey, url, ctx);
+    }
+
+    private UrlRegistryEntry persist(
+            UUID pageReferenceUuid, String channelKey, UrlArea area, String localeKey, String url, RevisionContext ctx) {
         // Insert-if-absent, then read back: whether this call or a concurrent one inserted the row,
         // the read returns the single winner. A lost race is a no-op insert, never an exception.
         repository.insertIfAbsent(

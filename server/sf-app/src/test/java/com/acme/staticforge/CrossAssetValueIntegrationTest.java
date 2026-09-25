@@ -67,6 +67,7 @@ class CrossAssetValueIntegrationTest {
     @Autowired TemplateService templateService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired PageRenderService pageRenderService;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -117,7 +118,8 @@ class CrossAssetValueIntegrationTest {
         // run is pinned to the head revision and behaves the same (see the next test).
         assetService.softDelete(pageB.uuid(), true, ctx);
         assertThat(preview(projectId, pageA.uuid(), null)).isEqualTo("A[]");
-        long deletedAt = assetService.requireCurrent(projectId, pageB.uuid()).validFromRevision();
+        // A deletion is a draft until released (M27): pin the run to the revision that releases it.
+        long deletedAt = releaseFixtures.releaseAll(project.getKey());
         GenerationRun afterDelete = run(project, target, GenerationMode.FULL, deletedAt, user);
         assertThat(afterDelete.getStatus()).as("diagnostics: %s", afterDelete.getDiagnostics()).isEqualTo(RunStatus.PARTIAL);
         assertThat(afterDelete.getDiagnostics().toString()).contains(DiagnosticCodes.OCTL_MISSING_VALUE_TARGET);
@@ -167,8 +169,9 @@ class CrossAssetValueIntegrationTest {
 
         GenerationRun incremental = run(project, target, GenerationMode.INCREMENTAL, null, user);
         assertThat(incremental.getStatus()).as("diagnostics: %s", incremental.getDiagnostics()).isEqualTo(RunStatus.PARTIAL);
+        // Pinned to the head: the revision that released the page's deletion, right after the section's deletion.
         assertThat(incremental.getRevisionId())
-                .isEqualTo(assetService.requireCurrent(projectId, box.uuid()).validFromRevision());
+                .isEqualTo(assetService.requireCurrent(projectId, box.uuid()).validFromRevision() + 1);
         assertThat(outputOfA(project, target, incremental)).isEqualTo("A[||]");
         String diagnostics = incremental.getDiagnostics().toString();
         assertThat(incremental.getDiagnostics().path("errors")).isEmpty();
@@ -237,6 +240,7 @@ class CrossAssetValueIntegrationTest {
 
     private GenerationRun run(Project project, GenerationTarget target, GenerationMode mode, Long revision, AppUser user)
             throws InterruptedException {
+        releaseFixtures.releaseAll(project.getKey());
         GenerationRun started = generationService.start(
                 project.getKey(),
                 new GenerationRequest(mode, revision, List.of("html"), target.getId(), null, null, null, null),

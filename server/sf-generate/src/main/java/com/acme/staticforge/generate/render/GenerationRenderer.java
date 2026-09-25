@@ -66,6 +66,11 @@ import java.util.regex.Pattern;
  * repositories, so generation and preview share the exact same render engine. All mutable
  * render state is scoped to a single {@link #render} call, so one instance is safe to share
  * across concurrent virtual threads.
+ *
+ * <p>A renderer renders one language view of the snapshot (M27.2.1): the pipeline holds one per language, and every
+ * entry renders with its language's renderer. A reference to an asset absent from that view because it isn't
+ * released there renders empty with {@code SF-GEN-0221}, exactly where a tombstone renders empty with
+ * {@code SF-GEN-0220}.
  */
 final class GenerationRenderer {
 
@@ -135,7 +140,7 @@ final class GenerationRenderer {
         this.paths = paths;
         this.projectKey = projectKey == null ? "" : projectKey;
         this.channelService = channelService;
-        this.uidIndex = indexUids(snapshot);
+        this.uidIndex = indexUids(snapshot.root());
         this.navigationLookup = new SnapshotNavigationLookup(snapshot);
         this.urlRegistryService = urlRegistryService;
         this.generationUserId = generationUserId;
@@ -433,11 +438,17 @@ final class GenerationRenderer {
             if (uuid == null) {
                 return "";
             }
-            if (isDeleted(uuid)) {
+            String locale = args != null && args.get("locale") != null ? args.get("locale") : renderLocale;
+            // A page link resolves in the language it links to; media and folders in the render language's view.
+            SnapshotAsset target = ("page".equals(kind) ? snapshot.in(locale) : snapshot).assetByUuid(uuid);
+            if (target != null && target.unreleased()) {
+                warnUnreleasedReference(warnings, kind, uid, pagePath, "page".equals(kind) ? locale : renderLocale);
+                return "";
+            }
+            if (target != null && target.deleted()) {
                 warnDeletedReference(warnings, kind, uid);
                 return "";
             }
-            String locale = args != null && args.get("locale") != null ? args.get("locale") : renderLocale;
             return switch (kind) {
                 case "media" -> relativeUrl(pagePath, resolveMedia(uuid, args));
                 case "page" -> paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(uuid, channel, locale));
@@ -450,10 +461,14 @@ final class GenerationRenderer {
     /**
      * The current page's URL in {@code target}, relative to this entry's own output path — what a
      * {@code CMS_LOCALES} language switcher links to (M24.3.1). Empty when the page has no URL in
-     * that language.
+     * that language — including when it isn't released there (M27.2.1).
      */
     private String localeHref(PlanEntry entry, SnapshotAsset page, String target) {
         if (paths == null || page == null) {
+            return "";
+        }
+        SnapshotAsset inTarget = snapshot.asset(page.uuid(), target);
+        if (inTarget == null || inTarget.deleted()) {
             return "";
         }
         try {
@@ -742,6 +757,9 @@ final class GenerationRenderer {
      * startNode} chain, not from a {@code PageReference} the folder itself owns) has no {@code
      * PageReference} identity to key a registry lookup on, so it keeps resolving directly via
      * {@link OutputPathResolver} — unchanged pre-`M8.2.3` behavior for that node kind.
+     *
+     * <p>A first assignment stores the path this build writes the page to (M27.2.1): the registry's own computation
+     * reads the drafts, which would hand out the draft path of a page moved but not released.
      */
     private String navHref(NavTreeNode node, String channel, String pagePath, String locale) {
         UUID resolvedPageUuid = node.resolvedPageUuid();
@@ -750,8 +768,13 @@ final class GenerationRenderer {
         }
         if (node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
             RevisionContext ctx = RevisionContext.of(snapshot.projectId(), generationUserId, "generation");
-            return relativeUrl(
-                    pagePath, urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.GENERATED, locale, ctx));
+            return relativeUrl(pagePath, urlRegistryService.resolve(
+                    node.assetUuid(),
+                    channel,
+                    UrlArea.GENERATED,
+                    locale,
+                    () -> paths == null ? null : paths.resolvePageUrl(resolvedPageUuid, channel, locale),
+                    ctx));
         }
         return paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(resolvedPageUuid, channel, locale));
     }
@@ -831,7 +854,7 @@ final class GenerationRenderer {
                 .meta("uid", TextNode.valueOf(emptyIfNull(template.uid())))
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
                 .pagination(pagination)
-                .urlResolver(urlResolver(channel, pagePath, warnings))
+                .urlResolver(urlResolver(channel, pagePath, warnings, locale))
                 .blockResolver(blockResolver(
                         pageValues, null, channel, activePageUuid, pagePath, pagination, deps, warnings, budget, locale))
                 .assetValueResolver(assetValues)
@@ -866,32 +889,51 @@ final class GenerationRenderer {
     }
 
     /**
-     * {@code type -> uid -> uuid} over the snapshot. Soft-deleted assets are indexed too, so a reference
-     * to a deleted target resolves (and renders empty with a warning, spec §16.4) instead of failing
-     * compilation as unknown; a live asset always wins a uid it shares with a deleted one.
+     * {@code type -> uid -> uuid} over every language view of the snapshot. Soft-deleted and unreleased assets are
+     * indexed too, so a reference to such a target resolves (and renders empty with a warning, spec §16.4, M27.2.1)
+     * instead of failing compilation as unknown; an asset present in some view always wins a uid it shares with an
+     * absent one. The index is the same for every language — templates compile once per build, whatever language
+     * compiles them first — so a uid released under an older name in one language and renamed in another resolves
+     * under both names.
      */
-    private static Map<AssetType, Map<String, UUID>> indexUids(Snapshot snapshot) {
+    private static Map<AssetType, Map<String, UUID>> indexUids(Snapshot root) {
         Map<AssetType, Map<String, UUID>> index = new java.util.HashMap<>();
-        for (SnapshotAsset asset : snapshot.byUuid().values()) {
-            if (asset.uid() == null) {
-                continue;
-            }
-            Map<String, UUID> byUid = index.computeIfAbsent(asset.type(), t -> new java.util.HashMap<>());
-            if (asset.deleted()) {
-                byUid.putIfAbsent(asset.uid(), asset.uuid());
-            } else {
-                UUID previous = byUid.get(asset.uid());
-                if (previous == null || snapshot.assetByUuid(previous).deleted()) {
-                    byUid.put(asset.uid(), asset.uuid());
+        Set<UUID> present = new java.util.HashSet<>();
+        for (Snapshot view : root.views()) {
+            for (SnapshotAsset asset : view.byUuid().values()) {
+                if (asset.uid() == null) {
+                    continue;
+                }
+                Map<String, UUID> byUid = index.computeIfAbsent(asset.type(), t -> new java.util.HashMap<>());
+                if (asset.deleted()) {
+                    byUid.putIfAbsent(asset.uid(), asset.uuid());
+                } else {
+                    UUID previous = byUid.get(asset.uid());
+                    if (previous == null || !present.contains(previous)) {
+                        byUid.put(asset.uid(), asset.uuid());
+                    }
+                    present.add(asset.uuid());
                 }
             }
         }
         return index;
     }
 
-    private boolean isDeleted(UUID uuid) {
-        SnapshotAsset asset = snapshot.assetByUuid(uuid);
-        return asset != null && asset.deleted();
+    /**
+     * One {@code SF-GEN-0221} per unreleased target per page and language (M27.2.1), naming the output that holds the
+     * reference, the language and the target.
+     */
+    private static void warnUnreleasedReference(
+            List<Diagnostic> warnings, String kind, String uid, String pagePath, String locale) {
+        Diagnostic warning = Diagnostic.warning(
+                GenerationDiagnosticCodes.GEN_UNRELEASED_REFERENCE,
+                "'" + emptyIfNull(pagePath) + "'" + (locale == null ? "" : " (" + locale + ")")
+                        + ": reference to unreleased " + kind + " '" + emptyIfNull(uid) + "' renders empty.",
+                0,
+                0);
+        if (!warnings.contains(warning)) {
+            warnings.add(warning);
+        }
     }
 
     /** One {@code SF-GEN-0220} per deleted target per page (the same reference may render many times). */

@@ -26,6 +26,8 @@ const ROOT_KIND_LABELS: Record<string, string> = {
   INCREMENTAL_FALLBACK_FULL: 'Full build (no usable previous build)',
   EXPLICIT_SCOPE: 'Explicitly selected',
   ASSET_CHANGED: 'Changed',
+  ASSET_RELEASED: 'Released',
+  ASSET_UNPUBLISHED: 'Unpublished',
   ASSET_DELETED: 'Deleted',
   NOT_IN_BASE_BUILD: 'Missing from the previous build',
 };
@@ -140,7 +142,18 @@ export function chainLines(reason: ReasonView | undefined, impact = false): Chai
   return lines;
 }
 
-/** The reason as one line of text: `about.html ← page_template:article ← media:hero · changed r1842`. */
+/** How a change-driven root kind reads in a chain; other kinds read as their badge. */
+const CHANGE_VERBS: Record<string, string> = {
+  ASSET_CHANGED: 'changed',
+  ASSET_DELETED: 'deleted',
+  ASSET_RELEASED: 'released in',
+  ASSET_UNPUBLISHED: 'unpublished in',
+};
+
+/**
+ * The reason as one line of text: `about.html ← page_template:article ← media:hero · changed r1842`, or for a
+ * release (M27.2.2) `en/about.html ← media:hero · released in r1902, en`.
+ */
 export function reasonText(entry: PlanEntryView, impact = false): string {
   const reason = entry.reason;
   const parts = [entry.outputPath ?? assetLabel(entry.assetType, entry.uid)];
@@ -151,11 +164,16 @@ export function reasonText(entry: PlanEntryView, impact = false): string {
     parts.push(line.asset);
   }
   let text = parts.join(' ← ');
-  if (reason?.rootKind === 'ASSET_CHANGED' || reason?.rootKind === 'ASSET_DELETED') {
+  const verb = reason?.rootKind ? CHANGE_VERBS[reason.rootKind] : undefined;
+  if (verb) {
     if (!impact) {
-      text += ` · ${reason.rootKind === 'ASSET_DELETED' ? 'deleted' : 'changed'}`;
-      if (reason.rootRevision != null) {
+      text += ` · ${verb}`;
+      if (reason?.rootRevision != null) {
         text += ` r${reason.rootRevision}`;
+      }
+      const release = reason?.rootKind === 'ASSET_RELEASED' || reason?.rootKind === 'ASSET_UNPUBLISHED';
+      if (release && entry.locale) {
+        text += `, ${entry.locale}`;
       }
     }
   } else {

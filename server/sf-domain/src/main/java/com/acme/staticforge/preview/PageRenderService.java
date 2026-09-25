@@ -14,7 +14,7 @@ import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.asset.media.TextMediaCompiler;
 import com.acme.staticforge.asset.media.TextMediaRenderer;
 import com.acme.staticforge.asset.media.TextMediaTypes;
-import com.acme.staticforge.asset.navigation.LiveNavigationLookup;
+import com.acme.staticforge.asset.navigation.NavigationLookup;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
@@ -31,6 +31,9 @@ import com.acme.staticforge.pagination.PaginationSource;
 import com.acme.staticforge.pagination.PaginationValue;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
+import com.acme.staticforge.release.ContentView;
+import com.acme.staticforge.release.ContentViews;
+import com.acme.staticforge.release.ReleaseProblems;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
@@ -82,7 +85,7 @@ public class PageRenderService {
     private final ObjectMapper objectMapper;
     private final PreviewTokenService previewTokenService;
     private final NavigationService navigationService;
-    private final LiveNavigationLookup navigationLookup;
+    private final ContentViews contentViews;
     private final UrlRegistryService urlRegistryService;
     private final CompiledTemplateCache compiledTemplates;
     private final BlobStore blobStore;
@@ -101,7 +104,7 @@ public class PageRenderService {
             ObjectMapper objectMapper,
             PreviewTokenService previewTokenService,
             NavigationService navigationService,
-            LiveNavigationLookup navigationLookup,
+            ContentViews contentViews,
             UrlRegistryService urlRegistryService,
             CompiledTemplateCache compiledTemplates,
             BlobStore blobStore,
@@ -115,7 +118,7 @@ public class PageRenderService {
         this.objectMapper = objectMapper;
         this.previewTokenService = previewTokenService;
         this.navigationService = navigationService;
-        this.navigationLookup = navigationLookup;
+        this.contentViews = contentViews;
         this.urlRegistryService = urlRegistryService;
         this.compiledTemplates = compiledTemplates;
         this.blobStore = blobStore;
@@ -158,7 +161,7 @@ public class PageRenderService {
     public PagePreview renderPage(
             long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
             Integer pageNumber) {
-        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber, null);
+        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber, null, ContentView.Kind.DRAFT);
     }
 
     /**
@@ -170,7 +173,22 @@ public class PageRenderService {
     public PagePreview renderPage(
             long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
             Integer pageNumber, String locale) {
-        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber, locale);
+        return renderPage(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber, locale, ContentView.Kind.DRAFT);
+    }
+
+    /**
+     * Renders a saved page in one language and one view (M27.2.3): {@link ContentView.Kind#DRAFT} shows the page's draft
+     * and the drafts of everything it reads (what an editor just saved), {@link ContentView.Kind#PUBLISHED} the release
+     * state the next build renders — the page's released version for the language, released navigation, values and
+     * records, and empty links to what isn't released. Both at {@code revision} when given.
+     *
+     * @throws SfException {@code 404 SF-DOM-0155} when the published view is asked for a page that exists but isn't
+     *     released in that language
+     */
+    public PagePreview renderPage(
+            long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
+            Integer pageNumber, String locale, ContentView.Kind view) {
+        return doRender(projectId, pageUuid, revision, channel, rewriteLinks, baseUrl, pageNumber, locale, view);
     }
 
     /**
@@ -182,8 +200,9 @@ public class PageRenderService {
         // Only the source matters for eligibility; size and sort don't change the count.
         PaginationValue value = new PaginationValue("count", kind, source, 1,
                 kind == PaginationValue.Kind.NAV ? "navigation" : "_displayName", false);
+        Reading reading = reading(projectId, null, ContentView.Kind.DRAFT, null);
         PaginationSource.Result result = PaginationSource.items(
-                projectId, value, navigationService, navigationLookup, assetValues(projectId, null)::datasetRecords);
+                projectId, value, navigationService, reading.navigation(), reading.values()::datasetRecords);
         return new PaginationCount(result.items().size(), result.warnings().size());
     }
 
@@ -200,7 +219,7 @@ public class PageRenderService {
     public String renderSection(long projectId, UUID sectionTemplateUuid, JsonNode sampleContent, String channel) {
         return withRenderLimitsAsProblem(() -> renderSectionTemplate(
                 projectId, projectKeyOf(projectId), sectionTemplateUuid, null, null, sampleContent, null, null, channel, false,
-                null, null, new RenderBudget(), new ArrayList<>(), null));
+                null, reading(projectId, null, ContentView.Kind.DRAFT, null), new RenderBudget(), new ArrayList<>(), null));
     }
 
     /**
@@ -216,7 +235,18 @@ public class PageRenderService {
      *     the limit's code when a render limit is hit
      */
     public String renderMedia(long projectId, AssetVersionView media, Long revision, String baseUrl) {
+        return renderMedia(projectId, media, revision, baseUrl, null, ContentView.Kind.DRAFT);
+    }
+
+    /**
+     * As {@link #renderMedia(long, AssetVersionView, Long, String)}, reading values, navigation and linked media in the
+     * view (and language) of the page preview that links the file (M27.2.3); {@code media} is the version that view
+     * renders.
+     */
+    public String renderMedia(
+            long projectId, AssetVersionView media, Long revision, String baseUrl, String locale, ContentView.Kind view) {
         String projectKey = projectKeyOf(projectId);
+        Reading reading = reading(projectId, revision, view, locale);
         JsonNode payload = media.payload();
         String mimeType = payload.path("mimeType").asText(null);
         String sha = payload.path("blobSha256").asText(null);
@@ -247,11 +277,11 @@ public class PageRenderService {
         return withRenderLimitsAsProblem(() -> textMediaRenderer.render(
                         compiled.template(),
                         target,
-                        urlResolver(projectKey, channel, true, baseUrl, revision),
-                        assetValues(projectId, revision),
+                        urlResolver(projectKey, channel, true, baseUrl, reading),
+                        reading.values(),
                         (navFolderUuid, args) -> {
                             JsonNode json = navigationTreeJson(
-                                    navFolderUuid, args, projectId, projectKey, null, channel, true, baseUrl);
+                                    navFolderUuid, args, projectId, projectKey, null, channel, true, baseUrl, reading);
                             return json == null ? null : json.path("children");
                         })
                 .output());
@@ -263,11 +293,18 @@ public class PageRenderService {
 
     private PagePreview doRender(
             long projectId, UUID pageUuid, Long revision, String channel, boolean rewriteLinks, String baseUrl,
-            Integer pageNumber, String locale) {
+            Integer pageNumber, String locale, ContentView.Kind kind) {
         String projectKey = projectKeyOf(projectId);
+        Reading reading = reading(projectId, revision, kind, locale);
 
         PageView page;
-        if (revision == null) {
+        if (kind == ContentView.Kind.PUBLISHED) {
+            page = reading.view().resolve(pageUuid)
+                    .map(found -> PageView.from(found.view()))
+                    .orElseThrow(() -> assetRepository.findByProjectIdAndUuid(projectId, pageUuid).isPresent()
+                            ? ReleaseProblems.notPublished()
+                            : new SfException(ProblemFactory.notFound("Page not found.")));
+        } else if (revision == null) {
             page = PageView.from(assetService.requireCurrent(projectId, pageUuid));
         } else {
             AssetVersionView view = assetService
@@ -277,7 +314,7 @@ public class PageRenderService {
         }
         PageView view = page;
         return withRenderLimits(
-                () -> renderPage(projectId, projectKey, view, channel, rewriteLinks, baseUrl, revision, pageNumber, locale));
+                () -> renderPage(projectId, projectKey, view, channel, rewriteLinks, baseUrl, reading, pageNumber, locale));
     }
 
     /**
@@ -312,11 +349,11 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl,
-            Long revision,
+            Reading reading,
             Integer requestedPage,
             String locale) {
-        AssetVersionView pageTemplate = templateAt(projectId, page.pageTemplateUuid(), revision);
-        CompiledTemplate compiled = compilePageTemplateChannel(pageTemplate, channel, projectId, revision);
+        AssetVersionView pageTemplate = templateAt(projectId, page.pageTemplateUuid(), reading.revision());
+        CompiledTemplate compiled = compilePageTemplateChannel(pageTemplate, channel, projectId, reading.revision());
         if (compiled == null) {
             return new PagePreview("", 1, 1, List.of()); // missing channel template degrades gracefully to an empty body
         }
@@ -326,13 +363,13 @@ public class PageRenderService {
         // The render warnings of the page and of every section rendered inside it (a section's own render result
         // would otherwise drop them).
         List<Diagnostic> warnings = new ArrayList<>();
-        UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision);
-        AssetValueResolver assetValues = assetValues(projectId, revision);
+        UrlResolver urlResolver = urlResolver(projectKey, channel, rewriteLinks, baseUrl, reading);
+        AssetValueResolver assetValues = reading.values();
         Pagination pagination = pagination(
-                projectId, projectKey, page, channel, rewriteLinks, baseUrl, revision, requestedPage, urlResolver, assetValues);
+                projectId, projectKey, page, channel, rewriteLinks, baseUrl, reading, requestedPage, urlResolver, assetValues);
         PageView paginated = page.withPagination(pagination.scope());
         BlockResolver blocks = blockResolver(
-                projectId, projectKey, paginated, channel, rewriteLinks, baseUrl, revision, budget, warnings, locale);
+                projectId, projectKey, paginated, channel, rewriteLinks, baseUrl, reading, budget, warnings, locale);
 
         RenderContext.Builder builder = RenderContext.builder()
                 .channel(channel)
@@ -383,11 +420,11 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl,
-            Long revision,
+            Reading reading,
             Integer requestedPage,
             UrlResolver urlResolver,
             AssetValueResolver assetValues) {
-        PaginationValue value = templateHierarchies.at(projectId, revision)
+        PaginationValue value = templateHierarchies.at(projectId, reading.revision())
                 .effectiveDefinition(page.pageTemplateUuid())
                 .map(EffectiveDefinition::definition)
                 .flatMap(definition -> PaginationValue.of(definition, page.content()))
@@ -396,13 +433,14 @@ public class PageRenderService {
             return new Pagination(null, 1, 1);
         }
         List<PaginationItem> items = PaginationSource
-                .items(projectId, value, navigationService, navigationLookup, assetValues::datasetRecords)
+                .items(projectId, value, navigationService, reading.navigation(), assetValues::datasetRecords)
                 .items();
         int total = PaginationSource.totalPages(items.size(), value.pageSize());
         int number = Math.max(1, Math.min(requestedPage == null ? 1 : requestedPage, total));
         String shareBase = rewriteLinks
                 ? (baseUrl == null ? "" : baseUrl) + "/projects/" + projectKey + "/preview/share?t="
-                        + previewTokenService.issueShareToken(page.uuid(), revision, channel, projectKey)
+                        + previewTokenService.issueShareToken(
+                                page.uuid(), reading.revision(), channel, projectKey, reading.locale(), reading.view().kind())
                 : null;
         JsonNode scope = PaginationScope.build(
                 items,
@@ -503,7 +541,7 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl,
-            Long revision,
+            Reading reading,
             RenderBudget budget,
             List<Diagnostic> warnings,
             String locale) {
@@ -518,7 +556,7 @@ public class PageRenderService {
                 for (JsonNode section : sections) {
                     out.append(renderSectionInstance(
                             projectId, projectKey, page.content(), page.pagination(), section, channel, rewriteLinks, baseUrl,
-                            revision, budget, warnings, locale));
+                            reading, budget, warnings, locale));
                 }
                 return out.toString();
             }
@@ -532,7 +570,7 @@ public class PageRenderService {
                 for (JsonNode card : cards) {
                     out.append(renderSectionInstance(
                             projectId, projectKey, page.content(), page.pagination(), card, channel, rewriteLinks, baseUrl,
-                            revision, budget, warnings, locale));
+                            reading, budget, warnings, locale));
                 }
                 return out.toString();
             }
@@ -545,18 +583,18 @@ public class PageRenderService {
                 }
                 return renderSectionTemplate(
                         projectId, projectKey, uuid, null, null, objectMapper.createObjectNode(), null, page.pagination(), channel,
-                        rewriteLinks, baseUrl, revision, budget, warnings, locale);
+                        rewriteLinks, baseUrl, reading, budget, warnings, locale);
             }
 
             @Override
             public CompiledTemplate recordTemplate(UUID datasetUuid) {
-                return compileRecordTemplate(projectId, datasetUuid, channel, revision);
+                return compileRecordTemplate(projectId, datasetUuid, channel, reading.revision());
             }
 
             @Override
             public String renderNavigation(UUID navFolderUuid, Map<String, String> args) {
                 JsonNode json = PageRenderService.this.navigationTreeJson(
-                        navFolderUuid, args, projectId, projectKey, page.uuid(), channel, rewriteLinks, baseUrl);
+                        navFolderUuid, args, projectId, projectKey, page.uuid(), channel, rewriteLinks, baseUrl, reading);
                 return json == null ? "" : NavigationHtmlRenderer.renderRoot(json);
             }
 
@@ -568,7 +606,7 @@ public class PageRenderService {
             @Override
             public JsonNode resolveNavigationChildren(UUID navFolderUuid, Map<String, String> args) {
                 JsonNode json = PageRenderService.this.navigationTreeJson(
-                        navFolderUuid, args, projectId, projectKey, page.uuid(), channel, rewriteLinks, baseUrl);
+                        navFolderUuid, args, projectId, projectKey, page.uuid(), channel, rewriteLinks, baseUrl, reading);
                 return json == null ? null : json.path("children");
             }
         };
@@ -594,7 +632,8 @@ public class PageRenderService {
             UUID activePageUuid,
             String defaultChannel,
             boolean rewriteLinks,
-            String baseUrl) {
+            String baseUrl,
+            Reading reading) {
         if (navFolderUuid == null) {
             return null;
         }
@@ -604,7 +643,7 @@ public class PageRenderService {
         // Diagnostics (cycle/depth-cap truncation) aren't surfaced by this preview path today —
         // renderPage already discards RenderResult.warnings() the same way, so this keeps parity
         // rather than introducing a new reporting channel just for navigation.
-        NavTreeNode tree = navigationService.tree(projectId, navFolderUuid, depth, navigationLookup, new ArrayList<>());
+        NavTreeNode tree = navigationService.tree(projectId, navFolderUuid, depth, reading.navigation(), new ArrayList<>());
         if (tree == null) {
             return null;
         }
@@ -624,7 +663,7 @@ public class PageRenderService {
         }
 
         return NavigationTreeJson.toJson(
-                tree, activePageUuid, node -> navHref(node, projectId, projectKey, navChannel, rewriteLinks, baseUrl));
+                tree, activePageUuid, node -> navHref(node, projectId, projectKey, navChannel, rewriteLinks, baseUrl, reading));
     }
 
     /**
@@ -645,7 +684,13 @@ public class PageRenderService {
      * UrlResolver} — unchanged pre-`M8.2.3` behavior for that node kind.
      */
     private String navHref(
-            NavTreeNode node, long projectId, String projectKey, String channel, boolean rewriteLinks, String baseUrl) {
+            NavTreeNode node,
+            long projectId,
+            String projectKey,
+            String channel,
+            boolean rewriteLinks,
+            String baseUrl,
+            Reading reading) {
         UUID resolvedPageUuid = node.resolvedPageUuid();
         if (resolvedPageUuid == null) {
             return "";
@@ -654,8 +699,7 @@ public class PageRenderService {
             RevisionContext ctx = RevisionContext.of(projectId, null, "preview");
             return urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.PREVIEW, ctx);
         }
-        // Page links are never revision-pinned, so the media revision doesn't matter here.
-        return urlResolver(projectKey, channel, rewriteLinks, baseUrl, null).resolve("page", null, resolvedPageUuid, Map.of());
+        return urlResolver(projectKey, channel, rewriteLinks, baseUrl, reading).resolve("page", null, resolvedPageUuid, Map.of());
     }
 
     /** {@code depth} named arg → int, {@code -1} (unlimited, still hard-capped) when absent/invalid. */
@@ -680,7 +724,7 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl,
-            Long revision,
+            Reading reading,
             RenderBudget budget,
             List<Diagnostic> warnings,
             String locale) {
@@ -693,7 +737,7 @@ public class PageRenderService {
         String instanceId = section.path("instanceId").asText();
         return renderSectionTemplate(
                 projectId, projectKey, sectionTemplateUuid, null, instanceId,
-                content, pageContent, pagination, channel, rewriteLinks, baseUrl, revision, budget, warnings, locale);
+                content, pageContent, pagination, channel, rewriteLinks, baseUrl, reading, budget, warnings, locale);
     }
 
     private String renderSectionTemplate(
@@ -708,11 +752,11 @@ public class PageRenderService {
             String channel,
             boolean rewriteLinks,
             String baseUrl,
-            Long revision,
+            Reading reading,
             RenderBudget budget,
             List<Diagnostic> warnings,
             String locale) {
-        AssetVersionView template = templateAt(projectId, sectionTemplateUuid, revision);
+        AssetVersionView template = templateAt(projectId, sectionTemplateUuid, reading.revision());
         CompiledTemplate compiled = compileChannel(template, channel, projectId);
         if (compiled == null) {
             return ""; // section template has no channel template
@@ -728,11 +772,11 @@ public class PageRenderService {
                 .meta("uid", TextNode.valueOf(uid))
                 .meta("uuid", TextNode.valueOf(sectionTemplateUuid.toString()))
                 .pagination(pagination)
-                .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl, revision))
+                .urlResolver(urlResolver(projectKey, channel, rewriteLinks, baseUrl, reading))
                 .blockResolver(blockResolver(
                         projectId, projectKey, PageView.contextOnly(pageValues, pagination), channel, rewriteLinks, baseUrl,
-                        revision, budget, warnings, locale))
-                .assetValueResolver(assetValues(projectId, revision))
+                        reading, budget, warnings, locale))
+                .assetValueResolver(reading.values())
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
             builder.meta("instanceId", TextNode.valueOf(instanceId));
@@ -789,9 +833,22 @@ public class PageRenderService {
     // Resolvers
     // ------------------------------------------------------------------
 
-    /** Cross-asset values at the preview's revision (current when {@code revision} is {@code null}). */
-    private AssetValueResolver assetValues(long projectId, Long revision) {
-        return new LiveAssetValueResolver(assetService, assetRepository, assetVersionRepository, projectId, revision);
+    /**
+     * What one preview render reads (M27.2.3): its {@link ContentView} — drafts or release state, at the revision, in
+     * the language — and the navigation and values over it, so the page, its navigation and its values always come
+     * from the same state.
+     */
+    private record Reading(ContentView view, String locale, NavigationLookup navigation, AssetValueResolver values) {
+
+        /** The time-travel revision templates are read at; {@code null} for the current state. */
+        Long revision() {
+            return view.pinnedRevision();
+        }
+    }
+
+    private Reading reading(long projectId, Long revision, ContentView.Kind kind, String locale) {
+        ContentView view = contentViews.open(projectId, revision, kind == null ? ContentView.Kind.DRAFT : kind, locale);
+        return new Reading(view, locale, new ContentViewNavigationLookup(view), new LiveAssetValueResolver(view, assetRepository));
     }
 
     private ReferenceResolver referenceResolver(long projectId) {
@@ -836,25 +893,37 @@ public class PageRenderService {
      * @param revision the time-travel revision media share links are pinned to (M18.3.2), so a
      *     processed file renders with that revision's values; {@code null} for the current state
      */
-    private UrlResolver urlResolver(String projectKey, String channel, boolean rewriteLinks, String baseUrl, Long revision) {
+    private UrlResolver urlResolver(String projectKey, String channel, boolean rewriteLinks, String baseUrl, Reading reading) {
         if (!rewriteLinks) {
             return (kind, uid, uuid, args) -> uid != null && !uid.isBlank() ? uid : (uuid == null ? "" : uuid.toString());
         }
         String base = baseUrl == null ? "" : baseUrl;
+        ContentView view = reading.view();
         return (kind, uid, uuid, args) -> {
             if (uuid == null) {
+                return "";
+            }
+            // The published view shows the site as the next build renders it: a link to a page or media file that
+            // isn't released in the language renders empty there too (M27.2.3).
+            if (view.kind() == ContentView.Kind.PUBLISHED
+                    && ("page".equals(kind) || "media".equals(kind))
+                    && view.resolve(uuid).isEmpty()) {
                 return "";
             }
             if ("media".equals(kind)) {
                 // Signed, unauthenticated route (mirrors the page branch below) — the plain
                 // `/media/{uuid}/binary` route is Bearer-only, and this HTML's `<img src>`/link
-                // is fetched by the browser directly, without the app's session.
+                // is fetched by the browser directly, without the app's session. The token carries the preview's
+                // view, so a published preview shows the released file.
                 String variant = args == null ? null : args.get("variant");
-                String mediaToken = previewTokenService.issueMediaShareToken(uuid, revision, projectKey);
+                String mediaToken = previewTokenService.issueMediaShareToken(
+                        uuid, reading.revision(), projectKey, reading.locale(), view.kind());
                 String query = variant == null || variant.isBlank() ? "" : "&variant=" + variant;
                 return base + "/projects/" + projectKey + "/media/" + uuid + "/share?t=" + mediaToken + query;
             }
-            String token = previewTokenService.issueShareToken(uuid, null, channel, projectKey);
+            // Page links follow the current state, in the preview's view and language, so navigating inside the
+            // frame stays in the same view.
+            String token = previewTokenService.issueShareToken(uuid, null, channel, projectKey, reading.locale(), view.kind());
             return base + "/projects/" + projectKey + "/preview/share?t=" + token;
         };
     }

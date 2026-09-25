@@ -5,8 +5,8 @@ import com.acme.staticforge.common.SfException;
 import java.util.List;
 import java.util.Map;
 
-/** The problem details of release requests (M27.1.2, Appendix B {@code SF-DOM-0150}–{@code 0154}). */
-final class ReleaseProblems {
+/** The problem details of release requests and views (M27.1.2, M27.2.3, Appendix B {@code SF-DOM-0150}–{@code 0155}). */
+public final class ReleaseProblems {
 
     private ReleaseProblems() {}
 
@@ -28,6 +28,17 @@ final class ReleaseProblems {
 
     static SfException foreignVersion(String detail) {
         return problem("SF-DOM-0154", detail, null, null);
+    }
+
+    /** {@code 404 SF-DOM-0155}: the published view of a page that exists but isn't released in the language. */
+    public static SfException notPublished() {
+        return new SfException(Problem.builder()
+                .type("https://cms.example.com/problems/sf-dom-0155")
+                .title("Not Published")
+                .status(404)
+                .detail("Not published in this locale.")
+                .property("code", "SF-DOM-0155")
+                .build());
     }
 
     private static SfException problem(String code, String detail, String name, Object value) {

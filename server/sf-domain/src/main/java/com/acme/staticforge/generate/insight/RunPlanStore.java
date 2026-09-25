@@ -119,8 +119,8 @@ public class RunPlanStore {
                 """
                 INSERT INTO generation_run_plan_entry
                     (run_id, asset_uuid, asset_type, uid, display_name, channel, output_path, page_number, root_kind,
-                     node_asset_uuid, cause_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     node_asset_uuid, cause_count, locale)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 entries,
                 BATCH,
@@ -143,6 +143,7 @@ public class RunPlanStore {
                             ? (reason.steps().isEmpty() ? reason.rootUuid() : reason.steps().get(0).assetUuid())
                             : null);
                     ps.setInt(11, reason.causeCount());
+                    ps.setString(12, entry.locale());
                 });
     }
 
@@ -200,7 +201,7 @@ public class RunPlanStore {
         }
         List<EntryRow> rows = jdbc.query(
                 "SELECT asset_uuid, asset_type, uid, display_name, channel, output_path, page_number, root_kind,"
-                        + " node_asset_uuid, cause_count FROM generation_run_plan_entry" + where + " ORDER BY id" + paging,
+                        + " node_asset_uuid, cause_count, locale FROM generation_run_plan_entry" + where + " ORDER BY id" + paging,
                 (rs, i) -> entryRow(rs),
                 pageArgs.toArray());
 
@@ -231,7 +232,8 @@ public class RunPlanStore {
                 rs.getString("channel"),
                 rs.getString("output_path"),
                 pageNumber,
-                null);
+                null,
+                rs.getString("locale"));
         return new EntryRow(entry, rs.getString("root_kind"), rs.getObject("node_asset_uuid", UUID.class), rs.getInt("cause_count"));
     }
 
@@ -304,7 +306,7 @@ public class RunPlanStore {
         }
         return new PlanEntryRecord(
                 entry.assetUuid(), entry.assetType(), entry.uid(), entry.displayName(), entry.channel(),
-                entry.outputPath(), entry.pageNumber(), reason);
+                entry.outputPath(), entry.pageNumber(), reason, entry.locale());
     }
 
     // ------------------------------------------------------------------

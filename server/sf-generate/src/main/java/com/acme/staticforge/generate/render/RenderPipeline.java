@@ -39,6 +39,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -97,17 +98,18 @@ public class RenderPipeline {
      */
     public List<Diagnostic> validate(Snapshot snapshot, BuildPlan plan) {
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, null, "", channelService, null, null, compiledTemplates.buildMemo(snapshot));
+                snapshot, null, "", channelService, null, null, compiledTemplates.buildMemo(snapshot.root()));
         Set<String> seen = new HashSet<>();
         List<Diagnostic> errors = new ArrayList<>();
         for (PlanEntry entry : plan.entries()) {
-            SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
+            Snapshot view = snapshot.in(entry.locale());
+            SnapshotAsset page = view.assetByUuid(entry.pageUuid());
             if (page == null) {
                 errors.add(Diagnostic.error(
                         "SF-GEN-0202", "Page missing from snapshot: " + entry.pageUuid(), 0, 0));
                 continue;
             }
-            SnapshotAsset template = GenerationRenderer.templateOf(snapshot, page);
+            SnapshotAsset template = GenerationRenderer.templateOf(view, page);
             if (template == null) {
                 continue; // renders empty; not a validation error
             }
@@ -124,20 +126,23 @@ public class RenderPipeline {
      * Completeness validation per planned page (spec §10.5, VALIDATE): validates each page's
      * content, bodies and sections against its snapshot templates and returns one
      * {@code SF-GEN-0120} per page with ERROR-severity completeness findings (listing their paths),
-     * keyed by page UUID. Those pages are not rendered; the rest of the plan still is. Structural
-     * findings are the save path's concern ({@code PageContentValidation}) and don't block here.
+     * keyed by page UUID and language: each language renders its own version of the page (M27.2.1), so a German
+     * version gone incomplete under a changed template holds back only the German outputs. Those outputs are not
+     * rendered; the rest of the plan still is. Structural findings are the save path's concern
+     * ({@code PageContentValidation}) and don't block here.
      */
-    public Map<UUID, Diagnostic> incompletePages(Snapshot snapshot, BuildPlan plan) {
-        TemplateCompileMemo memo = compiledTemplates.buildMemo(snapshot);
+    private Map<PageLocale, Diagnostic> incompletePages(Snapshot snapshot, BuildPlan plan) {
+        TemplateCompileMemo memo = compiledTemplates.buildMemo(snapshot.root());
         SectionTemplateLookup sections = snapshotSectionTemplates(snapshot, memo);
-        Map<UUID, Diagnostic> incomplete = new LinkedHashMap<>();
-        Set<UUID> seen = new HashSet<>();
+        Map<PageLocale, Diagnostic> incomplete = new LinkedHashMap<>();
+        Set<PageLocale> seen = new HashSet<>();
         for (PlanEntry entry : plan.entries()) {
-            if (!seen.add(entry.pageUuid())) {
+            if (!seen.add(PageLocale.of(entry))) {
                 continue;
             }
-            SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
-            SnapshotAsset template = page == null ? null : GenerationRenderer.templateOf(snapshot, page);
+            Snapshot view = snapshot.in(entry.locale());
+            SnapshotAsset page = view.assetByUuid(entry.pageUuid());
+            SnapshotAsset template = page == null ? null : GenerationRenderer.templateOf(view, page);
             if (template == null) {
                 continue;
             }
@@ -150,14 +155,23 @@ public class RenderPipeline {
                 String findings = blocking.stream()
                         .map(issue -> issue.path() + " (" + issue.message() + ")")
                         .collect(Collectors.joining("; "));
-                incomplete.put(entry.pageUuid(), Diagnostic.error(
+                incomplete.put(PageLocale.of(entry), Diagnostic.error(
                         GenerationDiagnosticCodes.GEN_CONTENT_INCOMPLETE,
-                        "Content incomplete for page '" + (page.uid() != null ? page.uid() : page.uuid()) + "': " + findings,
+                        "Content incomplete for page '" + (page.uid() != null ? page.uid() : page.uuid()) + "'"
+                                + (entry.locale() == null ? "" : " (" + entry.locale() + ")") + ": " + findings,
                         0,
                         0));
             }
         }
         return incomplete;
+    }
+
+    /** One language of a page — what completeness holds back (M27.2.1); {@code locale} is null without locales. */
+    private record PageLocale(UUID page, String locale) {
+
+        static PageLocale of(PlanEntry entry) {
+            return new PageLocale(entry.pageUuid(), entry.locale());
+        }
     }
 
     /** Section templates as of the snapshot; definitions come from the build's compile memo. */
@@ -219,16 +233,13 @@ public class RenderPipeline {
         }
 
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
-        GenerationRenderer renderer =
-                new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId,
-                                compiledTemplates.buildMemo(snapshot))
-                        .withLocales(com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales()));
+        Renderers renderers = new Renderers(snapshot, paths, projectKey, userId);
 
-        Map<UUID, Diagnostic> incomplete = incompletePages(snapshot, plan);
+        Map<PageLocale, Diagnostic> incomplete = incompletePages(snapshot, plan);
         BuildPlan publishable = incomplete.isEmpty()
                 ? plan
-                : plan.withEntries(plan.entries().stream().filter(e -> !incomplete.containsKey(e.pageUuid())).toList());
-        RenderBatch batch = renderParallel(renderer, publishable, snapshot);
+                : plan.withEntries(plan.entries().stream().filter(e -> !incomplete.containsKey(PageLocale.of(e))).toList());
+        RenderBatch batch = renderParallel(renderers, publishable, snapshot);
 
         List<RenderedFile> files = new ArrayList<>(batch.files);
         files.sort(Comparator.comparing(RenderedFile::outputPath));
@@ -251,11 +262,11 @@ public class RenderPipeline {
         Set<String> seen = new HashSet<>();
         List<Diagnostic> errors = new ArrayList<>();
         for (PlanEntry entry : plan.entries()) {
-            String key = entry.pageUuid() + ":" + entry.channel();
-            if (!seen.add(key)) {
+            // Each language renders its own version of the page (M27.2.1), so one language's expression may differ.
+            String expression = paths.effectiveExpression(entry.pageUuid(), entry.channel(), entry.locale());
+            if (!seen.add(entry.pageUuid() + ":" + entry.channel() + ":" + expression)) {
                 continue;
             }
-            String expression = paths.effectiveExpression(entry.pageUuid(), entry.channel());
             if (com.acme.staticforge.channel.OutputPathExpander.isLocaleDistinct(expression)) {
                 continue;
             }
@@ -278,18 +289,43 @@ public class RenderPipeline {
      */
     public MediaRenderSession mediaSession(Snapshot snapshot, OutputPathResolver paths, Long userId, String channel) {
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
-        return new MediaRenderSession(
-                new GenerationRenderer(snapshot, paths, projectKey, channelService, urlRegistryService, userId,
-                                compiledTemplates.buildMemo(snapshot))
-                        .withLocales(com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales())),
-                channel);
+        return new MediaRenderSession(new Renderers(snapshot, paths, projectKey, userId).of(null), channel);
+    }
+
+    /**
+     * The renderers of one build, one per language view (M27.2.1): a page renders against its language's view of the
+     * snapshot, so its references, navigation and values resolve to what that language has released. Every renderer
+     * shares the build's compile memo. Created on first use, from the render threads.
+     */
+    private final class Renderers {
+
+        private final Snapshot snapshot;
+        private final OutputPathResolver paths;
+        private final String projectKey;
+        private final Long userId;
+        private final Map<Snapshot, GenerationRenderer> byView = new ConcurrentHashMap<>();
+
+        Renderers(Snapshot snapshot, OutputPathResolver paths, String projectKey, Long userId) {
+            this.snapshot = snapshot;
+            this.paths = paths;
+            this.projectKey = projectKey;
+            this.userId = userId;
+        }
+
+        /** The renderer of {@code locale}'s view; the root view's for {@code null}. */
+        GenerationRenderer of(String locale) {
+            return byView.computeIfAbsent(snapshot.in(locale), view -> new GenerationRenderer(
+                            view, paths, projectKey, channelService, urlRegistryService, userId,
+                            compiledTemplates.buildMemo(snapshot.root()))
+                    .withLocales(com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales())));
+        }
     }
 
     // ------------------------------------------------------------------
     // Parallel render
     // ------------------------------------------------------------------
 
-    private RenderBatch renderParallel(GenerationRenderer renderer, BuildPlan plan, Snapshot snapshot) {
+    private RenderBatch renderParallel(Renderers renderers, BuildPlan plan, Snapshot snapshot) {
         int parallelism = Math.max(1, properties.getParallelism());
         Duration timeout = properties.renderTimeoutDuration();
         List<PlanEntry> entries = plan.entries();
@@ -306,7 +342,7 @@ public class RenderPipeline {
                 futures.add(executor.submit(() -> {
                     semaphore.acquire();
                     try {
-                        return renderEntry(renderer, snapshot, entry);
+                        return renderEntry(renderers.of(entry.locale()), snapshot.in(entry.locale()), entry);
                     } finally {
                         semaphore.release();
                     }

@@ -43,7 +43,7 @@ public final class PlanInsight {
     public static List<PlanEntryRecord> entries(Snapshot snapshot, BuildPlan plan) {
         List<PlanEntryRecord> entries = new ArrayList<>(plan.entries().size() + plan.processedMedia().size());
         for (PlanEntry entry : plan.entries()) {
-            SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
+            SnapshotAsset page = snapshot.asset(entry.pageUuid(), entry.locale());
             entries.add(new PlanEntryRecord(
                     page.uuid(),
                     page.type().name(),
@@ -52,7 +52,8 @@ public final class PlanInsight {
                     entry.channel(),
                     entry.outputPath(),
                     entry.pagination() == null ? null : entry.pageNumber(),
-                    plan.reasonFor(page.uuid())));
+                    plan.reasonFor(page.uuid()),
+                    entry.locale()));
         }
         List<PlanEntryRecord> media = new ArrayList<>();
         for (UUID uuid : plan.processedMedia()) {

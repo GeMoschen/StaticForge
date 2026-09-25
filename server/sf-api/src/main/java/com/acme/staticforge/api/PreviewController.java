@@ -9,6 +9,12 @@ import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.release.ContentView;
+import com.acme.staticforge.release.ContentViews;
+import com.acme.staticforge.release.LocaleRelease;
+import com.acme.staticforge.release.ReleaseLocales;
+import com.acme.staticforge.release.ReleaseStatusService;
+import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -44,8 +50,16 @@ public class PreviewController {
     private final ProjectService projectService;
     private final PageRenderService pageRenderService;
     private final PreviewTokenService previewTokenService;
+    private final ContentViews contentViews;
+    private final ReleaseStatusService releaseStatus;
 
     private static final SecureRandom NONCE = new SecureRandom();
+
+    /** Which view a preview rendered: {@code draft} or {@code published} (M27.2.3). */
+    static final String VIEW_HEADER = "X-SF-View";
+
+    /** The draft view's page release status in the rendered language (M27.2.3), e.g. {@code CHANGED}. */
+    static final String RELEASE_STATUS_HEADER = "X-SF-Release-Status";
 
     /** The page count of the previewed page ({@code 1} when not paginated). */
     static final String TOTAL_PAGES_HEADER = "X-SF-Total-Pages";
@@ -54,10 +68,16 @@ public class PreviewController {
     static final String PAGE_HEADER = "X-SF-Page";
 
     public PreviewController(
-            ProjectService projectService, PageRenderService pageRenderService, PreviewTokenService previewTokenService) {
+            ProjectService projectService,
+            PageRenderService pageRenderService,
+            PreviewTokenService previewTokenService,
+            ContentViews contentViews,
+            ReleaseStatusService releaseStatus) {
         this.projectService = projectService;
         this.pageRenderService = pageRenderService;
         this.previewTokenService = previewTokenService;
+        this.contentViews = contentViews;
+        this.releaseStatus = releaseStatus;
     }
 
     /**
@@ -65,6 +85,11 @@ public class PreviewController {
      * or {@code ?revision=R} for a past one. Content/bodies/meta are always resolved from
      * the database via {@code uuid} — the client never sends rendered data, only which
      * page (and optionally which revision) to render.
+     *
+     * <p>{@code ?view=draft} (default) renders the page's draft and the drafts of everything it reads;
+     * {@code ?view=published} the release state the next build renders (M27.2.3) — {@code 404 SF-DOM-0155} for a page
+     * not released in the language. {@code X-SF-View} names the view, and a draft preview carries the page's release
+     * status for the language in {@code X-SF-Release-Status}.
      */
     @GetMapping("/pages/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
@@ -76,10 +101,41 @@ public class PreviewController {
             @RequestParam(defaultValue = "true") boolean rewriteLinks,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) String locale,
+            @RequestParam(defaultValue = "draft") String view,
             HttpServletRequest request) {
+        long projectId = projectId(projectKey);
+        ContentView.Kind kind = viewOf(view);
         PagePreview preview = pageRenderService.renderPage(
-                projectId(projectKey), uuid, revision, channel, rewriteLinks, apiBase(request), page, locale);
-        return respond(preview, channel);
+                projectId, uuid, revision, channel, rewriteLinks, apiBase(request), page, locale, kind);
+        ResponseEntity<String> response = respond(preview, channel);
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(response.getHeaders());
+        headers.set(VIEW_HEADER, kind.wireName());
+        if (kind == ContentView.Kind.DRAFT) {
+            String status = releaseStatusOf(projectId, uuid, locale);
+            if (status != null) {
+                headers.set(RELEASE_STATUS_HEADER, status);
+            }
+        }
+        return ResponseEntity.status(response.getStatusCode()).headers(headers).body(response.getBody());
+    }
+
+    /** The page's release status in {@code locale}'s key; {@code null} for an asset without release state. */
+    private String releaseStatusOf(long projectId, UUID uuid, String locale) {
+        Map<String, LocaleRelease> statuses = releaseStatus.ofAsset(projectId, uuid);
+        LocaleRelease release = statuses.get(contentViews.localeKey(projectId, locale));
+        if (release == null) {
+            release = statuses.get(ReleaseLocales.ALL);
+        }
+        return release == null ? null : release.status().name();
+    }
+
+    private static ContentView.Kind viewOf(String view) {
+        try {
+            return ContentView.Kind.parse(view);
+        } catch (IllegalArgumentException e) {
+            throw new SfException(ProblemFactory.badRequest("view must be 'draft' or 'published'."));
+        }
     }
 
     /** Creates a signed, expiring share link for a saved page (spec §19.3); none for an archived project (M26). */
@@ -90,9 +146,11 @@ public class PreviewController {
             @PathVariable UUID uuid,
             @RequestParam(required = false) Long revision,
             @RequestParam(defaultValue = "html") String channel,
-            @RequestParam(required = false) String locale) {
+            @RequestParam(required = false) String locale,
+            @RequestParam(defaultValue = "draft") String view) {
         projectService.requireWritable(projectKey);
-        String token = previewTokenService.issueShareToken(uuid, revision, channel, projectKey, locale);
+        // The link keeps the view it was created in (M27.2.3): a published link keeps showing the released state.
+        String token = previewTokenService.issueShareToken(uuid, revision, channel, projectKey, locale, viewOf(view));
         String url = "/api/v1/projects/" + projectKey + "/preview/share?t=" + token;
         return new PreviewShareLink(token, url);
     }
@@ -120,7 +178,7 @@ public class PreviewController {
         String resolvedChannel = target.channel() != null ? target.channel() : channel;
         PagePreview preview = pageRenderService.renderPage(
                 sharedProjectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request),
-                page, target.locale());
+                page, target.locale(), target.view());
         return respond(preview, resolvedChannel);
     }
 

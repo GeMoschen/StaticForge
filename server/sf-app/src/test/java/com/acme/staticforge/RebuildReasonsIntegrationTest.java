@@ -66,13 +66,14 @@ class RebuildReasonsIntegrationTest {
     @Autowired PageReferenceService pageReferenceService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
 
     private BuildInsightFixtures fixtures;
 
     @BeforeEach
     void setUp() {
         fixtures = new BuildInsightFixtures(userService, projectService, assetService, assetRepository, templateService,
-                mediaService, pageReferenceService, targetRepository, generationService, outputRoot);
+                mediaService, pageReferenceService, targetRepository, generationService, releaseFixtures, outputRoot);
     }
 
     private BuildPlan plan(Fixture fx, GenerationTarget target, GenerationMode mode) {
@@ -80,6 +81,7 @@ class RebuildReasonsIntegrationTest {
     }
 
     private BuildPlan plan(Fixture fx, GenerationRequest request) {
+        releaseFixtures.releaseAll(fx.project().getKey());
         return generationService.planFor(fx.project().getKey(), request).plan();
     }
 
@@ -144,9 +146,10 @@ class RebuildReasonsIntegrationTest {
         assertThat(plannedPages(plan)).containsExactlyInAnyOrder(c.home().uuid(), c.about().uuid());
 
         RebuildReason about = plan.reasonFor(c.about().uuid());
-        assertThat(about.rootKind()).isEqualTo(RebuildRootKind.ASSET_CHANGED);
+        // Editorial content changes the site when it is released (M27.2.2).
+        assertThat(about.rootKind()).isEqualTo(RebuildRootKind.ASSET_RELEASED);
         assertThat(about.rootUuid()).isEqualTo(c.hero().uuid());
-        assertThat(about.rootRevision()).isEqualTo(hero.validFromRevision());
+        assertThat(about.rootRevision()).as("the release right after the rename").isEqualTo(hero.validFromRevision() + 1);
         assertThat(about.causeCount()).isEqualTo(1);
         assertThat(about.steps()).singleElement().isEqualTo(new RebuildStep(
                 c.about().uuid(), "PAGE", "about", RebuildEdgeKind.REFERENCE, "MEDIA_REF", "content.hero"));
@@ -171,8 +174,9 @@ class RebuildReasonsIntegrationTest {
         // A changed page is its own root.
         AssetVersionView legal = fixtures.edit(fx, c.legal().uuid(), payload -> payload.withObject("content").put("note", "x"));
         BuildPlan withPage = plan(fx, c.target(), GenerationMode.INCREMENTAL);
-        assertThat(withPage.reasonFor(c.legal().uuid())).isEqualTo(new RebuildReason(RebuildRootKind.ASSET_CHANGED,
-                c.legal().uuid(), "PAGE", "legal", legal.validFromRevision(), 1, null, List.of()));
+        // Its revision is the one that released the edit, right after it.
+        assertThat(withPage.reasonFor(c.legal().uuid())).isEqualTo(new RebuildReason(RebuildRootKind.ASSET_RELEASED,
+                c.legal().uuid(), "PAGE", "legal", legal.validFromRevision() + 1, 1, null, List.of()));
 
         // Planning the same state twice explains it identically.
         assertThat(plan(fx, c.target(), GenerationMode.INCREMENTAL).reasons()).isEqualTo(withPage.reasons());
@@ -275,7 +279,7 @@ class RebuildReasonsIntegrationTest {
         assetService.changeUid(legal.uuid(), "imprint", fx.ctx());
         BuildPlan renamed = plan(fx, site, GenerationMode.INCREMENTAL);
         assertThat(plannedPages(renamed)).containsExactly(legal.uuid());
-        assertThat(renamed.reasonFor(legal.uuid()).rootKind()).isEqualTo(RebuildRootKind.ASSET_CHANGED);
+        assertThat(renamed.reasonFor(legal.uuid()).rootKind()).isEqualTo(RebuildRootKind.ASSET_RELEASED);
         assertThat(renamed.reasonFor(legal.uuid()).rootRevision()).isGreaterThan(run.getRevisionId());
     }
 

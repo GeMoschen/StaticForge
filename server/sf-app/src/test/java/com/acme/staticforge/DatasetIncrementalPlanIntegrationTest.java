@@ -29,6 +29,8 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
+import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
@@ -74,6 +76,7 @@ class DatasetIncrementalPlanIntegrationTest {
     @Autowired TemplateService templateService;
     @Autowired PageService pageService;
     @Autowired SnapshotService snapshotService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired BuildPlanner buildPlanner;
     @Autowired PageRenderService pageRenderService;
 
@@ -205,7 +208,7 @@ class DatasetIncrementalPlanIntegrationTest {
         OutputPathResolver paths = mock(OutputPathResolver.class);
         when(paths.resolvePagePath(any(), any())).thenAnswer(call -> call.getArgument(0).toString());
         BuildPlan plan = buildPlanner.plan(
-                snapshotService.snapshot(fx.project().getId(), null),
+                releasedSnapshot(fx.project().getId()),
                 GenerationMode.INCREMENTAL,
                 lastSuccessfulRevision,
                 Set.of("html"),
@@ -216,7 +219,7 @@ class DatasetIncrementalPlanIntegrationTest {
     }
 
     private long head(Fixture fx) {
-        return snapshotService.snapshot(fx.project().getId(), null).revision();
+        return releasedSnapshot(fx.project().getId()).revision();
     }
 
     private UUID profilePage(Fixture fx, TemplateView profile, String name, RecordDetail person) {
@@ -267,5 +270,11 @@ class DatasetIncrementalPlanIntegrationTest {
         RevisionContext ctx() {
             return RevisionContext.of(project().getId(), user().getId(), "test");
         }
+    }
+
+    /** The released snapshot at head, after releasing everything pending (M27.2.1): what a build started now renders. */
+    private Snapshot releasedSnapshot(long projectId) {
+        releaseFixtures.releaseAll(projectId);
+        return snapshotService.snapshot(projectId, null, SnapshotView.RELEASED);
     }
 }

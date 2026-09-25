@@ -36,6 +36,8 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
+import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
@@ -83,6 +85,7 @@ class RecordSetIncrementalPlanIntegrationTest {
     @Autowired TemplateService templateService;
     @Autowired PageService pageService;
     @Autowired SnapshotService snapshotService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired BuildPlanner buildPlanner;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -127,10 +130,10 @@ class RecordSetIncrementalPlanIntegrationTest {
         jane = update(fx, jane, "{\"name\":\"Jane D.\",\"role\":\"lead\"}");
         BuildPlan plan = plan(fx, baseline);
         assertThat(pages(plan)).containsExactlyInAnyOrder(p1, p4).doesNotContain(p5);
-        assertChain(plan.reasonFor(p1), RebuildRootKind.ASSET_CHANGED, "RECORD", jane.uid(),
+        assertChain(plan.reasonFor(p1), RebuildRootKind.ASSET_RELEASED, "RECORD", jane.uid(),
                 step(p1, RebuildEdgeKind.PAGE_TEMPLATE, "templateRef"),
                 step(t1.uuid(), RebuildEdgeKind.RECORD_SET_MEMBERSHIP, "leads"));
-        assertChain(plan.reasonFor(p4), RebuildRootKind.ASSET_CHANGED, "RECORD", jane.uid(),
+        assertChain(plan.reasonFor(p4), RebuildRootKind.ASSET_RELEASED, "RECORD", jane.uid(),
                 step(p4, RebuildEdgeKind.PAGE_TEMPLATE, "templateRef"),
                 step(t4.uuid(), RebuildEdgeKind.DATASET_MEMBERSHIP, "team"));
 
@@ -145,11 +148,11 @@ class RecordSetIncrementalPlanIntegrationTest {
         RecordDetail cy = record(fx, staff.uuid(), "{\"name\":\"Cy\",\"role\":\"dev\"}");
         plan = plan(fx, baseline);
         assertThat(pages(plan)).containsExactlyInAnyOrder(p2, p3, p4);
-        assertChain(plan.reasonFor(p2), RebuildRootKind.ASSET_CHANGED, "RECORD", cy.uid(),
+        assertChain(plan.reasonFor(p2), RebuildRootKind.ASSET_RELEASED, "RECORD", cy.uid(),
                 step(p2, RebuildEdgeKind.PAGE_TEMPLATE, "templateRef"),
                 step(t2.uuid(), RebuildEdgeKind.RECORD_SET_MEMBERSHIP, "staff"));
         // The page itself reads the set: its reference editor value is a CONTENT_REF row to it.
-        assertChain(plan.reasonFor(p3), RebuildRootKind.ASSET_CHANGED, "RECORD", cy.uid(),
+        assertChain(plan.reasonFor(p3), RebuildRootKind.ASSET_RELEASED, "RECORD", cy.uid(),
                 step(p3, RebuildEdgeKind.RECORD_SET_MEMBERSHIP, "staff"));
 
         // Move a lead from staff to leads: the old set's readers (old version) and the new set's (new version).
@@ -172,7 +175,7 @@ class RecordSetIncrementalPlanIntegrationTest {
                 leads.revision(), fx.ctx());
         plan = plan(fx, baseline);
         assertThat(pages(plan)).containsExactly(p1);
-        assertChain(plan.reasonFor(p1), RebuildRootKind.ASSET_CHANGED, "RECORD_SET", "leads",
+        assertChain(plan.reasonFor(p1), RebuildRootKind.ASSET_RELEASED, "RECORD_SET", "leads",
                 step(p1, RebuildEdgeKind.PAGE_TEMPLATE, "templateRef"),
                 step(t1.uuid(), RebuildEdgeKind.RECORD_SET_QUERY, "channelTemplates.html"));
 
@@ -254,7 +257,7 @@ class RecordSetIncrementalPlanIntegrationTest {
         update(fx, bob, "{\"name\":\"Bob B.\",\"role\":\"dev\"}");
         BuildPlan plan = plan(fx, baseline);
         assertThat(pages(plan)).containsExactly(p6);
-        assertChain(plan.reasonFor(p6), RebuildRootKind.ASSET_CHANGED, "RECORD", bob.uid(),
+        assertChain(plan.reasonFor(p6), RebuildRootKind.ASSET_RELEASED, "RECORD", bob.uid(),
                 step(p6, RebuildEdgeKind.PAGE_TEMPLATE, "templateRef"),
                 step(t6.uuid(), RebuildEdgeKind.RECORD_SET_MEMBERSHIP, "groups"),
                 step(coreGroup.uuid(), RebuildEdgeKind.RECORD_SET_MEMBERSHIP, "staff"));
@@ -269,7 +272,7 @@ class RecordSetIncrementalPlanIntegrationTest {
         update(fx, boss, "{\"name\":\"Big Boss\",\"role\":\"lead\"}");
         plan = plan(fx, baseline);
         assertThat(pages(plan)).containsExactlyInAnyOrder(p6, p7);
-        assertChain(plan.reasonFor(p6), RebuildRootKind.ASSET_CHANGED, "RECORD", boss.uid(),
+        assertChain(plan.reasonFor(p6), RebuildRootKind.ASSET_RELEASED, "RECORD", boss.uid(),
                 step(p6, RebuildEdgeKind.PAGE_TEMPLATE, "templateRef"),
                 step(t6.uuid(), RebuildEdgeKind.RECORD_TEMPLATE, "groups"),
                 step(groups.uuid(), RebuildEdgeKind.DATASET_MEMBERSHIP, "team"));
@@ -310,7 +313,7 @@ class RecordSetIncrementalPlanIntegrationTest {
         OutputPathResolver paths = mock(OutputPathResolver.class);
         when(paths.resolvePagePath(any(), any())).thenAnswer(call -> call.getArgument(0).toString());
         return buildPlanner.plan(
-                snapshotService.snapshot(fx.projectId(), null),
+                releasedSnapshot(fx.projectId()),
                 GenerationMode.INCREMENTAL,
                 lastSuccessfulRevision,
                 Set.of("html"),
@@ -324,7 +327,7 @@ class RecordSetIncrementalPlanIntegrationTest {
     }
 
     private long head(Fixture fx) {
-        return snapshotService.snapshot(fx.projectId(), null).revision();
+        return releasedSnapshot(fx.projectId()).revision();
     }
 
     private UUID page(Fixture fx, TemplateView template, String name) {
@@ -382,5 +385,11 @@ class RecordSetIncrementalPlanIntegrationTest {
         RevisionContext ctx() {
             return RevisionContext.of(project().getId(), user().getId(), "test");
         }
+    }
+
+    /** The released snapshot at head, after releasing everything pending (M27.2.1): what a build started now renders. */
+    private Snapshot releasedSnapshot(long projectId) {
+        releaseFixtures.releaseAll(projectId);
+        return snapshotService.snapshot(projectId, null, SnapshotView.RELEASED);
     }
 }

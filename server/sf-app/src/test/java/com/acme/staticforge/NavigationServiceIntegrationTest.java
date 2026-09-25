@@ -25,6 +25,7 @@ import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
@@ -156,7 +157,8 @@ class NavigationServiceIntegrationTest {
         NavTreeNode liveTree = navigationService.tree(projectId, navRoot.uuid(), -1, liveNavigationLookup, liveDiagnostics);
 
         // -- snapshot path (same project, same fixture) --
-        Snapshot snapshot = snapshotService.snapshot(projectId, null);
+        // Parity with the live lookup, which reads the drafts.
+        Snapshot snapshot = snapshotService.snapshot(projectId, null, SnapshotView.DRAFT);
         SnapshotNavigationLookup snapshotLookup = new SnapshotNavigationLookup(snapshot);
         List<Diagnostic> snapshotDiagnostics = new ArrayList<>();
         UUID snapshotHomeResolve = navigationService.resolve(projectId, homeRef.uuid(), snapshotLookup);

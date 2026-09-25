@@ -18,6 +18,7 @@ import com.acme.staticforge.generate.render.RenderOutcome;
 import com.acme.staticforge.generate.render.RenderPipeline;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
 import com.acme.staticforge.generate.stage.AssetCopyResult;
 import com.acme.staticforge.generate.stage.AssetCopyStage;
@@ -279,7 +280,7 @@ public class GenerationService {
         long projectId = project.getId();
         GenerationTarget target = resolveTarget(projectId, request.targetId());
         TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
-        Snapshot snapshot = snapshotService.snapshot(projectId, request.revision());
+        Snapshot snapshot = snapshotService.snapshot(projectId, request.revision(), SnapshotView.RELEASED);
         // Channel settings are live configuration (not revision-pinned), read once per run.
         OutputPathResolver paths = OutputPathResolver.forSnapshot(
                 snapshot, channelService.outputSettings(projectId), projectLocales.forProject(projectId));

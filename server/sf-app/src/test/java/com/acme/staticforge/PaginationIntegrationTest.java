@@ -44,6 +44,7 @@ import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.preview.PagePreview;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
@@ -118,6 +119,7 @@ class PaginationIntegrationTest {
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
     @Autowired SnapshotService snapshotService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired BuildPlanner buildPlanner;
     @Autowired PageRenderService pageRenderService;
     @Autowired MockMvc mvc;
@@ -393,13 +395,13 @@ class PaginationIntegrationTest {
     }
 
     private BuildPlan plan(Fixture fx, long lastSuccessfulRevision) {
-        Snapshot snapshot = snapshotService.snapshot(fx.project().getId(), null);
+        Snapshot snapshot = releasedSnapshot(fx.project().getId());
         return buildPlanner.plan(snapshot, GenerationMode.INCREMENTAL, lastSuccessfulRevision, Set.of("html"), null, null,
                 OutputPathResolver.forSnapshot(snapshot, Map.of()));
     }
 
     private long head(Fixture fx) {
-        return snapshotService.snapshot(fx.project().getId(), null).revision();
+        return releasedSnapshot(fx.project().getId()).revision();
     }
 
     private long runToSuccess(Fixture fx, GenerationTarget target, GenerationMode mode) throws InterruptedException {
@@ -409,6 +411,7 @@ class PaginationIntegrationTest {
     }
 
     private GenerationRun run(Fixture fx, GenerationTarget target, GenerationMode mode) throws InterruptedException {
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun run = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(mode, null, List.of("html"), target.getId(), null, null, null, null),
@@ -457,5 +460,11 @@ class PaginationIntegrationTest {
         RevisionContext ctx() {
             return RevisionContext.of(project().getId(), user().getId(), "test");
         }
+    }
+
+    /** The released snapshot at head, after releasing everything pending (M27.2.1): what a build started now renders. */
+    private Snapshot releasedSnapshot(long projectId) {
+        releaseFixtures.releaseAll(projectId);
+        return snapshotService.snapshot(projectId, null, SnapshotView.RELEASED);
     }
 }

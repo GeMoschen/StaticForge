@@ -70,13 +70,14 @@ class M22BuildInsightJourneyIntegrationTest {
     @Autowired PageReferenceService pageReferenceService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
 
     private BuildInsightFixtures fixtures;
 
     @BeforeEach
     void setUp() {
         fixtures = new BuildInsightFixtures(userService, projectService, assetService, assetRepository, templateService,
-                mediaService, pageReferenceService, targetRepository, generationService, outputRoot);
+                mediaService, pageReferenceService, targetRepository, generationService, releaseFixtures, outputRoot);
     }
 
     private JsonNode call(org.springframework.test.web.servlet.RequestBuilder request) throws Exception {

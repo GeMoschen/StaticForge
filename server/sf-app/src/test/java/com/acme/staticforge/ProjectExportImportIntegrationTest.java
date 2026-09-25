@@ -141,6 +141,7 @@ class ProjectExportImportIntegrationTest {
     @Autowired com.acme.staticforge.asset.AssetReferenceRepository assetReferenceRepository;
     @Autowired com.acme.staticforge.asset.page.PageService pageService;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
 
     /** Where the M25 round trip's FULL generations write (generated output of source and target is compared). */
     private static Path outputRoot;
@@ -2623,6 +2624,7 @@ class ProjectExportImportIntegrationTest {
         GenerationTarget target = generationTargetRepository.save(new GenerationTarget(
                 fx.project().getId(), "m25-output", TargetType.FILESYSTEM,
                 MAPPER.readTree("{\"baseUrl\":\"https://example.com\"}"), false));
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun started = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html", "md"), target.getId(), null, null, null, null),

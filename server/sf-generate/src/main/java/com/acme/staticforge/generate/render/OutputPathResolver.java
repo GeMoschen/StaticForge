@@ -99,9 +99,12 @@ public final class OutputPathResolver {
         return resolvePagePath(pageUuid, channel, null);
     }
 
-    /** As {@link #resolvePagePath(UUID, String)}, for one language (M24.3.2). */
+    /**
+     * As {@link #resolvePagePath(UUID, String)}, for one language (M24.3.2): the page's version in that language's
+     * view — its released folder, uid and path override in the released view (M27.2.1).
+     */
     public String resolvePagePath(UUID pageUuid, String channel, String locale) {
-        SnapshotAsset page = snapshot.assetByUuid(pageUuid);
+        SnapshotAsset page = snapshot.asset(pageUuid, locale);
         if (page == null) {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }
@@ -115,7 +118,12 @@ public final class OutputPathResolver {
      * a {@code {locale}} segment when the project has locales.
      */
     public String effectiveExpression(UUID pageUuid, String channel) {
-        SnapshotAsset page = snapshot.assetByUuid(pageUuid);
+        return effectiveExpression(pageUuid, channel, null);
+    }
+
+    /** As {@link #effectiveExpression(UUID, String)}, for the page's version in {@code locale} (M27.2.1). */
+    public String effectiveExpression(UUID pageUuid, String channel, String locale) {
+        SnapshotAsset page = snapshot.asset(pageUuid, locale);
         if (page == null) {
             return OutputPathExpander.DEFAULT_EXPRESSION;
         }
@@ -141,7 +149,7 @@ public final class OutputPathResolver {
     /** As {@link #resolvePaginationPath(UUID, String, String, int)}, for one language (M24.3.3). */
     public String resolvePaginationPath(
             UUID pageUuid, String channel, String firstPagePath, int pageNumber, String locale) {
-        SnapshotAsset page = snapshot.assetByUuid(pageUuid);
+        SnapshotAsset page = snapshot.asset(pageUuid, locale);
         if (page == null) {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }

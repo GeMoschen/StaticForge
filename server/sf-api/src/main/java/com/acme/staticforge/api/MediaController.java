@@ -23,6 +23,8 @@ import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
+import com.acme.staticforge.release.ContentView;
+import com.acme.staticforge.release.ContentViews;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
@@ -75,6 +77,7 @@ public class MediaController {
     private final PreviewTokenService previewTokenService;
     private final PageRenderService pageRenderService;
     private final ReleaseBlocks releaseBlocks;
+    private final ContentViews contentViews;
 
     public MediaController(
             ProjectService projectService,
@@ -82,13 +85,15 @@ public class MediaController {
             SecuritySupport securitySupport,
             PreviewTokenService previewTokenService,
             PageRenderService pageRenderService,
-            ReleaseBlocks releaseBlocks) {
+            ReleaseBlocks releaseBlocks,
+            ContentViews contentViews) {
         this.projectService = projectService;
         this.mediaService = mediaService;
         this.securitySupport = securitySupport;
         this.previewTokenService = previewTokenService;
         this.pageRenderService = pageRenderService;
         this.releaseBlocks = releaseBlocks;
+        this.contentViews = contentViews;
     }
 
     @GetMapping
@@ -301,6 +306,9 @@ public class MediaController {
      * because its output depends on other assets. When it fails to compile or render, the source is
      * served instead with the diagnostic in {@code X-SF-Render-Error}, so one broken stylesheet
      * doesn't break the whole preview.
+     *
+     * <p>A token from a published preview (M27.2.3) serves the version released in its language — {@code 404} when
+     * none is — and renders a processed file in the published view.
      */
     @GetMapping("/{uuid}/share")
     @PreAuthorize("permitAll()")
@@ -315,13 +323,22 @@ public class MediaController {
             throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
         }
         long projectId = sharedProjectId(projectKey);
-        if (variant == null || variant.isBlank()) {
-            AssetVersionView media = mediaService.requireAt(projectId, uuid, target.revision());
-            if (TextMediaTypes.isProcessed(media.payload())) {
-                return sharedProcessed(projectId, media, target.revision(), request);
-            }
+        // The version the link's view shows, and the revision it is valid at (its own first revision when released).
+        AssetVersionView media;
+        Long revision = target.revision();
+        if (target.view() == ContentView.Kind.PUBLISHED) {
+            media = contentViews.open(projectId, target.revision(), ContentView.Kind.PUBLISHED, target.locale())
+                    .resolve(uuid)
+                    .map(ContentView.Resolved::view)
+                    .orElseThrow(() -> new SfException(ProblemFactory.notFound("Media not published.")));
+            revision = media.validFromRevision();
+        } else {
+            media = mediaService.requireAt(projectId, uuid, revision);
         }
-        MediaBinary binary = mediaService.binary(projectId, uuid, variant, target.revision());
+        if ((variant == null || variant.isBlank()) && TextMediaTypes.isProcessed(media.payload())) {
+            return sharedProcessed(projectId, media, target, request);
+        }
+        MediaBinary binary = mediaService.binary(projectId, uuid, variant, revision);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(binary.mimeType()));
         if (!isRenderable(binary.mimeType())) {
@@ -331,12 +348,13 @@ public class MediaController {
     }
 
     private ResponseEntity<byte[]> sharedProcessed(
-            long projectId, AssetVersionView media, Long revision, HttpServletRequest request) {
+            long projectId, AssetVersionView media, PreviewTokenService.ShareTarget target, HttpServletRequest request) {
         try {
-            String rendered = pageRenderService.renderMedia(projectId, media, revision, apiBase(request));
+            String rendered = pageRenderService.renderMedia(
+                    projectId, media, target.revision(), apiBase(request), target.locale(), target.view());
             return renderedResponse(media, rendered.getBytes(StandardCharsets.UTF_8), null);
         } catch (SfException e) {
-            MediaBinary source = mediaService.binary(projectId, media.uuid(), null, revision);
+            MediaBinary source = mediaService.binary(projectId, media.uuid(), null, media.validFromRevision());
             return renderedResponse(media, source.bytes(), renderErrorSummary(e));
         }
     }

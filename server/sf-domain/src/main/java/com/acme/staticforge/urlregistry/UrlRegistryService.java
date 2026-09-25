@@ -38,6 +38,21 @@ public interface UrlRegistryService {
      */
     String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, RevisionContext ctx);
 
+    /**
+     * As {@link #resolve(UUID, String, UrlArea, String, RevisionContext)}, but a first assignment stores the URL
+     * {@code computed} supplies instead of computing it from the live assets (M27.2.1): generation passes the path
+     * its released snapshot writes the page to, so a page moved in a draft that isn't released yet is never
+     * registered under its draft path. An existing entry is returned as always; {@code computed} is not called then.
+     * A {@code null} from {@code computed} falls back to the live computation.
+     */
+    String resolve(
+            UUID pageReferenceUuid,
+            String channelKey,
+            UrlArea area,
+            String locale,
+            java.util.function.Supplier<String> computed,
+            RevisionContext ctx);
+
     /** Upserts the tuple with a manually-chosen URL, marking the entry {@code overridden}. */
     UrlRegistryEntry override(UUID pageReferenceUuid, String channelKey, UrlArea area, String url, RevisionContext ctx);
 

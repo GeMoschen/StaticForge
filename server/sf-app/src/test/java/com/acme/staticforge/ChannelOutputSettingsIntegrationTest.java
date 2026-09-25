@@ -90,6 +90,7 @@ class ChannelOutputSettingsIntegrationTest {
     @Autowired ChannelService channelService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired UrlRegistryService urlRegistryService;
     @Autowired PageRenderService pageRenderService;
 
@@ -237,6 +238,7 @@ class ChannelOutputSettingsIntegrationTest {
     // ------------------------------------------------------------------
 
     private long generate(Site site, GenerationMode mode) throws InterruptedException {
+        releaseFixtures.releaseAll(site.project().getKey());
         GenerationRun run = generationService.start(
                 site.project().getKey(),
                 new GenerationRequest(mode, null, List.of("html"), site.target().getId(), null, null, null, null),

@@ -9,6 +9,7 @@ import com.acme.staticforge.asset.page.PageService;
 import com.acme.staticforge.asset.template.CreateTemplateCommand;
 import com.acme.staticforge.asset.template.TemplateService;
 import com.acme.staticforge.asset.template.TemplateView;
+import com.acme.staticforge.asset.template.UpdateTemplateCommand;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.GenerationRequest;
@@ -64,6 +65,7 @@ class ContentCompletenessGenerationIntegrationTest {
     @Autowired TemplateService templateService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -74,8 +76,10 @@ class ContentCompletenessGenerationIntegrationTest {
                 new CreateProjectRequest("gencompleteness", "Gen Completeness", null, null), user.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "completeness test");
 
+        // The title starts optional: incomplete content can't be released (M27.1.2, SF-DOM-0150), so a page only
+        // reaches a build incomplete when a template edit (templates are live) makes its released version incomplete.
         TemplateView template = templateService.create(new CreateTemplateCommand(
-                project.getId(), AssetType.PAGE_TEMPLATE, "Article", "content { editor text title { required } }",
+                project.getId(), AssetType.PAGE_TEMPLATE, "Article", "content { editor text title }",
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, null), ctx);
         AssetVersionView complete = pageService.create(new CreatePageCommand("Complete", null, template.uuid()), ctx);
         ObjectNode completePayload = (ObjectNode) complete.payload().deepCopy();
@@ -85,6 +89,13 @@ class ContentCompletenessGenerationIntegrationTest {
 
         GenerationTarget target = targetRepository.save(new GenerationTarget(
                 project.getId(), "default", TargetType.FILESYSTEM, mapper.createObjectNode(), true));
+        releaseFixtures.releaseAll(project.getKey());
+        templateService.update(
+                template.uuid(),
+                new UpdateTemplateCommand("Article", "content { editor text title { required } }",
+                        Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of(), false, Map.of()),
+                templateService.get(project.getId(), template.uuid()).validFromRevision(),
+                ctx);
         GenerationRun run = generationService.start(
                 project.getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null),

@@ -9,6 +9,7 @@ import java.util.UUID;
  * from a fresh plan (dry run) and from a stored plan (a past run), so both are served alike.
  *
  * @param pageNumber the page number of a paginated page's output; {@code null} otherwise
+ * @param locale the language the output renders (M27.2.2); {@code null} in a project without locales and for media
  */
 public record PlanEntryRecord(
         UUID assetUuid,
@@ -18,7 +19,21 @@ public record PlanEntryRecord(
         String channel,
         String outputPath,
         Integer pageNumber,
-        RebuildReason reason) {
+        RebuildReason reason,
+        String locale) {
+
+    /** An entry without a language: a project without locales, or a media file. */
+    public PlanEntryRecord(
+            UUID assetUuid,
+            String assetType,
+            String uid,
+            String displayName,
+            String channel,
+            String outputPath,
+            Integer pageNumber,
+            RebuildReason reason) {
+        this(assetUuid, assetType, uid, displayName, channel, outputPath, pageNumber, reason, null);
+    }
 
     /** A stored plan's entry filter; {@code null} fields don't filter. */
     public record Filter(RebuildRootKind rootKind, String channel, UUID assetUuid, String query) {

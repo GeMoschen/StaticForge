@@ -19,13 +19,13 @@ Tasks 2 and 3 can run in parallel.
 
 ## Feature exit criteria
 
-- [ ] A full build after the migration is byte-identical to the build before it (golden comparison on the existing
+- [x] A full build after the migration is byte-identical to the build before it (golden comparison on the existing
       generation fixtures, with and without locales).
-- [ ] Unreleased assets are absent everywhere a tombstone is absent; references to them render empty with `SF-GEN-0221`.
-- [ ] Per-locale: DE and EN render different released versions of one page.
-- [ ] Incremental builds are seeded by release changes, not by saves.
-- [ ] Preview draft/published views and share-link views work.
-- [ ] `./gradlew build` green.
+- [x] Unreleased assets are absent everywhere a tombstone is absent; references to them render empty with `SF-GEN-0221`.
+- [x] Per-locale: DE and EN render different released versions of one page.
+- [x] Incremental builds are seeded by release changes, not by saves.
+- [x] Preview draft/published views and share-link views work.
+- [x] `./gradlew build` green.
 
 ## Dependencies
 

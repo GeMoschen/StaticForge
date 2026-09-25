@@ -19,7 +19,14 @@ import com.acme.staticforge.generate.insight.RebuildStep;
 import com.acme.staticforge.generate.render.SnapshotPagination;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.project.LocaleConfig;
+import com.acme.staticforge.release.AssetRelease;
+import com.acme.staticforge.release.AssetReleaseRepository;
+import com.acme.staticforge.release.ReleasableTypes;
+import com.acme.staticforge.release.ReleaseLocales;
+import com.acme.staticforge.release.ReleaseState;
+import com.acme.staticforge.release.ReleaseStates;
 import com.acme.staticforge.template.query.RecordView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -127,43 +134,61 @@ public class RebuildExpansion {
     private final AssetVersionRepository versions;
     private final AssetUidHistoryRepository uidHistory;
     private final AssetReferenceRepository references;
+    private final AssetReleaseRepository releases;
+    private final ReleaseStates releaseStates;
 
     public RebuildExpansion(
-            AssetVersionRepository versions, AssetUidHistoryRepository uidHistory, AssetReferenceRepository references) {
+            AssetVersionRepository versions,
+            AssetUidHistoryRepository uidHistory,
+            AssetReferenceRepository references,
+            AssetReleaseRepository releases,
+            ReleaseStates releaseStates) {
         this.versions = versions;
         this.uidHistory = uidHistory;
         this.references = references;
+        this.releases = releases;
+        this.releaseStates = releaseStates;
     }
 
     /**
-     * The changes between {@code baselineRevision} and the snapshot: every asset with a version or a uid change in
-     * {@code (baseline, snapshot]}, with the newest revision it changed in, and the version it had at the baseline.
+     * Walks what changed between {@code baselineRevision} and the snapshot, once per language view (M27.2.2): a page's
+     * output in a language is rebuilt when that language's walk reaches the page.
+     *
+     * <p><b>Seeds.</b> A live type (template, dataset schema, template folder) changes with a new version or uid in
+     * {@code (baseline, snapshot]}, as before M27. A releasable asset changes in a language when the version or uid its
+     * release pointer names for that language differs between the baseline and the snapshot — a release, an unpublish
+     * or a released deletion; saving a draft changes nothing. A baseline without any release state (a build from before
+     * the initial release, M27.1.1) rendered the drafts valid then, so a pointer at the version that was the draft at
+     * the baseline is no change: the first incremental build after the migration plans nothing on an unchanged
+     * project.
+     *
+     * <p><b>Edges.</b> The rows valid at the snapshot revision plus the edges of released versions that are no longer
+     * their asset's draft, so a page is reached over what its released version references even when its draft dropped
+     * the reference.
      *
      * @param outputMoved whether a page's output path differs from the base build's; always {@code false} without one
+     * @param definitions the build's compile memo: the dataset schemas record set queries compile against
+     * @param locales the project's languages: a record set query may select a record in any of them
      */
-    public Changes changesSince(Snapshot snapshot, long baselineRevision, Predicate<UUID> outputMoved) {
-        Map<Long, Long> roots = new HashMap<>();
-        Set<Long> uidChanged = new HashSet<>();
-        versions.findChangesBetween(snapshot.projectId(), baselineRevision, snapshot.revision())
-                .forEach(change -> roots.merge(change.assetId(), change.revision(), Math::max));
-        uidHistory.findUidChangesBetween(snapshot.projectId(), baselineRevision, snapshot.revision()).forEach(change -> {
-            roots.merge(change.assetId(), change.revision(), Math::max);
-            uidChanged.add(change.assetId());
-        });
-        roots.keySet().removeIf(id -> snapshot.assetById(id) == null || snapshot.assetById(id).uuid() == null);
-
-        List<Long> beforeIds = roots.keySet().stream()
-                .filter(id -> BEFORE_TYPES.contains(snapshot.assetById(id).type()))
-                .sorted()
-                .toList();
-        Map<Long, AssetVersion> before = new HashMap<>();
-        for (int from = 0; from < beforeIds.size(); from += ID_CHUNK) {
-            List<Long> chunk = beforeIds.subList(from, Math.min(from + ID_CHUNK, beforeIds.size()));
-            for (AssetVersion version : versions.findValidAtRevisionByAssetIdIn(chunk, baselineRevision)) {
-                before.put(version.getAssetId(), version);
-            }
+    public Walks expandSince(
+            Snapshot snapshot,
+            long baselineRevision,
+            Predicate<UUID> outputMoved,
+            TemplateCompileMemo definitions,
+            LocaleConfig locales) {
+        Delta delta = new Delta(snapshot, baselineRevision);
+        List<ReferenceRow> rows = rows(snapshot);
+        Map<String, Result> walks = new LinkedHashMap<>();
+        for (Snapshot view : snapshot.views()) {
+            walks.put(view.locale(), new Walk(
+                            view,
+                            delta.changesIn(view, outputMoved),
+                            SnapshotPagination.of(view, definitions),
+                            new RecordSetImpact(view, definitions, locales),
+                            rows)
+                    .run());
         }
-        return new Changes(roots, before, uidChanged, outputMoved, false);
+        return new Walks(walks);
     }
 
     /**
@@ -178,13 +203,235 @@ public class RebuildExpansion {
             SnapshotPagination pagination,
             TemplateCompileMemo definitions,
             LocaleConfig locales) {
-        return new Walk(
-                        snapshot,
-                        changes,
-                        pagination,
-                        new RecordSetImpact(snapshot, definitions, locales),
-                        references.findRowsValidAtByProject(snapshot.projectId(), snapshot.revision()))
+        return new Walk(snapshot, changes, pagination, new RecordSetImpact(snapshot, definitions, locales), rows(snapshot))
                 .run();
+    }
+
+    /** The edges a walk follows: those valid at the snapshot revision and those of lagging released versions. */
+    private List<ReferenceRow> rows(Snapshot snapshot) {
+        Set<ReferenceRow> rows = new LinkedHashSet<>(references.findRowsValidAtByProject(snapshot.projectId(), snapshot.revision()));
+        if (snapshot.view() == SnapshotView.RELEASED) {
+            rows.addAll(releases.findReleasedEdgeRowsValidAt(snapshot.projectId(), snapshot.revision()));
+        }
+        return List.copyOf(rows);
+    }
+
+    /** Every language's walk of one plan (M27.2.2); a project without locales has one, keyed {@code null}. */
+    public static final class Walks {
+
+        private final Map<String, Result> byLocale;
+
+        Walks(Map<String, Result> byLocale) {
+            this.byLocale = byLocale;
+        }
+
+        /** The walk of {@code locale}'s view; the first (the root's) for a locale without a view of its own. */
+        public Result in(String locale) {
+            Result walk = byLocale.get(locale);
+            return walk != null ? walk : byLocale.values().iterator().next();
+        }
+
+        /** The changed roots of every language, in walk order. */
+        public Set<UUID> changedAssets() {
+            Set<UUID> changed = new LinkedHashSet<>();
+            byLocale.values().forEach(walk -> changed.addAll(walk.changedAssets()));
+            return changed;
+        }
+
+        /** The processed media any language's walk reached. */
+        public Set<UUID> processedMedia() {
+            Set<UUID> media = new LinkedHashSet<>();
+            byLocale.values().forEach(walk -> media.addAll(walk.processedMedia()));
+            return media;
+        }
+
+        /** The newest revision each root changed in, over every language. */
+        public Map<UUID, Long> changeRevisions() {
+            Map<UUID, Long> revisions = new LinkedHashMap<>();
+            byLocale.values().forEach(walk -> walk.changeRevisions().forEach((uuid, rev) -> revisions.merge(uuid, rev, Math::max)));
+            return revisions;
+        }
+
+        /** The reason of the first language's walk that reached {@code assetUuid}. */
+        public RebuildReason reasonFor(UUID assetUuid) {
+            for (Result walk : byLocale.values()) {
+                if (walk.reached(assetUuid)) {
+                    return walk.reasonFor(assetUuid);
+                }
+            }
+            throw new IllegalArgumentException("Asset " + assetUuid + " was not reached by any walk");
+        }
+    }
+
+    /**
+     * What changed between a baseline and a snapshot, computed once and asked per language view: live types by their
+     * versions and uids, releasable assets by their release pointers.
+     */
+    private final class Delta {
+
+        private final long baselineRevision;
+        private final Map<Long, Long> liveRoots = new HashMap<>();
+        private final Set<Long> uidChanged = new HashSet<>();
+        private final ReleaseState now;
+        private final ReleaseState then;
+        private final boolean preRelease;
+        private final Map<Long, AssetVersion> releasedVersions = new HashMap<>();
+        private final Map<Long, AssetVersion> draftsAtBaseline = new HashMap<>();
+        private final Set<Long> preReleaseUidChanges = new HashSet<>();
+
+        Delta(Snapshot snapshot, long baselineRevision) {
+            this.baselineRevision = baselineRevision;
+            long projectId = snapshot.projectId();
+            Set<Long> allUidChanges = new HashSet<>();
+            uidHistory.findUidChangesBetween(projectId, baselineRevision, snapshot.revision()).forEach(change -> {
+                allUidChanges.add(change.assetId());
+                if (isLive(snapshot, change.assetId())) {
+                    liveRoots.merge(change.assetId(), change.revision(), Math::max);
+                    uidChanged.add(change.assetId());
+                }
+            });
+            versions.findChangesBetween(projectId, baselineRevision, snapshot.revision()).forEach(change -> {
+                if (isLive(snapshot, change.assetId())) {
+                    liveRoots.merge(change.assetId(), change.revision(), Math::max);
+                }
+            });
+            if (snapshot.view() == SnapshotView.RELEASED) {
+                now = releaseStates.at(projectId, snapshot.revision());
+                then = releaseStates.at(projectId, baselineRevision);
+            } else {
+                now = null;
+                then = null;
+            }
+            preRelease = then != null && then.size() == 0;
+            if (then != null && !preRelease) {
+                loadPreviousVersionsOfChangedRoots(snapshot);
+            }
+            if (preRelease) {
+                releasedVersions.putAll(releaseStates.releasedVersions(now, releasedVersions.keySet()));
+                preReleaseUidChanges.addAll(allUidChanges);
+            }
+            // The baseline versions of live roots, and of releasable roots measured against a pre-release baseline.
+            Set<Long> atBaseline = new java.util.TreeSet<>();
+            liveRoots.keySet().stream().filter(id -> BEFORE_TYPES.contains(snapshot.assetById(id).type())).forEach(atBaseline::add);
+            if (preRelease) {
+                now.releasedAssetIds().stream()
+                        .filter(id -> snapshot.assetById(id) != null && BEFORE_TYPES.contains(snapshot.assetById(id).type()))
+                        .forEach(atBaseline::add);
+            }
+            List<Long> ids = List.copyOf(atBaseline);
+            for (int from = 0; from < ids.size(); from += ID_CHUNK) {
+                List<Long> chunk = ids.subList(from, Math.min(from + ID_CHUNK, ids.size()));
+                for (AssetVersion version : versions.findValidAtRevisionByAssetIdIn(chunk, baselineRevision)) {
+                    draftsAtBaseline.put(version.getAssetId(), version);
+                }
+            }
+        }
+
+        /**
+         * Loads the versions released at the baseline that a walk compares against — those of releasable roots whose
+         * pointer changed, in any language, and whose type the walk reads a "before" of. Usually a handful; never the
+         * whole project's released versions.
+         */
+        private void loadPreviousVersionsOfChangedRoots(Snapshot snapshot) {
+            Set<Long> needed = new java.util.TreeSet<>();
+            for (Snapshot view : snapshot.views()) {
+                String key = view.locale() == null ? ReleaseLocales.ALL : view.locale();
+                for (long id : then.releasedAssetIds()) {
+                    AssetRelease previous = pointer(then, id, key);
+                    SnapshotAsset asset = view.assetById(id);
+                    if (previous != null && asset != null && BEFORE_TYPES.contains(asset.type())
+                            && !unchanged(id, pointer(now, id, key), previous)) {
+                        needed.add(previous.getReleasedVersionId());
+                    }
+                }
+            }
+            List<Long> ids = List.copyOf(needed);
+            for (int from = 0; from < ids.size(); from += ID_CHUNK) {
+                versions.findAllById(ids.subList(from, Math.min(from + ID_CHUNK, ids.size())))
+                        .forEach(version -> releasedVersions.put(version.getId(), version));
+            }
+        }
+
+        /** Whether {@code assetId} is a live type in the snapshot: counted by versions, not by releases. */
+        private boolean isLive(Snapshot snapshot, long assetId) {
+            SnapshotAsset asset = snapshot.assetById(assetId);
+            return asset != null && asset.uuid() != null
+                    && (snapshot.view() != SnapshotView.RELEASED
+                            || !ReleasableTypes.isReleasable(asset.type(), asset.payload(), asset.uid()));
+        }
+
+        /** The changes {@code view}'s language sees. */
+        Changes changesIn(Snapshot view, Predicate<UUID> outputMoved) {
+            Map<Long, Long> roots = new HashMap<>(liveRoots);
+            Map<Long, RebuildRootKind> kinds = new HashMap<>();
+            Set<Long> uids = new HashSet<>(uidChanged);
+            Map<Long, AssetVersion> before = new HashMap<>();
+            liveRoots.keySet().forEach(id -> {
+                AssetVersion version = draftsAtBaseline.get(id);
+                if (version != null) {
+                    before.put(id, version);
+                }
+            });
+            if (now != null) {
+                String key = view.locale() == null ? ReleaseLocales.ALL : view.locale();
+                Set<Long> candidates = new java.util.TreeSet<>(now.releasedAssetIds());
+                candidates.addAll(then.releasedAssetIds());
+                for (long id : candidates) {
+                    SnapshotAsset asset = view.assetById(id);
+                    if (asset == null || asset.uuid() == null) {
+                        continue;
+                    }
+                    AssetRelease current = pointer(now, id, key);
+                    AssetRelease previous = pointer(then, id, key);
+                    if (unchanged(id, current, previous)) {
+                        continue;
+                    }
+                    roots.put(id, current != null ? current.getValidFromRevision() : previous.getValidToRevision());
+                    kinds.put(id, current != null
+                            ? RebuildRootKind.ASSET_RELEASED
+                            : asset.deleted() && !asset.unreleased() ? RebuildRootKind.ASSET_DELETED : RebuildRootKind.ASSET_UNPUBLISHED);
+                    AssetVersion released = previous == null
+                            ? (preRelease ? draftsAtBaseline.get(id) : null)
+                            : releasedVersions.get(previous.getReleasedVersionId());
+                    if (released != null && BEFORE_TYPES.contains(asset.type())) {
+                        before.put(id, released);
+                    }
+                    if (previous == null ? preRelease && preReleaseUidChanges.contains(id)
+                            : current != null && !previous.getReleasedUid().equals(current.getReleasedUid())) {
+                        uids.add(id);
+                    }
+                }
+            }
+            return new Changes(roots, kinds, before, uids, outputMoved, false);
+        }
+
+        /**
+         * Whether the pointers name the same (version, uid). Against a pre-release baseline the "pointer" there is the
+         * draft valid at the baseline, under the uid it had then.
+         */
+        private boolean unchanged(long id, AssetRelease current, AssetRelease previous) {
+            if (previous != null || !preRelease) {
+                return current == null
+                        ? previous == null
+                        : previous != null
+                                && current.getReleasedVersionId().equals(previous.getReleasedVersionId())
+                                && current.getReleasedUid().equals(previous.getReleasedUid());
+            }
+            if (current == null) {
+                return true;
+            }
+            AssetVersion version = releasedVersions.get(current.getReleasedVersionId());
+            return version != null
+                    && version.getValidFromRevision() <= baselineRevision
+                    && (version.getValidToRevision() == null || version.getValidToRevision() > baselineRevision)
+                    && !preReleaseUidChanges.contains(id);
+        }
+    }
+
+    /** The pointer {@code key} renders: its own, or the shared {@code ""} one (non-localized media). */
+    private static AssetRelease pointer(ReleaseState state, long assetId, String key) {
+        AssetRelease own = state.pointer(assetId, key);
+        return own != null || ReleaseLocales.ALL.equals(key) ? own : state.pointer(assetId, ReleaseLocales.ALL);
     }
 
     // ------------------------------------------------------------------
@@ -194,21 +441,23 @@ public class RebuildExpansion {
     /**
      * The roots of a walk and what the walk needs to know about them.
      *
-     * <p>A real plan's changes ({@link RebuildExpansion#changesSince}) compare with the baseline. The
+     * <p>A real plan's changes ({@link RebuildExpansion#expandSince}) compare with the baseline. The
      * {@link #upperBound} changes of an impact query assume the change matters to every reader: a record may start or
      * stop matching every loop over its dataset, a page change is navigation-affecting.
      */
     public static final class Changes {
 
         private final Map<Long, Long> roots;
+        private final Map<Long, RebuildRootKind> kinds;
         private final Map<Long, AssetVersion> before;
         private final Set<Long> uidChanged;
         private final Predicate<UUID> outputMoved;
         private final boolean upperBound;
 
-        Changes(Map<Long, Long> roots, Map<Long, AssetVersion> before, Set<Long> uidChanged, Predicate<UUID> outputMoved,
-                boolean upperBound) {
+        Changes(Map<Long, Long> roots, Map<Long, RebuildRootKind> kinds, Map<Long, AssetVersion> before,
+                Set<Long> uidChanged, Predicate<UUID> outputMoved, boolean upperBound) {
             this.roots = java.util.Collections.unmodifiableMap(new HashMap<>(roots)); // an upper bound has no revisions
+            this.kinds = Map.copyOf(kinds);
             this.before = Map.copyOf(before);
             this.uidChanged = Set.copyOf(uidChanged);
             this.outputMoved = outputMoved == null ? uuid -> false : outputMoved;
@@ -219,7 +468,7 @@ public class RebuildExpansion {
         public static Changes upperBound(long assetId) {
             Map<Long, Long> roots = new HashMap<>();
             roots.put(assetId, null);
-            return new Changes(roots, Map.of(), Set.of(), uuid -> false, true);
+            return new Changes(roots, Map.of(), Map.of(), Set.of(), uuid -> false, true);
         }
 
         boolean isRoot(long assetId) {
@@ -228,6 +477,18 @@ public class RebuildExpansion {
 
         Long revisionOf(long assetId) {
             return roots.get(assetId);
+        }
+
+        /**
+         * The root kind of a changed root: how its release pointer changed (M27.2.2); for a live type
+         * {@code ASSET_CHANGED}, or {@code ASSET_DELETED} for a tombstone.
+         */
+        RebuildRootKind kindOf(long assetId, SnapshotAsset asset) {
+            RebuildRootKind kind = kinds.get(assetId);
+            if (kind != null) {
+                return kind;
+            }
+            return asset.deleted() && !asset.unreleased() ? RebuildRootKind.ASSET_DELETED : RebuildRootKind.ASSET_CHANGED;
         }
 
         Set<Long> rootIds() {
@@ -405,7 +666,7 @@ public class RebuildExpansion {
             }
             SnapshotAsset root = snapshot.assetById(current);
             return new RebuildReason(
-                    root.deleted() ? RebuildRootKind.ASSET_DELETED : RebuildRootKind.ASSET_CHANGED,
+                    changes.kindOf(current, root),
                     root.uuid(),
                     root.type().name(),
                     root.uid(),

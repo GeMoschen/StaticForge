@@ -54,6 +54,7 @@ class GenerationEventsApiTest {
     @Autowired JwtService jwtService;
     @Autowired GenerationTargetRepository targets;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
 
     @Test
     void subscribingToAFinishedRunSendsFinalStatusAndCompletes() throws Exception {
@@ -61,6 +62,7 @@ class GenerationEventsApiTest {
         Project project = projectService.create(new CreateProjectRequest("genevents", "Gen Events", null, null), user.getId());
         GenerationTarget target = targets.save(new GenerationTarget(
                 project.getId(), "default", TargetType.FILESYSTEM, new ObjectMapper().createObjectNode(), true));
+        releaseFixtures.releaseAll(project.getKey());
         GenerationRun run = generationService.start(
                 project.getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null),

@@ -97,6 +97,7 @@ class CrossProjectUuidCollisionTest {
     @Autowired PageReferenceService pageReferenceService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired PageRenderService pageRenderService;
     @Autowired UrlRegistryService urlRegistryService;
     @Autowired JdbcTemplate jdbcTemplate;
@@ -227,6 +228,7 @@ class CrossProjectUuidCollisionTest {
     // ------------------------------------------------------------------
 
     private long runGenerationToSuccess(Fixture fx, GenerationTarget target) throws InterruptedException {
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun run = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null),

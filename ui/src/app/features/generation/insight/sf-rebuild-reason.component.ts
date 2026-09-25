@@ -60,6 +60,8 @@ import { chainLines, otherCausesLabel, reasonBadge, type ReasonView } from './in
         font-weight: 600;
       }
       .reason__badge[data-kind='ASSET_CHANGED'],
+      .reason__badge[data-kind='ASSET_RELEASED'],
+      .reason__badge[data-kind='ASSET_UNPUBLISHED'],
       .reason__badge[data-kind='ASSET_DELETED'] {
         color: var(--sf-signal);
       }

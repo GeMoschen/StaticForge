@@ -25,6 +25,14 @@ public final class GenerationDiagnosticCodes {
     public static final String GEN_DELETED_REFERENCE = "SF-GEN-0220";
 
     /**
+     * A reference resolves to an asset that exists at the build revision but is not released in the render language
+     * (M27.2.1, epic decision 9): tolerated build warning, the reference renders empty — the same places and the same
+     * output as {@link #GEN_DELETED_REFERENCE}. The message names the output holding the reference, the language and
+     * the target.
+     */
+    public static final String GEN_UNRELEASED_REFERENCE = "SF-GEN-0221";
+
+    /**
      * A processed text media file's source blob can't be read (M18.3.1): the file is not published,
      * the run is PARTIAL. Compile and render failures of processed media keep their own
      * {@code SF-TPL-*} code, with the media uid in the message.
