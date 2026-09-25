@@ -14,6 +14,7 @@ locale, release (with dependencies), unpublish and discard, and list every unrel
 | 1 | [001-release-state-model-and-migration.md](001-release-state-model-and-migration.md) | `M26` |
 | 2 | [002-release-service.md](002-release-service.md) | 1 |
 | 3 | [003-release-and-changes-api.md](003-release-and-changes-api.md) | 2 |
+| 4 | [004-release-performance-large-selections.md](004-release-performance-large-selections.md) | 2 (follow-up found in M27.2) |
 
 ## Feature exit criteria
 
