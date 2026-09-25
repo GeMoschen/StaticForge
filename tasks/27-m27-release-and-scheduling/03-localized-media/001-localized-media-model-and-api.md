@@ -1,6 +1,6 @@
 ---
 id: M27.3.1
-status: todo
+status: done
 depends: [M27.1.1]
 epic: m27-release-and-scheduling
 feature: localized-media
@@ -55,17 +55,17 @@ is needed — prefer payload). Epic decisions 4, 18, 19.
 
 ## Acceptance criteria
 
-- [ ] Localize → upload an EN file → EN resolves to it, `de-CH` falls back to `de`, a locale without own file falls back
+- [x] Localize → upload an EN file → EN resolves to it, `de-CH` falls back to `de`, a locale without own file falls back
       to the default file.
-- [ ] Un-localize with other files → `409 SF-MEDIA-0505` listing them; with `confirmDiscard` → one revision, pointers
+- [x] Un-localize with other files → `409 SF-MEDIA-0505` listing them; with `confirmDiscard` → one revision, pointers
       collapsed, default file kept.
-- [ ] Status: replacing only the EN file makes only EN `CHANGED`.
-- [ ] Upload pipeline rules apply to locale files (MIME sniffing, SVG sanitizing, size cap) — tests reuse the
+- [x] Status: replacing only the EN file makes only EN `CHANGED`.
+- [x] Upload pipeline rules apply to locale files (MIME sniffing, SVG sanitizing, size cap) — tests reuse the
       existing upload test fixtures.
-- [ ] Changes list: a localized media asset released in DE only lists EN as `NEW`; one released in every locale
+- [x] Changes list: a localized media asset released in DE only lists EN as `NEW`; one released in every locale
       at its draft is not a candidate; non-localized media still counts one key.
-- [ ] Existing media endpoints and payload readers unchanged for non-localized media (regression suite green).
-- [ ] `./gradlew build` green.
+- [x] Existing media endpoints and payload readers unchanged for non-localized media (regression suite green).
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -78,3 +78,40 @@ is needed — prefer payload). Epic decisions 4, 18, 19.
   search indexing, impact) stays correct without changes; only locale-aware readers use `MediaFiles.fileFor`.
 - Removing a locale from the project: its own files stay in the payload (harmless, invisible) until the media is
   saved again — note it in the docs task rather than migrating payloads.
+
+## Implementation notes
+
+- **Payload** (`asset/media/MediaFiles`, the one helper every locale-aware reader uses): `localized`, `fileLocale` (the
+  locale the top-level file belongs to — recorded when localizing, so changing the project's default locale later
+  doesn't hand the German file to English) and `localeFiles`. `fileFor(payload, locale, chain)` walks the chain;
+  the top-level file is the last resort. `effective(payload, locale, chain)` gives the payload with the top-level file
+  fields replaced by the locale's file — what binary serving, text reads and (M27.3.2) generation read.
+- **Pipeline.** `MediaServiceImpl` now has `prepare` (size cap, Tika sniffing, allow-list, dimensions, EXIF strip /
+  SVG sanitizing) and `store` (blob + `ref_count`, variants) shared by upload, replace and the per-locale upload.
+  `replace` copies the payload and swaps the file fields instead of rebuilding it from plain strings — which also
+  fixes a pre-existing loss of localized alt text/caption on replace in a project with locales.
+- **API.** `PUT /media/{uuid}/localized` (`If-Match`, `{localized, confirmDiscard}`), `POST|DELETE
+  /media/{uuid}/files/{locale}`, `?locale=` on `GET/PUT /text`, `PUT /process`, `GET /binary`, `GET /thumbnail` and
+  the rendered binary. A locale that falls back gets its own file on a text write (copy of what it rendered) or a
+  `processCms` change applies to the file it renders. Removing a file a locale doesn't own writes nothing; the default
+  file can't be removed (`422 SF-MEDIA-0509`). Problems `SF-MEDIA-0505`–`0509` (`MediaProblems`).
+- **Toggle pointers** (`ReleaseCarryForward.rekeyMedia`, one revision with the toggle): each new pointer moves to the
+  toggled version when the pointer it replaces was published (like a system migration), else keeps its released
+  version — so every locale keeps the status the shared/default pointer had. An `UNPUBLISHED` shared pointer leaves the
+  per-locale keys `NEW` (there is no history for them).
+- **Projection.** A localized media payload projects, per locale, the resolved file plus its owner locale (and drops the
+  MIME column, which describes only the default file); a locale that starts to own a file is `CHANGED` even with the
+  same bytes, because it publishes at another path. Discarding one locale also restores its own file
+  (`MediaFiles.restoreOwnFile`).
+- **Changes candidates:** a media asset counts every locale key when one of its open pointers at the draft is
+  per-locale (the flag lives in the JSON payload); a localized draft without pointers at it is a candidate anyway.
+- **Pre-existing bug fixed:** every media write other than upload/replace (metadata, process flag, text, restore,
+  folder move, the M24 localizable migration) wrote a version without `mime_type`/`size_bytes`, so the media library's
+  MIME filter (`?mimeType=image/*`, the image pickers) stopped finding the file. The columns are now projected from the
+  payload wherever a version is written (`AssetVersion.projectMediaColumns`); `setMediaColumns` is gone.
+- **Not done here:** export of locale files (`M27.5.1`), UI (`M27.6.4`). Removing a locale from the project leaves its
+  file in the payload (invisible, refused by the API) until the media is un-localized or the file is replaced.
+- **Tests:** `LocalizedMediaIntegrationTest` (11: chain resolution and DTO over HTTP, un-localize 409/confirm with
+  pointer collapse, localize keeps statuses, per-locale status + discard + remove, upload rules (sniffing, SVG, size
+  cap, roles), refusals `0506`–`0509`, text/process per locale, Changes candidates, MIME column regression, blob
+  refs, removed locale).

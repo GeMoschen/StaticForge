@@ -38,6 +38,32 @@ public interface MediaService {
     MediaWriteResult replace(UUID uuid, String fileName, String suppliedMimeType, byte[] bytes, RevisionContext ctx);
 
     /**
+     * Localizes ({@code true}) or un-localizes a media asset in one revision (M27.3.1, epic decision 19). Localizing
+     * makes the file the default locale's; un-localizing keeps the file the default locale renders and discards the
+     * others — a {@code 409 SF-MEDIA-0505} listing them unless {@code confirmDiscard}. The release pointers are
+     * rewritten to match ({@code ""} ↔ one per locale), each keeping the status it had. {@code 422 SF-MEDIA-0508} in
+     * a project without locales; the value it already has writes no revision.
+     */
+    AssetVersionView setLocalized(
+            UUID uuid, boolean localized, boolean confirmDiscard, long expectedRevision, RevisionContext ctx);
+
+    /**
+     * Stores or replaces {@code locale}'s own file of localized media in one revision, through the full upload
+     * pipeline (M27.3.1); for the locale that owns the top-level file this is {@link #replace}. A processed file stays
+     * processed like {@link #replace}. {@code 422 SF-MEDIA-0506} for media that isn't localized, {@code 0507} for a
+     * locale the project doesn't declare.
+     */
+    MediaWriteResult putLocaleFile(
+            UUID uuid, String locale, String fileName, String suppliedMimeType, byte[] bytes, RevisionContext ctx);
+
+    /**
+     * Removes {@code locale}'s own file of localized media in one revision, so the locale falls back again
+     * (M27.3.1). The default file can't be removed ({@code 422 SF-MEDIA-0509}); a locale without its own file writes
+     * no revision. Refusals as {@link #putLocaleFile}.
+     */
+    AssetVersionView removeLocaleFile(UUID uuid, String locale, RevisionContext ctx);
+
+    /**
      * Updates alt text, caption, copyright and focal point (optimistic-concurrency-checked). In a
      * project with locales, {@code altText} and {@code caption} are language-dependent (M24.2.2):
      * the write targets {@code locale} (the project default when {@code null}) and leaves the other
@@ -53,8 +79,19 @@ public interface MediaService {
      */
     MediaWriteResult setProcessCms(UUID uuid, boolean processCms, long expectedRevision, RevisionContext ctx);
 
+    /**
+     * As {@link #setProcessCms(UUID, boolean, long, RevisionContext)}, for the file {@code locale} renders of localized
+     * media (M27.3.1): its own file, or the one it falls back to. {@code null}, and media that isn't localized, mean
+     * the default file.
+     */
+    MediaWriteResult setProcessCms(
+            UUID uuid, boolean processCms, String locale, long expectedRevision, RevisionContext ctx);
+
     /** The text content of a text media file, current or at {@code revision}; non-text types are a {@code 400}. */
     MediaText readText(long projectId, UUID uuid, Long revision);
+
+    /** As {@link #readText(long, UUID, Long)}, the file {@code locale} renders of localized media (M27.3.1). */
+    MediaText readText(long projectId, UUID uuid, Long revision, String locale);
 
     /**
      * Replaces a text media file's content with {@code text} (UTF-8) in one revision, keeping its
@@ -63,6 +100,14 @@ public interface MediaService {
      * Content identical to the stored blob writes no revision.
      */
     MediaWriteResult writeText(UUID uuid, String text, long expectedRevision, RevisionContext ctx);
+
+    /**
+     * As {@link #writeText(UUID, String, long, RevisionContext)}, into {@code locale}'s own file of localized media
+     * (M27.3.1): a locale that falls back gets its own file, a copy of the one it rendered with the new content.
+     * {@code null}, and media that isn't localized, mean the default file; an undeclared locale is a
+     * {@code 422 SF-MEDIA-0507}.
+     */
+    MediaWriteResult writeText(UUID uuid, String text, String locale, long expectedRevision, RevisionContext ctx);
 
     /** Compiles draft {@code text} as the source of this text media file, without saving anything. */
     List<Diagnostic> validateText(long projectId, UUID uuid, String text);
@@ -80,9 +125,15 @@ public interface MediaService {
     /** Like {@link #binary(long, UUID, String)}, for the version valid at {@code revision} (current when {@code null}). */
     MediaBinary binary(long projectId, UUID uuid, String variantName, Long revision);
 
+    /** As {@link #binary(long, UUID, String, Long)}, the file {@code locale} renders of localized media (M27.3.1). */
+    MediaBinary binary(long projectId, UUID uuid, String variantName, Long revision, String locale);
+
     /** The media version valid at {@code revision} (current when {@code null}), or throws 404. */
     AssetVersionView requireAt(long projectId, UUID uuid, Long revision);
 
     /** A 320px-wide preview thumbnail of an image media asset. */
     MediaBinary thumbnail(long projectId, UUID uuid);
+
+    /** As {@link #thumbnail(long, UUID)}, of the file {@code locale} renders of localized media (M27.3.1). */
+    MediaBinary thumbnail(long projectId, UUID uuid, String locale);
 }

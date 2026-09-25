@@ -17,12 +17,12 @@ the locale chain, is released per locale and is written at each locale's prefix.
 
 ## Feature exit criteria
 
-- [ ] Media can be localized and un-localized in one revision (with confirmation when files would be discarded).
-- [ ] Per-locale files upload/replace; variants per locale file; fallback along the chain.
-- [ ] Per-locale release pointers for localized media; `""` for non-localized.
-- [ ] Generation writes localized media per locale with its own file at the locale prefix; references pick the render
+- [x] Media can be localized and un-localized in one revision (with confirmation when files would be discarded).
+- [x] Per-locale files upload/replace; variants per locale file; fallback along the chain.
+- [x] Per-locale release pointers for localized media; `""` for non-localized.
+- [x] Generation writes localized media per locale with its own file at the locale prefix; references pick the render
       locale's file; preview likewise.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Dependencies
 

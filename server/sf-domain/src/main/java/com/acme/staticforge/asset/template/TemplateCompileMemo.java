@@ -26,7 +26,7 @@ public final class TemplateCompileMemo {
     private final MeteredTemplateCompiler compiler;
     private final Map<UUID, ContentDefinition> definitions = new ConcurrentHashMap<>();
     private final Map<ChannelKey, CompiledChannel> channels = new ConcurrentHashMap<>();
-    private final Map<ChannelKey, OctlResult> textMedia = new ConcurrentHashMap<>();
+    private final Map<TextMediaKey, OctlResult> textMedia = new ConcurrentHashMap<>();
     private final ChainCompileMemo chains = new ChainCompileMemo();
     private final AtomicReference<TemplateHierarchy> hierarchy = new AtomicReference<>();
 
@@ -124,9 +124,13 @@ public final class TemplateCompileMemo {
      */
     public OctlResult textMedia(
             UUID mediaUuid, String channel, String source, boolean scriptLike, ReferenceResolver resolver) {
+        // Keyed by the source too: a localized stylesheet has one source per locale (M27.3.2).
         return textMedia.computeIfAbsent(
-                new ChannelKey(mediaUuid, channel), key -> compiler.textMedia(source, channel, resolver, scriptLike));
+                new TextMediaKey(mediaUuid, channel, source),
+                key -> compiler.textMedia(source, channel, resolver, scriptLike));
     }
 
     private record ChannelKey(UUID templateUuid, String channel) {}
+
+    private record TextMediaKey(UUID mediaUuid, String channel, String source) {}
 }

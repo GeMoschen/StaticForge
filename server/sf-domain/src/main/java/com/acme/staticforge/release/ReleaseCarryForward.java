@@ -93,6 +93,56 @@ public class ReleaseCarryForward {
         return opened.size();
     }
 
+    /**
+     * Rewrites the pointers of a media asset whose {@code localized} flag the rewrite toggled (M27.3.1, epic
+     * decision 19), in {@code revisionId}: localizing turns the {@code ""} pointer into one pointer per locale,
+     * un-localizing turns the default locale's pointer into the {@code ""} pointer and closes the others. Each new
+     * pointer carries the status of the pointer it replaces: a published one moves to the toggled version, any other
+     * keeps its released version. Must run in the toggle's transaction, after the new version is saved.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void rekeyMedia(long projectId, Rewrite rewrite, boolean localized, long revisionId) {
+        List<AssetRelease> open = releaseRepository.findByAssetIdAndValidToRevisionIsNull(rewrite.assetId());
+        if (open.isEmpty()) {
+            return;
+        }
+        LocaleConfig config = projectLocales.forProject(projectId);
+        Set<Long> versionIds = new HashSet<>();
+        open.forEach(p -> versionIds.add(p.getReleasedVersionId()));
+        versionIds.add(rewrite.previousVersionId());
+        Map<Long, AssetVersion> versions = Chunks.flatMap(versionIds, versionRepository::findAllById).stream()
+                .collect(Collectors.toMap(AssetVersion::getId, Function.identity()));
+
+        List<AssetRelease> opened = new ArrayList<>();
+        for (AssetRelease pointer : open) {
+            String key = pointer.getLocaleKey();
+            boolean source = localized ? ReleaseLocales.ALL.equals(key) : key.equals(config.defaultLocale());
+            if (localized && !source) {
+                continue; // already per locale: nothing to rekey
+            }
+            pointer.setValidToRevision(revisionId);
+            if (!source) {
+                continue;
+            }
+            long target = wasPublished(pointer, rewrite, versions, config)
+                    ? rewrite.newVersionId()
+                    : pointer.getReleasedVersionId();
+            for (String newKey : localized ? config.codes() : List.of(ReleaseLocales.ALL)) {
+                opened.add(new AssetRelease(
+                        pointer.getProjectId(),
+                        pointer.getAssetId(),
+                        newKey,
+                        target,
+                        pointer.getReleasedUid(),
+                        revisionId,
+                        pointer.getReleasedBy(),
+                        pointer.getReleasedAt()));
+            }
+        }
+        releaseRepository.saveAll(open);
+        releaseRepository.saveAll(opened);
+    }
+
     private static boolean wasPublished(
             AssetRelease pointer, Rewrite rewrite, Map<Long, AssetVersion> versions, LocaleConfig config) {
         if (pointer.getReleasedVersionId().equals(rewrite.previousVersionId())) {

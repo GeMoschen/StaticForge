@@ -1,11 +1,13 @@
 package com.acme.staticforge.release;
 
 import com.acme.staticforge.asset.AssetVersion;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.common.L10nValues;
 import com.acme.staticforge.project.LocaleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.List;
 
 /**
@@ -17,6 +19,11 @@ import java.util.List;
  * flag, MIME type) and the payload with every L10N wrapper resolved along the locale's fallback chain. A plain value
  * is kept as it is, which makes the read tolerant of both shapes (epic decision 13): a value the M24 localizable
  * toggle wrapped for the default locale projects exactly like the plain value it was.
+ *
+ * <p>A localized media payload (M27.3.1) projects, instead of its files, the one file the locale renders
+ * ({@link MediaFiles#fileFor}) and the locale that owns it — so replacing only the French file changes only the
+ * French projection, and a locale that starts to have its own file changes even when the bytes are the same (it is
+ * published at another path). The version's MIME type column describes the default file only and is left out.
  *
  * <p>The key {@link ReleaseLocales#ALL} projects the whole payload unresolved, because that pointer stands for every
  * locale at once. Pure: no repository access, safe to cache per (version, locale).
@@ -56,10 +63,26 @@ public final class LocaleProjection {
             out.put("templateAssetId", input.templateAssetId());
         }
         out.put("deleted", input.deleted());
-        if (input.mimeType() != null) {
+        boolean perLocaleFile = !ReleaseLocales.ALL.equals(localeKey)
+                && MediaFiles.isLocalized(input.payload())
+                && LocaleConfig.orEmpty(config).isLocalized();
+        if (input.mimeType() != null && !perLocaleFile) {
             out.put("mimeType", input.mimeType());
         }
-        out.set("payload", projectPayload(input.payload(), localeKey, config));
+        out.set("payload", projectPayload(
+                perLocaleFile ? withLocaleFile(input.payload(), localeKey, config) : input.payload(), localeKey, config));
+        return out;
+    }
+
+    /** A localized media payload with its files replaced by the one {@code locale} renders and that file's owner. */
+    private static JsonNode withLocaleFile(JsonNode payload, String locale, LocaleConfig config) {
+        MediaFiles.Resolved resolved = MediaFiles.fileFor(payload, locale, config.effectiveChain(locale));
+        ObjectNode out = ((ObjectNode) payload).deepCopy();
+        MediaFiles.FILE_FIELDS.forEach(out::remove);
+        out.remove(MediaFiles.LOCALE_FILES);
+        out.remove(MediaFiles.FILE_LOCALE);
+        out.set("file", resolved.file());
+        out.set("fileOwner", resolved.locale() == null ? JsonNodeFactory.instance.nullNode() : TextNode.valueOf(resolved.locale()));
         return out;
     }
 

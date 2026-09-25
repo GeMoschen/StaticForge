@@ -1,3 +1,38 @@
+# M27 feature 3 — Localized media (implementation, branch `m27-release-and-scheduling`)
+
+Spec: `tasks/27-m27-release-and-scheduling/03-localized-media/`. Backend only; order 3.1 → 3.2.
+
+- [x] M27.3.1 — `MediaFiles` (payload model: `localized`, `fileLocale`, `localeFiles`, `fileFor` along the chain),
+      per-locale upload/replace/remove, `?locale=` on text/process/binary, toggle with `409 SF-MEDIA-0505` and pointer
+      rekeying (carried like a system migration), projection per locale file, discard restores a locale's file,
+      Changes candidates count localized media keys, DTO `localized`/`localeFiles`, problems `0505`–`0509`;
+      fix: media versions written by metadata/process/text/restore writes lose the `mime_type` column
+- [x] M27.3.2 — per-locale media outputs (`{localePrefix}assets/media/…`, own file or shared owner path, fallback
+      copy when the owner doesn't publish it), references/processed media per render locale, manifest media locale,
+      carry-forward per (media, locale), collision check, planner seeds locales that fall back to a changed locale,
+      preview share URL serves the locale's file
+- [x] OpenAPI + `schema.d.ts`; full `./gradlew build` (`test --rerun`), `ui` `npm run build` + `npx vitest run`
+
+
+## Review
+
+- Backend as planned, plus small API additions the UI (`M27.6.4`) will need: `?locale=` on binary, thumbnail,
+  process and the rendered binary; `localized` on list rows; `localeFiles` (every language → the file it renders, own
+  or from which locale) on the media view. Design details are in each task's implementation notes.
+- Design beyond the task text: `fileLocale` pins the top-level file to its language (survives a change of the default
+  locale); one `MediaOutputs` rule for links, copies and carry-forward (a fallback links the owner's published file,
+  or writes its own copy when the owner doesn't publish one); the planner re-seeds locales that fall back to a locale
+  whose release changed; media outputs in the manifest carry their locale; page-vs-media path collisions are
+  `SF-GEN-0110`.
+- Fixed on the way: media versions written by metadata/process/text/restore/move/migration writes lost the
+  `mime_type` column (the library's MIME filter and image pickers dropped them); `replace` lost localized alt text and
+  caption; the per-build and preview text-media compile caches were keyed by media only (would have mixed locale
+  sources).
+- `./gradlew build test --rerun`: 1283 tests, 0 failures (5 skipped benchmarks); late-edited classes re-run green;
+  `ui` `ng build` (in the Gradle build) and `npx vitest run` (79 files, 536 tests) green.
+
+---
+
 # M27 feature 2 — Released rendering (implementation, branch `m27-release-and-scheduling`)
 
 Spec: `tasks/27-m27-release-and-scheduling/02-released-rendering/`. Backend only; order 2.1 → 2.2 → 2.3.

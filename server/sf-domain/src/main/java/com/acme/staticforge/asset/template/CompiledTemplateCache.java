@@ -60,7 +60,7 @@ public class CompiledTemplateCache {
     private final MeteredTemplateCompiler compiler;
     private final Cache<DefinitionKey, ContentDefinition> definitions;
     private final Cache<ChannelKey, Entry<CompiledChannel>> channels;
-    private final Cache<ChannelKey, Entry<OctlResult>> textMedia;
+    private final Cache<TextMediaKey, Entry<OctlResult>> textMedia;
     private final Cache<Object, TemplateCompileMemo> buildMemos;
 
     public CompiledTemplateCache(
@@ -164,28 +164,28 @@ public class CompiledTemplateCache {
     }
 
     /**
-     * Cross-request compile of one processed text media version's source (M18.3.2), validated on
-     * every hit exactly like {@link #compile}. The media version pins the blob, so
-     * {@code mediaValidFromRevision} identifies the source.
+     * Cross-request compile of one processed text media file's source (M18.3.2), validated on
+     * every hit exactly like {@link #compile}. The blob identifies the source — a version of localized media holds
+     * one per locale (M27.3.2).
      */
     public OctlResult compileTextMedia(
             long projectId,
             UUID mediaUuid,
-            long mediaValidFromRevision,
+            String blobSha256,
             String channel,
             String source,
             boolean scriptLike,
             ReferenceResolver resolver) {
         return cached(
                 textMedia,
-                new ChannelKey(projectId, mediaUuid, mediaValidFromRevision, channel),
+                new TextMediaKey(projectId, mediaUuid, blobSha256, channel),
                 resolver,
                 null,
                 (recording, lookups) -> compiler.textMedia(source, channel, recording, scriptLike));
     }
 
-    private static <T> T cached(
-            Cache<ChannelKey, Entry<T>> cache, ChannelKey key, ReferenceResolver resolver, TemplateHierarchy hierarchy,
+    private static <K, T> T cached(
+            Cache<K, Entry<T>> cache, K key, ReferenceResolver resolver, TemplateHierarchy hierarchy,
             BiFunction<ReferenceResolver, TemplateHierarchy, T> compile) {
         Entry<T> cached = cache.getIfPresent(key);
         if (cached != null && cached.stillResolves(resolver) && (hierarchy == null || hierarchy.matches(cached.templates))) {
@@ -206,6 +206,8 @@ public class CompiledTemplateCache {
     private record DefinitionKey(long projectId, UUID templateUuid, long validFromRevision) {}
 
     private record ChannelKey(long projectId, UUID assetUuid, long validFromRevision, String channel) {}
+
+    private record TextMediaKey(long projectId, UUID mediaUuid, String blobSha256, String channel) {}
 
     /** One {@code assetType:uid} lookup the compiler made, and its answer ({@code null} = unresolvable). */
     private record Resolution(String assetType, String uid, UUID uuid) {}

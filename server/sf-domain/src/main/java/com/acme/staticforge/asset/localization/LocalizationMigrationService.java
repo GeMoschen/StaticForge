@@ -424,6 +424,7 @@ public class LocalizationMigrationService {
         next.setTemplateAssetId(current.getTemplateAssetId());
         next.setDeleted(current.isDeleted());
         next.setAsset(rewrite.asset());
+        next.projectMediaColumns(rewrite.asset().getAssetType());
         AssetVersion saved = assetVersionRepository.save(next);
         referenceMaterializer.materialize(rewrite.asset(), saved);
         return saved;

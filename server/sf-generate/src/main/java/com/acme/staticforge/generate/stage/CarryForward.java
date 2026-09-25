@@ -1,12 +1,12 @@
 package com.acme.staticforge.generate.stage;
 
-import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.postprocess.SitePage;
+import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.generate.target.BuildManifest;
@@ -39,7 +39,8 @@ import java.util.UUID;
  *       a shrunk pagination and a page the run planned but held back all drop the base file;</li>
  *   <li><b>any other page output</b>: only in a scoped run (an unscoped run's channels are the whole site);</li>
  *   <li><b>a media file</b>: some kept or rendered page, or a kept or rendered processed media file, still needs it, and
- *       the run didn't copy it again;</li>
+ *       the run didn't copy it again. A reference from a locale needs the output it resolves to in that locale
+ *       ({@link MediaOutputs}, M27.3.2): a localized media's outputs are carried per locale they are written for;</li>
  *   <li><b>a site file</b> (sitemap, search index…): never; post-processing writes them again for the whole site.</li>
  * </ul>
  *
@@ -50,6 +51,7 @@ public final class CarryForward {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final Snapshot snapshot;
+    private final MediaOutputs mediaOutputs;
     private final BuildPlan plan;
     private final Set<String> channels;
     private final boolean scoped;
@@ -67,6 +69,7 @@ public final class CarryForward {
      */
     public CarryForward(
             Snapshot snapshot,
+            MediaOutputs mediaOutputs,
             BuildPlan plan,
             Set<String> channels,
             String scopeFolderPath,
@@ -74,6 +77,7 @@ public final class CarryForward {
             BuildManifest base,
             Optional<byte[]> baseSearchIndex) {
         this.snapshot = snapshot;
+        this.mediaOutputs = mediaOutputs;
         this.plan = plan;
         this.channels = Set.copyOf(channels);
         this.scopeFolderPath = scopeFolderPath;
@@ -216,9 +220,8 @@ public final class CarryForward {
         rendered.forEach(file -> renderedByPath.put(file.outputPath(), file));
 
         Map<String, BuildManifest.Output> outputs = new LinkedHashMap<>();
-        Set<UUID> copiedMedia = new HashSet<>(assets.owners().values());
         List<BuildManifest.Output> kept = new ArrayList<>(carriedPages);
-        kept.addAll(carriedMedia(copiedMedia, rendered, assets));
+        kept.addAll(carriedMedia(entriesByPath, rendered, assets));
         kept.forEach(output -> outputs.put(output.path(), output));
 
         for (OutputFile file : files) {
@@ -258,50 +261,65 @@ public final class CarryForward {
                     entry.locale(),
                     AssetCopyStage.mediaOnly(snapshot, page.dependencies()));
         }
-        UUID media = assets.owners().get(file.path());
+        MediaOutputs.Key media = assets.owners().get(file.path());
         if (media != null) {
             return new BuildManifest.Output(
-                    file.path(), BuildManifest.Kind.MEDIA, media, null, null, assets.dependencies().get(media));
+                    file.path(), BuildManifest.Kind.MEDIA, media.media(), null, null, media.locale(),
+                    assets.dependencies().get(media));
         }
         return new BuildManifest.Output(file.path(), BuildManifest.Kind.SITE, null, null, null, null);
     }
 
     /**
-     * The base build's media outputs still needed and not copied again: the media the kept pages and every rendered
-     * file depend on, closed over processed media (a stylesheet's images).
+     * The base build's media outputs still needed and not written again: the outputs the media references of the kept
+     * pages and of every rendered file resolve to in their locale, closed over processed media (a stylesheet's images).
      */
-    private List<BuildManifest.Output> carriedMedia(Set<UUID> copied, List<RenderedFile> rendered, AssetCopyResult assets) {
+    private List<BuildManifest.Output> carriedMedia(
+            Map<String, PlanEntry> entriesByPath, List<RenderedFile> rendered, AssetCopyResult assets) {
         if (base == null) {
             return List.of();
         }
-        Map<UUID, List<BuildManifest.Output>> baseMedia = new HashMap<>();
+        Set<MediaOutputs.Key> written = new HashSet<>(assets.owners().values());
+        Map<MediaOutputs.Key, List<BuildManifest.Output>> baseMedia = new HashMap<>();
         for (BuildManifest.Output output : base.outputs()) {
             if (output.kind() == BuildManifest.Kind.MEDIA && output.asset() != null) {
-                baseMedia.computeIfAbsent(output.asset(), k -> new ArrayList<>()).add(output);
+                baseMedia.computeIfAbsent(new MediaOutputs.Key(output.asset(), output.locale()), k -> new ArrayList<>())
+                        .add(output);
             }
         }
-        Deque<UUID> pending = new ArrayDeque<>();
-        carriedPages.forEach(output -> pending.addAll(output.dependencies()));
-        rendered.forEach(file -> pending.addAll(AssetCopyStage.mediaOnly(snapshot, file.dependencies())));
-        assets.dependencies().values().forEach(pending::addAll);
+        Deque<AssetCopyStage.Reference> pending = new ArrayDeque<>();
+        carriedPages.forEach(output -> references(output.dependencies(), output.locale(), pending));
+        for (RenderedFile file : rendered) {
+            PlanEntry entry = entriesByPath.get(file.outputPath());
+            references(AssetCopyStage.mediaOnly(snapshot, file.dependencies()), entry == null ? null : entry.locale(), pending);
+        }
+        assets.dependencies().forEach((key, media) -> references(media, key.locale(), pending));
 
-        Set<UUID> needed = new HashSet<>();
+        Set<AssetCopyStage.Reference> seen = new HashSet<>();
+        Set<MediaOutputs.Key> needed = new HashSet<>();
         List<BuildManifest.Output> carried = new ArrayList<>();
         while (!pending.isEmpty()) {
-            UUID media = pending.poll();
-            if (!needed.add(media) || copied.contains(media)) {
+            AssetCopyStage.Reference reference = pending.poll();
+            if (!seen.add(reference)) {
                 continue;
             }
-            SnapshotAsset asset = snapshot.assetByUuid(media);
-            if (asset == null || asset.deleted() || asset.type() != AssetType.MEDIA) {
+            MediaOutputs.Output output = mediaOutputs.of(reference.media(), reference.locale());
+            if (output == null || written.contains(output.key()) || !needed.add(output.key())) {
                 continue;
             }
-            for (BuildManifest.Output output : baseMedia.getOrDefault(media, List.of())) {
-                carried.add(output);
-                pending.addAll(output.dependencies());
+            for (BuildManifest.Output kept : baseMedia.getOrDefault(output.key(), List.of())) {
+                carried.add(kept);
+                references(kept.dependencies(), output.key().locale(), pending);
             }
         }
         return carried;
+    }
+
+    /** {@code media} referenced from {@code locale}, in a stable order. */
+    private static void references(Set<UUID> media, String locale, Deque<AssetCopyStage.Reference> into) {
+        media.stream()
+                .sorted(Comparator.comparing(UUID::toString))
+                .forEach(uuid -> into.add(new AssetCopyStage.Reference(uuid, locale)));
     }
 
     private static Map<String, JsonNode> searchIndex(Optional<byte[]> bytes) {

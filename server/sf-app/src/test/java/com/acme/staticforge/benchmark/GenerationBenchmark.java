@@ -162,7 +162,7 @@ class GenerationBenchmark {
         PlannedBuild planned = generationService.planFor(project.getKey(), incrementalRequest);
         long planMs = (System.nanoTime() - planStart) / 1_000_000L;
         long insightStart = System.nanoTime();
-        List<PlanEntryRecord> entries = PlanInsight.entries(planned.snapshot(), planned.plan());
+        List<PlanEntryRecord> entries = PlanInsight.entries(planned);
         PlanInsight.summary(mapper, planned, incrementalRequest, entries);
         long reasonsMs = (System.nanoTime() - insightStart) / 1_000_000L;
         GenerationRun holder = runs.save(new GenerationRun(project.getId(), null, GenerationMode.INCREMENTAL, null,

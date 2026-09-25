@@ -156,6 +156,21 @@ public class AssetVersion {
         this.sizeBytes = sizeBytes;
     }
 
+    /**
+     * Projects the media columns ({@code mime_type}, {@code size_bytes} — the media library's filter) from the
+     * payload's top-level file when {@code type} is {@code MEDIA}; every writer of a version calls this, so a version
+     * written by a metadata edit, a restore or a folder move keeps them.
+     */
+    public void projectMediaColumns(AssetType type) {
+        if (type != AssetType.MEDIA || payload == null) {
+            return;
+        }
+        JsonNode mime = payload.get("mimeType");
+        JsonNode size = payload.get("sizeBytes");
+        this.mimeType = mime != null && mime.isTextual() ? mime.asText() : null;
+        this.sizeBytes = size != null && size.isNumber() ? size.asLong() : null;
+    }
+
     public JsonNode getPayload() {
         return payload;
     }

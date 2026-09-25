@@ -5,18 +5,19 @@ import com.acme.staticforge.asset.media.BlobStore;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.generate.pipeline.OutputFile;
+import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -27,13 +28,17 @@ import org.springframework.stereotype.Service;
  * content-addressed {@link BlobStore} using the {@code blobSha256} recorded in the media
  * payload (revision-pinned, so the snapshot — not the live asset — dictates which bytes are
  * copied), emitting one {@link OutputFile} per primary binary and one per named variant. Paths
- * come from {@link MediaPaths}, keeping the ASSETS stage and the renderer's {@code $CMS_REF}
- * resolver in lock-step.
+ * come from {@link MediaPaths} through {@link MediaOutputs}, keeping the ASSETS stage and the renderer's
+ * {@code $CMS_REF} resolver in lock-step.
+ *
+ * <p>What is copied is driven by references: a page rendered in a locale needs the output its media references
+ * resolve to in that locale (M27.3.2) — for localized media the locale's own file, or the file of the locale it falls
+ * back to. Each output (media, locale it is written for) is written once, from that locale's view.
  *
  * <p>A processed text media file ({@code processCms}, M18.3.1) is rendered through
  * {@link MediaRenderStage} instead of copied, to the same path. The media it depends on (an image in
- * a CSS {@code url()}, a font, another processed stylesheet) joins the copy set, transitively: the
- * set is walked to a fixed point with a visited set, so two stylesheets referencing each other
+ * a CSS {@code url()}, a font, another processed stylesheet) joins the copy set in the locale it renders in,
+ * transitively: the set is walked to a fixed point with a visited set, so two stylesheets referencing each other
  * terminate. The walk is sequential; only rendering discovers the next dependencies.
  */
 @Service
@@ -45,60 +50,71 @@ public class AssetCopyStage {
         this.blobStore = blobStore;
     }
 
+    /** A reference to a media asset from a page or file rendered in {@code locale} ({@code null}: no locales). */
+    public record Reference(UUID media, String locale) {}
+
     /**
-     * Builds the ordered list of media files to write for the referenced media set, rendering
-     * processed media with {@code mediaRenderer} and following their media dependencies.
+     * Builds the ordered list of media files to write: the outputs {@code references} resolve to and the outputs
+     * {@code outputs} names directly (processed media an incremental build re-renders), rendering processed media
+     * with {@code mediaRenderer} and following their media dependencies.
      */
-    public AssetCopyResult copy(Snapshot snapshot, Set<UUID> referencedMediaUuids, MediaRenderStage.Build mediaRenderer) {
+    public AssetCopyResult copy(
+            MediaOutputs mediaOutputs,
+            Collection<Reference> references,
+            Collection<MediaOutputs.Key> outputs,
+            MediaRenderStage.Build mediaRenderer) {
         List<OutputFile> files = new ArrayList<>();
         List<Diagnostic> warnings = new ArrayList<>();
         List<Diagnostic> fileErrors = new ArrayList<>();
-        Map<String, UUID> owners = new HashMap<>();
-        Map<UUID, Set<UUID>> dependencies = new HashMap<>();
+        Map<String, MediaOutputs.Key> owners = new HashMap<>();
+        Map<MediaOutputs.Key, Set<UUID>> dependencies = new HashMap<>();
         long copied = 0;
         long skipped = 0;
 
-        Deque<UUID> pending = new ArrayDeque<>(referencedMediaUuids == null ? Set.<UUID>of() : referencedMediaUuids);
-        Set<UUID> visited = new HashSet<>();
+        Deque<MediaOutputs.Output> pending = new ArrayDeque<>();
+        for (Reference reference : references == null ? List.<Reference>of() : references) {
+            enqueue(pending, mediaOutputs.of(reference.media(), reference.locale()));
+        }
+        for (MediaOutputs.Key key : outputs == null ? List.<MediaOutputs.Key>of() : outputs) {
+            enqueue(pending, mediaOutputs.of(key));
+        }
+        Set<MediaOutputs.Key> written = new HashSet<>();
         while (!pending.isEmpty()) {
-            UUID uuid = pending.poll();
-            if (!visited.add(uuid)) {
+            MediaOutputs.Output output = pending.poll();
+            if (!written.add(output.key()) || owners.containsKey(output.path())) {
+                // Already written, or a path an earlier output took (a media between a shared and a
+                // per-locale release, whose default locale has no prefix): the first output keeps the path.
                 continue;
             }
-            SnapshotAsset media = snapshot.assetByUuid(uuid);
-            if (media == null || media.deleted() || media.type() != AssetType.MEDIA) {
-                continue;
-            }
-            JsonNode payload = media.payload();
-            String uid = media.uid() == null ? "" : media.uid();
+            MediaOutputs.Key key = output.key();
+            JsonNode payload = output.payload();
 
             if (TextMediaTypes.isProcessed(payload)) {
-                MediaRenderStage.Result rendered = mediaRenderer.render(media);
+                MediaRenderStage.Result rendered = mediaRenderer.render(output);
                 if (rendered.error() != null) {
                     fileErrors.add(rendered.error());
                     continue;
                 }
                 files.add(rendered.file().toOutputFile());
-                owners.put(rendered.file().outputPath(), uuid);
-                dependencies.put(uuid, mediaOnly(snapshot, rendered.file().dependencies()));
+                owners.put(rendered.file().outputPath(), key);
+                Set<UUID> linked = mediaOnly(mediaOutputs.snapshot(), rendered.file().dependencies());
+                dependencies.put(key, linked);
                 copied++;
                 warnings.addAll(rendered.file().diagnostics());
-                // Deterministic order: a rendered file's dependency set is unordered.
-                rendered.file().dependencies().stream()
-                        .filter(dependency -> !visited.contains(dependency))
+                // Deterministic order: a rendered file's dependency set is unordered. Linked from the locale it renders in.
+                linked.stream()
                         .sorted(Comparator.comparing(UUID::toString))
-                        .forEach(pending::add);
+                        .forEach(media -> enqueue(pending, mediaOutputs.of(media, key.locale())));
                 continue;
             }
 
             String primarySha = text(payload, "blobSha256");
             if (primarySha != null) {
-                String mime = text(payload, "mimeType");
                 byte[] bytes = readOrNull(primarySha);
                 if (bytes != null) {
-                    OutputFile file = new OutputFile(MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mime)), bytes);
+                    OutputFile file = new OutputFile(output.path(), bytes);
                     files.add(file);
-                    owners.put(file.path(), uuid);
+                    owners.put(file.path(), key);
                     copied++;
                 } else {
                     skipped++;
@@ -115,10 +131,9 @@ public class AssetCopyStage {
                     }
                     byte[] bytes = readOrNull(sha);
                     if (bytes != null) {
-                        OutputFile file = new OutputFile(
-                                MediaPaths.variantPath(uid, name, extensionForFormat(text(variant, "format"))), bytes);
+                        OutputFile file = new OutputFile(output.variantPath(name), bytes);
                         files.add(file);
-                        owners.put(file.path(), uuid);
+                        owners.put(file.path(), key);
                         copied++;
                     } else {
                         skipped++;
@@ -128,6 +143,12 @@ public class AssetCopyStage {
         }
 
         return new AssetCopyResult(files, copied, skipped, warnings, fileErrors, owners, dependencies);
+    }
+
+    private static void enqueue(Deque<MediaOutputs.Output> pending, MediaOutputs.Output output) {
+        if (output != null) {
+            pending.add(output);
+        }
     }
 
     /** The media among a rendered file's dependencies. */
@@ -148,15 +169,6 @@ public class AssetCopyStage {
         } catch (RuntimeException e) {
             return null;
         }
-    }
-
-    /** Variant {@code format} ("jpeg") → file extension ("jpg"); mirrors the renderer's URL resolver. */
-    private static String extensionForFormat(String format) {
-        if (format == null || format.isBlank()) {
-            return "bin";
-        }
-        String value = format.toLowerCase(Locale.ROOT);
-        return "jpeg".equals(value) ? "jpg" : value;
     }
 
     private static String text(JsonNode node, String field) {

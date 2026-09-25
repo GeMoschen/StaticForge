@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.media;
 
+import com.acme.staticforge.project.LocaleConfig;
 import java.util.Locale;
 
 /**
@@ -9,6 +10,10 @@ import java.util.Locale;
  *
  * <p>Primary binary: {@code assets/media/{uid}.{ext}}. Variant {@code V}:
  * {@code assets/media/{uid}-{V}.{ext}} (the extension follows the variant's format).
+ *
+ * <p>A localized media file (M27.3.2) is written once per locale that publishes its own file, under that locale's
+ * prefix — exactly the segment the locale's pages get for {@code {locale}}: {@code en/assets/media/{uid}.{ext}}, and
+ * no prefix for the default locale when the project puts it at the site root.
  */
 public final class MediaPaths {
 
@@ -20,6 +25,30 @@ public final class MediaPaths {
 
     public static String variantPath(String uid, String variantName, String ext) {
         return "assets/media/" + uid + "-" + variantName + "." + ext;
+    }
+
+    /** {@link #mediaPath} under {@code localePrefix} ({@link #localePrefix}). */
+    public static String localizedMediaPath(String localePrefix, String uid, String ext) {
+        return localePrefix + mediaPath(uid, ext);
+    }
+
+    /** {@link #variantPath} under {@code localePrefix} ({@link #localePrefix}). */
+    public static String localizedVariantPath(String localePrefix, String uid, String variantName, String ext) {
+        return localePrefix + variantPath(uid, variantName, ext);
+    }
+
+    /**
+     * The path prefix of {@code locale}'s outputs: its tag and a slash, or nothing for the default locale when the
+     * project sets "default locale without prefix", for a project without locales and for {@code null}. Mirrors how
+     * {@code {locale}} expands in a page's output path.
+     */
+    public static String localePrefix(LocaleConfig config, String locale) {
+        LocaleConfig locales = LocaleConfig.orEmpty(config);
+        String declared = locale == null ? null : locales.canonicalDeclared(locale);
+        if (declared == null || (locales.defaultWithoutPrefix() && declared.equals(locales.defaultLocale()))) {
+            return "";
+        }
+        return declared + "/";
     }
 
     /** File extension for a MIME type, used to name media copies deterministically. */
