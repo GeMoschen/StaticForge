@@ -369,7 +369,8 @@ public class AssetServiceImpl implements AssetService {
             }
         }
 
-        Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.RESTORE, ctx.comment(), ctx.userId());
+        // Joins an open batch: a discard (M27.1.2) restores many released versions in one revision.
+        Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.RESTORE);
         AssetVersion current = requireOpen(asset.getId());
         Long deletedAt = asset.getAssetType() == AssetType.RECORD_SET && current.isDeleted()
                 ? deletionRevision(asset.getId())
@@ -556,7 +557,7 @@ public class AssetServiceImpl implements AssetService {
         String oldUid = asset.getUid();
         String uid = requireAvailableUid(asset.getProjectId(), asset.getAssetType(), newUid, asset.getId());
 
-        Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.UID_CHANGE, ctx.comment(), ctx.userId());
+        Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.UID_CHANGE);
         assetUidHistoryRepository.save(new AssetUidHistory(asset.getId(), oldUid, uid, revision.getRevisionId()));
         asset.setUid(uid);
         assetRepository.save(asset);
@@ -634,7 +635,7 @@ public class AssetServiceImpl implements AssetService {
         requireContainment(asset.getProjectId(), asset.getAssetType(), current.getPayload(), newParentFolderUuid);
         FolderRef parent = resolveParent(
                 newParentFolderUuid, asset.getProjectId(), ctx, FolderScope.requiredFor(asset.getAssetType()));
-        Revision revision = revisionService.allocate(asset.getProjectId(), ChangeType.MOVE, ctx.comment(), ctx.userId());
+        Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.MOVE);
 
         close(asset.getId(), revision.getRevisionId());
         AssetVersion next = insertVersion(

@@ -27,4 +27,6 @@ public record RecordSetDetailView(
         long revision,
         Long changedBy,
         Instant changedAt,
-        boolean deleted) {}
+        boolean deleted,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

@@ -52,12 +52,15 @@ public class GlobalsController {
     private final GlobalSetService globalSetService;
     private final AssetService assetService;
     private final SecuritySupport securitySupport;
+    private final ReleaseBlocks releaseBlocks;
 
     public GlobalsController(
             ProjectService projectService,
             GlobalSetService globalSetService,
             AssetService assetService,
-            SecuritySupport securitySupport) {
+            SecuritySupport securitySupport,
+            ReleaseBlocks releaseBlocks) {
+        this.releaseBlocks = releaseBlocks;
         this.projectService = projectService;
         this.globalSetService = globalSetService;
         this.assetService = assetService;
@@ -68,8 +71,12 @@ public class GlobalsController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public List<GlobalSetSummaryView> list(
             @PathVariable String projectKey, @RequestParam(value = "folder", required = false) UUID folder) {
-        return globalSetService.list(projectId(projectKey), folder).stream()
-                .map(v -> new GlobalSetSummaryView(v.uuid(), v.uid(), v.displayName(), v.folderPath(), v.revision()))
+        long projectId = projectId(projectKey);
+        var sets = globalSetService.list(projectId, folder);
+        var release = releaseBlocks.of(projectId, sets.stream().map(v -> v.uuid()).toList());
+        return sets.stream()
+                .map(v -> new GlobalSetSummaryView(
+                        v.uuid(), v.uid(), v.displayName(), v.folderPath(), v.revision(), release.get(v.uuid()), null))
                 .toList();
     }
 
@@ -81,7 +88,7 @@ public class GlobalsController {
             @RequestParam(value = "revision", required = false) Long revision) {
         GlobalSetView view = globalSetService.find(projectId(projectKey), uuid, revision)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Property set not found.")));
-        return ok(view);
+        return ok(projectKey, view);
     }
 
     @PostMapping
@@ -94,7 +101,7 @@ public class GlobalsController {
                 ctx(projectKey, comment(body.comment(), "create property set")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
-                .body(toDetail(view));
+                .body(toDetail(projectKey, view));
     }
 
     @PutMapping("/{uuid}/schema")
@@ -111,7 +118,7 @@ public class GlobalsController {
                 RevisionHeaders.expectedRevision(ifMatch),
                 confirmDiscard,
                 ctx(projectKey, comment(body.comment(), "update property set schema")));
-        return ok(view);
+        return ok(projectKey, view);
     }
 
     @PutMapping("/{uuid}/content")
@@ -126,7 +133,7 @@ public class GlobalsController {
                 body.content(),
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, comment(body.comment(), "update property set values")));
-        return ok(view);
+        return ok(projectKey, view);
     }
 
     @DeleteMapping("/{uuid}")
@@ -141,13 +148,13 @@ public class GlobalsController {
         return ResponseEntity.noContent().build();
     }
 
-    private static ResponseEntity<GlobalSetDetailView> ok(GlobalSetView view) {
+    private ResponseEntity<GlobalSetDetailView> ok(String projectKey, GlobalSetView view) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
-                .body(toDetail(view));
+                .body(toDetail(projectKey, view));
     }
 
-    private static GlobalSetDetailView toDetail(GlobalSetView v) {
+    private GlobalSetDetailView toDetail(String projectKey, GlobalSetView v) {
         return new GlobalSetDetailView(
                 v.uuid(),
                 v.uid(),
@@ -156,7 +163,9 @@ public class GlobalsController {
                 v.contentDefinition(),
                 v.compiledDefinition(),
                 v.content(),
-                v.revision());
+                v.revision(),
+                releaseBlocks.of(projectId(projectKey), v.uuid()),
+                null);
     }
 
     private static String comment(String supplied, String fallback) {

@@ -23,4 +23,6 @@ public record FolderView(
         String type,
         Long recordCount,
         long revision,
-        List<FolderView> children) {}
+        List<FolderView> children,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

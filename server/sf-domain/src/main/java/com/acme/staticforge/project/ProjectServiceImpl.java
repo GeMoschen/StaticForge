@@ -7,6 +7,7 @@ import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.release.ReleaseLocaleTransition;
 import com.acme.staticforge.revision.AssetChange;
 import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
@@ -49,6 +50,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final LocalizationMigrationService localizationMigrations;
     private final UserService userService;
     private final ProjectWriteGuard writeGuard;
+    private final ReleaseLocaleTransition releaseLocaleTransition;
     /**
      * Lazily resolved: the search index is an optional companion of the project service, and a hard
      * dependency here would tie project writes to the index being constructible.
@@ -69,6 +71,7 @@ public class ProjectServiceImpl implements ProjectService {
             LocalizationMigrationService localizationMigrations,
             UserService userService,
             ProjectWriteGuard writeGuard,
+            ReleaseLocaleTransition releaseLocaleTransition,
             org.springframework.beans.factory.ObjectProvider<com.acme.staticforge.search.SearchIndexer> searchIndexer) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -79,6 +82,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.localizationMigrations = localizationMigrations;
         this.userService = userService;
         this.writeGuard = writeGuard;
+        this.releaseLocaleTransition = releaseLocaleTransition;
         this.searchIndexer = searchIndexer;
         this.objectMapper = objectMapper;
         this.assetService = assetService;
@@ -233,6 +237,9 @@ public class ProjectServiceImpl implements ProjectService {
 
         LocalizationMigrationService.MigrationReport applied =
                 localizationMigrations.migrateProject(project.getId(), target, batchCtx, true);
+        // Release pointers follow the locale set in the same revision (M27.1.1): removed locales close,
+        // a project gaining or losing its locales converts between per-locale and "all locales" pointers.
+        releaseLocaleTransition.apply(project.getId(), before, after, batch.getRevisionId());
 
         // A changed language set changes which analyzer each value is indexed with, so the index is
         // rebuilt rather than left describing the old set (M24.3.3). A failure here must not fail the

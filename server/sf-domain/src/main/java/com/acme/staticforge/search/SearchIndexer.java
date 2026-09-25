@@ -1,5 +1,7 @@
 package com.acme.staticforge.search;
 
+import com.acme.staticforge.release.LocaleRelease;
+import com.acme.staticforge.release.ReleaseStatusService;
 import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetChange;
 import com.acme.staticforge.asset.AssetReference;
@@ -84,6 +86,7 @@ public class SearchIndexer implements DisposableBean {
     /** Assets loaded per query when replaying. */
     private static final int LOAD_CHUNK = 500;
 
+    private final ReleaseStatusService releaseStatuses;
     private final SearchIndexService index;
     private final SearchTextExtractorRegistry extractors;
     private final LiveExtractionContexts contexts;
@@ -114,7 +117,9 @@ public class SearchIndexer implements DisposableBean {
             AssetReferenceRepository references,
             SearchProperties properties,
             PlatformTransactionManager transactionManager,
-            MeterRegistry meters) {
+            MeterRegistry meters,
+            ReleaseStatusService releaseStatuses) {
+        this.releaseStatuses = releaseStatuses;
         this.index = index;
         this.extractors = extractors;
         this.contexts = contexts;
@@ -347,13 +352,16 @@ public class SearchIndexer implements DisposableBean {
                     ExtractionContext context = contexts.forPass(projectId);
                     long failed = Long.MAX_VALUE;
                     int added = 0;
-                    for (AssetVersion version : versions.findWithAssetByIdIn(chunk)) {
+                    List<AssetVersion> batchVersions = versions.findWithAssetByIdIn(chunk);
+                    Map<Long, Map<String, LocaleRelease>> statuses = releaseStatuses.ofVersions(projectId, batchVersions);
+                    for (AssetVersion version : batchVersions) {
                         // A version closed since the ids were read changed after `head`: the catch-up replays it.
                         if (version.getValidToRevision() != null || version.isDeleted()) {
                             continue;
                         }
                         try {
-                            Optional<SearchDocument> document = extractors.extract(indexable(version.getAsset(), version), context);
+                            Optional<SearchDocument> document = extractors.extract(indexable(version.getAsset(), version), context)
+                                    .map(d -> d.withReleaseStatuses(statusNames(statuses.get(version.getAssetId()))));
                             if (document.isPresent()) {
                                 rebuild.add(document.get());
                                 added++;
@@ -527,13 +535,15 @@ public class SearchIndexer implements DisposableBean {
         for (List<Long> chunk : chunks(touched.stream().map(Asset::getId).toList())) {
             versions.findOpenWithAssetByAssetIdIn(chunk).forEach(version -> open.put(version.getAssetId(), version));
         }
+        Map<Long, Map<String, LocaleRelease>> statuses = releaseStatuses.ofVersions(projectId, open.values());
         long failedAt = Long.MAX_VALUE;
         for (Asset asset : touched) {
             try {
                 AssetVersion version = open.get(asset.getId());
                 Optional<SearchDocument> document = version == null || version.isDeleted()
                         ? Optional.empty()
-                        : extractors.extract(indexable(asset, version), context);
+                        : extractors.extract(indexable(asset, version), context)
+                                .map(d -> d.withReleaseStatuses(statusNames(statuses.get(asset.getId()))));
                 if (document.isPresent()) {
                     index.upsert(projectId, document.get());
                 } else {
@@ -548,6 +558,16 @@ public class SearchIndexer implements DisposableBean {
             }
         }
         return failedAt;
+    }
+
+    /** The distinct release statuses over an asset's locales — what the {@code releaseStatus} filter matches (M27.1.3). */
+    private static Set<String> statusNames(Map<String, LocaleRelease> locales) {
+        if (locales == null) {
+            return Set.of();
+        }
+        Set<String> names = new java.util.TreeSet<>();
+        locales.values().forEach(release -> names.add(release.status().name()));
+        return names;
     }
 
     private void failure(long projectId, long revision, UUID uuid, RuntimeException e) {

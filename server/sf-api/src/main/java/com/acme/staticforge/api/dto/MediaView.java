@@ -29,4 +29,6 @@ public record MediaView(
         FocalPointView focalPoint,
         List<MediaVariantView> variants,
         boolean processCms,
-        boolean textEditable) {}
+        boolean textEditable,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

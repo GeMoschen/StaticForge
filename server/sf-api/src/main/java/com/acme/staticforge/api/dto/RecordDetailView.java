@@ -26,4 +26,6 @@ public record RecordDetailView(
         Long changedBy,
         Instant changedAt,
         boolean deleted,
-        List<ContentIssue> issues) {}
+        List<ContentIssue> issues,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

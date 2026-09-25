@@ -22,6 +22,9 @@ final class LuceneDocuments {
         doc.add(new StringField(SearchFields.UID, source.uid(), Field.Store.YES));
         doc.add(new StringField(SearchFields.UID_LOWER, source.uid().toLowerCase(Locale.ROOT), Field.Store.NO));
         doc.add(new StringField(SearchFields.FOLDER_PATH, source.folderPath(), Field.Store.YES));
+        for (String status : source.releaseStatuses()) {
+            doc.add(new StringField(SearchFields.RELEASE_STATUS, status, Field.Store.NO));
+        }
         doc.add(new StoredField(SearchFields.DISPLAY_NAME, source.displayName()));
         if (source.templateUuid() != null) {
             doc.add(new StoredField(SearchFields.TEMPLATE_UUID, source.templateUuid().toString()));

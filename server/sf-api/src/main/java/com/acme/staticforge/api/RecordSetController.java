@@ -61,9 +61,14 @@ public class RecordSetController {
     private final ProjectService projectService;
     private final RecordSetService recordSetService;
     private final SecuritySupport securitySupport;
+    private final ReleaseBlocks releaseBlocks;
 
     public RecordSetController(
-            ProjectService projectService, RecordSetService recordSetService, SecuritySupport securitySupport) {
+            ProjectService projectService,
+            RecordSetService recordSetService,
+            SecuritySupport securitySupport,
+            ReleaseBlocks releaseBlocks) {
+        this.releaseBlocks = releaseBlocks;
         this.projectService = projectService;
         this.recordSetService = recordSetService;
         this.securitySupport = securitySupport;
@@ -74,10 +79,13 @@ public class RecordSetController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public List<RecordSetSummaryView> list(
             @PathVariable String projectKey, @RequestParam(value = "dataset", required = false) UUID dataset) {
-        return recordSetService.list(projectId(projectKey), dataset).stream()
+        long projectId = projectId(projectKey);
+        var sets = recordSetService.list(projectId, dataset);
+        var release = releaseBlocks.of(projectId, sets.stream().map(v -> v.uuid()).toList());
+        return sets.stream()
                 .map(v -> new RecordSetSummaryView(
                         v.uuid(), v.uid(), v.displayName(), datasetRef(v), v.folderUuid(), v.folderPath(),
-                        v.recordCount(), v.queryValid(), v.revision()))
+                        v.recordCount(), v.queryValid(), v.revision(), release.get(v.uuid()), null))
                 .toList();
     }
 
@@ -87,7 +95,7 @@ public class RecordSetController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam(value = "revision", required = false) Long revision) {
-        return ok(require(projectId(projectKey), uuid, revision));
+        return ok(projectKey, require(projectId(projectKey), uuid, revision));
     }
 
     /** {@code 400} naming {@code datasetUuid} without one; {@code 422} with {@code diagnostics} for a bad query. */
@@ -110,7 +118,7 @@ public class RecordSetController {
                 ctx(projectKey, comment(body.comment(), "create record set")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
-                .body(toDetail(view));
+                .body(toDetail(projectKey, view));
     }
 
     /** Renames the set and replaces its query; {@code 422} with {@code diagnostics} for an invalid query. */
@@ -127,7 +135,7 @@ public class RecordSetController {
                 new UpdateRecordSetCommand(body.displayName(), body.query()),
                 expected,
                 ctx(projectKey, comment(body.comment(), "update record set")));
-        return ok(view);
+        return ok(projectKey, view);
     }
 
     /** {@code 409 SF-DOM-0110} with {@code recordCount} while the set has live records, unless {@code cascade}. */
@@ -165,15 +173,16 @@ public class RecordSetController {
             @RequestParam(value = "locale", required = false) String locale,
             @RequestParam(value = "revision", required = false) Long revision,
             HttpServletRequest request) {
+        long projectId = projectId(projectKey);
         return RecordController.toPageView(recordSetService.listRecords(
-                projectId(projectKey),
+                projectId,
                 uuid,
                 new RecordListQuery(q, null, where, RecordController.sortKeys(request)),
                 applySetQuery,
                 locale,
                 revision,
                 page,
-                size));
+                size), releaseBlocks, projectId);
     }
 
     /**
@@ -195,13 +204,13 @@ public class RecordSetController {
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")));
     }
 
-    private static ResponseEntity<RecordSetDetailView> ok(RecordSetView view) {
+    private ResponseEntity<RecordSetDetailView> ok(String projectKey, RecordSetView view) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
-                .body(toDetail(view));
+                .body(toDetail(projectKey, view));
     }
 
-    private static RecordSetDetailView toDetail(RecordSetView v) {
+    private RecordSetDetailView toDetail(String projectKey, RecordSetView v) {
         return new RecordSetDetailView(
                 v.uuid(),
                 v.uid(),
@@ -216,7 +225,9 @@ public class RecordSetController {
                 v.revision(),
                 v.changedBy(),
                 v.changedAt(),
-                v.deleted());
+                v.deleted(),
+                releaseBlocks.of(projectId(projectKey), v.uuid()),
+                null);
     }
 
     private static AssetRefView datasetRef(RecordSetView v) {

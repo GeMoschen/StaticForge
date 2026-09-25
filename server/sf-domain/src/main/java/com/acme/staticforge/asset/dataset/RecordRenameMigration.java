@@ -7,6 +7,7 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.content.ContentRenameMigrator.EditorRename;
 import com.acme.staticforge.asset.content.ContentRenameMigrator;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
+import com.acme.staticforge.release.ReleaseCarryForward;
 import com.acme.staticforge.revision.AssetChange;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
@@ -44,6 +45,7 @@ public class RecordRenameMigration {
     private final AssetVersionRepository assetVersionRepository;
     private final ReferenceMaterializer referenceMaterializer;
     private final RevisionService revisionService;
+    private final ReleaseCarryForward releaseCarryForward;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -51,10 +53,12 @@ public class RecordRenameMigration {
     public RecordRenameMigration(
             AssetVersionRepository assetVersionRepository,
             ReferenceMaterializer referenceMaterializer,
-            RevisionService revisionService) {
+            RevisionService revisionService,
+            ReleaseCarryForward releaseCarryForward) {
         this.assetVersionRepository = assetVersionRepository;
         this.referenceMaterializer = referenceMaterializer;
         this.revisionService = revisionService;
+        this.releaseCarryForward = releaseCarryForward;
     }
 
     /**
@@ -76,6 +80,7 @@ public class RecordRenameMigration {
         entityManager.flush();
         List<Long> versionIds = assetVersionRepository.findCurrentRecordVersionIdsOfDataset(projectId, datasetAssetId);
         List<AssetChange> changes = new ArrayList<>();
+        List<ReleaseCarryForward.Rewrite> rewritten = new ArrayList<>();
         Instant now = Instant.now();
         for (int from = 0; from < versionIds.size(); from += CHUNK_SIZE) {
             List<Long> chunk = versionIds.subList(from, Math.min(from + CHUNK_SIZE, versionIds.size()));
@@ -98,13 +103,17 @@ public class RecordRenameMigration {
                 next.setTemplateAssetId(current.getTemplateAssetId());
                 next.setDeleted(false);
                 next.setAsset(asset);
-                referenceMaterializer.materialize(asset, assetVersionRepository.save(next));
+                AssetVersion saved = assetVersionRepository.save(next);
+                referenceMaterializer.materialize(asset, saved);
+                rewritten.add(new ReleaseCarryForward.Rewrite(current.getAssetId(), current.getId(), saved.getId()));
                 changes.add(AssetChange.create(asset.getUuid().toString(), AssetType.RECORD.name(), "UPDATE", List.of("payload")));
             }
             entityManager.flush();
             entityManager.clear();
         }
         revisionService.appendSummaries(projectId, revisionId, changes);
+        // A renamed field is a schema change, not an edit: published records stay published (M27.1.2).
+        releaseCarryForward.carryForward(projectId, rewritten, revisionId);
         return changes.size();
     }
 }

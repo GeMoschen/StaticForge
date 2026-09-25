@@ -41,11 +41,17 @@ public class PageController {
     private final ProjectService projectService;
     private final PageService pageService;
     private final SecuritySupport securitySupport;
+    private final ReleaseBlocks releaseBlocks;
 
-    public PageController(ProjectService projectService, PageService pageService, SecuritySupport securitySupport) {
+    public PageController(
+            ProjectService projectService,
+            PageService pageService,
+            SecuritySupport securitySupport,
+            ReleaseBlocks releaseBlocks) {
         this.projectService = projectService;
         this.pageService = pageService;
         this.securitySupport = securitySupport;
+        this.releaseBlocks = releaseBlocks;
     }
 
     @GetMapping
@@ -55,8 +61,10 @@ public class PageController {
             @RequestParam(required = false) UUID folder,
             @RequestParam(required = false) UUID templateUuid,
             @RequestParam(required = false) String q) {
-        List<AssetVersionView> pages = pageService.list(projectId(projectKey), new PageQuery(folder, templateUuid, q));
-        return pages.stream().map(PageController::toSummary).toList();
+        long projectId = projectId(projectKey);
+        List<AssetVersionView> pages = pageService.list(projectId, new PageQuery(folder, templateUuid, q));
+        var release = releaseBlocks.of(projectId, pages.stream().map(AssetVersionView::uuid).toList());
+        return pages.stream().map(v -> toSummary(v, release.get(v.uuid()))).toList();
     }
 
     @PostMapping
@@ -185,10 +193,14 @@ public class PageController {
                 payload != null ? payload.get("nav") : null,
                 payload != null ? payload.get("output") : null,
                 payload != null ? payload.get("meta") : null,
-                pageService.contentIssues(projectId, payload));
+                pageService.contentIssues(projectId, payload),
+                releaseBlocks.of(projectId, v.uuid()),
+                null);
     }
 
-    private static AssetSummaryView toSummary(AssetVersionView v) {
-        return new AssetSummaryView(v.uuid(), v.uid(), v.type().name(), v.displayName(), v.folderPath(), v.validFromRevision());
+    private static AssetSummaryView toSummary(
+            AssetVersionView v, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
+        return new AssetSummaryView(
+                v.uuid(), v.uid(), v.type().name(), v.displayName(), v.folderPath(), v.validFromRevision(), release, null);
     }
 }

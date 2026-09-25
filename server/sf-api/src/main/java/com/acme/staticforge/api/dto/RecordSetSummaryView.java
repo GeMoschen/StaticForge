@@ -17,4 +17,6 @@ public record RecordSetSummaryView(
         String folderPath,
         long recordCount,
         boolean queryValid,
-        long revision) {}
+        long revision,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

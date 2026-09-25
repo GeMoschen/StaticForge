@@ -92,17 +92,19 @@ final class SearchQueryExecutor {
             }
             List<String> bodyFields = bodyFields(query);
             Query match = build(input, false, bodyFields);
-            Map<AssetType, Long> counts = match == null ? Map.of() : counts(searcher, filtered(match, Set.of(), query.folder()));
+            Map<AssetType, Long> counts = match == null
+                    ? Map.of()
+                    : counts(searcher, filtered(match, Set.of(), query.folder(), query.releaseStatuses()));
             if (total(counts, Set.of()) == 0 && hasFuzzyWords(input)) {
                 match = build(input, true, bodyFields);
-                counts = counts(searcher, filtered(match, Set.of(), query.folder()));
+                counts = counts(searcher, filtered(match, Set.of(), query.folder(), query.releaseStatuses()));
             }
             long total = total(counts, query.types());
             int from = Math.multiplyExact(query.page(), query.size());
             if (match == null || total == 0 || from >= total) {
                 return new SearchHits(List.of(), total, counts);
             }
-            Query hitsQuery = filtered(match, query.types(), query.folder());
+            Query hitsQuery = filtered(match, query.types(), query.folder(), query.releaseStatuses());
             int wanted = (int) Math.min(total, (long) from + query.size());
             TopDocs top = searcher.search(hitsQuery, new TopScoreDocCollectorManager(wanted, null, wanted));
             Weight weight = searcher.createWeight(searcher.rewrite(match), ScoreMode.COMPLETE_NO_SCORES, 1f);
@@ -248,8 +250,8 @@ final class SearchQueryExecutor {
                 .anyMatch(word -> analyze(SearchFields.TEXT, word).stream().anyMatch(t -> t.length() >= MIN_FUZZY_CHARS));
     }
 
-    private static Query filtered(Query match, Set<AssetType> types, String folder) {
-        if (types.isEmpty() && folder == null) {
+    private static Query filtered(Query match, Set<AssetType> types, String folder, Set<String> releaseStatuses) {
+        if (types.isEmpty() && folder == null && releaseStatuses.isEmpty()) {
             return match;
         }
         BooleanQuery.Builder filtered = new BooleanQuery.Builder().add(match, Occur.MUST);
@@ -260,6 +262,12 @@ final class SearchQueryExecutor {
         }
         if (folder != null) {
             filtered.add(new PrefixQuery(new Term(SearchFields.FOLDER_PATH, folder)), Occur.FILTER);
+        }
+        if (!releaseStatuses.isEmpty()) {
+            BooleanQuery.Builder anyStatus = new BooleanQuery.Builder();
+            releaseStatuses.forEach(status ->
+                    anyStatus.add(new TermQuery(new Term(SearchFields.RELEASE_STATUS, status)), Occur.SHOULD));
+            filtered.add(anyStatus.build(), Occur.FILTER);
         }
         return filtered.build();
     }

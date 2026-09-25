@@ -54,13 +54,15 @@ public class AssetController {
     private final AssetService assetService;
     private final FolderService folderService;
     private final SecuritySupport securitySupport;
+    private final ReleaseBlocks releaseBlocks;
 
     public AssetController(ProjectService projectService, AssetService assetService,
-            FolderService folderService, SecuritySupport securitySupport) {
+            FolderService folderService, SecuritySupport securitySupport, ReleaseBlocks releaseBlocks) {
         this.projectService = projectService;
         this.assetService = assetService;
         this.folderService = folderService;
         this.securitySupport = securitySupport;
+        this.releaseBlocks = releaseBlocks;
     }
 
     @GetMapping
@@ -76,14 +78,15 @@ public class AssetController {
         AssetType assetType = type == null ? null : AssetType.valueOf(type.toUpperCase());
         Page<AssetSummary> result = assetService.search(
                 new AssetQuery(projectId, assetType, folder, q), PageRequest.of(page, size));
-        return result.map(AssetController::toSummary);
+        var release = releaseBlocks.of(projectId, result.getContent().stream().map(AssetSummary::uuid).toList());
+        return result.map(s -> toSummary(s, release.get(s.uuid())));
     }
 
     @GetMapping("/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<AssetDetailView> detail(@PathVariable String projectKey, @PathVariable UUID uuid) {
         AssetVersionView view = assetService.requireCurrent(projectId(projectKey), uuid);
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toDetail(view));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toDetail(projectKey, view));
     }
 
     @GetMapping("/{uuid}/usages")
@@ -111,14 +114,15 @@ public class AssetController {
         AssetVersionView view = assetService.findAt(projectId(projectKey), uuid, revision)
                 .orElseThrow(() -> new com.acme.staticforge.common.SfException(
                         com.acme.staticforge.common.ProblemFactory.notFound("No version at revision " + revision + ".")));
-        return toDetail(view);
+        // A past version has no current release status of its own.
+        return toDetail(view, null);
     }
 
     @PostMapping("/{uuid}/restore")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public AssetDetailView restore(@PathVariable String projectKey, @PathVariable UUID uuid, @RequestBody RestoreRequest body) {
         AssetVersionView view = assetService.restore(uuid, body.fromRevision(), ctx(projectKey, "restore"));
-        return toDetail(view);
+        return toDetail(projectKey, view);
     }
 
     @PatchMapping("/{uuid}/uid")
@@ -149,7 +153,7 @@ public class AssetController {
                 new UpdateAssetCommand(body.displayName(), current.payload()),
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, "rename display name"));
-        return toDetail(view);
+        return toDetail(projectKey, view);
     }
 
     @PostMapping("/{uuid}/move")
@@ -161,7 +165,7 @@ public class AssetController {
         if (current.type() == AssetType.FOLDER) {
             return ResponseEntity.ok(toMoveResult(folderService.move(uuid, body.folderUuid(), revisionContext)));
         }
-        return ResponseEntity.ok(toDetail(assetService.move(uuid, body.folderUuid(), revisionContext)));
+        return ResponseEntity.ok(toDetail(projectKey, assetService.move(uuid, body.folderUuid(), revisionContext)));
     }
 
     @DeleteMapping("/{uuid}")
@@ -180,14 +184,21 @@ public class AssetController {
         return RevisionContext.of(projectId(key), securitySupport.currentUserId(), comment);
     }
 
-    private static AssetSummaryView toSummary(AssetSummary s) {
-        return new AssetSummaryView(s.uuid(), s.uid(), s.type().name(), s.displayName(), s.folderPath(), s.validFromRevision());
+    private static AssetSummaryView toSummary(
+            AssetSummary s, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
+        return new AssetSummaryView(
+                s.uuid(), s.uid(), s.type().name(), s.displayName(), s.folderPath(), s.validFromRevision(), release, null);
     }
 
-    private static AssetDetailView toDetail(AssetVersionView v) {
+    private AssetDetailView toDetail(String projectKey, AssetVersionView v) {
+        return toDetail(v, releaseBlocks.of(projectId(projectKey), v.uuid()));
+    }
+
+    private static AssetDetailView toDetail(
+            AssetVersionView v, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
         return new AssetDetailView(
                 v.uuid(), v.uid(), v.type().name(), v.displayName(), v.payload(), v.validFromRevision(),
-                v.deleted(), v.folderPath(), v.changedBy(), v.changedAt());
+                v.deleted(), v.folderPath(), v.changedBy(), v.changedAt(), release, null);
     }
 
     private static UsageDto toUsage(UsageView u) {

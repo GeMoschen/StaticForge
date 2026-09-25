@@ -15,4 +15,6 @@ public record AssetDetailView(
         boolean deleted,
         String folderPath,
         Long changedBy,
-        Instant changedAt) {}
+        Instant changedAt,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

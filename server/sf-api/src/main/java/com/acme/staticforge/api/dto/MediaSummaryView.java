@@ -12,4 +12,6 @@ public record MediaSummaryView(
         String folderPath,
         long revision,
         boolean processCms,
-        boolean textEditable) {}
+        boolean textEditable,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

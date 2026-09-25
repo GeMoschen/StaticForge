@@ -297,7 +297,8 @@ public class FolderServiceImpl implements FolderService {
                 .filter(v -> pathService.isUnder(v.getFolderPath(), oldPath))
                 .toList();
 
-        Revision revision = revisionService.allocate(ctx.projectId(), ChangeType.MOVE, ctx.comment(), ctx.userId());
+        // Joins an open batch: a discard (M27.1.2) moves folders back in the discard revision.
+        Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.MOVE);
         for (AssetVersion version : subtree) {
             Long newFolderId = version.getAssetId().equals(folder.getId()) ? target.id() : version.getFolderId();
             String rebased = pathService.rebase(version.getFolderPath(), oldPath, newPath);

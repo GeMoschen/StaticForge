@@ -12,6 +12,7 @@ import com.acme.staticforge.asset.content.TemplateContentDefinitions;
 import com.acme.staticforge.asset.page.PageContentValidation;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.asset.template.TemplateHierarchies;
+import com.acme.staticforge.release.ReleaseCarryForward;
 import com.acme.staticforge.revision.AssetChange;
 import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
@@ -48,6 +49,7 @@ public class LocalizationMigrationService {
     private final ReferenceMaterializer referenceMaterializer;
     private final TemplateHierarchies hierarchies;
     private final PageContentValidation pageContentValidation;
+    private final ReleaseCarryForward releaseCarryForward;
 
     public LocalizationMigrationService(
             AssetRepository assetRepository,
@@ -55,13 +57,15 @@ public class LocalizationMigrationService {
             RevisionService revisionService,
             ReferenceMaterializer referenceMaterializer,
             TemplateHierarchies hierarchies,
-            PageContentValidation pageContentValidation) {
+            PageContentValidation pageContentValidation,
+            ReleaseCarryForward releaseCarryForward) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.revisionService = revisionService;
         this.referenceMaterializer = referenceMaterializer;
         this.hierarchies = hierarchies;
         this.pageContentValidation = pageContentValidation;
+        this.releaseCarryForward = releaseCarryForward;
     }
 
     /**
@@ -234,9 +238,12 @@ public class LocalizationMigrationService {
 
         Revision revision = revision(projectId, ctx);
         List<AssetChange> changes = new ArrayList<>();
+        List<ReleaseCarryForward.Rewrite> rewritten = new ArrayList<>();
         for (Rewrite rewrite : rewrites) {
             close(rewrite.version().getAssetId(), revision.getRevisionId());
-            insertVersion(rewrite, revision.getRevisionId(), ctx.userId());
+            AssetVersion next = insertVersion(rewrite, revision.getRevisionId(), ctx.userId());
+            rewritten.add(new ReleaseCarryForward.Rewrite(
+                    rewrite.version().getAssetId(), rewrite.version().getId(), next.getId()));
             changes.add(AssetChange.create(
                     rewrite.asset().getUuid().toString(),
                     rewrite.asset().getAssetType().name(),
@@ -244,6 +251,8 @@ public class LocalizationMigrationService {
                     List.of("content")));
         }
         revisionService.appendSummaries(projectId, revision.getRevisionId(), changes);
+        // Published content stays published: the rewrite changes the shape, not what a locale shows (M27.1.2).
+        releaseCarryForward.carryForward(projectId, rewritten, revision.getRevisionId());
         return new MigrationReport(affected, discarded, discardedLocales, true);
     }
 
@@ -406,7 +415,7 @@ public class LocalizationMigrationService {
         });
     }
 
-    private void insertVersion(Rewrite rewrite, long revisionId, Long changedBy) {
+    private AssetVersion insertVersion(Rewrite rewrite, long revisionId, Long changedBy) {
         AssetVersion current = rewrite.version();
         AssetVersion next = new AssetVersion(
                 current.getAssetId(), revisionId, current.getDisplayName(), rewrite.payload(), changedBy, Instant.now());
@@ -415,7 +424,9 @@ public class LocalizationMigrationService {
         next.setTemplateAssetId(current.getTemplateAssetId());
         next.setDeleted(current.isDeleted());
         next.setAsset(rewrite.asset());
-        referenceMaterializer.materialize(rewrite.asset(), assetVersionRepository.save(next));
+        AssetVersion saved = assetVersionRepository.save(next);
+        referenceMaterializer.materialize(rewrite.asset(), saved);
+        return saved;
     }
 
     private record Rewrite(AssetVersion version, Asset asset, ObjectNode payload) {}

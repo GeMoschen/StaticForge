@@ -5,6 +5,7 @@ import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentRenameMigrator.EditorRename;
+import com.acme.staticforge.release.ReleaseCarryForward;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.query.RecordSetQueries;
@@ -30,10 +31,15 @@ public class RecordSetQueryMigration {
 
     private final AssetService assetService;
     private final AssetVersionRepository assetVersionRepository;
+    private final ReleaseCarryForward releaseCarryForward;
 
-    public RecordSetQueryMigration(AssetService assetService, AssetVersionRepository assetVersionRepository) {
+    public RecordSetQueryMigration(
+            AssetService assetService,
+            AssetVersionRepository assetVersionRepository,
+            ReleaseCarryForward releaseCarryForward) {
         this.assetService = assetService;
         this.assetVersionRepository = assetVersionRepository;
+        this.releaseCarryForward = releaseCarryForward;
     }
 
     /**
@@ -55,6 +61,7 @@ public class RecordSetQueryMigration {
         Map<String, String> byPreviousName = new LinkedHashMap<>();
         renames.forEach(rename -> byPreviousName.put(rename.from(), rename.to()));
         int rewritten = 0;
+        List<ReleaseCarryForward.Rewrite> rewrites = new ArrayList<>();
         for (AssetVersion set : assetVersionRepository.findCurrentSetsOfDataset(projectId, datasetAssetId)) {
             RecordSetQuery query = RecordSetQuery.fromJson(set.getPayload().get("query"));
             RecordSetQuery renamed = RecordSetQueries.rename(query, byPreviousName);
@@ -68,8 +75,12 @@ public class RecordSetQueryMigration {
                     new UpdateAssetCommand(set.getDisplayName(), payload),
                     set.getValidFromRevision(),
                     batchCtx);
+            assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(set.getAssetId()).ifPresent(next ->
+                    rewrites.add(new ReleaseCarryForward.Rewrite(set.getAssetId(), set.getId(), next.getId())));
             rewritten++;
         }
+        // A renamed field is a schema change, not an edit: published sets stay published (M27.1.2).
+        releaseCarryForward.carryForward(projectId, rewrites, batchCtx.openRevision().getRevisionId());
         return rewritten;
     }
 

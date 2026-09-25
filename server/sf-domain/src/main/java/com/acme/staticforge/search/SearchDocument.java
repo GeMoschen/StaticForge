@@ -15,6 +15,8 @@ import java.util.UUID;
  * @param textByLocale prose of a language-dependent value, keyed by language (M24.3.3): indexed into
  *     that language's field, so a German search stems German and an English one English
  * @param source code (CDL, OCTL, processed text media): indexed language-neutral only
+ * @param releaseStatuses the distinct release statuses of the asset over its locales (M27.1.3); empty for assets
+ *     without a release state (templates, datasets)
  */
 public record SearchDocument(
         UUID uuid,
@@ -27,7 +29,8 @@ public record SearchDocument(
         String title,
         String text,
         java.util.Map<String, String> textByLocale,
-        String source) {
+        String source,
+        java.util.Set<String> releaseStatuses) {
 
     public SearchDocument {
         Objects.requireNonNull(uuid, "uuid");
@@ -39,6 +42,30 @@ public record SearchDocument(
         text = text == null ? "" : text;
         textByLocale = textByLocale == null ? java.util.Map.of() : java.util.Map.copyOf(textByLocale);
         source = source == null ? "" : source;
+        releaseStatuses = releaseStatuses == null ? java.util.Set.of() : java.util.Set.copyOf(releaseStatuses);
+    }
+
+    /** A document of an asset whose release state isn't known to the extractor (the indexer adds it). */
+    public SearchDocument(
+            UUID uuid,
+            AssetType assetType,
+            String uid,
+            String displayName,
+            String folderPath,
+            UUID templateUuid,
+            long revision,
+            String title,
+            String text,
+            java.util.Map<String, String> textByLocale,
+            String source) {
+        this(uuid, assetType, uid, displayName, folderPath, templateUuid, revision, title, text, textByLocale, source,
+                java.util.Set.of());
+    }
+
+    /** This document with the asset's release statuses. */
+    public SearchDocument withReleaseStatuses(java.util.Set<String> statuses) {
+        return new SearchDocument(uuid, assetType, uid, displayName, folderPath, templateUuid, revision, title, text,
+                textByLocale, source, statuses);
     }
 
     /** A document of a project without languages, or of an asset with no language-dependent text. */

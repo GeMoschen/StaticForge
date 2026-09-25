@@ -46,9 +46,10 @@ public class SearchController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String sort,
-            @RequestParam(required = false) String locale) {
+            @RequestParam(required = false) String locale,
+            @RequestParam(required = false) List<String> releaseStatus) {
         SearchService.Result result =
-                searchService.search(projectId(projectKey), q, type, folder, page, size, sort, locale);
+                searchService.search(projectId(projectKey), q, type, folder, page, size, sort, locale, releaseStatus);
         SearchHits hits = result.hits();
         Map<String, Long> types = new LinkedHashMap<>();
         hits.typeCounts().entrySet().stream()

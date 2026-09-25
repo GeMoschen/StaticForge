@@ -17,4 +17,6 @@ public record PageReferenceView(
         String targetKind,
         UUID targetAssetUuid,
         String label,
-        java.util.Map<String, String> labelL10n) {}
+        java.util.Map<String, String> labelL10n,
+        java.util.Map<String, LocaleReleaseView> release,
+        com.fasterxml.jackson.databind.JsonNode scheduled) {}

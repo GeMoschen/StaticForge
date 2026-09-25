@@ -99,6 +99,48 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             """)
     List<AssetVersion> findCurrentByProjectAndType(@Param("projectId") Long projectId, @Param("type") AssetType type);
 
+    /**
+     * Every open version of the given asset types in a project, tombstones included, asset joined: the drafts a bulk
+     * release status evaluates (M27.1.1).
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset a
+            WHERE a.projectId = :projectId
+              AND a.assetType IN :types
+              AND v.validToRevision IS NULL
+            """)
+    List<AssetVersion> findOpenWithAssetByProjectAndTypeIn(
+            @Param("projectId") Long projectId, @Param("types") java.util.Collection<AssetType> types);
+
+    /**
+     * The candidates of the Changes view (M27.1.3): open versions of the given types that may have unreleased changes
+     * in some locale. A live draft is a candidate unless every one of its {@code keys} locale keys (one for
+     * non-localized media) has an open pointer at exactly this version and uid — the only state that is certainly
+     * {@code PUBLISHED} without projecting. A tombstone is a candidate while any pointer is still open (deletion
+     * pending). The status service then decides per locale, so a candidate may still turn out published (a draft
+     * edited back to the released content).
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset a
+            WHERE a.projectId = :projectId
+              AND a.assetType IN :types
+              AND v.validToRevision IS NULL
+              AND (
+                   (v.deleted = false AND
+                     (SELECT COUNT(r) FROM com.acme.staticforge.release.AssetRelease r
+                      WHERE r.assetId = v.assetId AND r.validToRevision IS NULL
+                        AND r.releasedVersionId = v.id AND r.releasedUid = a.uid)
+                     < CASE WHEN a.assetType = com.acme.staticforge.asset.AssetType.MEDIA THEN 1 ELSE :keys END)
+                OR (v.deleted = true AND EXISTS
+                     (SELECT r2.id FROM com.acme.staticforge.release.AssetRelease r2
+                      WHERE r2.assetId = v.assetId AND r2.validToRevision IS NULL))
+              )
+            """)
+    List<AssetVersion> findChangeCandidates(
+            @Param("projectId") Long projectId,
+            @Param("types") java.util.Collection<AssetType> types,
+            @Param("keys") long keys);
+
     /** Every open version in a project, soft-deleted tombstones included. */
     @Query("""
             SELECT v FROM AssetVersion v

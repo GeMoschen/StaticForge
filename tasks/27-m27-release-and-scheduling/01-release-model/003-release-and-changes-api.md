@@ -1,6 +1,6 @@
 ---
 id: M27.1.3
-status: todo
+status: done
 depends: [M27.1.2]
 epic: m27-release-and-scheduling
 feature: release-model
@@ -46,13 +46,13 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] MockMvc tests per endpoint: role (VIEWER reads, EDITOR 403 on mutations, DEVELOPER ok), archived (mutations 409,
+- [x] MockMvc tests per endpoint: role (VIEWER reads, EDITOR 403 on mutations, DEVELOPER ok), archived (mutations 409,
       plan allowed — endpoint walk green with the new handlers), validation errors, happy paths.
-- [ ] Changes list: filters, paging, sort and counts correct on a fixture with every status and two locales.
-- [ ] Diff: localized field change shows only in that locale's diff; structural change in every locale.
-- [ ] Asset DTOs carry `release`; the pages tree call issues a bounded number of queries regardless of page count.
-- [ ] Search with `releaseStatus=CHANGED` finds an edited published page and not an unchanged one.
-- [ ] OpenAPI + `schema.d.ts` regenerated; `./gradlew build` green.
+- [x] Changes list: filters, paging, sort and counts correct on a fixture with every status and two locales.
+- [x] Diff: localized field change shows only in that locale's diff; structural change in every locale.
+- [x] Asset DTOs carry `release`; the pages tree call issues a bounded number of queries regardless of page count.
+- [x] Search with `releaseStatus=CHANGED` finds an edited published page and not an unchanged one.
+- [x] OpenAPI + `schema.d.ts` regenerated; `./gradlew build` green.
 
 ## Out of scope
 
@@ -64,3 +64,32 @@ area: backend
   **candidate** assets first (open version's `validFrom` > open pointer's `validFrom`, or no pointer, or tombstone
   with pointer) using SQL, then compute projections only for the page. Document the candidate query.
 - `diff` reuses the revision diff walker — don't write a second one.
+
+## Implementation notes
+
+- **Endpoints.** `ReleaseController` (`POST /releases/plan` VIEWER + `@AllowedOnArchivedProject`, `POST /releases`,
+  `/releases/unpublish`, `/releases/discard` via `@releasePermissions.canRelease/canUnpublish/canDiscard`;
+  `canSchedule` is there for M27.4.4). The release body takes `items` plus the kept `includeDependencies`, released in
+  one revision. `ChangesController`: `GET /changes` (filters `type`, `status`, `locale` repeatable, `changedBy`,
+  `folderUuid`, `q`; `sort=changedAt|displayName[,asc|desc]`; `size ≤ 200`), `GET /changes/count` (per status +
+  `total`), `GET /changes/{uuid}/diff?locale=`.
+- **Candidate query** (`AssetVersionRepository.findChangeCandidates`): open versions of releasable types whose count
+  of open pointers *at exactly this version and uid* is below the key count (`CASE` 1 for media, else the project's
+  locale count), plus tombstones with an open pointer. Only candidates are projected; filters, sort and paging run over
+  the evaluated rows. **M27.3 must revisit the `CASE`**: a localized media asset has one key per locale.
+- **`release` block** (`Map<locale, {status, releasedRevision, releasedAt, releasedBy}>`) and `scheduled` (always
+  `null` until M27.4.4) on `PageView`, `AssetSummaryView`, `AssetDetailView`, `MediaView`, `MediaSummaryView`,
+  `FolderView` (tree), `NavTreeView` (tree), `GlobalSet*View`, `RecordDetailView`, `RecordRowView`,
+  `RecordSet*View`, `PageReferenceView`; `null` for assets without a release state and for past versions
+  (`/assets/{uuid}/versions/{r}`). Lists and trees call `ReleaseStatusService.ofUuids` once per response
+  (`ReleaseBlocks`); the test asserts one `ofUuids` call and no `ofAsset` call for a 12-page list.
+- **Search facet.** Documents carry the distinct statuses over the asset's locales (`releaseStatus` string field,
+  filter only); `SearchSchemaVersion` 1 → 2 so every index is rebuilt once (the initial-release revision has only a
+  project summary entry). Release revisions list their assets in the summary, so the catch-up re-indexes them;
+  `GET /search?releaseStatus=CHANGED` (repeatable/comma-separated).
+- **Problems.** `SF-DOM-0150`–`0154` are built in `ReleaseProblems` (422 with `code`, plus `assets` for 0150/0152);
+  the generic `SfException` handler serializes them, no `ProblemFactory` change was needed.
+- **Tests:** `ReleaseApiTest` (8: roles, archived, validation codes, dependencies taken along, Changes list with every
+  status in two locales, counts, diff per locale and rename, release block + bounded status calls, search facet) and the
+  archived endpoint walk (allowlist gained `ReleaseController#plan`). OpenAPI and `schema.d.ts` regenerated; `ui`
+  `npm run build` and `npx vitest run` (79 files, 536 tests) green.
