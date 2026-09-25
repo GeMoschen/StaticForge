@@ -37,4 +37,4 @@ public record MediaView(
         boolean localized,
         java.util.Map<String, MediaLocaleFileView> localeFiles,
         java.util.Map<String, LocaleReleaseView> release,
-        com.fasterxml.jackson.databind.JsonNode scheduled) {}
+        java.util.List<ScheduledRefView> scheduled) {}

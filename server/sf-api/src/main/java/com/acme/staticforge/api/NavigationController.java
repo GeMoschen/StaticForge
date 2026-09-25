@@ -6,6 +6,7 @@ import com.acme.staticforge.api.dto.NavigationFolderView;
 import com.acme.staticforge.api.dto.NavigationStartNodeView;
 import com.acme.staticforge.api.dto.PageReferenceResolveView;
 import com.acme.staticforge.api.dto.PageReferenceView;
+import com.acme.staticforge.api.dto.ScheduledRefView;
 import com.acme.staticforge.api.dto.UpdatePageReferenceRequest;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetVersionView;
@@ -113,7 +114,8 @@ public class NavigationController {
         collect(roots, uuids);
         java.util.Map<UUID, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView>> release =
                 releaseBlocks.of(projectId, uuids);
-        return roots.stream().map(node -> toView(projectId, node, release)).toList();
+        java.util.Map<UUID, List<ScheduledRefView>> scheduled = releaseBlocks.scheduled(projectId, uuids);
+        return roots.stream().map(node -> toView(projectId, node, release, scheduled)).toList();
     }
 
     private static void collect(List<NavTreeNode> nodes, List<UUID> into) {
@@ -126,7 +128,8 @@ public class NavigationController {
     private NavTreeView toView(
             long projectId,
             NavTreeNode node,
-            java.util.Map<UUID, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView>> release) {
+            java.util.Map<UUID, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView>> release,
+            java.util.Map<UUID, List<ScheduledRefView>> scheduled) {
         String path = node.resolvedPageUuid() == null
                 ? null
                 : assetService.requireCurrent(projectId, node.resolvedPageUuid()).folderPath();
@@ -134,9 +137,9 @@ public class NavigationController {
                 node.assetUuid(), node.type().name(), node.uid(), node.displayName(), node.label(),
                 node.resolvedPageUuid(), path, node.protectedFolder(),
                 assetService.requireCurrent(projectId, node.assetUuid()).validFromRevision(),
-                node.children().stream().map(c -> toView(projectId, c, release)).toList(),
+                node.children().stream().map(c -> toView(projectId, c, release, scheduled)).toList(),
                 release.get(node.assetUuid()),
-                null);
+                scheduled.getOrDefault(node.assetUuid(), List.of()));
     }
 
     /** Renames a navigation folder and/or sets (or clears) its {@code startNode}. */
@@ -173,7 +176,8 @@ public class NavigationController {
                 new CreatePageReferenceCommand(
                         body.displayName(), body.folderUuid(), parseTargetKind(body.targetKind()), body.targetAssetUuid(), body.label()),
                 ctx(projectKey, "create page reference"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toReferenceView(view, List.of(), releaseBlocks.of(projectId(projectKey), view.uuid())));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toReferenceView(view, List.of(), releaseBlocks.of(projectId(projectKey), view.uuid()),
+                releaseBlocks.scheduled(projectId(projectKey), view.uuid())));
     }
 
     @PatchMapping("/references/{uuid}")
@@ -196,7 +200,8 @@ public class NavigationController {
                 .body(toReferenceView(
                         view,
                         projectLocales.forProject(projectId(projectKey)).effectiveChain(locale),
-                        releaseBlocks.of(projectId(projectKey), view.uuid())));
+                        releaseBlocks.of(projectId(projectKey), view.uuid()),
+                        releaseBlocks.scheduled(projectId(projectKey), view.uuid())));
     }
 
     @DeleteMapping("/references/{uuid}")
@@ -278,7 +283,8 @@ public class NavigationController {
     private static PageReferenceView toReferenceView(
             AssetVersionView v,
             List<String> chain,
-            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
+            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
+            List<ScheduledRefView> scheduled) {
         JsonNode payload = v.payload();
         String targetKind = payload.path("target").path("kind").asText(null);
         String targetUuidText = payload.path("target").path("assetUuid").asText(null);
@@ -299,6 +305,6 @@ public class NavigationController {
         }
         return new PageReferenceView(
                 v.uuid(), v.uid(), v.displayName(), v.validFromRevision(), v.folderPath(), targetKind, targetUuid,
-                label, labelL10n, release, null);
+                label, labelL10n, release, scheduled);
     }
 }

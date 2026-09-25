@@ -1,6 +1,6 @@
 ---
 id: M27.4.2
-status: todo
+status: done
 depends: [M27.4.1]
 epic: m27-release-and-scheduling
 feature: scheduler
@@ -39,16 +39,16 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Pinned: schedule at T, edit the page before T, execute → the pinned version is released; the newer draft stays
+- [x] Pinned: schedule at T, edit the page before T, execute → the pinned version is released; the newer draft stays
       `CHANGED`.
-- [ ] Latest: the newer draft is released; with `ERROR` findings in it that item is skipped, the rest released,
+- [x] Latest: the newer draft is released; with `ERROR` findings in it that item is skipped, the rest released,
       outcome `PARTIAL` with per-item reasons.
-- [ ] One revision per execution regardless of item count; re-executing after a lease expiry releases nothing twice.
-- [ ] Then-generate starts an incremental run at the release revision; with a run active it waits and starts once the
+- [x] One revision per execution regardless of item count; re-executing after a lease expiry releases nothing twice.
+- [x] Then-generate starts an incremental run at the release revision; with a run active it waits and starts once the
       run ends; a retry doesn't re-release.
-- [ ] Unpublish at T removes the outputs on the then-generate run.
-- [ ] Re-pin updates pinned versions and clears drift.
-- [ ] `./gradlew build` green.
+- [x] Unpublish at T removes the outputs on the then-generate run.
+- [x] Re-pin updates pinned versions and clears drift.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -59,3 +59,30 @@ area: backend
 - The permission requirement is `ReleasePermissions.canRelease/canUnpublish` of the owner (same component as the
   REST path, `M27.1.3`), plus generation start permission if `then_generate` is set — so `M28` changes both in one
   place.
+
+## Implementation notes
+
+- `scheduler/actions`: `ReleaseActionHandler`, `UnpublishActionHandler` over a shared `ReleaseStateActionHandler`;
+  `ScheduleDrift` (bulk per project). "Then generate" goes through the port `ScheduledGenerationStarter` (declared in
+  `sf-domain/scheduler`, implemented by `sf-generate`'s `ScheduledGenerations`), because `sf-domain` may not depend
+  on generation.
+- **Stored params** carry `resolved: true` and one item per locale key (`{assetUuid, locale, pinnedVersionId?,
+  deletion?}`); request params (`items` + `includeDependencies`) are resolved through `ReleaseService.plan`. An edit
+  that resends stored params keeps the pins while the policy stays `PINNED` (they are re-checked); switching to
+  `PINNED` pins the current drafts. A pinned version with `ERROR` findings is refused at scheduling (`422 0150`).
+  An item scheduled while its draft was deleted is stored as `deletion` (releasing it takes the asset offline).
+- **Execution.** Items are probed with `ReleaseService.plan` *outside* the release transaction (a refusal thrown inside
+  a joined `@Transactional` would mark that transaction rollback-only): one plan call, and per-item plans only when it
+  fails with `0151`/`0154`. Skipped with a reason: asset/locale gone, pinned item deleted (or deletion restored) since
+  scheduling, `LATEST` item incomplete. The rest is released in one revision (`ChangeType.RELEASE`, comment
+  "Scheduled release #id: …", truncated to the column's 500 characters) together with the checkpoint
+  `{items[], revision}`. Outcome: `SUCCEEDED` (all applied or already live), `PARTIAL`, or `FAILED` (all skipped).
+- **Then generate** after a revision: `INCREMENTAL` at the release revision, target/channels as stored, as the owner,
+  idempotency key `schedule-{id}-{scheduledFor}-then`. Busy → `WAITING` ("… Waiting for run #n.", abandon outcome
+  `PARTIAL`); past a `SKIP_IF_LATER_THAN` bound → `PARTIAL` with `detail.generation.result = SKIPPED`; refused →
+  `PARTIAL` with the reason.
+- **Re-pin** is the SPI's `repin(spec, actor)` behind `ScheduleService.repin` (instead of a `ReleaseScheduleService`):
+  the controller stays type-agnostic. `pinnedStatus` of the drift became the item's current release `status`, next
+  to `draftChangedSinceScheduled`.
+- Tests: `ScheduledActionsIntegrationTest` (pinned, latest/partial, one revision + crash re-run + unchanged,
+  then-generate with a busy project + unpublish removes the output, re-pin clears drift).

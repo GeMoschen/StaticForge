@@ -1,6 +1,6 @@
 ---
 id: M27.4.1
-status: todo
+status: done
 depends: [M27.1.2]
 epic: m27-release-and-scheduling
 feature: scheduler
@@ -64,16 +64,16 @@ JWT). `AuditService.record(projectId, actorUserId, action, target, detail)`. Epi
 
 ## Acceptance criteria
 
-- [ ] Two engine instances (two node ids) against one database and 50 due actions: each executes exactly once
+- [x] Two engine instances (two node ids) against one database and 50 due actions: each executes exactly once
       (integration test with a counting handler).
-- [ ] A lease left by a "crashed" node (lease expired, status RUNNING) is re-claimed and executed once.
-- [ ] Missed policy: `RUN_LATE` executes with `late_by` recorded; `SKIP_IF_LATER_THAN 10m` at 30 min late → `SKIPPED`;
+- [x] A lease left by a "crashed" node (lease expired, status RUNNING) is re-claimed and executed once.
+- [x] Missed policy: `RUN_LATE` executes with `late_by` recorded; `SKIP_IF_LATER_THAN 10m` at 30 min late → `SKIPPED`;
       a recurring hourly schedule down for 5 h executes once, then continues at the next slot.
-- [ ] Cron in `Europe/Berlin` `0 30 2 * * *` on the spring-forward day runs once at 03:00 local; on the fall-back day
+- [x] Cron in `Europe/Berlin` `0 30 2 * * *` on the spring-forward day runs once at 03:00 local; on the fall-back day
       runs once (clock injected; `Clock` bean used everywhere, no `Instant.now()` in the engine).
-- [ ] Owner disabled / removed / demoted → `FAILED SF-DOM-0163`; recurring action paused.
-- [ ] Archived project → not executed; after unarchive executed (or skipped) per missed policy.
-- [ ] `./gradlew build` green.
+- [x] Owner disabled / removed / demoted → `FAILED SF-DOM-0163`; recurring action paused.
+- [x] Archived project → not executed; after unarchive executed (or skipped) per missed policy.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -88,3 +88,36 @@ JWT). `AuditService.record(projectId, actorUserId, action, target, detail)`. Epi
 - Don't use `@Scheduled`/`@EnableScheduling` globally (it would change other beans' behaviour); a dedicated
   `ThreadPoolTaskScheduler` bean (1 thread for the tick) is fine.
 - Tests: inject `Clock`; never sleep — drive `engine.tick()` directly.
+
+## Implementation notes
+
+- **Package** `sf-domain/scheduler`: entities `ScheduledAction` (JPA `@Version`), `ScheduledActionExecution`,
+  `ScheduledActionAsset` (see M27.4.4), repositories, `SchedulerProperties`, `LeaseClaimer`, `ScheduleTiming`,
+  `SchedulerProblems` (`SF-DOM-0160`–`0168`), the SPI and `ActionAuthority`. Changelog `v1.0/022-scheduler.xml` (JSON
+  columns per dialect like `016`); `max_lateness` is stored as `max_lateness_seconds`.
+- **`LeaseClaimer`** is table-agnostic (`id`, `version`, `lease_owner`, `lease_until`; extra `SET` assignments on a
+  won claim) so M29's instance jobs reuse it. The claim `UPDATE … WHERE id AND version AND (lease_until IS NULL OR
+  lease_until < now)` also sets `status = 'RUNNING'`.
+- **`SchedulerEngine`** is a plain class (bean from `SchedulerConfiguration`), so tests run several engines with their
+  own node id and `MutableClock` against the one test database; `tick()` returns `Tick(claimed, done)`. Candidates:
+  `PENDING`/`RUNNING`, due, lease free or expired, project not archived (JPQL join). Poller: one platform daemon
+  thread started on `ApplicationReadyEvent` when `sf.scheduler.enabled` (off in the `test` profile); executions on
+  virtual threads; a lease keeper extends the lease every `lease/3`; `close()` stops everything with the context.
+- **Execution model** (the engine is type-agnostic): the engine opens an execution (`scheduled_for` = `next_run_at`)
+  or resumes the open one; applies unknown type → `FAILED 0160` (logged once, paused), missed policy (only when the
+  execution starts), owner re-check (`0163`, paused), then calls the handler. A handler returns `FINISHED` or
+  `WAITING`; waiting keeps the execution open and the action `PENDING` with `next_run_at` unchanged — due again, so
+  every tick retries it and later recurring slots coalesce. Handlers checkpoint progress
+  (`ExecutionContext.checkpoint`) in the transaction of the step itself, so a re-claim after a lease expiry never
+  repeats a committed step. A node that lost its lease drops its result (`finish` checks `lease_owner`).
+- **Paused** = recurring action `FAILED` with `next_run_at = null` (owner not permitted, unknown type, target gone).
+- **Owner check** (`ActionAuthority`, also used by the API for the caller): account exists and isn't `DISABLED`/
+  `DELETED` (`LOCKED` passes), instance admin or member with the handler's minimum role; a non-empty permission set
+  is refused in M27 (M28 evaluates it). `RoleReleasePermissionCheck` now lets a `LOCKED` instance admin release too,
+  matching this rule.
+- **DST** (`ScheduleTiming`): cron evaluated on `LocalDateTime` in the zone; a local time in a gap maps to the gap's
+  end (02:30 → 03:00 on the spring-forward day), a repeated one to its first occurrence, and the next slot is searched
+  strictly after the last instant — each local slot runs once.
+- Tests: `ScheduleTimingTest` (sf-domain, 4), `SchedulerEngineIntegrationTest` (8: two nodes × 50 actions, crashed
+  lease, missed policies, 5 h outage, Berlin DST both ways, owner disabled/removed/demoted/locked, unknown type,
+  archived → unarchived).

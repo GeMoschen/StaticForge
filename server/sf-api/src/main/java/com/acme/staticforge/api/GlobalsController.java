@@ -73,10 +73,13 @@ public class GlobalsController {
             @PathVariable String projectKey, @RequestParam(value = "folder", required = false) UUID folder) {
         long projectId = projectId(projectKey);
         var sets = globalSetService.list(projectId, folder);
-        var release = releaseBlocks.of(projectId, sets.stream().map(v -> v.uuid()).toList());
+        List<UUID> uuids = sets.stream().map(v -> v.uuid()).toList();
+        var release = releaseBlocks.of(projectId, uuids);
+        var scheduled = releaseBlocks.scheduled(projectId, uuids);
         return sets.stream()
                 .map(v -> new GlobalSetSummaryView(
-                        v.uuid(), v.uid(), v.displayName(), v.folderPath(), v.revision(), release.get(v.uuid()), null))
+                        v.uuid(), v.uid(), v.displayName(), v.folderPath(), v.revision(), release.get(v.uuid()),
+                        scheduled.getOrDefault(v.uuid(), List.of())))
                 .toList();
     }
 
@@ -165,7 +168,7 @@ public class GlobalsController {
                 v.content(),
                 v.revision(),
                 releaseBlocks.of(projectId(projectKey), v.uuid()),
-                null);
+                releaseBlocks.scheduled(projectId(projectKey), v.uuid()));
     }
 
     private static String comment(String supplied, String fallback) {

@@ -3,6 +3,7 @@ package com.acme.staticforge.api;
 import com.acme.staticforge.api.dto.ChangeDiffView;
 import com.acme.staticforge.api.dto.ChangeRowView;
 import com.acme.staticforge.api.dto.ChangesPageView;
+import com.acme.staticforge.api.dto.ScheduledRefView;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -36,10 +37,12 @@ public class ChangesController {
 
     private final ProjectService projectService;
     private final ChangesService changesService;
+    private final ReleaseBlocks releaseBlocks;
 
-    public ChangesController(ProjectService projectService, ChangesService changesService) {
+    public ChangesController(ProjectService projectService, ChangesService changesService, ReleaseBlocks releaseBlocks) {
         this.projectService = projectService;
         this.changesService = changesService;
+        this.releaseBlocks = releaseBlocks;
     }
 
     /**
@@ -71,10 +74,13 @@ public class ChangesController {
                 folderUuid,
                 q,
                 parseSort(sort));
-        ChangesService.Page result = changesService.list(projectId(projectKey), query, page, size);
+        long projectId = projectId(projectKey);
+        ChangesService.Page result = changesService.list(projectId, query, page, size);
         int totalPages = (int) ((result.totalElements() + size - 1) / size);
+        Map<UUID, List<ScheduledRefView>> scheduled =
+                releaseBlocks.scheduled(projectId, result.rows().stream().map(ChangesService.Row::uuid).toList());
         return new ChangesPageView(
-                result.rows().stream().map(ChangesController::view).toList(),
+                result.rows().stream().map(row -> view(row, scheduled.getOrDefault(row.uuid(), List.of()))).toList(),
                 result.page(),
                 result.size(),
                 result.totalElements(),
@@ -104,7 +110,8 @@ public class ChangesController {
         return new ChangeDiffView(diff.uuid(), diff.locale(), diff.status().name(), diff.changes());
     }
 
-    private static ChangeRowView view(ChangesService.Row row) {
+    /** A row; {@code scheduled} is narrowed to the actions touching its locale (or every locale). */
+    private static ChangeRowView view(ChangesService.Row row, List<ScheduledRefView> scheduled) {
         return new ChangeRowView(
                 row.uuid(),
                 row.type().name(),
@@ -118,7 +125,10 @@ public class ChangesController {
                 row.releasedRevision(),
                 row.releasedBy(),
                 row.releasedAt(),
-                null);
+                scheduled.stream()
+                        .filter(s -> s.locale().isEmpty() || row.locale() == null || row.locale().isEmpty()
+                                || s.locale().equals(row.locale()))
+                        .toList());
     }
 
     private static <E extends Enum<E>> Set<E> parse(

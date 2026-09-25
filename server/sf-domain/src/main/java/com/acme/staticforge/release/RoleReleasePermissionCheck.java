@@ -47,12 +47,13 @@ public class RoleReleasePermissionCheck implements ReleasePermissionCheck {
             return;
         }
         AppUser user = users.findById(ctx.userId()).orElse(null);
-        if (user != null && user.getStatus() == UserStatus.ACTIVE && user.getSystemRole() == SystemRole.INSTANCE_ADMIN) {
+        // A sign-in lockout (LOCKED) is temporary and doesn't revoke what the account may do (M27.4.1: an owner's
+        // scheduled release still runs); a disabled or deleted account may do nothing.
+        boolean usable = user != null && user.getStatus() != UserStatus.DISABLED && user.getStatus() != UserStatus.DELETED;
+        if (usable && user.getSystemRole() == SystemRole.INSTANCE_ADMIN) {
             return;
         }
-        boolean allowed = user != null
-                && user.getStatus() != UserStatus.DISABLED
-                && user.getStatus() != UserStatus.DELETED
+        boolean allowed = usable
                 && members.findByProjectIdAndUserId(ctx.projectId(), ctx.userId())
                         .map(ProjectMember::getRole)
                         .map(role -> role.atLeast(ProjectRole.DEVELOPER))

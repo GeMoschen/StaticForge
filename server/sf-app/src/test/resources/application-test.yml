@@ -22,6 +22,9 @@ sf:
     store: filesystem
     root: ${java.io.tmpdir}/sf-test-media
   # Each Spring context gets its own in-memory indexes; tests that need a directory set their own temp root.
+  # Tests drive SchedulerEngine.tick() themselves (M27.4.1).
+  scheduler:
+    enabled: false
   search:
     directory: memory
     refresh-interval: 200ms

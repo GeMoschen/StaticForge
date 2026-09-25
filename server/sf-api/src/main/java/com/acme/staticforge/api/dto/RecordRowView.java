@@ -22,4 +22,4 @@ public record RecordRowView(
         JsonNode values,
         @JsonInclude(JsonInclude.Include.NON_NULL) Boolean selectedBySet,
         java.util.Map<String, LocaleReleaseView> release,
-        com.fasterxml.jackson.databind.JsonNode scheduled) {}
+        java.util.List<ScheduledRefView> scheduled) {}

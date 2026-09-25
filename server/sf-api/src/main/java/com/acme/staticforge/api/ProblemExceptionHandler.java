@@ -3,6 +3,7 @@ package com.acme.staticforge.api;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +31,16 @@ public class ProblemExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Problem> handleAccessDenied(AccessDeniedException ex) {
         return respond(ProblemFactory.forbidden("Access denied."), HttpStatus.FORBIDDEN.value());
+    }
+
+    /**
+     * A concurrent change caught by an entity's {@code @Version} at commit (a schedule edited while a scheduler node
+     * claimed it, M27.4.4): the same {@code 409 SF-API-0409} a stale {@code If-Match} gets — reload and retry.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<Problem> handleOptimisticLock(OptimisticLockingFailureException ex) {
+        return respond(ProblemFactory.conflict("It was changed at the same time by someone else; reload it and try again."),
+                HttpStatus.CONFLICT.value());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

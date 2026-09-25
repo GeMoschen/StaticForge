@@ -9,13 +9,13 @@ import java.util.function.Function;
  * Splits an {@code IN (…)} parameter list into bounded chunks: PostgreSQL caps a statement at 32,767 bind
  * parameters, and a 50,000-asset project (§26.2) would exceed it in one query.
  */
-final class Chunks {
+public final class Chunks {
 
     static final int SIZE = 1_000;
 
     private Chunks() {}
 
-    static <I, O> List<O> flatMap(Collection<I> ids, Function<List<I>, List<O>> query) {
+    public static <I, O> List<O> flatMap(Collection<I> ids, Function<List<I>, List<O>> query) {
         List<I> all = List.copyOf(ids);
         if (all.size() <= SIZE) {
             return query.apply(all);

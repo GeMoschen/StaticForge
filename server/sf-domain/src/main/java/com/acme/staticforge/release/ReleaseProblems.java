@@ -10,7 +10,7 @@ public final class ReleaseProblems {
 
     private ReleaseProblems() {}
 
-    static SfException incomplete(List<Map<String, Object>> assets) {
+    public static SfException incomplete(List<Map<String, Object>> assets) {
         return problem("SF-DOM-0150", "Content incomplete: fill in the required fields before releasing.", "assets", assets);
     }
 

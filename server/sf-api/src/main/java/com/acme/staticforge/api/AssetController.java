@@ -7,6 +7,7 @@ import com.acme.staticforge.api.dto.AssetSummaryView;
 import com.acme.staticforge.api.dto.MoveRequest;
 import com.acme.staticforge.api.dto.RenameAssetRequest;
 import com.acme.staticforge.api.dto.RestoreRequest;
+import com.acme.staticforge.api.dto.ScheduledRefView;
 import com.acme.staticforge.api.dto.UidChangeRequest;
 import com.acme.staticforge.api.dto.UidChangeResult;
 import com.acme.staticforge.api.dto.UsageDto;
@@ -78,8 +79,10 @@ public class AssetController {
         AssetType assetType = type == null ? null : AssetType.valueOf(type.toUpperCase());
         Page<AssetSummary> result = assetService.search(
                 new AssetQuery(projectId, assetType, folder, q), PageRequest.of(page, size));
-        var release = releaseBlocks.of(projectId, result.getContent().stream().map(AssetSummary::uuid).toList());
-        return result.map(s -> toSummary(s, release.get(s.uuid())));
+        List<UUID> uuids = result.getContent().stream().map(AssetSummary::uuid).toList();
+        var release = releaseBlocks.of(projectId, uuids);
+        var scheduled = releaseBlocks.scheduled(projectId, uuids);
+        return result.map(s -> toSummary(s, release.get(s.uuid()), scheduled.getOrDefault(s.uuid(), List.of())));
     }
 
     @GetMapping("/{uuid}")
@@ -114,8 +117,8 @@ public class AssetController {
         AssetVersionView view = assetService.findAt(projectId(projectKey), uuid, revision)
                 .orElseThrow(() -> new com.acme.staticforge.common.SfException(
                         com.acme.staticforge.common.ProblemFactory.notFound("No version at revision " + revision + ".")));
-        // A past version has no current release status of its own.
-        return toDetail(view, null);
+        // A past version has no current release status or schedule of its own.
+        return toDetail(view, null, null);
     }
 
     @PostMapping("/{uuid}/restore")
@@ -185,20 +188,25 @@ public class AssetController {
     }
 
     private static AssetSummaryView toSummary(
-            AssetSummary s, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
+            AssetSummary s,
+            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
+            List<ScheduledRefView> scheduled) {
         return new AssetSummaryView(
-                s.uuid(), s.uid(), s.type().name(), s.displayName(), s.folderPath(), s.validFromRevision(), release, null);
+                s.uuid(), s.uid(), s.type().name(), s.displayName(), s.folderPath(), s.validFromRevision(), release, scheduled);
     }
 
     private AssetDetailView toDetail(String projectKey, AssetVersionView v) {
-        return toDetail(v, releaseBlocks.of(projectId(projectKey), v.uuid()));
+        long projectId = projectId(projectKey);
+        return toDetail(v, releaseBlocks.of(projectId, v.uuid()), releaseBlocks.scheduled(projectId, v.uuid()));
     }
 
     private static AssetDetailView toDetail(
-            AssetVersionView v, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
+            AssetVersionView v,
+            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
+            List<ScheduledRefView> scheduled) {
         return new AssetDetailView(
                 v.uuid(), v.uid(), v.type().name(), v.displayName(), v.payload(), v.validFromRevision(),
-                v.deleted(), v.folderPath(), v.changedBy(), v.changedAt(), release, null);
+                v.deleted(), v.folderPath(), v.changedBy(), v.changedAt(), release, scheduled);
     }
 
     private static UsageDto toUsage(UsageView u) {

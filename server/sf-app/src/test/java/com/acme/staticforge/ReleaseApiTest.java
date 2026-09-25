@@ -271,7 +271,7 @@ class ReleaseApiTest {
                 .andExpect(jsonPath("$.release.de.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.release.de.releasedRevision").isNumber())
                 .andExpect(jsonPath("$.release.en.status").value("NEW"))
-                .andExpect(jsonPath("$.scheduled").doesNotExist());
+                .andExpect(jsonPath("$.scheduled", hasSize(0)));
 
         clearInvocations(statuses);
         perform(get("/api/v1/projects/{key}/pages", fx.key()), token)

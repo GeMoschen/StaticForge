@@ -30,8 +30,7 @@ public class ReleasePermissions {
         return projectAuth.has(projectKey, ProjectRole.DEVELOPER);
     }
 
-    /** Scheduling a release or unpublish (M27.4.4). */
-    public boolean canSchedule(String projectKey) {
-        return projectAuth.has(projectKey, ProjectRole.DEVELOPER);
-    }
+    // Scheduling (M27.4.4) is not decided here: each action type's handler states its requirements
+    // (ScheduledActionHandler#requirements), which the schedules API checks for the caller and the engine for the
+    // owner at every execution — one rule for both paths.
 }

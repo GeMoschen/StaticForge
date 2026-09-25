@@ -6,6 +6,7 @@ import com.acme.staticforge.api.dto.CreatePageRequest;
 import com.acme.staticforge.api.dto.MoveSectionRequest;
 import com.acme.staticforge.api.dto.PageView;
 import com.acme.staticforge.api.dto.ReorderRequest;
+import com.acme.staticforge.api.dto.ScheduledRefView;
 import com.acme.staticforge.api.dto.TemplateView;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.page.CreatePageCommand;
@@ -63,8 +64,12 @@ public class PageController {
             @RequestParam(required = false) String q) {
         long projectId = projectId(projectKey);
         List<AssetVersionView> pages = pageService.list(projectId, new PageQuery(folder, templateUuid, q));
-        var release = releaseBlocks.of(projectId, pages.stream().map(AssetVersionView::uuid).toList());
-        return pages.stream().map(v -> toSummary(v, release.get(v.uuid()))).toList();
+        List<UUID> uuids = pages.stream().map(AssetVersionView::uuid).toList();
+        var release = releaseBlocks.of(projectId, uuids);
+        var scheduled = releaseBlocks.scheduled(projectId, uuids);
+        return pages.stream()
+                .map(v -> toSummary(v, release.get(v.uuid()), scheduled.getOrDefault(v.uuid(), List.of())))
+                .toList();
     }
 
     @PostMapping
@@ -195,12 +200,14 @@ public class PageController {
                 payload != null ? payload.get("meta") : null,
                 pageService.contentIssues(projectId, payload),
                 releaseBlocks.of(projectId, v.uuid()),
-                null);
+                releaseBlocks.scheduled(projectId, v.uuid()));
     }
 
     private static AssetSummaryView toSummary(
-            AssetVersionView v, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
+            AssetVersionView v,
+            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
+            List<ScheduledRefView> scheduled) {
         return new AssetSummaryView(
-                v.uuid(), v.uid(), v.type().name(), v.displayName(), v.folderPath(), v.validFromRevision(), release, null);
+                v.uuid(), v.uid(), v.type().name(), v.displayName(), v.folderPath(), v.validFromRevision(), release, scheduled);
     }
 }

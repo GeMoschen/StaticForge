@@ -24,4 +24,4 @@ public record NavTreeView(
         long revision,
         List<NavTreeView> children,
         java.util.Map<String, LocaleReleaseView> release,
-        com.fasterxml.jackson.databind.JsonNode scheduled) {}
+        java.util.List<ScheduledRefView> scheduled) {}

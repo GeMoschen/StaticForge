@@ -14,6 +14,7 @@ import com.acme.staticforge.api.dto.MediaTextRequest;
 import com.acme.staticforge.api.dto.MediaTextView;
 import com.acme.staticforge.api.dto.MediaView;
 import com.acme.staticforge.api.dto.OctlValidateResponse;
+import com.acme.staticforge.api.dto.ScheduledRefView;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.media.FocalPoint;
 import com.acme.staticforge.asset.media.MediaBinary;
@@ -118,8 +119,10 @@ public class MediaController {
         long projectId = projectId(projectKey);
         Page<AssetVersionView> result =
                 mediaService.list(projectId, mimeType, folder, recursive, q, PageRequest.of(page, size));
-        var release = releaseBlocks.of(projectId, result.getContent().stream().map(AssetVersionView::uuid).toList());
-        return result.map(v -> toSummary(v, release.get(v.uuid())));
+        List<UUID> uuids = result.getContent().stream().map(AssetVersionView::uuid).toList();
+        var release = releaseBlocks.of(projectId, uuids);
+        var scheduled = releaseBlocks.scheduled(projectId, uuids);
+        return result.map(v -> toSummary(v, release.get(v.uuid()), scheduled.getOrDefault(v.uuid(), List.of())));
     }
 
     @PostMapping
@@ -535,7 +538,9 @@ public class MediaController {
     }
 
     private MediaSummaryView toSummary(
-            AssetVersionView v, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
+            AssetVersionView v,
+            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
+            List<ScheduledRefView> scheduled) {
         JsonNode payload = v.payload();
         return new MediaSummaryView(
                 v.uuid(),
@@ -549,12 +554,13 @@ public class MediaController {
                 payload != null && TextMediaTypes.isText(text(payload, "mimeType")),
                 MediaFiles.isLocalized(payload),
                 release,
-                null);
+                scheduled);
     }
 
     private MediaView toMediaView(String projectKey, AssetVersionView v) {
         long projectId = projectId(projectKey);
-        return toMediaView(v, null, releaseBlocks.of(projectId, v.uuid()), projectLocales.forProject(projectId));
+        return toMediaView(v, null, releaseBlocks.of(projectId, v.uuid()), releaseBlocks.scheduled(projectId, v.uuid()),
+                projectLocales.forProject(projectId));
     }
 
     /**
@@ -565,6 +571,7 @@ public class MediaController {
             AssetVersionView v,
             java.util.List<String> locale,
             java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
+            List<ScheduledRefView> scheduled,
             LocaleConfig locales) {
         JsonNode payload = v.payload();
         return new MediaView(
@@ -589,7 +596,7 @@ public class MediaController {
                 MediaFiles.isLocalized(payload),
                 localeFiles(payload, locales),
                 release,
-                null);
+                scheduled);
     }
 
     /**

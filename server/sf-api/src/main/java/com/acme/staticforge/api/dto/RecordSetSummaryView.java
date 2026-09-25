@@ -19,4 +19,4 @@ public record RecordSetSummaryView(
         boolean queryValid,
         long revision,
         java.util.Map<String, LocaleReleaseView> release,
-        com.fasterxml.jackson.databind.JsonNode scheduled) {}
+        java.util.List<ScheduledRefView> scheduled) {}
