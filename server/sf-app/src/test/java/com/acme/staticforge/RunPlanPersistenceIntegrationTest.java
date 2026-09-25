@@ -117,7 +117,7 @@ class RunPlanPersistenceIntegrationTest {
         fixtures.updateTemplate(fx, shared.uuid(), "<p>shared v2</p>", "{displayNameSlug}.{ext}");
         releaseFixtures.releaseAll(fx.project().getKey());
         PlannedBuild dryRun = generationService.planFor(fx.project().getKey(), request(target, GenerationMode.INCREMENTAL));
-        List<PlanEntryRecord> planned = PlanInsight.entries(dryRun.snapshot(), dryRun.plan());
+        List<PlanEntryRecord> planned = PlanInsight.entries(dryRun);
         GenerationRun incremental = fixtures.succeeded(fixtures.generate(fx, request(target, GenerationMode.INCREMENTAL)));
 
         assertThat(stored(incremental)).isEqualTo(planned);

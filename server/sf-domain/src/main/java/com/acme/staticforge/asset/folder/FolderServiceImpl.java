@@ -431,6 +431,7 @@ public class FolderServiceImpl implements FolderService {
         version.setFolderPath(folderPath);
         version.setTemplateAssetId(templateAssetId);
         version.setDeleted(deleted);
+        version.projectMediaColumns(asset.getAssetType());
         referenceMaterializer.materialize(asset, assetVersionRepository.save(version));
     }
 

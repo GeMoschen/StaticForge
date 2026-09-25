@@ -289,7 +289,7 @@ public class RenderPipeline {
      */
     public MediaRenderSession mediaSession(Snapshot snapshot, OutputPathResolver paths, Long userId, String channel) {
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
-        return new MediaRenderSession(new Renderers(snapshot, paths, projectKey, userId).of(null), channel);
+        return new MediaRenderSession(new Renderers(snapshot, paths, projectKey, userId)::of, channel);
     }
 
     /**
@@ -459,7 +459,8 @@ public class RenderPipeline {
                 .allMatch(d -> GenerationDiagnosticCodes.GEN_CHANNEL_MISSING.equals(d.code()));
     }
 
-    private static SfException collisionError(List<OutputPathResolver.Collision> collisions) {
+    /** {@code 422 SF-GEN-0110} naming every colliding path and its two owners. */
+    public static SfException collisionError(List<OutputPathResolver.Collision> collisions) {
         StringBuilder detail = new StringBuilder("Output path collision: ");
         for (int i = 0; i < collisions.size(); i++) {
             OutputPathResolver.Collision c = collisions.get(i);

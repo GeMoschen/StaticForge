@@ -10,6 +10,10 @@ import java.util.UUID;
  * <p>{@code altText}/{@code caption} are always the value resolved for the requested (or default)
  * language, so clients written before M24 keep working; {@code altTextL10n}/{@code captionL10n}
  * carry the per-language values and are {@code null} in a project without locales.
+ *
+ * <p>The file fields ({@code blobSha256} … {@code variants}, {@code processCms}) describe the default language's file.
+ * A {@code localized} media asset (M27.3.1) has one file per language: {@code localeFiles} maps every project language
+ * to the file it renders, own or by fallback; {@code null} for media that isn't localized.
  */
 public record MediaView(
         UUID uuid,
@@ -30,5 +34,7 @@ public record MediaView(
         List<MediaVariantView> variants,
         boolean processCms,
         boolean textEditable,
+        boolean localized,
+        java.util.Map<String, MediaLocaleFileView> localeFiles,
         java.util.Map<String, LocaleReleaseView> release,
         com.fasterxml.jackson.databind.JsonNode scheduled) {}

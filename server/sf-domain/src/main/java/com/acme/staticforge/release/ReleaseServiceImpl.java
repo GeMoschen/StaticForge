@@ -11,6 +11,7 @@ import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.asset.folder.FolderService;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.ProjectLocales;
 import com.acme.staticforge.revision.AssetChange;
@@ -20,6 +21,7 @@ import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -325,6 +327,11 @@ public class ReleaseServiceImpl implements ReleaseService {
         JsonNode payload = draft.getPayload();
         for (Resolved item : discarded) {
             payload = LocaleDiscard.merge(payload, item.releasedVersion().getPayload(), item.key());
+            if (payload instanceof ObjectNode object) {
+                // A localized media file is the locale's own too (M27.3.1).
+                MediaFiles.restoreOwnFile(
+                        object, item.releasedVersion().getPayload(), item.key(), config.effectiveChain(item.key()));
+            }
         }
         if (!Objects.equals(payload, draft.getPayload())) {
             assetService.update(first.asset().getUuid(), new UpdateAssetCommand(draft.getDisplayName(), payload),

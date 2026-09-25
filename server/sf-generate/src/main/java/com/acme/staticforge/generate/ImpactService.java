@@ -1,7 +1,5 @@
 package com.acme.staticforge.generate;
 
-import com.acme.staticforge.asset.AssetType;
-import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.asset.template.CompiledTemplateCache;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.channel.OutputChannel;
@@ -12,12 +10,13 @@ import com.acme.staticforge.generate.insight.RebuildReason;
 import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.plan.RebuildExpansion;
+import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.SnapshotPagination;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
-import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import java.util.ArrayList;
@@ -114,15 +113,12 @@ public class ImpactService {
                     walk.reasonFor(page.uuid()), output.locale()));
         }
         if (channel == null) {
+            MediaOutputs outputs = new MediaOutputs(snapshot, paths.locales());
             walk.processedMedia().stream()
                     .map(snapshot::assetByUuid)
                     .sorted(Comparator.comparing(SnapshotAsset::uid))
-                    .forEach(media -> {
-                        String mimeType = media.payload() == null ? null : media.payload().path("mimeType").asText(null);
-                        entries.add(new PlanEntryRecord(media.uuid(), AssetType.MEDIA.name(), media.uid(), media.displayName(),
-                                null, MediaPaths.mediaPath(media.uid(), MediaPaths.extensionFor(mimeType)), null,
-                                walk.reasonFor(media.uuid())));
-                    });
+                    .forEach(media -> entries.addAll(
+                            PlanInsight.mediaEntries(outputs, media.uuid(), walk.reasonFor(media.uuid()))));
         }
 
         Map<String, Integer> byFirstEdge = new TreeMap<>();

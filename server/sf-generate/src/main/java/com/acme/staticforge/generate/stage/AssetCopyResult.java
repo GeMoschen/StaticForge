@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate.stage;
 
 import com.acme.staticforge.generate.pipeline.OutputFile;
+import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.List;
 import java.util.Map;
@@ -14,8 +15,9 @@ import java.util.UUID;
  * {@code warnings} are render-time warnings of processed media, and {@code fileErrors} name the
  * processed media files that failed to render and were left out (M18.3.1), which makes the run PARTIAL.
  *
- * <p>{@code owners} maps each file's path to its media asset, and {@code dependencies} each rendered processed media
- * file to the media it links (M22.4.1): what a build manifest records so a later run can carry them.
+ * <p>{@code owners} maps each file's path to its media output — the media asset and, for localized media, the locale
+ * the file is written for (M27.3.2) — and {@code dependencies} each rendered processed media output to the media it
+ * links (M22.4.1): what a build manifest records so a later run can carry them.
  */
 public record AssetCopyResult(
         List<OutputFile> files,
@@ -23,8 +25,8 @@ public record AssetCopyResult(
         long filesSkipped,
         List<Diagnostic> warnings,
         List<Diagnostic> fileErrors,
-        Map<String, UUID> owners,
-        Map<UUID, Set<UUID>> dependencies) {
+        Map<String, MediaOutputs.Key> owners,
+        Map<MediaOutputs.Key, Set<UUID>> dependencies) {
 
     public AssetCopyResult {
         files = files == null ? List.of() : List.copyOf(files);

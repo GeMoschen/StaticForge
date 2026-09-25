@@ -1,12 +1,12 @@
 package com.acme.staticforge.generate;
 
-import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.generate.insight.PlanEntryRecord;
 import com.acme.staticforge.generate.insight.RebuildReason;
 import com.acme.staticforge.generate.insight.RebuildStep;
 import com.acme.staticforge.generate.insight.RunPlanStore;
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.PlanEntry;
+import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,9 +38,12 @@ public final class PlanInsight {
 
     /**
      * Every planned output with its reason, in plan order: page outputs, then processed media files an incremental
-     * plan re-renders (by path).
+     * plan re-renders (by path) — a localized file once per locale it is written for (M27.3.2).
      */
-    public static List<PlanEntryRecord> entries(Snapshot snapshot, BuildPlan plan) {
+    public static List<PlanEntryRecord> entries(PlannedBuild build) {
+        Snapshot snapshot = build.snapshot();
+        BuildPlan plan = build.plan();
+        MediaOutputs outputs = new MediaOutputs(snapshot, build.paths().locales());
         List<PlanEntryRecord> entries = new ArrayList<>(plan.entries().size() + plan.processedMedia().size());
         for (PlanEntry entry : plan.entries()) {
             SnapshotAsset page = snapshot.asset(entry.pageUuid(), entry.locale());
@@ -57,20 +60,22 @@ public final class PlanInsight {
         }
         List<PlanEntryRecord> media = new ArrayList<>();
         for (UUID uuid : plan.processedMedia()) {
-            SnapshotAsset file = snapshot.assetByUuid(uuid);
-            String mimeType = file.payload() == null ? null : file.payload().path("mimeType").asText(null);
-            media.add(new PlanEntryRecord(
-                    file.uuid(),
-                    file.type().name(),
-                    file.uid(),
-                    file.displayName(),
-                    null,
-                    MediaPaths.mediaPath(file.uid(), MediaPaths.extensionFor(mimeType)),
-                    null,
-                    plan.reasonFor(uuid)));
+            media.addAll(mediaEntries(outputs, uuid, plan.reasonFor(uuid)));
         }
         media.sort(Comparator.comparing(PlanEntryRecord::outputPath));
         entries.addAll(media);
+        return entries;
+    }
+
+    /** One entry per output of processed media file {@code uuid}, each with the locale it is written for. */
+    static List<PlanEntryRecord> mediaEntries(MediaOutputs outputs, UUID uuid, RebuildReason reason) {
+        List<PlanEntryRecord> entries = new ArrayList<>();
+        for (MediaOutputs.Output output : outputs.outputsOf(uuid)) {
+            SnapshotAsset file = output.asset();
+            entries.add(new PlanEntryRecord(
+                    file.uuid(), file.type().name(), file.uid(), file.displayName(), null, output.path(), null, reason,
+                    output.key().locale()));
+        }
         return entries;
     }
 

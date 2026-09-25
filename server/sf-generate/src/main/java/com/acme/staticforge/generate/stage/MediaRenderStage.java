@@ -4,6 +4,7 @@ import com.acme.staticforge.asset.media.BlobStore;
 import com.acme.staticforge.asset.media.TextMediaCompiler;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
+import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.MediaRenderSession;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.RenderPipeline;
@@ -11,6 +12,7 @@ import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.render.RenderLimitException;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 /**
@@ -52,15 +54,17 @@ public class MediaRenderStage {
          * naming the media uid (run diagnostics group messages by code). The file is left out of the
          * build and nothing previous is substituted.
          */
-        Result render(SnapshotAsset media) {
-            String prefix = "Media '" + (media.uid() == null ? media.uuid() : media.uid()) + "': ";
-            byte[] source = readSource(media);
+        Result render(MediaOutputs.Output output) {
+            SnapshotAsset media = output.asset();
+            String prefix = "Media '" + (media.uid() == null ? media.uuid() : media.uid()) + "'"
+                    + (output.key().locale() == null ? "" : " (" + output.key().locale() + ")") + ": ";
+            byte[] source = readSource(output.payload());
             if (source == null) {
                 return Result.failed(Diagnostic.error(
                         GenerationDiagnosticCodes.GEN_MEDIA_SOURCE_MISSING, prefix + "the source file is missing.", 0, 0));
             }
             try {
-                return new Result(session.render(media, TextMediaCompiler.decode(source).text()), null);
+                return new Result(session.render(output, TextMediaCompiler.decode(source).text()), null);
             } catch (RenderLimitException e) {
                 Diagnostic cause = e.diagnostic();
                 return Result.failed(cause == null
@@ -69,8 +73,8 @@ public class MediaRenderStage {
             }
         }
 
-        private byte[] readSource(SnapshotAsset media) {
-            String sha = media.payload() == null ? null : media.payload().path("blobSha256").asText(null);
+        private byte[] readSource(JsonNode payload) {
+            String sha = payload == null ? null : payload.path("blobSha256").asText(null);
             try {
                 return sha == null ? null : blobStore.get(sha);
             } catch (RuntimeException e) {

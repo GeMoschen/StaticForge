@@ -4,9 +4,11 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.content.AssetValueProjection;
 import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.query.RecordSetQueries;
 import com.acme.staticforge.template.query.RecordSetQuery;
@@ -47,6 +49,8 @@ final class SnapshotAssetValueResolver implements AssetValueResolver {
 
     private final Snapshot snapshot;
     private final TemplateCompileMemo definitions;
+    /** The view's locale chain: a localized media file reads as the file this locale renders (M27.3.2). */
+    private final List<String> mediaChain;
     private final Map<UUID, JsonNode> projections = new ConcurrentHashMap<>();
     private final Map<String, RecordIndex> recordIndex = new ConcurrentHashMap<>(1);
     private final Map<UUID, Optional<RecordSetSource>> recordSets = new ConcurrentHashMap<>();
@@ -54,8 +58,15 @@ final class SnapshotAssetValueResolver implements AssetValueResolver {
 
     /** @param definitions the build's compile memo, the source of the datasets' schemas */
     SnapshotAssetValueResolver(Snapshot snapshot, TemplateCompileMemo definitions) {
+        this(snapshot, definitions, LocaleConfig.EMPTY);
+    }
+
+    /** @param locales the project's locales: which file of a localized media the view's locale reads */
+    SnapshotAssetValueResolver(
+            Snapshot snapshot, TemplateCompileMemo definitions, LocaleConfig locales) {
         this.snapshot = snapshot;
         this.definitions = definitions;
+        this.mediaChain = LocaleConfig.orEmpty(locales).effectiveChain(snapshot.locale());
     }
 
     @Override
@@ -115,7 +126,10 @@ final class SnapshotAssetValueResolver implements AssetValueResolver {
             RecordView record = asset.deleted() ? null : index().byUuid.get(uuid);
             return record == null ? MissingNode.getInstance() : record.item();
         }
-        return AssetValueProjection.project(asset.type(), asset.uid(), asset.displayName(), asset.payload(), asset.deleted());
+        JsonNode payload = asset.type() == AssetType.MEDIA
+                ? MediaFiles.effective(asset.payload(), snapshot.locale(), mediaChain)
+                : asset.payload();
+        return AssetValueProjection.project(asset.type(), asset.uid(), asset.displayName(), payload, asset.deleted());
     }
 
     private RecordIndex index() {

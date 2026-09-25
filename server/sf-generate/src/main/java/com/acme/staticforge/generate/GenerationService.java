@@ -13,6 +13,7 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanRequest;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
+import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.RenderOutcome;
 import com.acme.staticforge.generate.render.RenderPipeline;
@@ -41,6 +42,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -330,7 +332,7 @@ public class GenerationService {
      */
     public DryRun dryRun(String projectKey, GenerationRequest request, boolean validate) {
         PlannedBuild build = planFor(projectKey, request);
-        List<PlanEntryRecord> entries = PlanInsight.entries(build.snapshot(), build.plan());
+        List<PlanEntryRecord> entries = PlanInsight.entries(build);
         JsonNode diagnostics = validate
                 ? diagnosticsJson(renderPipeline.validate(build.snapshot(), build.plan()), List.of())
                 : null;
@@ -420,7 +422,7 @@ public class GenerationService {
             Snapshot snapshot = build.snapshot();
             BuildPlan plan = build.plan();
             // The plan is stored before anything renders: a run that fails later is still explainable.
-            List<PlanEntryRecord> planEntries = PlanInsight.entries(snapshot, plan);
+            List<PlanEntryRecord> planEntries = PlanInsight.entries(build);
             run.setRevisionId(snapshot.revision());
             run.setTargetId(build.target().getId());
             run.setPlanSummary(PlanInsight.summary(mapper, build, planned, planEntries));
@@ -443,10 +445,21 @@ public class GenerationService {
             }
 
             emit(runId, STAGE_ASSETS, "Copying media", 0, 0, 0, null);
-            Set<UUID> media = mediaUuids(outcome, snapshot);
-            media.addAll(plan.processedMedia());
+            com.acme.staticforge.project.LocaleConfig locales =
+                    projectLocales.forProject(build.project().getId());
+            MediaOutputs mediaOutputs = new MediaOutputs(snapshot, locales);
             AssetCopyResult assets = assetCopyStage.copy(
-                    snapshot, media, mediaRenderStage.open(snapshot, build.paths(), run.getStartedBy()));
+                    mediaOutputs,
+                    mediaReferences(outcome, plan, snapshot),
+                    processedOutputs(plan, build.base()),
+                    mediaRenderStage.open(snapshot, build.paths(), run.getStartedBy()));
+            Map<String, UUID> mediaByPath = new HashMap<>();
+            assets.owners().forEach((path, key) -> mediaByPath.put(path, key.media()));
+            List<OutputPathResolver.Collision> mediaCollisions =
+                    build.paths().findMediaCollisions(plan.siteOutputs(), mediaByPath);
+            if (!mediaCollisions.isEmpty()) {
+                throw RenderPipeline.collisionError(mediaCollisions);
+            }
             List<Diagnostic> warnings = new ArrayList<>(outcome.warnings());
             warnings.addAll(assets.warnings());
             List<Diagnostic> fileErrors = new ArrayList<>(outcome.pageErrors());
@@ -462,6 +475,7 @@ public class GenerationService {
             TargetWriter writer = build.writer();
             CarryForward carry = new CarryForward(
                     snapshot,
+                    mediaOutputs,
                     plan,
                     build.channels(),
                     request.folderPath(),
@@ -469,8 +483,6 @@ public class GenerationService {
                     build.base(),
                     build.carries() ? writer.readFile(build.baseRunId(), SEARCH_INDEX_PATH) : Optional.empty());
             List<String> channels = request.channels() == null ? parseChannels(run.getChannels()) : request.channels();
-            com.acme.staticforge.project.LocaleConfig locales =
-                    projectLocales.forProject(build.project().getId());
             PostProcessContext ctx = new PostProcessContext(
                     build.project().getId(), projectKey, baseUrl(build.target()), channels, carry.sitePages(),
                     false, java.util.List.of(), java.util.List.of(), carry.carriedText(),
@@ -602,17 +614,45 @@ public class GenerationService {
                         422, NO_TARGET_CODE, "Validation Failed", "No generation target configured.")));
     }
 
-    private static Set<UUID> mediaUuids(RenderOutcome outcome, Snapshot snapshot) {
-        Set<UUID> media = new LinkedHashSet<>();
+    /**
+     * The media the rendered pages reference, each from the locale its page rendered in (M27.3.2): a localized media
+     * file resolves per locale.
+     */
+    private static Set<AssetCopyStage.Reference> mediaReferences(RenderOutcome outcome, BuildPlan plan, Snapshot snapshot) {
+        Map<String, String> localeByPath = new HashMap<>();
+        plan.entries().forEach(entry -> {
+            if (entry.locale() != null) {
+                localeByPath.put(entry.outputPath(), entry.locale());
+            }
+        });
+        Set<AssetCopyStage.Reference> media = new LinkedHashSet<>();
         for (RenderedFile file : outcome.files()) {
             for (UUID uuid : file.dependencies()) {
                 SnapshotAsset asset = snapshot.assetByUuid(uuid);
                 if (asset != null && asset.type() == AssetType.MEDIA) {
-                    media.add(uuid);
+                    media.add(new AssetCopyStage.Reference(uuid, localeByPath.get(file.outputPath())));
                 }
             }
         }
         return media;
+    }
+
+    /**
+     * The processed media outputs an incremental plan re-renders (M18.3.1): the outputs the base build has of each
+     * processed media file the walk reached — one per locale it is written for (M27.3.2). Without a base build every
+     * page renders, and their references name the outputs.
+     */
+    private static List<MediaOutputs.Key> processedOutputs(BuildPlan plan, BuildManifest base) {
+        if (base == null || plan.processedMedia().isEmpty()) {
+            return List.of();
+        }
+        Set<MediaOutputs.Key> keys = new LinkedHashSet<>();
+        for (BuildManifest.Output output : base.outputs()) {
+            if (output.kind() == BuildManifest.Kind.MEDIA && plan.processedMedia().contains(output.asset())) {
+                keys.add(new MediaOutputs.Key(output.asset(), output.locale()));
+            }
+        }
+        return List.copyOf(keys);
     }
 
     private static String baseUrl(GenerationTarget target) {

@@ -114,11 +114,14 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
 
     /**
      * The candidates of the Changes view (M27.1.3): open versions of the given types that may have unreleased changes
-     * in some locale. A live draft is a candidate unless every one of its {@code keys} locale keys (one for
-     * non-localized media) has an open pointer at exactly this version and uid — the only state that is certainly
-     * {@code PUBLISHED} without projecting. A tombstone is a candidate while any pointer is still open (deletion
-     * pending). The status service then decides per locale, so a candidate may still turn out published (a draft
-     * edited back to the released content).
+     * in some locale. A live draft is a candidate unless every one of its {@code keys} locale keys has an open pointer
+     * at exactly this version and uid — the only state that is certainly {@code PUBLISHED} without projecting. Media
+     * counts one key ({@code ""}) unless it is localized (M27.3.1); a localized media asset's pointers at its draft
+     * are per locale, so an open per-locale pointer at the draft tells the query to count every locale key — the flag
+     * itself lives in the JSON payload, which the query does not read. A localized draft without any pointer at it is
+     * a candidate either way. A tombstone is a candidate while any pointer is still open (deletion pending). The
+     * status service then decides per locale, so a candidate may still turn out published (a draft edited back to the
+     * released content).
      */
     @Query("""
             SELECT v FROM AssetVersion v JOIN FETCH v.asset a
@@ -130,7 +133,11 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
                      (SELECT COUNT(r) FROM com.acme.staticforge.release.AssetRelease r
                       WHERE r.assetId = v.assetId AND r.validToRevision IS NULL
                         AND r.releasedVersionId = v.id AND r.releasedUid = a.uid)
-                     < CASE WHEN a.assetType = com.acme.staticforge.asset.AssetType.MEDIA THEN 1 ELSE :keys END)
+                     < CASE WHEN a.assetType = com.acme.staticforge.asset.AssetType.MEDIA AND NOT EXISTS
+                              (SELECT r3.id FROM com.acme.staticforge.release.AssetRelease r3
+                               WHERE r3.assetId = v.assetId AND r3.validToRevision IS NULL
+                                 AND r3.releasedVersionId = v.id AND r3.localeKey <> '')
+                            THEN 1 ELSE :keys END)
                 OR (v.deleted = true AND EXISTS
                      (SELECT r2.id FROM com.acme.staticforge.release.AssetRelease r2
                       WHERE r2.assetId = v.assetId AND r2.validToRevision IS NULL))

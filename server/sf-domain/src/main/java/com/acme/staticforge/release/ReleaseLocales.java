@@ -1,6 +1,7 @@
 package com.acme.staticforge.release;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.project.LocaleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
@@ -36,6 +37,6 @@ public final class ReleaseLocales {
      * flag — every media before M27.3.1 — is not localized.
      */
     public static boolean isLocalizedMedia(JsonNode payload) {
-        return payload != null && payload.path("localized").asBoolean(false);
+        return MediaFiles.isLocalized(payload);
     }
 }

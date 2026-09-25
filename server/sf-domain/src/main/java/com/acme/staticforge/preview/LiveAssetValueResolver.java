@@ -8,6 +8,7 @@ import com.acme.staticforge.asset.content.AssetValueProjection;
 import com.acme.staticforge.asset.content.TemplateContentDefinitions;
 import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.release.ContentView;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.query.RecordSetQueries;
@@ -41,9 +42,15 @@ final class LiveAssetValueResolver implements AssetValueResolver {
     private final Map<UUID, DatasetRecords> datasets = new HashMap<>();
     private final Map<UUID, Optional<RecordSetSource>> recordSets = new HashMap<>();
 
-    LiveAssetValueResolver(ContentView view, AssetRepository assetRepository) {
+    /** The reading's locale and its chain: a localized media file reads as the file that locale renders (M27.3.2). */
+    private final String locale;
+    private final List<String> mediaChain;
+
+    LiveAssetValueResolver(ContentView view, AssetRepository assetRepository, String locale, List<String> mediaChain) {
         this.view = view;
         this.assetRepository = assetRepository;
+        this.locale = locale;
+        this.mediaChain = mediaChain;
     }
 
     /** The dataset's records present in the view (M19.3.2): soft-deleted and — published — unreleased ones left out. */
@@ -135,7 +142,13 @@ final class LiveAssetValueResolver implements AssetValueResolver {
                 .map(found -> expected == AssetType.RECORD
                         ? recordItem(found)
                         : AssetValueProjection.project(
-                                expected, found.uid(), found.version().getDisplayName(), found.version().getPayload(), false))
+                                expected,
+                                found.uid(),
+                                found.version().getDisplayName(),
+                                expected == AssetType.MEDIA
+                                        ? MediaFiles.effective(found.version().getPayload(), locale, mediaChain)
+                                        : found.version().getPayload(),
+                                false))
                 .orElse(MissingNode.getInstance());
     }
 

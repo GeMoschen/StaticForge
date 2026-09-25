@@ -3,6 +3,8 @@ package com.acme.staticforge.api;
 import com.acme.staticforge.api.dto.FocalPointView;
 import com.acme.staticforge.api.dto.MediaBulkItemResult;
 import com.acme.staticforge.api.dto.MediaImageView;
+import com.acme.staticforge.api.dto.MediaLocaleFileView;
+import com.acme.staticforge.api.dto.MediaLocalizedRequest;
 import com.acme.staticforge.api.dto.MediaMetadataRequest;
 import com.acme.staticforge.api.dto.MediaProcessRequest;
 import com.acme.staticforge.api.dto.MediaSaveResponse;
@@ -15,6 +17,7 @@ import com.acme.staticforge.api.dto.OctlValidateResponse;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.media.FocalPoint;
 import com.acme.staticforge.asset.media.MediaBinary;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.asset.media.MediaService;
 import com.acme.staticforge.asset.media.MediaText;
 import com.acme.staticforge.asset.media.MediaWriteResult;
@@ -25,7 +28,9 @@ import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
 import com.acme.staticforge.release.ContentView;
 import com.acme.staticforge.release.ContentViews;
+import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
+import com.acme.staticforge.project.ProjectLocales;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
@@ -46,6 +51,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -78,6 +84,7 @@ public class MediaController {
     private final PageRenderService pageRenderService;
     private final ReleaseBlocks releaseBlocks;
     private final ContentViews contentViews;
+    private final ProjectLocales projectLocales;
 
     public MediaController(
             ProjectService projectService,
@@ -86,7 +93,8 @@ public class MediaController {
             PreviewTokenService previewTokenService,
             PageRenderService pageRenderService,
             ReleaseBlocks releaseBlocks,
-            ContentViews contentViews) {
+            ContentViews contentViews,
+            ProjectLocales projectLocales) {
         this.projectService = projectService;
         this.mediaService = mediaService;
         this.securitySupport = securitySupport;
@@ -94,6 +102,7 @@ public class MediaController {
         this.pageRenderService = pageRenderService;
         this.releaseBlocks = releaseBlocks;
         this.contentViews = contentViews;
+        this.projectLocales = projectLocales;
     }
 
     @GetMapping
@@ -196,6 +205,63 @@ public class MediaController {
     }
 
     /**
+     * Localizes or un-localizes the media asset (M27.3.1): one file per language, or one for all. Un-localizing
+     * keeps the default language's file; the others are discarded only with {@code confirmDiscard}, else a
+     * {@code 409 SF-MEDIA-0505} lists them ({@code files}). {@code 422 SF-MEDIA-0508} in a project without
+     * languages.
+     */
+    @PutMapping("/{uuid}/localized")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<MediaView> setLocalized(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @org.springframework.web.bind.annotation.RequestBody MediaLocalizedRequest body) {
+        AssetVersionView view = mediaService.setLocalized(
+                uuid,
+                body.localized(),
+                Boolean.TRUE.equals(body.confirmDiscard()),
+                RevisionHeaders.expectedRevision(ifMatch),
+                ctx(projectKey, body.localized() ? "localize media" : "un-localize media"));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
+                .body(toMediaView(projectKey, view));
+    }
+
+    /**
+     * Uploads or replaces one language's own file of localized media (M27.3.1), through the same upload rules as
+     * {@code replace}. {@code 422 SF-MEDIA-0506} for media that isn't localized, {@code 0507} for a language the
+     * project doesn't have.
+     */
+    @PostMapping("/{uuid}/files/{locale}")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<MediaSaveResponse> putLocaleFile(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @PathVariable String locale,
+            @RequestParam("file") MultipartFile file) {
+        MediaWriteResult result = mediaService.putLocaleFile(
+                uuid, locale, file.getOriginalFilename(), file.getContentType(), bytes(file),
+                ctx(projectKey, "replace media file (" + locale + ")"));
+        return saved(projectKey, result);
+    }
+
+    /**
+     * Removes one language's own file of localized media, so the language falls back again (M27.3.1). The default
+     * language's file can't be removed ({@code 422 SF-MEDIA-0509}); a language without its own file changes nothing.
+     */
+    @DeleteMapping("/{uuid}/files/{locale}")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<MediaView> removeLocaleFile(
+            @PathVariable String projectKey, @PathVariable UUID uuid, @PathVariable String locale) {
+        AssetVersionView view = mediaService.removeLocaleFile(
+                uuid, locale, ctx(projectKey, "remove media file (" + locale + ")"));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
+                .body(toMediaView(projectKey, view));
+    }
+
+    /**
      * Switches CMS syntax processing of a text media file on or off (M18.1.1). Non-text files are a
      * {@code 400}. Switching on compiles the file: errors are a {@code 422} with {@code diagnostics}
      * and leave the flag off; warnings ({@code $$}, unescaped JS/JSON values) come back in the response.
@@ -206,23 +272,29 @@ public class MediaController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestParam(required = false) String locale,
             @org.springframework.web.bind.annotation.RequestBody MediaProcessRequest body) {
         MediaWriteResult result = mediaService.setProcessCms(
                 uuid,
                 body.processCms(),
+                locale,
                 RevisionHeaders.expectedRevision(ifMatch),
                 ctx(projectKey, body.processCms() ? "enable CMS processing" : "disable CMS processing"));
         return saved(projectKey, result);
     }
 
-    /** A text media file's content, current or at {@code ?revision=} (M18.1.2); non-text files are a {@code 400}. */
+    /**
+     * A text media file's content, current or at {@code ?revision=} (M18.1.2); non-text files are a {@code 400}. For
+     * localized media, {@code ?locale=} reads the file that language renders (M27.3.1; default: the default file).
+     */
     @GetMapping("/{uuid}/text")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<MediaTextView> readText(
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
-            @RequestParam(required = false) Long revision) {
-        MediaText text = mediaService.readText(projectId(projectKey), uuid, revision);
+            @RequestParam(required = false) Long revision,
+            @RequestParam(required = false) String locale) {
+        MediaText text = mediaService.readText(projectId(projectKey), uuid, revision, locale);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(text.revision()))
                 .body(new MediaTextView(text.text(), text.mimeType(), text.revision(), text.utf8()));
@@ -230,7 +302,8 @@ public class MediaController {
 
     /**
      * Replaces a text media file's content (M18.1.2); every change is one revision. A processed file's
-     * new source is compiled first: errors are a {@code 422} with {@code diagnostics} and nothing is stored.
+     * new source is compiled first: errors are a {@code 422} with {@code diagnostics} and nothing is stored. For
+     * localized media, {@code ?locale=} writes that language's own file (M27.3.1).
      */
     @PutMapping("/{uuid}/text")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
@@ -238,9 +311,10 @@ public class MediaController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestParam(required = false) String locale,
             @org.springframework.web.bind.annotation.RequestBody MediaTextRequest body) {
         MediaWriteResult result = mediaService.writeText(
-                uuid, body.text(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "edit media text"));
+                uuid, body.text(), locale, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "edit media text"));
         return saved(projectKey, result);
     }
 
@@ -261,7 +335,8 @@ public class MediaController {
      * media drawer's Rendered tab; {@code EDITOR}, since it exposes the output of the file's source.
      * A file that isn't processed is a {@code 400}; a source that doesn't compile or render is a
      * {@code 422} with {@code diagnostics} (or the render limit's code). The plain {@code /binary}
-     * route keeps serving the source.
+     * route keeps serving the source. For localized media, {@code ?locale=} renders that language's file in that
+     * language (M27.3.2).
      */
     @GetMapping(value = "/{uuid}/binary", params = "rendered=true")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
@@ -269,22 +344,31 @@ public class MediaController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam(required = false) Long revision,
+            @RequestParam(required = false) String locale,
             HttpServletRequest request) {
         long projectId = projectId(projectKey);
         AssetVersionView media = mediaService.requireAt(projectId, uuid, revision);
-        if (!TextMediaTypes.isProcessed(media.payload())) {
+        JsonNode file = fileOf(projectId, media, locale);
+        if (!TextMediaTypes.isProcessed(file)) {
             throw new SfException(ProblemFactory.badRequest("This media file does not have CMS processing switched on."));
         }
-        String rendered = pageRenderService.renderMedia(projectId, media, revision, apiBase(request));
-        return renderedResponse(media, rendered.getBytes(StandardCharsets.UTF_8), null);
+        String rendered = pageRenderService.renderMedia(
+                projectId, media, revision, apiBase(request), locale, ContentView.Kind.DRAFT);
+        return renderedResponse(text(file, "mimeType"), rendered.getBytes(StandardCharsets.UTF_8), null);
+    }
+
+    /** The payload of {@code media} as {@code locale} renders it: localized media's file for that language (M27.3.2). */
+    private JsonNode fileOf(long projectId, AssetVersionView media, String locale) {
+        return MediaFiles.effective(media.payload(), locale, projectLocales.forProject(projectId).effectiveChain(locale));
     }
 
     @GetMapping("/{uuid}/binary")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<byte[]> binary(
             @PathVariable String projectKey, @PathVariable UUID uuid,
-            @RequestParam(required = false) String variant) {
-        MediaBinary binary = mediaService.binary(projectId(projectKey), uuid, variant);
+            @RequestParam(required = false) String variant,
+            @RequestParam(required = false) String locale) {
+        MediaBinary binary = mediaService.binary(projectId(projectKey), uuid, variant, null, locale);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(binary.mimeType()));
         if (!isRenderable(binary.mimeType())) {
@@ -308,7 +392,8 @@ public class MediaController {
      * doesn't break the whole preview.
      *
      * <p>A token from a published preview (M27.2.3) serves the version released in its language — {@code 404} when
-     * none is — and renders a processed file in the published view.
+     * none is — and renders a processed file in the published view. Localized media serves the file of the token's
+     * language (M27.3.2).
      */
     @GetMapping("/{uuid}/share")
     @PreAuthorize("permitAll()")
@@ -335,10 +420,10 @@ public class MediaController {
         } else {
             media = mediaService.requireAt(projectId, uuid, revision);
         }
-        if ((variant == null || variant.isBlank()) && TextMediaTypes.isProcessed(media.payload())) {
+        if ((variant == null || variant.isBlank()) && TextMediaTypes.isProcessed(fileOf(projectId, media, target.locale()))) {
             return sharedProcessed(projectId, media, target, request);
         }
-        MediaBinary binary = mediaService.binary(projectId, uuid, variant, revision);
+        MediaBinary binary = mediaService.binary(projectId, uuid, variant, revision, target.locale());
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(binary.mimeType()));
         if (!isRenderable(binary.mimeType())) {
@@ -349,19 +434,21 @@ public class MediaController {
 
     private ResponseEntity<byte[]> sharedProcessed(
             long projectId, AssetVersionView media, PreviewTokenService.ShareTarget target, HttpServletRequest request) {
+        String mimeType = text(fileOf(projectId, media, target.locale()), "mimeType");
         try {
             String rendered = pageRenderService.renderMedia(
                     projectId, media, target.revision(), apiBase(request), target.locale(), target.view());
-            return renderedResponse(media, rendered.getBytes(StandardCharsets.UTF_8), null);
+            return renderedResponse(mimeType, rendered.getBytes(StandardCharsets.UTF_8), null);
         } catch (SfException e) {
-            MediaBinary source = mediaService.binary(projectId, media.uuid(), null, media.validFromRevision());
-            return renderedResponse(media, source.bytes(), renderErrorSummary(e));
+            MediaBinary source = mediaService.binary(
+                    projectId, media.uuid(), null, media.validFromRevision(), target.locale());
+            return renderedResponse(mimeType, source.bytes(), renderErrorSummary(e));
         }
     }
 
-    private static ResponseEntity<byte[]> renderedResponse(AssetVersionView media, byte[] bytes, String renderError) {
+    private static ResponseEntity<byte[]> renderedResponse(String mimeType, byte[] bytes, String renderError) {
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.parseMediaType(text(media.payload(), "mimeType")));
+        headers.setContentType(MediaType.parseMediaType(mimeType));
         headers.setCacheControl(CacheControl.noStore());
         if (renderError != null) {
             headers.set(RENDER_ERROR_HEADER, renderError);
@@ -391,8 +478,9 @@ public class MediaController {
 
     @GetMapping("/{uuid}/thumbnail")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public ResponseEntity<byte[]> thumbnail(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        MediaBinary thumb = mediaService.thumbnail(projectId(projectKey), uuid);
+    public ResponseEntity<byte[]> thumbnail(
+            @PathVariable String projectKey, @PathVariable UUID uuid, @RequestParam(required = false) String locale) {
+        MediaBinary thumb = mediaService.thumbnail(projectId(projectKey), uuid, locale);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(thumb.mimeType()))
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=" + THUMBNAIL_CACHE_SECONDS)
@@ -459,12 +547,14 @@ public class MediaController {
                 v.validFromRevision(),
                 TextMediaTypes.isProcessed(payload),
                 payload != null && TextMediaTypes.isText(text(payload, "mimeType")),
+                MediaFiles.isLocalized(payload),
                 release,
                 null);
     }
 
     private MediaView toMediaView(String projectKey, AssetVersionView v) {
-        return toMediaView(v, null, releaseBlocks.of(projectId(projectKey), v.uuid()));
+        long projectId = projectId(projectKey);
+        return toMediaView(v, null, releaseBlocks.of(projectId, v.uuid()), projectLocales.forProject(projectId));
     }
 
     /**
@@ -474,7 +564,8 @@ public class MediaController {
     private static MediaView toMediaView(
             AssetVersionView v,
             java.util.List<String> locale,
-            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release) {
+            java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
+            LocaleConfig locales) {
         JsonNode payload = v.payload();
         return new MediaView(
                 v.uuid(),
@@ -495,8 +586,36 @@ public class MediaController {
                 variants(payload),
                 TextMediaTypes.isProcessed(payload),
                 TextMediaTypes.isText(text(payload, "mimeType")),
+                MediaFiles.isLocalized(payload),
+                localeFiles(payload, locales),
                 release,
                 null);
+    }
+
+    /**
+     * The file every project language renders of localized media, own or by fallback (M27.3.1); {@code null} for
+     * media that isn't localized.
+     */
+    private static java.util.Map<String, MediaLocaleFileView> localeFiles(JsonNode payload, LocaleConfig locales) {
+        if (!MediaFiles.isLocalized(payload)) {
+            return null;
+        }
+        java.util.Map<String, MediaLocaleFileView> out = new java.util.LinkedHashMap<>();
+        for (String locale : LocaleConfig.orEmpty(locales).codes()) {
+            MediaFiles.Resolved resolved = MediaFiles.fileFor(payload, locale, locales.effectiveChain(locale));
+            JsonNode file = resolved.file();
+            out.put(locale, new MediaLocaleFileView(
+                    resolved.own(),
+                    resolved.locale(),
+                    text(file, "blobSha256"),
+                    text(file, "fileName"),
+                    text(file, "mimeType"),
+                    longVal(file, "sizeBytes"),
+                    image(file),
+                    TextMediaTypes.isProcessed(file),
+                    TextMediaTypes.isText(text(file, "mimeType"))));
+        }
+        return out;
     }
 
     private static MediaImageView image(JsonNode payload) {

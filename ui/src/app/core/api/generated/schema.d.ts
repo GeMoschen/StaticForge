@@ -196,6 +196,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/media/{uuid}/localized": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setLocalized"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/globals/{uuid}/schema": {
         parameters: {
             query?: never;
@@ -703,6 +719,22 @@ export interface paths {
         put?: never;
         post: operations["replace"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/media/{uuid}/files/{locale}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["putLocaleFile"];
+        delete: operations["removeLocaleFile"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2293,6 +2325,18 @@ export interface components {
             orientation?: number;
             dominantColor?: string;
         };
+        MediaLocaleFileView: {
+            own?: boolean;
+            fromLocale?: string;
+            blobSha256?: string;
+            fileName?: string;
+            mimeType?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            image?: components["schemas"]["MediaImageView"];
+            processCms?: boolean;
+            textEditable?: boolean;
+        };
         MediaVariantView: {
             name?: string;
             blobSha256?: string;
@@ -2326,6 +2370,10 @@ export interface components {
             variants?: components["schemas"]["MediaVariantView"][];
             processCms?: boolean;
             textEditable?: boolean;
+            localized?: boolean;
+            localeFiles?: {
+                [key: string]: components["schemas"]["MediaLocaleFileView"];
+            };
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
@@ -2341,6 +2389,10 @@ export interface components {
         };
         MediaProcessRequest: {
             processCms?: boolean;
+        };
+        MediaLocalizedRequest: {
+            localized?: boolean;
+            confirmDiscard?: boolean;
         };
         UpdateGlobalSetSchemaRequest: {
             contentDefinition?: string;
@@ -3409,6 +3461,7 @@ export interface components {
             revision?: number;
             processCms?: boolean;
             textEditable?: boolean;
+            localized?: boolean;
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
@@ -4202,6 +4255,7 @@ export interface operations {
         parameters: {
             query?: {
                 revision?: number;
+                locale?: string;
             };
             header?: never;
             path: {
@@ -4225,7 +4279,9 @@ export interface operations {
     };
     writeText: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: string;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -4254,7 +4310,9 @@ export interface operations {
     };
     setProcessCms: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: string;
+            };
             header?: {
                 "If-Match"?: string;
             };
@@ -4277,6 +4335,35 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MediaSaveResponse"];
+                };
+            };
+        };
+    };
+    setLocalized: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaLocalizedRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaView"];
                 };
             };
         };
@@ -5467,6 +5554,61 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MediaSaveResponse"];
+                };
+            };
+        };
+    };
+    putLocaleFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+                locale: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaSaveResponse"];
+                };
+            };
+        };
+    };
+    removeLocaleFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+                locale: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaView"];
                 };
             };
         };
@@ -7207,7 +7349,9 @@ export interface operations {
     };
     thumbnail: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: string;
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -7258,6 +7402,7 @@ export interface operations {
         parameters: {
             query?: {
                 variant?: string;
+                locale?: string;
                 revision?: number;
             };
             header?: never;

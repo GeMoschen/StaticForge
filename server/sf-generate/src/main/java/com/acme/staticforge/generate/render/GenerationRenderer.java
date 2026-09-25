@@ -4,7 +4,6 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.dataset.RecordTemplates;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
-import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.asset.media.TextMediaRenderer;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
@@ -52,7 +51,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -84,7 +82,7 @@ final class GenerationRenderer {
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<AssetType, Map<String, UUID>> uidIndex;
     private final TemplateCompileMemo compiledTemplates;
-    private final SnapshotAssetValueResolver assetValues;
+    private SnapshotAssetValueResolver assetValues;
 
     private final Renderer renderer = new OctlRenderer();
     private final TextMediaRenderer textMediaRenderer = new TextMediaRenderer();
@@ -103,6 +101,9 @@ final class GenerationRenderer {
 
     /** The project's content locales (M24.3.1); {@link com.acme.staticforge.project.LocaleConfig#EMPTY} is single-language. */
     private com.acme.staticforge.project.LocaleConfig localeConfig = com.acme.staticforge.project.LocaleConfig.EMPTY;
+
+    /** Where media links point per render locale (M27.3.2); follows {@link #localeConfig}. */
+    private MediaOutputs mediaOutputs;
 
     GenerationRenderer(
             Snapshot snapshot,
@@ -146,6 +147,7 @@ final class GenerationRenderer {
         this.generationUserId = generationUserId;
         this.compiledTemplates = compiledTemplates;
         this.assetValues = new SnapshotAssetValueResolver(snapshot, compiledTemplates);
+        this.mediaOutputs = new MediaOutputs(snapshot, localeConfig);
     }
 
     /**
@@ -154,6 +156,9 @@ final class GenerationRenderer {
      */
     GenerationRenderer withLocales(com.acme.staticforge.project.LocaleConfig config) {
         this.localeConfig = config == null ? com.acme.staticforge.project.LocaleConfig.EMPTY : config;
+        this.mediaOutputs = new MediaOutputs(snapshot, localeConfig);
+        // Before any entry renders, so nothing has been memoized yet: media values read the view's locale file.
+        this.assetValues = new SnapshotAssetValueResolver(snapshot, compiledTemplates, localeConfig);
         return this;
     }
 
@@ -273,24 +278,27 @@ final class GenerationRenderer {
     }
 
     /**
-     * Renders a processed text media file (M18.3.1) to its canonical media path, through the shared
+     * Renders a processed text media file (M18.3.1) to its output path, through the shared
      * {@link TextMediaRenderer} with this build's snapshot resolvers: links are relative to the media
      * file's own output path, values and globals come from the snapshot, {@code nav:} iteration uses
-     * the snapshot navigation. The source compiles once per build through the compile memo.
+     * the snapshot navigation. A localized file renders in the locale it is written for (M27.3.2), with this
+     * renderer being that locale's. The source compiles once per build through the compile memo.
      * Compile-time warnings were shown when the file was saved and are not repeated here; render-time
      * warnings (a deleted target, a missing value) are returned like a page's.
      *
+     * @param output the media output to render ({@link MediaOutputs})
      * @param source the media file's source text (its blob, decoded)
      * @param channel the project's default channel, the only one media renders in
      * @throws RenderLimitException when the source no longer compiles against the snapshot (e.g. a
      *     referenced uid was renamed after the save) or a render limit is hit: this file fails, the
      *     rest of the build does not
      */
-    RenderedFile renderMedia(SnapshotAsset media, String source, String channel) {
-        JsonNode payload = media.payload();
-        String mimeType = payload == null ? null : payload.path("mimeType").asText(null);
+    RenderedFile renderMedia(MediaOutputs.Output output, String source, String channel) {
+        SnapshotAsset media = output.renderedAsset();
+        String mimeType = output.mimeType();
         String uid = emptyIfNull(media.uid());
-        String outputPath = MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mimeType));
+        String outputPath = output.path();
+        String locale = output.key().locale();
 
         OctlResult compiled = compiledTemplates.textMedia(
                 media.uuid(), channel, source, TextMediaTypes.isScriptLike(mimeType), referenceResolver());
@@ -308,7 +316,7 @@ final class GenerationRenderer {
         RenderResult result = textMediaRenderer.render(
                 compiled.template(),
                 target,
-                urlResolver(channel, outputPath, warnings),
+                urlResolver(channel, outputPath, warnings, locale),
                 assetValues,
                 (navFolderUuid, args) -> {
                     JsonNode json = navigationTreeJson(navFolderUuid, args, channel, null, outputPath, deps, warnings);
@@ -450,7 +458,7 @@ final class GenerationRenderer {
                 return "";
             }
             return switch (kind) {
-                case "media" -> relativeUrl(pagePath, resolveMedia(uuid, args));
+                case "media" -> relativeUrl(pagePath, resolveMedia(uuid, args, renderLocale));
                 case "page" -> paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(uuid, channel, locale));
                 case "folder" -> resolveFolder(uuid, pagePath);
                 default -> "";
@@ -478,27 +486,18 @@ final class GenerationRenderer {
         }
     }
 
-    private String resolveMedia(UUID uuid, Map<String, String> args) {
-        SnapshotAsset media = snapshot.assetByUuid(uuid);
-        if (media == null) {
+    /** The site path a media reference from {@code renderLocale} links: that locale's file (M27.3.2). */
+    private String resolveMedia(UUID uuid, Map<String, String> args, String renderLocale) {
+        MediaOutputs.Output output = mediaOutputs.of(uuid, renderLocale);
+        if (output == null) {
             return "";
         }
-        String uid = media.uid() == null ? "" : media.uid();
-        JsonNode payload = media.payload();
         String variant = args == null ? null : args.get("variant");
         if (variant == null || variant.isBlank()) {
-            String mime = payload == null ? null : payload.path("mimeType").asText();
-            return MediaPaths.mediaPath(uid, MediaPaths.extensionFor(mime));
+            return output.path();
         }
-        JsonNode variants = payload == null ? null : payload.get("variants");
-        if (variants != null && variants.isArray()) {
-            for (JsonNode node : variants) {
-                if (variant.equals(node.path("name").asText())) {
-                    return MediaPaths.variantPath(uid, variant, extensionForFormat(node.path("format").asText()));
-                }
-            }
-        }
-        return "";
+        String path = output.variantPath(variant);
+        return path == null ? "" : path;
     }
 
     private String resolveFolder(UUID uuid, String pagePath) {
@@ -946,15 +945,6 @@ final class GenerationRenderer {
         if (!warnings.contains(warning)) {
             warnings.add(warning);
         }
-    }
-
-    /** Variant {@code format} ("jpeg") → file extension ("jpg"); mirrors the ASSETS copy stage. */
-    private static String extensionForFormat(String format) {
-        if (format == null || format.isBlank()) {
-            return "bin";
-        }
-        String value = format.toLowerCase(Locale.ROOT);
-        return "jpeg".equals(value) ? "jpg" : value;
     }
 
     private Escaping escapingFor(String channel) {

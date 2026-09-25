@@ -12,8 +12,10 @@ import com.acme.staticforge.project.LocaleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -201,6 +203,24 @@ public final class OutputPathResolver {
         Map<String, UUID> pages = new HashMap<>();
         owners.forEach((path, owner) -> pages.put(path, owner.pageUuid()));
         this.collisionOwners = Map.copyOf(pages);
+        return List.copyOf(collisions);
+    }
+
+    /**
+     * Detects page outputs that land on a media output's path (M27.3.2): a page may own {@code en/assets/media/…} as
+     * much as a localized media file's English copy does. One {@link Collision} per path, naming the page and the
+     * media by uid.
+     */
+    public List<Collision> findMediaCollisions(List<PlanEntry> pages, Map<String, UUID> mediaByPath) {
+        List<Collision> collisions = new ArrayList<>();
+        Set<String> reported = new HashSet<>();
+        for (PlanEntry entry : pages == null ? List.<PlanEntry>of() : pages) {
+            UUID media = mediaByPath.get(entry.outputPath());
+            if (media != null && reported.add(entry.outputPath())) {
+                collisions.add(new Collision(
+                        entry.outputPath(), describe(new Owner(entry.pageUuid(), entry.pageNumber())), uidOf(media)));
+            }
+        }
         return List.copyOf(collisions);
     }
 

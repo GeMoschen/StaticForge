@@ -2,6 +2,7 @@ package com.acme.staticforge.generate.plan;
 
 import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.asset.AssetUidHistoryRepository;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
@@ -182,7 +183,7 @@ public class RebuildExpansion {
         for (Snapshot view : snapshot.views()) {
             walks.put(view.locale(), new Walk(
                             view,
-                            delta.changesIn(view, outputMoved),
+                            delta.changesIn(view, outputMoved, locales),
                             SnapshotPagination.of(view, definitions),
                             new RecordSetImpact(view, definitions, locales),
                             rows)
@@ -361,7 +362,7 @@ public class RebuildExpansion {
         }
 
         /** The changes {@code view}'s language sees. */
-        Changes changesIn(Snapshot view, Predicate<UUID> outputMoved) {
+        Changes changesIn(Snapshot view, Predicate<UUID> outputMoved, LocaleConfig locales) {
             Map<Long, Long> roots = new HashMap<>(liveRoots);
             Map<Long, RebuildRootKind> kinds = new HashMap<>();
             Set<Long> uids = new HashSet<>(uidChanged);
@@ -401,8 +402,42 @@ public class RebuildExpansion {
                         uids.add(id);
                     }
                 }
+                seedFallbackMedia(view, candidates, locales, roots, kinds);
             }
             return new Changes(roots, kinds, before, uids, outputMoved, false);
+        }
+
+        /**
+         * A localized media file that {@code view}'s language falls back to is published by the language that owns it
+         * (M27.3.2): when the owner's release changes, what this language links — and where — changes too, so the
+         * media is a root here as well.
+         */
+        private void seedFallbackMedia(
+                Snapshot view, Set<Long> candidates, LocaleConfig locales, Map<Long, Long> roots,
+                Map<Long, RebuildRootKind> kinds) {
+            LocaleConfig config = LocaleConfig.orEmpty(locales);
+            if (view.locale() == null || !config.isLocalized()) {
+                return;
+            }
+            for (long id : candidates) {
+                SnapshotAsset asset = view.assetById(id);
+                if (kinds.containsKey(id) || asset == null || asset.deleted() || asset.type() != AssetType.MEDIA
+                        || !MediaFiles.isLocalized(asset.payload())) {
+                    continue;
+                }
+                String owner = MediaFiles.fileFor(asset.payload(), view.locale(), config.effectiveChain(view.locale()))
+                        .locale();
+                if (owner == null || owner.equals(view.locale())) {
+                    continue;
+                }
+                AssetRelease current = pointer(now, id, owner);
+                AssetRelease previous = pointer(then, id, owner);
+                if (unchanged(id, current, previous)) {
+                    continue;
+                }
+                roots.put(id, current != null ? current.getValidFromRevision() : previous.getValidToRevision());
+                kinds.put(id, current != null ? RebuildRootKind.ASSET_RELEASED : RebuildRootKind.ASSET_UNPUBLISHED);
+            }
         }
 
         /**

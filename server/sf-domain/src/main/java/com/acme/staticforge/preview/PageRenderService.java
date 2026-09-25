@@ -10,6 +10,7 @@ import com.acme.staticforge.asset.dataset.RecordTemplates;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.asset.media.MediaPaths;
 import com.acme.staticforge.asset.media.TextMediaCompiler;
 import com.acme.staticforge.asset.media.TextMediaRenderer;
@@ -241,13 +242,14 @@ public class PageRenderService {
     /**
      * As {@link #renderMedia(long, AssetVersionView, Long, String)}, reading values, navigation and linked media in the
      * view (and language) of the page preview that links the file (M27.2.3); {@code media} is the version that view
-     * renders.
+     * renders. Localized media renders the file of {@code locale} (M27.3.2; the default file for {@code null}).
      */
     public String renderMedia(
             long projectId, AssetVersionView media, Long revision, String baseUrl, String locale, ContentView.Kind view) {
         String projectKey = projectKeyOf(projectId);
         Reading reading = reading(projectId, revision, view, locale);
-        JsonNode payload = media.payload();
+        JsonNode payload = MediaFiles.effective(
+                media.payload(), locale, projectLocales.forProject(projectId).effectiveChain(locale));
         String mimeType = payload.path("mimeType").asText(null);
         String sha = payload.path("blobSha256").asText(null);
         if (sha == null) {
@@ -257,7 +259,7 @@ public class PageRenderService {
         OctlResult compiled = compiledTemplates.compileTextMedia(
                 projectId,
                 media.uuid(),
-                media.validFromRevision(),
+                sha,
                 channel,
                 TextMediaCompiler.decode(blobStore.get(sha)).text(),
                 TextMediaTypes.isScriptLike(mimeType),
@@ -848,7 +850,8 @@ public class PageRenderService {
 
     private Reading reading(long projectId, Long revision, ContentView.Kind kind, String locale) {
         ContentView view = contentViews.open(projectId, revision, kind == null ? ContentView.Kind.DRAFT : kind, locale);
-        return new Reading(view, locale, new ContentViewNavigationLookup(view), new LiveAssetValueResolver(view, assetRepository));
+        return new Reading(view, locale, new ContentViewNavigationLookup(view), new LiveAssetValueResolver(
+                view, assetRepository, locale, projectLocales.forProject(projectId).effectiveChain(locale)));
     }
 
     private ReferenceResolver referenceResolver(long projectId) {

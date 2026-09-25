@@ -717,6 +717,7 @@ public class AssetServiceImpl implements AssetService {
         version.setFolderPath(folderPath);
         version.setTemplateAssetId(templateAssetId);
         version.setDeleted(deleted);
+        version.projectMediaColumns(asset.getAssetType());
         AssetVersion saved = assetVersionRepository.save(version);
         referenceMaterializer.materialize(asset, saved);
         return saved;
