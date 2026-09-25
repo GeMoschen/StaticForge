@@ -116,6 +116,7 @@ class RecordSetRenderIntegrationTest {
     @Autowired PageService pageService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired PageRenderService pageRenderService;
     @Autowired RevisionRepository revisionRepository;
 
@@ -355,6 +356,7 @@ class RecordSetRenderIntegrationTest {
     }
 
     private GenerationRun generate(Fixture fx, GenerationTarget target) throws InterruptedException {
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun started = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null),

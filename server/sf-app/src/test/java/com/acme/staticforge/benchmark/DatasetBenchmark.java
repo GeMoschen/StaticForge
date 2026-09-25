@@ -1,5 +1,6 @@
 package com.acme.staticforge.benchmark;
 
+import com.acme.staticforge.ReleaseFixtures;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.staticforge.RecordSetFixtures;
@@ -88,6 +89,7 @@ class DatasetBenchmark {
     @Autowired PageService pageService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -291,6 +293,7 @@ class DatasetBenchmark {
 
     private GenerationRun generate(Project project, GenerationTarget target, AppUser user, GenerationMode mode)
             throws InterruptedException {
+        releaseFixtures.releaseAll(project.getKey());
         GenerationRun started = generationService.start(
                 project.getKey(),
                 new GenerationRequest(mode, null, List.of("html"), target.getId(), null, null, null, null),

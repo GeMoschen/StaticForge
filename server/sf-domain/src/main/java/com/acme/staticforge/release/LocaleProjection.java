@@ -35,7 +35,8 @@ public final class LocaleProjection {
                         version.getTemplateAssetId(),
                         version.isDeleted(),
                         version.getMimeType(),
-                        version.getPayload()),
+                        version.getPayload(),
+                        version.getFolderId()),
                 localeKey,
                 config);
     }
@@ -46,6 +47,11 @@ public final class LocaleProjection {
         out.put("uid", input.uid());
         out.put("displayName", input.displayName());
         out.put("folderPath", input.folderPath());
+        // The parent itself, not only its path: a record moved to another record set of the same folder keeps its
+        // folder path but renders in the other set (M27.2.1).
+        if (input.folderId() != null) {
+            out.put("folderId", input.folderId());
+        }
         if (input.templateAssetId() != null) {
             out.put("templateAssetId", input.templateAssetId());
         }
@@ -77,5 +83,19 @@ public final class LocaleProjection {
             Long templateAssetId,
             boolean deleted,
             String mimeType,
-            JsonNode payload) {}
+            JsonNode payload,
+            Long folderId) {
+
+        /** An input without a parent id (tests that don't place the asset). */
+        public Input(
+                String uid,
+                String displayName,
+                String folderPath,
+                Long templateAssetId,
+                boolean deleted,
+                String mimeType,
+                JsonNode payload) {
+            this(uid, displayName, folderPath, templateAssetId, deleted, mimeType, payload, null);
+        }
+    }
 }

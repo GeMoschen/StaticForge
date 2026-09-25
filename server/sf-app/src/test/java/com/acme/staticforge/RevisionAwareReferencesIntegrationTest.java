@@ -32,6 +32,8 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
+import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
@@ -84,6 +86,7 @@ class RevisionAwareReferencesIntegrationTest {
     @Autowired GenerationService generationService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired SnapshotService snapshotService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired BuildPlanner buildPlanner;
     @Autowired ReferenceBackfill referenceBackfill;
 
@@ -175,10 +178,11 @@ class RevisionAwareReferencesIntegrationTest {
                 .as("value reader via its template's OCTL_VALUE edge, link editor via CONTENT_REF")
                 .containsExactlyInAnyOrder(about.uuid(), p2.uuid(), p3.uuid());
 
-        // P3 drops its link; after a build at that revision, editing About no longer rebuilds P3.
+        // P3 drops its link; after a build at the revision that released that, editing About no longer rebuilds P3.
         AssetVersionView p3Current = assetService.requireCurrent(fx.project().getId(), p3.uuid());
-        AssetVersionView unlinked = update(fx, p3Current, pagePayload(t2.uuid()));
-        assertThat(rebuiltBy(fx, about, unlinked.validFromRevision()))
+        update(fx, p3Current, pagePayload(t2.uuid()));
+        long unlinkReleased = releaseFixtures.releaseAll(fx.project().getId());
+        assertThat(rebuiltBy(fx, about, unlinkReleased))
                 .containsExactlyInAnyOrder(about.uuid(), p2.uuid());
     }
 
@@ -232,7 +236,7 @@ class RevisionAwareReferencesIntegrationTest {
         touched.put("touch", UUID.randomUUID().toString());
         AssetVersionView edited = update(fx, current, touched);
 
-        var snapshot = snapshotService.snapshot(fx.project().getId(), edited.validFromRevision());
+        var snapshot = releasedSnapshot(fx.project().getId());
         OutputPathResolver paths = mock(OutputPathResolver.class);
         when(paths.resolvePagePath(any(), any())).thenAnswer(invocation -> invocation.getArgument(0).toString());
         BuildPlan plan = buildPlanner.plan(
@@ -241,10 +245,11 @@ class RevisionAwareReferencesIntegrationTest {
     }
 
     private long currentRevision(Fixture fx) {
-        return snapshotService.snapshot(fx.project().getId(), null).revision();
+        return releasedSnapshot(fx.project().getId()).revision();
     }
 
     private void generate(Fixture fx, GenerationTarget target, GenerationMode mode) throws InterruptedException {
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun run = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(mode, null, List.of("html"), target.getId(), null, null, null, null),
@@ -308,5 +313,11 @@ class RevisionAwareReferencesIntegrationTest {
         String token() {
             return jwt.issueAccessToken(admin);
         }
+    }
+
+    /** The released snapshot at head, after releasing everything pending (M27.2.1): what a build started now renders. */
+    private Snapshot releasedSnapshot(long projectId) {
+        releaseFixtures.releaseAll(projectId);
+        return snapshotService.snapshot(projectId, null, SnapshotView.RELEASED);
     }
 }

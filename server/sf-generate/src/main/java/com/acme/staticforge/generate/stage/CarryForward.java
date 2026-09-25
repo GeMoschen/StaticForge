@@ -134,7 +134,7 @@ public final class CarryForward {
         if (!channels.contains(output.channel())) {
             return false;
         }
-        SnapshotAsset page = output.asset() == null ? null : snapshot.assetByUuid(output.asset());
+        SnapshotAsset page = output.asset() == null ? null : snapshot.asset(output.asset(), output.locale());
         return page == null || BuildPlanner.inScope(page, scopeFolderPath, scopeAssetUuids);
     }
 
@@ -145,7 +145,8 @@ public final class CarryForward {
     public List<SitePage> sitePages() {
         List<SitePage> pages = new ArrayList<>();
         for (PlanEntry entry : plan.siteOutputs()) {
-            SnapshotAsset page = snapshot.assetByUuid(entry.pageUuid());
+            // Listed as the language's released version names it (M27.2.1).
+            SnapshotAsset page = snapshot.asset(entry.pageUuid(), entry.locale());
             if (page != null) {
                 pages.add(entry.pagination() == null
                         ? new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
@@ -166,7 +167,7 @@ public final class CarryForward {
 
     private SitePage carriedSitePage(BuildManifest.Output output) {
         JsonNode entry = baseIndex.get(output.path());
-        SnapshotAsset page = output.asset() == null ? null : snapshot.assetByUuid(output.asset());
+        SnapshotAsset page = output.asset() == null ? null : snapshot.asset(output.asset(), output.locale());
         String uid = entry != null ? entry.path("uid").asText("") : page == null ? "" : page.uid();
         String title = entry != null
                 ? baseTitle(entry, output.pageNumber())

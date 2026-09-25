@@ -63,6 +63,7 @@ class IncludeCycleGenerationIntegrationTest {
     @Autowired TemplateService templateService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -87,6 +88,7 @@ class IncludeCycleGenerationIntegrationTest {
 
         GenerationTarget target = targetRepository.save(new GenerationTarget(
                 project.getId(), "default", TargetType.FILESYSTEM, mapper.createObjectNode(), true));
+        releaseFixtures.releaseAll(project.getKey());
         GenerationRun run = generationService.start(
                 project.getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null),

@@ -62,6 +62,7 @@ class GenerationIntegrationTest {
     @Autowired AssetService assetService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired TemplateService templateService;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -92,6 +93,7 @@ class GenerationIntegrationTest {
                 mapper.readTree("{\"baseUrl\":\"https://example.com\"}"),
                 true));
 
+        releaseFixtures.releaseAll(project.getKey());
         GenerationRun run = generationService.start(
                 project.getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null),
@@ -141,6 +143,7 @@ class GenerationIntegrationTest {
         GenerationTarget target = targetRepository.save(new GenerationTarget(
                 project.getId(), "default", TargetType.FILESYSTEM, mapper.createObjectNode(), true));
 
+        releaseFixtures.releaseAll(project.getKey());
         GenerationRun run = generationService.start(
                 project.getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null),

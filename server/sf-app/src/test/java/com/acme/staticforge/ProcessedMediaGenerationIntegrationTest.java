@@ -30,6 +30,8 @@ import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
+import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
@@ -88,6 +90,7 @@ class ProcessedMediaGenerationIntegrationTest {
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
     @Autowired SnapshotService snapshotService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired BuildPlanner buildPlanner;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -206,7 +209,7 @@ class ProcessedMediaGenerationIntegrationTest {
         values.put("brandColor", "#00c");
         GlobalSetView recolored = globalSetService.updateValues(site.uuid(), values, site.revision(), fx.ctx());
 
-        BuildPlan plan = plan(fx, recolored.revision(), full.getRevisionId());
+        BuildPlan plan = plan(fx, full.getRevisionId());
         assertThat(plan.entries()).as("no page reads the global itself").isEmpty();
         assertThat(plan.processedMedia()).containsExactly(css.uuid());
 
@@ -219,7 +222,7 @@ class ProcessedMediaGenerationIntegrationTest {
         AssetVersionView renamed = assetService.update(legal.uuid(),
                 new com.acme.staticforge.asset.UpdateAssetCommand("Legal notice", legalNow.payload()),
                 legalNow.validFromRevision(), fx.ctx());
-        BuildPlan unrelated = plan(fx, renamed.validFromRevision(), incremental.getRevisionId());
+        BuildPlan unrelated = plan(fx, incremental.getRevisionId());
         assertThat(unrelated.processedMedia()).isEmpty();
         GenerationRun afterUnrelated = generate(fx, target, GenerationMode.INCREMENTAL);
         assertThat(afterUnrelated.getStatus()).isEqualTo(RunStatus.SUCCESS);
@@ -279,10 +282,10 @@ class ProcessedMediaGenerationIntegrationTest {
         return pageService.create(new CreatePageCommand(name, null, template.uuid()), fx.ctx());
     }
 
-    private BuildPlan plan(Fixture fx, long revision, long lastSuccessfulRevision) {
+    private BuildPlan plan(Fixture fx, long lastSuccessfulRevision) {
         OutputPathResolver paths = mock(OutputPathResolver.class);
         when(paths.resolvePagePath(any(), any())).thenAnswer(call -> call.getArgument(0).toString());
-        return buildPlanner.plan(snapshotService.snapshot(fx.project().getId(), revision), GenerationMode.INCREMENTAL,
+        return buildPlanner.plan(releasedSnapshot(fx.project().getId()), GenerationMode.INCREMENTAL,
                 lastSuccessfulRevision, Set.of("html"), null, null, paths);
     }
 
@@ -292,6 +295,7 @@ class ProcessedMediaGenerationIntegrationTest {
     }
 
     private GenerationRun generate(Fixture fx, GenerationTarget target, GenerationMode mode) throws InterruptedException {
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun started = generationService.start(fx.project().getKey(),
                 new GenerationRequest(mode, null, List.of("html"), target.getId(), null, null, null, null), fx.user().getId());
         long deadline = System.currentTimeMillis() + 60_000;
@@ -336,5 +340,11 @@ class ProcessedMediaGenerationIntegrationTest {
         RevisionContext ctx() {
             return RevisionContext.of(project().getId(), user().getId(), "test");
         }
+    }
+
+    /** The released snapshot at head, after releasing everything pending (M27.2.1): what a build started now renders. */
+    private Snapshot releasedSnapshot(long projectId) {
+        releaseFixtures.releaseAll(projectId);
+        return snapshotService.snapshot(projectId, null, SnapshotView.RELEASED);
     }
 }

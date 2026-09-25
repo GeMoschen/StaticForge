@@ -71,6 +71,7 @@ final class BuildInsightFixtures {
     private final PageReferenceService pageReferences;
     private final GenerationTargetRepository targets;
     private final GenerationService generation;
+    private final ReleaseFixtures releases;
     private final Path outputRoot;
 
     BuildInsightFixtures(
@@ -83,6 +84,7 @@ final class BuildInsightFixtures {
             PageReferenceService pageReferences,
             GenerationTargetRepository targets,
             GenerationService generation,
+            ReleaseFixtures releases,
             Path outputRoot) {
         this.users = users;
         this.projects = projects;
@@ -93,6 +95,7 @@ final class BuildInsightFixtures {
         this.pageReferences = pageReferences;
         this.targets = targets;
         this.generation = generation;
+        this.releases = releases;
         this.outputRoot = outputRoot;
     }
 
@@ -210,7 +213,9 @@ final class BuildInsightFixtures {
         return generate(fx, new GenerationRequest(mode, null, List.of("html"), target.getId(), null, null, null, null));
     }
 
+    /** Releases everything pending (M27.2.1) and runs {@code request} to its end. */
     GenerationRun generate(Fixture fx, GenerationRequest request) {
+        releases.releaseAll(fx.projectId());
         GenerationRun started = generation.start(fx.project().getKey(), request, fx.user().getId());
         return await(fx, started.getId());
     }

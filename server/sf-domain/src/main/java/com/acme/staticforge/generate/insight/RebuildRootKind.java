@@ -11,9 +11,16 @@ public enum RebuildRootKind {
     INCREMENTAL_FALLBACK_FULL,
     /** The asset was listed explicitly in the request's {@code assetUuids}. */
     EXPLICIT_SCOPE,
-    /** The root asset changed since the baseline. */
+    /** The root asset changed since the baseline: a live type (a template, a dataset schema) got a new version. */
     ASSET_CHANGED,
-    /** The root asset was deleted since the baseline. */
+    /**
+     * The root asset's released version changed since the baseline (M27.2.2): a release opened or moved its pointer in
+     * the language the entry renders. Saving a draft is no change.
+     */
+    ASSET_RELEASED,
+    /** The root asset was unpublished since the baseline (M27.2.2): its pointer closed while its draft stays. */
+    ASSET_UNPUBLISHED,
+    /** The root asset was deleted since the baseline — for a released type: its deletion was released. */
     ASSET_DELETED,
     /** Nothing it depends on changed, but the base build lacks this output (e.g. the page was held back then). */
     NOT_IN_BASE_BUILD,
@@ -26,6 +33,6 @@ public enum RebuildRootKind {
 
     /** Whether reasons of this kind start at a change and carry a chain. */
     public boolean changeDriven() {
-        return this == ASSET_CHANGED || this == ASSET_DELETED;
+        return this == ASSET_CHANGED || this == ASSET_DELETED || this == ASSET_RELEASED || this == ASSET_UNPUBLISHED;
     }
 }

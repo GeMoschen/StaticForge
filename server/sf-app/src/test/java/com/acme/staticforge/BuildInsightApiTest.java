@@ -78,6 +78,7 @@ class BuildInsightApiTest {
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationRunRepository runRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired RunPlanStore runPlanStore;
     @Autowired JdbcTemplate jdbc;
 
@@ -86,7 +87,7 @@ class BuildInsightApiTest {
     @BeforeEach
     void setUp() {
         fixtures = new BuildInsightFixtures(userService, projectService, assetService, assetRepository, templateService,
-                mediaService, pageReferenceService, targetRepository, generationService, outputRoot);
+                mediaService, pageReferenceService, targetRepository, generationService, releaseFixtures, outputRoot);
     }
 
     /** Two pages linking a media file directly, one placing a teaser section, one plain page. */
@@ -108,6 +109,7 @@ class BuildInsightApiTest {
         AssetVersionView home = fixtures.page(fx, "Home", article.uuid(), p -> fixtures.section(p, "main", teaser.uuid()));
         AssetVersionView legal = fixtures.page(fx, "Legal", plain.uuid());
         GenerationTarget target = fixtures.target(fx, "site", TargetType.FILESYSTEM);
+        releaseFixtures.releaseAll(fx.projectId());
         return new Site(fx, jwtService.issueAccessToken(fx.user()), target, hero, unused, teaser, heroPages, home, legal);
     }
 
@@ -119,7 +121,9 @@ class BuildInsightApiTest {
         return "{\"mode\":\"" + mode + "\",\"channels\":[\"html\"],\"targetId\":" + target.getId() + "}";
     }
 
+    /** Releases what is pending first (M27.2.1): a plan is what a run started now would build. */
     private ResultActions dryRun(Site site, String token, String mode, String query) throws Exception {
+        releaseFixtures.releaseAll(site.fx().projectId());
         return mvc.perform(post(base(site.fx()) + "/generations/plan" + query)
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -135,6 +139,7 @@ class BuildInsightApiTest {
     }
 
     private GenerationRun startAndAwait(Site site, String mode) throws Exception {
+        releaseFixtures.releaseAll(site.fx().projectId());
         JsonNode started = body(mvc.perform(post(base(site.fx()) + "/generations")
                         .header("Authorization", "Bearer " + site.token())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -172,7 +177,7 @@ class BuildInsightApiTest {
                 .filter(entry -> entry.path("uid").asText().equals("about"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(about.path("reason").path("rootKind").asText()).isEqualTo("ASSET_CHANGED");
+        assertThat(about.path("reason").path("rootKind").asText()).isEqualTo("ASSET_RELEASED");
         assertThat(about.path("reason").path("rootAsset").path("uid").asText()).isEqualTo("hero_txt");
         assertThat(about.path("reason").path("steps").get(0).path("referenceKind").asText()).isEqualTo("MEDIA_REF");
 
@@ -293,6 +298,7 @@ class BuildInsightApiTest {
         fixtures.page(fx, "Two", nav.uuid());
         AssetVersionView target = fixtures.page(fx, "Target", plain.uuid());
         AssetVersionView link = fixtures.pageReference(fx, "Target link", fixtures.navigationRoot(fx), target.uuid());
+        releaseFixtures.releaseAll(fx.projectId());
         String token = jwtService.issueAccessToken(fx.user());
 
         JsonNode impact = body(getJson(token, base(fx) + "/assets/" + link.uuid() + "/impact").andExpect(status().isOk()));

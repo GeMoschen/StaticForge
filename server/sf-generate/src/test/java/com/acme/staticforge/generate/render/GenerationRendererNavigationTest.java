@@ -333,6 +333,18 @@ class GenerationRendererNavigationTest {
             return store.computeIfAbsent(key, k -> "registry/" + pageReferenceUuid + ".html");
         }
 
+        /** Stores its own marker URL rather than {@code computed}, so the tests see that the href came from here. */
+        @Override
+        public String resolve(
+                UUID pageReferenceUuid,
+                String channelKey,
+                UrlArea area,
+                String locale,
+                java.util.function.Supplier<String> computed,
+                RevisionContext ctx) {
+            return resolve(pageReferenceUuid, channelKey, area, locale, ctx);
+        }
+
         @Override
         public UrlRegistryEntry override(UUID pageReferenceUuid, String channelKey, UrlArea area, String url, RevisionContext ctx) {
             throw new UnsupportedOperationException("not exercised by this test");

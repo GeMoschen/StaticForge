@@ -1,3 +1,44 @@
+# M27 feature 2 — Released rendering (implementation, branch `m27-release-and-scheduling`)
+
+Spec: `tasks/27-m27-release-and-scheduling/02-released-rendering/`. Backend only; order 2.1 → 2.2 → 2.3.
+
+- [x] M27.2.1 — `SnapshotView`, per-locale released views in `Snapshot` (unreleased = absent marker, like a
+      tombstone), bulk pointer + version load; consumers locale-aware (planner site outputs, output paths, renderer,
+      navigation, values, pagination, carry-forward, media copy); `SF-GEN-0221`; URL registry assigns the snapshot's
+      path; test helper that releases fixtures; golden/per-locale/time-travel tests; benchmark number
+- [x] M27.2.2 — release-seeded incremental planning (`ASSET_RELEASED`/`ASSET_UNPUBLISHED` roots, released-version
+      edges, migration seeds nothing), impact endpoint answers "if released", invariant tests
+- [x] M27.2.3 — preview `view=draft|published`, one view abstraction, navigation at the preview revision,
+      `SF-DOM-0155`, headers, share-token `view` claim, link rewriting keeps the view; OpenAPI + `schema.d.ts`
+- [x] Full `./gradlew build` (`test --rerun`), `ui` `npm run build` + `npx vitest run`
+
+
+## Review
+
+- Backend as planned, plus two small UI touches (root-kind labels "Released"/"Unpublished", chain text
+  `… · released in r1902, en`) and regenerated `schema.d.ts` (`PlanEntryView.locale`, preview `view` params).
+- Design beyond the task text (details in each task's implementation notes): a released `Snapshot` is a family of
+  per-language views with "unreleased" absent markers (tombstone semantics for free); incremental planning walks once
+  per language, which replaces M24's `LocaleValueDiff` narrowing; preview reads through `ContentView`, the live
+  counterpart of the snapshot view; share tokens carry `view` only for `published`.
+- Fixes found on the way: `LocaleProjection` ignored `folderId` (a record moved between sets of one folder could never
+  be released, M27.1); a section's `$CMS_REF` resolved outside its page's language (M24); a revision preview showed
+  the current navigation (task goal); the planner loaded every released version on each plan (benchmark).
+- Tests: `ReleaseFixtures` releases fixtures before builds and runs the golden check (released view == draft view,
+  byte for byte, whenever they hold the same versions) on every generation test; new
+  `ReleasedGenerationIntegrationTest` (7), `ReleaseIncrementalPlanIntegrationTest` (6), `PreviewViewIntegrationTest` (5).
+- `./gradlew build test --rerun`: 1265 tests, 0 failures (5 skipped benchmarks); planning classes re-run after the last
+  `RebuildExpansion` change; `ui` `npm run build` and `npx vitest run` (79 files, 536 tests) green.
+- Benchmark, 5,000 pages × 2 locales, machine under load (same load for both): full build 11.4 s (master 15.6 s),
+  snapshot 158 ms (205), one-page dry run 594 ms (868), all-changed plan 2.0 s (310 ms — one walk per language plus two
+  release-state loads).
+- **Follow-up (M27.1 / M27.6):** releasing 10,000 items in one call took ~430–490 s (later calls 2–4 s): the first
+  "release all" of a large project is far too slow. Not measured apart from the golden check in the same call, so
+  profile before fixing — saved as task `M27.1.4` (`01-release-model/004-release-performance-large-selections.md`); suspects are per-item queries in `ReleaseServiceImpl.resolve`/completeness inside one large
+  transaction.
+
+---
+
 # M27 feature 1 — Release model (implementation, branch `m27-release-and-scheduling`)
 
 Spec: `tasks/27-m27-release-and-scheduling/01-release-model/`. Backend only; order 1.1 → 1.2 → 1.3.

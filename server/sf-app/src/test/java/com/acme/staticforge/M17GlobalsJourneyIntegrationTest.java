@@ -35,6 +35,8 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
+import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
@@ -110,6 +112,7 @@ class M17GlobalsJourneyIntegrationTest {
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
     @Autowired SnapshotService snapshotService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired BuildPlanner buildPlanner;
     @Autowired PageRenderService pageRenderService;
     @Autowired RevisionRepository revisionRepository;
@@ -199,13 +202,13 @@ class M17GlobalsJourneyIntegrationTest {
         //    the set. The fan-out is page → template → set, so the plan proves the reverse-edge
         //    walk takes that second hop rather than only looking at direct page edges.
         // ------------------------------------------------------------------
-        long revisionBeforeTitleChange = snapshotService.snapshot(fx.project().getId(), null).revision();
+        long revisionBeforeTitleChange = releasedSnapshot(fx.project().getId()).revision();
         ObjectNode renamedValues = valued.content().deepCopy();
         renamedValues.put("title", "Acme Outdoor Co.");
         GlobalSetView retitled =
                 globalSetService.updateValues(site.uuid(), renamedValues, valued.revision(), fx.ctx());
 
-        assertThat(plannedPages(fx, retitled.revision(), revisionBeforeTitleChange))
+        assertThat(plannedPages(fx, revisionBeforeTitleChange))
                 .containsExactlyInAnyOrder(home.uuid(), about.uuid())
                 .doesNotContain(legal.uuid());
 
@@ -301,11 +304,11 @@ class M17GlobalsJourneyIntegrationTest {
     }
 
     /** The pages an INCREMENTAL run at {@code revision} would rebuild, given the last success. */
-    private Set<UUID> plannedPages(Fixture fx, long revision, long lastSuccessfulRevision) {
+    private Set<UUID> plannedPages(Fixture fx, long lastSuccessfulRevision) {
         OutputPathResolver paths = mock(OutputPathResolver.class);
         when(paths.resolvePagePath(any(), any())).thenAnswer(call -> call.getArgument(0).toString());
         BuildPlan plan = buildPlanner.plan(
-                snapshotService.snapshot(fx.project().getId(), revision),
+                releasedSnapshot(fx.project().getId()),
                 GenerationMode.INCREMENTAL,
                 lastSuccessfulRevision,
                 Set.of("html"),
@@ -330,6 +333,7 @@ class M17GlobalsJourneyIntegrationTest {
 
     private GenerationRun generate(Fixture fx, GenerationTarget target, GenerationMode mode)
             throws InterruptedException {
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun started = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(mode, null, List.of("html"), target.getId(), null, null, null, null),
@@ -387,5 +391,11 @@ class M17GlobalsJourneyIntegrationTest {
         RevisionContext ctx() {
             return RevisionContext.of(project().getId(), user().getId(), "test");
         }
+    }
+
+    /** The released snapshot at head, after releasing everything pending (M27.2.1): what a build started now renders. */
+    private Snapshot releasedSnapshot(long projectId) {
+        releaseFixtures.releaseAll(projectId);
+        return snapshotService.snapshot(projectId, null, SnapshotView.RELEASED);
     }
 }

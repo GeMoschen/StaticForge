@@ -16,6 +16,7 @@ import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.SnapshotPagination;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
@@ -80,7 +81,9 @@ public class ImpactService {
      */
     public Impact impact(String projectKey, UUID assetUuid, String channel) {
         Project project = projectService.requireByKey(projectKey);
-        Snapshot snapshot = snapshotService.snapshot(project.getId(), null);
+        // "If this draft were released" (M27.2.2): the released site with the asset at its draft in every language.
+        Snapshot snapshot = snapshotService.snapshot(
+                project.getId(), null, SnapshotView.RELEASED, assetUuid == null ? Set.of() : Set.of(assetUuid));
         SnapshotAsset asset = assetUuid == null ? null : snapshot.assetByUuid(assetUuid);
         if (asset == null || asset.deleted()) {
             throw new SfException(ProblemFactory.notFound("Asset not found."));
@@ -88,7 +91,7 @@ public class ImpactService {
 
         OutputPathResolver paths = OutputPathResolver.forSnapshot(
                 snapshot, channelService.outputSettings(project.getId()), projectLocales.forProject(project.getId()));
-        var memo = compiledTemplates.buildMemo(snapshot);
+        var memo = compiledTemplates.buildMemo(snapshot.root());
         RebuildExpansion.Result walk = expansion.expand(
                 snapshot,
                 RebuildExpansion.Changes.upperBound(asset.assetId()),
@@ -105,10 +108,10 @@ public class ImpactService {
 
         List<PlanEntryRecord> entries = new ArrayList<>();
         for (PlanEntry output : buildPlanner.outputsOf(snapshot, pages, channels(project.getId(), channel), paths)) {
-            SnapshotAsset page = snapshot.assetByUuid(output.pageUuid());
+            SnapshotAsset page = snapshot.asset(output.pageUuid(), output.locale());
             entries.add(new PlanEntryRecord(page.uuid(), page.type().name(), page.uid(), page.displayName(), output.channel(),
                     output.outputPath(), output.pagination() == null ? null : output.pageNumber(),
-                    walk.reasonFor(page.uuid())));
+                    walk.reasonFor(page.uuid()), output.locale()));
         }
         if (channel == null) {
             walk.processedMedia().stream()

@@ -1,5 +1,6 @@
 package com.acme.staticforge.preview;
 
+import com.acme.staticforge.release.ContentView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -64,7 +65,17 @@ public class PreviewTokenService {
      * is also what every token issued before M24 carries.
      */
     public String issueShareToken(UUID pageUuid, Long revision, String channel, String projectKey, String locale) {
-        return issueAssetShareToken("page", pageUuid, revision, channel, projectKey, locale);
+        return issueShareToken(pageUuid, revision, channel, projectKey, locale, ContentView.Kind.DRAFT);
+    }
+
+    /**
+     * Issues a share token bound to a view as well (M27.2.3): {@code published} keeps rendering the released state
+     * however the drafts change. A draft token carries no {@code view} claim — exactly like every token issued before
+     * M27, which therefore keep meaning "draft".
+     */
+    public String issueShareToken(
+            UUID pageUuid, Long revision, String channel, String projectKey, String locale, ContentView.Kind view) {
+        return issueAssetShareToken("page", pageUuid, revision, channel, projectKey, locale, view);
     }
 
     /**
@@ -78,11 +89,26 @@ public class PreviewTokenService {
      *     claim existed carry none and keep meaning "current"
      */
     public String issueMediaShareToken(UUID mediaUuid, Long revision, String projectKey) {
-        return issueAssetShareToken("media", mediaUuid, revision, null, projectKey, null);
+        return issueMediaShareToken(mediaUuid, revision, projectKey, null, ContentView.Kind.DRAFT);
+    }
+
+    /**
+     * A media share token in the view (and language) of the page preview that links it (M27.2.3): a published preview
+     * serves the released file of the media, a draft preview the current one.
+     */
+    public String issueMediaShareToken(
+            UUID mediaUuid, Long revision, String projectKey, String locale, ContentView.Kind view) {
+        return issueAssetShareToken("media", mediaUuid, revision, null, projectKey, locale, view);
     }
 
     private String issueAssetShareToken(
-            String kind, UUID assetUuid, Long revision, String channel, String projectKey, String locale) {
+            String kind,
+            UUID assetUuid,
+            Long revision,
+            String channel,
+            String projectKey,
+            String locale,
+            ContentView.Kind view) {
         Instant now = clock.instant();
         StringBuilder payload = new StringBuilder("{");
         payload.append("\"sub\":\"viewer\"");
@@ -99,6 +125,9 @@ public class PreviewTokenService {
         }
         if (locale != null && !locale.isBlank()) {
             payload.append(",\"locale\":\"").append(locale).append('"');
+        }
+        if (view != null && view != ContentView.Kind.DRAFT) {
+            payload.append(",\"view\":\"").append(view.wireName()).append('"');
         }
         payload.append(",\"iat\":").append(now.getEpochSecond());
         payload.append(",\"exp\":").append(now.getEpochSecond() + DEFAULT_TTL_SECONDS);
@@ -176,7 +205,8 @@ public class PreviewTokenService {
                     claims.path("revision").isNumber() ? claims.path("revision").asLong() : null,
                     blankToNull(claims.path("channel").asText(null)),
                     blankToNull(claims.path("projectKey").asText(null)),
-                    blankToNull(claims.path("locale").asText(null)));
+                    blankToNull(claims.path("locale").asText(null)),
+                    ContentView.Kind.parse(blankToNull(claims.path("view").asText(null))));
         } catch (IllegalArgumentException e) {
             throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
         }
@@ -212,14 +242,25 @@ public class PreviewTokenService {
     /**
      * The asset target bound to a verified share token — {@code kind} is {@code "page"} or
      * {@code "media"}. {@code locale} is the language the link opens in (M24.3.2), {@code null} for
-     * the project's default language and for every token issued before M24.
+     * the project's default language and for every token issued before M24. {@code view} is what the link renders
+     * (M27.2.3): {@code DRAFT} for every token without the claim.
      */
     public record ShareTarget(
-            String kind, UUID pageUuid, Long revision, String channel, String projectKey, String locale) {
+            String kind, UUID pageUuid, Long revision, String channel, String projectKey, String locale,
+            ContentView.Kind view) {
 
-        /** A target without a language. */
+        public ShareTarget {
+            view = view == null ? ContentView.Kind.DRAFT : view;
+        }
+
+        /** A draft target without a language. */
         public ShareTarget(String kind, UUID pageUuid, Long revision, String channel, String projectKey) {
-            this(kind, pageUuid, revision, channel, projectKey, null);
+            this(kind, pageUuid, revision, channel, projectKey, null, ContentView.Kind.DRAFT);
+        }
+
+        /** A draft target in one language. */
+        public ShareTarget(String kind, UUID pageUuid, Long revision, String channel, String projectKey, String locale) {
+            this(kind, pageUuid, revision, channel, projectKey, locale, ContentView.Kind.DRAFT);
         }
     }
 }

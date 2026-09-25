@@ -31,6 +31,8 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
+import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
@@ -83,6 +85,7 @@ class TemplateInheritanceRenderIntegrationTest {
     @Autowired GenerationService generationService;
     @Autowired PageRenderService pageRenderService;
     @Autowired SnapshotService snapshotService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired BuildPlanner buildPlanner;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -133,7 +136,7 @@ class TemplateInheritanceRenderIntegrationTest {
         long beforeLayoutChange = assetService.requireCurrent(projectId, page).validFromRevision();
 
         // Only the root layout changes: the incremental plan holds exactly the chain's pages, and they show it.
-        long lastRun = snapshotService.snapshot(projectId, null).revision();
+        long lastRun = releasedSnapshot(projectId).revision();
         update(ctx, projectId, base, "content { editor text title { label \"Title\" } }",
                 Map.of("html", BASE_HTML.replace("v1", "v2"), "markdown", BASE_MD.replace("v1", "v2")), true);
         assertThat(planned(projectId, lastRun)).containsExactly(page).doesNotContain(unrelated);
@@ -191,7 +194,7 @@ class TemplateInheritanceRenderIntegrationTest {
         OutputPathResolver paths = mock(OutputPathResolver.class);
         when(paths.resolvePagePath(any(), any())).thenAnswer(call -> call.getArgument(0).toString());
         BuildPlan plan = buildPlanner.plan(
-                snapshotService.snapshot(projectId, null), GenerationMode.INCREMENTAL, lastSuccessfulRevision,
+                releasedSnapshot(projectId), GenerationMode.INCREMENTAL, lastSuccessfulRevision,
                 Set.of("html"), null, null, paths);
         return plan.entries().stream().map(PlanEntry::pageUuid).collect(Collectors.toSet());
     }
@@ -208,6 +211,7 @@ class TemplateInheritanceRenderIntegrationTest {
 
     private GenerationRun run(Project project, GenerationTarget target, GenerationMode mode, AppUser user)
             throws InterruptedException {
+        releaseFixtures.releaseAll(project.getKey());
         GenerationRun started = generationService.start(
                 project.getKey(),
                 new GenerationRequest(mode, null, List.of("html", "markdown"), target.getId(), null, null, null, null),
@@ -223,5 +227,11 @@ class TemplateInheritanceRenderIntegrationTest {
             Thread.sleep(100);
         }
         throw new AssertionError("Generation did not reach a terminal state within 60s");
+    }
+
+    /** The released snapshot at head, after releasing everything pending (M27.2.1): what a build started now renders. */
+    private Snapshot releasedSnapshot(long projectId) {
+        releaseFixtures.releaseAll(projectId);
+        return snapshotService.snapshot(projectId, null, SnapshotView.RELEASED);
     }
 }

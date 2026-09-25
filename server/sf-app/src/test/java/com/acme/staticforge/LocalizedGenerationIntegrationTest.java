@@ -82,6 +82,7 @@ class LocalizedGenerationIntegrationTest {
     @Autowired TemplateService templateService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -178,6 +179,7 @@ class LocalizedGenerationIntegrationTest {
     }
 
     private Path generate(Fixture fx, GenerationMode mode) throws Exception {
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun run = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(mode, null, List.of("html"), fx.target().getId(), null, null, null, null),
@@ -292,6 +294,7 @@ class LocalizedGenerationIntegrationTest {
                 fx.ctx());
         pageService.create(new CreatePageCommand("about", null, template.uuid()), fx.ctx());
 
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun run = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(GenerationMode.FULL, null, List.of("html"), fx.target().getId(), null, null, null, null),
@@ -321,6 +324,7 @@ class LocalizedGenerationIntegrationTest {
                 L10nValues.with(content.get("headline"), "en", JsonNodeFactory.instance.textNode("Contact us")));
         pageService.update(second, payload, current.validFromRevision(), fx.ctx());
 
+        releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun run = generationService.start(
                 fx.project().getKey(),
                 new GenerationRequest(

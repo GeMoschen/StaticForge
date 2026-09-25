@@ -75,7 +75,8 @@ final class PlanViews {
                         reason.steps().stream()
                                 .map(step -> new PlanEntryView.StepView(step.assetUuid(), step.assetType(), step.uid(),
                                         step.edge().name(), step.referenceKind(), step.sourcePath()))
-                                .toList()));
+                                .toList()),
+                entry.locale());
     }
 
     /** The typed view of a plan summary as {@code PlanInsight.summary} writes it; {@code null} for {@code null}. */

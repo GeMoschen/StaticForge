@@ -69,4 +69,12 @@
         </addColumn>
     </changeSet>
 
+    <!-- M27.2.2: a stored plan entry names the language it renders, so a reason chain can say which language's
+         release caused it ("released in r1902, en"). Null for projects without locales, media and older plans. -->
+    <changeSet id="020-release-state-plan-entry-locale" author="sf">
+        <addColumn tableName="generation_run_plan_entry">
+            <column name="locale" type="VARCHAR(35)"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>

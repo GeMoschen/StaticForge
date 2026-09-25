@@ -1,5 +1,6 @@
 package com.acme.staticforge.benchmark;
 
+import com.acme.staticforge.ReleaseFixtures;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.staticforge.asset.AssetService;
@@ -18,6 +19,7 @@ import com.acme.staticforge.generate.PlannedBuild;
 import com.acme.staticforge.generate.insight.PlanEntryRecord;
 import com.acme.staticforge.generate.insight.RunPlanStore;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.RunStatus;
@@ -86,12 +88,16 @@ class GenerationBenchmark {
     @Autowired AssetService assetService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired GenerationRunRepository runs;
     @Autowired SnapshotService snapshotService;
     @Autowired RunPlanStore runPlanStore;
     @Autowired ImpactService impactService;
 
     private final ObjectMapper mapper = new ObjectMapper();
+
+    /** How long each run's release (plus the golden check of {@link ReleaseFixtures}) took, before the run. */
+    private final java.util.List<Long> releaseMs = new java.util.ArrayList<>();
 
     /** Enables the benchmark via {@code -Dsf.perf=true} or the {@code SF_PERF=true} env var. */
     static boolean perfEnabled() {
@@ -149,9 +155,10 @@ class GenerationBenchmark {
         // explained plan, and the template's and a page's impact.
         editTemplate(template.uuid(), ctx);
         long snapshotStart = System.nanoTime();
-        snapshotService.snapshot(project.getId(), null);
+        snapshotService.snapshot(project.getId(), null, SnapshotView.RELEASED);
         long snapshotMs = (System.nanoTime() - snapshotStart) / 1_000_000L;
         long planStart = System.nanoTime();
+        releaseFixtures.releaseAll(project.getKey());
         PlannedBuild planned = generationService.planFor(project.getKey(), incrementalRequest);
         long planMs = (System.nanoTime() - planStart) / 1_000_000L;
         long insightStart = System.nanoTime();
@@ -177,11 +184,11 @@ class GenerationBenchmark {
                         + "incrementalFilesWritten=%d, fixtureMs=%d, "
                         + "onePageDryRunMs=%d, snapshotMs=%d, allChangedPlanMs=%d, allChangedEntries=%d, reasonsMs=%d, "
                         + "persistMs=%d, templateImpactMs=%d, templateImpactEntries=%d, pageImpactMs=%d, "
-                        + "allChangedIncrementalMs=%d",
+                        + "allChangedIncrementalMs=%d, releaseMs=%s",
                 pages, locales, full.millis(), full.millis() / (double) fullFiles, incremental.millis(),
                 full.run().getFilesWritten(),
                 incremental.run().getFilesWritten(), fixtureMs, onePageDryRunMs, snapshotMs, planMs, entries.size(),
-                reasonsMs, persistMs, templateImpactMs, templateImpact, pageImpactMs, allChanged.millis());
+                reasonsMs, persistMs, templateImpactMs, templateImpact, pageImpactMs, allChanged.millis(), releaseMs);
         System.out.println("SFP_BENCH " + summary);
         writeSummary(summary);
     }
@@ -241,6 +248,10 @@ class GenerationBenchmark {
 
     private TimedRun run(String projectKey, GenerationMode mode, Long targetId, Long userId, int pages)
             throws InterruptedException {
+        // Releasing is not part of the build (M27.2.1): release what the fixture saved, then time the run.
+        long releaseStart = System.nanoTime();
+        releaseFixtures.releaseAll(projectKey);
+        releaseMs.add((System.nanoTime() - releaseStart) / 1_000_000L);
         long start = System.nanoTime();
         GenerationRun started = generationService.start(
                 projectKey,

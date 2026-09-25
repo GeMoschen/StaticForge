@@ -40,6 +40,8 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.SnapshotService;
+import com.acme.staticforge.generate.snapshot.SnapshotView;
+import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
@@ -121,6 +123,7 @@ class M19ContentStoreJourneyIntegrationTest {
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
     @Autowired SnapshotService snapshotService;
+    @Autowired ReleaseFixtures releaseFixtures;
     @Autowired BuildPlanner buildPlanner;
     @Autowired PageRenderService pageRenderService;
     @Autowired RevisionRepository revisionRepository;
@@ -270,13 +273,13 @@ class M19ContentStoreJourneyIntegrationTest {
         OutputPathResolver paths = mock(OutputPathResolver.class);
         when(paths.resolvePagePath(any(), any())).thenAnswer(call -> call.getArgument(0).toString());
         BuildPlan plan = buildPlanner.plan(
-                snapshotService.snapshot(project.getId(), null), GenerationMode.INCREMENTAL, lastSuccessfulRevision,
+                releasedSnapshot(project.getId()), GenerationMode.INCREMENTAL, lastSuccessfulRevision,
                 Set.of("html"), null, null, paths);
         return plan.entries().stream().map(PlanEntry::pageUuid).collect(Collectors.toSet());
     }
 
     private long head(Project project) {
-        return snapshotService.snapshot(project.getId(), null).revision();
+        return releasedSnapshot(project.getId()).revision();
     }
 
     private long revisionCount(Project project) {
@@ -290,6 +293,7 @@ class M19ContentStoreJourneyIntegrationTest {
 
     private GenerationRun generate(Project project, GenerationTarget target, AppUser user, GenerationMode mode)
             throws InterruptedException {
+        releaseFixtures.releaseAll(project.getKey());
         GenerationRun started = generationService.start(
                 project.getKey(),
                 new GenerationRequest(mode, null, List.of("html"), target.getId(), null, null, null, null),
@@ -345,5 +349,11 @@ class M19ContentStoreJourneyIntegrationTest {
         RevisionContext ctx() {
             return RevisionContext.of(project().getId(), user().getId(), "test");
         }
+    }
+
+    /** The released snapshot at head, after releasing everything pending (M27.2.1): what a build started now renders. */
+    private Snapshot releasedSnapshot(long projectId) {
+        releaseFixtures.releaseAll(projectId);
+        return snapshotService.snapshot(projectId, null, SnapshotView.RELEASED);
     }
 }
