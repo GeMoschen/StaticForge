@@ -59,6 +59,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -416,7 +417,21 @@ class ScheduledActionsIntegrationTest {
             finish(blocker);
             clock.advance(Duration.ofSeconds(30));
             assertThat(fixtures.tickOnce(engine)).isEqualTo(2);
-            await(fx, single(late).getGenerationRunId());
+            // Both are due in the same tick, but a project has one run at a time (epic decision 27): whichever starts
+            // first, the other meets its run and waits, then starts on a tick after that run has ended.
+            for (int round = 0; round < 10 && (runOf(late) == null || runOf(hourly) == null); round++) {
+                for (Long runId : Arrays.asList(runOf(late), runOf(hourly))) {
+                    if (runId != null) {
+                        await(fx, runId);
+                    }
+                }
+                clock.advance(Duration.ofSeconds(15));
+                fixtures.tickOnce(engine);
+            }
+            assertThat(runOf(late)).as("the one-off started").isNotNull();
+            assertThat(runOf(hourly)).as("the coalesced hourly slot started").isNotNull();
+            await(fx, runOf(late));
+            await(fx, runOf(hourly));
         } finally {
             engine.close();
         }
@@ -553,6 +568,11 @@ class ScheduledActionsIntegrationTest {
         } finally {
             engine.close();
         }
+    }
+
+    /** The generation run the single execution of {@code action} started, or {@code null} while it hasn't. */
+    private Long runOf(ScheduledAction action) {
+        return single(action).getGenerationRunId();
     }
 
     private ScheduledActionExecution single(ScheduledAction action) {

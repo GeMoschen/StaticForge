@@ -134,7 +134,20 @@ public enum ConflictType {
      * folder. The target is still imported, but without {@code path}, so it publishes to its
      * collision-free {@code target-{id}} default — a warning, since that is a safe default.
      */
-    TARGET_PATH_COLLISION(ConflictSeverity.WARNING);
+    TARGET_PATH_COLLISION(ConflictSeverity.WARNING),
+
+    /**
+     * An asset released in a locale the target project doesn't have (M27.5.1): a locale code the target doesn't
+     * declare, or any locale code when the target has no languages. The asset imports; that pointer is dropped, so
+     * the asset is {@code NEW} in that locale.
+     */
+    RELEASE_LOCALE_MISSING(ConflictSeverity.WARNING),
+
+    /**
+     * The archive predates release state (protocol {@code <= 7}, M27.5.1): everything imports as a draft, whatever
+     * release mode was asked for.
+     */
+    ARCHIVE_WITHOUT_RELEASE_STATE(ConflictSeverity.INFO);
 
     private final ConflictSeverity severity;
     private final boolean rejectsAssetOnly;

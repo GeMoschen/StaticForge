@@ -18,6 +18,7 @@ import com.acme.staticforge.asset.folder.RecordSetContainment;
 import com.acme.staticforge.asset.media.Blob;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.channel.OutputChannel;
@@ -29,8 +30,14 @@ import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.TargetType;
+import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
+import com.acme.staticforge.release.AssetRelease;
+import com.acme.staticforge.release.AssetReleaseRepository;
+import com.acme.staticforge.release.Chunks;
+import com.acme.staticforge.release.ReleasableTypes;
+import com.acme.staticforge.release.ReleaseLocales;
 import com.acme.staticforge.revision.AssetChange;
 import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
@@ -53,6 +60,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -93,6 +101,16 @@ import org.springframework.transaction.annotation.Transactional;
  * record of a protocol {@code <= 6} archive — is rejected on its own ({@link
  * ConflictType#RECORD_OUTSIDE_RECORD_SET}) while the rest of the archive imports. Such records are never migrated
  * or grouped into sets (epic decision 8).
+ *
+ * <p><strong>Release state</strong> (M27, protocol {@code 8}): every releasable asset carries its open release
+ * pointers and the locale keys it was unpublished in ({@link ExportedRelease}), and an asset whose draft is deleted
+ * while it is still released is exported as its tombstone. A {@link ReleaseMode#KEEP} import writes each released
+ * version that differs from the draft as an extra version of the asset, opened and closed in the import revision
+ * ({@code validFrom = validTo}): it is never the version valid at any revision — so the "one valid version per
+ * revision" invariant holds and every reader of versions is unaffected — and only the pointer, opened in the same
+ * revision, reads it. An unpublished locale key likewise becomes a pointer opened and closed in the import revision:
+ * valid at no revision, it only records that the key was released once. Pointers, versions and the draft all belong
+ * to the one import revision.
  */
 @Service
 @RevisionAware
@@ -166,6 +184,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final GenerationTargetRepository generationTargetRepository;
     private final ReferenceMaterializer referenceMaterializer;
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
+    private final AssetReleaseRepository releaseRepository;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -182,9 +201,11 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             OutputChannelRepository outputChannelRepository,
             GenerationTargetRepository generationTargetRepository,
             ReferenceMaterializer referenceMaterializer,
-            com.acme.staticforge.project.ProjectLocales projectLocales) {
+            com.acme.staticforge.project.ProjectLocales projectLocales,
+            AssetReleaseRepository releaseRepository) {
         this.projectRepository = projectRepository;
         this.projectLocales = projectLocales;
+        this.releaseRepository = releaseRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetRepository = assetRepository;
         this.assetService = assetService;
@@ -206,7 +227,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     @Override
     public byte[] exportProject(long projectId) {
-        List<AssetVersion> versions = assetVersionRepository.findCurrentSnapshot(projectId);
+        List<AssetVersion> versions = exportableVersions(projectId, openPointers(projectId));
         Set<UUID> allUuids = versions.stream()
                 .map(version -> version.getAsset().getUuid())
                 .collect(Collectors.toSet());
@@ -227,7 +248,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Project not found.")));
 
-        List<AssetVersion> versions = assetVersionRepository.findCurrentSnapshot(projectId);
+        Map<Long, List<AssetRelease>> pointers = openPointers(projectId);
+        List<AssetVersion> versions = exportableVersions(projectId, pointers);
         Map<Long, String> uuidByAssetId = new HashMap<>();
         Map<Long, AssetVersion> versionByAssetId = new HashMap<>();
         for (AssetVersion version : versions) {
@@ -258,13 +280,21 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Set<Long> explicitIds = includedIds.explicit();
         Set<Long> ancestorIds = includedIds.ancestors();
 
+        List<AssetVersion> exported = versions.stream()
+                .filter(v -> explicitIds.contains(v.getAssetId()) || ancestorIds.contains(v.getAssetId()))
+                .toList();
+        Map<Long, AssetVersion> releasedVersions = releasedVersions(exported, pointers);
+        addMissingUuids(uuidByAssetId, releasedVersions.values());
+        Map<Long, Set<String>> everReleased = everReleased(exported);
+
         List<ExportedAsset> assets = new ArrayList<>();
         Map<String, byte[]> blobs = new TreeMap<>();
-        for (AssetVersion version : versions) {
-            if (!explicitIds.contains(version.getAssetId()) && !ancestorIds.contains(version.getAssetId())) {
-                continue;
-            }
+        for (AssetVersion version : exported) {
             Asset asset = version.getAsset();
+            List<ExportedRelease> release = ReleasableTypes.isReleasable(asset.getAssetType(), version.getPayload(), asset.getUid())
+                    ? releaseEntries(version, pointers.getOrDefault(version.getAssetId(), List.of()), releasedVersions,
+                            everReleased.getOrDefault(version.getAssetId(), Set.of()), uuidByAssetId)
+                    : null;
             assets.add(new ExportedAsset(
                     asset.getUuid().toString(),
                     asset.getAssetType().name(),
@@ -276,15 +306,21 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     version.getPayload(),
                     version.getMimeType(),
                     version.getSizeBytes(),
-                    !ancestorIds.contains(version.getAssetId())));
+                    !ancestorIds.contains(version.getAssetId()),
+                    release,
+                    version.isDeleted() ? Boolean.TRUE : null));
             if (asset.getAssetType() == AssetType.MEDIA) {
                 collectBlobs(version.getPayload(), blobs);
+                if (release != null) {
+                    release.forEach(entry -> collectBlobs(entry.payload(), blobs));
+                }
             }
         }
         assets.sort(Comparator.comparing(ExportedAsset::uuid));
 
         ExportManifest manifest = new ExportManifest(
-                PROTOCOL_VERSION, project.getKey(), project.getName(), project.getDescription(), Instant.now());
+                PROTOCOL_VERSION, project.getKey(), project.getName(), project.getDescription(), Instant.now(),
+                projectLocales.forProject(projectId).codes());
 
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -308,6 +344,129 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     ProblemFactory.other(500, "SF-EXP-0500", "Export Failed", "Failed to write export archive."),
                     e.getMessage(), e);
         }
+    }
+
+    /** The open release pointers of a project, by asset id, each list in locale key order. */
+    private Map<Long, List<AssetRelease>> openPointers(long projectId) {
+        Map<Long, List<AssetRelease>> byAsset = new HashMap<>();
+        releaseRepository.findByProjectIdAndValidToRevisionIsNull(projectId).stream()
+                .sorted(Comparator.comparing(AssetRelease::getLocaleKey))
+                .forEach(p -> byAsset.computeIfAbsent(p.getAssetId(), id -> new ArrayList<>()).add(p));
+        return byAsset;
+    }
+
+    /**
+     * What an export can contain (M27.5.1): the live assets, plus every tombstone that is still released somewhere
+     * ({@code DELETION_PENDING}) and the deleted folders above such a tombstone, so its archive parent chain stays
+     * intact. Other tombstones are gone and stay out.
+     */
+    private List<AssetVersion> exportableVersions(long projectId, Map<Long, List<AssetRelease>> pointers) {
+        List<AssetVersion> versions = new ArrayList<>(assetVersionRepository.findCurrentSnapshot(projectId));
+        Set<Long> known = versions.stream().map(AssetVersion::getAssetId).collect(Collectors.toSet());
+        Set<Long> wanted = new HashSet<>(pointers.keySet());
+        wanted.removeAll(known);
+        while (!wanted.isEmpty()) {
+            List<AssetVersion> tombstones = Chunks.flatMap(wanted, assetVersionRepository::findOpenWithAssetByAssetIdIn)
+                    .stream()
+                    .filter(AssetVersion::isDeleted)
+                    .toList();
+            known.addAll(wanted);
+            versions.addAll(tombstones);
+            wanted = tombstones.stream()
+                    .map(AssetVersion::getFolderId)
+                    .filter(id -> id != null && !known.contains(id))
+                    .collect(Collectors.toSet());
+        }
+        return versions;
+    }
+
+    /** The released versions the pointers of {@code exported} name, except the exported versions themselves. */
+    private Map<Long, AssetVersion> releasedVersions(List<AssetVersion> exported, Map<Long, List<AssetRelease>> pointers) {
+        Set<Long> draftIds = exported.stream().map(AssetVersion::getId).collect(Collectors.toSet());
+        Set<Long> ids = new HashSet<>();
+        for (AssetVersion version : exported) {
+            pointers.getOrDefault(version.getAssetId(), List.of()).stream()
+                    .map(AssetRelease::getReleasedVersionId)
+                    .filter(id -> !draftIds.contains(id))
+                    .forEach(ids::add);
+        }
+        Map<Long, AssetVersion> byId = new HashMap<>();
+        if (!ids.isEmpty()) {
+            Chunks.flatMap(ids, assetVersionRepository::findAllById).forEach(v -> byId.put(v.getId(), v));
+        }
+        return byId;
+    }
+
+    /** The locale keys each of {@code exported} was ever released under, open or closed, by asset id. */
+    private Map<Long, Set<String>> everReleased(List<AssetVersion> exported) {
+        Set<Long> ids = exported.stream().map(AssetVersion::getAssetId).collect(Collectors.toSet());
+        Map<Long, Set<String>> keys = new HashMap<>();
+        if (!ids.isEmpty()) {
+            Chunks.flatMap(ids, releaseRepository::findEverReleasedKeys)
+                    .forEach(k -> keys.computeIfAbsent(k.assetId(), id -> new HashSet<>()).add(k.localeKey()));
+        }
+        return keys;
+    }
+
+    /** Adds the uuids of the parent folders and templates of {@code versions} that aren't in {@code uuidByAssetId} yet. */
+    private void addMissingUuids(Map<Long, String> uuidByAssetId, java.util.Collection<AssetVersion> versions) {
+        Set<Long> missing = new HashSet<>();
+        for (AssetVersion version : versions) {
+            for (Long id : new Long[] {version.getFolderId(), version.getTemplateAssetId()}) {
+                if (id != null && !uuidByAssetId.containsKey(id)) {
+                    missing.add(id);
+                }
+            }
+        }
+        if (!missing.isEmpty()) {
+            Chunks.flatMap(missing, assetRepository::findAllById)
+                    .forEach(asset -> uuidByAssetId.put(asset.getId(), asset.getUuid().toString()));
+        }
+    }
+
+    /**
+     * The release entries of one exported version (M27.5.1), in locale key order: {@link
+     * ExportedRelease.State#DRAFT_EQUALS} for a pointer at the version itself, else the released version's content,
+     * and {@link ExportedRelease.State#UNPUBLISHED} for a key released once without an open pointer now (a tombstone
+     * has none: it is gone there, not pending). A pointer whose version is gone (only reachable through manual SQL) is
+     * left out.
+     */
+    private static List<ExportedRelease> releaseEntries(
+            AssetVersion draft, List<AssetRelease> pointers, Map<Long, AssetVersion> releasedVersions,
+            Set<String> everReleased, Map<Long, String> uuidByAssetId) {
+        Asset asset = draft.getAsset();
+        List<ExportedRelease> entries = new ArrayList<>();
+        Set<String> open = pointers.stream().map(AssetRelease::getLocaleKey).collect(Collectors.toSet());
+        if (!draft.isDeleted()) {
+            everReleased.stream()
+                    .filter(key -> !open.contains(key))
+                    .forEach(key -> entries.add(ExportedRelease.unpublished(key)));
+        }
+        for (AssetRelease pointer : pointers) {
+            String uid = Objects.equals(pointer.getReleasedUid(), asset.getUid()) ? null : pointer.getReleasedUid();
+            if (pointer.getReleasedVersionId().equals(draft.getId())) {
+                entries.add(ExportedRelease.draftEquals(pointer.getLocaleKey(), uid));
+                continue;
+            }
+            AssetVersion released = releasedVersions.get(pointer.getReleasedVersionId());
+            if (released == null) {
+                continue;
+            }
+            boolean media = asset.getAssetType() == AssetType.MEDIA;
+            entries.add(new ExportedRelease(
+                    pointer.getLocaleKey(),
+                    ExportedRelease.State.PAYLOAD,
+                    uid,
+                    released.getPayload(),
+                    released.getDisplayName(),
+                    released.getFolderId() == null ? null : uuidByAssetId.get(released.getFolderId()),
+                    released.getFolderPath(),
+                    released.getTemplateAssetId() == null ? null : uuidByAssetId.get(released.getTemplateAssetId()),
+                    media ? released.getMimeType() : null,
+                    media ? released.getSizeBytes() : null));
+        }
+        entries.sort(Comparator.comparing(ExportedRelease::locale));
+        return entries;
     }
 
     /**
@@ -433,7 +592,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     @Override
     @Transactional
     public ImportResult importProject(long targetProjectId, byte[] zipBytes, RevisionContext ctx, ImportOptions options) {
-        ArchiveContent content = readArchive(zipBytes);
+        ArchiveContent archive = readArchive(zipBytes);
+        ReleaseMode releaseMode = releaseMode(archive.manifest(), options);
+        ArchiveContent content = archive.forReleaseMode(releaseMode);
         ExportManifest manifest = content.manifest();
 
         // Re-run the exact same conflict detection analyzeImport uses, unconditionally — a
@@ -586,7 +747,12 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Set<String> importedShas = new HashSet<>();
         for (ExportedAsset asset : assets) {
             if ("MEDIA".equals(asset.type())) {
-                importBlobs(asset.payload(), content.blobs(), importedShas);
+                // Once per blob and asset, whether the draft, a released version or both hold it.
+                Map<String, String> shas = blobShas(asset.payload());
+                if (releaseMode == ReleaseMode.KEEP) {
+                    asset.releases().forEach(entry -> blobShas(entry.payload()).forEach(shas::putIfAbsent));
+                }
+                shas.forEach((sha, mime) -> importBlob(sha, mime, content.blobs(), importedShas));
             }
         }
 
@@ -594,13 +760,16 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         int created = 0;
         int updated = 0;
         List<AssetVersion> importedVersions = new ArrayList<>();
+        List<ImportedDraft> imported = new ArrayList<>();
         for (ExportedAsset asset : order(assets, rootAsset)) {
             String key = asset.uuid().toLowerCase();
             if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key) || rejected.contains(key)) {
                 continue;
             }
-            importedVersions.add(createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest,
-                    importedAt, revision.getRevisionId(), ctx));
+            AssetVersion draft = createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest,
+                    importedAt, revision.getRevisionId(), ctx);
+            importedVersions.add(draft);
+            imported.add(new ImportedDraft(asset, draft, overwritten.contains(key)));
             if (overwritten.contains(key)) {
                 updated++;
             } else {
@@ -614,18 +783,229 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             referenceMaterializer.materialize(version.getAsset(), version);
         }
 
+        int released = releaseMode == ReleaseMode.KEEP
+                ? importReleaseState(targetProjectId, content, imported, remap, idMaps, manifest, importedAt, revision, ctx)
+                : 0;
+
         if (content.settings() != null) {
             importSettings(targetProjectId, content.settings());
         }
 
-        return new ImportResult(manifest.sourceProjectKey(), created, updated, importedShas.size());
+        return new ImportResult(manifest.sourceProjectKey(), created, updated, importedShas.size(), released);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ConflictReport analyzeImport(long targetProjectId, byte[] zipBytes, ImportOptions options) {
-        ArchiveContent content = readArchive(zipBytes);
-        return detectConflicts(targetProjectId, content, options);
+        ArchiveContent archive = readArchive(zipBytes);
+        return detectConflicts(targetProjectId, archive.forReleaseMode(releaseMode(archive.manifest(), options)), options);
+    }
+
+    /** The release mode an import applies: the requested one, or {@link ReleaseMode#DRAFT} without release state. */
+    private static ReleaseMode releaseMode(ExportManifest manifest, ImportOptions options) {
+        return manifest.protocolVersion() >= RELEASE_STATE_PROTOCOL ? options.releaseMode() : ReleaseMode.DRAFT;
+    }
+
+    /**
+     * The languages the target project will have once the import has run: its own, or — when it has none — the
+     * archive's, which {@link #importSettings} adopts.
+     */
+    private LocaleConfig effectiveLocales(long targetProjectId, ArchiveContent content) {
+        LocaleConfig target = projectLocales.forProject(targetProjectId);
+        if (target.isLocalized() || content.settings() == null || content.settings().locales() == null) {
+            return target;
+        }
+        return content.settings().locales();
+    }
+
+    /**
+     * The languages of the archive (M27.5.1): the manifest's list, else — an archive without it — the languages of
+     * its settings, else none.
+     */
+    private static Set<String> archiveLocales(ArchiveContent content) {
+        if (content.manifest().locales() != null) {
+            return Set.copyOf(content.manifest().locales());
+        }
+        if (content.settings() != null && content.settings().locales() != null) {
+            return Set.copyOf(content.settings().locales().codes());
+        }
+        return Set.of();
+    }
+
+    /**
+     * The release entries of an archived asset keyed by the locale key they get in the target (M27.5.1, epic
+     * decision 4): an entry whose key the asset has there is kept. The shared key {@code ""} stands for every
+     * language of the archive, so it releases the target languages that are also the archive's ({@code
+     * archiveLocales}) and that no entry names; a target language the archive doesn't have stays unreleased. An
+     * archive without languages counts as the target's default language: its single-language content is that. Any
+     * other key — and a shared entry that matches no target language — is added to {@code dropped}. Empty for an
+     * asset that isn't releasable.
+     */
+    private static Map<String, ExportedRelease> targetPointers(
+            ExportedAsset asset, LocaleConfig locales, Set<String> archiveLocales, List<String> dropped) {
+        Map<String, ExportedRelease> out = new LinkedHashMap<>();
+        AssetType type = AssetType.valueOf(asset.type());
+        if (asset.releases().isEmpty() || !ReleasableTypes.isReleasable(type, asset.payload(), asset.uid())) {
+            return out;
+        }
+        List<String> keys = ReleaseLocales.keysFor(locales, type, asset.payload());
+        ExportedRelease shared = null;
+        for (ExportedRelease entry : asset.releases()) {
+            String locale = entry.locale() == null ? ReleaseLocales.ALL : entry.locale();
+            if (keys.contains(locale)) {
+                out.put(locale, entry);
+            } else if (ReleaseLocales.ALL.equals(locale)) {
+                shared = entry;
+            } else if (entry.state() != ExportedRelease.State.UNPUBLISHED) {
+                dropped.add(locale); // an unpublished key renders nothing: losing it needs no warning
+            }
+        }
+        if (shared != null) {
+            Set<String> languages = archiveLocales.isEmpty() && locales.defaultLocale() != null
+                    ? Set.of(locales.defaultLocale())
+                    : archiveLocales;
+            boolean matched = false;
+            for (String key : keys) {
+                if (languages.contains(key)) {
+                    out.putIfAbsent(key, shared);
+                    matched = true;
+                }
+            }
+            if (!matched && shared.state() != ExportedRelease.State.UNPUBLISHED) {
+                dropped.add(ReleaseLocales.ALL);
+            }
+        }
+        return out;
+    }
+
+    /** {@link ConflictType#RELEASE_LOCALE_MISSING} per asset released in a locale the target won't have. */
+    private List<ImportConflict> releaseLocaleConflicts(long targetProjectId, ArchiveContent content) {
+        LocaleConfig locales = effectiveLocales(targetProjectId, content);
+        Set<String> archiveLocales = archiveLocales(content);
+        List<ImportConflict> conflicts = new ArrayList<>();
+        for (ExportedAsset asset : content.assets()) {
+            List<String> dropped = new ArrayList<>();
+            targetPointers(asset, locales, archiveLocales, dropped);
+            if (dropped.isEmpty()) {
+                continue;
+            }
+            String label = asset.displayName() != null ? asset.displayName() : asset.uid();
+            conflicts.add(ImportConflict.of(
+                    ConflictType.RELEASE_LOCALE_MISSING,
+                    asset.uuid(),
+                    label,
+                    dropped.contains(ReleaseLocales.ALL)
+                            ? "Released for all languages, but none of this project's languages is in the archive: "
+                                    + "imported as not released."
+                            : "Released in " + String.join(", ", dropped.stream().map(l -> "'" + l + "'").toList())
+                                    + (locales.isLocalized()
+                                            ? ", which this project doesn't have"
+                                            : ", but this project has no languages")
+                                    + ": imported as not released there.",
+                    asset.isExplicit()));
+        }
+        return conflicts;
+    }
+
+    /**
+     * Opens the archive's release pointers for every imported asset in the import revision (M27.5.1, {@link
+     * ReleaseMode#KEEP}). A pointer at the draft names the imported draft; every distinct released version is written
+     * once — with the same remapping and provenance as the draft, so the locale projections compare exactly as they
+     * did in the source — and closed in the import revision (see the class comment). An overwritten asset loses the
+     * target's pointers: the import wins. An unpublished key gets a pointer valid at no revision (see the class
+     * comment). Returns the number of pointers opened.
+     */
+    private int importReleaseState(
+            long projectId, ArchiveContent content, List<ImportedDraft> imported, Map<String, UUID> remap,
+            IdMaps idMaps, ExportManifest manifest, Instant importedAt, Revision revision, RevisionContext ctx) {
+        LocaleConfig locales = effectiveLocales(projectId, content);
+        Set<String> archiveLocales = archiveLocales(content);
+        long rev = revision.getRevisionId();
+        PathRebase paths = PathRebase.of(content.assets(), idMaps);
+        List<AssetRelease> closed = new ArrayList<>();
+        List<AssetRelease> opened = new ArrayList<>();
+        List<AssetChange> summary = new ArrayList<>();
+        for (ImportedDraft item : imported) {
+            Asset asset = item.draft().getAsset();
+            if (item.overwrite()) {
+                for (AssetRelease pointer : releaseRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId())) {
+                    pointer.setValidToRevision(rev);
+                    closed.add(pointer);
+                }
+            }
+            Map<String, AssetVersion> releasedByContent = new HashMap<>();
+            for (Map.Entry<String, ExportedRelease> target : targetPointers(item.source(), locales, archiveLocales, new ArrayList<>()).entrySet()) {
+                ExportedRelease entry = target.getValue();
+                if (entry.state() == ExportedRelease.State.UNPUBLISHED) {
+                    if (!item.draft().isDeleted()) {
+                        AssetRelease history = new AssetRelease(projectId, asset.getId(), target.getKey(),
+                                item.draft().getId(), asset.getUid(), rev, ctx.userId(), importedAt);
+                        history.setValidToRevision(rev);
+                        opened.add(history);
+                    }
+                    continue;
+                }
+                AssetVersion version;
+                if (entry.state() == ExportedRelease.State.PAYLOAD) {
+                    version = releasedByContent.computeIfAbsent(signature(entry), s -> writeReleasedVersion(
+                            projectId, item, entry, remap, idMaps, paths, manifest, importedAt, rev, ctx));
+                } else if (!item.draft().isDeleted()) {
+                    version = item.draft();
+                } else {
+                    continue; // a tombstone is never released; a hand-edited archive can't make it so
+                }
+                String uid = entry.uid() != null ? entry.uid() : asset.getUid();
+                opened.add(new AssetRelease(
+                        projectId, asset.getId(), target.getKey(), version.getId(), uid, rev, ctx.userId(), importedAt));
+                summary.add(AssetChange.release(asset.getUuid().toString(), asset.getAssetType().name(), asset.getUid(),
+                        "RELEASE", target.getKey(), version.getId()));
+            }
+        }
+        releaseRepository.saveAll(closed);
+        releaseRepository.saveAll(opened);
+        if (!summary.isEmpty()) {
+            revisionService.appendSummaries(projectId, rev, summary);
+        }
+        return summary.size();
+    }
+
+    /** One released version's content as a key: entries of several locales that carry the same content share a version. */
+    private String signature(ExportedRelease entry) {
+        ObjectNode node = objectMapper.valueToTree(entry);
+        node.remove("locale");
+        node.remove("uid");
+        return node.toString();
+    }
+
+    /**
+     * Writes a released version of an imported asset, opened and closed in the import revision. Its parent and
+     * template resolve like the draft's; a parent the archive doesn't hold falls back to the draft's placement, and
+     * its folder path is the archive's, rebased onto the target's folders.
+     */
+    private AssetVersion writeReleasedVersion(
+            long projectId, ImportedDraft item, ExportedRelease entry, Map<String, UUID> remap, IdMaps idMaps,
+            PathRebase paths, ExportManifest manifest, Instant importedAt, long revision, RevisionContext ctx) {
+        AssetVersion draft = item.draft();
+        Long parentId = idMaps.idOf(entry.parentFolderUuid());
+        AssetVersion version = new AssetVersion(
+                draft.getAssetId(),
+                revision,
+                entry.displayName(),
+                withOrigin(UuidRemapper.remap(entry.payload(), remap), manifest, importedAt, item.overwrite()),
+                ctx.userId(),
+                importedAt);
+        version.setFolderId(parentId != null ? parentId : draft.getFolderId());
+        version.setFolderPath(parentId != null && entry.folderPath() != null
+                ? paths.rebase(entry.folderPath())
+                : draft.getFolderPath());
+        version.setTemplateAssetId(templateIdOf(projectId, entry.templateUuid(), remap, idMaps));
+        if (draft.getAsset().getAssetType() == AssetType.MEDIA) {
+            version.setMimeType(entry.mimeType());
+            version.setSizeBytes(entry.sizeBytes());
+        }
+        version.setValidToRevision(revision);
+        version.setAsset(draft.getAsset());
+        return assetVersionRepository.save(version);
     }
 
     /**
@@ -702,6 +1082,17 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
         List<ImportConflict> conflicts = new ArrayList<>();
         conflicts.addAll(localeConflicts(targetProjectId, content));
+        boolean releaseState = manifest.protocolVersion() >= RELEASE_STATE_PROTOCOL;
+        ReleaseMode releaseMode = releaseMode(manifest, options);
+        if (!releaseState) {
+            conflicts.add(ImportConflict.of(
+                    ConflictType.ARCHIVE_WITHOUT_RELEASE_STATE,
+                    null,
+                    null,
+                    "This archive has no release state — everything is imported as draft."));
+        } else if (releaseMode == ReleaseMode.KEEP) {
+            conflicts.addAll(releaseLocaleConflicts(targetProjectId, content));
+        }
         List<ExportedAsset> assets = content.assets();
         Set<String> archiveUuids = assets.stream()
                 .map(a -> a.uuid().toLowerCase(Locale.ROOT))
@@ -850,7 +1241,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
         }
 
-        return new ConflictReport(conflicts);
+        return new ConflictReport(conflicts, releaseState, releaseMode);
     }
 
     /**
@@ -1108,31 +1499,14 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         String folderPath = type == AssetType.FOLDER
                 ? pathService.childPath(parentPath, uid)
                 : pathService.contentPath(parentPath);
-        Long templateAssetId = idMaps.idOf(asset.templateUuid());
-        if (templateAssetId == null && asset.templateUuid() != null && !asset.templateUuid().isBlank()) {
-            // The template (or a record's dataset, M19.1.3) is not in the archive but already exists in
-            // the target project: link to it, since a record without template_asset_id drops out of
-            // every dataset query.
-            UUID targetTemplate = remap.getOrDefault(asset.templateUuid().toLowerCase(), UUID.fromString(asset.templateUuid()));
-            templateAssetId = assetRepository.findByProjectIdAndUuid(projectId, targetTemplate).map(Asset::getId).orElse(null);
-        }
-
-        JsonNode remapped = UuidRemapper.remap(asset.payload(), remap);
-        ObjectNode payload = JsonUtil.object(remapped).deepCopy();
-        ObjectNode origin = payload.putObject("origin");
-        origin.put("from", "import");
-        origin.put("sourceProjectKey", manifest.sourceProjectKey());
-        origin.put("importedAt", importedAt.toString());
-        if (overwrite) {
-            // Debugging/audit metadata only (§6.1) — the DB-level (project_id, uuid) existence
-            // check above is what actually drove the overwrite path, this just lets a human
-            // inspecting the asset's history see this version replaced pre-existing content.
-            origin.put("overwrite", true);
-        }
+        Long templateAssetId = templateIdOf(projectId, asset.templateUuid(), remap, idMaps);
+        ObjectNode payload = withOrigin(UuidRemapper.remap(asset.payload(), remap), manifest, importedAt, overwrite);
 
         idMaps.put(asset.uuid().toLowerCase(), assetId, folderPath);
 
         AssetVersion version = new AssetVersion(assetId, revision, asset.displayName(), payload, ctx.userId(), importedAt);
+        // A deletion-pending asset (M27.5.1) arrives as its tombstone; its released versions are written separately.
+        version.setDeleted(asset.isDraftDeleted());
         version.setFolderId(parentFolderId);
         version.setFolderPath(folderPath);
         version.setTemplateAssetId(templateAssetId);
@@ -1148,22 +1522,67 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         return saved;
     }
 
-    private void importBlobs(JsonNode payload, Map<String, byte[]> archiveBlobs, Set<String> importedShas) {
-        if (payload == null) {
-            return;
+    /**
+     * The id {@code templateUuid} (a template, or a record's dataset) has in the target: the imported asset, else —
+     * when the archive doesn't carry it — the target's existing one, since a record without {@code
+     * template_asset_id} drops out of every dataset query (M19.1.3).
+     */
+    private Long templateIdOf(long projectId, String templateUuid, Map<String, UUID> remap, IdMaps idMaps) {
+        Long templateAssetId = idMaps.idOf(templateUuid);
+        if (templateAssetId == null && templateUuid != null && !templateUuid.isBlank()) {
+            UUID targetTemplate = remap.getOrDefault(templateUuid.toLowerCase(), UUID.fromString(templateUuid));
+            templateAssetId = assetRepository.findByProjectIdAndUuid(projectId, targetTemplate).map(Asset::getId).orElse(null);
         }
-        importBlob(payload.path("blobSha256"), payload.path("mimeType"), archiveBlobs, importedShas);
-        JsonNode variants = payload.get("variants");
-        if (variants != null && variants.isArray()) {
-            variants.forEach(variant -> importBlob(variant.path("blobSha256"), null, archiveBlobs, importedShas));
-        }
+        return templateAssetId;
     }
 
-    private void importBlob(JsonNode shaNode, JsonNode mimeNode, Map<String, byte[]> archiveBlobs, Set<String> importedShas) {
-        String sha = textOrNull(shaNode);
-        if (sha == null) {
-            return;
+    /** A copy of an imported payload with its {@code origin} provenance (§6.1). */
+    private static ObjectNode withOrigin(JsonNode remapped, ExportManifest manifest, Instant importedAt, boolean overwrite) {
+        ObjectNode payload = JsonUtil.object(remapped).deepCopy();
+        ObjectNode origin = payload.putObject("origin");
+        origin.put("from", "import");
+        origin.put("sourceProjectKey", manifest.sourceProjectKey());
+        origin.put("importedAt", importedAt.toString());
+        if (overwrite) {
+            // Debugging/audit metadata only (§6.1) — the DB-level (project_id, uuid) existence
+            // check is what actually drove the overwrite path, this just lets a human
+            // inspecting the asset's history see this version replaced pre-existing content.
+            origin.put("overwrite", true);
         }
+        return payload;
+    }
+
+    /**
+     * Every blob a media payload holds (M27.3.1): its file and variants, and those of each per-locale file of a
+     * localized media asset.
+     */
+    private static Map<String, String> blobShas(JsonNode payload) {
+        Map<String, String> shas = new LinkedHashMap<>();
+        if (payload == null || !payload.isObject()) {
+            return shas;
+        }
+        List<JsonNode> files = new ArrayList<>();
+        files.add(payload);
+        MediaFiles.localeFileKeys(payload).forEach(locale -> files.add(payload.path(MediaFiles.LOCALE_FILES).get(locale)));
+        for (JsonNode file : files) {
+            String sha = textOrNull(file.path("blobSha256"));
+            if (sha != null) {
+                shas.putIfAbsent(sha, textOrNull(file.path("mimeType")));
+            }
+            JsonNode variants = file.get("variants");
+            if (variants != null && variants.isArray()) {
+                for (JsonNode variant : variants) {
+                    String variantSha = textOrNull(variant.path("blobSha256"));
+                    if (variantSha != null) {
+                        shas.putIfAbsent(variantSha, null);
+                    }
+                }
+            }
+        }
+        return shas;
+    }
+
+    private void importBlob(String sha, String mimeType, Map<String, byte[]> archiveBlobs, Set<String> importedShas) {
         byte[] bytes = archiveBlobs.get(sha);
         if (bytes == null) {
             return;
@@ -1176,7 +1595,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 () -> {
                     blobStore.put(sha, bytes);
                     blobRepository.save(new Blob(
-                            sha, bytes.length, textOrNull(mimeNode), blobStore.storageKey(sha), 1, Instant.now()));
+                            sha, bytes.length, mimeType, blobStore.storageKey(sha), 1, Instant.now()));
                 });
         importedShas.add(sha);
     }
@@ -1270,23 +1689,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     }
 
     private void collectBlobs(JsonNode payload, Map<String, byte[]> blobs) {
-        if (payload == null) {
-            return;
-        }
-        collectBlob(payload.path("blobSha256"), blobs);
-        JsonNode variants = payload.get("variants");
-        if (variants != null && variants.isArray()) {
-            variants.forEach(variant -> collectBlob(variant.path("blobSha256"), blobs));
-        }
-    }
-
-    private void collectBlob(JsonNode shaNode, Map<String, byte[]> blobs) {
-        String sha = textOrNull(shaNode);
-        if (sha == null || blobs.containsKey(sha)) {
-            return;
-        }
-        if (blobStore.exists(sha)) {
-            blobs.put(sha, blobStore.get(sha));
+        for (String sha : blobShas(payload).keySet()) {
+            if (!blobs.containsKey(sha) && blobStore.exists(sha)) {
+                blobs.put(sha, blobStore.get(sha));
+            }
         }
     }
 
@@ -1436,5 +1842,53 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     private record ArchiveContent(
             ExportManifest manifest, List<ExportedAsset> assets, Map<String, byte[]> blobs,
-            ExportedSettings settings) {}
+            ExportedSettings settings) {
+
+        /**
+         * The archive as an import in {@code mode} reads it: a {@link ReleaseMode#DRAFT} import leaves out the
+         * deletion-pending assets (M27.5.1) — a tombstone is no draft, and without its released versions it would
+         * only delete.
+         */
+        ArchiveContent forReleaseMode(ReleaseMode mode) {
+            if (mode == ReleaseMode.KEEP || assets.stream().noneMatch(ExportedAsset::isDraftDeleted)) {
+                return this;
+            }
+            List<ExportedAsset> drafts = assets.stream().filter(asset -> !asset.isDraftDeleted()).toList();
+            return new ArchiveContent(manifest, drafts, blobs, settings);
+        }
+    }
+
+    /** An imported asset: its archive entry, the draft version the import wrote, and whether it overwrote one. */
+    private record ImportedDraft(ExportedAsset source, AssetVersion draft, boolean overwrite) {}
+
+    /**
+     * Moves archive folder paths onto the target's (M27.5.1): a released version carries the folder path it had in
+     * the source project, and the folders above it may have other uids — hence other paths — in the target. The
+     * longest archive folder path that prefixes a path is replaced by that folder's target path; a path under no
+     * imported folder is kept.
+     */
+    private record PathRebase(Map<String, String> targetByArchivePath) {
+
+        static PathRebase of(List<ExportedAsset> assets, IdMaps idMaps) {
+            Map<String, String> map = new HashMap<>();
+            map.put(PathService.ROOT_PATH, PathService.ROOT_PATH);
+            for (ExportedAsset asset : assets) {
+                String target = idMaps.pathOf(asset.uuid());
+                if ("FOLDER".equals(asset.type()) && asset.folderPath() != null && target != null) {
+                    map.put(asset.folderPath(), target);
+                }
+            }
+            return new PathRebase(map);
+        }
+
+        String rebase(String archivePath) {
+            String best = null;
+            for (String prefix : targetByArchivePath.keySet()) {
+                if (archivePath.startsWith(prefix) && (best == null || prefix.length() > best.length())) {
+                    best = prefix;
+                }
+            }
+            return best == null ? archivePath : targetByArchivePath.get(best) + archivePath.substring(best.length());
+        }
+    }
 }

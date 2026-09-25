@@ -10,6 +10,12 @@ export type ConflictReportView = S['ConflictReportView'];
 export type ImportConflictView = S['ImportConflictView'];
 export type ImportResultView = S['ImportResultView'];
 
+/**
+ * What an import does with the archive's release state (M27.5.1): `KEEP` releases what was released when the archive
+ * was exported, `DRAFT` imports everything as a draft. Archives without release state always import as drafts.
+ */
+export type ReleaseMode = 'KEEP' | 'DRAFT';
+
 const BASE = '/api/v1';
 
 /**
@@ -32,10 +38,12 @@ export class ImportExportService {
     projectKey: string,
     file: File,
     skipExistingImplicit = false,
+    releaseMode: ReleaseMode = 'KEEP',
   ): Observable<ConflictReportView> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('skipExistingImplicit', String(skipExistingImplicit));
+    formData.append('releaseMode', releaseMode);
     return this.http.post<ConflictReportView>(
       `${BASE}/projects/${projectKey}/import/analyze`,
       formData,
@@ -47,10 +55,12 @@ export class ImportExportService {
     projectKey: string,
     file: File,
     skipExistingImplicit = false,
+    releaseMode: ReleaseMode = 'KEEP',
   ): Observable<ImportResultView> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('skipExistingImplicit', String(skipExistingImplicit));
+    formData.append('releaseMode', releaseMode);
     return this.http.post<ImportResultView>(`${BASE}/projects/${projectKey}/import`, formData, {
       withCredentials: true,
     });

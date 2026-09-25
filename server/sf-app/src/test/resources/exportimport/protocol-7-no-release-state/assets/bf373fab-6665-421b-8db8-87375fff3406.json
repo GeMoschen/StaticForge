@@ -1,0 +1,16 @@
+{
+  "uuid": "bf373fab-6665-421b-8db8-87375fff3406",
+  "type": "FOLDER",
+  "uid": "templates_root",
+  "displayName": "All Templates",
+  "parentFolderUuid": "ccb15e4c-7b2d-42db-a1fd-5544c79dddcf",
+  "folderPath": "/templates_root/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "TEMPLATES",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

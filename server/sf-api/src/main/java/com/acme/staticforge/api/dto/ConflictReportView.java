@@ -6,5 +6,12 @@ import java.util.List;
  * Client-facing conflict report returned by the analyze-import endpoint (M10.2.3). {@code hasBlocking}: any
  * {@code BLOCKING} conflict; {@code blocksImport} (M25): any conflict that refuses the whole import — when it
  * is {@code false}, committing imports everything except the assets the blocking conflicts reject.
+ *
+ * <p>{@code releaseState} (M27.5.1): whether the archive carries release state (protocol {@code >= 8});
+ * {@code releaseMode} ({@code KEEP} | {@code DRAFT}): the mode the import applies — the requested one, or {@code
+ * DRAFT} for an archive without release state, which also lists an {@code INFO} entry {@code
+ * ARCHIVE_WITHOUT_RELEASE_STATE}.
  */
-public record ConflictReportView(List<ImportConflictView> conflicts, boolean hasBlocking, boolean blocksImport) {}
+public record ConflictReportView(
+        List<ImportConflictView> conflicts, boolean hasBlocking, boolean blocksImport, boolean releaseState,
+        String releaseMode) {}

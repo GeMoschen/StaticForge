@@ -1,7 +1,7 @@
 import '@angular/compiler';
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { render, screen, waitFor } from '@testing-library/angular';
+import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -80,7 +80,7 @@ describe('ProjectSettingsImportComponent', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     selectFile(input, zipFile());
 
-    expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), false);
+    expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), false, 'KEEP');
     await waitFor(() => expect(screen.getByText('Blocking issues')).toBeTruthy());
     expect(screen.getByText('Warnings')).toBeTruthy();
 
@@ -132,7 +132,7 @@ describe('ProjectSettingsImportComponent', () => {
     await waitFor(() => expect(screen.getByText('Choose file…')).toBeTruthy());
     expect(screen.queryByRole('button', { name: 'Import' })).toBeNull();
     selectFile(document.querySelector('input[type="file"]') as HTMLInputElement, zipFile());
-    await waitFor(() => expect(api.analyzeImport).toHaveBeenLastCalledWith('other', expect.any(File), false));
+    await waitFor(() => expect(api.analyzeImport).toHaveBeenLastCalledWith('other', expect.any(File), false, 'KEEP'));
     expect(api.commitImport).not.toHaveBeenCalled();
   });
 
@@ -178,7 +178,7 @@ describe('ProjectSettingsImportComponent', () => {
 
     screen.getByRole('button', { name: 'Import' }).click();
 
-    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false);
+    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false, 'KEEP');
     await waitFor(() => expect(screen.getByText(/Imported 5 asset/)).toBeTruthy());
     // Panel resets back toward its initial state — ready for another import.
     expect(screen.getByText('Choose file…')).toBeTruthy();
@@ -216,16 +216,16 @@ describe('ProjectSettingsImportComponent', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     selectFile(input, zipFile());
     await waitFor(() => expect(screen.getByText('implicit')).toBeTruthy());
-    expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), false);
+    expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), false, 'KEEP');
 
     const toggle = screen.getByText('Skip ancestor folders that already exist').closest('label')!.querySelector('input')!;
     (toggle as HTMLInputElement).click();
     await vi.advanceTimersByTimeAsync(300);
 
-    await waitFor(() => expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), true));
+    await waitFor(() => expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), true, 'KEEP'));
 
     screen.getByRole('button', { name: 'Import' }).click();
-    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), true);
+    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), true, 'KEEP');
     vi.useRealTimers();
   });
 
@@ -320,7 +320,7 @@ describe('ProjectSettingsImportComponent', () => {
     const importBtn = screen.getByRole('button', { name: 'Import' }) as HTMLButtonElement;
     expect(importBtn.disabled).toBe(false);
     importBtn.click();
-    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false);
+    expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false, 'KEEP');
   });
 
   it('keeps Import disabled when a conflict refuses the whole import next to rejected records', async () => {
@@ -344,6 +344,109 @@ describe('ProjectSettingsImportComponent', () => {
     expect(screen.getByText('Bob').closest('section')!.textContent).toContain('Blocking issues');
     expect(screen.getByText('Ada').closest('section')!.textContent).toContain('Not imported');
     expect((screen.getByRole('button', { name: 'Import' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  describe('release state (M27.5.2)', () => {
+    // Shapes of the real `POST …/import/analyze` response (`ConflictReportView`): every field the server sends.
+    const protocol8Report = (releaseMode: 'KEEP' | 'DRAFT'): ConflictReportView => ({
+      conflicts:
+        releaseMode === 'KEEP'
+          ? [
+              {
+                severity: 'WARNING',
+                type: 'RELEASE_LOCALE_MISSING',
+                elementUuid: '0199a0f2-6c1e-7c11-9a3b-1d2e3f405061',
+                elementLabel: 'About',
+                detail: "Released in 'en', which this project doesn't have: imported as not released there.",
+                explicit: true,
+                blocksImport: false,
+              },
+            ]
+          : [],
+      hasBlocking: false,
+      blocksImport: false,
+      releaseState: true,
+      releaseMode,
+    });
+    const protocol7Report: ConflictReportView = {
+      conflicts: [
+        {
+          severity: 'INFO',
+          type: 'ARCHIVE_WITHOUT_RELEASE_STATE',
+          detail: 'This archive has no release state — everything is imported as draft.',
+          explicit: true,
+          blocksImport: false,
+        },
+      ],
+      hasBlocking: false,
+      blocksImport: false,
+      releaseState: false,
+      releaseMode: 'DRAFT',
+    };
+
+    async function renderWith(api: ReturnType<typeof makeApiStub>) {
+      await render(ProjectSettingsImportComponent, {
+        componentInputs: { projectKey: 'proj' },
+        providers: [provideHttpClient(), provideHttpClientTesting(), { provide: ImportExportService, useValue: api }],
+      });
+      selectFile(document.querySelector('input[type="file"]') as HTMLInputElement, zipFile());
+    }
+
+    it('keeps the release state by default and sends KEEP; a missing language is listed with the warnings', async () => {
+      const api = makeApiStub({
+        analyzeImport: vi.fn().mockReturnValue(of(protocol8Report('KEEP'))),
+        commitImport: vi.fn().mockReturnValue(of({ ...importResult, releasedCount: 4 })),
+      });
+      await renderWith(api);
+
+      const keep = (await screen.findByRole('radio', { name: /Keep release state from the archive/ })) as HTMLInputElement;
+      expect(keep.checked).toBe(true);
+      expect((screen.getByRole('radio', { name: /Import everything as draft/ }) as HTMLInputElement).checked).toBe(false);
+      expect(api.analyzeImport).toHaveBeenCalledWith('proj', expect.any(File), false, 'KEEP');
+      expect(screen.getByText('About').closest('section')!.textContent).toContain('Warnings');
+      expect(screen.getByText('About').closest('li')!.querySelector('sf-icon')!.textContent!.trim()).toBe('translate');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+      expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false, 'KEEP');
+      await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Kept 4 release(s).'));
+    });
+
+    it('re-analyzes with DRAFT when switched, and imports as DRAFT', async () => {
+      const api = makeApiStub({
+        analyzeImport: vi.fn((_key: string, _file: File, _skip: boolean, mode: 'KEEP' | 'DRAFT') => of(protocol8Report(mode))),
+        commitImport: vi.fn().mockReturnValue(of(importResult)),
+      });
+      await renderWith(api);
+
+      fireEvent.click(await screen.findByRole('radio', { name: /Import everything as draft/ }));
+
+      await waitFor(() => expect(api.analyzeImport).toHaveBeenLastCalledWith('proj', expect.any(File), false, 'DRAFT'));
+      // Only a kept release state can miss a language: the warning goes with the switch.
+      await waitFor(() => expect(screen.getByText('No conflicts found')).toBeTruthy());
+      expect((screen.getByRole('radio', { name: /Import everything as draft/ }) as HTMLInputElement).checked).toBe(true);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+      expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false, 'DRAFT');
+    });
+
+    it('replaces the choice with a note for an archive without release state and imports it as DRAFT', async () => {
+      const api = makeApiStub({
+        analyzeImport: vi.fn().mockReturnValue(of(protocol7Report)),
+        commitImport: vi.fn().mockReturnValue(of(importResult)),
+      });
+      await renderWith(api);
+
+      await waitFor(() =>
+        expect(screen.getByText('This archive has no release state — everything is imported as draft.')).toBeTruthy(),
+      );
+      expect(screen.queryByRole('radio')).toBeNull();
+      // The info entry is no warning: the archive is still clean.
+      expect(screen.getByText('No conflicts found')).toBeTruthy();
+      expect(screen.queryByText('Warnings')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+      expect(api.commitImport).toHaveBeenCalledWith('proj', expect.any(File), false, 'DRAFT');
+    });
   });
 
   it('gives each record-set conflict (M25) its own icon', async () => {

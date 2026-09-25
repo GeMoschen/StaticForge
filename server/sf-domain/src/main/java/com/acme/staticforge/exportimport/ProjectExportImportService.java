@@ -27,8 +27,16 @@ public interface ProjectExportImportService {
      * read. An older server would place such a record under a set it can't read; this one reads a protocol
      * {@code <= 6} archive's records (which sit in Content folders) as {@code RECORD_OUTSIDE_RECORD_SET} and
      * imports everything else. The file layout itself is unchanged.
+     *
+     * <p>Bumped to {@code 8} by M27: each asset file carries its open release pointers ({@link ExportedRelease}, with
+     * the released version's content where it differs from the draft), deletion-pending assets are exported as
+     * tombstones with their released versions, and a localized media asset's per-locale files travel as blobs. An
+     * archive of protocol {@code <= 7} has no release state and imports as drafts ({@link ReleaseMode#DRAFT}).
      */
-    int PROTOCOL_VERSION = 7;
+    int PROTOCOL_VERSION = 8;
+
+    /** The first protocol whose archives carry release state (M27.5.1). */
+    int RELEASE_STATE_PROTOCOL = 8;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP

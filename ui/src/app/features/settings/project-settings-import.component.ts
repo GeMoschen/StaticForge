@@ -6,6 +6,7 @@ import {
   ImportConflictView,
   ImportExportService,
   ImportResultView,
+  ReleaseMode,
   extractConflicts,
 } from './import-export.service';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -39,6 +40,7 @@ const CONFLICT_ICONS: Record<string, string> = {
   TARGET_PATH_COLLISION: 'drive_file_move',
   LOCALE_CONFIG_MISMATCH: 'translate',
   LOCALIZATION_SHAPE_MISMATCH: 'translate',
+  RELEASE_LOCALE_MISSING: 'translate',
 };
 
 /**
@@ -63,6 +65,10 @@ export function rejectsAssetOnly(conflict: ImportConflictView): boolean {
  * <p>Import is gated on conflicts that refuse the whole import (`blocksImport`), not on every `BLOCKING`
  * one: assets whose conflict rejects only themselves are listed under "Not imported" and simply stay out
  * (M25: records from before record sets).
+ *
+ * <p>Release state (M27.5.2): once the analysis says whether the archive carries release state, the user chooses to
+ * keep it (default) or import everything as a draft; the choice is re-analyzed (only a kept release state can miss
+ * languages) and sent with the import. An archive without release state shows a note instead of the choice.
  */
 @Component({
   selector: 'sf-project-settings-import',
@@ -100,6 +106,14 @@ export class ProjectSettingsImportComponent {
   protected readonly skipExistingImplicit = signal(false);
   private readonly skipExistingImplicit$ = new Subject<boolean>();
 
+  /** Keep the archive's release state, or import everything as a draft (M27.5.2). */
+  protected readonly releaseMode = signal<ReleaseMode>('KEEP');
+  /**
+   * Whether the loaded archive carries release state, from its last analysis; `null` until one answers. Kept apart
+   * from `report` so the choice doesn't disappear while a changed option is re-analyzed.
+   */
+  protected readonly archiveHasReleaseState = signal<boolean | null>(null);
+
   /** The analysis in flight — dropped when the archive or the project changes before it answers. */
   private analysis: Subscription | null = null;
 
@@ -134,11 +148,12 @@ export class ProjectSettingsImportComponent {
     // sent to `commitImport()`.
     effect(() => {
       const skip = this.skipExistingImplicit();
+      const releaseMode = this.releaseMode();
       const file = this.file();
       if (!file) {
         return;
       }
-      untracked(() => this.analyze(file, skip));
+      untracked(() => this.analyze(file, skip, releaseMode));
     });
 
     // The router reuses this screen when only the project changes (`/p/a/settings/…` → `/p/b/settings/…`): an
@@ -194,6 +209,10 @@ export class ProjectSettingsImportComponent {
     this.skipExistingImplicit$.next((event.target as HTMLInputElement).checked);
   }
 
+  protected onReleaseModeChange(mode: ReleaseMode): void {
+    this.releaseMode.set(mode);
+  }
+
   private pickFile(file: File | null): void {
     if (!file || this.readOnly()) {
       return;
@@ -205,19 +224,22 @@ export class ProjectSettingsImportComponent {
     this.pickError.set(null);
     this.result.set(null);
     this.commitError.set(null);
+    this.releaseMode.set('KEEP');
+    this.archiveHasReleaseState.set(null);
     // Setting `file` here triggers the constructor's analyze-on-change effect below — no
     // direct `analyze()` call needed.
     this.file.set(file);
   }
 
-  private analyze(file: File, skipExistingImplicit: boolean): void {
+  private analyze(file: File, skipExistingImplicit: boolean, releaseMode: ReleaseMode): void {
     this.analyzing.set(true);
     this.report.set(null);
     this.analysis?.unsubscribe();
-    this.analysis = this.api.analyzeImport(this.projectKey(), file, skipExistingImplicit).subscribe({
+    this.analysis = this.api.analyzeImport(this.projectKey(), file, skipExistingImplicit, releaseMode).subscribe({
       next: (report) => {
         this.analyzing.set(false);
         this.report.set(report);
+        this.archiveHasReleaseState.set(report.releaseState !== false);
       },
       error: () => {
         this.analyzing.set(false);
@@ -238,6 +260,8 @@ export class ProjectSettingsImportComponent {
     this.pickError.set(null);
     this.commitError.set(null);
     this.result.set(null);
+    this.releaseMode.set('KEEP');
+    this.archiveHasReleaseState.set(null);
   }
 
   commit(): void {
@@ -247,12 +271,15 @@ export class ProjectSettingsImportComponent {
     }
     this.committing.set(true);
     this.commitError.set(null);
-    this.api.commitImport(this.projectKey(), file, this.skipExistingImplicit()).subscribe({
+    // Without release state the server imports drafts whatever is sent; send what the analysis applied.
+    const releaseMode: ReleaseMode = this.archiveHasReleaseState() === false ? 'DRAFT' : this.releaseMode();
+    this.api.commitImport(this.projectKey(), file, this.skipExistingImplicit(), releaseMode).subscribe({
       next: (result) => {
         this.committing.set(false);
         this.result.set(result);
         this.file.set(null);
         this.report.set(null);
+        this.archiveHasReleaseState.set(null);
         // A committed import can create folders (and move/rename existing ones) that
         // `ProjectContextStore`'s folder trees — loaded once per project and otherwise only
         // refreshed by each store screen's own CRUD actions — have no other way to learn about,
@@ -260,10 +287,12 @@ export class ProjectSettingsImportComponent {
         // folder structure until a full page reload re-fetches the store from scratch.
         this.store.loadFor(this.projectKey(), true).subscribe();
         const updated = result.updatedAssetCount ?? 0;
+        const released = result.releasedCount ?? 0;
         this.toasts.show(
           `Imported ${result.importedAssetCount ?? 0} asset(s)`
             + (updated > 0 ? `, overwrote ${updated}` : '')
-            + `, ${result.importedBlobCount ?? 0} blob(s)`,
+            + `, ${result.importedBlobCount ?? 0} blob(s)`
+            + (released > 0 ? `, ${released} release(s) kept` : ''),
           'success',
         );
       },
@@ -275,6 +304,8 @@ export class ProjectSettingsImportComponent {
             conflicts: freshConflicts,
             hasBlocking: freshConflicts.some((c) => c.severity === 'BLOCKING'),
             blocksImport: freshConflicts.some(refusesImport),
+            releaseState: this.archiveHasReleaseState() !== false,
+            releaseMode,
           });
           this.commitError.set(
             'Conflicts changed since you last checked this archive — please re-check it.',

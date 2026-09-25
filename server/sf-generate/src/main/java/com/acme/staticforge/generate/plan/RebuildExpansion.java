@@ -11,6 +11,7 @@ import com.acme.staticforge.asset.ReferenceRow;
 import com.acme.staticforge.asset.dataset.RecordTemplates;
 import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.generate.insight.RebuildEdgeKind;
@@ -137,18 +138,21 @@ public class RebuildExpansion {
     private final AssetReferenceRepository references;
     private final AssetReleaseRepository releases;
     private final ReleaseStates releaseStates;
+    private final ReferenceMaterializer materializer;
 
     public RebuildExpansion(
             AssetVersionRepository versions,
             AssetUidHistoryRepository uidHistory,
             AssetReferenceRepository references,
             AssetReleaseRepository releases,
-            ReleaseStates releaseStates) {
+            ReleaseStates releaseStates,
+            ReferenceMaterializer materializer) {
         this.versions = versions;
         this.uidHistory = uidHistory;
         this.references = references;
         this.releases = releases;
         this.releaseStates = releaseStates;
+        this.materializer = materializer;
     }
 
     /**
@@ -208,11 +212,20 @@ public class RebuildExpansion {
                 .run();
     }
 
-    /** The edges a walk follows: those valid at the snapshot revision and those of lagging released versions. */
+    /**
+     * The edges a walk follows: those valid at the snapshot revision and those of lagging released versions — read
+     * from {@code asset_reference}, or extracted from the payload of a released version an import wrote (M27.5.1),
+     * whose edges were never materialized.
+     */
     private List<ReferenceRow> rows(Snapshot snapshot) {
         Set<ReferenceRow> rows = new LinkedHashSet<>(references.findRowsValidAtByProject(snapshot.projectId(), snapshot.revision()));
         if (snapshot.view() == SnapshotView.RELEASED) {
             rows.addAll(releases.findReleasedEdgeRowsValidAt(snapshot.projectId(), snapshot.revision()));
+            for (AssetVersion version : releases.findUnmaterializedReleasedVersionsValidAt(snapshot.projectId(), snapshot.revision())) {
+                materializer.extract(snapshot.projectId(), version.getAsset().getAssetType(), version.getPayload())
+                        .forEach(edge -> rows.add(
+                                new ReferenceRow(version.getAssetId(), edge.toAssetId(), edge.kind(), edge.sourcePath())));
+            }
         }
         return List.copyOf(rows);
     }

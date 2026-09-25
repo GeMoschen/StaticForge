@@ -1,0 +1,16 @@
+{
+  "uuid": "b16762b0-4322-4725-a92c-3c0a1ab4273e",
+  "type": "FOLDER",
+  "uid": "globals_root",
+  "displayName": "All Globals",
+  "parentFolderUuid": "ccb15e4c-7b2d-42db-a1fd-5544c79dddcf",
+  "folderPath": "/globals_root/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "GLOBALS",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

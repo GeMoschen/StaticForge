@@ -1,0 +1,16 @@
+{
+  "uuid": "324145a0-fc35-4423-958a-97a480e80163",
+  "type": "FOLDER",
+  "uid": "navigation_root",
+  "displayName": "All Navigation",
+  "parentFolderUuid": "ccb15e4c-7b2d-42db-a1fd-5544c79dddcf",
+  "folderPath": "/navigation_root/",
+  "templateUuid": null,
+  "payload": {
+    "scope": "NAVIGATION",
+    "protected": true
+  },
+  "mimeType": null,
+  "sizeBytes": null,
+  "explicit": true
+}

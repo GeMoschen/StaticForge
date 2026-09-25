@@ -9,6 +9,7 @@ import com.acme.staticforge.exportimport.ConflictReport;
 import com.acme.staticforge.exportimport.ImportOptions;
 import com.acme.staticforge.exportimport.ImportResult;
 import com.acme.staticforge.exportimport.ProjectExportImportService;
+import com.acme.staticforge.exportimport.ReleaseMode;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
@@ -27,6 +28,10 @@ import org.springframework.web.multipart.MultipartFile;
  * {@link ProjectExportController} and recreates the exported assets in the target project
  * with fresh UUIDs and import provenance. Mutations flow through the real service layer so
  * every imported asset is a revisioned, attributable change.
+ *
+ * <p>{@code releaseMode} (M27.5.1): {@code KEEP} (default) keeps the archive's release state, {@code DRAFT} imports
+ * everything as a draft. An archive without release state (protocol {@code <= 7}) always imports as drafts; the
+ * analysis says which mode applies ({@code releaseState}, {@code releaseMode}).
  */
 @RestController
 @RequestMapping("/api/v1/projects/{projectKey}")
@@ -50,13 +55,15 @@ public class ProjectImportController {
     public ImportResultView importArchive(
             @PathVariable String projectKey,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(defaultValue = "false") boolean skipExistingImplicit) {
+            @RequestParam(defaultValue = "false") boolean skipExistingImplicit,
+            @RequestParam(defaultValue = "KEEP") ReleaseMode releaseMode) {
         long projectId = projectService.requireByKey(projectKey).getId();
         RevisionContext ctx = RevisionContext.of(projectId, securitySupport.currentUserId(), "import project");
         ImportResult result = exportImportService.importProject(
-                projectId, bytes(file), ctx, new ImportOptions(skipExistingImplicit));
+                projectId, bytes(file), ctx, new ImportOptions(skipExistingImplicit, releaseMode));
         return new ImportResultView(
-                result.sourceProjectKey(), result.importedAssetCount(), result.updatedAssetCount(), result.importedBlobCount());
+                result.sourceProjectKey(), result.importedAssetCount(), result.updatedAssetCount(), result.importedBlobCount(),
+                result.releasedCount());
     }
 
     @AllowedOnArchivedProject("Analyzes an archive against the project, imports nothing.")
@@ -65,10 +72,11 @@ public class ProjectImportController {
     public ConflictReportView analyzeImport(
             @PathVariable String projectKey,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(defaultValue = "false") boolean skipExistingImplicit) {
+            @RequestParam(defaultValue = "false") boolean skipExistingImplicit,
+            @RequestParam(defaultValue = "KEEP") ReleaseMode releaseMode) {
         long projectId = projectService.requireByKey(projectKey).getId();
         ConflictReport report = exportImportService.analyzeImport(
-                projectId, bytes(file), new ImportOptions(skipExistingImplicit));
+                projectId, bytes(file), new ImportOptions(skipExistingImplicit, releaseMode));
         return toView(report);
     }
 
@@ -78,7 +86,8 @@ public class ProjectImportController {
                         c.severity().name(), c.type().name(), c.elementUuid(), c.elementLabel(), c.detail(),
                         c.explicit(), c.blocksImport()))
                 .toList();
-        return new ConflictReportView(conflicts, report.hasBlocking(), report.blocksImport());
+        return new ConflictReportView(
+                conflicts, report.hasBlocking(), report.blocksImport(), report.releaseState(), report.releaseMode().name());
     }
 
     private static byte[] bytes(MultipartFile file) {
