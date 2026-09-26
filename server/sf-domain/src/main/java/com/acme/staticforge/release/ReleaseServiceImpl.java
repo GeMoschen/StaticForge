@@ -12,6 +12,7 @@ import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.media.MediaFiles;
+import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.ProjectLocales;
 import com.acme.staticforge.revision.AssetChange;
@@ -105,8 +106,10 @@ public class ReleaseServiceImpl implements ReleaseService {
     // Dry run
     // ------------------------------------------------------------------
 
+    // A refused plan writes nothing, so it must not doom a caller's transaction it joined: an import validates the
+    // schedules of its archive with it and imports the rest when one is refused (M27.8.1).
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = SfException.class)
     public ReleasePlan plan(long projectId, List<ReleaseItem> items) {
         Resolution resolution = resolve(projectId, items);
         ReleaseCompleteness.Checker checker = completeness.checker(projectId);

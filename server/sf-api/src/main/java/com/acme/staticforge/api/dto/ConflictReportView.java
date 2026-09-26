@@ -11,7 +11,9 @@ import java.util.List;
  * {@code releaseMode} ({@code KEEP} | {@code DRAFT}): the mode the import applies — the requested one, or {@code
  * DRAFT} for an archive without release state, which also lists an {@code INFO} entry {@code
  * ARCHIVE_WITHOUT_RELEASE_STATE}.
+ *
+ * <p>{@code scheduleCount} (M27.8.1): the schedules the archive carries, whether or not the import brings them.
  */
 public record ConflictReportView(
         List<ImportConflictView> conflicts, boolean hasBlocking, boolean blocksImport, boolean releaseState,
-        String releaseMode) {}
+        String releaseMode, int scheduleCount) {}

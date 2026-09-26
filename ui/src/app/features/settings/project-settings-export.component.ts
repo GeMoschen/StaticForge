@@ -142,6 +142,8 @@ export class ProjectSettingsExportComponent {
 
   protected readonly includeChannels = signal(false);
   protected readonly includeGenerationTargets = signal(false);
+  /** The open schedules (M27.8.2): a release or unpublish only when all its assets are selected, a build always. */
+  protected readonly includeSchedules = signal(false);
 
   protected readonly exporting = signal(false);
   protected readonly exportError = signal<string | null>(null);
@@ -151,7 +153,8 @@ export class ProjectSettingsExportComponent {
       this.selected().size === 0 &&
       this.fullStores().size === 0 &&
       !this.includeChannels() &&
-      !this.includeGenerationTargets(),
+      !this.includeGenerationTargets() &&
+      !this.includeSchedules(),
   );
 
   constructor() {
@@ -550,6 +553,10 @@ export class ProjectSettingsExportComponent {
     this.includeGenerationTargets.set((event.target as HTMLInputElement).checked);
   }
 
+  protected onToggleSchedules(event: Event): void {
+    this.includeSchedules.set((event.target as HTMLInputElement).checked);
+  }
+
   // ── Export ───────────────────────────────────────────────────────────────
 
   protected exportNow(): void {
@@ -561,6 +568,7 @@ export class ProjectSettingsExportComponent {
       includeChannels: this.includeChannels(),
       includeGenerationTargets: this.includeGenerationTargets(),
       fullStores: Array.from(this.fullStores()),
+      includeSchedules: this.includeSchedules(),
     };
     this.exporting.set(true);
     this.exportError.set(null);

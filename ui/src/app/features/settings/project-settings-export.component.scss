@@ -193,6 +193,26 @@
   cursor: pointer;
 }
 
+/* A toggle with a hint under its label: the box aligns with the label's first line. */
+.options__toggle:has(.options__hint) {
+  align-items: flex-start;
+}
+
+.options__toggle:has(.options__hint) input {
+  margin-top: 0.2em;
+}
+
+.options__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.options__hint {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
 .export__actions {
   display: flex;
   justify-content: flex-end;

@@ -32,8 +32,12 @@ public interface ProjectExportImportService {
      * the released version's content where it differs from the draft), deletion-pending assets are exported as
      * tombstones with their released versions, and a localized media asset's per-locale files travel as blobs. An
      * archive of protocol {@code <= 7} has no release state and imports as drafts ({@link ReleaseMode#DRAFT}).
+     *
+     * <p>Bumped to {@code 9} by M27.8: an archive carries the project's open schedules ({@link ExportedSchedule},
+     * {@code schedules/<uuid>.json}) and each generation target's uuid, which the schedules name. An older server
+     * would drop the schedules silently; an archive of protocol {@code <= 8} has none.
      */
-    int PROTOCOL_VERSION = 8;
+    int PROTOCOL_VERSION = 9;
 
     /** The first protocol whose archives carry release state (M27.5.1). */
     int RELEASE_STATE_PROTOCOL = 8;
@@ -42,7 +46,7 @@ public interface ProjectExportImportService {
      * Serializes every one of the project's current assets and media blobs into a ZIP
      * archive. A thin convenience over {@link #exportSelection}: delegates with a
      * selection that means "everything" (every current asset UUID, both settings flags
-     * {@code true}), so its output is unaffected by selective-export support.
+     * {@code true}, every open schedule — M27.8.1), so its output is unaffected by selective-export support.
      */
     byte[] exportProject(long projectId);
 

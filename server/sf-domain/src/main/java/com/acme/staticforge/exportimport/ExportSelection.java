@@ -18,10 +18,24 @@ import java.util.UUID;
  * {@code null} {@code fullStores} is treated identically to an empty set everywhere it's
  * consumed.
  *
+ * <p>{@code includeSchedules} (M27.8.1) adds the project's open schedules: a release or unpublish only when every
+ * asset it works on is in the archive, a generation always.
+ *
  * <p>An empty/{@code null} {@code assetUuids}, empty/{@code null} {@code fullStores}, and
  * both flags {@code false} means nothing would be exported; {@link
  * ProjectExportImportServiceImpl#exportSelection} rejects that case rather than silently
  * producing an empty archive — validation lives there, not in this plain data holder.
  */
 public record ExportSelection(
-        Set<UUID> assetUuids, boolean includeChannels, boolean includeGenerationTargets, Set<FolderScope> fullStores) {}
+        Set<UUID> assetUuids,
+        boolean includeChannels,
+        boolean includeGenerationTargets,
+        Set<FolderScope> fullStores,
+        boolean includeSchedules) {
+
+    /** A selection without schedules. */
+    public ExportSelection(
+            Set<UUID> assetUuids, boolean includeChannels, boolean includeGenerationTargets, Set<FolderScope> fullStores) {
+        this(assetUuids, includeChannels, includeGenerationTargets, fullStores, false);
+    }
+}

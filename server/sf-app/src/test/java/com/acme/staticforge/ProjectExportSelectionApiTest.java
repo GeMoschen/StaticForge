@@ -54,6 +54,9 @@ class ProjectExportSelectionApiTest {
     @Autowired com.acme.staticforge.project.ProjectService projectService;
     @Autowired AssetService assetService;
     @Autowired JwtService jwtService;
+    @Autowired com.acme.staticforge.scheduler.ScheduleService scheduleService;
+    @Autowired com.acme.staticforge.generate.GenerationTargetRepository targetRepository;
+    @Autowired SchedulerFixtures schedulerFixtures;
 
     @Test
     void selectionOfAFolderReturnsZipContainingExactlyThatSubtree() throws Exception {
@@ -134,6 +137,37 @@ class ProjectExportSelectionApiTest {
         assertThat(entryNames).contains("manifest.json", "settings.json");
         assertThat(entryNames).noneMatch(name -> name.equals("assets.json") || name.startsWith("assets/"));
         assertThat(parseAssets(archive)).isEmpty();
+    }
+
+    /** {@code includeSchedules} (M27.8.1) alone is a selection: the archive carries the project's generation schedules. */
+    @Test
+    void schedulesOnlySelectionCarriesTheSchedules() throws Exception {
+        Fixture fixture = newFixture("exp_sel_sched");
+        long projectId = fixture.project().getId();
+        var target = targetRepository.save(new com.acme.staticforge.generate.GenerationTarget(
+                projectId, "default", com.acme.staticforge.generate.TargetType.FILESYSTEM, MAPPER.createObjectNode(), true));
+        ObjectNode params = MAPPER.createObjectNode().put("mode", "FULL").put("targetId", target.getId());
+        var schedule = scheduleService.create(projectId, new com.acme.staticforge.scheduler.ScheduleService.Command(
+                "GENERATION", java.time.Instant.now().plus(java.time.Duration.ofDays(2)), null, null, null, null, null, null,
+                params), fixture.user().getId());
+        try {
+            ObjectNode requestBody = MAPPER.createObjectNode();
+            requestBody.putArray("assetUuids");
+            requestBody.put("includeSchedules", true);
+
+            MvcResult result = mvc.perform(post("/api/v1/projects/" + fixture.project().getKey() + "/export/selection")
+                            .header("Authorization", "Bearer " + fixture.token())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(requestBody.toString()))
+                    .andExpect(status().isOk())
+                    .andReturn();
+
+            assertThat(zipEntryNames(result.getResponse().getContentAsByteArray()))
+                    .contains("manifest.json", "schedules/" + schedule.getUuid() + ".json")
+                    .noneMatch(name -> name.startsWith("assets/"));
+        } finally {
+            schedulerFixtures.retire(projectId);
+        }
     }
 
     @Test

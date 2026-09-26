@@ -28,6 +28,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -301,6 +302,112 @@ public class ScheduleService {
         detail.put("repinned", true);
         record(action, actorUserId, "SCHEDULE_UPDATED", detail);
         return action;
+    }
+
+    // ------------------------------------------------------------------
+    // Import (M27.8.1)
+    // ------------------------------------------------------------------
+
+    /**
+     * A schedule as an import brings it.
+     *
+     * @param command timing, policies and the type's stored params (resolved items with pins, target ids of this project)
+     * @param status {@code PENDING}, or {@code FAILED} for a paused recurring schedule
+     * @param createdByUserId the matching user of the archive's creator; {@code null} when there is none
+     */
+    public record ImportCommand(
+            UUID uuid, Command command, ActionStatus status, long ownerUserId, Long createdByUserId, Instant createdAt) {}
+
+    /** What {@link #importAction} did. */
+    public sealed interface ImportOutcome {
+
+        /** A new schedule. */
+        record Created(ScheduledAction action) implements ImportOutcome {}
+
+        /** The open schedule with the same uuid was replaced in place (its id and history kept). */
+        record Replaced(ScheduledAction action) implements ImportOutcome {}
+
+        /** The schedule with the same uuid was left alone: {@code reason} says it "is executing" or "has finished (…)". */
+        record Kept(ScheduledAction action, String reason) implements ImportOutcome {}
+
+        /** The schedule fails the checks a create applies; {@code code} is the problem code. */
+        record Refused(String code, String message) implements ImportOutcome {}
+    }
+
+    /**
+     * Writes a schedule an import brings (M27.8.1), inside the import's transaction. It is checked like a create —
+     * timing, policies, the type's validation and the owner's authority — and a refusal is returned, never thrown, so
+     * the rest of the import commits. The schedule with the same uuid in the project is replaced when it is open
+     * (pending, or a paused recurring one): the import wins, as it does for assets. One that executes, or that has
+     * finished, is left alone. The archive's status is kept — a paused recurring schedule stays paused — and the
+     * next run is computed from now; there is no lease.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ImportOutcome importAction(long projectId, ImportCommand imported, long importerUserId, String sourceProjectKey) {
+        Command command = imported.command();
+        ScheduledActionHandler handler = handlers.find(command.type()).orElse(null);
+        if (handler == null) {
+            return new ImportOutcome.Refused(SchedulerProblems.UNKNOWN_TYPE, "Unknown schedule type '" + command.type() + "'.");
+        }
+        ScheduledAction existing = actions.findByProjectIdAndUuid(projectId, imported.uuid()).orElse(null);
+        if (existing != null) {
+            if (!existing.getType().equals(handler.type())) {
+                return new ImportOutcome.Refused(SchedulerProblems.INVALID_PARAMS, "Schedule #" + existing.getId()
+                        + " has this identity with another type (" + existing.getType() + ").");
+            }
+            if (existing.getStatus() == ActionStatus.RUNNING
+                    || executions.findFirstByActionIdAndFinishedAtIsNullOrderByIdDesc(existing.getId()).isPresent()) {
+                return new ImportOutcome.Kept(existing, "is executing");
+            }
+            if (!isOpen(existing)) {
+                return new ImportOutcome.Kept(existing, "has finished (" + existing.getStatus() + ")");
+            }
+        }
+        Instant now = clock.instant();
+        // Validated on a detached copy, so a refusal leaves an existing schedule untouched.
+        ScheduledAction checked = new ScheduledAction(projectId, imported.uuid(), handler.type(),
+                imported.createdByUserId(), imported.ownerUserId(), imported.createdAt());
+        ActionSpec spec;
+        try {
+            spec = apply(checked, handler, command, command.params(), imported.ownerUserId(), now);
+        } catch (SfException refused) {
+            Object code = refused.getProblem().getExtensions().get("code");
+            return new ImportOutcome.Refused(
+                    code == null ? null : code.toString(), refused.getProblem().getDetail());
+        }
+        boolean paused = imported.status() == ActionStatus.FAILED && checked.isRecurring();
+        ScheduledAction action = existing == null ? checked : existing;
+        if (existing != null) {
+            existing.setParams(checked.getParams());
+            existing.setPinPolicy(checked.getPinPolicy());
+            existing.setThenGenerate(checked.getThenGenerate());
+            existing.setMissedPolicy(checked.getMissedPolicy());
+            existing.setMaxLateness(checked.getMaxLateness());
+            existing.setRunAt(checked.getRunAt());
+            existing.setCron(checked.getCron());
+            existing.setZoneId(checked.getZoneId());
+            existing.setOwnerUserId(imported.ownerUserId());
+            existing.clearLease();
+        }
+        action.setStatus(paused ? ActionStatus.FAILED : ActionStatus.PENDING);
+        action.setNextRunAt(paused ? null : checked.getNextRunAt());
+        action.setUpdatedAt(now);
+        action = actions.saveAndFlush(action);
+        writeAssets(action, handler, spec);
+        ObjectNode detail = timing(action);
+        detail.put("imported", true);
+        detail.put("sourceProjectKey", sourceProjectKey);
+        detail.put("replaced", existing != null);
+        detail.put("ownerUserId", action.getOwnerUserId());
+        record(action, importerUserId, "SCHEDULE_IMPORTED", detail);
+        return existing == null ? new ImportOutcome.Created(action) : new ImportOutcome.Replaced(action);
+    }
+
+    /** Pending, or recurring and paused: what an export carries and an import may replace (M27.8.1). */
+    public static boolean isOpen(ScheduledAction action) {
+        return action.getStatus() == ActionStatus.PENDING
+                || action.getStatus() == ActionStatus.RUNNING
+                || (action.getStatus() == ActionStatus.FAILED && action.isRecurring());
     }
 
     // ------------------------------------------------------------------

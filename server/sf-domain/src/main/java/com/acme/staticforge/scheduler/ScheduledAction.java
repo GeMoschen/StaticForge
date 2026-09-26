@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -23,6 +24,9 @@ import org.hibernate.type.SqlTypes;
  *
  * <p>{@code type} is a {@link ScheduledActionHandler#type()} and stays a string so a new action type is a new handler
  * bean, with no schema change; {@code params} is that handler's own, validated shape.
+ *
+ * <p>{@code uuid} (M27.8.1) is the action's stable identity, unique per project: an export archive names it, and a
+ * re-import of that archive replaces the action it names.
  */
 @Entity
 @Table(name = "scheduled_action")
@@ -34,6 +38,9 @@ public class ScheduledAction {
 
     @Column(name = "project_id", nullable = false)
     private Long projectId;
+
+    @Column(name = "uuid", nullable = false, updatable = false)
+    private UUID uuid;
 
     @Column(name = "type", nullable = false, length = 40)
     private String type;
@@ -98,10 +105,16 @@ public class ScheduledAction {
     protected ScheduledAction() {}
 
     public ScheduledAction(long projectId, String type, Long createdBy, Instant createdAt) {
+        this(projectId, UUID.randomUUID(), type, createdBy, createdBy, createdAt);
+    }
+
+    /** An action with a given identity, creator and owner: an imported one (M27.8.1). */
+    public ScheduledAction(long projectId, UUID uuid, String type, Long createdBy, Long ownerUserId, Instant createdAt) {
         this.projectId = projectId;
+        this.uuid = uuid;
         this.type = type;
         this.createdBy = createdBy;
-        this.ownerUserId = createdBy;
+        this.ownerUserId = ownerUserId;
         this.createdAt = createdAt;
         this.updatedAt = createdAt;
         this.status = ActionStatus.PENDING;
@@ -128,6 +141,10 @@ public class ScheduledAction {
 
     public Long getProjectId() {
         return projectId;
+    }
+
+    public UUID getUuid() {
+        return uuid;
     }
 
     public String getType() {

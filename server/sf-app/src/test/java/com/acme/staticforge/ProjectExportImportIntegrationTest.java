@@ -1826,9 +1826,9 @@ class ProjectExportImportIntegrationTest {
 
         ExportManifest manifest = parseManifest(archive);
         // Bumped to 6 by M24.5.1 (the project's content languages in settings.json), to 7 by M25.4.1 (record sets),
-        // to 8 by M27.5.1 (release state).
+        // to 8 by M27.5.1 (release state), to 9 by M27.8.1 (schedules).
         assertThat(manifest.protocolVersion()).isEqualTo(ProjectExportImportService.PROTOCOL_VERSION);
-        assertThat(manifest.protocolVersion()).isEqualTo(8);
+        assertThat(manifest.protocolVersion()).isEqualTo(9);
     }
 
     /**

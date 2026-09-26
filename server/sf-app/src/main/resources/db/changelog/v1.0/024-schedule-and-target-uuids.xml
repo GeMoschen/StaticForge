@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M27.8.1: stable identities for schedules and generation targets, unique per project. An export archive
+         (protocol 9) names a schedule and the target it builds to by these uuids instead of database ids, so a
+         re-import finds the schedule it replaces and a schedule finds its target in another instance. Existing rows
+         get a random uuid (per dialect); new rows get theirs from the entity. -->
+    <changeSet id="024-uuid-columns" author="sf">
+        <addColumn tableName="scheduled_action">
+            <column name="uuid" type="UUID"/>
+        </addColumn>
+        <addColumn tableName="generation_target">
+            <column name="uuid" type="UUID"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="024-uuid-backfill-postgresql" author="sf" dbms="postgresql">
+        <comment>Backfill (M27.8.1) — PostgreSQL (gen_random_uuid, built in since 13).</comment>
+        <sql>UPDATE scheduled_action SET uuid = gen_random_uuid() WHERE uuid IS NULL</sql>
+        <sql>UPDATE generation_target SET uuid = gen_random_uuid() WHERE uuid IS NULL</sql>
+    </changeSet>
+
+    <changeSet id="024-uuid-backfill-h2" author="sf" dbms="h2">
+        <comment>Backfill (M27.8.1) — H2.</comment>
+        <sql>UPDATE scheduled_action SET uuid = RANDOM_UUID() WHERE uuid IS NULL</sql>
+        <sql>UPDATE generation_target SET uuid = RANDOM_UUID() WHERE uuid IS NULL</sql>
+    </changeSet>
+
+    <changeSet id="024-uuid-constraints" author="sf">
+        <addNotNullConstraint tableName="scheduled_action" columnName="uuid" columnDataType="UUID"/>
+        <addUniqueConstraint tableName="scheduled_action" columnNames="project_id, uuid"
+                             constraintName="uq_scheduled_action_project_uuid"/>
+        <addNotNullConstraint tableName="generation_target" columnName="uuid" columnDataType="UUID"/>
+        <addUniqueConstraint tableName="generation_target" columnNames="project_id, uuid"
+                             constraintName="uq_generation_target_project_uuid"/>
+    </changeSet>
+
+</databaseChangeLog>

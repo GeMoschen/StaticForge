@@ -192,7 +192,8 @@ This milestone delivers:
 28. **Protocol 8** carries each asset's open release pointers (locale key + the version they point at, exported as
     "released payload" when it differs from the draft) and localized media files. The import analysis/dialog offers
     **keep release state from the archive** (default) or **import everything as draft**. Protocol ≤ 7 archives import
-    as drafts (`NEW`). Schedules are not exported.
+    as drafts (`NEW`). ~~Schedules are not exported.~~ *Amended 2026-09-26 (user request):* protocol 9 carries the
+    open schedules — see [08-schedule-export](08-schedule-export/README.md).
 
 ## Exit criteria (epic is done when)
 
@@ -229,6 +230,7 @@ This milestone delivers:
 | 5 | [export-import](05-export-import/README.md) | fullstack | 1.1, 3.1 |
 | 6 | [ui](06-ui/README.md) | frontend | 1–5 (per task) |
 | 7 | [docs-e2e](07-docs-e2e/README.md) | qa | 1–6 |
+| 8 | [schedule-export](08-schedule-export/README.md) | fullstack | 4, 5 (follow-up, 2026-09-26) |
 
 Features 3 and 4 can run in parallel with feature 2 once `M27.1.2` is done (different packages).
 
@@ -253,7 +255,8 @@ manifests, `consistentRevision`), `M23` (search index, facets), `M24` (locales, 
   media, `SF-GEN-0221` unreleased reference (warning). Assigned per task; Appendix B in `M27.7.1`.
 - **Not in scope:** approval / four-eyes workflow; editor permissions for release, schedules and builds (`M28`);
   housekeeping jobs on the scheduler (`M29`); link/SEO checks and redirects (`M30`); email or push notifications;
-  external schedulers (cron outside the app); exporting schedules; per-channel release.
+  external schedulers (cron outside the app); per-channel release. (Exporting schedules was out of scope until the
+  follow-up feature 8.)
 - **Spec follow-up (in `M27.7.1`):** §2.2 (non-goal narrowed), §5 (release pointer), §7 (`ChangeType`s, time travel of
   release state), §10.4 (lifecycle: release, unpublish, discard; structural drafts), §11 (localized media, output
   paths), §16.4 (unreleased references), §17, §18.1 (scheduled trigger), §18.2 (SNAPSHOT released view, PLAN seeds),

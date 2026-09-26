@@ -147,7 +147,36 @@ public enum ConflictType {
      * The archive predates release state (protocol {@code <= 7}, M27.5.1): everything imports as a draft, whatever
      * release mode was asked for.
      */
-    ARCHIVE_WITHOUT_RELEASE_STATE(ConflictSeverity.INFO);
+    ARCHIVE_WITHOUT_RELEASE_STATE(ConflictSeverity.INFO),
+
+    /**
+     * A schedule of the archive has the identity of one in the target project (M27.8.1): an open one is replaced in
+     * place, keeping its id and history — the import wins, as for assets; one that executes or has finished is left
+     * alone, and the archive's copy is not imported.
+     */
+    DUPLICATE_SCHEDULE(ConflictSeverity.WARNING),
+
+    /** A one-off schedule whose time has passed by the import (M27.8.1): not imported, so nothing fires late. */
+    SCHEDULE_OVERDUE(ConflictSeverity.WARNING),
+
+    /**
+     * The generation target a schedule builds to is neither in the archive nor in the target project, or was deleted
+     * before the export (M27.8.1): the schedule is not imported.
+     */
+    SCHEDULE_TARGET_MISSING(ConflictSeverity.WARNING),
+
+    /**
+     * A schedule fails the checks a new schedule gets (M27.8.1) — an asset or locale it works on is missing, a pinned
+     * version is incomplete, a channel is disabled, a scheduled deletion imported as draft: not imported. The detail
+     * names the {@code SF-DOM} code where there is one.
+     */
+    SCHEDULE_INVALID(ConflictSeverity.WARNING),
+
+    /**
+     * The owner of a schedule has no account in the target, or may not own it there (M27.8.1): the importing user
+     * becomes its owner.
+     */
+    SCHEDULE_OWNER_REPLACED(ConflictSeverity.WARNING);
 
     private final ConflictSeverity severity;
     private final boolean rejectsAssetOnly;

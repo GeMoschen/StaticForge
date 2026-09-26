@@ -16,6 +16,8 @@ export type ImportResultView = S['ImportResultView'];
  */
 export type ReleaseMode = 'KEEP' | 'DRAFT';
 
+// `importSchedules` (M27.8.2): whether an import brings the archive's schedules; the analysis counts them either way.
+
 const BASE = '/api/v1';
 
 /**
@@ -39,11 +41,13 @@ export class ImportExportService {
     file: File,
     skipExistingImplicit = false,
     releaseMode: ReleaseMode = 'KEEP',
+    importSchedules = true,
   ): Observable<ConflictReportView> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('skipExistingImplicit', String(skipExistingImplicit));
     formData.append('releaseMode', releaseMode);
+    formData.append('importSchedules', String(importSchedules));
     return this.http.post<ConflictReportView>(
       `${BASE}/projects/${projectKey}/import/analyze`,
       formData,
@@ -56,11 +60,13 @@ export class ImportExportService {
     file: File,
     skipExistingImplicit = false,
     releaseMode: ReleaseMode = 'KEEP',
+    importSchedules = true,
   ): Observable<ImportResultView> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('skipExistingImplicit', String(skipExistingImplicit));
     formData.append('releaseMode', releaseMode);
+    formData.append('importSchedules', String(importSchedules));
     return this.http.post<ImportResultView>(`${BASE}/projects/${projectKey}/import`, formData, {
       withCredentials: true,
     });

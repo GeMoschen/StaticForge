@@ -174,6 +174,7 @@ public class TargetController {
     private static GenerationTargetView toView(String projectKey, GenerationTarget target) {
         return new GenerationTargetView(
                 target.getId(),
+                target.getUuid(),
                 target.getName(),
                 target.getType().name(),
                 target.getConfig(),

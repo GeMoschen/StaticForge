@@ -300,6 +300,7 @@ public class ScheduleController {
                 : null;
         return new ScheduleView(
                 a.getId(),
+                a.getUuid(),
                 a.getType(),
                 a.getStatus().name(),
                 a.getRunAt(),

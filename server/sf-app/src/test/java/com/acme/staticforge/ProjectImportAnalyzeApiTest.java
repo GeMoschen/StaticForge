@@ -62,6 +62,9 @@ class ProjectImportAnalyzeApiTest {
     @Autowired ChannelService channelService;
     @Autowired ProjectExportImportService exportImportService;
     @Autowired JwtService jwtService;
+    @Autowired com.acme.staticforge.scheduler.ScheduleService scheduleService;
+    @Autowired com.acme.staticforge.generate.GenerationTargetRepository targetRepository;
+    @Autowired SchedulerFixtures schedulerFixtures;
 
     @Test
     void analyzeMissingTemplateReferenceReturns200WithBlockingConflictAndNoWrites() throws Exception {
@@ -223,6 +226,55 @@ class ProjectImportAnalyzeApiTest {
                         .header("Authorization", "Bearer " + target.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.releasedCount").value(0));
+    }
+
+    /**
+     * Schedules over HTTP (M27.8.1): the analysis counts the archive's schedules and warns about each one that won't be
+     * imported as it is; {@code importSchedules=false} leaves them out; the result counts the imported ones and carries
+     * the commit-time warnings.
+     */
+    @Test
+    void schedulesAreCountedImportedAndLeftOutOnRequest() throws Exception {
+        Fixture source = newFixture("an_sch_src");
+        long sourceId = source.project().getId();
+        var target = targetRepository.save(new com.acme.staticforge.generate.GenerationTarget(
+                sourceId, "default", com.acme.staticforge.generate.TargetType.FILESYSTEM, new ObjectMapper().createObjectNode(),
+                true));
+        ObjectNode params = new ObjectMapper().createObjectNode().put("mode", "FULL").put("targetId", target.getId());
+        scheduleService.create(sourceId, new com.acme.staticforge.scheduler.ScheduleService.Command(
+                "GENERATION", java.time.Instant.now().plus(java.time.Duration.ofDays(2)), null, null, null, null, null, null,
+                params), source.user().getId());
+        byte[] archive = exportImportService.exportProject(sourceId);
+        Fixture skipping = newFixture("an_sch_skip");
+        Fixture importing = newFixture("an_sch_tgt");
+        try {
+            mvc.perform(multipart("/api/v1/projects/" + importing.project().getKey() + "/import/analyze")
+                            .file(new MockMultipartFile("file", "archive.zip", "application/zip", archive))
+                            .header("Authorization", "Bearer " + importing.token()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.scheduleCount").value(1))
+                    .andExpect(jsonPath("$.conflicts[?(@.type == 'SCHEDULE_OWNER_REPLACED')].severity")
+                            .value(org.hamcrest.Matchers.contains("WARNING")));
+
+            mvc.perform(multipart("/api/v1/projects/" + skipping.project().getKey() + "/import")
+                            .file(new MockMultipartFile("file", "archive.zip", "application/zip", archive))
+                            .param("importSchedules", "false")
+                            .header("Authorization", "Bearer " + skipping.token()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.importedScheduleCount").value(0))
+                    .andExpect(jsonPath("$.scheduleWarnings").isEmpty());
+
+            mvc.perform(multipart("/api/v1/projects/" + importing.project().getKey() + "/import")
+                            .file(new MockMultipartFile("file", "archive.zip", "application/zip", archive))
+                            .header("Authorization", "Bearer " + importing.token()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.importedScheduleCount").value(1))
+                    .andExpect(jsonPath("$.updatedScheduleCount").value(0))
+                    .andExpect(jsonPath("$.scheduleWarnings[0].type").value("SCHEDULE_OWNER_REPLACED"));
+        } finally {
+            schedulerFixtures.retire(sourceId);
+            schedulerFixtures.retire(importing.project().getId());
+        }
     }
 
     private long assetCount(Fixture fixture) {

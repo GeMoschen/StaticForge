@@ -7,13 +7,15 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
  * A reusable output destination for generation runs (spec §18.4). {@code type} is stored
  * as the plain {@link TargetType} name; {@code config} holds the backend-specific options
- * (filesystem prefix, S3 bucket/path, ZIP layout, ...).
+ * (filesystem prefix, S3 bucket/path, ZIP layout, ...). {@code uuid} (M27.8.1) is its stable identity, unique per
+ * project: export archives and the schedules in them name a target by it.
  */
 @Entity
 @Table(name = "generation_target")
@@ -25,6 +27,9 @@ public class GenerationTarget {
 
     @Column(name = "project_id", nullable = false)
     private long projectId;
+
+    @Column(name = "uuid", nullable = false, updatable = false)
+    private UUID uuid;
 
     @Column(name = "name", nullable = false, length = 120)
     private String name;
@@ -42,7 +47,14 @@ public class GenerationTarget {
     protected GenerationTarget() {}
 
     public GenerationTarget(long projectId, String name, TargetType type, JsonNode config, boolean defaultTarget) {
+        this(projectId, UUID.randomUUID(), name, type, config, defaultTarget);
+    }
+
+    /** A target with a given identity: an imported one keeps the uuid it had in its archive (M27.8.1). */
+    public GenerationTarget(
+            long projectId, UUID uuid, String name, TargetType type, JsonNode config, boolean defaultTarget) {
         this.projectId = projectId;
+        this.uuid = uuid;
         this.name = name;
         this.type = type.name();
         this.config = config;
@@ -59,6 +71,10 @@ public class GenerationTarget {
 
     public void setProjectId(long projectId) {
         this.projectId = projectId;
+    }
+
+    public UUID getUuid() {
+        return uuid;
     }
 
     public String getName() {
