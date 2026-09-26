@@ -16,10 +16,10 @@ state or brings everything in as drafts.
 
 ## Feature exit criteria
 
-- [ ] Protocol 8 round-trips release pointers (per locale, incl. released payloads that differ from the draft) and
+- [x] Protocol 8 round-trips release pointers (per locale, incl. released payloads that differ from the draft) and
       localized media files.
-- [ ] Import option "keep release state" (default) / "everything as draft" in API and UI; protocol ≤ 7 imports as drafts.
-- [ ] `./gradlew build`, `npm run build`, `npx vitest run` green.
+- [x] Import option "keep release state" (default) / "everything as draft" in API and UI; protocol ≤ 7 imports as drafts.
+- [x] `./gradlew build`, `npm run build`, `npx vitest run` green.
 
 ## Dependencies
 

@@ -196,26 +196,26 @@ This milestone delivers:
 
 ## Exit criteria (epic is done when)
 
-- [ ] After the migration, a full build of every existing fixture project is byte-identical to the build before it.
-- [ ] Editing a published page changes nothing in the next build; releasing it (one revision) changes exactly that
+- [x] After the migration, a full build of every existing fixture project is byte-identical to the build before it.
+- [x] Editing a published page changes nothing in the next build; releasing it (one revision) changes exactly that
       page's outputs (plus what depends on it) in an incremental build.
-- [ ] Per-locale release: releasing only EN of a page with DE and EN changes only the EN outputs; DE keeps its old
+- [x] Per-locale release: releasing only EN of a page with DE and EN changes only the EN outputs; DE keeps its old
       text, path and sections.
-- [ ] Delete, move and rename of a published page are drafts until released; releasing a deletion removes the output;
+- [x] Delete, move and rename of a published page are drafts until released; releasing a deletion removes the output;
       deleting a never-released page is immediate.
-- [ ] The release dialog proposes unreleased dependencies (references and ancestor folders), included by default;
+- [x] The release dialog proposes unreleased dependencies (references and ancestor folders), included by default;
       an unticked dependency renders empty with `SF-GEN-0221`.
-- [ ] Release is refused for incomplete content (`422 SF-DOM-0150`); discard restores the released version.
-- [ ] Preview shows the draft by default and the released state with the toggle; share links keep their view.
-- [ ] A media asset can be localized with one file per locale, released per locale and written at the locale prefix;
+- [x] Release is refused for incomplete content (`422 SF-DOM-0150`); discard restores the released version.
+- [x] Preview shows the draft by default and the released state with the toggle; share links keep their view.
+- [x] A media asset can be localized with one file per locale, released per locale and written at the locale prefix;
       un-localizing asks before discarding files.
-- [ ] The Changes view lists every unreleased asset×locale with diff; multi-select release, discard and schedule work.
-- [ ] Scheduled release (pinned and latest, with and without then-generate), scheduled unpublish, one-off and
+- [x] The Changes view lists every unreleased asset×locale with diff; multi-select release, discard and schedule work.
+- [x] Scheduled release (pinned and latest, with and without then-generate), scheduled unpublish, one-off and
       recurring generation execute on time in the creator's time zone; missed, busy, owner-lost and archived cases
       behave as decided; executions are listed with outcome.
-- [ ] Export/import protocol 8 round-trips release state; the import option "everything as draft" works; protocol 7
+- [x] Export/import protocol 8 round-trips release state; the import option "everything as draft" works; protocol 7
       archives import as drafts.
-- [ ] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey
+- [x] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey
       green twice on a clean dev stack.
 
 ## Features (dependency order)

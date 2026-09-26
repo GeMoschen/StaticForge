@@ -24,15 +24,15 @@ others (different feature folders).
 
 ## Feature exit criteria
 
-- [ ] Status badges (per locale) in the page tree/list, content store, globals, media library and navigation.
-- [ ] Release bar with Release / Unpublish / Discard / Schedule in every releasable editor; dependency dialog.
-- [ ] Changes view with filters, diff and multi-select release/discard/schedule; nav-rail badge.
-- [ ] Preview Draft/Published toggle; share dialog chooses the view.
-- [ ] Localized media: toggle, per-locale files, discard confirmation.
-- [ ] Schedules page: list, create/edit (cron presets + cron text, viewer time zone), cancel, take over, run now,
+- [x] Status badges (per locale) in the page tree/list, content store, globals, media library and navigation.
+- [x] Release bar with Release / Unpublish / Discard / Schedule in every releasable editor; dependency dialog.
+- [x] Changes view with filters, diff and multi-select release/discard/schedule; nav-rail badge.
+- [x] Preview Draft/Published toggle; share dialog chooses the view.
+- [x] Localized media: toggle, per-locale files, discard confirmation.
+- [x] Schedules page: list, create/edit (cron presets + cron text, viewer time zone), cancel, take over, run now,
       re-pin, history.
-- [ ] Every action hidden/disabled by role (`DEVELOPER` in M27) and read-only mode (time travel, archived).
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] Every action hidden/disabled by role (`DEVELOPER` in M27) and read-only mode (time travel, archived).
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Dependencies
 

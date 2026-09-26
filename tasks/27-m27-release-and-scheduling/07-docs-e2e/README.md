@@ -16,9 +16,9 @@ media and the scheduler as implemented; one Playwright journey proves the editor
 
 ## Feature exit criteria
 
-- [ ] Spec sections and Appendix B updated; deviations between plan and code recorded in the task notes.
-- [ ] Journey green twice in a row on a clean dev stack.
-- [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
+- [x] Spec sections and Appendix B updated; deviations between plan and code recorded in the task notes.
+- [x] Journey green twice in a row on a clean dev stack.
+- [x] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
 
 ## Dependencies
 
