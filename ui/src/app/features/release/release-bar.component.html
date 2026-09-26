@@ -31,7 +31,7 @@
         @if (canDiscardAny()) {
           <button type="button" class="bar__action" (click)="open('discard')">Discard changes…</button>
         }
-        @if (permissions.canSchedule() && scheduleTypes().length > 0) {
+        @if (permissions.canScheduleRelease() && scheduleTypes().length > 0) {
           <button type="button" class="bar__action" (click)="scheduling.set(true)">Schedule…</button>
         }
       </div>

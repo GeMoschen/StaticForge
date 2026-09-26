@@ -1,6 +1,6 @@
 ---
 id: M28.1.1
-status: todo
+status: done
 depends: []
 epic: m28-editor-publishing
 feature: policy-model
@@ -54,21 +54,21 @@ guard). Requires M27 merged. Epic decisions 1–5, 10, 12.
 
 ## Acceptance criteria
 
-- [ ] Migration: existing projects read `{"editor":[]}`; a new project starts empty; H2 and PostgreSQL changelog
+- [x] Migration: existing projects read `{"editor":[]}`; a new project starts empty; H2 and PostgreSQL changelog
       checks green.
-- [ ] Unit test: `grants` for every role × permission × policy subset (table-driven); `validate` messages for both
+- [x] Unit test: `grants` for every role × permission × policy subset (table-driven); `validate` messages for both
       implications and for both together.
-- [ ] `can` and `permitted` agree on a shared fixture matrix (same role, same policy → same answer); a `DISABLED`
+- [x] `can` and `permitted` agree on a shared fixture matrix (same role, same policy → same answer); a `DISABLED`
       member with a valid token is already rejected upstream (M26) — `permitted` returns false for them.
-- [ ] **Next request:** an editor with a still-valid access token gets `403` before and `2xx` after the admin enables
+- [x] **Next request:** an editor with a still-valid access token gets `403` before and `2xx` after the admin enables
       `RELEASE` (use a trivial guarded test endpoint or the first M28.2.1 endpoint), with no token refresh.
-- [ ] `PUT` records a revision + `PUBLISH_POLICY_SET`; no-op `PUT` records neither; `PUT` on an archived project is
+- [x] `PUT` records a revision + `PUBLISH_POLICY_SET`; no-op `PUT` records neither; `PUT` on an archived project is
       `409 SF-DOM-0141`; `PUT` as `DEVELOPER` is `403`.
-- [ ] `impact` lists exactly the editor-owned pending schedules that would fail (fixture with one `RELEASE` schedule,
+- [x] `impact` lists exactly the editor-owned pending schedules that would fail (fixture with one `RELEASE` schedule,
       one with "then generate" to a non-default target, one owned by a developer).
-- [ ] A test asserts every `@projectAuth.can(…, '<NAME>')` literal in `@PreAuthorize` annotations names an existing
+- [x] A test asserts every `@projectAuth.can(…, '<NAME>')` literal in `@PreAuthorize` annotations names an existing
       `PublishPermission` (scan handler methods at context start).
-- [ ] Regenerated `schema.d.ts` committed; `./gradlew build` green.
+- [x] Regenerated `schema.d.ts` committed; `./gradlew build` green.
 
 ## Out of scope
 

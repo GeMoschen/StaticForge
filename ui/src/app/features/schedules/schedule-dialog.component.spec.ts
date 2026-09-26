@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import type { ReleaseChoice } from '../release/release-choice.util';
 import { ScheduleDialogComponent } from './schedule-dialog.component';
 
@@ -153,5 +154,88 @@ describe('ScheduleDialogComponent', () => {
       params: { mode: 'INCREMENTAL', targetId: null },
     });
     request.flush({ id: 9, type: 'RECURRING_GENERATION', status: 'PENDING', nextRunAt: '2026-09-28T11:00:00Z' } satisfies ScheduleView);
+  });
+});
+
+describe('ScheduleDialogComponent "then generate" for an editor (M28.3.3)', () => {
+  let fixture: ComponentFixture<ScheduleDialogComponent>;
+  let http: HttpTestingController;
+
+  /** The project's targets as `GET /targets` sends them: 7 is the default. */
+  const TARGETS = [
+    { id: 7, name: 'Live', type: 'FILESYSTEM', isDefault: true, outputPath: 'proj/live' },
+    { id: 8, name: 'Staging', type: 'FILESYSTEM', isDefault: false, outputPath: 'proj/staging' },
+  ];
+
+  afterEach(() => {
+    vi.useRealTimers();
+    http.verify();
+  });
+
+  function open(permissions: string[]): HTMLElement {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-26T10:00:00Z'));
+    TestBed.configureTestingModule({
+      imports: [ScheduleDialogComponent],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideProjectPermissions({ role: () => 'EDITOR', permissions: () => permissions, userId: () => 1, readOnly: () => false }),
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(ScheduleDialogComponent);
+    fixture.componentRef.setInput('projectKey', 'proj');
+    fixture.componentRef.setInput('types', ['RELEASE']);
+    fixture.componentRef.setInput('choices', CHOICES);
+    fixture.detectChanges();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  /** Ticks "Generate right after" and answers the generation options' loads. */
+  function tickThenGenerate(el: HTMLElement): void {
+    const box = Array.from(el.querySelectorAll('label.sched__choice')).find((l) => l.textContent?.includes('Generate right after'))!
+      .querySelector('input') as HTMLInputElement;
+    box.click();
+    fixture.detectChanges();
+    fixture.detectChanges();
+    http.expectOne(`${BASE}/targets`).flush(TARGETS);
+    http.expectOne(`${BASE}/channels`).flush([]);
+    fixture.detectChanges();
+  }
+
+  it('offers no "then generate" without INCREMENTAL_BUILD', () => {
+    const el = open(['RELEASE', 'SCHEDULE_RELEASE']);
+    expect(el.textContent).not.toContain('Generate right after');
+  });
+
+  it('builds only the default target with INCREMENTAL_BUILD but no FULL_BUILD, and sends no target', () => {
+    const el = open(['RELEASE', 'SCHEDULE_RELEASE', 'INCREMENTAL_BUILD']);
+    expect(el.textContent).toContain('Generate right after');
+    tickThenGenerate(el);
+    expect(el.querySelector('.options__select')).toBeNull();
+    expect(el.querySelector('.options__fixed')?.textContent?.trim()).toBe('Default target');
+
+    vi.advanceTimersByTime(300);
+    http.expectOne(`${BASE}/releases/plan`).flush({ items: [], dependencies: [], incomplete: [], warnings: [] });
+    fixture.detectChanges();
+    fixture.detectChanges();
+    const schedule = Array.from(el.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(
+      (b) => b.textContent?.trim() === 'Schedule',
+    )!;
+    schedule.click();
+    const request = http.expectOne((r) => r.method === 'POST' && r.url === `${BASE}/schedules`);
+    expect(request.request.body).toMatchObject({ type: 'RELEASE', thenGenerate: { targetId: null } });
+    request.flush({ id: 5, type: 'RELEASE', runAt: '2026-09-26T11:00:00Z', status: 'PENDING' } satisfies ScheduleView);
+  });
+
+  it('lets a holder of FULL_BUILD choose the target', () => {
+    const el = open(['RELEASE', 'SCHEDULE_RELEASE', 'INCREMENTAL_BUILD', 'FULL_BUILD']);
+    tickThenGenerate(el);
+    const options = Array.from(el.querySelectorAll('.options__select option')).map((o) => o.textContent?.trim());
+    expect(options).toEqual(['Default target', 'Live', 'Staging']);
+    expect(el.querySelector('.options__fixed')).toBeNull();
   });
 });

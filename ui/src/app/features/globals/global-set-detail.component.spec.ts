@@ -8,6 +8,7 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { GlobalSetDetailComponent } from './global-set-detail.component';
 import { GlobalsService, type GlobalSetDetailView } from './globals.service';
+import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 
 // `compiledDefinition`/`content` are `JsonNode` on the server, which openapi-typescript renders as
 // `Record<string, never>`; the fixture carries real JSON, so it is cast rather than typed field by field.
@@ -46,6 +47,7 @@ function setup(role: string, globals: ReturnType<typeof globalsStub>, revision: 
       { provide: GlobalsService, useValue: globals },
       { provide: AuthStore, useValue: { roleFor: () => role } },
       { provide: TimeTravelStore, useValue: timeTravel },
+      provideProjectPermissions({ role: () => role, readOnly: () => timeTravel.isTimeTravel() }),
     ],
   });
 }

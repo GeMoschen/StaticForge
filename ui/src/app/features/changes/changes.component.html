@@ -112,7 +112,7 @@
       <sf-button variant="secondary" [disabled]="discardable().length === 0" (click)="discardSelected()">
         Discard changes…
       </sf-button>
-      @if (permissions.canSchedule()) {
+      @if (permissions.canScheduleRelease()) {
         <sf-button variant="secondary" (click)="scheduleSelected()">Schedule release…</sf-button>
       }
     </div>

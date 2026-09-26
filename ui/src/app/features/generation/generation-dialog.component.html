@@ -8,18 +8,26 @@
   </header>
 
   <form class="dialog__body" [formGroup]="form">
-    <sf-field label="Mode">
-      <div class="radios">
-        <label class="radio">
-          <input type="radio" formControlName="mode" value="FULL" />
-          <span>Full</span>
-        </label>
-        <label class="radio">
-          <input type="radio" formControlName="mode" value="INCREMENTAL" />
-          <span>Incremental</span>
-        </label>
+    @if (fullBuild()) {
+      <sf-field label="Mode">
+        <div class="radios">
+          <label class="radio">
+            <input type="radio" formControlName="mode" value="FULL" />
+            <span>Full</span>
+          </label>
+          <label class="radio">
+            <input type="radio" formControlName="mode" value="INCREMENTAL" />
+            <span>Incremental</span>
+          </label>
+        </div>
+      </sf-field>
+    } @else {
+      <div class="fixed" role="group" aria-label="Build">
+        <p class="fixed__line"><span class="fixed__label">Mode</span> Incremental</p>
+        <p class="fixed__line"><span class="fixed__label">Target</span> {{ defaultTargetName() }}</p>
+        <p class="dialog__note">You can start incremental builds of the default target in this project.</p>
       </div>
-    </sf-field>
+    }
 
     <sf-field label="Channels">
       <div class="checkboxes" formArrayName="channels">
@@ -32,6 +40,7 @@
       </div>
     </sf-field>
 
+    @if (fullBuild()) {
     <sf-field label="Target">
       @if (targets().length === 0) {
         <p class="dialog__note">
@@ -47,6 +56,39 @@
         </select>
       }
     </sf-field>
+    }
+
+    <fieldset class="scope">
+      <legend class="scope__legend">Scope</legend>
+      <label class="scope__field">
+        <span class="scope__label">Limit to folder</span>
+        <select class="select" [value]="scopeFolder()" (change)="onScopeFolder($event)">
+          <option value="">Whole site</option>
+          @for (folder of folderOptions(); track folder.path) {
+            <option [value]="folder.path">{{ folder.label }}</option>
+          }
+        </select>
+      </label>
+      <div class="scope__field">
+        <span class="scope__label">Only these pages</span>
+        @if (scopePages().length > 0) {
+          <ul class="scope__pages">
+            @for (page of scopePages(); track page.uuid) {
+              <li class="scope__page">
+                {{ page.label }}
+                <button type="button" class="scope__remove" [attr.aria-label]="'Remove ' + page.label" (click)="removePage(page.uuid)">
+                  <sf-icon name="close" />
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        <sf-button variant="ghost" (click)="pickingPage.set(true)">Add page…</sf-button>
+      </div>
+      <p class="dialog__note">
+        With a folder or pages, only those pages are rebuilt. Leave both empty to build everything that changed.
+      </p>
+    </fieldset>
 
     <sf-field label="Comment">
       <textarea
@@ -161,3 +203,12 @@
     </footer>
   </form>
 </div>
+
+@if (pickingPage()) {
+  <sf-asset-picker-dialog
+    [projectKey]="projectKey()"
+    [allowedTypes]="['PAGE']"
+    (picked)="addPage($event)"
+    (closed)="pickingPage.set(false)"
+  />
+}

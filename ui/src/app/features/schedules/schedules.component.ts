@@ -12,7 +12,8 @@ import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.co
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
-import { ReleasePermissionsStore } from '../release/release-permissions.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
+import { GenerationService } from '../generation/generation.service';
 import { ScheduleDialogComponent } from './schedule-dialog.component';
 import { ScheduleHistoryComponent } from './schedule-history.component';
 import {
@@ -65,7 +66,8 @@ export class SchedulesComponent {
   private readonly auth = inject(AuthStore);
   private readonly events = inject(ReleaseEventsStore);
   protected readonly members = inject(ProjectMembersStore);
-  protected readonly permissions = inject(ReleasePermissionsStore);
+  protected readonly permissions = inject(ProjectPermissionsStore);
+  private readonly generation = inject(GenerationService);
   protected readonly access = inject(ProjectAccessStore);
 
   readonly projectKey = input.required<string>();
@@ -86,6 +88,8 @@ export class SchedulesComponent {
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly busyId = signal<number | null>(null);
+  /** Where a "then generate" without a target builds — it decides which build permission a release schedule needs. */
+  private readonly defaultTargetId = signal<number | null>(null);
   protected readonly dialog = signal<{ schedule: ScheduleView | null; types: ScheduleType[] } | null>(null);
 
   protected readonly pageIndex = computed(() => Math.max(0, Number(this.page() ?? 0) || 0));
@@ -116,20 +120,50 @@ export class SchedulesComponent {
         this.load(key, query);
       });
     });
+    effect(() => {
+      const key = this.projectKey();
+      untracked(() =>
+        this.generation.listTargets(key).subscribe({
+          next: (targets) => this.defaultTargetId.set(((targets ?? []).find((t) => t.isDefault) ?? targets?.[0])?.id ?? null),
+          error: () => this.defaultTargetId.set(null),
+        }),
+      );
+    });
   }
 
   protected what = scheduleWhat;
   protected typeLabel = typeLabel;
   protected statusLabel = scheduleStatusLabel;
   protected outcomeLabel = outcomeLabel;
-  protected canEdit = canEditSchedule;
-  protected canCancel = canCancelSchedule;
-  protected canRunNow = canRunNow;
-  protected canRepin = canRepin;
   protected showsDrift = showsDrift;
 
+  /**
+   * The row actions follow the server's rules (M28, epic decision 9): changing a schedule needs what it needs — for a
+   * release, `SCHEDULE_RELEASE` and the build permission of its "then generate" — and a developer for someone else's;
+   * taking one over needs only what it needs.
+   */
+  private canChange(schedule: ScheduleView): boolean {
+    return this.permissions.canChangeSchedule(schedule, this.defaultTargetId());
+  }
+
+  protected canEdit(schedule: ScheduleView): boolean {
+    return canEditSchedule(schedule) && this.canChange(schedule);
+  }
+
+  protected canCancel(schedule: ScheduleView): boolean {
+    return canCancelSchedule(schedule) && this.canChange(schedule);
+  }
+
+  protected canRunNow(schedule: ScheduleView): boolean {
+    return canRunNow(schedule) && this.canChange(schedule);
+  }
+
+  protected canRepin(schedule: ScheduleView): boolean {
+    return canRepin(schedule) && this.canChange(schedule);
+  }
+
   protected canTakeOver(schedule: ScheduleView): boolean {
-    return canTakeOver(schedule, this.currentUserId());
+    return canTakeOver(schedule, this.currentUserId()) && this.permissions.satisfiesSchedule(schedule, this.defaultTargetId());
   }
 
   protected nextRun(schedule: ScheduleView): string {

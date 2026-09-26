@@ -117,7 +117,7 @@ Processed text media (M18), also `asset.media`: `TextMediaTypes` is the one text
 
 ## 8. Security and authorization
 
-`sf-api.security` holds the JWT stack (`JwtService`, `RefreshTokenService`, `SfJwtAuthenticationConverter`, `ProjectAuthorizationService`). Authorization is `(user, project) → role`, evaluated per request (`@PreAuthorize("@projectAuth.has(...)")`) with a `404`-vs-`403` distinction so project existence is not leaked (§8.4). No per-asset ACLs in v1.
+`sf-api.security` holds the JWT stack (`JwtService`, `RefreshTokenService`, `SfJwtAuthenticationConverter`, `ProjectAuthorizationService`). Authorization is `(user, project) → role`, evaluated per request (`@PreAuthorize("@projectAuth.has(...)")`) with a `404`-vs-`403` distinction so project existence is not leaked (§8.4); publishing operations add the project's publish policy (`@projectAuth.can(...)`, section 14). No per-asset ACLs in v1.
 
 ## 9. Data and schema
 
@@ -225,8 +225,9 @@ renders the released ones.
 - **Actions.** `ReleaseService` (plan, release, unpublish, discard) resolves and checks every item first and then
   writes one batch revision, so a refusal leaves the counter untouched; `ReleaseCompleteness.checker` validates once
   per call; the dependency walk is breadth-first per layer with bulk reads. Permission is one hook,
-  `ReleasePermissionCheck` (`RoleReleasePermissionCheck`: `DEVELOPER`+, read from the database because a schedule runs
-  without a token) — M28 replaces that bean. `ReleaseCarryForward` moves pointers along with system migrations (its own
+  `ReleasePermissionCheck`, implemented by `PolicyReleasePermissionCheck` (M28: the `RELEASE` publish permission,
+  evaluated by `PublishPermissionEvaluator` from the database because a schedule runs without a token; it replaced
+  M27's `RoleReleasePermissionCheck`). `ReleaseCarryForward` moves pointers along with system migrations (its own
   component: the migrations are lower-level writers than `ReleaseService`). `ReleaseStateInitializer` migrates
   unflagged projects on start. `ChangesService` answers the Changes list from a candidate query plus projections.
 - **Rendering.** `SnapshotService` loads a released `Snapshot`: a family of per-language views in which an asset not
@@ -246,10 +247,51 @@ renders the released ones.
   `RecurringGenerationActionHandler` in `sf-generate`; "then generate" goes through the port
   `ScheduledGenerationStarter` (declared in `sf-domain`, implemented by `sf-generate`'s `ScheduledGenerations`), since
   `sf-domain` may not depend on generation. `ActionAuthority` is the single owner/caller check both the API and the
-  engine use. Handlers checkpoint progress in the transaction of each step, so a re-claimed execution never repeats a
+  engine use; since M28 it evaluates the handler's `PublishRequirements` through `PublishPermissionEvaluator`
+  (section 14). Handlers checkpoint progress in the transaction of each step, so a re-claimed execution never repeats a
   committed one. `ScheduleService` holds the API rules; `scheduled_action_asset` answers "schedules touching these
   assets" in one query.
-- **UI.** `features/release` (badge, release bar, dialogs, `ReleasePermissionsStore`, `ReleaseEventsStore` — a
+- **UI.** `features/release` (badge, release bar, dialogs, `ReleaseEventsStore` — a
   counter every status display re-reads on, plus the last status a release bar read so lists patch their row without
   reloading), `features/changes`, `features/schedules` (dialog, page, history, `zoned-time.util` on the platform `Intl`
-  API, cron presets). Statuses always come from the server's `release` blocks; the client never computes one.
+  API, cron presets). Statuses always come from the server's `release` blocks; the client never computes one. Who may
+  release or schedule comes from `ProjectPermissionsStore` (section 14; M27's `ReleasePermissionsStore` is gone).
+
+## 14. Editor publishing (M28)
+
+Spec §8.3, §8.4, §18.1, §18.7. A per-project **publish policy** opens release, scheduled release, incremental and full
+builds to editors; everything else keeps its role check.
+
+- **One rule** (`sf-domain` package `project.publish`). `PublishPermission` (`RELEASE`, `SCHEDULE_RELEASE`,
+  `INCREMENTAL_BUILD`, `FULL_BUILD`); `PublishPolicy` (the editor set, stored as `project.publish_policy` JSON,
+  changelog `v1.0/025`) with `grants(role, permission)` — the only place that says who holds what — and `validate()`
+  for the two implications; `PublishRequirements` (a minimum role plus permissions, `missing(role, policy)` → the
+  first thing lacking, a permission name or `ROLE:<role>`), the one requirement type for every path.
+- **Two evaluators, same answer.** `ProjectAuthorizationService.can`/`satisfies` (`sf-api`) take the role from the
+  token and read the policy through `ProjectService.publishPolicy` on every call (no cache, nothing in a claim, so a
+  change applies on the next request); a denial is `403 SF-API-0403` with `permission`. `PublishPermissionEvaluator`
+  (`sf-domain`) takes the role from the membership row and the account state (disabled or deleted: nothing; locked:
+  unchanged; instance admin: everything) for callers without a token: `ActionAuthority` (schedule API and every
+  execution, and `ScheduleService.policyImpact` with a proposed policy), `PolicyReleasePermissionCheck`.
+  `PublishPolicyApiTest` checks that both agree on every role × policy × permission.
+- **Who needs what.** Release endpoints: `@projectAuth.can(#projectKey, 'RELEASE')`. Generation: `GenerationAuthorization`
+  (`sf-domain` package `generate`) maps a request (mode, target, revision) to requirements; the controller applies it
+  to start and dry run, `ReleaseStateActionHandler.requirements` to a scheduled release's "then generate" on the stored
+  target. Scheduled actions: each handler's `requirements(spec)`; `ScheduleService.forActor` adds `DEVELOPER` when the
+  caller changes someone else's action. The publishing controllers write role-only guards as
+  `can(#projectKey, 'ROLE:X')` so their denials name the role; a context test scans every literal.
+  `PublishPermissionMatrixTest` walks every mutating handler of these controllers for every role and valid policy and
+  fails on a handler without an expectation.
+- **Attribution.** `GenerationService` audits `GENERATION_STARTED` (with `scheduledActionId` for scheduled starts),
+  `GENERATION_CANCELLED` and `GENERATION_PROMOTED`, and scopes its in-memory `Idempotency-Key` map by project and
+  user; `GenerationRunView.startedBy` is resolved with one user lookup per list of runs. `ProjectServiceImpl.updatePublishPolicy`
+  writes the column in place, allocates an `UPDATE` revision for attribution and audits `PUBLISH_POLICY_SET`.
+- **UI.** `core/project/ProjectPermissionsStore` is the one permission helper (effective role, `ProjectDetail.permissions`,
+  `readOnly`); it replaced the ad-hoc `ROLE_RANK`/`roleFor` checks of the content, globals, search and members screens.
+  `publish-permissions.ts` maps a `permission` to the "You no longer have permission to …" wording; the error
+  interceptor re-reads the project detail on such a `403`, and `ProjectContextStore` re-reads it on every navigation
+  (coalesced: one read at a time, plus one more when a navigation happened during it) and on tab visibility (≤ once a
+  minute). `features/settings` holds the "Publishing by editors" card,
+  `features/generation/BuildNowService` the "Build now" offer after a release. Toasts are rendered by
+  `core/ui/ToastHostComponent` (in the app shell since M28; polite and assertive live regions, optional action button).
+

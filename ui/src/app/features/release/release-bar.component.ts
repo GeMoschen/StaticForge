@@ -24,7 +24,7 @@ import { formatInstant } from '../schedules/zoned-time.util';
 import { ReleaseBadgeComponent } from './release-badge.component';
 import { ReleaseDialogComponent } from './release-dialog.component';
 import { ReleaseEventsStore } from './release-events.store';
-import { ReleasePermissionsStore } from './release-permissions.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { type ReleaseChoice, type ReleaseMode, type ReleaseSubject, assetName, choicesFor } from './release-choice.util';
 import { localeStatuses, localeTag, scheduledTypeLabel, statusIcon, statusLabel, statusTone } from './release-status.util';
 
@@ -51,7 +51,7 @@ export class ReleaseBarComponent implements OnDestroy {
   private readonly editingLocale = inject(EditingLocaleStore);
   private readonly locales = inject(LocalesStore);
   private readonly events = inject(ReleaseEventsStore);
-  protected readonly permissions = inject(ReleasePermissionsStore);
+  protected readonly permissions = inject(ProjectPermissionsStore);
   private readonly members = inject(ProjectMembersStore);
 
   readonly projectKey = input.required<string>();

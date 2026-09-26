@@ -105,3 +105,30 @@
   value, its spec needs one case per source shape it can actually receive.
 - **Rule:** an assertion like `jsonPath(...).doesNotExist()` passes on an explicit `null`; assert absence and
   null-ness separately when the contract says "left out".
+
+## A throttle must defer, not drop (2026-09-26)
+- **Mistake (M28.3.1, found by the journey):** the project detail (with the caller's publish permissions) was re-read on
+  navigation "at most every N seconds". A navigation inside the window after the last read skipped the refresh, so an
+  editor kept the old controls after the admin changed the policy — until some later navigation.
+- **Rule:** when a refresh exists so that "the next action sees the change", never drop it by time. Coalesce instead:
+  one request in flight, and a request asked for meanwhile runs once more after it. Test the "immediately after a
+  read" case explicitly.
+
+## Zoneless: the DOM flips before Angular renders (2026-09-26)
+- **Mistake:** a Playwright helper clicked a checkbox, waited for *that* checkbox's state (the native click flips it at
+  once) and read the next switch before the app's render had run (the app uses zoneless change detection) — so it saw
+  stale `checked`/`disabled` states and clicked a switch that was about to be disabled.
+- **Rule:** in journeys, after an action wait for something only the app's render produces (a dependent control, a
+  text), never for the state the browser changed natively. Remember `provideExperimentalZonelessChangeDetection`.
+
+## Kill a process by its verified listening PID (2026-09-26)
+- **Mistake:** `netstat … | awk '{print $NF}' | head -1` picked a TIME_WAIT line whose PID column is 0, and
+  `taskkill //PID 0 //T` tried to kill the system tree (Windows refused).
+- **Rule:** select the LISTEN (`ABHÖREN`) line of the port, require a PID matching `^[1-9][0-9]*$`, and print it
+  before killing.
+
+## No `git stash` while another agent edits the tree (2026-09-26)
+- **Mistake:** I stashed to compare a build before/after while a docs agent was editing files in the same working tree;
+  an edit landing between stash and pop would have been lost or conflicted.
+- **Rule:** to compare against the old code, use `git worktree add` (or read `git show HEAD:path`), never stash a tree
+  that someone else is writing to.

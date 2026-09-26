@@ -18,8 +18,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { catchError, debounceTime, EMPTY, map, of, Subject, switchMap } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
-import { AuthStore } from '../../core/auth/auth.store';
-import { roleRank } from '../../core/auth/auth.guard';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
@@ -91,7 +90,6 @@ export class DatasetSchemaEditorComponent {
   private readonly templates = inject(TemplatesService);
   private readonly channelsService = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
-  private readonly auth = inject(AuthStore);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
@@ -124,9 +122,7 @@ export class DatasetSchemaEditorComponent {
 
   protected readonly hasErrors = computed(() => this.diagnostics().some((d) => d.severity === 'ERROR'));
 
-  protected readonly canEdit = computed(
-    () => !this.timeTravel.isTimeTravel() && roleRank(this.auth.roleFor(this.projectKey())) >= roleRank('DEVELOPER'),
-  );
+  protected readonly canEdit = inject(ProjectPermissionsStore).canEditTemplates;
 
   /** The stored record templates, channel → source. */
   private readonly storedRecordTemplates = computed(() => readRecordTemplateSources(this.detail()?.channelTemplates));

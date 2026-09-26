@@ -1,6 +1,6 @@
 ---
 id: M28.2.1
-status: todo
+status: done
 depends: [M28.1.1]
 epic: m28-editor-publishing
 feature: enforcement
@@ -43,17 +43,17 @@ all with `DEVELOPER`. `ProjectAuthorizationService.can`, `PublishPermissionEvalu
 
 ## Acceptance criteria
 
-- [ ] Integration tests per endpoint: `EDITOR` without `RELEASE` → `403` with `permission: "RELEASE"`; with it → the
+- [x] Integration tests per endpoint: `EDITOR` without `RELEASE` → `403` with `permission: "RELEASE"`; with it → the
       M27 behaviour; `VIEWER` → `403` regardless of policy; `DEVELOPER` unaffected by an empty policy.
-- [ ] Schedules: an editor with `SCHEDULE_RELEASE` creates a `RELEASE` schedule; adding "then generate" needs
+- [x] Schedules: an editor with `SCHEDULE_RELEASE` creates a `RELEASE` schedule; adding "then generate" needs
       `INCREMENTAL_BUILD` (default target) / `FULL_BUILD` (other target); creating `GENERATION` or
       `RECURRING_GENERATION` as editor → `403 "ROLE:DEVELOPER"` even with every toggle on.
-- [ ] Editor edits/cancels own schedule; cancelling a developer's schedule → `403`; take-over follows requirements.
-- [ ] Execution: editor schedules a release, admin switches `SCHEDULE_RELEASE` off, the tick executes → execution
+- [x] Editor edits/cancels own schedule; cancelling a developer's schedule → `403`; take-over follows requirements.
+- [x] Execution: editor schedules a release, admin switches `SCHEDULE_RELEASE` off, the tick executes → execution
       `FAILED` with "creator no longer permitted (SCHEDULE_RELEASE)"; nothing released; a developer takes over and
       reruns → released.
-- [ ] Same for a demoted owner (role changed to `VIEWER`) and a disabled owner.
-- [ ] Regenerated `schema.d.ts` committed (if any response shape changed); `./gradlew build` green.
+- [x] Same for a demoted owner (role changed to `VIEWER`) and a disabled owner.
+- [x] Regenerated `schema.d.ts` committed (if any response shape changed); `./gradlew build` green.
 
 ## Out of scope
 

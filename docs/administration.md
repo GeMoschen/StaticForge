@@ -1,6 +1,7 @@
 # StaticForge — Administration guide
 
-For instance administrators: accounts, sign-in problems and archiving projects. Everything here is under
+For instance administrators: accounts, sign-in problems and archiving projects — and, for project admins, what
+editors may publish. Everything here is under
 **Administration** in the user menu (top right on the dashboard, bottom of the project rail); only instance
 administrators see it. The rules behind it are in `cms-specification.md` §8.1–§8.3 and §9.2; operator setup (the
 seeded `Admin` account, password policy settings) is in [`infra/README.md`](../infra/README.md).
@@ -13,6 +14,7 @@ seeded `Admin` account, password policy settings) is in [`infra/README.md`](../i
 | Grant or revoke instance administration | ✅ | — | — |
 | Add existing accounts to a project, change roles, remove members | ✅ (every project) | ✅ (their project) | — |
 | See who is in a project | ✅ | ✅ (with emails) | ✅ (members, without emails) |
+| Choose what editors may publish (publish policy, M28) | ✅ (every project) | ✅ (their project) | read-only (members) |
 | Archive and unarchive projects, read the whole audit trail | ✅ | — | — |
 | Change own profile and password, sign out everywhere | ✅ | ✅ | ✅ |
 
@@ -80,17 +82,57 @@ delete they land on the sign-in page.
 **Unarchive** (on the Projects tab, or from the banner inside the project) makes it writable and visible again, with
 everyone's old role.
 
+## Letting editors publish (M28)
+
+Since M27 a change goes online when it is **released** and then **built**. By default only developers (and project
+admins) do either. Each project can open these steps to its **editors** — a project decision, made by its project
+admins (or an instance admin) under **Settings → Generation → Publishing by editors**:
+
+| Switch | Editors may then | Needs |
+|---|---|---|
+| **Release, discard and unpublish content** | release their changes, discard drafts, take content offline | — |
+| **Schedule releases and unpublishing** | schedule one-off releases and unpublishing, and change their own schedules | Release |
+| **Start incremental builds to the default target** | build what changed (or a folder or some pages) to the default target, *Build now* after a release, cancel their own builds | — |
+| **Start full builds and builds to any target** | full builds, and builds to any target | Incremental builds |
+
+**Choosing a policy.** All four are off in every project, including projects that existed before the upgrade, so
+nothing changes until you opt in. A common choice for a small team is *Release* plus *Incremental builds*: editors put
+a text change online without waiting for anyone. Keep *Full builds* for teams where editors know when a whole-site
+rebuild or a second target is appropriate. A switch that needs another is disabled until that one is on, and turning
+the other off turns it off too. Members who aren't project admins see the card read-only.
+
+**What developers keep.** Developers and project admins can always do all four, whatever the card says. These stay
+with developers in every project: **Promote** (rolling back to an earlier build), builds of an earlier revision,
+scheduled and repeating builds, changing or cancelling other people's schedules and builds, and the targets (creating
+them needs a developer, editing and deleting a project admin). Viewers never publish.
+
+**When it applies.** A change applies to every editor's **next request** — nobody signs out, and open browser tabs
+adjust on the next click or when the tab is shown again. Each change is recorded as a project revision and in the
+audit trail (`PUBLISH_POLICY_SET`, with the policy before and after). The revision history can't show an earlier
+policy; the audit trail can.
+
+**The impact warning.** Before saving, the card checks what the new policy would break: pending schedules owned by
+editors that would lose a permission they need (for example a scheduled release after you turn off *Schedule
+releases*). If there are any, a dialog lists them — type, time, owner and the missing permission — with **Save
+anyway** or **Cancel**. Saved anyway, those schedules fail when they come due ("Owner no longer permitted", see
+below); a developer can take them over.
+
 ## Schedules and people who leave (M27)
 
 A schedule (a timed release, unpublish or build, see the user guide *Publishing*) runs **as the person who owns it** —
 whoever created it, or last took it over — and the server checks at every run that this person may still do it
-(project `DEVELOPER` or above, account active; a *locked* account still counts). So removing someone from a project,
+(a scheduled build: project `DEVELOPER` or above; a scheduled release or unpublish: a developer, or an editor while the
+project's publish policy allows scheduling — and the build right after, if any; the account must not be disabled or
+deleted — a *locked* account still counts). So removing someone from a project,
 lowering their role, disabling or deleting their account affects their schedules:
 
 - the next run fails with "Owner no longer permitted" (`SF-DOM-0163`) instead of acting with rights the person no
-  longer has;
+  longer has — the message names what is missing, e.g. "Owner no longer permitted (SCHEDULE_RELEASE): 'bob' is EDITOR
+  without SCHEDULE_RELEASE in the project's publish policy." (the same happens when a project admin turns off an
+  editor's permission, see *Letting editors publish*);
 - a repeating schedule is **paused** ("Paused" on the Schedules page) and runs nothing until someone takes it over;
-- any developer of the project can **Take over** a failed or paused schedule on the Schedules page: they become the
+- any developer of the project — or an editor who may schedule releases, for a release or unpublish — can **Take
+  over** a failed or paused schedule on the Schedules page: they become the
   owner, a paused schedule resumes at its next run time, and a failed one-off one runs right away (unless *Skip if
   more than … late* says it is too late).
 
@@ -99,8 +141,10 @@ Before removing a developer, filter the Schedules page by **Owner** to see what 
 ## The audit trail
 
 **Administration → Audit** lists every security-relevant event of the instance, newest first: sign-ins (and failed
-ones), account changes, membership changes, archiving, channel and generation-target changes, and schedules — created,
-changed, cancelled, taken over, run now, and each execution (as its owner). Releases are not audit entries: each is a
+ones), account changes, membership changes, archiving, channel and generation-target changes, publish policy changes
+(`PUBLISH_POLICY_SET`), generation runs started, cancelled and promoted (`GENERATION_STARTED` — as the schedule's owner
+for a scheduled build —, `GENERATION_CANCELLED`, `GENERATION_PROMOTED`), and schedules — created, changed, cancelled,
+taken over, run now, and each execution (as its owner). Releases are not audit entries: each is a
 revision, listed in the project's revision history. Filter by action, user,
 project (or *Instance only* for account events) and date range; the filters are part of the address, so a filtered
 view can be bookmarked or shared with another admin. (A project admin can read their own project's entries through

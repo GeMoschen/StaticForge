@@ -15,6 +15,7 @@ import type { Subscription } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { problemOf } from '../../core/api/problem.util';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
@@ -75,6 +76,8 @@ export class ScheduleDialogComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
   private readonly events = inject(ReleaseEventsStore);
+  /** "Then generate" needs a build permission, another target `FULL_BUILD` (M28, epic decision 9). */
+  protected readonly permissions = inject(ProjectPermissionsStore);
 
   readonly projectKey = input.required<string>();
   /** The types offered; the first is preselected. */
@@ -248,9 +251,10 @@ export class ScheduleDialogComponent implements OnDestroy {
       items: this.items(),
       includeDependencies: this.showPlan() ? (this.planState()?.includeDependencies ?? []) : [],
       pinPolicy: this.pinPolicy(),
-      thenGenerate: this.thenGenerate(),
+      // Without a build permission there is no "then generate"; without FULL_BUILD it goes to the default target.
+      thenGenerate: this.thenGenerate() && (!this.releaseState() || this.permissions.canIncrementalBuild()),
       mode: this.mode(),
-      targetId: this.targetId(),
+      targetId: this.releaseState() && !this.permissions.canFullBuild() ? null : this.targetId(),
       channels: this.channels(),
       missedPolicy: this.missedPolicy(),
       maxLatenessValue: this.latenessValue(),

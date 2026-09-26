@@ -2,6 +2,8 @@
   <sf-generation-dialog
     [projectKey]="projectKey()"
     [targets]="targets()"
+    [fullBuild]="permissions.canFullBuild()"
+    [defaultTargetId]="defaultTargetId()"
     (started)="onStarted($event)"
     (cancelled)="onDialogCancelled()"
   />
@@ -10,7 +12,11 @@
 <div class="generation">
   <div class="toolbar">
     <h2 class="toolbar__title">Generation</h2>
-    <sf-button variant="primary" [disabled]="readOnly()" (click)="openDialog()">New generation</sf-button>
+    @if (permissions.canIncrementalBuild()) {
+      <sf-button variant="primary" (click)="openDialog()">New generation</sf-button>
+    } @else if (!readOnly()) {
+      <p class="toolbar__note">Builds are started by developers in this project.</p>
+    }
   </div>
 
   @if (loading()) {
@@ -48,6 +54,9 @@
               @if (run.comment) {
                 <span class="run-comment" [attr.title]="run.comment">{{ run.comment }}</span>
               }
+              @if (run.startedBy?.displayName; as starter) {
+                <span class="run-starter">Started by {{ starter }}</span>
+              }
             </td>
             <td>
               <span class="badge" [style.color]="statusColor(run.status)">
@@ -81,11 +90,13 @@
                   <sf-button variant="secondary" (click)="watchLive(run)">
                     Live log
                   </sf-button>
-                  <sf-button variant="danger" (click)="cancel(run)">
-                    Cancel
-                  </sf-button>
-                } @else if (run.status === 'SUCCESS' || run.status === 'PARTIAL') {
-                  <sf-button variant="secondary" [disabled]="readOnly()" (click)="promote(run)">
+                  @if (permissions.canCancelRun(run)) {
+                    <sf-button variant="danger" (click)="cancel(run)">
+                      Cancel
+                    </sf-button>
+                  }
+                } @else if ((run.status === 'SUCCESS' || run.status === 'PARTIAL') && permissions.canPromote()) {
+                  <sf-button variant="secondary" (click)="promote(run)">
                     Promote
                   </sf-button>
                 }
@@ -147,6 +158,10 @@
                 <dl class="details">
                   <dt>Started</dt>
                   <dd>{{ run.startedAt ? (run.startedAt | date: 'medium') : '—' }}</dd>
+                  <dt>Started by</dt>
+                  <dd>{{ run.startedBy?.displayName ?? '—' }}</dd>
+                  <dt>Comment</dt>
+                  <dd>{{ run.comment ?? '—' }}</dd>
                   <dt>Finished</dt>
                   <dd>{{ run.finishedAt ? (run.finishedAt | date: 'medium') : '—' }}</dd>
                   <dt>Channels</dt>

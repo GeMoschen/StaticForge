@@ -30,7 +30,7 @@ import { assetRoute } from '../../shared/asset-route.util';
 import { ReleaseBadgeComponent } from '../release/release-badge.component';
 import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
-import { ReleasePermissionsStore } from '../release/release-permissions.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { type ReleaseChoice, type ReleaseMode, assetName, eligible, itemKey } from '../release/release-choice.util';
 import { type ReleaseStatus, localeTag, statusLabel } from '../release/release-status.util';
 import { ScheduleDialogComponent } from '../schedules/schedule-dialog.component';
@@ -92,7 +92,7 @@ export class ChangesComponent implements OnDestroy {
   private readonly context = inject(ProjectContextStore);
   protected readonly locales = inject(LocalesStore);
   protected readonly members = inject(ProjectMembersStore);
-  protected readonly permissions = inject(ReleasePermissionsStore);
+  protected readonly permissions = inject(ProjectPermissionsStore);
   protected readonly access = inject(ProjectAccessStore);
 
   readonly projectKey = input.required<string>();

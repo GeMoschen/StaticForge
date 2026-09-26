@@ -78,6 +78,8 @@ Because rendering is fully separated from content, the same content can be emitt
 | G5 | Generation of a 5,000-page project completes predictably | Full build < 5 min, incremental < 10 s |
 | G6 | The editing UI is fast, accessible and keyboard-driven | WCAG 2.2 AA verified, core flows keyboard-complete |
 
+**G1 and the publish policy (M28).** Since M27 a change goes online in two steps: it is **released** (§5.5) and then **built** (§18). Each project decides with its **publish policy** (§8.3) which of these steps its editors may take themselves: release, schedule releases, start incremental builds to the default target, start full builds. A project that opens `RELEASE` and `INCREMENTAL_BUILD` meets G1 without a developer — the editor releases a page and presses *Build now*. Nothing is opened by default, so a project that keeps the default has developers release and build, as in M27.
+
 ### 2.2 Non-goals (v1)
 
 - No per-asset ACLs — permissions are per project only.
@@ -509,6 +511,7 @@ project
   description   text
   default_channel_id bigint FK output_channel
   created_at, created_by, archived
+  publish_policy json                   -- {"editor": [...]}, what editors may publish (M28, §8.3)
 ```
 
 Projects are hard isolation boundaries. Every asset query is filtered by `project_id` at the repository level via a mandatory parameter — there is no repository method that can read across projects except instance-admin reports.
@@ -516,7 +519,7 @@ Projects are hard isolation boundaries. Every asset query is filtered by `projec
 **Archived projects (M26).** `POST /projects/{key}/archive` (instance admin) makes a project read-only and hides it from its members; `POST /projects/{key}/unarchive` reverses it. Both record a revision, audit `PROJECT_ARCHIVED` / `PROJECT_UNARCHIVED` and bump the token epoch of every member (§9.2), so the change applies on each member's next request. While a project is archived:
 
 - **Members** get `404` for every endpoint of the project, as for a non-member (it is left out of the token's `projects` claim); it is missing from their `GET /projects` and from the memberships of `/auth/me`. Their memberships stay and come back with unarchive.
-- **Instance admins** see it (`archived: true`) and can read everything, but every write answers `409 SF-DOM-0141` "Project is archived" — theirs too. The guard is central (every revision allocation) plus explicit checks on the writes that allocate no revision (generation start and promote, share-link creation, search reindex, URL-registry overrides, generation targets). The API admits only: unarchive, archive (a no-op), requests that change nothing (`/generations/plan`, `/cdl/validate`, `/octl/validate`, text-media validation, section preview, record-set `preview-query`, `export/selection`, `import/analyze`, `releases/plan` and `schedules/preview-times`, M27) and cancelling a run started before archiving, which may also finish. Schedules of an archived project don't execute (§18.7).
+- **Instance admins** see it (`archived: true`) and can read everything, but every write answers `409 SF-DOM-0141` "Project is archived" — theirs too. The guard is central (every revision allocation) plus explicit checks on the writes that allocate no revision (generation start and promote, share-link creation, search reindex, URL-registry overrides, generation targets). The API admits only: unarchive, archive (a no-op), requests that change nothing (`/generations/plan`, `/cdl/validate`, `/octl/validate`, text-media validation, section preview, record-set `preview-query`, `export/selection`, `import/analyze`, `releases/plan` and `schedules/preview-times`, M27; `publish-policy/impact`, M28) and cancelling a run started before archiving, which may also finish. Schedules of an archived project don't execute (§18.7).
 - Share links issued earlier answer `404`; the search index is closed and catches up on unarchive; published output is left as it is.
 - Deleting an account (§8.2) still removes its memberships of archived projects.
 
@@ -568,7 +571,7 @@ A user may hold exactly one role per project.
 | Role | Read content | Edit content | Edit templates & channels | Generate/publish | Manage members |
 |---|---|---|---|---|---|
 | `VIEWER` | ✅ | — | — | — | — |
-| `EDITOR` | ✅ | ✅ | — | preview only | — |
+| `EDITOR` | ✅ | ✅ | — | preview; release and builds per the project's publish policy (M28) | — |
 | `DEVELOPER` | ✅ | ✅ | ✅ | ✅ | — |
 | `PROJECT_ADMIN` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
@@ -576,7 +579,20 @@ A user may hold exactly one role per project.
 
 **Who manages what (M26).** Only instance admins create, edit, disable and delete accounts and change system roles (`/api/v1/admin/users`). A `PROJECT_ADMIN` adds **existing** accounts to their project — found through `GET /users/lookup`, which never returns emails — changes roles and removes members; a disabled or deleted account can't be added (`409`). Instance admins reach every project without a membership and are not listed as members. The members list shows emails to project admins and instance admins only; everyone else gets them as `null`.
 
-**No per-asset rights in v1.** Authorization is `(user, project) → role`, evaluated once per request and cached in the security context.
+**No per-asset rights in v1.** Authorization is `(user, project) → role`, evaluated once per request and cached in the security context; publishing operations add the project's publish policy (below, §8.4).
+
+**Publish policy (M28).** A project admin decides per project what editors may do to put content online. Four permissions, all **off** by default — new projects and every project that existed before M28 start with none:
+
+| Permission | Opens to editors | Requires |
+|---|---|---|
+| `RELEASE` | Release, discard and unpublish content (§5.5, §10.4) — in the release bar and as a batch in the Changes view | — |
+| `SCHEDULE_RELEASE` | One-off scheduled `RELEASE`/`UNPUBLISH` actions (§18.7), and editing, running now, re-pinning and cancelling their own; a "then generate" step also needs the build permission that run needs | `RELEASE` |
+| `INCREMENTAL_BUILD` | Incremental runs to the project's default target, whole or limited to a folder or pages; cancelling runs they started (§18.1) | — |
+| `FULL_BUILD` | Full runs and runs to any target | `INCREMENTAL_BUILD` |
+
+The toggles apply to `EDITOR` only: `VIEWER` never holds a publish permission; `DEVELOPER`, `PROJECT_ADMIN` and instance admins always hold all four, whatever the policy says. Whatever the policy, these stay with developers: generating at a pinned past revision, promote/rollback, generation schedules (`GENERATION`, `RECURRING_GENERATION`), changing or cancelling someone else's schedule, and target configuration (create `DEVELOPER`, update and delete `PROJECT_ADMIN`). There is no approval workflow and no extra role.
+
+The policy is stored as `project.publish_policy` (JSON `{"editor": ["RELEASE", …]}`, changelog `v1.0/025-publish-policy.xml`) and changed through `PUT /projects/{key}/publish-policy` (§20.2). A policy that breaks an implication is `400 SF-API-0400` with one message per broken rule under `errors`. The column is overwritten in place, like the locale configuration; each change allocates an `UPDATE` revision (summary entry `PROJECT`, field `publishPolicy`) for attribution and is audited as `PUBLISH_POLICY_SET` (§26.3). Time travel doesn't show a historical policy, and enforcement always uses the current one. The archived guard applies (`409 SF-DOM-0141`).
 
 ### 8.4 Authorization implementation
 
@@ -587,6 +603,17 @@ public TemplateDto update(...) { … }
 ```
 
 `ProjectAuthorizationService.has(projectKey, minimumRole)` reads the role from the access token's `projects` claim (§9.2; an instance admin passes everywhere), compares against the role ordinal, and answers `403` with a problem document when the role is too low. A missing membership yields `404` rather than `403`, so project existence is not leaked. Archived projects are left out of the claim, so their members get `404` (§8.1); instance admins pass and then meet the read-only guard (`409 SF-DOM-0141`).
+
+**Publish permissions (M28).** Publishing operations are checked with `ProjectAuthorizationService.can(projectKey, requirement)`:
+
+```java
+@PreAuthorize("@projectAuth.can(#projectKey, 'RELEASE')")          // a publish permission
+@PreAuthorize("@projectAuth.can(#projectKey, 'ROLE:DEVELOPER')")   // a role no policy opens
+```
+
+The role still comes from the token; the project's policy is read from the database on **every** check — no cache, and it is not part of any claim — so a policy change applies on every editor's **next request** without a token refresh or an epoch bump. Non-members get `404` as with `has`. A denial is `403 SF-API-0403` whose problem carries the extension `permission`: the missing permission name, or `ROLE:<role>` (Appendix B). The publishing controllers use `can` for their role-only guards too (`ROLE:EDITOR`, `ROLE:DEVELOPER`, `ROLE:PROJECT_ADMIN`), so every denial on them names what is missing; other endpoints keep `has`. A test scans every `@projectAuth.can(…)` literal and fails on an unknown name.
+
+One rule, three callers. `PublishRequirements` (a minimum role plus publish permissions) is the single requirement type for endpoints, generation requests (`GenerationAuthorization`, §18.1) and scheduled actions (`ScheduledActionHandler.requirements`, §18.7); `PublishPolicy.grants(role, permission)` is the single rule (`VIEWER` nothing, `EDITOR` what the policy lists, `DEVELOPER`/`PROJECT_ADMIN` everything). Requests whose requirement depends on the body call `satisfies(projectKey, requirements)`. Where there is no token — the scheduler, when a schedule is saved or changed and before every execution, and the release service for whoever acts (`PolicyReleasePermissionCheck`) — `PublishPermissionEvaluator` (sf-domain) evaluates the same requirements for a stored user: the role from the **membership row**, the current policy, and the account — a `DISABLED` or `DELETED` account holds nothing, a `LOCKED` one (temporary sign-in lockout) keeps its permissions (M27.4.1), an instance admin holds everything. `ProjectDetail.permissions` lists the caller's effective permissions; clients show publishing controls from it and never derive them from the role.
 
 ---
 
@@ -1564,7 +1591,7 @@ The same asset type also backs breadcrumbs, sitemaps and index listings; `naviga
 
 | Trigger | Scope | Actor |
 |---|---|---|
-| `POST /projects/{p}/generations` | full or incremental | DEVELOPER / PROJECT_ADMIN |
+| `POST /projects/{p}/generations` | full or incremental | DEVELOPER / PROJECT_ADMIN; EDITOR per the publish policy (below, M28) |
 | Save (auto) | preview only, in-memory | any editor |
 | Scheduled (M27) | one-off or recurring (cron) generation, or "then generate" after a scheduled release — §18.7 | the schedule's owner |
 
@@ -1576,16 +1603,29 @@ Request body:
   "revision": null,
   "channels": ["html", "markdown"],
   "targetId": 3,
-  "scope": { "folderPath": "/products/", "assetUuids": [] },
+  "folderPath": "/products/",
+  "assetUuids": [],
   "comment": "Autumn campaign live"
 }
 ```
+
+A request without `mode` is a `FULL` run; one without `targetId` goes to the default target (else the first one).
 
 `revision: null` means "current". Passing a revision generates the site **as it was** — its drafts of live types and its release state (§5.5) — which is the mechanism behind reproducible republishing and rollback verification.
 
 **Saving changes nothing online (M27).** A build renders released versions only; a release, unpublish or discard is a state change and starts no build. The site changes with the next run — started by hand, by a schedule, or by a scheduled release's "then generate".
 
-`scope` limits the pages a run renders: pages in `folderPath` (and below) or listed in `assetUuids`; with both, either qualifies. A scoped run publishes its pages on top of the build the target serves, so the rest of the site stays online (§18.4).
+The scope — `folderPath`, `assetUuids` — limits the pages a run renders: pages in `folderPath` (and below) or listed in `assetUuids`; with both, either qualifies. A scoped run publishes its pages on top of the build the target serves, so the rest of the site stays online (§18.4).
+
+**Who may start which run (M28).** `GenerationAuthorization.requiredFor(project, mode, targetId, revision)` decides, for the generation endpoints and a scheduled release's "then generate" alike:
+
+| Request | Needs |
+|---|---|
+| `revision` set (rendering the past is rollback-like) | `DEVELOPER`, whatever the policy |
+| `mode: INCREMENTAL` **explicitly**, `targetId` absent or the target an absent one resolves to (the default, else the first), scoped or not | `INCREMENTAL_BUILD` |
+| anything else — a missing `mode` is `FULL`, another target | `FULL_BUILD` |
+
+`VIEWER`s are refused at the annotation (`ROLE:EDITOR`); the body is checked next (`403` with the missing permission). An incremental request that the planner turns into a full plan (`fallbackCause`, e.g. after a channel settings change) still needs only `INCREMENTAL_BUILD`: the fallback is the system's decision. A target id of another project needs `FULL_BUILD` like any non-default id, so the answer reveals nothing. The dry run (`POST /generations/plan`) is authorized exactly like a start. **Cancel:** developers cancel any run; an editor holding `INCREMENTAL_BUILD` only a run they started — a scheduled run counts as started by the schedule's owner — and anyone else's run is `403` with `ROLE:DEVELOPER`. **Promote** stays `DEVELOPER`.
 
 ### 18.2 Stages
 
@@ -1704,6 +1744,8 @@ The plan is stored right after PLAN, so a run failing later is still explainable
 
 Runs are queued per project (one active run per project; a second request returns `409` with the running run's id). Progress is streamed to the UI via Server-Sent Events on `GET /generations/{id}/events`.
 
+**Attribution (M28).** `started_by` is the caller — for a scheduled run the schedule's owner. The request's `comment` is stored trimmed; a blank one is none, a longer one is cut to 500 characters ending in "…". The run view carries `comment` and `startedBy {id, displayName}` — "Deleted user" for a deleted account, `null` when unknown (a system start). Start, cancel and promote are audited (§26.3). An `Idempotency-Key` is scoped by project and user: another user reusing a key starts their own run instead of receiving someone else's.
+
 ### 18.6 Performance targets
 
 | Project size | Full build | Incremental (1 page) |
@@ -1737,7 +1779,7 @@ Releases, unpublishing and builds can be scheduled. Tables (`v1.0/022-scheduler.
 
 **Time zones.** One-off actions are stored as UTC instants. Recurring ones store the cron expression (5 fields, normalized to Spring's 6 with seconds `0`) **and** the creator's IANA zone, and are evaluated in that zone: a local time skipped by a DST switch runs at the end of the gap, a repeated one runs once. A one-off time the viewer enters follows the same rule (a skipped time becomes the end of the gap, a repeated one its first occurrence) before it is sent as an instant. The UI takes and shows times in the viewer's zone and names the schedule's zone where it differs; next-run previews come from the server (`POST …/schedules/preview-times`).
 
-**Authority.** An action runs as its **owner** (initially the creator). `requirements(spec)` returns an `ActionRequirements` (a minimum role plus named permissions — empty in M27; `DEVELOPER` for every type); the API checks it for the caller on create, edit, cancel, run-now, re-pin and take-over, and the engine checks it for the owner at every execution (`ActionAuthority`). An owner who lost it — removed, demoted, disabled, deleted — fails the execution with `SF-DOM-0163` and a recurring action is **paused** (`FAILED`, no `next_run_at`); a permitted user **takes over** (becomes the owner): a paused recurring action resumes at its next slot, a failed one-off becomes due at its original time with the missed policy applied to it.
+**Authority.** An action runs as its **owner** (initially the creator). `requirements(spec)` returns `PublishRequirements` (§8.4; M28): `RELEASE`/`UNPUBLISH` need `SCHEDULE_RELEASE`, plus with "then generate" what that incremental run needs (§18.1: `INCREMENTAL_BUILD` for the default target, `FULL_BUILD` for another — evaluated on the target as stored, so a target that stops being the default raises the requirement); `GENERATION`/`RECURRING_GENERATION` need `DEVELOPER` whatever the policy. The API checks them for the caller on create and edit (the action as saved), cancel, run-now, re-pin and take-over; editing, cancelling, running now or re-pinning **someone else's** action needs `DEVELOPER` on top, while taking over needs only the requirements. The engine checks them for the owner at every execution (`ActionAuthority` → `PublishPermissionEvaluator`), and the release service checks the owner's `RELEASE` again. An owner who lost them — removed, demoted, disabled, deleted, or an editor whose permission the policy no longer grants — fails the execution with `SF-DOM-0163` and a message naming what is missing ("Owner no longer permitted (SCHEDULE_RELEASE): 'bob' is EDITOR without SCHEDULE_RELEASE in the project's publish policy."); a recurring action is **paused** (`FAILED`, no `next_run_at`), a one-off one fails; a permitted user **takes over** (becomes the owner): a paused recurring action resumes at its next slot, a failed one-off becomes due at its original time with the missed policy applied to it.
 
 **Busy project.** A generation step that meets an active run stays open (`WAITING`, the action `PENDING` with its `next_run_at` unchanged) and is retried on every poll until the run ends, bounded by the missed policy; the execution's `detail.waitingForRun` names the run. A scheduled release that can't start its then-generate within a `SKIP_IF_LATER_THAN` bound ends `PARTIAL` with the release done.
 
@@ -1804,7 +1846,7 @@ Releases, unpublishing and builds can be scheduled. Tables (`v1.0/022-scheduler.
 |---|---|---|---|
 | `GET` | `/projects` | authenticated | Only projects the user is a member of, archived ones left out; every project for instance admins |
 | `POST` | `/projects` | INSTANCE_ADMIN | Creates revision 1 |
-| `GET` | `/projects/{key}` | VIEWER | |
+| `GET` | `/projects/{key}` | VIEWER | With `publishPolicy {editor}` and `permissions` — the caller's effective publish permissions (M28) |
 | `PUT` | `/projects/{key}` | PROJECT_ADMIN | |
 | `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN | Read-only and hidden from members (§8.1); `204` |
 | `POST` | `/projects/{key}/unarchive` | INSTANCE_ADMIN | Reverses archive; `204` |
@@ -1812,6 +1854,9 @@ Releases, unpublishing and builds can be scheduled. Tables (`v1.0/022-scheduler.
 | `PUT` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN | Add or set role `{role}`; a disabled or deleted account is `409` |
 | `DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN | |
 | `GET` | `/projects/{key}/audit` | PROJECT_ADMIN | The project's audit entries, newest first |
+| `GET` | `/projects/{key}/publish-policy` | VIEWER | `{editor: [...]}`, in declaration order (M28, §8.3) |
+| `PUT` | `/projects/{key}/publish-policy` | PROJECT_ADMIN | Body `{editor}`; `400 SF-API-0400` with `errors` (unknown name, broken implication); an identical policy is `200` with no revision and no audit; otherwise one revision + `PUBLISH_POLICY_SET` |
+| `POST` | `/projects/{key}/publish-policy/impact` | PROJECT_ADMIN | Body = a proposed policy → `{failingSchedules: [{id, type, runAt, ownerUserId, ownerName, missingPermission}]}`: the pending schedules whose owner satisfies them now but wouldn't under the proposal (`runAt` = next run); read-only, allowed on archived projects |
 
 **Users and administration (M26)** — `/admin/**` is instance admin only (`403` otherwise).
 
@@ -1922,15 +1967,17 @@ Move, rename, uid change, history, usages, generic delete and restore of dataset
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/projects/{p}/generations` | Run history |
-| `POST` | `/projects/{p}/generations` | Start run (§18.1) |
+| `POST` | `/projects/{p}/generations` | Start run (§18.1): EDITOR at the annotation, then the body decides — `INCREMENTAL_BUILD`, `FULL_BUILD` or `DEVELOPER` (M28) |
 | `GET` | `/projects/{p}/generations/{id}` | Status + diagnostics |
 | `GET` | `/projects/{p}/generations/{id}/events` | SSE progress |
-| `POST` | `/projects/{p}/generations/{id}/cancel` | |
-| `POST` | `/projects/{p}/generations/{id}/promote` | Rollback to a previous build |
-| `POST` | `/projects/{p}/generations/plan` | Dry run: the plan and reasons a run started now would have (M22) |
+| `POST` | `/projects/{p}/generations/{id}/cancel` | DEVELOPER any run; an EDITOR holding `INCREMENTAL_BUILD` a run they started (M28) |
+| `POST` | `/projects/{p}/generations/{id}/promote` | Rollback to a previous build (DEVELOPER) |
+| `POST` | `/projects/{p}/generations/plan` | Dry run: the plan and reasons a run started now would have (M22); authorized exactly like a start (M28) |
 | `GET` | `/projects/{p}/generations/{id}/plan` | A run's stored plan and reasons (M22) |
 | `GET` | `/projects/{p}/assets/{uuid}/impact` | What would rebuild if the asset changed (M22) |
-| `GET`/`POST`/`PUT`/`DELETE` | `/projects/{p}/targets[/{id}]` | Target CRUD (PROJECT_ADMIN) |
+| `GET`/`POST`/`PUT`/`DELETE` | `/projects/{p}/targets[/{id}]` | Target CRUD: read VIEWER, create DEVELOPER, update and delete PROJECT_ADMIN |
+
+History, status, events and stored plans are VIEWER. Run views carry `comment` and `startedBy` (§18.5). Every `403` of these endpoints, the release and schedule endpoints and the publish-policy endpoints carries `permission` (Appendix B).
 
 **Search** (M23) — editorial full-text search over a project's *current* assets, from an embedded per-project index
 kept after commit (§21.4). Time travel doesn't change what it returns.
@@ -1941,19 +1988,19 @@ kept after commit (§21.4). Time travel doesn't change what it returns.
 | `GET` | `/projects/{p}/search/status` | `{indexedRevision, latestRevision, lag, state: READY\|CATCHING_UP\|REBUILDING\|UNAVAILABLE, lastRebuildAt}`. VIEWER |
 | `POST` | `/projects/{p}/search/reindex` | Full rebuild without query downtime; `202` with the status, `409` while one runs. PROJECT_ADMIN |
 
-**Releases and changes** (M27, §5.5, §10.4) — body of the release calls: `{items: [{assetUuid, locale?}], includeDependencies?: [{assetUuid, locale?}], comment?}`; an item without `locale` means every language of the asset.
+**Releases and changes** (M27, §5.5, §10.4; `RELEASE` in the role column is the publish permission, §8.3 — developers always, editors per the policy, M28) — body of the release calls: `{items: [{assetUuid, locale?}], includeDependencies?: [{assetUuid, locale?}], comment?}`; an item without `locale` means every language of the asset.
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | `POST` | `/projects/{p}/releases/plan` | VIEWER | Dry run: `{items, dependencies: [{target, reason, via, includedByDefault}], incomplete: [{uuid, locale, issues}], warnings}`; allowed on archived projects |
-| `POST` | `/projects/{p}/releases` | DEVELOPER | Releases `items` + the kept `includeDependencies` in one revision → `{revision, applied, skipped, sharedFieldsKept}` (`revision: null` when nothing changed); `422 SF-DOM-0150` incomplete, `0151` unknown asset/locale or a live type, `0153` empty selection, `0154` foreign pinned version |
-| `POST` | `/projects/{p}/releases/unpublish` | DEVELOPER | Takes the items offline; drafts stay |
-| `POST` | `/projects/{p}/releases/discard` | DEVELOPER | Writes the released versions back as drafts; `422 SF-DOM-0152` for items never released |
+| `POST` | `/projects/{p}/releases` | `RELEASE` | Releases `items` + the kept `includeDependencies` in one revision → `{revision, applied, skipped, sharedFieldsKept}` (`revision: null` when nothing changed); `422 SF-DOM-0150` incomplete, `0151` unknown asset/locale or a live type, `0153` empty selection, `0154` foreign pinned version |
+| `POST` | `/projects/{p}/releases/unpublish` | `RELEASE` | Takes the items offline; drafts stay |
+| `POST` | `/projects/{p}/releases/discard` | `RELEASE` | Writes the released versions back as drafts; `422 SF-DOM-0152` for items never released |
 | `GET` | `/projects/{p}/changes` | VIEWER | Every (asset, locale) not `PUBLISHED`: `type`, `status`, `locale` (repeatable), `changedBy`, `folderUuid` (subtree), `q`, `sort=changedAt\|displayName[,asc\|desc]`, `page`, `size` ≤ 200 → `{rows: [{uuid, type, uid, displayName, folderPath, locale, status, changedBy, changedAt, releasedRevision, releasedBy, releasedAt, scheduled}], page, size, totalElements, totalPages}` |
 | `GET` | `/projects/{p}/changes/count` | VIEWER | `{NEW, CHANGED, UNPUBLISHED, DELETION_PENDING, total}` |
 | `GET` | `/projects/{p}/changes/{uuid}/diff` | VIEWER | `?locale=` → `{uuid, locale, status, changes: [FieldChange]}`: released → draft, per locale projection |
 
-**Schedules** (M27, §18.7) — every endpoint is VIEWER; changes check the action type's requirements for the caller (`DEVELOPER` in M27, `403` otherwise). Responses carry `ETag: "v{version}"`.
+**Schedules** (M27, §18.7) — every endpoint is VIEWER; changes check the action's requirements for the caller (M28: `SCHEDULE_RELEASE`, plus the build permission of a "then generate", for `RELEASE`/`UNPUBLISH`; `DEVELOPER` for `GENERATION`/`RECURRING_GENERATION`; `DEVELOPER` on top to change, run now, re-pin or cancel someone else's; take-over only the requirements), `403 SF-API-0403` with `permission` otherwise. Responses carry `ETag: "v{version}"`.
 
 | Method | Path | Notes |
 |---|---|---|
@@ -2429,6 +2476,7 @@ ui/src/app/
 - A silent refresh timer fires at 80% of token lifetime.
 - Route guards: `authGuard`, `projectMemberGuard(minRole)`, `instanceAdminGuard` (`/admin`) and `passwordChangeGuard`. Guards read roles from the decoded token, so navigation never waits on a network call.
 - **Effective role (M26).** `authStore.roleFor(projectKey)` is what every role-gated control reads: an instance admin acts as `PROJECT_ADMIN` everywhere, and in an archived project everyone acts as `VIEWER`. `projectAccessStore.readOnly` (time travel or archived) gates the editors that aren't role-gated; an archived project shows a banner (with *Unarchive* for instance admins).
+- **Publish permissions (M28).** `ProjectPermissionsStore` (`core/project/`) is the one permission helper: signals such as `canEditContent`, `canEditTemplates`, `canManageMembers`, `canManageTargets`, `canRelease`, `canScheduleRelease`, `canIncrementalBuild`, `canFullBuild`, `canCancelRun(run)`, `canPromote`, `canScheduleGeneration`, `canAdminProject`, built from the effective role, `ProjectDetail.permissions` and `projectAccessStore.readOnly` (every write capability is off while read-only). Publish permissions are read from the server, never derived from the role. A `403` carrying `permission` re-reads the project detail and shows "You no longer have permission to …"; the detail is also re-read on every navigation inside the project (a burst of navigations shares one read; one that happens during a read gets another read after it) and when the tab becomes visible again (at most once a minute), so a policy change shows without a reload.
 - **Forced password change (M26).** While `/auth/me` reports `mustChangePassword` — or any call answers `428` — every route leads to `/account/set-password`, which offers only the password form and *Sign out*, then continues to the URL the user was heading for. The own password change signs in again with the new password, since the server revokes every session.
 - `canDeactivate` guard on editors warns on unsaved changes (with "Save and leave" / "Discard" / "Stay").
 
@@ -2615,13 +2663,14 @@ Breakpoints: 1600 / 1280 / 1100 / 840 / 600. Below 840 px the app is **review-or
 7. **Structures.** Source definition, per-channel renderer, live tree preview with a page selector to test `active`/`trail`.
 8. **Channels.** Small table + form. Deleting shows the exact list of templates that will lose a channel body.
 9. **Revisions.** Full-page timeline (the spine, expanded) with filters by user, asset and type; side-by-side diff; restore.
-10. **Generate.** Dialog (mode, channels, target, comment) → live log with per-stage progress, error/warning grouping by code, and a file-count summary. Errors link straight to the offending template line.
+10. **Generate.** Dialog (mode, channels, target, scope, comment) → live log with per-stage progress, error/warning grouping by code, and a file-count summary. Errors link straight to the offending template line. **M28:** *New generation* only with `INCREMENTAL_BUILD`; without `FULL_BUILD` the dialog fixes mode *Incremental* and the default target (shown, not selectable). The **Scope** fieldset — *Limit to folder* (a pages folder) and *Only these pages* — sends `folderPath`/`assetUuids`, and the plan preview reflects it. *Cancel* shows on an editor's own runs (developers: every run), *Promote* for developers only; runs show *Started by* and their comment. A user who can't build sees "Builds are started by developers in this project." instead of a dead button.
 11. **Admin** (`/admin`, instance admins). *Users*: server-paged list with search and status/role filters; create (generated password shown once, or typed with the policy as live checks; "must change password"; first project memberships); a user page with profile, account state, actions (disable/enable, unlock, reset password, sign out everywhere, grant/revoke instance admin, delete by typing the username) whose guard rails show as disabled buttons with the reason, and memberships. *Projects*: every project with members and last change; archive and unarchive. *Audit*: every entry, filterable by action, user, project (or instance only) and day range, the filters kept in the URL.
 12. **Account.** A user menu in the dashboard header and at the foot of the project rail (initials only when collapsed): *My account*, *Administration* for instance admins, *Sign out*. *My account* holds the profile (username and email ask for the current password), the password with live policy checks, the user's projects, and *Sign out everywhere*.
 13. **Members** (project settings tab). Everyone in the project sees the members; project admins add existing accounts through a lookup, change roles and remove members (removing yourself warns and leaves the project). Disabled members show greyed; emails only for project admins.
-14. **Release bar and badges (M27).** Every releasable editor (page, record, record set, global set, media drawer, navigation folder and reference, editorial folders) opens with a bar: the status in the editing language, a compact per-language list, the pending schedules ("Release scheduled for Tue 29 Sep, 09:00 by Ana", linking to the schedule) and — for `DEVELOPER`+, not in time travel or archived — *Release…*, *Unpublish…*, *Discard changes…*, *Schedule…*. Trees, lists and cards show a status badge per row: icon and text (icon only in trees, text for screen readers and in the tooltip, which lists every language), a clock when a schedule touches it. Deleting a published item says it stays online until the deletion is released.
-15. **Changes (M27).** Every unreleased (asset, language), server-paged; filters (type, status, language, changed by, folder, text) and sort in the URL, shown as removable chips; the selected row's released → draft diff with *Open in editor*; multi-select on the page with *Release…*, *Discard changes…*, *Schedule release…*; ↑/↓ move, Space selects, Enter opens the diff. The nav rail shows the count of new, changed and deletion-pending pairs.
-16. **Schedules (M27).** Every schedule, next due first, filtered by type, status and owner; times in the viewer's zone (plus the schedule's zone where it differs); drift warning with *Re-pin*; *Edit*, *Run now*, *Take over*, *Cancel*; an execution history drawer with lateness, outcome, per-item results and links to the revision and the generation run. The schedule dialog (from the release bar, Changes and this page) takes the date and time in the viewer's zone, recurring schedules as presets (hourly, daily, weekdays, weekly) or a cron with the next five runs, the pin, then-generate and missed-run options, and the release plan.
+14. **Release bar and badges (M27).** Every releasable editor (page, record, record set, global set, media drawer, navigation folder and reference, editorial folders) opens with a bar: the status in the editing language, a compact per-language list, the pending schedules ("Release scheduled for Tue 29 Sep, 09:00 by Ana", linking to the schedule) and — not in time travel or archived — *Release…*, *Unpublish…*, *Discard changes…* for users holding `RELEASE` and *Schedule…* for `SCHEDULE_RELEASE` (M28; before M28 `DEVELOPER`+). After a successful release (here or in Changes) a toast offers **Build now** — an incremental run to the default target — to users holding `INCREMENTAL_BUILD`, then *Show progress*; it is a separate, explicit action. Trees, lists and cards show a status badge per row: icon and text (icon only in trees, text for screen readers and in the tooltip, which lists every language), a clock when a schedule touches it. Deleting a published item says it stays online until the deletion is released.
+15. **Changes (M27).** Every unreleased (asset, language), server-paged; filters (type, status, language, changed by, folder, text) and sort in the URL, shown as removable chips; the selected row's released → draft diff with *Open in editor*; multi-select on the page with *Release…*, *Discard changes…* (`RELEASE`) and *Schedule release…* (`SCHEDULE_RELEASE`); ↑/↓ move, Space selects, Enter opens the diff. The nav rail shows the count of new, changed and deletion-pending pairs.
+16. **Schedules (M27).** Every schedule, next due first, filtered by type, status and owner; times in the viewer's zone (plus the schedule's zone where it differs); drift warning with *Re-pin*; *Edit*, *Run now*, *Take over*, *Cancel*; an execution history drawer with lateness, outcome, per-item results and links to the revision and the generation run. The schedule dialog (from the release bar, Changes and this page) takes the date and time in the viewer's zone, recurring schedules as presets (hourly, daily, weekdays, weekly) or a cron with the next five runs, the pin, then-generate and missed-run options, and the release plan. **M28:** "then generate" is offered with `INCREMENTAL_BUILD`, a target other than the default only with `FULL_BUILD`; generation schedules only for developers; *Edit*, *Run now*, *Re-pin* and *Cancel* follow the server rules (own schedule with its permissions, or a developer).
+17. **Publishing by editors (M28).** A card at the top of *Settings → Generation* with four switches — "Release, discard and unpublish content", "Schedule releases and unpublishing", "Start incremental builds to the default target", "Start full builds and builds to any target" — and the line "Developers and project admins can always do all of this. Promote/rollback, targets and generation schedules stay with developers." A dependent switch is disabled ("Needs …") while its prerequisite is off, and switching the prerequisite off switches it off too. Project admins edit it (*Save* only when changed); everyone else sees it read-only with "Only project admins can change this.", as does everyone in time travel and archived projects. Before saving, the impact check runs; when pending schedules would fail, a confirmation lists them (type, time in the viewer's zone, owner, missing permission) with *Save anyway* / *Cancel*.
 
 ### 24.6 Interaction rules
 
@@ -2818,14 +2867,14 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 |---|---|
 | Transport | TLS 1.3 only, HSTS, secure cookies |
 | Auth | §9; BCrypt cost 12; password policy and server-enforced forced change (§8.2); lockout (15 failures → 30 min); refresh rotation with reuse detection; immediate revocation by token epoch (§9.2) |
-| AuthZ | Per-project role check on every endpoint; deny-by-default; project existence not leaked |
+| AuthZ | Per-project role check on every endpoint; publishing operations checked against the project's publish policy, read per request (§8.4, M28); deny-by-default; project existence not leaked |
 | Injection | Parameterized JPQL/SQL only; no string-built queries; OCTL cannot reach Java |
 | XSS | Channel-default escaping in OCTL; TipTap schema-constrained input; Angular sanitization; strict CSP on preview |
 | Upload | Tika type sniffing, allow-list, size cap, SVG sanitization, EXIF strip, non-executable storage path |
 | SSRF | No server-side fetch of user-supplied URLs in v1 |
 | Path traversal | Output paths normalized and asserted to stay under the target root; `..` rejected at validation |
 | Secrets | Env/secret-manager only; never in the DB or logs |
-| Audit | Revisions cover content; a separate `audit_log` covers auth (`AUTH_LOGIN`, `AUTH_LOGIN_FAILED`), accounts (`USER_CREATED`, `USER_UPDATED`, `USER_RENAMED`, `USER_DISABLED`, `USER_ENABLED`, `USER_UNLOCKED`, `USER_PASSWORD_RESET`, `USER_PASSWORD_CHANGED`, `USER_SYSTEM_ROLE_SET`, `USER_SESSIONS_REVOKED`, `USER_DELETED` — instance-level, no project), membership (`MEMBER_ROLE_SET`, `MEMBER_REMOVED`), `PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`, channel and target changes, schedules (`SCHEDULE_CREATED`, `_UPDATED`, `_CANCELLED`, `_TAKEN_OVER`, `_RUN_NOW`, `_IMPORTED` (M27.8), and per execution `SCHEDULE_EXECUTED`/`_FAILED`/`_SKIPPED`, M27). Release actions are revisions, not audit entries. Instance admins read all of it (`/admin/audit`), project admins their project's. Intended retention 1 year — no purge job exists yet |
+| Audit | Revisions cover content; a separate `audit_log` covers auth (`AUTH_LOGIN`, `AUTH_LOGIN_FAILED`), accounts (`USER_CREATED`, `USER_UPDATED`, `USER_RENAMED`, `USER_DISABLED`, `USER_ENABLED`, `USER_UNLOCKED`, `USER_PASSWORD_RESET`, `USER_PASSWORD_CHANGED`, `USER_SYSTEM_ROLE_SET`, `USER_SESSIONS_REVOKED`, `USER_DELETED` — instance-level, no project), membership (`MEMBER_ROLE_SET`, `MEMBER_REMOVED`), `PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`, channel and target changes, schedules (`SCHEDULE_CREATED`, `_UPDATED`, `_CANCELLED`, `_TAKEN_OVER`, `_RUN_NOW`, `_IMPORTED` (M27.8), and per execution `SCHEDULE_EXECUTED`/`_FAILED`/`_SKIPPED`, M27), the publish policy (`PUBLISH_POLICY_SET`, target `project:<key>`, detail `{before, after}`, M28) and generation runs (M28: `GENERATION_STARTED`, target `generation:<runId>`, detail `{runId, targetId, mode, channels, scoped, revision, scheduledActionId?}` — as the schedule's owner for a scheduled start; `GENERATION_CANCELLED` and `GENERATION_PROMOTED`, detail `{runId, targetId}`). Release actions are revisions, not audit entries. Instance admins read all of it (`/admin/audit`), project admins their project's. Intended retention 1 year — no purge job exists yet |
 | Rate limits | Login, preview render, generation start |
 | Headers | CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` |
 
@@ -2874,7 +2923,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 
 Total ≈ 25 weeks with a team of 2 backend, 2 frontend, 1 designer, 0.5 QA.
 
-**Post-v1 candidates:** editorial approval workflow (release state and scheduled publishing shipped in M27, §5.5, §18.7), multi-language content dimension (shipped in M24), per-asset permissions, template packages shareable across projects, webhooks, headless JSON channel with an incremental delivery API, visual template scaffolding.
+**Post-v1 candidates:** editorial approval workflow (release state and scheduled publishing shipped in M27, §5.5, §18.7; editors publishing per project policy in M28, §8.3), multi-language content dimension (shipped in M24), per-asset permissions, template packages shareable across projects, webhooks, headless JSON channel with an incremental delivery API, visual template scaffolding.
 
 ---
 
@@ -2999,7 +3048,7 @@ Same content. Two channels. No duplication.
 |---|---|---|
 | `SF-API-0400` | 400 | Malformed request body; invalid channel output settings (`fieldErrors` attached, §15.2) |
 | `SF-API-0401` | 401 | Missing or expired access token |
-| `SF-API-0403` | 403 | Role insufficient for this project action |
+| `SF-API-0403` | 403 | Role insufficient for this project action. For publishing operations (M28: release, schedules, generation, targets, publish policy) the problem carries `permission`: the missing publish permission (`RELEASE`, `SCHEDULE_RELEASE`, `INCREMENTAL_BUILD`, `FULL_BUILD`) or `ROLE:<role>` for a role-only rule (§8.4) |
 | `SF-API-0404` | 404 | Asset, project or revision not found (or not visible) |
 | `SF-API-0409` | 409 | Revision conflict (`If-Match` mismatch); also a stale schedule version (`If-Match: "v{n}"`) or an edit that raced a scheduler claim (M27) |
 | `SF-API-0412` | 412 | `If-Match` header missing on a mutating request |
@@ -3030,7 +3079,7 @@ Same content. Two channels. No duplication.
 | `SF-DOM-0160` | 422 | Unknown schedule type; also an execution's failure code (paused) (M27) |
 | `SF-DOM-0161` | 422 | Schedule params don't fit the type (`field` names the offender): unknown mode, target, channel or scope, `pinPolicy`/`thenGenerate` on a generation; also an execution failure when a channel was disabled since (M27) |
 | `SF-DOM-0162` | — | Execution failure: the generation target is gone; a recurring schedule pauses (M27) |
-| `SF-DOM-0163` | — | Execution failure: the owner is no longer permitted (removed, demoted, disabled, deleted); a recurring schedule pauses until taken over (M27) |
+| `SF-DOM-0163` | — | Execution failure: the owner is no longer permitted (removed, demoted, disabled, deleted, or — M28 — an editor whose permission the publish policy no longer grants; the message names it); a recurring schedule pauses until taken over (M27) |
 | `SF-DOM-0164` | 422 | Schedule time lies in the past (M27) |
 | `SF-DOM-0165` | 422 | Invalid cron expression or unknown/missing time zone (M27) |
 | `SF-DOM-0166` | 422 | Timing doesn't fit the type: a cron on a one-off type, a run time on a recurring one, or neither (M27) |
@@ -3078,4 +3127,4 @@ Same content. Two channels. No duplication.
 - **Q5** — Membership is `(project, user)` only; there is no email-invite/guest-user concept. A member must already be an `app_user`. Instance admin creates users (or an invite-with-account-creation flow) out of band; the members API then binds them by `userId`. This matches the implemented `ProjectMemberRepository`/`ProjectController` members endpoints.
 - **Q6** — Filesystem + Nginx is the v1 pilot target (matches the committed `infra/` stack). S3 is implemented but de-prioritized: it is not the default and has no dedicated ops runbook at v1. M4 priorities were set accordingly (filesystem atomic staged publish + `current` symlink first).
 - **Q3/Q4/Q7** — Decisions recorded above are consistent with what the code implements; Q2 remains explicitly v2. No v1-affecting question is left open.
-- **Post-v1 "scheduled publishing" (§27)** — delivered in M27 together with a release state: drafts vs released versions per language (§5.5), release/unpublish/discard with dependency proposals and a completeness gate (§10.4), and a multi-node-safe scheduler for releases, unpublishing and one-off or recurring builds (§18.7). An approval (four-eyes) workflow remains out of scope (§2.2); opening release and scheduling to editors by project policy is M28.
+- **Post-v1 "scheduled publishing" (§27)** — delivered in M27 together with a release state: drafts vs released versions per language (§5.5), release/unpublish/discard with dependency proposals and a completeness gate (§10.4), and a multi-node-safe scheduler for releases, unpublishing and one-off or recurring builds (§18.7). An approval (four-eyes) workflow remains out of scope (§2.2). Opening release, scheduling and builds to editors by a per-project publish policy was delivered in M28 (§8.3, §8.4, §18.1).

@@ -13,6 +13,7 @@ import { TimeTravelStore } from '../revisions/time-travel.store';
 import { TemplatesService } from '../templates/templates.service';
 import { ContentService, etagFor, type DatasetDetailView } from './content.service';
 import { DatasetSchemaEditorComponent } from './dataset-schema-editor.component';
+import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 
 const CDL = `content {
   editor text name { label "Name" required }
@@ -77,6 +78,7 @@ async function setup(options: { role?: string; revision?: number } = {}) {
       { provide: ApiClient, useValue: {} },
       { provide: AuthStore, useValue: { roleFor: () => options.role ?? 'DEVELOPER', isArchived: () => false } },
       { provide: TimeTravelStore, useValue: timeTravel },
+      provideProjectPermissions({ role: () => options.role ?? 'DEVELOPER', readOnly: () => timeTravel.isTimeTravel() }),
     ],
   });
   // Part of the application's view tree, as in the app: after-render hooks then run after this view rendered.

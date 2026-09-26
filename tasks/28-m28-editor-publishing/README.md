@@ -117,21 +117,21 @@ found in the generation surface (see "Findings").
 
 ## Exit criteria (epic is done when)
 
-- [ ] A project admin switches each toggle on the Generation tab; members see the policy read-only; the change is a
+- [x] A project admin switches each toggle on the Generation tab; members see the policy read-only; the change is a
       revision plus a `PUBLISH_POLICY_SET` audit entry, and applies to an editor's **next request** (tested with a
       still-valid access token).
-- [ ] With all toggles off, an editor sees no release, schedule, build, cancel or promote control and every such
+- [x] With all toggles off, an editor sees no release, schedule, build, cancel or promote control and every such
       endpoint answers `403 SF-API-0403` with `permission`.
-- [ ] With `RELEASE` an editor releases/discards/unpublishes; with `SCHEDULE_RELEASE` they schedule one-off
+- [x] With `RELEASE` an editor releases/discards/unpublishes; with `SCHEDULE_RELEASE` they schedule one-off
       releases/unpublishes (then-generate only within their build permission); with `INCREMENTAL_BUILD` they start
       incremental runs to the default target and cancel their own; with `FULL_BUILD` full runs to any target.
-- [ ] `DEVELOPER+` behaviour is unchanged; promote, target config, `GENERATION` and `RECURRING_GENERATION` schedules
+- [x] `DEVELOPER+` behaviour is unchanged; promote, target config, `GENERATION` and `RECURRING_GENERATION` schedules
       stay `DEVELOPER+`.
-- [ ] An editor's pending schedule fails with "creator no longer permitted" after the permission is switched off, and
+- [x] An editor's pending schedule fails with "creator no longer permitted" after the permission is switched off, and
       the admin was warned by the impact check first.
-- [ ] Runs show `comment` and `startedBy`; start/cancel/promote are audited.
-- [ ] The permission matrix test covers every publish-related handler for every role × policy combination.
-- [ ] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey green.
+- [x] Runs show `comment` and `startedBy`; start/cancel/promote are audited.
+- [x] The permission matrix test covers every publish-related handler for every role × policy combination.
+- [x] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey green.
 
 ## Features (dependency order)
 

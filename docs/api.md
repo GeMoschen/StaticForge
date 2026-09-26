@@ -1,6 +1,6 @@
 # StaticForge CMS — API reference
 
-Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (137 paths as of M27), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
+Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (139 paths as of M28), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
 
 ## 1. Conventions
 
@@ -32,12 +32,14 @@ refresh returns a token with the current roles.
 |---|---|---|
 | `GET` | `/projects` | authenticated (member projects only; archived projects only for INSTANCE_ADMIN) |
 | `POST` | `/projects` | INSTANCE_ADMIN |
-| `GET`/`PUT` | `/projects/{key}` | VIEWER / PROJECT_ADMIN |
+| `GET`/`PUT` | `/projects/{key}` | VIEWER / PROJECT_ADMIN — the detail carries `publishPolicy` and the caller's `permissions` (M28, §3.3) |
 | `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN — read-only (`409 SF-DOM-0141` on every write) and `404` for members until unarchived |
 | `POST` | `/projects/{key}/unarchive` | INSTANCE_ADMIN |
 | `GET` | `/projects/{key}/members` | VIEWER — `email` only for PROJECT_ADMIN and instance admins, `status` per member |
 | `PUT`/`DELETE` | `/projects/{key}/members/{userId}` | PROJECT_ADMIN — `PUT {role}` adds or changes; a disabled/deleted account is `409` |
 | `GET` | `/projects/{key}/audit` | PROJECT_ADMIN — the project's audit entries, newest first |
+| `GET`/`PUT` | `/projects/{key}/publish-policy` | VIEWER / PROJECT_ADMIN — what editors may publish (M28, §3.3) |
+| `POST` | `/projects/{key}/publish-policy/impact` | PROJECT_ADMIN — the schedules a proposed policy would make fail (M28, §3.3) |
 | `GET` | `/users/lookup?projectKey=&q=` | PROJECT_ADMIN of `projectKey` — up to 20 active/locked accounts `{id, username, displayName, member}`, no emails (M26) |
 | `GET` | `/projects/{key}/locales` | VIEWER |
 | `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |
@@ -114,6 +116,76 @@ answers with an empty list.
 { "assetUuid": "…", "locales": [ {"locale": "de", "missing": 0, "total": 4},
                                  {"locale": "en", "missing": 1, "total": 4} ], "orphaned": [] }
 ```
+
+### 3.3 Publish policy and publish permissions (M28)
+
+What a project's editors may do to put content online (spec §8.3). Four permissions, all off by default:
+`RELEASE` (release, discard, unpublish), `SCHEDULE_RELEASE` (one-off scheduled releases and unpublishing; needs
+`RELEASE`), `INCREMENTAL_BUILD` (incremental runs to the default target, optionally scoped), `FULL_BUILD` (full runs,
+any target; needs `INCREMENTAL_BUILD`). Viewers never hold one; developers, project admins and instance admins always
+hold all four.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `GET` | `/projects/{projectKey}/publish-policy` | VIEWER | `{editor: [...]}` in declaration order |
+| `PUT` | `/projects/{projectKey}/publish-policy` | PROJECT_ADMIN | body `{editor: [...]}` → the stored policy |
+| `POST` | `/projects/{projectKey}/publish-policy/impact` | PROJECT_ADMIN | body = the proposed policy; stores nothing, also on archived projects |
+
+```http
+PUT /api/v1/projects/acme/publish-policy
+{ "editor": ["RELEASE", "INCREMENTAL_BUILD"] }
+```
+
+A policy that names an unknown permission or breaks an implication is `400 SF-API-0400` with one message per problem:
+
+```json
+{ "code": "SF-API-0400", "detail": "The publish policy is invalid.",
+  "errors": [ "SCHEDULE_RELEASE requires RELEASE: editors who schedule a release must be allowed to release.",
+              "FULL_BUILD requires INCREMENTAL_BUILD: editors who start full builds must be allowed to start incremental ones." ] }
+```
+
+An identical policy answers `200` and records nothing; a change allocates one `UPDATE` revision (summary entry
+`PROJECT`, field `publishPolicy`) and the audit entry `PUBLISH_POLICY_SET` (`{before, after}`). The policy is read on
+every check, so it applies to every editor's **next request** — no token refresh. `409 SF-DOM-0141` on an archived
+project.
+
+`impact` lists the pending schedules whose owner satisfies them now but wouldn't under the proposal — the ones that
+would fail at execution:
+
+```json
+{ "failingSchedules": [ { "id": 12, "type": "RELEASE", "runAt": "2026-09-29T07:00:00Z", "ownerUserId": 7,
+                          "ownerName": "Bob Editor", "missingPermission": "SCHEDULE_RELEASE" } ] }
+```
+
+`runAt` is the next run time. **`GET /projects/{key}`** adds `publishPolicy` (`{editor}`, readable by every member)
+and `permissions`, the caller's effective publish permissions in declaration order — clients show publishing controls
+from `permissions`, never from the role.
+
+**Denials.** Every `403` of a publishing endpoint (releases, schedules, generation, targets, publish policy) is
+`SF-API-0403` with the extension `permission`: the missing publish permission, or `ROLE:<role>` for a rule no policy
+opens. A client that gets one should re-read the project detail — the policy may have changed while it was open.
+
+```json
+{ "status": 403, "code": "SF-API-0403", "permission": "RELEASE",
+  "detail": "You need the RELEASE permission for this; the project's publish policy decides which editors hold it." }
+```
+
+**Request rules for editors.**
+
+| Operation | Editor needs |
+|---|---|
+| `POST /releases`, `/releases/unpublish`, `/releases/discard` | `RELEASE` |
+| `POST /generations`, `POST /generations/plan` with `mode: INCREMENTAL` (explicit), no `targetId` or the default target's, no `revision`; `folderPath`/`assetUuids` allowed | `INCREMENTAL_BUILD` |
+| the same with `mode: FULL`, without `mode`, or to another target | `FULL_BUILD` |
+| any `revision` | never (`ROLE:DEVELOPER`) |
+| `POST /generations/{id}/cancel` | `INCREMENTAL_BUILD`, and they started the run (a scheduled run: the schedule's owner did) — else `ROLE:DEVELOPER` |
+| `POST /generations/{id}/promote`, `POST /targets` | never (`ROLE:DEVELOPER`) |
+| `PUT`/`DELETE /targets/{id}`, `PUT /publish-policy`, `POST /publish-policy/impact` | never (`ROLE:PROJECT_ADMIN`) |
+| schedules `RELEASE`/`UNPUBLISH`: create, edit, run now, re-pin and cancel their own; take over | `SCHEDULE_RELEASE`, plus `INCREMENTAL_BUILD` for a "then generate" to the default target or `FULL_BUILD` to another |
+| schedules `GENERATION`/`RECURRING_GENERATION`; changing someone else's schedule | never (`ROLE:DEVELOPER`) |
+
+An incremental request that the planner turns into a full build (`fallbackCause`) is allowed with `INCREMENTAL_BUILD`.
+A `VIEWER` is refused every publishing operation (`ROLE:EDITOR` on generation, the missing permission elsewhere).
 
 ## 4. Assets (generic)
 
@@ -319,23 +391,29 @@ ahead. `PUT /globals/{uuid}/schema` and `PUT /datasets/{uuid}` take the same fla
 | `PUT`/`DELETE` | `/projects/{projectKey}/channels/{key}` |
 | `POST` | `/projects/{projectKey}/channels/{key}/enable` \| `/disable` |
 | `GET` | `/projects/{projectKey}/channels/{key}/delete-preview` |
-| `GET`/`POST` | `/projects/{projectKey}/targets` |
-| `PUT`/`DELETE` | `/projects/{projectKey}/targets/{id}` |
+| `GET`/`POST` | `/projects/{projectKey}/targets` (read VIEWER, create DEVELOPER) |
+| `PUT`/`DELETE` | `/projects/{projectKey}/targets/{id}` (PROJECT_ADMIN) |
 
 ## 10. Generation
 
 | Method | Path |
 |---|---|
-| `GET`/`POST` | `/projects/{projectKey}/generations` |
+| `GET`/`POST` | `/projects/{projectKey}/generations` (history `VIEWER`; start `EDITOR`, then the body decides — §3.3) |
 | `GET` | `/projects/{projectKey}/generations/{runId}` |
 | `GET` | `/projects/{projectKey}/generations/{runId}/events` (SSE) |
-| `POST` | `/projects/{projectKey}/generations/{runId}/cancel` |
-| `POST` | `/projects/{projectKey}/generations/{runId}/promote` |
-| `POST` | `/projects/{projectKey}/generations/plan` (`DEVELOPER`; `?page=&size=&rootKind=&channel=&q=&validate=`) |
+| `POST` | `/projects/{projectKey}/generations/{runId}/cancel` (`DEVELOPER`; an editor with `INCREMENTAL_BUILD` their own run) |
+| `POST` | `/projects/{projectKey}/generations/{runId}/promote` (`DEVELOPER`) |
+| `POST` | `/projects/{projectKey}/generations/plan` (authorized like a start; `?page=&size=&rootKind=&channel=&q=&validate=`) |
 | `GET` | `/projects/{projectKey}/generations/{runId}/plan` (`VIEWER`; `?page=&size=&rootKind=&channel=&q=`) |
 | `GET` | `/projects/{projectKey}/assets/{uuid}/impact` (`VIEWER`; `?channel=&page=&size=&q=`) |
 
-A run view carries `comment` — the note it was started with (`POST /generations` `comment`, trimmed, at most 500 characters; a scheduled run's is `Scheduled generation #n: …` or `After scheduled release|unpublish #n`), `null` for none — and `planSummary` (`null` for a run that never got past PLAN): `{mode, incremental, revision, fallbackCause, baselineRevision, baseRunId, scoped, channels, changedAssetCount, entryCount, pageCount, processedMediaCount, byRootKind, byFirstEdge, byChannel, via: [{edge, assetUuid, assetType, uid, count}], planAvailable}`.
+A run view carries `comment` — the note it was started with (`POST /generations` `comment`, trimmed; a longer one is cut to 500 characters ending in "…"; a scheduled run's is `Scheduled generation #n: …` or `After scheduled release|unpublish #n`), `null` for none —, `startedBy` — `{id, displayName}` of who started it (the schedule's owner for a scheduled run; `displayName` "Deleted user" once that account was deleted), `null` when unknown (M28) — and `planSummary` (`null` for a run that never got past PLAN): `{mode, incremental, revision, fallbackCause, baselineRevision, baseRunId, scoped, channels, changedAssetCount, entryCount, pageCount, processedMediaCount, byRootKind, byFirstEdge, byChannel, via: [{edge, assetUuid, assetType, uid, count}], planAvailable}`.
+
+**Who may start what (M28).** Start and dry run check the body against the caller's publish permissions (§3.3):
+`INCREMENTAL_BUILD` for an explicit incremental run to the default target, `FULL_BUILD` otherwise, `DEVELOPER` for a
+pinned `revision`. Start, cancel and promote are audited (`GENERATION_STARTED`, `GENERATION_CANCELLED`,
+`GENERATION_PROMOTED`). An `Idempotency-Key` is scoped by project and user: another user reusing a key starts their own
+run.
 
 **Build insight (M22).** `POST /generations/plan` takes the body of `POST /generations` and returns the plan a run started now would build — same snapshot, baseline and planner — without rendering, writing, storing a run or taking the run lock (it works while a run is active). `GET /generations/{runId}/plan` returns what a past run planned; `404` for a run of another project or one that never got past PLAN. Both answer `GenerationPlanView`:
 
@@ -361,7 +439,10 @@ A run view carries `comment` — the note it was started with (`POST /generation
 ### 10.1 Schedules (M27)
 
 Scheduled releases, unpublishing and builds (spec §18.7). Every endpoint needs `VIEWER`; every change checks what the
-action type requires of the caller (`DEVELOPER` in M27, `403` otherwise). Times are ISO instants; a recurring
+action requires of the caller — M28: `SCHEDULE_RELEASE` (plus the build permission of a "then generate") for
+`RELEASE`/`UNPUBLISH`, `DEVELOPER` for `GENERATION`/`RECURRING_GENERATION`; editing, running now, re-pinning or
+cancelling someone else's schedule needs `DEVELOPER` on top, taking over only the requirements (§3.3). A refusal is
+`403 SF-API-0403` with `permission`. Times are ISO instants; a recurring
 schedule's cron is evaluated in its `zoneId`. Single-schedule responses carry `ETag: "v{version}"`.
 
 | Method | Path | Notes |
@@ -420,7 +501,9 @@ An execution is `{id, scheduledFor, startedAt, finishedAt, outcome, lateByMs, me
 generationRunId, executedAsUserId}`, `outcome` one of `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED` (`null` while it
 runs). For releases `detail.items` lists `{assetUuid, locale, result: APPLIED|UNCHANGED|SKIPPED, reason?}`;
 `detail.waitingForRun` names the run a busy project waits for; a failure carries `detail.code` (`SF-DOM-0162` target
-gone, `0163` owner no longer permitted — the schedule is paused until taken over).
+gone, `0163` owner no longer permitted — the schedule is paused until taken over; the message names what is missing,
+e.g. "Owner no longer permitted (SCHEDULE_RELEASE): 'bob' is EDITOR without SCHEDULE_RELEASE in the project's
+publish policy.").
 
 ## 11. Revisions & restore
 
@@ -441,9 +524,9 @@ means every language the asset has.
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | `POST` | `/projects/{projectKey}/releases/plan` | `VIEWER` | dry run, also on archived projects |
-| `POST` | `/projects/{projectKey}/releases` | `DEVELOPER` | releases `items` and the kept `includeDependencies` |
-| `POST` | `/projects/{projectKey}/releases/unpublish` | `DEVELOPER` | takes the items offline; drafts stay |
-| `POST` | `/projects/{projectKey}/releases/discard` | `DEVELOPER` | writes the released versions back as drafts |
+| `POST` | `/projects/{projectKey}/releases` | `RELEASE` | releases `items` and the kept `includeDependencies` |
+| `POST` | `/projects/{projectKey}/releases/unpublish` | `RELEASE` | takes the items offline; drafts stay |
+| `POST` | `/projects/{projectKey}/releases/discard` | `RELEASE` | writes the released versions back as drafts |
 | `GET` | `/projects/{projectKey}/changes` | `VIEWER` | every (asset, locale) that isn't `PUBLISHED` |
 | `GET` | `/projects/{projectKey}/changes/count` | `VIEWER` | `{NEW, CHANGED, UNPUBLISHED, DELETION_PENDING, total}` |
 | `GET` | `/projects/{projectKey}/changes/{uuid}/diff` | `VIEWER` | `?locale=` (omitted: the shared key) |
@@ -486,7 +569,8 @@ POST /api/v1/projects/acme/releases
 `sharedFieldsKept` the items whose shared (not per-language) fields stayed, because other languages have unreleased
 changes on them. Errors: `422 SF-DOM-0150` content incomplete (`assets[]` with the findings), `0151` unknown asset or
 language or a live type (templates have no release state), `0152` discard of something never released (`assets[]`),
-`0153` empty selection; `403` below `DEVELOPER`; `409 SF-DOM-0141` in an archived project.
+`0153` empty selection; `403 SF-API-0403` with `permission: "RELEASE"` without the publish permission (developers
+always hold it, editors when the policy opens it, M28); `409 SF-DOM-0141` in an archived project.
 
 `GET /changes?type=PAGE&status=CHANGED&locale=en&sort=changedAt,desc&page=0&size=50` (filters `type`, `status`,
 `locale` repeat; also `changedBy`, `folderUuid` — the folder's subtree — and `q` on display name or uid;
@@ -596,7 +680,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 |---|---|---|
 | `SF-API-0400` | 400 | malformed request body — `ProblemFactory`; a missing required member is named in `field` (M25: `recordSetUuid` on record create, `datasetUuid` on record set create); invalid channel output settings carry a `fieldErrors` array of `{field, message}` — `ChannelServiceImpl` |
 | `SF-API-0401` | 401 | missing/expired access token — `ProblemEntryPoint` |
-| `SF-API-0403` | 403 | role insufficient — `ProjectAuthorizationService` |
+| `SF-API-0403` | 403 | role insufficient — `ProjectAuthorizationService`; publishing handlers add `permission` (a publish permission or `ROLE:<role>`, M28) — `ProjectAuthorizationService.can`/`satisfies`, `ActionAuthority`, `PolicyReleasePermissionCheck` |
 | `SF-API-0404` | 404 | not found / not visible (does not leak existence, §8.4) |
 | `SF-API-0409` | 409 | revision conflict (`If-Match` mismatch), §7.5; a stale schedule version or an edit racing a scheduler claim (M27) — `ProblemExceptionHandler` |
 | `SF-API-0412` | 412 | `If-Match` missing on a mutating request |
@@ -637,7 +721,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0160` | 422 | unknown schedule type; also a paused execution's `detail.code` (M27) — `SchedulerProblems` |
 | `SF-DOM-0161` | 422 | schedule params don't fit the type, `field` names the offender; also an execution failure when a channel was disabled since (M27) — handlers' `validate` |
 | `SF-DOM-0162` | — | execution failure: the generation target is gone; a recurring schedule pauses (M27) — `ScheduledGenerations` |
-| `SF-DOM-0163` | — | execution failure: the owner is no longer permitted; a recurring schedule pauses until taken over (M27) — `SchedulerEngine` |
+| `SF-DOM-0163` | — | execution failure: the owner is no longer permitted (M28: also an editor the publish policy no longer allows; the message names the missing permission); a recurring schedule pauses until taken over (M27) — `SchedulerEngine` |
 | `SF-DOM-0164` | 422 | schedule time in the past (M27) — `ScheduleService` |
 | `SF-DOM-0165` | 422 | invalid cron or unknown/missing time zone (M27) — `ScheduleTiming` |
 | `SF-DOM-0166` | 422 | a timing form that doesn't fit the type (M27) — `ScheduleService` |

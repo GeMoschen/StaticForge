@@ -15,8 +15,8 @@ Bring the spec and docs in line with the implemented behaviour and prove the edi
 
 ## Feature exit criteria
 
-- [ ] Spec and docs describe the policy, the endpoint roles and the new audit actions as implemented.
-- [ ] `ui/e2e/m28-journeys.spec.ts` green twice on a clean dev stack.
+- [x] Spec and docs describe the policy, the endpoint roles and the new audit actions as implemented.
+- [x] `ui/e2e/m28-journeys.spec.ts` green twice on a clean dev stack.
 
 ## Dependencies
 

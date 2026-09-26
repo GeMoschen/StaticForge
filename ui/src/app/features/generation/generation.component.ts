@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   OnDestroy,
+  computed,
   effect,
   inject,
   input,
@@ -24,6 +25,7 @@ import { GenerationRunEvent } from './generation-sse';
 import { planSummaryLine, rootKindRows, type EntryPage, type PlanEntryQuery } from './insight/insight.util';
 import { SfPlanEntriesTableComponent } from './insight/sf-plan-entries-table.component';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 
 type GenerationRunView = components['schemas']['GenerationRunView'];
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
@@ -68,11 +70,18 @@ export class GenerationComponent implements OnDestroy {
   private readonly toasts = inject(ToastService);
   /** No new runs or promotes in time travel or in an archived project (M26); running ones may still be cancelled. */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
+  /** Who may start, cancel and promote (M28.3.3): the project's publish policy for editors, developers always. */
+  protected readonly permissions = inject(ProjectPermissionsStore);
 
   readonly runs = signal<GenerationRunView[]>([]);
   readonly loading = signal(false);
   readonly dialogOpen = signal(false);
   readonly targets = signal<GenerationTargetView[]>([]);
+  /** Where a run without a target goes: the default target, else the first (as the server resolves it). */
+  readonly defaultTargetId = computed(() => {
+    const targets = this.targets();
+    return (targets.find((t) => t.isDefault) ?? targets[0])?.id ?? null;
+  });
 
   readonly liveRunId = signal<number | null>(null);
   readonly liveActive = signal(false);

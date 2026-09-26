@@ -9,6 +9,7 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { ALL_PUBLISH_PERMISSIONS, projectDetail } from '../../core/project/testing/project-detail.fixture';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ReleaseBarComponent } from './release-bar.component';
 import { ReleaseEventsStore } from './release-events.store';
@@ -59,7 +60,9 @@ describe('ReleaseBarComponent', () => {
 
   afterEach(() => http.verify());
 
-  function render(role: string): void {
+  /** Renders the bar for `role`; the server's publish permissions default to what that role holds with no policy. */
+  function render(role: string, permissions = role === 'DEVELOPER' || role === 'PROJECT_ADMIN' ? ALL_PUBLISH_PERMISSIONS : []): void {
+    TestBed.inject(ProjectContextStore).project.set(projectDetail(permissions));
     auth.setUser({ id: 1, username: 'ana', projectRoles: { proj: role } });
     fixture = TestBed.createComponent(ReleaseBarComponent);
     fixture.componentRef.setInput('projectKey', 'proj');
@@ -137,5 +140,20 @@ describe('ReleaseBarComponent', () => {
     http.expectOne(DETAIL_URL).flush({ ...DETAIL, release: undefined });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.bar')).toBeNull();
+  });
+
+  it('shows an editor with RELEASE the release actions but not Schedule…', () => {
+    render('EDITOR', ['RELEASE']);
+    expect(buttons()).toEqual(['Release…', 'Unpublish…', 'Discard changes…']);
+  });
+
+  it('shows an editor with RELEASE and SCHEDULE_RELEASE Schedule… too', () => {
+    render('EDITOR', ['RELEASE', 'SCHEDULE_RELEASE']);
+    expect(buttons()).toEqual(['Release…', 'Unpublish…', 'Discard changes…', 'Schedule…']);
+  });
+
+  it('shows an editor holding only SCHEDULE_RELEASE no actions', () => {
+    render('EDITOR', ['SCHEDULE_RELEASE']);
+    expect(buttons()).toEqual([]);
   });
 });

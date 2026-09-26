@@ -19,6 +19,18 @@
   gap: var(--sf-2);
 }
 
+.toolbar__note {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.run-starter {
+  display: block;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
 .toolbar__title {
   margin: 0;
   font-family: var(--sf-font-display);

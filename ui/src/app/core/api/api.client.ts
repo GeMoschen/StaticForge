@@ -1091,6 +1091,28 @@ export class ApiClient {
     });
   }
 
+  // ── Publish policy (M28) ─────────────────────────────────────────────────
+
+  /** What the project's editors may do to put content online. */
+  publishPolicy(projectKey: string): Observable<S['PublishPolicyView']> {
+    return this.http.get<S['PublishPolicyView']>(`${BASE}/projects/${projectKey}/publish-policy`, { withCredentials: true });
+  }
+
+  /** Replaces the policy (`PROJECT_ADMIN`); `400` lists broken implications under `errors`, shown by the card itself. */
+  updatePublishPolicy(projectKey: string, body: S['PublishPolicyView']): Observable<S['PublishPolicyView']> {
+    return this.http.put<S['PublishPolicyView']>(`${BASE}/projects/${projectKey}/publish-policy`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** The pending schedules a proposed policy would make fail at execution. */
+  publishPolicyImpact(projectKey: string, body: S['PublishPolicyView']): Observable<S['PublishPolicyImpactView']> {
+    return this.http.post<S['PublishPolicyImpactView']>(`${BASE}/projects/${projectKey}/publish-policy/impact`, body, {
+      withCredentials: true,
+    });
+  }
+
   /** The next run times of a cron in a zone, validated like a create (`422 SF-DOM-0165` for an invalid cron). */
   schedulePreviewTimes(projectKey: string, body: S['PreviewTimesRequest']): Observable<S['PreviewTimesView']> {
     return this.http.post<S['PreviewTimesView']>(`${BASE}/projects/${projectKey}/schedules/preview-times`, body, {

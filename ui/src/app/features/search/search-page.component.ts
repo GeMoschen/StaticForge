@@ -25,7 +25,7 @@ import {
   switchMap,
   timer,
 } from 'rxjs';
-import { AuthStore } from '../../core/auth/auth.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfAutofocusDirective } from '../../shared/directives/sf-autofocus.directive';
@@ -88,7 +88,6 @@ export class SearchPageComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly search = inject(SearchService);
-  private readonly auth = inject(AuthStore);
   private readonly store = inject(ProjectContextStore);
   private readonly toasts = inject(ToastService);
   protected readonly timeTravel = inject(TimeTravelStore);
@@ -111,9 +110,7 @@ export class SearchPageComponent {
   protected readonly filtersOpen = signal(false);
   protected readonly rebuilding = signal(false);
 
-  protected readonly isAdmin = computed(
-    () => this.auth.roleFor(this.projectKey()) === 'PROJECT_ADMIN',
-  );
+  protected readonly isAdmin = inject(ProjectPermissionsStore).isProjectAdmin;
 
   protected readonly result = computed<SearchResultView | null>(() => {
     const load = this.load();

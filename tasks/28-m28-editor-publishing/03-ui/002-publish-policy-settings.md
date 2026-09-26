@@ -1,6 +1,6 @@
 ---
 id: M28.3.2
-status: todo
+status: done
 depends: [M28.3.1]
 epic: m28-editor-publishing
 feature: ui
@@ -35,10 +35,10 @@ area: frontend
 
 ## Acceptance criteria
 
-- [ ] Vitest: dependency rules (disable + cascade off), dirty/valid gating, impact dialog shown only with failing
+- [x] Vitest: dependency rules (disable + cascade off), dirty/valid gating, impact dialog shown only with failing
       schedules, read-only for non-admins, error rendering from a `400` payload in the API's shape.
-- [ ] Manual check in the running app as project admin and as editor.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] Manual check in the running app as project admin and as editor.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 
