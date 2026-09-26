@@ -45,6 +45,9 @@
               @if (run.planSummary) {
                 <span class="plan-line">{{ planLine(run) }}</span>
               }
+              @if (run.comment) {
+                <span class="run-comment" [attr.title]="run.comment">{{ run.comment }}</span>
+              }
             </td>
             <td>
               <span class="badge" [style.color]="statusColor(run.status)">

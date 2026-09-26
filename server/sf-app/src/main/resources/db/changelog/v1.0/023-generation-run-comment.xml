@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="023-generation-run-comment" author="sf">
+        <comment>The note a run was started with (manual or scheduled), at most 500 characters like a revision comment.</comment>
+        <addColumn tableName="generation_run">
+            <column name="comment" type="VARCHAR(500)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

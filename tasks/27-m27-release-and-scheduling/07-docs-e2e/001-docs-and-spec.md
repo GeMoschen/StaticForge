@@ -104,8 +104,9 @@ multi-node note); `docs/release-readiness.md` §4 (M27 breaking changes). Every 
 - *Decision 25 (authority)* — a `LOCKED` account still counts as permitted (a lock only blocks sign-in); the manual
   release permission check was aligned with that. A `@Version` conflict at commit (an edit racing a claim) is
   `409 SF-API-0409`, not a 500.
-- *Decision 21 (generation actions)* — the scheduled run's comment is passed to generation but not persisted (runs
-  have no comment column; out of scope).
+- *Decision 21 (generation actions)* — resolved after M27.7: runs store their comment (`generation_run.comment`,
+  changelog `023`; manual runs' notes were never stored either), shown in the Generation runs table. A scheduled run
+  reads `Scheduled generation #n: …` or `After scheduled release #n`.
 - *Decision 28 (export)* — beyond open pointers the archive records `UNPUBLISHED` keys (open pointers can't tell
   `UNPUBLISHED` from `NEW`), imported as pointers opened and closed in the import revision. Released versions that
   differ from the draft are imported as extra versions opened and closed in the import revision. A `""` pointer

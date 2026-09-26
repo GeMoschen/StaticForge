@@ -1,3 +1,22 @@
+# Generation run comment (follow-up to M27, branch `m27-release-and-scheduling`)
+
+A run's comment was passed to generation but never stored. This affected manual runs (the dialog's "Optional note
+for this run") and the notes schedules give their runs (M27 deviation, decision 21).
+
+- [x] `generation_run.comment` (changelog `023`, `VARCHAR(500)`). `GenerationService.start` stores the trimmed
+      comment; blank means none, and a longer one is cut to 500 characters ending in "…", like a revision comment.
+- [x] `GenerationRunView.comment`; OpenAPI + `schema.d.ts`; the Generation runs table shows it under the mode.
+- [x] Tests:
+  - `BuildInsightApiTest.aRunKeepsTheCommentItWasStartedWith` covers start, read, history, blank and too long.
+  - `ScheduledActionsIntegrationTest` covers "Scheduled generation #n: nightly" and "After scheduled release #n".
+  - `generation.component.spec.ts`.
+- [x] Spec §18.5, `docs/api.md`, and the M27 deviation note marked resolved.
+- [x] `./gradlew build test --rerun` (1329 tests, 0 failures, 6 skipped benchmarks), `npm run build`,
+      `npx vitest run` (90 files, 598 tests)
+
+
+---
+
 # M27.7 — Docs and journey (branch `m27-release-and-scheduling`)
 
 Spec: `tasks/27-m27-release-and-scheduling/07-docs-e2e/`. 7.1 (docs, agent) and 7.2 (journey, me) in parallel.

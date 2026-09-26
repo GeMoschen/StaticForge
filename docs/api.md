@@ -325,7 +325,7 @@ ahead. `PUT /globals/{uuid}/schema` and `PUT /datasets/{uuid}` take the same fla
 | `GET` | `/projects/{projectKey}/generations/{runId}/plan` (`VIEWER`; `?page=&size=&rootKind=&channel=&q=`) |
 | `GET` | `/projects/{projectKey}/assets/{uuid}/impact` (`VIEWER`; `?channel=&page=&size=&q=`) |
 
-A run view carries `planSummary` (`null` for a run that never got past PLAN): `{mode, incremental, revision, fallbackCause, baselineRevision, baseRunId, scoped, channels, changedAssetCount, entryCount, pageCount, processedMediaCount, byRootKind, byFirstEdge, byChannel, via: [{edge, assetUuid, assetType, uid, count}], planAvailable}`.
+A run view carries `comment` — the note it was started with (`POST /generations` `comment`, trimmed, at most 500 characters; a scheduled run's is `Scheduled generation #n: …` or `After scheduled release|unpublish #n`), `null` for none — and `planSummary` (`null` for a run that never got past PLAN): `{mode, incremental, revision, fallbackCause, baselineRevision, baseRunId, scoped, channels, changedAssetCount, entryCount, pageCount, processedMediaCount, byRootKind, byFirstEdge, byChannel, via: [{edge, assetUuid, assetType, uid, count}], planAvailable}`.
 
 **Build insight (M22).** `POST /generations/plan` takes the body of `POST /generations` and returns the plan a run started now would build — same snapshot, baseline and planner — without rendering, writing, storing a run or taking the run lock (it works while a run is active). `GET /generations/{runId}/plan` returns what a past run planned; `404` for a run of another project or one that never got past PLAN. Both answer `GenerationPlanView`:
 

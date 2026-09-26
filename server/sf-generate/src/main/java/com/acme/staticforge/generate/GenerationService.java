@@ -195,6 +195,7 @@ public class GenerationService {
                     0,
                     null,
                     null);
+            run.setComment(request.comment());
             run = runs.saveAndFlush(run);
             final long runId = run.getId();
             if (idemKey != null) {

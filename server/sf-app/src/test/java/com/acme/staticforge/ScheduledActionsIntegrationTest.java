@@ -278,6 +278,7 @@ class ScheduledActionsIntegrationTest {
         assertThat(run.getRevisionId()).isEqualTo(done.getRevisionId());
         assertThat(run.getStartedBy()).isEqualTo(fx.owner().getId());
         assertThat(run.getTargetId()).isEqualTo(fx.target().getId());
+        assertThat(run.getComment()).isEqualTo("After scheduled release #" + action.getId());
         assertThat(files(fx, run)).containsKeys("home.html", "news.html");
 
         // Unpublish at T, then generate: the page's output is gone from the new build.
@@ -337,6 +338,8 @@ class ScheduledActionsIntegrationTest {
             GenerationRun run = await(fx, execution.getGenerationRunId());
             assertThat(run.getStartedBy()).isEqualTo(fx.owner().getId());
             assertThat(run.getMode()).isEqualTo(GenerationMode.FULL);
+            // The run keeps the schedule's note, so the generation history says where it came from.
+            assertThat(run.getComment()).isEqualTo("Scheduled generation #" + build.getId() + ": nightly");
             assertThat(files(fx, run)).containsKey("home.html");
 
             fixtures.crashAfterFinishing(build.getId(), T.plusSeconds(2));

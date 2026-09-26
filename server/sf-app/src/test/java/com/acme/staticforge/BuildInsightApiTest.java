@@ -161,6 +161,45 @@ class BuildInsightApiTest {
     }
 
     @Test
+    void aRunKeepsTheCommentItWasStartedWith() throws Exception {
+        Site site = site("bi-comment");
+        releaseFixtures.releaseAll(site.fx().projectId());
+        JsonNode started = start(site, "{\"mode\":\"FULL\",\"targetId\":" + site.target().getId()
+                + ",\"comment\":\"  Hotfix for the footer  \"}");
+        assertThat(started.path("comment").asText()).isEqualTo("Hotfix for the footer");
+        fixtures.succeeded(fixtures.await(site.fx(), started.path("id").asLong()));
+        JsonNode read = body(mvc.perform(get(base(site.fx()) + "/generations/" + started.path("id").asLong())
+                        .header("Authorization", "Bearer " + site.token()))
+                .andExpect(status().isOk()));
+        assertThat(read.path("comment").asText()).isEqualTo("Hotfix for the footer");
+        JsonNode history = body(mvc.perform(get(base(site.fx()) + "/generations").header("Authorization", "Bearer " + site.token()))
+                .andExpect(status().isOk()));
+        assertThat(history.get(0).path("comment").asText()).isEqualTo("Hotfix for the footer");
+
+        // A blank note is no note; a long one keeps its first 500 characters, like a revision comment.
+        JsonNode blank = start(site, "{\"mode\":\"FULL\",\"targetId\":" + site.target().getId() + ",\"comment\":\"   \"}");
+        assertThat(blank.has("comment")).isTrue();
+        assertThat(blank.get("comment").isNull()).isTrue();
+        fixtures.succeeded(fixtures.await(site.fx(), blank.path("id").asLong()));
+        JsonNode longer = start(site, "{\"mode\":\"FULL\",\"targetId\":" + site.target().getId()
+                + ",\"comment\":\"" + "x".repeat(600) + "\"}");
+        assertThat(longer.path("comment").asText()).hasSize(500).endsWith("…");
+        fixtures.succeeded(fixtures.await(site.fx(), longer.path("id").asLong()));
+    }
+
+    /** Starts a run; the body is read as UTF-8, so a comment's "…" stays one character. */
+    private JsonNode start(Site site, String body) throws Exception {
+        return fixtures.json(mvc.perform(post(base(site.fx()) + "/generations")
+                        .header("Authorization", "Bearer " + site.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isAccepted())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    @Test
     void theDryRunPlansExactlyWhatTheRunStartedAfterItBuilds() throws Exception {
         Site site = site("m22dry");
         startAndAwait(site, "FULL");

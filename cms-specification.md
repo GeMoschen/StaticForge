@@ -1689,6 +1689,8 @@ generation_run
   files_written, files_skipped, bytes_written,
   error_count, warning_count, diagnostics json, log_blob_sha,
   plan_summary json                         -- M22
+  comment (≤ 500)                           -- the note the run was started with; scheduled runs
+                                            --   "Scheduled generation #n: …" / "After scheduled release #n"
 
 generation_run_plan_entry                   -- one row per planned output
   run_id, asset_uuid, asset_type, uid, display_name, channel,

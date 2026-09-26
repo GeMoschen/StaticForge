@@ -3095,6 +3095,7 @@ export interface components {
             warningCount?: number;
             diagnostics?: components["schemas"]["JsonNode"];
             planSummary?: components["schemas"]["PlanSummaryView"];
+            comment?: string;
         };
         PlanSummaryView: {
             mode?: string;
@@ -3436,13 +3437,13 @@ export interface components {
             /** Format: int64 */
             totalElements?: number;
             /** Format: int32 */
-            numberOfElements?: number;
-            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             first?: boolean;
             last?: boolean;
@@ -3452,11 +3453,11 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            unpaged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
+            unpaged?: boolean;
             paged?: boolean;
         };
         SortObject: {
@@ -3485,13 +3486,13 @@ export interface components {
             /** Format: int64 */
             totalElements?: number;
             /** Format: int32 */
-            numberOfElements?: number;
-            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             first?: boolean;
             last?: boolean;
@@ -3728,13 +3729,13 @@ export interface components {
             /** Format: int64 */
             totalElements?: number;
             /** Format: int32 */
-            numberOfElements?: number;
-            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             first?: boolean;
             last?: boolean;
@@ -3845,13 +3846,13 @@ export interface components {
             /** Format: int64 */
             totalElements?: number;
             /** Format: int32 */
-            numberOfElements?: number;
-            /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             first?: boolean;
             last?: boolean;

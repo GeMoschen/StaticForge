@@ -207,7 +207,8 @@ public class GenerationController {
                 run.getErrorCount(),
                 run.getWarningCount(),
                 run.getDiagnostics(),
-                PlanViews.summary(run.getPlanSummary()));
+                PlanViews.summary(run.getPlanSummary()),
+                run.getComment());
     }
 
     private List<String> parseChannels(String json) {
