@@ -52,6 +52,7 @@
           [projectKey]="projectKey()"
           [folder]="folder"
           [children]="selectedNode()?.children ?? []"
+          [release]="selectedNode()?.release"
           (closed)="closeDetail()"
           (changed)="onFolderChanged()"
           (deleted)="onFolderDeleted()"
@@ -61,6 +62,7 @@
           <sf-nav-reference-detail
             [projectKey]="projectKey()"
             [reference]="reference"
+            [release]="selectedNode()?.release"
             (closed)="closeDetail()"
             (changed)="onReferenceChanged()"
             (deleted)="onReferenceDeleted()"

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { GenerationComponent } from '../generation/generation.component';
 import { ProjectSettingsTargetsComponent } from './project-settings-targets.component';
 
@@ -18,4 +18,7 @@ import { ProjectSettingsTargetsComponent } from './project-settings-targets.comp
 })
 export class ProjectSettingsGenerationViewComponent {
   readonly projectKey = input.required<string>();
+  /** `?run=` opens that run's details (the Schedules history links a run it started, M27.6.5). */
+  readonly run = input<string | undefined>();
+  protected readonly runId = computed(() => (this.run() ? Number(this.run()) : null));
 }

@@ -248,14 +248,17 @@ class ScheduleApiTest {
         UUID other = page(fx, "other");
         String dev = member(fx, ProjectRole.DEVELOPER);
         Instant runAt = future(1);
-        long id = id(create(fx, dev, release(runAt, page)).andExpect(status().isOk()));
+        JsonNode created = json(create(fx, dev, release(runAt, page)).andExpect(status().isOk()).andReturn());
+        long id = created.path("id").asLong();
         long otherId = id(create(fx, dev, release(runAt, other)).andExpect(status().isOk()));
 
         perform(get("/api/v1/projects/{key}/pages/{uuid}", fx.key(), page), dev)
                 .andExpect(jsonPath("$.scheduled", hasSize(1)))
                 .andExpect(jsonPath("$.scheduled[0].actionId").value(id))
                 .andExpect(jsonPath("$.scheduled[0].type").value("RELEASE"))
-                .andExpect(jsonPath("$.scheduled[0].runAt").value(runAt.toString()));
+                .andExpect(jsonPath("$.scheduled[0].runAt").value(runAt.toString()))
+                // Who it runs as, so an editor's release bar can say "… by Ana" (M27.6.5).
+                .andExpect(jsonPath("$.scheduled[0].ownerUserId").value(created.path("ownerUserId").asLong()));
         perform(get("/api/v1/projects/{key}/pages", fx.key()), dev)
                 .andExpect(jsonPath("$[?(@.uid == 'home')].scheduled[0].actionId").value((int) id));
         perform(get("/api/v1/projects/{key}/changes", fx.key()), dev)

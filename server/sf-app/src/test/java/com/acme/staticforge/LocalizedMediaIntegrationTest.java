@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -415,6 +416,36 @@ class LocalizedMediaIntegrationTest {
 
     private AssetVersionView upload(Fixture fx, String name, byte[] bytes) {
         return mediaService.upload(fx.id(), null, name, null, bytes, fx.ctx());
+    }
+
+    @Test
+    @DisplayName("GET /media/{uuid} carries the resolved per-language files, now and at an earlier revision")
+    void detailCarriesLocaleFiles() throws Exception {
+        Fixture fx = newLocalizedFixture("de", "en", "fr");
+        AssetVersionView media = localize(fx, upload(fx, "hero.png", png(Color.RED)));
+        long before = mediaService.require(fx.id(), media.uuid()).validFromRevision();
+        putFile(fx, media, "en", "hero-en.png", png(Color.BLUE)).andExpect(status().isOk());
+
+        mvc.perform(get(url(fx, media)).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewer())))
+                .andExpect(status().isOk())
+                .andExpect(header().exists(HttpHeaders.ETAG))
+                .andExpect(jsonPath("$.localized").value(true))
+                .andExpect(jsonPath("$.localeFiles.de.own").value(true))
+                .andExpect(jsonPath("$.localeFiles.en.own").value(true))
+                .andExpect(jsonPath("$.localeFiles.en.fileName").value("hero-en.png"))
+                .andExpect(jsonPath("$.localeFiles.fr.own").value(false))
+                .andExpect(jsonPath("$.localeFiles.fr.fromLocale").value("de"))
+                .andExpect(jsonPath("$.release.de.status").value("NEW"));
+
+        mvc.perform(get(url(fx, media)).param("revision", String.valueOf(before))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.viewer())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.localeFiles.en.own").value(false))
+                .andExpect(jsonPath("$.localeFiles.en.fromLocale").value("de"));
+
+        mvc.perform(get("/api/v1/projects/" + fx.project().getKey() + "/media/" + UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.viewer())))
+                .andExpect(status().isNotFound());
     }
 
     private AssetVersionView localize(Fixture fx, AssetVersionView media) {

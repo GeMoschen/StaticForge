@@ -24,6 +24,32 @@ export function revisionFromEtag(etag: string): number | null {
 
 type QueryValue = string | number | boolean | undefined;
 
+/** Which state a page preview renders (M27.2.3): the drafts (default) or what the next build publishes. */
+export type PreviewView = 'draft' | 'published';
+
+/** The Changes list's filters (M27.1.3); `type`, `status` and `locale` may repeat. */
+export interface ChangesQuery {
+  type?: string[];
+  status?: string[];
+  locale?: string[];
+  changedBy?: number;
+  folderUuid?: string;
+  q?: string;
+  sort?: string;
+  page?: number;
+  size?: number;
+}
+
+/** The Schedules list's filters (M27.4.4); `type` and `status` may repeat. */
+export interface SchedulesQuery {
+  type?: string[];
+  status?: string[];
+  owner?: number;
+  assetUuid?: string;
+  page?: number;
+  size?: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
   constructor(private readonly http: HttpClient) {}
@@ -617,6 +643,17 @@ export class ApiClient {
     );
   }
 
+  /**
+   * One media asset with the file each language renders (`localeFiles`, M27.6.4); `revision` reads the version valid
+   * then (time travel). List rows don't carry the per-language files.
+   */
+  mediaDetail(projectKey: string, uuid: string, revision?: number | null): Observable<S['MediaView']> {
+    return this.http.get<S['MediaView']>(`${BASE}/projects/${projectKey}/media/${uuid}`, {
+      withCredentials: true,
+      params: this.params({ revision: revision ?? undefined }),
+    });
+  }
+
   /** Swaps the file; `processCmsCleared` reports a processed file that is no longer text (M18). */
   replaceMedia(projectKey: string, uuid: string, file: File): Observable<S['MediaSaveResponse']> {
     const formData = new FormData();
@@ -661,25 +698,75 @@ export class ApiClient {
     );
   }
 
-  /** A text media file's content, current or at a time-travel `revision` (M18.1.2). */
-  mediaText(projectKey: string, uuid: string, revision?: number | null): Observable<S['MediaTextView']> {
+  /**
+   * A text media file's content, current or at a time-travel `revision` (M18.1.2). For localized media, `locale`
+   * reads the file that language renders (M27.3.1); omitted, the default file.
+   */
+  mediaText(
+    projectKey: string,
+    uuid: string,
+    revision?: number | null,
+    locale?: string | null,
+  ): Observable<S['MediaTextView']> {
     return this.http.get<S['MediaTextView']>(`${BASE}/projects/${projectKey}/media/${uuid}/text`, {
       withCredentials: true,
-      params: this.params({ revision: revision ?? undefined }),
+      params: this.params({ revision: revision ?? undefined, locale: locale ?? undefined }),
     });
   }
 
-  /** Saves a text media file's content: one revision per change; a 422 carries `diagnostics`. */
+  /**
+   * Saves a text media file's content: one revision per change; a 422 carries `diagnostics`. For localized media,
+   * `locale` writes that language's own file (M27.3.1).
+   */
   saveMediaText(
     projectKey: string,
     uuid: string,
     text: string,
     etag?: number,
+    locale?: string | null,
   ): Observable<S['MediaSaveResponse']> {
     return this.http.put<S['MediaSaveResponse']>(
       `${BASE}/projects/${projectKey}/media/${uuid}/text`,
       { text } satisfies S['MediaTextRequest'],
-      this.mutationOptions(etag),
+      { ...this.mutationOptions(etag), params: this.params({ locale: locale ?? undefined }) },
+    );
+  }
+
+  /**
+   * Localizes or un-localizes media (M27.3.1): one file per language, or one for all. Un-localizing with other
+   * language files answers `409 SF-MEDIA-0505` listing them (`files`) unless `confirmDiscard`.
+   */
+  setMediaLocalized(
+    projectKey: string,
+    uuid: string,
+    localized: boolean,
+    confirmDiscard: boolean,
+    etag?: number,
+  ): Observable<S['MediaView']> {
+    // The drawer turns the 409 into its own confirmation, so no error toast next to it.
+    return this.http.put<S['MediaView']>(
+      `${BASE}/projects/${projectKey}/media/${uuid}/localized`,
+      { localized, confirmDiscard } satisfies S['MediaLocalizedRequest'],
+      { ...this.mutationOptions(etag), context: new HttpContext().set(SKIP_ERROR_TOAST, true) },
+    );
+  }
+
+  /** Uploads or replaces one language's own file of localized media (M27.3.1). */
+  putMediaLocaleFile(projectKey: string, uuid: string, locale: string, file: File): Observable<S['MediaSaveResponse']> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<S['MediaSaveResponse']>(
+      `${BASE}/projects/${projectKey}/media/${uuid}/files/${encodeURIComponent(locale)}`,
+      formData,
+      { withCredentials: true },
+    );
+  }
+
+  /** Removes one language's own file, so the language falls back again (M27.3.1). */
+  removeMediaLocaleFile(projectKey: string, uuid: string, locale: string): Observable<S['MediaView']> {
+    return this.http.delete<S['MediaView']>(
+      `${BASE}/projects/${projectKey}/media/${uuid}/files/${encodeURIComponent(locale)}`,
+      { withCredentials: true },
     );
   }
 
@@ -701,9 +788,17 @@ export class ApiClient {
     });
   }
 
-  mediaBinaryUrl(projectKey: string, uuid: string, variant?: string): string {
-    const query = variant ? `?variant=${encodeURIComponent(variant)}` : '';
-    return `${BASE}/projects/${projectKey}/media/${uuid}/binary${query}`;
+  /** `locale` picks the file a language renders, for localized media (M27.3.1). */
+  mediaBinaryUrl(projectKey: string, uuid: string, variant?: string, locale?: string | null): string {
+    const query = new URLSearchParams();
+    if (variant) {
+      query.set('variant', variant);
+    }
+    if (locale) {
+      query.set('locale', locale);
+    }
+    const text = query.toString();
+    return `${BASE}/projects/${projectKey}/media/${uuid}/binary${text ? `?${text}` : ''}`;
   }
 
   /** Fetches a media binary (or named variant) through `HttpClient`, so the app's Bearer session
@@ -711,18 +806,20 @@ export class ApiClient {
    * pointed at `mediaBinaryUrl()`, which the browser fetches directly with no auth header and
    * gets a 401 from the `/binary` route's `VIEWER`-gated `@PreAuthorize` (mirrors
    * `mediaThumbnailBlob`, which already solves this same problem for grid thumbnails). */
-  mediaBinaryBlob(projectKey: string, uuid: string, variant?: string): Observable<Blob> {
-    return this.http.get(this.mediaBinaryUrl(projectKey, uuid, variant), {
+  mediaBinaryBlob(projectKey: string, uuid: string, variant?: string, locale?: string | null): Observable<Blob> {
+    return this.http.get(this.mediaBinaryUrl(projectKey, uuid, variant, locale), {
       responseType: 'blob',
     });
   }
 
-  mediaThumbnailUrl(projectKey: string, uuid: string): string {
-    return `${BASE}/projects/${projectKey}/media/${uuid}/thumbnail`;
+  /** `locale` picks the file a language renders, for localized media (M27.3.1). */
+  mediaThumbnailUrl(projectKey: string, uuid: string, locale?: string | null): string {
+    const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+    return `${BASE}/projects/${projectKey}/media/${uuid}/thumbnail${query}`;
   }
 
-  mediaThumbnailBlob(projectKey: string, uuid: string): Observable<Blob> {
-    return this.http.get(this.mediaThumbnailUrl(projectKey, uuid), {
+  mediaThumbnailBlob(projectKey: string, uuid: string, locale?: string | null): Observable<Blob> {
+    return this.http.get(this.mediaThumbnailUrl(projectKey, uuid, locale), {
       responseType: 'blob',
     });
   }
@@ -754,10 +851,11 @@ export class ApiClient {
     channel?: string,
     page?: number,
     locale?: string,
+    view?: PreviewView,
   ): Observable<HttpResponse<string>> {
     return this.http.get(`${BASE}/projects/${projectKey}/preview/pages/${uuid}`, {
       withCredentials: true,
-      params: this.params({ revision, channel, page, locale }),
+      params: this.params({ revision, channel, page, locale, view }),
       responseType: 'text',
       observe: 'response',
     });
@@ -787,16 +885,18 @@ export class ApiClient {
     });
   }
 
+  /** `view` (M27.2.3) is bound into the link: a published link keeps showing the released state. */
   sharePreviewUrl(
     projectKey: string,
     uuid: string,
     revision?: number,
     channel?: string,
     locale?: string,
+    view?: PreviewView,
   ): Observable<S['PreviewShareLink']> {
     return this.http.get<S['PreviewShareLink']>(
       `${BASE}/projects/${projectKey}/preview/pages/${uuid}/share`,
-      { withCredentials: true, params: this.params({ revision, channel, locale }) },
+      { withCredentials: true, params: this.params({ revision, channel, locale, view }) },
     );
   }
 
@@ -874,5 +974,143 @@ export class ApiClient {
       body,
       this.mutationOptions(etag),
     );
+  }
+
+  // ── Releases (M27.1.3) ──────────────────────────────────────────────────
+
+  /** What releasing `items` would take along (dependencies) and what blocks it (incomplete content). Writes nothing. */
+  releasePlan(projectKey: string, body: S['ReleaseRequest']): Observable<S['ReleasePlanView']> {
+    return this.http.post<S['ReleasePlanView']>(`${BASE}/projects/${projectKey}/releases/plan`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** Releases the items and the kept dependencies in one revision; `422 SF-DOM-0150` for incomplete content. */
+  release(projectKey: string, body: S['ReleaseRequest']): Observable<S['ReleaseResultView']> {
+    return this.http.post<S['ReleaseResultView']>(`${BASE}/projects/${projectKey}/releases`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** Takes the items offline; the drafts stay. */
+  unpublish(projectKey: string, body: S['ReleaseRequest']): Observable<S['ReleaseResultView']> {
+    return this.http.post<S['ReleaseResultView']>(`${BASE}/projects/${projectKey}/releases/unpublish`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** Writes the released versions back as the drafts; `sharedFieldsKept` lists the items whose shared fields stayed. */
+  discard(projectKey: string, body: S['ReleaseRequest']): Observable<S['ReleaseResultView']> {
+    return this.http.post<S['ReleaseResultView']>(`${BASE}/projects/${projectKey}/releases/discard`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  // ── Changes (M27.1.3) ───────────────────────────────────────────────────
+
+  /** One page of unreleased (asset, locale) pairs. */
+  listChanges(projectKey: string, query: ChangesQuery = {}): Observable<S['ChangesPageView']> {
+    return this.http.get<S['ChangesPageView']>(`${BASE}/projects/${projectKey}/changes`, {
+      withCredentials: true,
+      params: this.listParams(query),
+    });
+  }
+
+  /** How many pending pairs there are per status, plus `total`. */
+  changesCount(projectKey: string): Observable<Record<string, number>> {
+    return this.http.get<Record<string, number>>(`${BASE}/projects/${projectKey}/changes/count`, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** The released-to-draft diff of one asset in one locale (`locale` omitted: the shared key). */
+  changeDiff(projectKey: string, uuid: string, locale?: string | null): Observable<S['ChangeDiffView']> {
+    return this.http.get<S['ChangeDiffView']>(`${BASE}/projects/${projectKey}/changes/${uuid}/diff`, {
+      withCredentials: true,
+      params: this.params({ locale: locale || undefined }),
+    });
+  }
+
+  // ── Schedules (M27.4.4) ─────────────────────────────────────────────────
+
+  listSchedules(projectKey: string, query: SchedulesQuery = {}): Observable<S['SchedulePageView']> {
+    return this.http.get<S['SchedulePageView']>(`${BASE}/projects/${projectKey}/schedules`, {
+      withCredentials: true,
+      params: this.listParams(query),
+    });
+  }
+
+  schedule(projectKey: string, id: number): Observable<S['ScheduleView']> {
+    return this.http.get<S['ScheduleView']>(`${BASE}/projects/${projectKey}/schedules/${id}`, {
+      withCredentials: true,
+    });
+  }
+
+  /** `422`: `SF-DOM-0160`–`0166` (type, params, time, cron, form) and the release codes. */
+  createSchedule(projectKey: string, body: S['ScheduleRequest']): Observable<S['ScheduleView']> {
+    return this.http.post<S['ScheduleView']>(`${BASE}/projects/${projectKey}/schedules`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** Replaces time, policies and params of a pending schedule; `version` is its `If-Match` (`"v{version}"`). */
+  updateSchedule(projectKey: string, id: number, version: number, body: S['ScheduleRequest']): Observable<S['ScheduleView']> {
+    return this.http.put<S['ScheduleView']>(`${BASE}/projects/${projectKey}/schedules/${id}`, body, {
+      withCredentials: true,
+      headers: { 'If-Match': `"v${version}"` },
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** `cancel`, `take-over`, `run-now` or `repin` a schedule; answers the schedule as it is afterwards. */
+  scheduleAction(
+    projectKey: string,
+    id: number,
+    action: 'cancel' | 'take-over' | 'run-now' | 'repin',
+  ): Observable<S['ScheduleView']> {
+    return this.http.post<S['ScheduleView']>(`${BASE}/projects/${projectKey}/schedules/${id}/${action}`, null, {
+      withCredentials: true,
+    });
+  }
+
+  scheduleExecutions(
+    projectKey: string,
+    id: number,
+    page = 0,
+    size = 50,
+  ): Observable<S['ScheduleExecutionPageView']> {
+    return this.http.get<S['ScheduleExecutionPageView']>(`${BASE}/projects/${projectKey}/schedules/${id}/executions`, {
+      withCredentials: true,
+      params: this.params({ page, size }),
+    });
+  }
+
+  /** The next run times of a cron in a zone, validated like a create (`422 SF-DOM-0165` for an invalid cron). */
+  schedulePreviewTimes(projectKey: string, body: S['PreviewTimesRequest']): Observable<S['PreviewTimesView']> {
+    return this.http.post<S['PreviewTimesView']>(`${BASE}/projects/${projectKey}/schedules/preview-times`, body, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** Query params where array values repeat the key (`type=PAGE&type=MEDIA`). */
+  private listParams(values: object): HttpParams {
+    let params = new HttpParams();
+    for (const [key, value] of Object.entries(values)) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          params = params.append(key, String(item));
+        }
+      } else if (value !== undefined && value !== null && value !== '') {
+        params = params.set(key, String(value));
+      }
+    }
+    return params;
   }
 }

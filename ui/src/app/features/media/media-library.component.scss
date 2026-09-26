@@ -194,6 +194,8 @@
 }
 
 .cell__name {
+  max-width: 100%;
+  min-width: 0;
   font-size: var(--sf-text-sm);
   font-weight: 500;
   overflow: hidden;
@@ -266,4 +268,11 @@
   font-family: var(--sf-font-mono, monospace);
   font-size: var(--sf-text-xs);
   font-weight: 400;
+}
+
+.cell__localized {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: var(--sf-1);
+  color: var(--sf-slate);
 }

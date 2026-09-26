@@ -1,3 +1,74 @@
+# M27.6 — UI: release status, release bar, Changes, preview toggle, localized media, Schedules (branch `m27-release-and-scheduling`)
+
+Spec: `tasks/27-m27-release-and-scheduling/06-ui/`. Order 6.1 → 6.5 → 6.2; 6.3 and 6.4 in parallel (separate agents,
+separate feature folders).
+
+Design (beyond the task text):
+- New `features/release/`: `ReleaseService` (plan/release/unpublish/discard + changes API), `release-status.util`
+  (labels, status for the editing locale with `""` fallback, tooltip text), `ReleasePermissionsStore` (`canRelease()`:
+  role ≥ `DEVELOPER` and not read-only — the one place M28 swaps), `ReleaseEventsStore` (a counter bumped after every
+  release/unpublish/discard/schedule action; lists, the nav-rail count and release bars refresh on it — no polling).
+- `sf-release-badge` takes the DTO's `release` + `scheduled` blocks and reads the editing locale itself.
+- `sf-release-bar` loads its own state with `GET /assets/{uuid}` (the generic detail carries `release`/`scheduled` for
+  every releasable type) and re-loads on `refreshKey` (the editor's saved revision) and on release events — one data
+  source, never computed client-side, and one integration line per editor.
+- Dialogs follow the `design/_dialog-shell` pattern (scrim + panel, Escape closes).
+- Routes stay eager like every other project route (decision of 2026-09-16 in `app.routes.ts`), not lazy.
+
+- [x] API client: releases, changes, schedules, preview `view`, media localized/files/text locale
+- [x] M27.6.1 — badge, release bar, release/unpublish/discard dialogs, permissions store; bar in every releasable
+      editor; badges in pages tree/list, content, globals, media, navigation; delete confirmation texts
+- [x] M27.6.5 — schedule dialog (time zones, cron presets, preview times, pin/missed/then-generate, dependencies),
+      Schedules page (filters, actions, history drawer), bar "Schedule…" + pending-schedule line, nav-rail entry
+- [x] M27.6.2 — Changes view (URL filters as chips, paging, sort, diff panel, multi-select actions, keyboard), nav-rail
+      count badge
+- [x] M27.6.3 — preview Draft/Published toggle, not-published empty state, status line, share view (agent)
+- [x] M27.6.4 — localized media drawer, files section, text locale, library marker/thumbnail (agent)
+- [x] Backend additions the UI needed: `GET /media/{uuid}` (per-language files resolved server-side),
+      `ownerUserId` on `scheduled` refs; OpenAPI + `schema.d.ts` regenerated
+- [x] `npm run build`, `npx vitest run` (89 files, 596 tests); `./gradlew build test --rerun` (1327 tests, 0 failures,
+      6 skipped benchmarks); manual check in the running app (dev stack on scratch ports)
+
+
+## Review
+
+- **Delivered as specified**, with these design choices:
+  - One data source for statuses: the DTO `release` blocks. The release bar reads its asset itself
+    (`GET /assets/{uuid}`) and again after every save and every release action. Lists re-read on release events.
+    A row shown elsewhere is patched right away with the status the bar just read (`ReleaseEventsStore.observed`),
+    so the tree shows "Changed" as soon as the editor saved.
+  - Permissions sit in `ReleasePermissionsStore` (one computed per operation, `DEVELOPER` + not read-only) so that
+    M28 changes a single class.
+  - Routes `changes` and `schedules` are eager, like every other project route (the 2026-09-16 single-bundle
+    decision), not lazy as the task text says.
+- **Backend additions the UI needed** (instead of copying server logic into the UI):
+  - `GET /media/{uuid}` returns `MediaView` with `localeFiles`. The media agent had first re-implemented
+    `MediaFiles.fileFor` in TypeScript for drawers opened from list rows; that copy is gone.
+  - `ownerUserId` on `scheduled` refs, so the bar can say "Release scheduled for … by Ana" without one request per
+    schedule.
+- **Fixed on the way (pre-existing, found by the manual check): history rewritten by page PATCH and section
+  edits.** `BodyService` edited the stored version's payload in place. Content merge-patch and section add, reorder,
+  delete and move therefore rewrote the *previous* version's row at flush. A released page that was edited through
+  these endpoints stayed `PUBLISHED`, and the next build would have published the unreleased edit. Fixed at the root
+  (deep copy). `PagePayloadHistoryIntegrationTest` fails on the old code and passes now. See `lessons.md`.
+- Also fixed: the media library's thumbnail cache never refreshed after a file was replaced. It is keyed by
+  revision now, which matters more now that a language can get its own file.
+- **Manual check** (scratch stack 8082/4301, Playwright at 1280 px, screenshots checked):
+  - Release: NEW → release dialog → Published, with the tree badge and the nav-rail count updated.
+  - Per language: an EN edit makes EN Changed while DE stays Published. Preview Draft shows the edit, Published
+    shows the old text, per language. Discard restores the text in the editor and the preview.
+  - Delete: deleting a published page makes it Deletion pending. Releasing the deletion from the Changes view
+    (keyboard selection) removes it.
+  - Schedule: a release 2 minutes ahead with then-generate ran on time ("4 s late"), and the page became
+    Published. The history links revision r23, and generation run #1 opens expanded.
+  - Localized media: toggle, EN upload, the thumbnail follows the editing language, EN released alone. Turning
+    localization off lists the file to discard first.
+  - Preview "Not published in Deutsch" and the share view choice.
+  - 220 changes: 5 pages; paging, locale and search filters in the URL; select all on the page.
+
+
+---
+
 # M27.1.4 — Release performance for large selections (branch `m27-release-and-scheduling`)
 
 Spec: `tasks/27-m27-release-and-scheduling/01-release-model/004-release-performance-large-selections.md`. Backend.

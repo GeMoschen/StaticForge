@@ -25,6 +25,9 @@ import type { ContentDefinition } from '../forms/form.model';
 import type { EditingLocale } from '../forms/l10n.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { GlobalsService, etagFor, type Diagnostic, type GlobalSetDetailView } from './globals.service';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import type { ReleaseMode } from '../release/release-choice.util';
+import { isOnline } from '../release/release-status.util';
 
 const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
 
@@ -51,7 +54,7 @@ interface ContentIssue {
   selector: 'sf-global-set-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent],
+  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
   templateUrl: './global-set-detail.component.html',
   styleUrl: './global-set-detail.component.scss',
 })
@@ -240,9 +243,13 @@ export class GlobalSetDetailComponent {
     if (!current?.uuid || !this.canEditSchema()) {
       return;
     }
+    const online = isOnline(current.release);
     this.globals.delete(this.projectKey(), current.uuid).subscribe({
       next: () => {
-        this.toasts.show('Property set deleted', 'success');
+        this.toasts.show(
+          online ? 'Property set deleted — it stays online until you release the deletion' : 'Property set deleted',
+          'success',
+        );
         this.deleted.emit();
       },
       error: (err) => {
@@ -255,6 +262,13 @@ export class GlobalSetDetailComponent {
         );
       },
     });
+  }
+
+  /** A discard wrote the released values back as the draft: reload the set (M27.6.1). */
+  protected onReleaseChanged(mode: ReleaseMode): void {
+    if (mode === 'discard' && !this.timeTravelling()) {
+      this.load(this.projectKey(), this.uuid(), null);
+    }
   }
 
   private load(projectKey: string, uuid: string, revision: number | null): void {

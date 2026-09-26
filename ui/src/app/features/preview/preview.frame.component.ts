@@ -1,4 +1,3 @@
-import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -10,13 +9,26 @@ import {
   input,
   output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
-import { ApiClient } from '../../core/api/api.client';
+import { ApiClient, type PreviewView } from '../../core/api/api.client';
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { LocalesStore } from '../../core/project/locales.store';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { previewErrorDocument, previewProblem } from './preview-error';
 import { pageNumbers, readPageHeaders, requestedPage } from './preview-pagination.util';
-import { ProjectAccessStore } from '../../core/project/project-access.store';
+import {
+  NOT_PUBLISHED_CODE,
+  RELEASE_STATUS_HEADER,
+  VIEW_HEADER,
+  readStoredView,
+  releaseStatusLabel,
+  storeView,
+  viewLabel,
+} from './preview-view.util';
+import { ReleaseEventsStore } from '../release/release-events.store';
 
 type ViewportPreset = 'mobile' | 'tablet' | 'desktop' | 'full';
 
@@ -90,6 +102,11 @@ const HIGHLIGHT_SCRIPT = `<script>
  * revision, refresh when either changes." Always shows the current stored state (bounded
  * by the editor's own autosave debounce), never an unsaved/in-memory draft. Also offers a
  * viewport switcher, section-click forwarding, and a share-link helper.
+ *
+ * <p>Draft/Published (M27.2.3, M27.6.3): the draft view (default) renders the page's draft and the drafts of
+ * everything it reads; the published view renders what the next build publishes. Links inside the frame keep the view:
+ * the server signs it into every rewritten `/preview/share?t=…` link, and a pagination click re-fetches with the
+ * current view. A save only re-renders the draft view — the published view doesn't change until a release.
  */
 @Component({
   selector: 'sf-preview-frame',
@@ -105,6 +122,8 @@ export class SfPreviewFrameComponent implements OnDestroy {
   protected readonly archived = inject(ProjectAccessStore).archived;
   /** The language this preview renders — the one the editor is working in (M24.4.1). */
   protected readonly editingLocale = inject(EditingLocaleStore);
+  private readonly locales = inject(LocalesStore);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly projectKey = input.required<string>();
@@ -128,7 +147,31 @@ export class SfPreviewFrameComponent implements OnDestroy {
 
   protected readonly html = signal('');
   protected readonly viewport = signal<ViewportPreset>('desktop');
-  protected readonly shareUrl = signal<string | null>(null);
+  /** Draft (default) or Published, remembered per browser. */
+  protected readonly view = signal<PreviewView>(readStoredView());
+  protected readonly viewOptions: { value: PreviewView; label: string }[] = [
+    { value: 'draft', label: 'Draft' },
+    { value: 'published', label: 'Published' },
+  ];
+  /** The draft view's release status from `X-SF-Release-Status`; `null` when the response carries none. */
+  private readonly releaseStatus = signal<string | null>(null);
+  /** The view the shown document was rendered in (`X-SF-View`), so the status line never describes the other one. */
+  private readonly renderedView = signal<PreviewView | null>(null);
+  protected readonly statusLine = computed(() => {
+    const label = releaseStatusLabel(this.releaseStatus());
+    return this.view() === 'draft' && this.renderedView() === 'draft' && label ? `Draft — ${label}` : null;
+  });
+  /** Set when the published view has nothing to show: the page isn't released in the language. */
+  protected readonly notPublished = signal<string | null>(null);
+
+  /** The share popover: open, the chosen view, and the created link with the view it shows. */
+  protected readonly shareOpen = signal(false);
+  protected readonly shareView = signal<PreviewView>('draft');
+  protected readonly shareLink = signal<{ url: string; view: PreviewView } | null>(null);
+  protected readonly shareLabel = computed(() => {
+    const link = this.shareLink();
+    return link ? `${viewLabel(link.view)} link` : '';
+  });
   /** The page of a paginated page (M21.3.1): requested, rendered and total. Hidden while there is one page. */
   protected readonly page = signal(1);
   protected readonly totalPages = signal(1);
@@ -177,11 +220,41 @@ export class SfPreviewFrameComponent implements OnDestroy {
         this.requestedPage = 1;
       }
       this.revision();
-      this.refreshKey();
       // Switching the editing language re-renders the preview in it (M24.4.1).
       this.editingLocale.locale();
+      // A release, unpublish or discard changes what both views show, and the draft's status (M27.6.3).
+      this.releaseEvents.version();
       this.scheduleDebounced();
     });
+
+    // A save (autosave) changes only the draft: the published view stays as it is until a release.
+    effect(() => {
+      this.refreshKey();
+      if (untracked(() => this.view()) === 'draft') {
+        this.scheduleDebounced();
+      }
+    });
+  }
+
+  /** Switches between the draft and the published view and remembers the choice. */
+  protected setView(view: PreviewView): void {
+    if (view === this.view()) {
+      return;
+    }
+    this.view.set(view);
+    storeView(view);
+    this.refreshManually();
+  }
+
+  /** Arrow keys move between the two views, like a radio group. */
+  protected onViewKeydown(event: KeyboardEvent): void {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      const next: PreviewView = this.view() === 'draft' ? 'published' : 'draft';
+      this.setView(next);
+      const group = (event.currentTarget as HTMLElement | null)?.closest('[role="radiogroup"]');
+      group?.querySelector<HTMLElement>(`[data-view="${next}"]`)?.focus();
+    }
   }
 
   ngOnDestroy(): void {
@@ -225,20 +298,38 @@ export class SfPreviewFrameComponent implements OnDestroy {
     this.fetch();
   }
 
+  /** Opens the share choice with the view currently shown preselected. */
+  protected toggleShare(): void {
+    if (this.shareOpen()) {
+      this.shareOpen.set(false);
+      return;
+    }
+    this.shareView.set(this.view());
+    this.shareOpen.set(true);
+  }
+
+  /** Creates a share link bound to the chosen view (M27.2.3): a published link keeps showing the released state. */
   protected share(): void {
     const key = this.projectKey();
     const uuid = this.pageUuid();
     if (!key || !uuid) {
       return;
     }
-    this.api.sharePreviewUrl(key, uuid, undefined, CHANNEL, this.editingLocale.locale() ?? undefined).subscribe({
-      next: (link) => this.shareUrl.set(link.url ?? link.token ?? null),
-      error: () => this.shareUrl.set(null),
-    });
+    const view = this.shareView();
+    this.api
+      .sharePreviewUrl(key, uuid, undefined, CHANNEL, this.editingLocale.locale() ?? undefined, view)
+      .subscribe({
+        next: (link) => {
+          const url = link.url ?? link.token ?? null;
+          this.shareLink.set(url ? { url, view } : null);
+          this.shareOpen.set(false);
+        },
+        error: () => this.shareLink.set(null),
+      });
   }
 
   protected copyShareUrl(): void {
-    const url = this.shareUrl();
+    const url = this.shareLink()?.url;
     if (!url) {
       return;
     }
@@ -282,6 +373,8 @@ export class SfPreviewFrameComponent implements OnDestroy {
     if (!key || !uuid) {
       return;
     }
+    const view = this.view();
+    const locale = this.editingLocale.locale();
     this.api
       .previewSavedPageResponse(
         key,
@@ -290,7 +383,8 @@ export class SfPreviewFrameComponent implements OnDestroy {
         CHANNEL,
         this.requestedPage,
         // The preview renders the language the editor is working in (M24.4.1).
-        this.editingLocale.locale() ?? undefined,
+        locale ?? undefined,
+        view,
       )
       .subscribe({
       next: (response) => {
@@ -298,10 +392,27 @@ export class SfPreviewFrameComponent implements OnDestroy {
         this.page.set(page);
         this.totalPages.set(total);
         this.requestedPage = page;
+        this.notPublished.set(null);
+        const rendered = response.headers.get(VIEW_HEADER);
+        this.renderedView.set(rendered === 'published' || rendered === 'draft' ? rendered : view);
+        this.releaseStatus.set(response.headers.get(RELEASE_STATUS_HEADER));
         this.html.set(response.body ?? '');
       },
-      // Show why the page can't render (e.g. 422 SF-TPL-0135 include cycle) instead of a blank frame.
-      error: (err: unknown) => this.html.set(previewErrorDocument(previewProblem(err))),
+      error: (err: unknown) => {
+        const problem = previewProblem(err);
+        this.releaseStatus.set(null);
+        if (view === 'published' && problem.status === 404 && problem.code === NOT_PUBLISHED_CODE) {
+          // Not an error: the page simply isn't live in this language yet.
+          this.notPublished.set(
+            locale && this.locales.isLocalized() ? `Not published in ${this.locales.labelOf(locale)}` : 'Not published',
+          );
+          this.html.set('');
+          return;
+        }
+        this.notPublished.set(null);
+        // Show why the page can't render (e.g. 422 SF-TPL-0135 include cycle) instead of a blank frame.
+        this.html.set(previewErrorDocument(problem));
+      },
     });
   }
 

@@ -84,6 +84,17 @@
 - **Rule:** assert statement counts with `ThreadStatementCounter` (per-thread `StatementInspector`), warm the
   project's caches with an unmeasured call right before each measured one, and prove the test fails on the old code.
 
+## Never edit a loaded version's payload in place (2026-09-26)
+- **Mistake (pre-existing since the section endpoints, found in M27.6's manual check):** `BodyService` edited the
+  payload it was handed — the open version's managed `JsonNode` — for content merge-patch and every section operation.
+  At flush Hibernate rewrote the *previous* version's row with the new content: history lied, and a released version
+  silently took the draft's edits (status stayed `PUBLISHED`; the next build would have published unreleased content).
+  Unit specs and the release service tests never saw it: they save through `PUT` (a fresh payload).
+- **Rule:** any code that derives a new payload from a stored one starts with `deepCopy()`. Helpers that "normalize"
+  a node (`object(node)`, `JsonUtil.object`) must not hand back the stored instance for editing.
+- **Rule:** a versioning feature is tested through *every* write path the UI uses (PATCH, section add/reorder/delete/
+  move), and asserts the earlier version is unchanged — not only the new one.
+
 ## Spec fixtures must have the API's real shape (2026-09-23)
 - **Mistake (M25, found by the e2e journey):** the Content UI ran record/set `folderPath` values through a helper
   that expects stored paths (`/content_root/…`), but the REST API sends them store-relative (`/staff/`). Every unit

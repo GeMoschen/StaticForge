@@ -20,14 +20,21 @@
           [ariaCurrentWhenActive]="'page'"
           [routerLinkActiveOptions]="{ exact: false }"
           [attr.title]="item.hint ?? item.label"
-          [attr.aria-label]="item.label"
+          [attr.aria-label]="item.count ? item.label + ', ' + item.count + ' ' + item.countLabel : item.label"
         >
           <span class="rail__item-icon">
             <sf-icon [name]="item.icon" />
+            @if (item.count && !expanded()) {
+              <span class="rail__count rail__count--dot" aria-hidden="true">{{ item.count > 99 ? '99+' : item.count }}</span>
+            }
           </span>
           @if (expanded()) {
             <span class="rail__item-label">{{ item.label }}</span>
+            @if (item.count) {
+              <span class="rail__count" aria-hidden="true">{{ item.count }}</span>
+            }
           }
+
         </a>
       </li>
     }

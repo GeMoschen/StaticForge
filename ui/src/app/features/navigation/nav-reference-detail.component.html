@@ -1,4 +1,10 @@
 <div class="nav-ref-detail">
+  <sf-release-bar
+    [projectKey]="projectKey()"
+    [assetUuid]="reference().uuid"
+    [refreshKey]="reference().revision"
+    (changed)="onReleaseChanged($event)"
+  />
   <header class="nav-ref-detail__header">
     <sf-icon name="link" class="nav-ref-detail__icon" />
     @if (editingName()) {

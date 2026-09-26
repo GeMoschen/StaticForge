@@ -1,0 +1,84 @@
+<section class="plan" aria-live="polite" [attr.aria-busy]="loading()">
+  @if (loading() && !plan()) {
+    <sf-spinner label="Checking dependencies…" />
+  } @else if (error()) {
+    <p class="plan__error" role="alert">{{ error() }}</p>
+  } @else if (plan()) {
+    @if (incomplete().length > 0) {
+      <div class="plan__incomplete" role="alert">
+        <h3 class="plan__title">Incomplete content</h3>
+        <p class="plan__note">Fill in the required fields before releasing — or untick the dependency.</p>
+        <ul class="plan__list">
+          @for (row of incomplete(); track $index) {
+            <li class="plan__incomplete-row" [class.plan__incomplete-row--muted]="!row.blocking">
+              <span class="plan__name">
+                {{ row.name }}
+                @if (row.entry.locale) {
+                  <span class="plan__locale">{{ localeTag(row.entry.locale) }}</span>
+                }
+                @if (!row.blocking) {
+                  <span class="plan__muted">(not included)</span>
+                }
+              </span>
+              <a
+                class="plan__open"
+                [routerLink]="row.route.commands"
+                [queryParams]="row.route.queryParams"
+                (click)="navigated.emit()"
+                >Open</a
+              >
+              <ul class="plan__issues">
+                @for (issue of row.entry.issues ?? []; track $index) {
+                  <li>
+                    @if (issue.path) {
+                      <code class="plan__path">{{ issue.path }}</code>
+                    }
+                    {{ issue.message }}
+                  </li>
+                }
+              </ul>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+    @if (dependencyCount() > 0) {
+      <div class="plan__dependencies">
+        <h3 class="plan__title">Also release ({{ dependencyCount() }})</h3>
+        <p class="plan__note">Unreleased assets the selection needs. Anything you untick renders empty until released.</p>
+        @for (group of groups(); track group.reason) {
+          <fieldset class="plan__group">
+            <legend class="plan__legend">{{ group.label }}</legend>
+            @for (row of group.rows; track row.key) {
+              <label class="plan__dependency">
+                <input type="checkbox" [checked]="isTicked(row)" (change)="toggle(row, $event)" />
+                <span class="plan__name">{{ row.name }}</span>
+                @if (row.dependency.target?.locale) {
+                  <span class="plan__locale">{{ localeTag(row.dependency.target?.locale) }}</span>
+                }
+                <span class="plan__status">{{ statusLabel(row.dependency.target?.status) }}</span>
+                @if (row.via) {
+                  <span class="plan__muted">via {{ row.via }}</span>
+                }
+              </label>
+            }
+          </fieldset>
+        }
+      </div>
+    } @else if (!loading()) {
+      <p class="plan__note">No unreleased dependencies.</p>
+    }
+
+    @if (warnings().length > 0) {
+      <ul class="plan__warnings">
+        @for (warning of warnings(); track $index) {
+          <li>{{ warning }}</li>
+        }
+      </ul>
+    }
+    @if (loading()) {
+      <p class="plan__note">Updating…</p>
+    }
+  }
+</section>

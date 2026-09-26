@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { map, Observable, of, catchError } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
 import { deleteSetQuestion } from './content-tree.util';
+import { type ReleaseBlock, deleteQuestion } from '../release/release-status.util';
 import { ContentService } from './content.service';
 
 /** What deleting a set needs to know about it. */
@@ -10,6 +11,8 @@ export interface DeletableSet {
   uuid: string;
   name: string;
   recordCount: number;
+  /** The set's release state (M27.6.1): a published set stays online until the deletion is released. */
+  release?: ReleaseBlock;
 }
 
 /**
@@ -27,7 +30,7 @@ export class RecordSetActions {
    * cancelled or the delete failed (the failure is toasted here).
    */
   delete(projectKey: string, set: DeletableSet): Observable<boolean> {
-    if (!window.confirm(deleteSetQuestion(set.name, set.recordCount))) {
+    if (!window.confirm(deleteQuestion(deleteSetQuestion(set.name, set.recordCount), set.release))) {
       return of(false);
     }
     return this.content.deleteRecordSet(projectKey, set.uuid, set.recordCount > 0).pipe(

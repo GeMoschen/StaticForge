@@ -21,6 +21,9 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { etagFor, NavigationService, type PageReferenceView } from './navigation.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import type { ReleaseMode } from '../release/release-choice.util';
+import { type ReleaseBlock, deleteQuestion } from '../release/release-status.util';
 
 type FolderView = components['schemas']['FolderView'];
 
@@ -49,6 +52,7 @@ interface FlatFolderOption {
     SfFieldComponent,
     SfIconComponent,
     SfUidRenameComponent,
+    ReleaseBarComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav-reference-detail.component.html',
@@ -57,6 +61,8 @@ interface FlatFolderOption {
 export class NavReferenceDetailComponent implements OnInit {
   readonly projectKey = input.required<string>();
   readonly reference = input.required<PageReferenceView>();
+  /** The reference's release state from the tree (M27.6.1), for the delete question. */
+  readonly release = input<ReleaseBlock>(null);
 
   readonly closed = output<void>();
   readonly changed = output<void>();
@@ -212,13 +218,20 @@ export class NavReferenceDetailComponent implements OnInit {
       });
   }
 
+  /** A discard wrote the released reference back as the draft: the navigation reloads it (M27.6.1). */
+  protected onReleaseChanged(mode: ReleaseMode): void {
+    if (mode === 'discard') {
+      this.changed.emit();
+    }
+  }
+
   protected requestDelete(): void {
     const uuid = this.reference().uuid;
     if (!uuid || this.deleting() || this.readOnly()) {
       return;
     }
     const name = this.reference().displayName ?? this.reference().uid ?? 'this reference';
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) {
+    if (!window.confirm(deleteQuestion(`Delete "${name}"? This cannot be undone.`, this.release()))) {
       return;
     }
     this.deleting.set(true);

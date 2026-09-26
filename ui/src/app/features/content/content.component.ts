@@ -33,6 +33,7 @@ import {
   storeFolderPath,
 } from './content-tree.util';
 import { ContentStoreRefresh } from './content-store-refresh.service';
+import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 import {
   ContentService,
   etagFor,
@@ -102,6 +103,7 @@ export class ContentComponent {
   private readonly refresh = inject(ContentStoreRefresh);
   private readonly setActions = inject(RecordSetActions);
   private readonly projectContext = inject(ProjectContextStore);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
 
   protected readonly all = ALL;
   protected readonly setIcon = RECORD_SET_ICON;
@@ -215,8 +217,20 @@ export class ContentComponent {
     effect(() => {
       const key = this.projectKey();
       this.refresh.tick();
+      // Release actions change the statuses of the tree's folders and sets (M27.6.1).
+      this.releaseEvents.version();
       untracked(() => this.reload(key));
     });
+    effect(
+      () => {
+        const observed = this.releaseEvents.observed();
+        const next = untracked(() => withObservedRelease(this.sets(), observed));
+        if (next) {
+          this.sets.set(next);
+        }
+      },
+      { allowSignalWrites: true },
+    );
     effect(() => {
       const uuid = this.folder();
       if (!uuid || !findFolder(this.folders(), uuid)) {

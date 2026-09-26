@@ -10,5 +10,7 @@ import java.util.UUID;
  * @param locale the locale key the action touches, {@code ""} for every locale
  * @param runAt the one-off time; {@code null} for a recurring action
  * @param nextRunAt when it is next due
+ * @param ownerUserId who it runs as (M27.6.5: "Release scheduled for Tue 09:00 by Ana")
  */
-public record ScheduledRef(UUID assetUuid, String locale, long actionId, String type, Instant runAt, Instant nextRunAt) {}
+public record ScheduledRef(
+        UUID assetUuid, String locale, long actionId, String type, Instant runAt, Instant nextRunAt, Long ownerUserId) {}

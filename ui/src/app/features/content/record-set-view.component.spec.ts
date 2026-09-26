@@ -2,12 +2,13 @@ import '@angular/compiler';
 import { provideRouter, Router } from '@angular/router';
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { of } from 'rxjs';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ContentService, type DatasetDetailView, type RecordSetDetailView } from './content.service';
 import { RecordSetViewComponent } from './record-set-view.component';
+import { stubReleaseBar } from '../release/testing/release-bar.stub';
 
 const SET: RecordSetDetailView = {
   uuid: 'set-uuid',
@@ -72,6 +73,7 @@ async function setup(content: ReturnType<typeof contentStub>, options: { role?: 
 }
 
 describe('RecordSetViewComponent', () => {
+  beforeEach(() => stubReleaseBar(RecordSetViewComponent));
   afterEach(() => vi.restoreAllMocks());
 
   it('shows the set with its dataset, folder, record count, query panel and grid', async () => {

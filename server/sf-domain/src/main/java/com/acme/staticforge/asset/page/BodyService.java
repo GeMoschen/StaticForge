@@ -96,8 +96,12 @@ public class BodyService {
         return page;
     }
 
+    /**
+     * A copy of {@code node} to edit: the payload a caller passes is usually the stored version's own (managed)
+     * {@link JsonNode}, and editing it in place would rewrite that version's row at flush — history is append-only.
+     */
     private static ObjectNode object(JsonNode node) {
-        return (ObjectNode) (node != null && node.isObject() ? node : JsonUtil.parse("{}"));
+        return (ObjectNode) (node != null && node.isObject() ? node.deepCopy() : JsonUtil.parse("{}"));
     }
 
     private static List<JsonNode> sections(ObjectNode page, String bodyName) {

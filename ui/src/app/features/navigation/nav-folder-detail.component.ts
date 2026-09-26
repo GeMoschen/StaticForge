@@ -6,6 +6,9 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView } from './navigation.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import type { ReleaseMode } from '../release/release-choice.util';
+import { type ReleaseBlock, deleteQuestion } from '../release/release-status.util';
 
 interface StartNodeOption {
   value: string;
@@ -29,7 +32,7 @@ interface StartNodeOption {
 @Component({
   selector: 'sf-nav-folder-detail',
   standalone: true,
-  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent],
+  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav-folder-detail.component.html',
   styleUrl: './nav-folder-detail.component.scss',
@@ -39,6 +42,8 @@ export class NavFolderDetailComponent {
   readonly folder = input.required<NavigationFolderView>();
   /** This folder's direct children in the tree — the only valid `startNode` targets. */
   readonly children = input<NavTreeView[]>([]);
+  /** The folder's release state from the tree (M27.6.1), for the delete question. */
+  readonly release = input<ReleaseBlock>(null);
 
   readonly closed = output<void>();
   readonly changed = output<void>();
@@ -132,6 +137,13 @@ export class NavFolderDetailComponent {
     });
   }
 
+  /** A discard wrote the released folder back as the draft: the navigation reloads it (M27.6.1). */
+  protected onReleaseChanged(mode: ReleaseMode): void {
+    if (mode === 'discard') {
+      this.changed.emit();
+    }
+  }
+
   protected requestDelete(): void {
     const uuid = this.folder().uuid;
     if (!uuid || this.isProtected() || this.readOnly()) {
@@ -142,7 +154,7 @@ export class NavFolderDetailComponent {
     const message = childCount > 0
       ? `Delete "${name}" and everything inside it (${childCount} item(s))? This cannot be undone.`
       : `Delete "${name}"? This cannot be undone.`;
-    if (!window.confirm(message)) {
+    if (!window.confirm(deleteQuestion(message, this.release()))) {
       return;
     }
     this.deleting.set(true);

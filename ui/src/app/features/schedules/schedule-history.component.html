@@ -1,0 +1,102 @@
+<div class="history-scrim" (click)="closed.emit()"></div>
+<aside class="history" role="dialog" aria-modal="true" [attr.aria-label]="'History of ' + title()">
+  <header class="history__header">
+    <h2 class="history__title">{{ title() }}</h2>
+    <button type="button" class="history__close" aria-label="Close" (click)="closed.emit()">
+      <sf-icon name="close" />
+    </button>
+  </header>
+
+  <div class="history__body">
+    @if (error(); as message) {
+      <p class="history__error" role="alert">{{ message }}</p>
+    }
+    @if (schedule(); as s) {
+      <dl class="history__facts">
+        <dt>Status</dt>
+        <dd>{{ statusLabel(s) }}</dd>
+        <dt>Next run</dt>
+        <dd>{{ nextRun(s) }}</dd>
+        <dt>Owner</dt>
+        <dd>{{ members.nameOf(s.ownerUserId) }}</dd>
+        @if (s.pinPolicy) {
+          <dt>Version</dt>
+          <dd>{{ s.pinPolicy === 'LATEST' ? 'Whatever is saved at that time' : 'Pinned when scheduled' }}</dd>
+        }
+        <dt>If missed</dt>
+        <dd>{{ s.missedPolicy === 'SKIP_IF_LATER_THAN' ? 'Skip if later than ' + s.maxLateness : 'Run as soon as possible' }}</dd>
+      </dl>
+      @if ((s.items ?? []).length > 0) {
+        <h3 class="history__subtitle">Items</h3>
+        <ul class="history__items">
+          @for (item of s.items ?? []; track $index) {
+            <li>
+              {{ item.displayName || item.uid }}
+              @if (item.locale) {
+                <span class="history__tag">{{ item.locale.toUpperCase() }}</span>
+              }
+              @if (item.draftChangedSinceScheduled) {
+                <span class="history__drift">Draft changed since scheduled</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
+
+    <h3 class="history__subtitle">Executions</h3>
+    @if (loading() && rows().length === 0) {
+      <sf-spinner label="Loading executions…" />
+    } @else {
+      <ol class="history__list">
+        @for (row of rows(); track row.execution.id) {
+          <li class="history__execution">
+            <div class="history__line">
+              <span class="history__outcome" [class]="'history__outcome history__outcome--' + (row.execution.outcome ?? 'running').toLowerCase()">
+                {{ row.execution.outcome ? outcomeLabel(row.execution.outcome) : 'In progress' }}
+              </span>
+              <span>Due {{ formatInstant(row.execution.scheduledFor) }}</span>
+              @if (formatDuration(row.execution.lateByMs); as late) {
+                <span class="history__muted">· started {{ late }} late</span>
+              }
+            </div>
+            @if (row.execution.message) {
+              <p class="history__message">{{ row.execution.message }}</p>
+            }
+            @if (row.waitingForRun !== null) {
+              <p class="history__muted">Waiting for run #{{ row.waitingForRun }} to finish.</p>
+            }
+            @if (row.items.length > 0) {
+              <ul class="history__results">
+                @for (item of row.items; track $index) {
+                  <li>
+                    {{ item.name }}
+                    @if (item.locale) {
+                      <span class="history__tag">{{ item.locale }}</span>
+                    }
+                    — {{ item.result }}
+                    @if (item.reason) {
+                      <span class="history__muted">({{ item.reason }})</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+            <div class="history__links">
+              @if (row.execution.revisionId) {
+                <a [routerLink]="['/p', projectKey(), 'settings', 'revisions', row.execution.revisionId]">Revision r{{ row.execution.revisionId }}</a>
+              }
+              @if (row.execution.generationRunId) {
+                <a [routerLink]="['/p', projectKey(), 'settings', 'generation']" [queryParams]="{ run: row.execution.generationRunId }">
+                  Generation run #{{ row.execution.generationRunId }}
+                </a>
+              }
+            </div>
+          </li>
+        } @empty {
+          <li class="history__muted">Not executed yet.</li>
+        }
+      </ol>
+    }
+  </div>
+</aside>

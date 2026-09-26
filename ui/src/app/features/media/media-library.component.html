@@ -6,6 +6,7 @@
     (closed)="closeDetail()"
     (updated)="onUpdated($event)"
     (deleted)="onDeleted($event)"
+    (discarded)="onDiscarded($event)"
   />
 }
 
@@ -162,7 +163,10 @@
               <div class="cell__icon cell__icon--folder">
                 <sf-icon name="folder" />
               </div>
-              <span class="cell__name">{{ folder.displayName ?? folder.uid }}</span>
+              <span class="cell__name">
+                {{ folder.displayName ?? folder.uid }}
+                <sf-release-badge [release]="folder.release" [compact]="true" />
+              </span>
             </div>
           </div>
         }
@@ -182,7 +186,7 @@
               (change)="toggle(item.uuid)"
             />
             <button class="cell__body" type="button" (click)="openDetail(item.uuid)">
-              @if (thumb(item.uuid); as thumbUrl) {
+              @if (thumb(item); as thumbUrl) {
                 <img
                   class="cell__img"
                   [src]="thumbUrl"
@@ -199,6 +203,13 @@
                 @if (item.processCms) {
                   <span class="cell__badge" title="CMS syntax is processed when the site is generated">CMS</span>
                 }
+                @if (item.localized) {
+                  <span class="cell__localized" title="Different file per language">
+                    <sf-icon name="translate" />
+                    <span class="sf-sr-only">Different file per language</span>
+                  </span>
+                }
+                <sf-release-badge [release]="item.release" [scheduled]="item.scheduled" [compact]="true" />
               </span>
               <span class="cell__meta">
                 {{ item.mimeType }} · {{ item.sizeBytes | sfFileSize }}

@@ -60,6 +60,12 @@
     }
     <span class="page-editor__status" aria-live="polite">{{ statusLabel() }}</span>
   </header>
+  <sf-release-bar
+    [projectKey]="projectKey()"
+    [assetUuid]="uuid()"
+    [refreshKey]="releaseRefresh()"
+    (changed)="onReleaseChanged($event)"
+  />
 
   <div class="page-editor__body">
     <div class="page-editor__main" #main>

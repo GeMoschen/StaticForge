@@ -26,6 +26,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { FolderMoveEvent } from './types';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
@@ -69,6 +70,7 @@ export class PagesListComponent {
   /** `?folder=<uuid>` selects that folder (search deep link, M23.4.1). */
   readonly folder = input<string | undefined>();
   private readonly router = inject(Router);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly route = inject(ActivatedRoute);
 
   protected readonly tree = this.store.pageFolderTree;
@@ -159,7 +161,20 @@ export class PagesListComponent {
           return;
         }
         const q = this.search();
+        this.releaseEvents.version();
         this.reload(key, q);
+      },
+      { allowSignalWrites: true },
+    );
+
+    // An open editor's release bar read a new status: the tree row shows it at once (M27.6.1).
+    effect(
+      () => {
+        const observed = this.releaseEvents.observed();
+        const next = untracked(() => withObservedRelease(this.pages(), observed));
+        if (next) {
+          this.pages.set(next);
+        }
       },
       { allowSignalWrites: true },
     );

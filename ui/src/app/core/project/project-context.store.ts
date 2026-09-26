@@ -152,6 +152,36 @@ export class ProjectContextStore {
     );
   }
 
+  /**
+   * Re-reads the five editorial folder trees (M27.6.1): their nodes carry release statuses, which a release,
+   * unpublish or discard changes without anything else about the project changing.
+   */
+  refreshFolderTrees(projectKey: string): void {
+    const tree = (scope: string) =>
+      this.http.get<FolderView[]>(`/api/v1/projects/${projectKey}/folders?scope=${scope}&depth=10`);
+    forkJoin({
+      pages: tree('PAGES'),
+      media: tree('MEDIA'),
+      navigation: tree('NAVIGATION'),
+      globals: tree('GLOBALS'),
+      content: tree('CONTENT'),
+    }).subscribe({
+      next: (trees) => {
+        if (this.activeProjectKey() !== projectKey) {
+          return;
+        }
+        this.pageFolderTree.set(sortFolderTree(trees.pages ?? []));
+        this.mediaFolderTree.set(sortFolderTree(trees.media ?? []));
+        this.navigationFolderTree.set(sortFolderTree(trees.navigation ?? []));
+        this.globalsFolderTree.set(sortFolderTree(trees.globals ?? []));
+        this.contentFolderTree.set(sortFolderTree(trees.content ?? []));
+      },
+      error: () => {
+        /* the trees keep their last statuses; the next navigation reloads them */
+      },
+    });
+  }
+
   refreshRevision(projectKey: string): void {
     this.http
       .get<RevisionView[]>(`/api/v1/projects/${projectKey}/revisions`)

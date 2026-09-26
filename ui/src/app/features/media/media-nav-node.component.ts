@@ -7,6 +7,8 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseBadgeComponent } from '../release/release-badge.component';
+import { deleteQuestion } from '../release/release-status.util';
 
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
 
@@ -21,7 +23,7 @@ type MediaSummaryView = components['schemas']['MediaSummaryView'];
 @Component({
   selector: 'sf-media-nav-node',
   standalone: true,
-  imports: [SfIconComponent, SfRenameAssetDialogComponent],
+  imports: [SfIconComponent, SfRenameAssetDialogComponent, ReleaseBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './media-nav-node.component.html',
   styleUrl: './media-nav-node.component.scss',
@@ -145,7 +147,7 @@ export class MediaNavNodeComponent {
       return;
     }
     const name = this.summary().displayName ?? this.summary().uid ?? 'this media item';
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) {
+    if (!window.confirm(deleteQuestion(`Delete "${name}"? This cannot be undone.`, this.summary().release))) {
       return;
     }
     this.api.deleteAsset(this.projectKey(), uuid).subscribe({

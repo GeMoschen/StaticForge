@@ -23,6 +23,7 @@ import {
 } from '@angular/forms';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
+import { problemOf } from '../../core/api/problem.util';
 import { DialogService } from '../../core/ui/dialog.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
@@ -44,12 +45,25 @@ import {
   withLineEnding,
 } from './text-media.util';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { LocalesStore } from '../../core/project/locales.store';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import type { ReleaseMode } from '../release/release-choice.util';
+import { STAYS_ONLINE_NOTE, deleteQuestion, isOnline } from '../release/release-status.util';
+import {
+  type DiscardedFile,
+  type LocaleFileRow,
+  discardedFilesText,
+  localeFileRows,
+} from './media-locale-files.util';
 
 type MediaView = components['schemas']['MediaView'];
 type MediaMetadataRequest = components['schemas']['MediaMetadataRequest'];
 type FocalPointView = components['schemas']['FocalPointView'];
 type UsageDto = components['schemas']['UsageDto'];
 type Diagnostic = components['schemas']['Diagnostic'];
+type MediaLocaleFileView = components['schemas']['MediaLocaleFileView'];
 
 /** Details for every file; Source and Rendered for text media (M18.4.1). */
 export type MediaDrawerTab = 'details' | 'source' | 'rendered';
@@ -64,6 +78,9 @@ export type MediaDrawerTab = 'details' | 'source' | 'rendered';
     SfButtonComponent,
     ConflictDrawerComponent,
     SfAssetImpactComponent,
+    SfIconComponent,
+    SfFileSizePipe,
+    ReleaseBarComponent,
   ],
   templateUrl: './media-detail-drawer.component.html',
   styleUrl: './media-detail-drawer.component.scss',
@@ -75,6 +92,8 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   readonly closed = output<void>();
   readonly updated = output<MediaView>();
   readonly deleted = output<string>();
+  /** Discard changes rewrote the draft (M27.6.1): the library reloads the file and reopens the drawer. */
+  readonly discarded = output<string>();
 
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
@@ -125,6 +144,37 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
 
   readonly variants = computed(
     () => this.media()?.variants ?? [],
+  );
+
+  // ── Localized media (M27.6.4) ───────────────────────────────────────────
+
+  protected readonly locales = inject(LocalesStore);
+  /** The switch exists only in a project with languages. */
+  protected readonly showLocalization = computed(() => this.locales.isLocalized());
+  readonly localized = signal(false);
+  readonly togglingLocalized = signal(false);
+  /** Un-localizing would discard these files (`409 SF-MEDIA-0505`): asked before resending with `confirmDiscard`. */
+  readonly discardPrompt = signal<DiscardedFile[] | null>(null);
+  protected readonly discardPromptText = computed(() => discardedFilesText(this.discardPrompt() ?? []));
+  /** The per-language files as `GET /media/{uuid}` resolves them, for a drawer opened from a list row (no `localeFiles`). */
+  private readonly fetchedFiles = signal<Record<string, MediaLocaleFileView> | null>(null);
+  private fetchedFilesKey: string | null = null;
+  readonly fileRows = computed<LocaleFileRow[]>(() =>
+    this.localized() && this.showLocalization()
+      ? localeFileRows(this.media()?.localeFiles ?? this.fetchedFiles(), this.locales.locales(), this.locales.defaultLocale())
+      : [],
+  );
+  /** The language whose file is being uploaded or removed. */
+  readonly busyLocale = signal<string | null>(null);
+  /** The row a file is dragged over. */
+  readonly dragLocale = signal<string | null>(null);
+  /** Object URLs of the own files' thumbnails, by language. */
+  readonly localeThumbs = signal<Record<string, string>>({});
+  private readonly localeThumbKeys = new Map<string, string>();
+  /** The language the Source tab edits for localized text media; `null` follows the editing language. */
+  private readonly textLocaleChoice = signal<string | null>(null);
+  readonly textLocale = computed<string | null>(() =>
+    this.localized() && this.showLocalization() ? (this.textLocaleChoice() ?? this.editingLocale.locale()) : null,
   );
 
   // ── Text media (M18.4.1) ────────────────────────────────────────────────
@@ -180,11 +230,33 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     effect(() => {
       const uuid = this.media()?.uuid;
       const key = this.projectKey();
-      if (!uuid || !key || uuid === this.lastPreviewUuid) {
+      // Localized media previews the editing language's file (M27.6.4); a new file of it previews again.
+      const locale = this.media()?.localized ? this.editingLocale.locale() : null;
+      const previewKey = `${uuid}|${locale ?? ''}|${this.media()?.revision ?? ''}`;
+      if (!uuid || !key || previewKey === this.lastPreviewUuid) {
         return;
       }
-      this.lastPreviewUuid = uuid;
-      untracked(() => this.loadPreview(key, uuid));
+      this.lastPreviewUuid = previewKey;
+      untracked(() => this.loadPreview(key, uuid, locale));
+    });
+    // A drawer opened from a list row has no `localeFiles`: the server resolves them, once per version.
+    effect(() => {
+      const media = this.media();
+      const key = this.projectKey();
+      const viewed = this.timeTravel.activeRevision();
+      this.locales.config();
+      untracked(() => this.loadLocaleFiles(key, media, viewed));
+    });
+    // Thumbnails of the languages that have their own image file, re-fetched only when that file changes.
+    effect(() => {
+      const rows = this.fileRows();
+      const key = this.projectKey();
+      const uuid = this.media()?.uuid;
+      untracked(() => {
+        if (uuid) {
+          this.loadLocaleThumbs(key, uuid, rows);
+        }
+      });
     });
     // Another file: start over on its Details tab; the same file saved: follow its flag.
     effect(() => {
@@ -193,11 +265,13 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
         if (media.uuid !== this.lastTextUuid) {
           this.lastTextUuid = media.uuid ?? null;
           this.revision.set(media.revision ?? null);
+          this.textLocaleChoice.set(null);
           this.processDiagnostics.set([]);
           this.resetText();
           this.tab.set('details');
         }
         this.processCms.set(media.processCms ?? false);
+        this.localized.set(media.localized ?? false);
       });
     });
     // Alt text and caption are stored per language, so the two fields have to be re-seeded when
@@ -254,6 +328,9 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     if (url) {
       URL.revokeObjectURL(url);
     }
+    for (const thumb of Object.values(this.localeThumbs())) {
+      URL.revokeObjectURL(thumb);
+    }
     this.clearValidateTimer();
   }
 
@@ -282,9 +359,9 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     });
   }
 
-  private loadPreview(projectKey: string, uuid: string): void {
+  private loadPreview(projectKey: string, uuid: string, locale: string | null): void {
     const previous = this.previewObjectUrl();
-    this.api.mediaBinaryBlob(projectKey, uuid).subscribe({
+    this.api.mediaBinaryBlob(projectKey, uuid, undefined, locale).subscribe({
       next: (blob) => {
         this.previewObjectUrl.set(URL.createObjectURL(blob));
         if (previous) {
@@ -455,7 +532,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
       return;
     }
     this.sourceLoading.set(true);
-    this.api.mediaText(this.projectKey(), uuid, this.timeTravel.activeRevision()).subscribe({
+    this.api.mediaText(this.projectKey(), uuid, this.timeTravel.activeRevision(), this.textLocale()).subscribe({
       next: (view) => {
         const text = view.text ?? '';
         this.lineEnding.set(lineEndingOf(text));
@@ -509,7 +586,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     }
     const text = this.sourceText();
     this.sourceSaving.set(true);
-    this.api.saveMediaText(this.projectKey(), uuid, text, this.revision() ?? undefined).subscribe({
+    this.api.saveMediaText(this.projectKey(), uuid, text, this.revision() ?? undefined, this.textLocale()).subscribe({
       next: (response) => {
         const updated = response.media!;
         const changed = updated.revision !== this.revision();
@@ -595,12 +672,15 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
       return;
     }
     const referenced = this.usages().length > 0;
+    const release = this.media()?.release;
     this.confirmText.set('');
     this.dialog.open({
       title: 'Delete media',
       message: referenced
-        ? `This file is referenced by ${this.usages().length} asset(s). Deleting it will break those references. Type DELETE to confirm.`
-        : 'Delete this media file? This cannot be undone.',
+        ? `This file is referenced by ${this.usages().length} asset(s). Deleting it will break those references.` +
+          (isOnline(release) ? ` ${STAYS_ONLINE_NOTE}` : '') +
+          ' Type DELETE to confirm.'
+        : deleteQuestion('Delete this media file? This cannot be undone.', release),
       confirmLabel: 'Delete',
       cancelLabel: 'Cancel',
       kind: 'danger',
@@ -639,6 +719,217 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
         this.toasts.show('Could not delete media — it may still be referenced by a page or template.', 'error');
       },
     });
+  }
+
+  // ── Release (M27.6.1) ───────────────────────────────────────────────────
+
+  protected onReleaseChanged(mode: ReleaseMode): void {
+    const uuid = this.media()?.uuid;
+    if (mode === 'discard' && uuid) {
+      this.discarded.emit(uuid);
+    }
+  }
+
+  // ── Localized media (M27.6.4) ───────────────────────────────────────────
+
+  /** "Different file per language": on is immediate; off asks first when other languages have their own file. */
+  onLocalizedToggle(event: Event): void {
+    const checkbox = event.target as HTMLInputElement;
+    const wanted = checkbox.checked;
+    checkbox.checked = this.localized();
+    if (this.readOnly() || this.togglingLocalized()) {
+      return;
+    }
+    this.sendLocalized(wanted, false);
+  }
+
+  confirmUnlocalize(): void {
+    this.sendLocalized(false, true);
+  }
+
+  cancelUnlocalize(): void {
+    this.discardPrompt.set(null);
+  }
+
+  private sendLocalized(localized: boolean, confirmDiscard: boolean): void {
+    const uuid = this.media()?.uuid;
+    if (!uuid) {
+      return;
+    }
+    this.togglingLocalized.set(true);
+    this.api
+      .setMediaLocalized(this.projectKey(), uuid, localized, confirmDiscard, this.revision() ?? undefined)
+      .subscribe({
+        next: (updated) => {
+          this.togglingLocalized.set(false);
+          this.discardPrompt.set(null);
+          this.applyUpdated(updated);
+          this.toasts.show(
+            localized ? 'Each language can now have its own file' : 'One file for every language again',
+            'success',
+          );
+        },
+        error: (err: unknown) => {
+          this.togglingLocalized.set(false);
+          const body = (err instanceof HttpErrorResponse ? err.error : null) as
+            | { code?: string; files?: DiscardedFile[] }
+            | null;
+          if (err instanceof HttpErrorResponse && err.status === 409 && body?.code === 'SF-MEDIA-0505') {
+            this.discardPrompt.set(body.files ?? []);
+          } else {
+            this.toasts.show(problemOf(err, 'Could not change the file setting — try again in a moment.').detail, 'error');
+          }
+        },
+      });
+  }
+
+  onLocaleFileInput(locale: string, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) {
+      this.uploadLocaleFile(locale, file);
+    }
+  }
+
+  onLocaleDragOver(locale: string, event: DragEvent): void {
+    if (this.readOnly() || !event.dataTransfer?.types.includes('Files')) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    this.dragLocale.set(locale);
+  }
+
+  onLocaleDragLeave(locale: string): void {
+    if (this.dragLocale() === locale) {
+      this.dragLocale.set(null);
+    }
+  }
+
+  onLocaleDrop(locale: string, event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.dragLocale.set(null);
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+      this.uploadLocaleFile(locale, file);
+    }
+  }
+
+  uploadLocaleFile(locale: string, file: File): void {
+    const uuid = this.media()?.uuid;
+    if (!uuid || this.readOnly() || this.busyLocale() || !this.confirmDiscard()) {
+      return;
+    }
+    this.busyLocale.set(locale);
+    this.api.putMediaLocaleFile(this.projectKey(), uuid, locale, file).subscribe({
+      next: (response) => {
+        this.busyLocale.set(null);
+        this.resetText();
+        this.processDiagnostics.set(response.warnings ?? []);
+        this.toasts.show(`File for ${locale.toUpperCase()} saved`, 'success');
+        this.applyUpdated(response.media!);
+      },
+      error: (err: unknown) => {
+        this.busyLocale.set(null);
+        this.processDiagnostics.set(diagnosticsOf(err));
+      },
+    });
+  }
+
+  removeLocaleFile(row: LocaleFileRow): void {
+    const uuid = this.media()?.uuid;
+    if (!uuid || this.readOnly() || row.isDefault || !row.own || this.busyLocale()) {
+      return;
+    }
+    if (!window.confirm(`Remove the ${row.label} file? ${row.label} then uses the file it falls back to.`)) {
+      return;
+    }
+    this.busyLocale.set(row.locale);
+    this.api.removeMediaLocaleFile(this.projectKey(), uuid, row.locale).subscribe({
+      next: (updated) => {
+        this.busyLocale.set(null);
+        this.resetText();
+        this.toasts.show(`File for ${row.locale.toUpperCase()} removed`, 'success');
+        this.applyUpdated(updated);
+      },
+      error: () => this.busyLocale.set(null),
+    });
+  }
+
+  /** The Source tab of localized text media edits one language's file. */
+  onTextLocaleChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    if (!this.confirmDiscard()) {
+      select.value = this.textLocale() ?? '';
+      return;
+    }
+    this.textLocaleChoice.set(select.value || null);
+    this.resetText();
+    this.loadSource();
+  }
+
+  private applyUpdated(updated: MediaView): void {
+    this.revision.set(updated.revision ?? null);
+    this.localized.set(updated.localized ?? false);
+    this.updated.emit(updated);
+  }
+
+  private loadLocaleFiles(projectKey: string, media: MediaView, viewed: number | null): void {
+    const uuid = media?.uuid;
+    if (!uuid || !media.localized || media.localeFiles || !this.showLocalization()) {
+      this.fetchedFilesKey = null;
+      this.fetchedFiles.set(null);
+      return;
+    }
+    const key = `${uuid}|${media.revision ?? ''}|${viewed ?? ''}|${this.locales.locales().length}`;
+    if (key === this.fetchedFilesKey) {
+      return;
+    }
+    this.fetchedFilesKey = key;
+    this.api.mediaDetail(projectKey, uuid, viewed).subscribe({
+      next: (detail) => {
+        if (this.fetchedFilesKey === key) {
+          this.fetchedFiles.set(detail.localeFiles ?? null);
+        }
+      },
+      error: () => this.fetchedFiles.set(null),
+    });
+  }
+
+  private loadLocaleThumbs(projectKey: string, uuid: string, rows: LocaleFileRow[]): void {
+    const wanted = new Map(rows.filter((row) => row.own && row.isImage).map((row) => [row.locale, `${uuid}|${row.blobSha256}`]));
+    const current = { ...this.localeThumbs() };
+    let changed = false;
+    for (const [locale, key] of [...this.localeThumbKeys]) {
+      if (wanted.get(locale) !== key) {
+        this.localeThumbKeys.delete(locale);
+        if (current[locale]) {
+          URL.revokeObjectURL(current[locale]);
+          delete current[locale];
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      this.localeThumbs.set(current);
+    }
+    for (const [locale, key] of wanted) {
+      if (this.localeThumbKeys.get(locale) === key) {
+        continue;
+      }
+      this.localeThumbKeys.set(locale, key);
+      this.api.mediaThumbnailBlob(projectKey, uuid, locale).subscribe({
+        next: (blob) => {
+          if (this.localeThumbKeys.get(locale) === key) {
+            this.localeThumbs.update((map) => ({ ...map, [locale]: URL.createObjectURL(blob) }));
+          }
+        },
+        error: () => this.localeThumbKeys.delete(locale),
+      });
+    }
   }
 
   private loadUsages(): void {

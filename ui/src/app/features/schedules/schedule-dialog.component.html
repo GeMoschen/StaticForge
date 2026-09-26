@@ -1,0 +1,262 @@
+<div class="scrim" (click)="close()"></div>
+<div class="dialog dialog--wide" role="dialog" aria-modal="true" [attr.aria-label]="title()">
+  <header class="dialog__header">
+    <h2 class="dialog__title">{{ title() }}</h2>
+    <button type="button" class="dialog__close" aria-label="Close" (click)="close()">×</button>
+  </header>
+
+  <div class="dialog__body">
+    @if (typeOptions().length > 1 && !editing()) {
+      <fieldset class="sched__group">
+        <legend class="sched__legend">What</legend>
+        <div class="sched__row">
+          @for (option of typeOptions(); track option.value) {
+            <label class="sched__choice">
+              <input
+                type="radio"
+                name="schedule-type"
+                [value]="option.value"
+                [checked]="type() === option.value"
+                (change)="setType(option.value)"
+              />
+              {{ option.label }}
+            </label>
+          }
+        </div>
+      </fieldset>
+    }
+
+    @if (releaseState()) {
+      <fieldset class="sched__group">
+        <legend class="sched__legend">Items</legend>
+        @if (editing()) {
+          <ul class="sched__items">
+            @for (item of schedule()?.items ?? []; track $index) {
+              <li>
+                {{ item.displayName || item.uid }}
+                @if (item.locale) {
+                  <span class="sched__tag">{{ localeTag(item.locale) }}</span>
+                }
+                @if (item.draftChangedSinceScheduled) {
+                  <span class="sched__drift">Draft changed since scheduled</span>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          @for (choice of selection(); track $index; let i = $index) {
+            <label class="sched__choice">
+              <input type="checkbox" [checked]="choice.checked" (change)="toggleItem(i, $event)" />
+              {{ choice.label }}
+            </label>
+          } @empty {
+            <p class="sched__note">Nothing to {{ type() === 'RELEASE' ? 'release' : 'unpublish' }}.</p>
+          }
+        }
+      </fieldset>
+    }
+
+    <fieldset class="sched__group">
+      <legend class="sched__legend">When</legend>
+      @if (recurring()) {
+        <div class="sched__row">
+          <label class="sched__choice">
+            <input type="radio" name="cron-mode" value="preset" [checked]="cronMode() === 'preset'" (change)="cronMode.set('preset')" />
+            Repeat
+          </label>
+          <label class="sched__choice">
+            <input type="radio" name="cron-mode" value="advanced" [checked]="cronMode() === 'advanced'" (change)="cronMode.set('advanced')" />
+            Advanced (cron)
+          </label>
+        </div>
+        @if (cronMode() === 'preset') {
+          <div class="sched__row">
+            <label class="sched__field">
+              <span class="sr-label">Repeat</span>
+              <select class="sched__input" [value]="presetKind()" (change)="presetKind.set($any(value($event)))">
+                @for (option of presetOptions; track option.kind) {
+                  <option [value]="option.kind">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+            @if (presetKind() === 'weekly') {
+              <label class="sched__field">
+                <span class="sr-label">on</span>
+                <select class="sched__input" [value]="presetWeekday()" (change)="presetWeekday.set(+value($event))">
+                  @for (day of weekdays; track day.value) {
+                    <option [value]="day.value">{{ day.label }}</option>
+                  }
+                </select>
+              </label>
+            }
+            <label class="sched__field">
+              <span class="sr-label">{{ presetKind() === 'hourly' ? 'at minute' : 'at' }}</span>
+              <input class="sched__input" type="time" [value]="presetTime()" (input)="presetTime.set(value($event))" />
+            </label>
+          </div>
+        } @else {
+          <label class="sched__field sched__field--wide">
+            <span class="sr-label">Cron expression (minute hour day month weekday)</span>
+            <input
+              class="sched__input sched__mono"
+              type="text"
+              spellcheck="false"
+              [value]="advancedCron()"
+              [attr.aria-invalid]="previewError() ? true : null"
+              (input)="advancedCron.set(value($event))"
+            />
+          </label>
+        }
+        <p class="sched__note">Time zone: {{ zoneText() }}</p>
+        @if (previewError(); as message) {
+          <p class="sched__error" role="alert">{{ message }}</p>
+        } @else if (previewText().length > 0) {
+          <div class="sched__preview" aria-live="polite">
+            <span class="sched__legend">Next runs (your time)</span>
+            <ol>
+              @for (line of previewText(); track $index) {
+                <li>{{ line }}</li>
+              }
+            </ol>
+          </div>
+        } @else if (previewLoading()) {
+          <sf-spinner label="Computing next runs…" />
+        }
+      } @else {
+        <div class="sched__row">
+          <label class="sched__field">
+            <span class="sr-label">Date</span>
+            <input class="sched__input" type="date" [value]="date()" (input)="date.set(value($event))" />
+          </label>
+          <label class="sched__field">
+            <span class="sr-label">Time</span>
+            <input class="sched__input" type="time" [value]="time()" (input)="time.set(value($event))" />
+          </label>
+        </div>
+        <p class="sched__note">Time zone: {{ zoneText() }}</p>
+        @if (inPast()) {
+          <p class="sched__error" role="alert">Pick a time in the future.</p>
+        }
+      }
+    </fieldset>
+
+    @if (type() === 'RELEASE') {
+      <fieldset class="sched__group">
+        <legend class="sched__legend">Which version</legend>
+        <label class="sched__choice">
+          <input type="radio" name="pin" value="PINNED" [checked]="pinPolicy() === 'PINNED'" (change)="pinPolicy.set('PINNED')" />
+          Release the versions as they are now
+        </label>
+        <label class="sched__choice">
+          <input type="radio" name="pin" value="LATEST" [checked]="pinPolicy() === 'LATEST'" (change)="pinPolicy.set('LATEST')" />
+          Release whatever is saved at that time
+        </label>
+      </fieldset>
+    }
+
+    @if (releaseState()) {
+      <fieldset class="sched__group">
+        <legend class="sched__legend">Then</legend>
+        <label class="sched__choice">
+          <input type="checkbox" [checked]="thenGenerate()" (change)="thenGenerate.set($any($event.target).checked)" />
+          Generate right after (incremental build)
+        </label>
+        @if (thenGenerate()) {
+          <sf-generation-options
+            [projectKey]="projectKey()"
+            [showMode]="false"
+            name="then"
+            [(targetId)]="targetId"
+            [(channels)]="channels"
+          />
+        }
+      </fieldset>
+    } @else {
+      <fieldset class="sched__group">
+        <legend class="sched__legend">Build</legend>
+        <sf-generation-options
+          [projectKey]="projectKey()"
+          name="build"
+          [(mode)]="mode"
+          [(targetId)]="targetId"
+          [(channels)]="channels"
+        />
+      </fieldset>
+    }
+
+    <fieldset class="sched__group">
+      <legend class="sched__legend">If the time is missed (server down, project archived)</legend>
+      <label class="sched__choice">
+        <input type="radio" name="missed" value="RUN_LATE" [checked]="missedPolicy() === 'RUN_LATE'" (change)="missedPolicy.set('RUN_LATE')" />
+        Run as soon as possible
+      </label>
+      <div class="sched__row">
+        <label class="sched__choice">
+          <input
+            type="radio"
+            name="missed"
+            value="SKIP_IF_LATER_THAN"
+            [checked]="missedPolicy() === 'SKIP_IF_LATER_THAN'"
+            (change)="missedPolicy.set('SKIP_IF_LATER_THAN')"
+          />
+          Skip if more than
+        </label>
+        <input
+          class="sched__input sched__input--short"
+          type="number"
+          min="1"
+          aria-label="Lateness limit"
+          [value]="latenessValue()"
+          [disabled]="missedPolicy() !== 'SKIP_IF_LATER_THAN'"
+          (input)="setLateness($event)"
+        />
+        <select
+          class="sched__input"
+          aria-label="Lateness unit"
+          [value]="latenessUnit()"
+          [disabled]="missedPolicy() !== 'SKIP_IF_LATER_THAN'"
+          (change)="latenessUnit.set($any(value($event)))"
+        >
+          <option value="minutes">minutes</option>
+          <option value="hours">hours</option>
+        </select>
+        <span class="sched__note">late</span>
+      </div>
+    </fieldset>
+
+    @if (showPlan()) {
+      <sf-release-plan [projectKey]="projectKey()" [items]="items()" (stateChange)="planState.set($event)" (navigated)="closed.emit()" />
+      @if (planState()?.blocked && pinPolicy() === 'LATEST') {
+        <p class="sched__note">Incomplete items are skipped at run time unless they are completed by then.</p>
+      }
+    }
+
+    @if (!editing() || !releaseState()) {
+      <label class="sched__field sched__field--wide">
+        <span class="sched__legend">Comment</span>
+        <textarea
+          class="sched__input"
+          rows="2"
+          placeholder="Optional note for the revision or run"
+          [value]="comment()"
+          (input)="comment.set(value($event))"
+        ></textarea>
+      </label>
+    }
+
+    @if (error(); as message) {
+      <p class="sched__error" role="alert">{{ message }}</p>
+    }
+
+    <div class="dialog__actions">
+      <sf-button variant="ghost" [disabled]="submitting()" (click)="close()">Cancel</sf-button>
+      <sf-button variant="primary" [disabled]="!canSubmit()" (click)="submit()">
+        @if (submitting()) {
+          <sf-spinner label="Saving…" />
+        } @else {
+          {{ editing() ? 'Save' : 'Schedule' }}
+        }
+      </sf-button>
+    </div>
+  </div>
+</div>

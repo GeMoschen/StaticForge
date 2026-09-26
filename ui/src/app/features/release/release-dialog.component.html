@@ -1,0 +1,113 @@
+<div class="scrim" (click)="close()"></div>
+<div class="dialog" [class.dialog--wide]="mode() === 'release'" role="dialog" aria-modal="true" [attr.aria-label]="title()">
+  <header class="dialog__header">
+    <h2 class="dialog__title">{{ title() }}</h2>
+    <button type="button" class="dialog__close" aria-label="Close" (click)="close()">×</button>
+  </header>
+
+  <div class="dialog__body">
+    @if (keptNote(); as kept) {
+      <p class="release__note" role="status">
+        Discarded. The shared fields (not per language) were kept, because other languages have unreleased changes
+        on them: {{ kept.join(', ') }}.
+      </p>
+      <div class="dialog__actions">
+        <sf-button variant="primary" (click)="closed.emit()">Close</sf-button>
+      </div>
+    } @else {
+      @if (mode() === 'unpublish') {
+        <p class="release__note">Goes offline with the next build. The draft stays and can be released again.</p>
+      }
+
+      <fieldset class="release__choices">
+        <legend class="release__legend">{{ legend() }}</legend>
+        @for (choice of selection(); track $index; let i = $index) {
+          @if (multiple()) {
+            <label class="release__choice">
+              <input type="checkbox" [checked]="choice.checked" (change)="toggle(i, $event)" />
+              <span>{{ choice.label }}</span>
+            </label>
+          } @else {
+            <p class="release__single">{{ choice.label }}</p>
+          }
+        } @empty {
+          <p class="release__single">Nothing to {{ actionLabel().toLowerCase() }}.</p>
+        }
+        @if (multiple()) {
+          <button type="button" class="release__all" (click)="selectAll()">
+            {{ mode() === 'release' ? 'All changed languages' : 'Select all' }}
+          </button>
+        }
+      </fieldset>
+
+      @if (mode() === 'release') {
+        <sf-release-plan
+          [projectKey]="projectKey()"
+          [items]="items()"
+          (stateChange)="planState.set($event)"
+          (navigated)="closed.emit()"
+        />
+      }
+
+      @if (mode() === 'discard') {
+        <section class="release__diffs" aria-label="What would be discarded">
+          <p class="release__note">
+            Writes the released version back as the draft — a new revision; the discarded draft stays in the history.
+          </p>
+          @if (diffs(); as summaries) {
+            @for (summary of summaries; track $index) {
+              <div class="release__diff">
+                @if (multiple()) {
+                  <p class="release__diff-label">{{ summary.label }}</p>
+                }
+                @if (summary.error) {
+                  <p class="release__muted">Could not load the changes.</p>
+                } @else if (summary.paths.length === 0) {
+                  <p class="release__muted">No field changes (a move, rename or deletion).</p>
+                } @else {
+                  <ul class="release__paths">
+                    @for (path of summary.paths; track $index) {
+                      <li><code>{{ path }}</code></li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          } @else if (checkedCount() > 0) {
+            <sf-spinner label="Loading changes…" />
+          }
+        </section>
+      }
+
+      <label class="release__comment">
+        <span class="release__legend">Comment</span>
+        <textarea
+          class="release__textarea"
+          rows="2"
+          placeholder="Optional note for the revision"
+          [value]="comment()"
+          (input)="onComment($event)"
+        ></textarea>
+      </label>
+
+      @if (error(); as message) {
+        <p class="release__error" role="alert">{{ message }}</p>
+      }
+
+      <div class="dialog__actions">
+        <sf-button variant="ghost" [disabled]="submitting()" (click)="close()">Cancel</sf-button>
+        <sf-button
+          [variant]="mode() === 'release' ? 'primary' : 'danger'"
+          [disabled]="!canSubmit()"
+          (click)="submit()"
+        >
+          @if (submitting()) {
+            <sf-spinner [label]="actionLabel() + '…'" />
+          } @else {
+            {{ actionLabel() }}
+          }
+        </sf-button>
+      </div>
+    }
+  </div>
+</div>

@@ -5,9 +5,15 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map } from 'rxjs';
+import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { pendingCount } from '../changes/changes-query.util';
+import { ReleaseEventsStore } from '../release/release-events.store';
 import { ThemeService } from '../../core/ui/theme.service';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { UserMenuComponent } from '../account/user-menu.component';
@@ -20,6 +26,10 @@ interface NavItem {
   route: string;
   /** Tooltip, when it says more than the label (e.g. a keyboard shortcut). */
   hint?: string;
+  /** A count shown on the entry (the Changes entry's unreleased changes, M27.6.2); hidden when 0. */
+  count?: number;
+  /** What the count means, for its accessible name. */
+  countLabel?: string;
 }
 
 @Component({
@@ -32,7 +42,20 @@ interface NavItem {
 })
 export class NavRailComponent {
   private readonly store = inject(ProjectContextStore);
+  private readonly api = inject(ApiClient);
+  private readonly router = inject(Router);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
   protected readonly theme = inject(ThemeService);
+
+  /** New, changed and deletion-pending (asset, locale) pairs — re-read on navigation and after release actions, never polled. */
+  protected readonly changesCount = signal(0);
+  private readonly navigations = toSignal(
+    this.router.events.pipe(
+      filter((event) => event instanceof NavigationEnd),
+      map((event) => (event as NavigationEnd).id),
+    ),
+    { initialValue: 0 },
+  );
 
   readonly activeKey = this.store.activeProjectKey;
   readonly expanded = signal(this.readInitial());
@@ -55,6 +78,14 @@ export class NavRailComponent {
       { label: 'Media', icon: 'perm_media', route: `${base}/media` },
       { label: 'Navigation', icon: 'account_tree', route: `${base}/navigation` },
       { label: 'Globals', icon: 'tune', route: `${base}/globals` },
+      {
+        label: 'Changes',
+        icon: 'published_with_changes',
+        route: `${base}/changes`,
+        count: this.changesCount(),
+        countLabel: this.changesCount() === 1 ? 'unreleased change' : 'unreleased changes',
+      },
+      { label: 'Schedules', icon: 'schedule', route: `${base}/schedules` },
       { label: 'Templates', icon: 'dashboard_customize', route: `${base}/templates` },
       { label: 'Settings', icon: 'settings', route: `${base}/settings` },
     ];
@@ -63,6 +94,24 @@ export class NavRailComponent {
   constructor() {
     effect(() => {
       localStorage.setItem(STORAGE_KEY, this.expanded() ? '1' : '0');
+    });
+    effect(() => {
+      const key = this.activeKey();
+      this.navigations();
+      this.releaseEvents.version();
+      untracked(() => this.loadCount(key));
+    });
+  }
+
+  private loadCount(key: string | null): void {
+    if (!key) {
+      this.changesCount.set(0);
+      return;
+    }
+    this.api.changesCount(key).subscribe({
+      next: (counts) => this.changesCount.set(pendingCount(counts)),
+      // The count is a hint: a failed read keeps the last one.
+      error: () => undefined,
     });
   }
 

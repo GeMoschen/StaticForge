@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { of } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { NavReferenceDetailComponent } from './nav-reference-detail.component';
 import { NavigationService, type PageReferenceView } from './navigation.service';
+import { stubReleaseBar } from '../release/testing/release-bar.stub';
 
 const reference: PageReferenceView = {
   uuid: 'ref-uuid',
@@ -35,6 +36,8 @@ function makeApiStub(overrides: Partial<Record<keyof ApiClient, unknown>> = {}) 
 }
 
 describe('NavReferenceDetailComponent', () => {
+  beforeEach(() => stubReleaseBar(NavReferenceDetailComponent));
+
   it('shows the live-resolved target path on load', async () => {
     const nav = makeNavStub();
     const api = makeApiStub();

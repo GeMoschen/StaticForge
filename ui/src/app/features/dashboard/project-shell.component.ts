@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, untracked } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { ArchivedBannerComponent } from './archived-banner.component';
 import { NavRailComponent } from './nav-rail.component';
@@ -7,6 +7,7 @@ import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { RevisionSpineComponent } from '../revisions/revision-spine.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { ReleaseEventsStore } from '../release/release-events.store';
 
 @Component({
   selector: 'sf-project-shell',
@@ -25,8 +26,22 @@ export class ProjectShellComponent {
   protected readonly editingLocale = inject(EditingLocaleStore);
 
   protected readonly projectKey = this.store.activeProjectKey;
+  private readonly releaseEvents = inject(ReleaseEventsStore);
 
   constructor() {
+    // A release action (M27.6) is a revision, and it changes the statuses the folder trees show.
+    effect(() => {
+      if (this.releaseEvents.version() === 0) {
+        return;
+      }
+      const key = untracked(() => this.projectKey());
+      if (key) {
+        untracked(() => {
+          this.store.refreshFolderTrees(key);
+          this.store.refreshRevision(key);
+        });
+      }
+    });
     // The project's languages and the language last edited in it load with the project itself, so
     // every content screen can read them synchronously (M24.4.1).
     effect(

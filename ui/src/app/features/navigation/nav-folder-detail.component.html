@@ -1,4 +1,10 @@
 <div class="nav-folder-detail">
+  <sf-release-bar
+    [projectKey]="projectKey()"
+    [assetUuid]="folder().uuid"
+    [refreshKey]="folder().revision"
+    (changed)="onReleaseChanged($event)"
+  />
   <header class="nav-folder-detail__header">
     <sf-icon name="folder" class="nav-folder-detail__icon" />
     @if (editingName()) {

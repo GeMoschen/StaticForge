@@ -36,6 +36,9 @@ import { ContentStoreRefresh } from './content-store-refresh.service';
 import { ContentService, type DatasetDetailView, type RecordDetailView } from './content.service';
 import { MoveTargetDialogComponent } from './move-target-dialog.component';
 import { RecordAutosaveService, type RecordPayload } from './record-autosave.service';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import type { ReleaseMode } from '../release/release-choice.util';
+import { deleteQuestion } from '../release/release-status.util';
 
 type AssetHistoryEntry = components['schemas']['AssetHistoryEntry'];
 type UsageDto = components['schemas']['UsageDto'];
@@ -72,6 +75,7 @@ interface ContentIssue {
     SfContentFormComponent,
     ConflictDrawerComponent,
     MoveTargetDialogComponent,
+    ReleaseBarComponent,
   ],
   providers: [RecordAutosaveService],
   templateUrl: './record-editor.component.html',
@@ -224,6 +228,20 @@ export class RecordEditorComponent implements OnDestroy {
     }
   }
 
+  /** Re-reads the release bar whenever the record was saved (M27.6.1). */
+  protected readonly releaseRefresh = computed(
+    () => `${this.autosave.revision() ?? ''}|${this.record()?.revision ?? ''}|${this.record()?.deleted ?? ''}`,
+  );
+
+  /** A discard wrote the released version back as the draft: reload the record. */
+  protected onReleaseChanged(mode: ReleaseMode): void {
+    const uuid = this.record()?.uuid;
+    this.refresh?.notify();
+    if (mode === 'discard' && uuid && !this.timeTravelling()) {
+      this.load(this.projectKey(), uuid, null);
+    }
+  }
+
   protected leaveTimeTravel(): void {
     this.timeTravel.exit();
   }
@@ -238,7 +256,7 @@ export class RecordEditorComponent implements OnDestroy {
     const question = referenced
       ? `"${name}" is used by ${this.usages().length} page(s) or template(s). Delete it anyway?`
       : `Delete "${name}"? You can restore it from its history.`;
-    if (!window.confirm(question)) {
+    if (!window.confirm(deleteQuestion(question, record.release))) {
       return;
     }
     this.api.deleteAsset(this.projectKey(), record.uuid, referenced).subscribe({

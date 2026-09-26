@@ -60,6 +60,8 @@ interface LiveSummary {
 })
 export class GenerationComponent implements OnDestroy {
   readonly projectKey = input.required<string>();
+  /** A run to open on arrival — the Schedules history links here with `?run=` (M27.6.5). */
+  readonly openRun = input<number | null>(null);
 
   private readonly api = inject(GenerationService);
   private readonly auth = inject(AuthStore);
@@ -100,6 +102,17 @@ export class GenerationComponent implements OnDestroy {
       });
     });
   }
+
+  /** Opens {@link openRun}'s details once the history holds it. */
+  private readonly openRunEffect = effect(
+    () => {
+      const id = this.openRun();
+      if (id != null && this.runs().some((run) => run.id === id)) {
+        untracked(() => this.expandedRunId.set(id));
+      }
+    },
+    { allowSignalWrites: true },
+  );
 
   trackRun(index: number, run: GenerationRunView): number {
     return run.id ?? index;
