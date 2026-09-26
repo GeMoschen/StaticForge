@@ -143,7 +143,8 @@ class ReleaseStateExportImportIntegrationTest {
         byte[] archive = exportImportService.exportProject(src.fx().id());
         String doomedEntry = entry(archive, "assets/" + src.doomed() + ".json");
         assertThat(mapper.readTree(doomedEntry).path("draftDeleted").asBoolean()).isTrue();
-        assertThat(mapper.readTree(entry(archive, "manifest.json")).path("protocolVersion").asInt()).isEqualTo(8);
+        assertThat(mapper.readTree(entry(archive, "manifest.json")).path("protocolVersion").asInt())
+                .isGreaterThanOrEqualTo(ProjectExportImportService.RELEASE_STATE_PROTOCOL);
 
         Fixture target = newFixture("rkeep", false);
         ConflictReport report = exportImportService.analyzeImport(target.id(), archive, ImportOptions.DEFAULT);

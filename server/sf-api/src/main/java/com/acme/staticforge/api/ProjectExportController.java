@@ -57,7 +57,8 @@ public class ProjectExportController {
         Set<FolderScope> fullStores = parseFullStores(body.fullStores());
         byte[] archive = exportImportService.exportSelection(
                 projectId, new ExportSelection(
-                        assetUuids, body.includeChannels(), body.includeGenerationTargets(), fullStores));
+                        assetUuids, body.includeChannels(), body.includeGenerationTargets(), fullStores,
+                        body.includeSchedules()));
         return zipResponse(projectKey, archive);
     }
 

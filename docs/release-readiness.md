@@ -69,6 +69,21 @@ Goals G2, G3, and G4 are **proven** by committed automated tests. G1 and G5 need
 
 ## 4. Release notes — breaking changes
 
+### M27.8 — schedules travel with exports
+
+- **Archives.** The export protocol is now **9**: an archive carries the project's pending and paused schedules and
+  each generation target's `uuid`. A server of an earlier version refuses a protocol-9 archive (as with every protocol
+  bump); archives of protocol 8 and older import unchanged, without schedules.
+- **Identities.** Schedules and generation targets get a `uuid` (changelog `024`, backfilled for existing rows; the
+  PostgreSQL backfill uses `gen_random_uuid()`, built in since PostgreSQL 13). Both appear in their API views.
+- **Import.** Importing an archive with schedules imports them by default (`importSchedules=false` leaves them out);
+  pending schedules can fire on the target instance from then on. Re-importing replaces the open schedules with the
+  same `uuid`.
+
+Evidence: `ScheduleExportImportIntegrationTest` (pinned, latest, unpublish, one-off and recurring round trips;
+overdue, target missing, invalid, owner replaced, re-import, selection coverage, `importSchedules=false`, a protocol-8
+archive), `ProjectImportAnalyzeApiTest`, `ProjectExportSelectionApiTest`.
+
 ### M27 — release state: saving is a draft
 
 Editorial content — pages, records, record sets, global property sets, media, navigation page references and the

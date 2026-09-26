@@ -116,7 +116,8 @@ class ScheduleApiTest {
 
         perform(get("/api/v1/projects/{key}/schedules", fx.key()), viewer).andExpect(status().isOk())
                 .andExpect(jsonPath("$.rows", hasSize(1)));
-        perform(get("/api/v1/projects/{key}/schedules/{id}", fx.key(), id), viewer).andExpect(status().isOk());
+        perform(get("/api/v1/projects/{key}/schedules/{id}", fx.key(), id), viewer).andExpect(status().isOk())
+                .andExpect(jsonPath("$.uuid").value(fixtures.reload(id).getUuid().toString()));
         perform(get("/api/v1/projects/{key}/schedules/{id}/executions", fx.key(), id), viewer).andExpect(status().isOk());
         perform(post("/api/v1/projects/{key}/schedules/{id}/cancel", fx.key(), id), viewer).andExpect(status().isForbidden());
         perform(post("/api/v1/projects/{key}/schedules/{id}/cancel", fx.key(), id), editor).andExpect(status().isForbidden());

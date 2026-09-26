@@ -6,6 +6,7 @@ import com.acme.staticforge.api.dto.ImportResultView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.exportimport.ConflictReport;
+import com.acme.staticforge.exportimport.ImportConflict;
 import com.acme.staticforge.exportimport.ImportOptions;
 import com.acme.staticforge.exportimport.ImportResult;
 import com.acme.staticforge.exportimport.ProjectExportImportService;
@@ -32,6 +33,9 @@ import org.springframework.web.multipart.MultipartFile;
  * <p>{@code releaseMode} (M27.5.1): {@code KEEP} (default) keeps the archive's release state, {@code DRAFT} imports
  * everything as a draft. An archive without release state (protocol {@code <= 7}) always imports as drafts; the
  * analysis says which mode applies ({@code releaseState}, {@code releaseMode}).
+ *
+ * <p>{@code importSchedules} (M27.8.1, default {@code true}): whether the archive's open schedules are imported; the
+ * analysis counts them ({@code scheduleCount}) and warns about each one that won't be imported as it is.
  */
 @RestController
 @RequestMapping("/api/v1/projects/{projectKey}")
@@ -56,14 +60,16 @@ public class ProjectImportController {
             @PathVariable String projectKey,
             @RequestParam("file") MultipartFile file,
             @RequestParam(defaultValue = "false") boolean skipExistingImplicit,
-            @RequestParam(defaultValue = "KEEP") ReleaseMode releaseMode) {
+            @RequestParam(defaultValue = "KEEP") ReleaseMode releaseMode,
+            @RequestParam(defaultValue = "true") boolean importSchedules) {
         long projectId = projectService.requireByKey(projectKey).getId();
         RevisionContext ctx = RevisionContext.of(projectId, securitySupport.currentUserId(), "import project");
         ImportResult result = exportImportService.importProject(
-                projectId, bytes(file), ctx, new ImportOptions(skipExistingImplicit, releaseMode));
+                projectId, bytes(file), ctx, new ImportOptions(skipExistingImplicit, releaseMode, importSchedules));
         return new ImportResultView(
                 result.sourceProjectKey(), result.importedAssetCount(), result.updatedAssetCount(), result.importedBlobCount(),
-                result.releasedCount());
+                result.releasedCount(), result.importedScheduleCount(), result.updatedScheduleCount(),
+                views(result.scheduleWarnings()));
     }
 
     @AllowedOnArchivedProject("Analyzes an archive against the project, imports nothing.")
@@ -73,21 +79,26 @@ public class ProjectImportController {
             @PathVariable String projectKey,
             @RequestParam("file") MultipartFile file,
             @RequestParam(defaultValue = "false") boolean skipExistingImplicit,
-            @RequestParam(defaultValue = "KEEP") ReleaseMode releaseMode) {
+            @RequestParam(defaultValue = "KEEP") ReleaseMode releaseMode,
+            @RequestParam(defaultValue = "true") boolean importSchedules) {
         long projectId = projectService.requireByKey(projectKey).getId();
         ConflictReport report = exportImportService.analyzeImport(
-                projectId, bytes(file), new ImportOptions(skipExistingImplicit, releaseMode));
+                projectId, bytes(file), new ImportOptions(skipExistingImplicit, releaseMode, importSchedules));
         return toView(report);
     }
 
     private static ConflictReportView toView(ConflictReport report) {
-        List<ImportConflictView> conflicts = report.conflicts().stream()
+        return new ConflictReportView(
+                views(report.conflicts()), report.hasBlocking(), report.blocksImport(), report.releaseState(),
+                report.releaseMode().name(), report.scheduleCount());
+    }
+
+    private static List<ImportConflictView> views(List<ImportConflict> conflicts) {
+        return conflicts.stream()
                 .map(c -> new ImportConflictView(
                         c.severity().name(), c.type().name(), c.elementUuid(), c.elementLabel(), c.detail(),
                         c.explicit(), c.blocksImport()))
                 .toList();
-        return new ConflictReportView(
-                conflicts, report.hasBlocking(), report.blocksImport(), report.releaseState(), report.releaseMode().name());
     }
 
     private static byte[] bytes(MultipartFile file) {

@@ -1,3 +1,37 @@
+# M27.8 — Schedules in archives, protocol 9 (branch `m27-8-schedule-export`)
+
+Spec: `tasks/27-m27-release-and-scheduling/08-schedule-export/`. Decisions 1–9 there (with the user, 2026-09-26).
+
+- [x] M27.8.1 — changelog 024 (schedule + target uuid), entity/repo/views
+- [x] M27.8.1 — `ReleaseServiceImpl.plan` `noRollbackFor`; `ScheduleService.importAction` (validates a detached copy, returns refusals)
+- [x] M27.8.1 — export: `schedules/<uuid>.json`, `includeSchedules`, target uuid in settings
+- [x] M27.8.1 — import: settings by uuid, `importSchedules`, analysis warnings, result counts; API + OpenAPI
+- [x] M27.8.1 — `ScheduleExportImportIntegrationTest` (7 tests covering T1–T14; protocol-8 archive rewritten in the test), existing tests updated
+- [x] M27.8.2 — export checkbox, import option, warnings, vitest
+- [x] M27.8.3 — docs
+- [x] `./gradlew build test --rerun` (1338 tests, 0 failures, 6 skipped benchmarks), `npm run build`,
+      `npx vitest run` (90 files, 603 tests); manual check on the dev stack
+
+## Review
+
+- **Backend.** `ScheduleArchive` (new, package-private) carries all schedule logic; the export/import service only
+  wires it in. `ScheduleService.importAction` validates each schedule like a create (as its owner) on a detached copy
+  and returns refusals instead of throwing. `ReleaseServiceImpl.plan` no longer dooms a caller's transaction when it
+  refuses (`noRollbackFor`): without it one invalid schedule rolled back the whole import (two tests fail without it).
+  Changelog `024` adds `uuid` to `scheduled_action` and `generation_target` (PostgreSQL backfill reviewed, not
+  testable here: no PostgreSQL on this machine).
+- **UI.** Export: "Include schedules". Import: a "Schedules" choice when the archive has any, schedule warnings
+  without the asset provenance badge, and the commit-time outcomes under the result.
+- **Manual check** (clean dev DB, Playwright script): a project with a pinned release + then-generate and a recurring
+  generation exported with targets and schedules; imported into a second project — both schedules pending, the target
+  resolved by uuid, pin drift 0, the recurring one at its next 03:00 Berlin slot; re-import lists "Replaces schedule
+  #…" for both, and "Don't import schedules" drops those warnings. Two polish fixes came out of the screenshots:
+  readable labels ("Release at 2026-09-28 11:39 UTC …") and no "explicit" badge on schedule warnings.
+- **Deviation:** the protocol-8 case is an archive rewritten in the test, not a frozen fixture directory.
+
+
+---
+
 # Generation run comment (follow-up to M27, branch `m27-release-and-scheduling`)
 
 A run's comment was passed to generation but never stored. This affected manual runs (the dialog's "Optional note

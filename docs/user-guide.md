@@ -327,6 +327,14 @@ build it started. **New generation schedule** plans builds: once, or repeating (
 every week at a time — or a cron expression under *Advanced*, with the next five runs shown). A schedule runs as the
 person who owns it; if they leave the project or lose the role, it stops ("Paused") until someone else takes it over.
 
+**Schedules in exports.** A project export carries its pending and paused schedules (a selection export only with
+**Include schedules**, and a scheduled release only when all its pages are selected). Importing the archive brings them
+along — choose **Don't import schedules** in the import dialog to leave them out. A pinned release still releases the
+content it was pinned to; a schedule whose time has passed, whose target is missing or that no longer fits the project
+(a missing page or language) is left out and listed in the import's warnings. The owner stays the same person when
+they are a developer of the project here; otherwise whoever imports owns it. Importing the same archive again replaces
+the pending schedules it brought the first time instead of adding copies.
+
 ### Generate & publish
 
 First, in **Settings → Targets**, create at least one target (the first one becomes the default). Each target writes into its own folder, `{projectKey}/{output folder}` under the server's output root (`{projectKey}/target-{id}` when the folder is left empty); two targets of a project may not share or nest folders (an imported target whose folder is invalid or clashes is imported without it and uses its default folder; the import analysis warns about this). Set **Base URL** for correct sitemap and absolute links.

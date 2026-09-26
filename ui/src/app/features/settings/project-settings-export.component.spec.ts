@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/angular';
+import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
@@ -128,6 +128,41 @@ describe('ProjectSettingsExportComponent', () => {
     await waitFor(() => expect(exportButton.disabled).toBe(false));
   });
 
+  it('exports the schedules on their own (M27.8.2): the toggle alone enables Export and is sent', async () => {
+    const importExport = makeImportExportStub();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await render(ProjectSettingsExportComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: ProjectContextStore, useValue: makeStoreStub() },
+        { provide: ApiClient, useValue: makeApiStub() },
+        { provide: ImportExportService, useValue: importExport },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText('Root')).toBeTruthy());
+
+    const exportButton = screen.getByRole('button', { name: /Export/ }) as HTMLButtonElement;
+    expect(exportButton.disabled).toBe(true);
+    const toggle = screen.getByRole('checkbox', { name: /Include schedules/ }) as HTMLInputElement;
+    expect(toggle.closest('label')!.textContent).toContain('only when all its assets are selected');
+    fireEvent.click(toggle);
+    await waitFor(() => expect(exportButton.disabled).toBe(false));
+    fireEvent.click(exportButton);
+
+    await waitFor(() =>
+      expect(importExport.exportSelection).toHaveBeenCalledWith('proj', {
+        assetUuids: [],
+        includeChannels: false,
+        includeGenerationTargets: false,
+        fullStores: [],
+        includeSchedules: true,
+      }),
+    );
+    vi.restoreAllMocks();
+  });
+
   it('enables export once a tree item is checked', async () => {
     const store = makeStoreStub();
     const api = makeApiStub();
@@ -181,6 +216,7 @@ describe('ProjectSettingsExportComponent', () => {
         includeChannels: false,
         includeGenerationTargets: false,
         fullStores: [],
+        includeSchedules: false,
       }),
     );
     await waitFor(() => expect(createObjectURLSpy).toHaveBeenCalled());
@@ -218,6 +254,7 @@ describe('ProjectSettingsExportComponent', () => {
         includeChannels: false,
         includeGenerationTargets: false,
         fullStores: ['PAGES'],
+        includeSchedules: false,
       }),
     );
   });

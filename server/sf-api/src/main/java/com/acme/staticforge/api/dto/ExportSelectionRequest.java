@@ -8,7 +8,12 @@ import java.util.Set;
  * includeGenerationTargets} mirror {@code ExportSelection}'s project-settings flags.
  * {@code fullStores} (feature `full-store-export`, `M11.1.3`) holds raw strings matching
  * {@code FolderScope} enum names (e.g. {@code "PAGES"}, {@code "MEDIA"}, {@code
- * "NAVIGATION"}), converted and validated by the controller.
+ * "NAVIGATION"}), converted and validated by the controller. {@code includeSchedules} (M27.8.1) adds the open
+ * schedules: a release or unpublish only when all its assets are selected, a generation always.
  */
 public record ExportSelectionRequest(
-        Set<String> assetUuids, boolean includeChannels, boolean includeGenerationTargets, Set<String> fullStores) {}
+        Set<String> assetUuids,
+        boolean includeChannels,
+        boolean includeGenerationTargets,
+        Set<String> fullStores,
+        boolean includeSchedules) {}

@@ -111,6 +111,11 @@ import org.springframework.transaction.annotation.Transactional;
  * revision, reads it. An unpublished locale key likewise becomes a pointer opened and closed in the import revision:
  * valid at no revision, it only records that the key was released once. Pointers, versions and the draft all belong
  * to the one import revision.
+ *
+ * <p><strong>Schedules</strong> (M27.8, protocol {@code 9}): an archive carries the open schedules
+ * ({@code schedules/<uuid>.json}), and the import brings them in last, in the same transaction — see {@link
+ * ScheduleArchive}. A pinned version that isn't the draft is written like a released version and shared with an
+ * identical one.
  */
 @Service
 @RevisionAware
@@ -120,6 +125,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private static final String ASSETS_ENTRY = "assets.json";
     private static final String ASSETS_PREFIX = "assets/";
     private static final String SETTINGS_ENTRY = "settings.json";
+    private static final String SCHEDULES_PREFIX = "schedules/";
     private static final String BLOBS_PREFIX = "blobs/";
     private static final String ROOT_UID = "root";
 
@@ -185,6 +191,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final ReferenceMaterializer referenceMaterializer;
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
     private final AssetReleaseRepository releaseRepository;
+    private final ScheduleArchive scheduleArchive;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -202,8 +209,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             GenerationTargetRepository generationTargetRepository,
             ReferenceMaterializer referenceMaterializer,
             com.acme.staticforge.project.ProjectLocales projectLocales,
-            AssetReleaseRepository releaseRepository) {
+            AssetReleaseRepository releaseRepository,
+            ScheduleArchive scheduleArchive) {
         this.projectRepository = projectRepository;
+        this.scheduleArchive = scheduleArchive;
         this.projectLocales = projectLocales;
         this.releaseRepository = releaseRepository;
         this.assetVersionRepository = assetVersionRepository;
@@ -231,16 +240,25 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Set<UUID> allUuids = versions.stream()
                 .map(version -> version.getAsset().getUuid())
                 .collect(Collectors.toSet());
-        return exportSelection(projectId, new ExportSelection(allUuids, true, true, Set.of()));
+        return export(projectId, new ExportSelection(allUuids, true, true, Set.of(), true), true);
     }
 
     @Override
     public byte[] exportSelection(long projectId, ExportSelection selection) {
+        return export(projectId, selection, false);
+    }
+
+    /**
+     * Writes the archive of {@code selection}. {@code full}: the whole project — every open schedule is carried, not
+     * only those whose assets the selection covers (M27.8.1).
+     */
+    private byte[] export(long projectId, ExportSelection selection, boolean full) {
         Set<FolderScope> fullStores = selection.fullStores() == null ? Set.of() : selection.fullStores();
         if ((selection.assetUuids() == null || selection.assetUuids().isEmpty())
                 && fullStores.isEmpty()
                 && !selection.includeChannels()
-                && !selection.includeGenerationTargets()) {
+                && !selection.includeGenerationTargets()
+                && !selection.includeSchedules()) {
             throw new SfException(
                     ProblemFactory.unprocessableEntity("Export selection is empty — nothing to export."));
         }
@@ -318,6 +336,14 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         }
         assets.sort(Comparator.comparing(ExportedAsset::uuid));
 
+        List<ExportedSchedule> schedules = List.of();
+        if (selection.includeSchedules()) {
+            Map<UUID, AssetVersion> archived = new HashMap<>();
+            exported.forEach(version -> archived.put(version.getAsset().getUuid(), version));
+            schedules = scheduleArchive.export(projectId, archived, generationTargetRepository.findByProjectId(projectId),
+                    full, payload -> collectBlobs(payload, blobs));
+        }
+
         ExportManifest manifest = new ExportManifest(
                 PROTOCOL_VERSION, project.getKey(), project.getName(), project.getDescription(), Instant.now(),
                 projectLocales.forProject(projectId).codes());
@@ -331,6 +357,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 }
                 if (selection.includeChannels() || selection.includeGenerationTargets()) {
                     writeJson(zip, SETTINGS_ENTRY, buildExportedSettings(projectId, selection));
+                }
+                for (ExportedSchedule schedule : schedules) {
+                    writeJson(zip, SCHEDULES_PREFIX + schedule.uuid() + ".json", schedule);
                 }
                 for (Map.Entry<String, byte[]> blob : blobs.entrySet()) {
                     zip.putNextEntry(new ZipEntry(BLOBS_PREFIX + blob.getKey()));
@@ -761,6 +790,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         int updated = 0;
         List<AssetVersion> importedVersions = new ArrayList<>();
         List<ImportedDraft> imported = new ArrayList<>();
+        // Versions written for released payloads and pinned ones, per asset id and content: identical ones are shared.
+        Map<Long, Map<String, AssetVersion>> writtenVersions = new HashMap<>();
         for (ExportedAsset asset : order(assets, rootAsset)) {
             String key = asset.uuid().toLowerCase();
             if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key) || rejected.contains(key)) {
@@ -783,15 +814,66 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             referenceMaterializer.materialize(version.getAsset(), version);
         }
 
+        PathRebase paths = PathRebase.of(content.assets(), idMaps);
         int released = releaseMode == ReleaseMode.KEEP
-                ? importReleaseState(targetProjectId, content, imported, remap, idMaps, manifest, importedAt, revision, ctx)
+                ? importReleaseState(targetProjectId, content, imported, remap, idMaps, paths, writtenVersions, manifest,
+                        importedAt, revision, ctx)
                 : 0;
 
+        List<TargetImportPlan.Decision> targetPlan = targetPlan(targetProjectId, content);
         if (content.settings() != null) {
             importSettings(targetProjectId, content.settings());
         }
 
-        return new ImportResult(manifest.sourceProjectKey(), created, updated, importedShas.size(), released);
+        ScheduleArchive.Result schedules = new ScheduleArchive.Result(0, 0, List.of());
+        if (options.importSchedules() && !content.schedules().isEmpty()) {
+            Map<String, ImportedDraft> importedByUuid = new HashMap<>();
+            imported.forEach(item -> importedByUuid.put(item.source().uuid().toLowerCase(), item));
+            ScheduleArchive.Writes writes = new ScheduleArchive.Writes() {
+                @Override
+                public UUID assetUuid(String archiveUuid) {
+                    return remap.getOrDefault(archiveUuid.toLowerCase(), UUID.fromString(archiveUuid));
+                }
+
+                @Override
+                public Long pinnedVersion(String archiveUuid, ExportedRelease pin) {
+                    ImportedDraft item = importedByUuid.get(archiveUuid.toLowerCase());
+                    if (item == null) {
+                        // Reused from the target (an existing implicit pick), or not in the archive: its draft there.
+                        return assetRepository.findByProjectIdAndUuid(targetProjectId, assetUuid(archiveUuid))
+                                .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
+                                .filter(version -> !version.isDeleted())
+                                .map(AssetVersion::getId)
+                                .orElse(null);
+                    }
+                    if (pin.state() != ExportedRelease.State.PAYLOAD) {
+                        return item.draft().isDeleted() ? null : item.draft().getId();
+                    }
+                    return writtenVersions.computeIfAbsent(item.draft().getAssetId(), id -> new HashMap<>())
+                            .computeIfAbsent(signature(pin), sig -> writeReleasedVersion(targetProjectId, item, pin, remap,
+                                    idMaps, paths, manifest, importedAt, revision.getRevisionId(), ctx))
+                            .getId();
+                }
+
+                @Override
+                public String folderPath(String archivePath) {
+                    return paths.rebase(archivePath);
+                }
+            };
+            schedules = scheduleArchive.importAll(targetProjectId, content.schedules(),
+                    ScheduleArchive.Targets.of(generationTargetRepository.findByProjectId(targetProjectId), targetPlan),
+                    writes, ctx.userId(), manifest.sourceProjectKey());
+        }
+
+        return new ImportResult(manifest.sourceProjectKey(), created, updated, importedShas.size(), released,
+                schedules.created(), schedules.replaced(), schedules.warnings());
+    }
+
+    /** What the settings import does with each archived generation target, decided before it runs. */
+    private List<TargetImportPlan.Decision> targetPlan(long targetProjectId, ArchiveContent content) {
+        return content.settings() == null
+                ? List.of()
+                : TargetImportPlan.plan(generationTargetRepository.findByProjectId(targetProjectId), content.settings().targets());
     }
 
     @Override
@@ -917,11 +999,11 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
      */
     private int importReleaseState(
             long projectId, ArchiveContent content, List<ImportedDraft> imported, Map<String, UUID> remap,
-            IdMaps idMaps, ExportManifest manifest, Instant importedAt, Revision revision, RevisionContext ctx) {
+            IdMaps idMaps, PathRebase paths, Map<Long, Map<String, AssetVersion>> writtenVersions, ExportManifest manifest,
+            Instant importedAt, Revision revision, RevisionContext ctx) {
         LocaleConfig locales = effectiveLocales(projectId, content);
         Set<String> archiveLocales = archiveLocales(content);
         long rev = revision.getRevisionId();
-        PathRebase paths = PathRebase.of(content.assets(), idMaps);
         List<AssetRelease> closed = new ArrayList<>();
         List<AssetRelease> opened = new ArrayList<>();
         List<AssetChange> summary = new ArrayList<>();
@@ -933,7 +1015,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     closed.add(pointer);
                 }
             }
-            Map<String, AssetVersion> releasedByContent = new HashMap<>();
+            Map<String, AssetVersion> releasedByContent = writtenVersions.computeIfAbsent(asset.getId(), id -> new HashMap<>());
             for (Map.Entry<String, ExportedRelease> target : targetPointers(item.source(), locales, archiveLocales, new ArrayList<>()).entrySet()) {
                 ExportedRelease entry = target.getValue();
                 if (entry.state() == ExportedRelease.State.UNPUBLISHED) {
@@ -1234,14 +1316,51 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                             name,
                             "Generation target '" + name + "' will be imported without its output folder because "
                                     + decision.reason() + "; it will publish to its default folder instead."));
-                    case IMPORT -> {
+                    case IMPORT, SKIP_SAME_TARGET -> {
                         // no conflict
                     }
                 }
             }
         }
 
-        return new ConflictReport(conflicts, releaseState, releaseMode);
+        if (options.importSchedules() && !content.schedules().isEmpty()) {
+            Set<String> rejected = conflicts.stream()
+                    .filter(c -> c.type().rejectsAssetOnly())
+                    .map(c -> c.elementUuid().toLowerCase(Locale.ROOT))
+                    .collect(Collectors.toSet());
+            conflicts.addAll(scheduleArchive.analyze(
+                    targetProjectId, content.schedules(), scheduleView(targetProjectId, content, archiveByUuid, rejected, options)));
+        }
+        return new ConflictReport(conflicts, releaseState, releaseMode, content.schedules().size());
+    }
+
+    /** The target as the archive's schedules will find it once the import has run (M27.8.1). */
+    private ScheduleArchive.TargetView scheduleView(
+            long targetProjectId, ArchiveContent content, Map<String, ExportedAsset> archiveByUuid, Set<String> rejected,
+            ImportOptions options) {
+        Map<String, ScheduleArchive.AssetState> assets = new HashMap<>();
+        for (ExportedSchedule schedule : content.schedules()) {
+            for (ExportedSchedule.ExportedScheduleItem item : schedule.items() == null
+                    ? List.<ExportedSchedule.ExportedScheduleItem>of()
+                    : schedule.items()) {
+                String key = item.assetUuid().toLowerCase(Locale.ROOT);
+                if (assets.containsKey(key)) {
+                    continue;
+                }
+                Map<String, ExportedAsset> importable = rejected.contains(key) ? Map.of() : archiveByUuid;
+                placement(targetProjectId, item.assetUuid(), importable, options)
+                        .ifPresent(p -> assets.put(key, new ScheduleArchive.AssetState(p.type(), p.payload())));
+            }
+        }
+        Map<String, Boolean> channels = new HashMap<>();
+        outputChannelRepository.findByProjectIdOrderByPositionAsc(targetProjectId)
+                .forEach(c -> channels.put(c.getKey(), c.isEnabled()));
+        if (content.settings() != null) {
+            content.settings().channels().forEach(c -> channels.putIfAbsent(c.key(), c.enabled()));
+        }
+        ScheduleArchive.Targets targets = ScheduleArchive.Targets.of(
+                generationTargetRepository.findByProjectId(targetProjectId), targetPlan(targetProjectId, content));
+        return new ScheduleArchive.TargetView(assets, effectiveLocales(targetProjectId, content), targets, channels);
     }
 
     /**
@@ -1445,14 +1564,17 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // A project has at most one default target (generation resolves it as a single row).
         boolean hasDefault = existingTargets.stream().anyMatch(GenerationTarget::isDefaultTarget);
         for (TargetImportPlan.Decision decision : TargetImportPlan.plan(existingTargets, settings.targets())) {
-            if (decision.action() == TargetImportPlan.Action.SKIP_NAME_COLLISION) {
+            if (decision.action() == TargetImportPlan.Action.SKIP_NAME_COLLISION
+                    || decision.action() == TargetImportPlan.Action.SKIP_SAME_TARGET) {
                 continue;
             }
             ExportedGenerationTarget t = decision.source();
             boolean isDefault = t.isDefault() && !hasDefault;
             hasDefault |= isDefault;
+            // The archive's uuid is kept (M27.8.1): the archive's schedules name their target by it.
             generationTargetRepository.save(new GenerationTarget(
-                    targetProjectId, t.name(), TargetType.valueOf(t.type()), decision.config(), isDefault));
+                    targetProjectId, t.uuid() == null ? UUID.randomUUID() : UUID.fromString(t.uuid()), t.name(),
+                    TargetType.valueOf(t.type()), decision.config(), isDefault));
         }
     }
 
@@ -1714,7 +1836,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         List<ExportedGenerationTarget> targets = selection.includeGenerationTargets()
                 ? generationTargetRepository.findByProjectId(projectId).stream()
                         .map(t -> new ExportedGenerationTarget(
-                                t.getName(), t.getType().name(), redact(t.getConfig()), t.isDefaultTarget()))
+                                t.getUuid().toString(), t.getName(), t.getType().name(), redact(t.getConfig()),
+                                t.isDefaultTarget()))
                         .toList()
                 : List.of();
         // The language configuration travels with the settings, so an archive restores a localized
@@ -1771,6 +1894,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         List<ExportedAsset> legacyAssets = null;
         List<ExportedAsset> perFileAssets = null;
         ExportedSettings settings = null;
+        List<ExportedSchedule> schedules = new ArrayList<>();
         Map<String, byte[]> blobs = new HashMap<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
             ZipEntry entry;
@@ -1786,6 +1910,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                         perFileAssets = new ArrayList<>();
                     }
                     perFileAssets.add(objectMapper.readValue(zip.readAllBytes(), ExportedAsset.class));
+                } else if (name.startsWith(SCHEDULES_PREFIX)) {
+                    schedules.add(objectMapper.readValue(zip.readAllBytes(), ExportedSchedule.class));
                 } else if (SETTINGS_ENTRY.equals(name)) {
                     settings = objectMapper.readValue(zip.readAllBytes(), ExportedSettings.class);
                 } else if (name.startsWith(BLOBS_PREFIX)) {
@@ -1814,7 +1940,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             throw new SfException(ProblemFactory.badRequest("Export archive is missing a manifest document."));
         }
         assets.sort(Comparator.comparing(ExportedAsset::uuid));
-        return new ArchiveContent(manifest, assets, blobs, settings);
+        schedules.sort(Comparator.comparing(ExportedSchedule::uuid));
+        return new ArchiveContent(manifest, assets, blobs, settings, schedules);
     }
 
     private static String textOrNull(JsonNode node) {
@@ -1842,7 +1969,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     private record ArchiveContent(
             ExportManifest manifest, List<ExportedAsset> assets, Map<String, byte[]> blobs,
-            ExportedSettings settings) {
+            ExportedSettings settings, List<ExportedSchedule> schedules) {
 
         /**
          * The archive as an import in {@code mode} reads it: a {@link ReleaseMode#DRAFT} import leaves out the
@@ -1854,7 +1981,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 return this;
             }
             List<ExportedAsset> drafts = assets.stream().filter(asset -> !asset.isDraftDeleted()).toList();
-            return new ArchiveContent(manifest, drafts, blobs, settings);
+            return new ArchiveContent(manifest, drafts, blobs, settings, schedules);
         }
     }
 

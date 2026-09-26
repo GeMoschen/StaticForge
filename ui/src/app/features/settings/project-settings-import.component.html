@@ -43,8 +43,26 @@
           @if ((r.releasedCount ?? 0) > 0) {
             Kept {{ r.releasedCount }} release(s).
           }
+          {{ schedulesSummary(r) }}
         </span>
       </div>
+      @if (r.scheduleWarnings?.length) {
+        <section class="conflict-section conflict-section--warning">
+          <h2 class="conflict-section__title">
+            Schedules
+            <span class="badge badge--warning">{{ r.scheduleWarnings!.length }}</span>
+          </h2>
+          <ul class="conflict-list">
+            @for (c of r.scheduleWarnings; track $index) {
+              <li class="conflict-item">
+                <sf-icon [name]="iconFor(c.type)" />
+                <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+                <span class="conflict-item__detail">{{ c.detail }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
     }
   } @else {
     <div class="archive-bar">
@@ -62,9 +80,9 @@
     </label>
 
     @if (archiveHasReleaseState() === true) {
-      <fieldset class="release-mode" [disabled]="committing()">
-        <legend class="release-mode__legend">Release state</legend>
-        <label class="release-mode__option">
+      <fieldset class="import-option" [disabled]="committing()">
+        <legend class="import-option__legend">Release state</legend>
+        <label class="import-option__option">
           <input
             type="radio"
             name="releaseMode"
@@ -72,12 +90,12 @@
             [checked]="releaseMode() === 'KEEP'"
             (change)="onReleaseModeChange('KEEP')"
           />
-          <span class="release-mode__text">
-            <span class="release-mode__label">Keep release state from the archive</span>
-            <span class="release-mode__hint">What was released when the archive was made is released here too.</span>
+          <span class="import-option__text">
+            <span class="import-option__label">Keep release state from the archive</span>
+            <span class="import-option__hint">What was released when the archive was made is released here too.</span>
           </span>
         </label>
-        <label class="release-mode__option">
+        <label class="import-option__option">
           <input
             type="radio"
             name="releaseMode"
@@ -85,17 +103,49 @@
             [checked]="releaseMode() === 'DRAFT'"
             (change)="onReleaseModeChange('DRAFT')"
           />
-          <span class="release-mode__text">
-            <span class="release-mode__label">Import everything as draft</span>
-            <span class="release-mode__hint">Nothing goes live until you release it; overwritten assets keep their release state.</span>
+          <span class="import-option__text">
+            <span class="import-option__label">Import everything as draft</span>
+            <span class="import-option__hint">Nothing goes live until you release it; overwritten assets keep their release state.</span>
           </span>
         </label>
       </fieldset>
     } @else if (archiveHasReleaseState() === false) {
-      <p class="release-mode__note" role="note">
+      <p class="import-option__note" role="note">
         <sf-icon name="info" />
         This archive has no release state — everything is imported as draft.
       </p>
+    }
+
+    @if ((archiveScheduleCount() ?? 0) > 0) {
+      <fieldset class="import-option" [disabled]="committing()">
+        <legend class="import-option__legend">Schedules</legend>
+        <label class="import-option__option">
+          <input
+            type="radio"
+            name="importSchedules"
+            value="true"
+            [checked]="importSchedules()"
+            (change)="onImportSchedulesChange(true)"
+          />
+          <span class="import-option__text">
+            <span class="import-option__label">Import the archive's {{ archiveScheduleCount() }} schedule(s)</span>
+            <span class="import-option__hint">Pending and paused schedules come in as they are; the warnings list any that can't.</span>
+          </span>
+        </label>
+        <label class="import-option__option">
+          <input
+            type="radio"
+            name="importSchedules"
+            value="false"
+            [checked]="!importSchedules()"
+            (change)="onImportSchedulesChange(false)"
+          />
+          <span class="import-option__text">
+            <span class="import-option__label">Don't import schedules</span>
+            <span class="import-option__hint">Nothing is scheduled here by this import.</span>
+          </span>
+        </label>
+      </fieldset>
     }
 
     @if (analyzing()) {
@@ -166,9 +216,11 @@
                 <li class="conflict-item">
                   <sf-icon [name]="iconFor(c.type)" />
                   <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
-                  <span class="badge" [class.badge--implicit]="c.explicit === false" [class.badge--explicit]="c.explicit !== false">
-                    {{ c.explicit === false ? 'implicit' : 'explicit' }}
-                  </span>
+                  @if (hasProvenance(c)) {
+                    <span class="badge" [class.badge--implicit]="c.explicit === false" [class.badge--explicit]="c.explicit !== false">
+                      {{ c.explicit === false ? 'implicit' : 'explicit' }}
+                    </span>
+                  }
                   <span class="conflict-item__detail">{{ c.detail }}</span>
                 </li>
               }

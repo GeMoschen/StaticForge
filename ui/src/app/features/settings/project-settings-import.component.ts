@@ -41,6 +41,11 @@ const CONFLICT_ICONS: Record<string, string> = {
   LOCALE_CONFIG_MISMATCH: 'translate',
   LOCALIZATION_SHAPE_MISMATCH: 'translate',
   RELEASE_LOCALE_MISSING: 'translate',
+  DUPLICATE_SCHEDULE: 'event_repeat',
+  SCHEDULE_OVERDUE: 'event_busy',
+  SCHEDULE_TARGET_MISSING: 'link_off',
+  SCHEDULE_INVALID: 'event_busy',
+  SCHEDULE_OWNER_REPLACED: 'person',
 };
 
 /**
@@ -69,6 +74,10 @@ export function rejectsAssetOnly(conflict: ImportConflictView): boolean {
  * <p>Release state (M27.5.2): once the analysis says whether the archive carries release state, the user chooses to
  * keep it (default) or import everything as a draft; the choice is re-analyzed (only a kept release state can miss
  * languages) and sent with the import. An archive without release state shows a note instead of the choice.
+ *
+ * <p>Schedules (M27.8.2): an archive that carries schedules offers to import them (default) or leave them out; the
+ * choice is re-analyzed (the schedule warnings only apply when they are imported) and sent with the import. The result
+ * lists what happened to them at commit time.
  */
 @Component({
   selector: 'sf-project-settings-import',
@@ -114,6 +123,11 @@ export class ProjectSettingsImportComponent {
    */
   protected readonly archiveHasReleaseState = signal<boolean | null>(null);
 
+  /** Import the archive's schedules, or leave them out (M27.8.2). */
+  protected readonly importSchedules = signal(true);
+  /** How many schedules the loaded archive carries, from its last analysis; `null` until one answers. */
+  protected readonly archiveScheduleCount = signal<number | null>(null);
+
   /** The analysis in flight — dropped when the archive or the project changes before it answers. */
   private analysis: Subscription | null = null;
 
@@ -149,11 +163,12 @@ export class ProjectSettingsImportComponent {
     effect(() => {
       const skip = this.skipExistingImplicit();
       const releaseMode = this.releaseMode();
+      const importSchedules = this.importSchedules();
       const file = this.file();
       if (!file) {
         return;
       }
-      untracked(() => this.analyze(file, skip, releaseMode));
+      untracked(() => this.analyze(file, skip, releaseMode, importSchedules));
     });
 
     // The router reuses this screen when only the project changes (`/p/a/settings/…` → `/p/b/settings/…`): an
@@ -169,8 +184,23 @@ export class ProjectSettingsImportComponent {
     });
   }
 
+  /** Whether a conflict is about an archived asset, whose explicit/implicit pick the badge shows (a schedule's isn't). */
+  protected hasProvenance(conflict: ImportConflictView): boolean {
+    return !(conflict.type ?? '').includes('SCHEDULE');
+  }
+
   protected iconFor(type: string | undefined): string {
     return CONFLICT_ICONS[type ?? ''] ?? 'info';
+  }
+
+  /** "Imported 2 schedule(s), replaced 1." — empty when the import brought none. */
+  protected schedulesSummary(result: ImportResultView): string {
+    const created = result.importedScheduleCount ?? 0;
+    const replaced = result.updatedScheduleCount ?? 0;
+    if (created + replaced === 0) {
+      return '';
+    }
+    return `Imported ${created} schedule(s)` + (replaced > 0 ? `, replaced ${replaced}` : '') + '.';
   }
 
   /** The badge of an asset left out of the import: a record outside a record set says what it is. */
@@ -213,6 +243,10 @@ export class ProjectSettingsImportComponent {
     this.releaseMode.set(mode);
   }
 
+  protected onImportSchedulesChange(importSchedules: boolean): void {
+    this.importSchedules.set(importSchedules);
+  }
+
   private pickFile(file: File | null): void {
     if (!file || this.readOnly()) {
       return;
@@ -226,27 +260,32 @@ export class ProjectSettingsImportComponent {
     this.commitError.set(null);
     this.releaseMode.set('KEEP');
     this.archiveHasReleaseState.set(null);
+    this.importSchedules.set(true);
+    this.archiveScheduleCount.set(null);
     // Setting `file` here triggers the constructor's analyze-on-change effect below — no
     // direct `analyze()` call needed.
     this.file.set(file);
   }
 
-  private analyze(file: File, skipExistingImplicit: boolean, releaseMode: ReleaseMode): void {
+  private analyze(file: File, skipExistingImplicit: boolean, releaseMode: ReleaseMode, importSchedules: boolean): void {
     this.analyzing.set(true);
     this.report.set(null);
     this.analysis?.unsubscribe();
-    this.analysis = this.api.analyzeImport(this.projectKey(), file, skipExistingImplicit, releaseMode).subscribe({
-      next: (report) => {
-        this.analyzing.set(false);
-        this.report.set(report);
-        this.archiveHasReleaseState.set(report.releaseState !== false);
-      },
-      error: () => {
-        this.analyzing.set(false);
-        this.pickError.set('Could not analyze that archive — check your connection and try again.');
-        this.file.set(null);
-      },
-    });
+    this.analysis = this.api
+      .analyzeImport(this.projectKey(), file, skipExistingImplicit, releaseMode, importSchedules)
+      .subscribe({
+        next: (report) => {
+          this.analyzing.set(false);
+          this.report.set(report);
+          this.archiveHasReleaseState.set(report.releaseState !== false);
+          this.archiveScheduleCount.set(report.scheduleCount ?? 0);
+        },
+        error: () => {
+          this.analyzing.set(false);
+          this.pickError.set('Could not analyze that archive — check your connection and try again.');
+          this.file.set(null);
+        },
+      });
   }
 
   // ── Actions ─────────────────────────────────────────────────────────────
@@ -262,6 +301,8 @@ export class ProjectSettingsImportComponent {
     this.result.set(null);
     this.releaseMode.set('KEEP');
     this.archiveHasReleaseState.set(null);
+    this.importSchedules.set(true);
+    this.archiveScheduleCount.set(null);
   }
 
   commit(): void {
@@ -273,13 +314,15 @@ export class ProjectSettingsImportComponent {
     this.commitError.set(null);
     // Without release state the server imports drafts whatever is sent; send what the analysis applied.
     const releaseMode: ReleaseMode = this.archiveHasReleaseState() === false ? 'DRAFT' : this.releaseMode();
-    this.api.commitImport(this.projectKey(), file, this.skipExistingImplicit(), releaseMode).subscribe({
+    const importSchedules = this.importSchedules();
+    this.api.commitImport(this.projectKey(), file, this.skipExistingImplicit(), releaseMode, importSchedules).subscribe({
       next: (result) => {
         this.committing.set(false);
         this.result.set(result);
         this.file.set(null);
         this.report.set(null);
         this.archiveHasReleaseState.set(null);
+        this.archiveScheduleCount.set(null);
         // A committed import can create folders (and move/rename existing ones) that
         // `ProjectContextStore`'s folder trees — loaded once per project and otherwise only
         // refreshed by each store screen's own CRUD actions — have no other way to learn about,
@@ -288,11 +331,13 @@ export class ProjectSettingsImportComponent {
         this.store.loadFor(this.projectKey(), true).subscribe();
         const updated = result.updatedAssetCount ?? 0;
         const released = result.releasedCount ?? 0;
+        const schedules = (result.importedScheduleCount ?? 0) + (result.updatedScheduleCount ?? 0);
         this.toasts.show(
           `Imported ${result.importedAssetCount ?? 0} asset(s)`
             + (updated > 0 ? `, overwrote ${updated}` : '')
             + `, ${result.importedBlobCount ?? 0} blob(s)`
-            + (released > 0 ? `, ${released} release(s) kept` : ''),
+            + (released > 0 ? `, ${released} release(s) kept` : '')
+            + (schedules > 0 ? `, ${schedules} schedule(s)` : ''),
           'success',
         );
       },
@@ -306,6 +351,7 @@ export class ProjectSettingsImportComponent {
             blocksImport: freshConflicts.some(refusesImport),
             releaseState: this.archiveHasReleaseState() !== false,
             releaseMode,
+            scheduleCount: this.archiveScheduleCount() ?? 0,
           });
           this.commitError.set(
             'Conflicts changed since you last checked this archive — please re-check it.',

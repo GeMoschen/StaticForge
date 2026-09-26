@@ -14,7 +14,8 @@ import java.util.stream.Collectors;
  * Decides, per archived generation target, what a settings import does with it. Shared by conflict
  * analysis and the import itself so the report always describes exactly what import will do.
  *
- * <p>A target whose name already exists is skipped (import only adds). A target whose
+ * <p>A target whose uuid already exists is that target (M27.8.1: a re-import) and is kept as it is. Otherwise a
+ * target whose name already exists is skipped (import only adds). A target whose
  * {@code config.path} is invalid, or whose output folder would coincide with / nest in an existing
  * target's or an earlier imported target's folder, is imported <em>without</em> its path: it then
  * falls back to {@code target-{id}}, which can never clash (see {@link TargetLocations}).
@@ -22,6 +23,8 @@ import java.util.stream.Collectors;
 final class TargetImportPlan {
 
     enum Action {
+        /** The project already has this target (same uuid): kept as it is, nothing to report. */
+        SKIP_SAME_TARGET,
         SKIP_NAME_COLLISION,
         IMPORT,
         IMPORT_WITHOUT_PATH
@@ -39,6 +42,9 @@ final class TargetImportPlan {
 
     static List<Decision> plan(List<GenerationTarget> existing, List<ExportedGenerationTarget> archived) {
         Set<String> existingNames = existing.stream().map(GenerationTarget::getName).collect(Collectors.toSet());
+        Set<String> existingUuids = existing.stream()
+                .map(target -> target.getUuid().toString())
+                .collect(Collectors.toSet());
         List<Occupied> occupied = new ArrayList<>();
         for (GenerationTarget target : existing) {
             try {
@@ -50,6 +56,10 @@ final class TargetImportPlan {
 
         List<Decision> decisions = new ArrayList<>();
         for (ExportedGenerationTarget t : archived) {
+            if (t.uuid() != null && existingUuids.contains(t.uuid().toLowerCase(java.util.Locale.ROOT))) {
+                decisions.add(new Decision(t, Action.SKIP_SAME_TARGET, t.config(), null));
+                continue;
+            }
             if (existingNames.contains(t.name())) {
                 decisions.add(new Decision(t, Action.SKIP_NAME_COLLISION, t.config(), null));
                 continue;

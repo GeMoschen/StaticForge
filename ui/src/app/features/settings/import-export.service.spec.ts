@@ -90,6 +90,23 @@ describe('ImportExportService', () => {
     draft.flush({ sourceProjectKey: 'src1', importedAssetCount: 1, updatedAssetCount: 0, importedBlobCount: 0, releasedCount: 0 });
   });
 
+  it('sends importSchedules (M27.8.2): true by default, false when asked, on analyze and on import', () => {
+    const file = new File(['content'], 'export.zip', { type: 'application/zip' });
+
+    service.analyzeImport('proj1', file).subscribe();
+    const byDefault = httpMock.expectOne('/api/v1/projects/proj1/import/analyze');
+    expect((byDefault.request.body as FormData).get('importSchedules')).toBe('true');
+    byDefault.flush({ conflicts: [], hasBlocking: false, blocksImport: false, releaseState: true, releaseMode: 'KEEP', scheduleCount: 2 });
+
+    service.commitImport('proj1', file, false, 'KEEP', false).subscribe();
+    const without = httpMock.expectOne('/api/v1/projects/proj1/import');
+    expect((without.request.body as FormData).get('importSchedules')).toBe('false');
+    without.flush({
+      sourceProjectKey: 'src1', importedAssetCount: 1, updatedAssetCount: 0, importedBlobCount: 0, releasedCount: 0,
+      importedScheduleCount: 0, updatedScheduleCount: 0, scheduleWarnings: [],
+    });
+  });
+
   it('commitImport posts multipart form data and returns the import result', () => {
     const file = new File(['content'], 'export.zip', { type: 'application/zip' });
     let result: ImportResultView | undefined;

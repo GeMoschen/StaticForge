@@ -16,17 +16,23 @@ package com.acme.staticforge.exportimport;
  * @param releaseMode what happens to the archive's release state (M27.5.1); {@code null} reads as {@link
  *     ReleaseMode#KEEP}. An archive without release state (protocol {@code <= 7}) always imports as {@link
  *     ReleaseMode#DRAFT}.
+ * @param importSchedules whether the archive's schedules are imported (M27.8.1)
  */
-public record ImportOptions(boolean skipExistingImplicit, ReleaseMode releaseMode) {
+public record ImportOptions(boolean skipExistingImplicit, ReleaseMode releaseMode, boolean importSchedules) {
 
     /** Pre-M11 behavior: every collision mints a fresh UUID, no conflicts are suppressed; release state kept. */
-    public static final ImportOptions DEFAULT = new ImportOptions(false, ReleaseMode.KEEP);
+    public static final ImportOptions DEFAULT = new ImportOptions(false, ReleaseMode.KEEP, true);
 
     public ImportOptions {
         releaseMode = releaseMode == null ? ReleaseMode.KEEP : releaseMode;
     }
 
-    /** The given skip option, release state kept. */
+    /** The given skip option and release mode, schedules imported. */
+    public ImportOptions(boolean skipExistingImplicit, ReleaseMode releaseMode) {
+        this(skipExistingImplicit, releaseMode, true);
+    }
+
+    /** The given skip option, release state kept, schedules imported. */
     public ImportOptions(boolean skipExistingImplicit) {
         this(skipExistingImplicit, ReleaseMode.KEEP);
     }

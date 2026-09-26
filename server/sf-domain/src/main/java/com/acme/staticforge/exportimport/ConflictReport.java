@@ -8,12 +8,14 @@ import java.util.List;
  * @param releaseState whether the archive carries release state (protocol {@code >= 8}, M27.5.1)
  * @param releaseMode the release mode the import applies: the requested one, or {@link ReleaseMode#DRAFT} for an
  *     archive without release state
+ * @param scheduleCount the number of schedules in the archive (M27.8.1), whether or not they are imported
  */
-public record ConflictReport(List<ImportConflict> conflicts, boolean releaseState, ReleaseMode releaseMode) {
+public record ConflictReport(
+        List<ImportConflict> conflicts, boolean releaseState, ReleaseMode releaseMode, int scheduleCount) {
 
     /** A report about an archive whose release state doesn't matter (an unreadable or rejected one). */
     public ConflictReport(List<ImportConflict> conflicts) {
-        this(conflicts, false, ReleaseMode.DRAFT);
+        this(conflicts, false, ReleaseMode.DRAFT, 0);
     }
 
     /**

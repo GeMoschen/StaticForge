@@ -3,6 +3,8 @@ package com.acme.staticforge.scheduler;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -25,4 +27,10 @@ public interface ScheduledActionRepository
             """)
     List<ScheduledAction> findDue(
             @Param("now") Instant now, @Param("statuses") Collection<ActionStatus> statuses, Pageable limit);
+
+    /** The action a project knows under {@code uuid} (M27.8.1: the one a re-import replaces). */
+    Optional<ScheduledAction> findByProjectIdAndUuid(long projectId, UUID uuid);
+
+    /** A project's actions in {@code statuses}, oldest first (M27.8.1: the open ones an export carries). */
+    List<ScheduledAction> findByProjectIdAndStatusInOrderById(long projectId, Collection<ActionStatus> statuses);
 }

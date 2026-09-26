@@ -42,7 +42,7 @@ refresh returns a token with the current roles.
 | `GET` | `/projects/{key}/locales` | VIEWER |
 | `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |
 | `GET` / `POST` | `/projects/{key}/export` / `/projects/{key}/export/selection` | PROJECT_ADMIN |
-| `POST` | `/projects/{key}/import/analyze`, `/projects/{key}/import` (multipart `file`, `?skipExistingImplicit=`, `?releaseMode=KEEP\|DRAFT` — M27) | PROJECT_ADMIN |
+| `POST` | `/projects/{key}/import/analyze`, `/projects/{key}/import` (multipart `file`, `?skipExistingImplicit=`, `?releaseMode=KEEP\|DRAFT` — M27, `?importSchedules=` — M27.8, default `true`) | PROJECT_ADMIN |
 
 **Import conflicts.** `import/analyze` returns `{conflicts: [{severity, type, elementUuid, elementLabel, detail,
 explicit, blocksImport}], hasBlocking, blocksImport}` and writes nothing. `hasBlocking` is true when any conflict is
@@ -56,7 +56,17 @@ rejects only its own asset, which stays out while the rest of the archive import
 restores the archive's statuses; `DRAFT` imports everything as draft and leaves deletion-pending assets out. A kept
 release for a language the target doesn't have is the warning `RELEASE_LOCALE_MISSING`; a protocol ≤ 7 archive lists
 the `INFO` entry `ARCHIVE_WITHOUT_RELEASE_STATE` (severity `INFO` neither blocks nor warns). The import result counts
-the opened release pointers in `releasedCount`. Schedules are not exported.
+the opened release pointers in `releasedCount`.
+
+**Schedules (M27.8, protocol 9).** `POST …/export/selection` takes `includeSchedules` (default `false`; on its own it
+is a valid selection): the open schedules, a release or unpublish only when all its assets are selected. The full
+export always carries them. The analysis answers `scheduleCount` (the archive's schedules, whether or not they are
+imported) and, with `importSchedules=true`, the warnings `DUPLICATE_SCHEDULE` (replaces the open schedule with the same
+`uuid`; one that executes or has finished is left alone), `SCHEDULE_OVERDUE`, `SCHEDULE_TARGET_MISSING`,
+`SCHEDULE_INVALID` (with the `SF-DOM` code) and `SCHEDULE_OWNER_REPLACED` — each with the schedule's `uuid` as
+`elementUuid`. None blocks the import. The import result adds `importedScheduleCount`, `updatedScheduleCount` and
+`scheduleWarnings` (what happened at commit time, in the conflict shape). Schedules and generation targets expose their
+`uuid`.
 
 ### 3.1 Content languages (M24)
 
