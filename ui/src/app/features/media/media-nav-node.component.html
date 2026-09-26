@@ -14,6 +14,10 @@
     <span class="media-nav__spacer"></span>
     <sf-icon class="media-nav__icon" [name]="mediaIcon()" />
     <span class="media-nav__name">{{ summary().displayName ?? summary().uid }}</span>
+    @if (summary().localized) {
+      <sf-icon class="media-nav__localized" name="translate" title="Different file per language" />
+    }
+    <sf-release-badge [release]="summary().release" [scheduled]="summary().scheduled" [compact]="true" />
     <span class="media-nav__mono">{{ summary().uid }}</span>
   </div>
 </div>

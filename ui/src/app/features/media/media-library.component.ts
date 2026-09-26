@@ -36,6 +36,10 @@ import { MediaNavNodeComponent } from './media-nav-node.component';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { ReleaseBadgeComponent } from '../release/release-badge.component';
+import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
+import { deleteQuestion, isOnline } from '../release/release-status.util';
 
 type MediaView = components['schemas']['MediaView'];
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
@@ -68,6 +72,7 @@ const PAGE_SIZE = 40;
     MediaFolderDetailComponent,
     MediaFolderNodeComponent,
     MediaNavNodeComponent,
+    ReleaseBadgeComponent,
   ],
   templateUrl: './media-library.component.html',
   styleUrl: './media-library.component.scss',
@@ -86,6 +91,9 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   protected readonly clipboard = inject(TreeClipboardService);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
+  /** Localized media shows the editing language's file (M27.6.4). */
+  private readonly editingLocale = inject(EditingLocaleStore);
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
@@ -223,12 +231,51 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
 
     effect(() => {
       const key = this.projectKey();
+      const locale = this.editingLocale.locale();
       for (const item of this.items()) {
         if (item.uuid && (item.mimeType ?? '').startsWith('image/')) {
-          this.requestThumb(key, item.uuid);
+          this.requestThumb(key, item.uuid, item.localized ? locale : null, item.revision ?? null);
         }
       }
     });
+
+    // A release, unpublish, discard or schedule anywhere: the grid and the tree leaves re-read their statuses
+    // (the folder tree itself is refreshed by the project shell).
+    let seenReleaseVersion = this.releaseEvents.version();
+    effect(() => {
+      const version = this.releaseEvents.version();
+      if (version === seenReleaseVersion) {
+        return;
+      }
+      seenReleaseVersion = version;
+      untracked(() => {
+        this.reload();
+        this.loadAllMedia(this.projectKey());
+      });
+    });
+
+    // The drawer's release bar read a new status (e.g. after a save): the rows show it at once (M27.6.1).
+    effect(
+      () => {
+        const observed = this.releaseEvents.observed();
+        untracked(() => {
+          const items = withObservedRelease(this.items(), observed);
+          if (items) {
+            this.items.set(items);
+          }
+          const all = withObservedRelease(this.allMedia(), observed);
+          if (all) {
+            this.allMedia.set(all);
+          }
+          const open = this.selectedMedia();
+          const patched = open ? withObservedRelease([open], observed) : null;
+          if (patched) {
+            this.selectedMedia.set(patched[0]);
+          }
+        });
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   ngOnDestroy(): void {
@@ -237,17 +284,34 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private requestThumb(projectKey: string, uuid: string): void {
-    if (this.thumbRequested.has(uuid)) {
+  /**
+   * `locale` for localized media: the thumbnail of the file that language renders, cached per language. Keyed by
+   * revision too, so a replaced file (or a language's new own file) is fetched again instead of served stale.
+   */
+  private requestThumb(projectKey: string, uuid: string, locale: string | null, revision: number | null): void {
+    const key = thumbKey(uuid, locale, revision);
+    if (this.thumbRequested.has(key)) {
       return;
     }
-    this.thumbRequested.add(uuid);
-    this.api.mediaThumbnailBlob(projectKey, uuid).subscribe({
+    this.thumbRequested.add(key);
+    this.api.mediaThumbnailBlob(projectKey, uuid, locale).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
-        this.thumbUrls.update((map) => ({ ...map, [uuid]: url }));
+        const stale = thumbKey(uuid, locale, null);
+        this.thumbUrls.update((map) => {
+          const next = { ...map };
+          for (const [cached, old] of Object.entries(map)) {
+            if (cached !== key && cached.startsWith(stale + '@')) {
+              URL.revokeObjectURL(old);
+              delete next[cached];
+              this.thumbRequested.delete(cached);
+            }
+          }
+          next[key] = url;
+          return next;
+        });
       },
-      error: () => this.thumbRequested.delete(uuid),
+      error: () => this.thumbRequested.delete(key),
     });
   }
 
@@ -269,8 +333,12 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  thumb(uuid?: string): string | null {
-    return uuid ? (this.thumbUrls()[uuid] ?? null) : null;
+  thumb(item: MediaView): string | null {
+    if (!item.uuid) {
+      return null;
+    }
+    const locale = item.localized ? this.editingLocale.locale() : null;
+    return this.thumbUrls()[thumbKey(item.uuid, locale, item.revision ?? null)] ?? null;
   }
 
   /** Material Symbols icon for a mime type that has no thumbnail preview (anything non-image). */
@@ -368,6 +436,18 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     this.selectedMedia.set(updated);
   }
 
+  /** Discard changes rewrote the file's draft: reload it and reopen the drawer on the new state (M27.6.1). */
+  onDiscarded(uuid: string): void {
+    this.selectedMedia.set(null);
+    this.reload(() => {
+      const found = this.items().find((i) => i.uuid === uuid);
+      if (found) {
+        this.selectedMedia.set(found);
+      }
+    });
+    this.loadAllMedia(this.projectKey());
+  }
+
   onDeleted(uuid: string): void {
     this.items.update((list) => list.filter((i) => i.uuid !== uuid));
     this.allMedia.update((list) => list.filter((i) => i.uuid !== uuid));
@@ -382,8 +462,12 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
       return;
     }
     this.toasts.show(`Deleting ${uuids.length} media item(s)`, 'warning');
+    // A published item stays online until its deletion is released (M27.6.1).
+    const anyOnline = this.items().some((i) => i.uuid != null && uuids.includes(i.uuid) && isOnline(i.release));
     const confirmed = window.confirm(
-      `Delete ${uuids.length} media item(s)? This cannot be undone.`,
+      anyOnline
+        ? `Delete ${uuids.length} media item(s)? Published items stay online until you release their deletion.`
+        : `Delete ${uuids.length} media item(s)? This cannot be undone.`,
     );
     if (!confirmed) {
       return;
@@ -605,7 +689,7 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const name = folder.displayName ?? folder.uid ?? 'this folder';
-    if (!window.confirm(`Delete "${name}" and everything inside it? This cannot be undone.`)) {
+    if (!window.confirm(deleteQuestion(`Delete "${name}" and everything inside it? This cannot be undone.`, folder.release))) {
       return;
     }
     this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({
@@ -711,7 +795,8 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     if (this.readOnly()) {
       return;
     }
-    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) {
+    const release = this.items().find((i) => i.uuid === uuid)?.release;
+    if (!window.confirm(deleteQuestion(`Delete "${label}"? This cannot be undone.`, release))) {
       return;
     }
     this.api.deleteAsset(this.projectKey(), uuid).subscribe({
@@ -871,6 +956,11 @@ export class MediaLibraryComponent implements AfterViewInit, OnDestroy {
     };
     return e?.error?.detail ?? e?.error?.message ?? e?.message ?? 'Failed';
   }
+}
+
+/** `uuid|locale@revision`; without a revision, the prefix every revision of that file shares. */
+function thumbKey(uuid: string, locale: string | null, revision: number | null): string {
+  return `${uuid}|${locale ?? ''}${revision != null ? `@${revision}` : ''}`;
 }
 
 function findFolder(nodes: FolderView[], uuid: string): FolderView | null {

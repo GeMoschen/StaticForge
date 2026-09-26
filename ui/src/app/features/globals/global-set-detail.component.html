@@ -19,6 +19,12 @@
       </button>
       <sf-button variant="secondary" (click)="close()">Close</sf-button>
     </header>
+    <sf-release-bar
+      [projectKey]="projectKey()"
+      [assetUuid]="set.uuid"
+      [refreshKey]="set.revision"
+      (changed)="onReleaseChanged($event)"
+    />
 
     @if (timeTravelling()) {
       <p class="global-detail__time-travel" role="status">

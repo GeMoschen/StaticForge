@@ -50,6 +50,7 @@
 }
 
 .folder-node__name {
+  min-width: 0;
   font-size: var(--sf-text-sm);
   overflow: hidden;
   text-overflow: ellipsis;

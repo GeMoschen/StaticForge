@@ -133,6 +133,7 @@
           >
             <td class="record-grid__name">
               {{ row.displayName }}
+              <sf-release-badge [release]="row.release" [scheduled]="row.scheduled" [compact]="true" />
               @if (isExcluded(row)) {
                 <span class="record-grid__excluded">
                   <sf-icon name="visibility_off" />

@@ -6,6 +6,9 @@ import { ContextMenuItem, ContextMenuService } from '../services/context-menu.se
 import { SfIconComponent } from './sf-icon.component';
 import { SfRenameAssetDialogComponent } from './sf-rename-asset-dialog.component';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import type { components } from '../../core/api/generated/schema.d.ts';
+import { ReleaseBadgeComponent } from '../../features/release/release-badge.component';
+import type { ReleaseBlock } from '../../features/release/release-status.util';
 
 /**
  * One node of a store tree, in the store-agnostic shape this component renders. A store maps its
@@ -30,6 +33,9 @@ export interface StoreTreeNode {
   warning?: string;
   /** The node's current revision, sent as `If-Match` when it is renamed — the endpoints require it. */
   revision?: number;
+  /** Release status per locale (M27.6.1); absent for nodes without a release state (store roots). */
+  release?: ReleaseBlock;
+  scheduled?: components['schemas']['ScheduledRefView'][];
   children?: StoreTreeNode[];
 }
 
@@ -73,7 +79,7 @@ export type FolderRenameFn = (
 @Component({
   selector: 'sf-store-tree-node',
   standalone: true,
-  imports: [SfIconComponent, SfRenameAssetDialogComponent],
+  imports: [SfIconComponent, SfRenameAssetDialogComponent, ReleaseBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sf-store-tree-node.component.html',
   styleUrl: './sf-store-tree-node.component.scss',

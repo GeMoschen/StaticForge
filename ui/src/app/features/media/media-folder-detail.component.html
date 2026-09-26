@@ -27,6 +27,8 @@
     <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
   </header>
 
+  <sf-release-bar [projectKey]="projectKey()" [assetUuid]="folder().uuid" [refreshKey]="folder().revision" />
+
   <div class="folder-drawer__body">
     <section class="folder-drawer__section">
       <h3 class="folder-drawer__section-title">Metadata</h3>

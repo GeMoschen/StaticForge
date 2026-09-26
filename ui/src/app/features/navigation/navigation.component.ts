@@ -21,6 +21,7 @@ import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView
 import { sortNavTree } from '../../shared/tree-sort.util';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseEventsStore } from '../release/release-events.store';
 
 interface RawFolderPayload {
   scope?: string;
@@ -70,6 +71,7 @@ export class NavigationComponent {
   private readonly route = inject(ActivatedRoute);
 
   private readonly nav = inject(NavigationService);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
@@ -125,7 +127,17 @@ export class NavigationComponent {
   constructor() {
     effect(() => {
       const key = this.projectKey();
+      // Release actions change the statuses the tree shows (M27.6.1).
+      this.releaseEvents.version();
       untracked(() => this.reload(key));
+    });
+    // An open detail's release bar read a new status (e.g. after a save): re-read the tree when it shows another.
+    effect(() => {
+      const observed = this.releaseEvents.observed();
+      const node = observed ? untracked(() => findNode(this.forest(), observed.uuid)) : null;
+      if (observed && node && JSON.stringify(node.release ?? null) !== JSON.stringify(observed.release ?? null)) {
+        untracked(() => this.reload(this.projectKey()));
+      }
     });
     effect(() => {
       const uuid = this.asset();
@@ -395,6 +407,8 @@ function toStoreNode(node: NavTreeView): StoreTreeNode {
     icon: 'link',
     protectedFolder: node.protectedFolder === true,
     revision: node.revision,
+    release: node.release,
+    scheduled: node.scheduled,
     badge: path
       ? { text: `→ ${path}` }
       : isFolder

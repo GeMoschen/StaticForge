@@ -48,6 +48,7 @@
         <span class="sf-sr-only">{{ warning }}</span>
       </span>
     }
+    <sf-release-badge [release]="node().release" [scheduled]="node().scheduled" [compact]="true" />
     @if (isProtected()) {
       <sf-icon
         class="store-node__protected-icon"

@@ -28,6 +28,8 @@ import { ContentService, type DatasetDetailView, type RecordSetDetailView } from
 import { RecordGridComponent, type GridFilter } from './record-grid.component';
 import { RecordSetActions } from './record-set-actions.service';
 import { RecordSetQueryPanelComponent } from './record-set-query-panel.component';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import type { ReleaseMode } from '../release/release-choice.util';
 
 type AssetHistoryEntry = components['schemas']['AssetHistoryEntry'];
 type UsageDto = components['schemas']['UsageDto'];
@@ -62,6 +64,7 @@ function isPanel(value: string | undefined): value is RecordSetPanel {
     SfRelativeTimePipe,
     RecordGridComponent,
     RecordSetQueryPanelComponent,
+    ReleaseBarComponent,
   ],
   templateUrl: './record-set-view.component.html',
   styleUrl: './record-set-view.component.scss',
@@ -217,7 +220,12 @@ export class RecordSetViewComponent {
       return;
     }
     this.actions
-      .delete(this.projectKey(), { uuid: set.uuid, name: set.displayName ?? set.uid ?? '', recordCount: set.recordCount ?? 0 })
+      .delete(this.projectKey(), {
+        uuid: set.uuid,
+        name: set.displayName ?? set.uid ?? '',
+        recordCount: set.recordCount ?? 0,
+        release: set.release,
+      })
       .subscribe((deleted) => {
         if (deleted) {
           this.refresh?.notify();
@@ -240,6 +248,15 @@ export class RecordSetViewComponent {
       },
       error: () => this.toasts.show('Could not restore the record set — try again in a moment.', 'error'),
     });
+  }
+
+  /** A discard wrote the released version back as the set's draft: reload it (M27.6.1). */
+  protected onReleaseChanged(mode: ReleaseMode): void {
+    const uuid = this.set()?.uuid;
+    this.refresh?.notify();
+    if (mode === 'discard' && uuid && !this.timeTravelling()) {
+      this.load(this.projectKey(), uuid, null);
+    }
   }
 
   protected viewRevision(revision: number | undefined): void {

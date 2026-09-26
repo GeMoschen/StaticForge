@@ -171,7 +171,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["detail_6"];
         put: operations["updateMetadata"];
         post?: never;
         delete?: never;
@@ -283,7 +283,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_7"];
+        get: operations["detail_8"];
         put: operations["update_7"];
         post?: never;
         delete: operations["delete_6"];
@@ -315,7 +315,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_9"];
+        get: operations["detail_10"];
         put: operations["update_9"];
         post?: never;
         delete?: never;
@@ -1499,7 +1499,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_10"];
+        get: operations["detail_11"];
         put?: never;
         post?: never;
         delete: operations["delete_9"];
@@ -1851,7 +1851,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_6"];
+        get: operations["detail_7"];
         put?: never;
         post?: never;
         delete: operations["delete_4"];
@@ -2027,7 +2027,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_8"];
+        get: operations["detail_9"];
         put?: never;
         post?: never;
         delete: operations["delete_8"];
@@ -2440,6 +2440,8 @@ export interface components {
             runAt?: string;
             /** Format: date-time */
             nextRunAt?: string;
+            /** Format: int64 */
+            ownerUserId?: number;
         };
         RecordSetQuery: {
             where?: string;
@@ -3429,18 +3431,18 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
             /** Format: int32 */
-            totalPages?: number;
+            numberOfElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             first?: boolean;
             last?: boolean;
@@ -3450,12 +3452,12 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
-            /** Format: int32 */
-            pageSize?: number;
+            unpaged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
-            unpaged?: boolean;
+            /** Format: int32 */
+            pageSize?: number;
+            paged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -3478,18 +3480,18 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
             /** Format: int32 */
-            totalPages?: number;
+            numberOfElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             first?: boolean;
             last?: boolean;
@@ -3721,18 +3723,18 @@ export interface components {
             scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageMediaSummaryView: {
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
             /** Format: int32 */
-            totalPages?: number;
+            numberOfElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             first?: boolean;
             last?: boolean;
@@ -3838,18 +3840,18 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
             /** Format: int32 */
-            totalPages?: number;
+            numberOfElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             first?: boolean;
             last?: boolean;
@@ -4525,6 +4527,31 @@ export interface operations {
             };
         };
     };
+    detail_6: {
+        parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaView"];
+                };
+            };
+        };
+    };
     updateMetadata: {
         parameters: {
             query?: {
@@ -4785,7 +4812,7 @@ export interface operations {
             };
         };
     };
-    detail_7: {
+    detail_8: {
         parameters: {
             query?: {
                 revision?: number;
@@ -4910,7 +4937,7 @@ export interface operations {
             };
         };
     };
-    detail_9: {
+    detail_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -7323,7 +7350,7 @@ export interface operations {
             };
         };
     };
-    detail_10: {
+    detail_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -7933,7 +7960,7 @@ export interface operations {
             };
         };
     };
-    detail_6: {
+    detail_7: {
         parameters: {
             query?: {
                 revision?: number;
@@ -8232,7 +8259,7 @@ export interface operations {
             };
         };
     };
-    detail_8: {
+    detail_9: {
         parameters: {
             query?: never;
             header?: never;

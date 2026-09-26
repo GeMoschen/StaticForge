@@ -26,6 +26,8 @@ import { RecordSetViewComponent } from './features/content/record-set-view.compo
 import { MediaLibraryComponent } from './features/media/media-library.component';
 import { TemplatesComponent } from './features/templates/templates.component';
 import { SearchPageComponent } from './features/search/search-page.component';
+import { ChangesComponent } from './features/changes/changes.component';
+import { SchedulesComponent } from './features/schedules/schedules.component';
 
 /**
  * Every route component is imported eagerly: the app ships as one bundle with no lazy chunks (decided 2026-09-16 after
@@ -116,6 +118,14 @@ export const routes: Routes = [
       {
         path: 'search',
         component: SearchPageComponent,
+      },
+      {
+        path: 'changes',
+        component: ChangesComponent,
+      },
+      {
+        path: 'schedules',
+        component: SchedulesComponent,
       },
       {
         path: 'settings',

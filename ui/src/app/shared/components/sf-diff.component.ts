@@ -27,6 +27,8 @@ export function formatDiffPath(path: string | undefined, labels: Record<string, 
   if (!path) {
     return '';
   }
+  // The Changes diff (M27.1.3) addresses the stored version: `payload.content.title` reads as `content.title`.
+  path = path.replace(/^payload\./, '');
   const match = /^(.*)\.values\.([^.[\]]+)(.*)$/.exec(path);
   if (!match) {
     return path;

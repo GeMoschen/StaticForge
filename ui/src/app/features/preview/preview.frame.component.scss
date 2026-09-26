@@ -118,3 +118,109 @@
   color: var(--sf-ink);
   cursor: pointer;
 }
+
+.preview-view {
+  gap: 0;
+}
+
+.preview-view__option:first-child {
+  border-radius: var(--sf-radius-sm) 0 0 var(--sf-radius-sm);
+}
+
+.preview-view__option:last-child {
+  border-left: none;
+  border-radius: 0 var(--sf-radius-sm) var(--sf-radius-sm) 0;
+}
+
+.preview-status {
+  margin: 0;
+  padding: var(--sf-1) var(--sf-3);
+  border-bottom: 1px solid var(--sf-line);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.preview-share-anchor {
+  position: relative;
+}
+
+.preview-share-popover {
+  position: absolute;
+  top: calc(100% + var(--sf-1));
+  right: 0;
+  z-index: 20;
+  width: 15rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  padding: var(--sf-3);
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.preview-share-popover__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.preview-share-popover__legend {
+  margin-bottom: var(--sf-1);
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+  color: var(--sf-ink);
+}
+
+.preview-share-popover__choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+  cursor: pointer;
+}
+
+.preview-share-popover__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+}
+
+.preview-share__label {
+  align-self: center;
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+  color: var(--sf-ink);
+  white-space: nowrap;
+}
+
+.preview-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sf-2);
+  padding: var(--sf-6, 2rem);
+  text-align: center;
+  background: var(--sf-surface);
+}
+
+.preview-empty__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}
+
+.preview-empty__hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}

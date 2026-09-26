@@ -4,6 +4,8 @@ import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ContentService, type DatasetDetailView, type RecordSetGridQuery } from './content.service';
 import { EXCLUDED_BY_QUERY, EXCLUDED_INVALID_QUERY, RecordGridComponent } from './record-grid.component';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 // `compiledDefinition` / `values` are `JsonNode` on the server (`Record<string, never>` in the generated types).
 const DATASET = {
@@ -38,7 +40,8 @@ async function setup(content: ReturnType<typeof contentStub>, inputs: Record<str
   const useAsSetQuery = vi.fn();
   const view = await render(RecordGridComponent, {
     componentInputs: { projectKey: 'proj', dataset: DATASET, recordSetUuid: 'set-uuid', canEditQuery: true, ...inputs },
-    providers: [{ provide: ContentService, useValue: content }],
+    // The rows' release badges read the editing language (LocalesStore → ApiClient → HttpClient).
+    providers: [{ provide: ContentService, useValue: content }, provideHttpClient(), provideHttpClientTesting()],
     on: { useAsSetQuery },
   });
   return { ...view, useAsSetQuery };

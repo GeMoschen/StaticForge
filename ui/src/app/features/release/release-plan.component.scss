@@ -1,0 +1,131 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  min-width: 0;
+}
+
+.plan__title {
+  margin: 0 0 var(--sf-1);
+  font-size: var(--sf-text-sm);
+  font-weight: 600;
+  color: var(--sf-ink);
+}
+
+.plan__note,
+.plan__muted {
+  margin: 0;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.plan__error {
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+  font-size: var(--sf-text-sm);
+}
+
+.plan__incomplete {
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid color-mix(in srgb, var(--sf-rust) 45%, transparent);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-rust) 6%, transparent);
+}
+
+.plan__list,
+.plan__issues,
+.plan__warnings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan__incomplete-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sf-1) var(--sf-2);
+  padding: var(--sf-1) 0;
+  font-size: var(--sf-text-sm);
+}
+
+.plan__incomplete-row--muted {
+  opacity: 0.65;
+}
+
+.plan__issues {
+  grid-column: 1 / -1;
+  padding-left: var(--sf-3);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-rust);
+}
+
+.plan__path {
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+}
+
+.plan__open {
+  color: var(--sf-signal);
+  font-size: var(--sf-text-xs);
+}
+
+.plan__group {
+  margin: 0 0 var(--sf-2);
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.plan__legend {
+  padding: 0;
+  margin-bottom: var(--sf-1);
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+  color: var(--sf-slate);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.plan__dependency {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  min-width: 0;
+  padding: 2px 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+  cursor: pointer;
+}
+
+.plan__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan__locale {
+  padding: 0 var(--sf-1);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-sm);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.plan__status {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.plan__warnings {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-amber);
+}

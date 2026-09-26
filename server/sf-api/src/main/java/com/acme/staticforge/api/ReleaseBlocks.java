@@ -49,7 +49,8 @@ class ReleaseBlocks {
     Map<UUID, List<ScheduledRefView>> scheduled(long projectId, Collection<UUID> uuids) {
         Map<UUID, List<ScheduledRefView>> out = new LinkedHashMap<>();
         schedules.scheduledFor(projectId, uuids).forEach((uuid, refs) -> out.put(uuid, refs.stream()
-                .map(r -> new ScheduledRefView(r.actionId(), r.type(), r.locale(), r.runAt(), r.nextRunAt()))
+                .map(r -> new ScheduledRefView(
+                        r.actionId(), r.type(), r.locale(), r.runAt(), r.nextRunAt(), r.ownerUserId()))
                 .toList()));
         return out;
     }

@@ -11,6 +11,8 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import type { BodiesMap, SectionInstance } from './types';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseBadgeComponent } from '../release/release-badge.component';
+import { deleteQuestion, isOnline } from '../release/release-status.util';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type PageView = components['schemas']['PageView'];
@@ -27,7 +29,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
 @Component({
   selector: 'sf-page-nav-node',
   standalone: true,
-  imports: [SfIconComponent, SfRenameAssetDialogComponent],
+  imports: [SfIconComponent, SfRenameAssetDialogComponent, ReleaseBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './page-nav-node.component.html',
   styleUrl: './page-nav-node.component.scss',
@@ -350,12 +352,13 @@ export class PageNavNodeComponent {
       return;
     }
     const name = this.summary().displayName ?? this.summary().uid ?? 'this page';
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) {
+    const online = isOnline(this.summary().release);
+    if (!window.confirm(deleteQuestion(`Delete "${name}"? This cannot be undone.`, this.summary().release))) {
       return;
     }
     this.api.deleteAsset(this.projectKey(), uuid).subscribe({
       next: () => {
-        this.toast.show('Page deleted', 'success');
+        this.toast.show(online ? 'Page deleted — it stays online until you release the deletion' : 'Page deleted', 'success');
         this.changed.emit();
       },
       error: () => this.toast.show('Could not delete page — try again in a moment.', 'error'),

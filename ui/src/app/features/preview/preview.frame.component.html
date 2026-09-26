@@ -1,4 +1,22 @@
 <header class="preview-toolbar">
+  <div class="preview-toolbar__group preview-view" role="radiogroup" aria-label="Preview view">
+    @for (option of viewOptions; track option.value) {
+      <button
+        type="button"
+        role="radio"
+        class="preview-toolbar__button preview-view__option"
+        [class.preview-toolbar__button--active]="view() === option.value"
+        [attr.aria-checked]="view() === option.value"
+        [attr.tabindex]="view() === option.value ? 0 : -1"
+        [attr.data-view]="option.value"
+        (click)="setView(option.value)"
+        (keydown)="onViewKeydown($event)"
+      >
+        {{ option.label }}
+      </button>
+    }
+  </div>
+
   <div class="preview-toolbar__group">
     @for (option of viewports; track option.key) {
       <button
@@ -50,34 +68,90 @@
     </button>
 
     @if (pageUuid()) {
-      <button
-        type="button"
-        class="preview-toolbar__button"
-        [disabled]="archived()"
-        [title]="archived() ? 'An archived project has no share links.' : ''"
-        (click)="share()"
-      >
-        Share
-      </button>
+      <div class="preview-share-anchor">
+        <button
+          type="button"
+          class="preview-toolbar__button"
+          [disabled]="archived()"
+          [title]="archived() ? 'An archived project has no share links.' : ''"
+          aria-haspopup="dialog"
+          [attr.aria-expanded]="shareOpen()"
+          (click)="toggleShare()"
+        >
+          Share
+        </button>
+        @if (shareOpen()) {
+          <div class="preview-share-popover" role="dialog" aria-label="Share preview" (keydown.escape)="shareOpen.set(false)">
+            <fieldset class="preview-share-popover__choices">
+              <legend class="preview-share-popover__legend">Link shows</legend>
+              <label class="preview-share-popover__choice">
+                <input
+                  type="radio"
+                  name="preview-share-view"
+                  value="draft"
+                  [checked]="shareView() === 'draft'"
+                  (change)="shareView.set('draft')"
+                />
+                <span>Draft (latest saved)</span>
+              </label>
+              <label class="preview-share-popover__choice">
+                <input
+                  type="radio"
+                  name="preview-share-view"
+                  value="published"
+                  [checked]="shareView() === 'published'"
+                  (change)="shareView.set('published')"
+                />
+                <span>Published</span>
+              </label>
+            </fieldset>
+            <div class="preview-share-popover__actions">
+              <button type="button" class="preview-toolbar__button" (click)="shareOpen.set(false)">Cancel</button>
+              <button
+                type="button"
+                class="preview-toolbar__button preview-toolbar__button--active"
+                (click)="share()"
+              >
+                Create link
+              </button>
+            </div>
+          </div>
+        }
+      </div>
     }
   </div>
 </header>
 
+@if (statusLine(); as line) {
+  <p class="preview-status" aria-live="polite">{{ line }}</p>
+}
+
 <div class="preview-stage">
   <div class="preview-stage__frame" [style.width]="viewportWidth()">
-    <iframe
-      #frame
-      class="preview-frame"
-      [srcdoc]="srcdoc()"
-      sandbox="allow-scripts"
-      title="Live preview"
-    ></iframe>
+    @if (notPublished(); as message) {
+      <div class="preview-empty" role="status">
+        <p class="preview-empty__title">{{ message }}</p>
+        <p class="preview-empty__hint">
+          The published view shows what the next build puts online. Release the page to publish it, or switch to Draft
+          to see the latest saved version.
+        </p>
+      </div>
+    } @else {
+      <iframe
+        #frame
+        class="preview-frame"
+        [srcdoc]="srcdoc()"
+        sandbox="allow-scripts"
+        title="Live preview"
+      ></iframe>
+    }
   </div>
 </div>
 
-@if (shareUrl()) {
+@if (shareLink(); as link) {
   <div class="preview-share">
-    <input class="preview-share__input" type="text" readonly [value]="shareUrl() ?? ''" />
+    <label class="preview-share__label" for="preview-share-url">{{ shareLabel() }}</label>
+    <input id="preview-share-url" class="preview-share__input" type="text" readonly [value]="link.url" />
     <button type="button" class="preview-share__copy" (click)="copyShareUrl()">
       Copy
     </button>

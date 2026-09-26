@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/angular';
 import { describe, expect, it } from 'vitest';
 import {
+  formatDiffPath,
   SfDiffComponent,
   blockKind,
   formatValue,
@@ -42,5 +43,16 @@ describe('blockKind', () => {
   it('infers ADD/REMOVE from which side is present', () => {
     expect(blockKind({ after: 'b' })).toBe('ADD');
     expect(blockKind({ before: 'a' })).toBe('REMOVE');
+  });
+});
+
+describe('formatDiffPath', () => {
+  it('names the language of a language-dependent value', () => {
+    expect(formatDiffPath('content.headline.values.en', { en: 'English' })).toBe('content.headline (English)');
+  });
+
+  it('drops the payload prefix of a Changes diff', () => {
+    expect(formatDiffPath('payload.content.headline')).toBe('content.headline');
+    expect(formatDiffPath('payload.content.title.values.de')).toBe('content.title (de)');
   });
 });

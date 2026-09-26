@@ -37,6 +37,8 @@ function folderNode(folder: FolderView, sets: ReadonlyMap<string, RecordSetSumma
     kind: 'FOLDER',
     protectedFolder: folder.protectedFolder === true,
     revision: folder.revision,
+    release: folder.release,
+    scheduled: folder.scheduled,
     children: childNodes(folder.children ?? [], sets),
   };
 }
@@ -52,6 +54,8 @@ function setNode(set: FolderView, summary: RecordSetSummaryView | undefined): St
     badge: { text: String(count), label: `${count} ${count === 1 ? 'record' : 'records'}` },
     warning: summary?.queryValid === false ? INVALID_QUERY_WARNING : undefined,
     revision: summary?.revision,
+    release: summary?.release ?? set.release,
+    scheduled: summary?.scheduled ?? set.scheduled,
   };
 }
 

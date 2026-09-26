@@ -18,6 +18,8 @@ import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-
 import { PageNavNodeComponent } from './page-nav-node.component';
 import type { FolderMoveEvent } from './types';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseBadgeComponent } from '../release/release-badge.component';
+import { deleteQuestion } from '../release/release-status.util';
 
 type FolderView = components['schemas']['FolderView'];
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
@@ -38,7 +40,7 @@ type AssetSummaryView = components['schemas']['AssetSummaryView'];
 @Component({
   selector: 'sf-folder-node',
   standalone: true,
-  imports: [SfIconComponent, PageNavNodeComponent, SfCreateAssetDialogComponent, SfRenameAssetDialogComponent],
+  imports: [SfIconComponent, PageNavNodeComponent, SfCreateAssetDialogComponent, SfRenameAssetDialogComponent, ReleaseBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './folder-node.component.html',
   styleUrl: './folder-node.component.scss',
@@ -241,7 +243,7 @@ export class FolderNodeComponent {
       return;
     }
     const name = this.node().displayName ?? this.node().uid ?? 'this folder';
-    if (!window.confirm(`Delete "${name}" and everything inside it? This cannot be undone.`)) {
+    if (!window.confirm(deleteQuestion(`Delete "${name}" and everything inside it? This cannot be undone.`, this.node().release))) {
       return;
     }
     this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({

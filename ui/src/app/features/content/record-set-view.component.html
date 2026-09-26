@@ -39,6 +39,12 @@
           <sf-button variant="primary" [disabled]="readOnly()" (click)="restoreSet()">Restore</sf-button>
         }
       </header>
+      <sf-release-bar
+        [projectKey]="projectKey()"
+        [assetUuid]="rs.uuid"
+        [refreshKey]="rs.revision"
+        (changed)="onReleaseChanged($event)"
+      />
 
       @if (timeTravelling()) {
         <p class="set-view__notice" role="status">

@@ -1,9 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/angular';
 import { of } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { NavigationComponent } from './navigation.component';
 import { NavigationService, type NavTreeView } from './navigation.service';
+import { stubReleaseBar } from '../release/testing/release-bar.stub';
+import { NavFolderDetailComponent } from './nav-folder-detail.component';
+import { NavReferenceDetailComponent } from './nav-reference-detail.component';
 
 // The tree endpoint always returns exactly one top-level entry — the fixed, protected
 // "All Navigation" wrapper root — which the component unwraps for display (`topLevelNodes`),
@@ -37,6 +40,11 @@ const tree: NavTreeView[] = [
 ];
 
 describe('NavigationComponent', () => {
+  beforeEach(() => {
+    stubReleaseBar(NavFolderDetailComponent);
+    stubReleaseBar(NavReferenceDetailComponent);
+  });
+
   it('renders the full navigation folder structure from GET .../navigation/tree', async () => {
     const nav = { tree: vi.fn().mockReturnValue(of(tree)) };
     const api = {};

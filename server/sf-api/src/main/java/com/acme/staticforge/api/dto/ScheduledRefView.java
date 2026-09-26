@@ -5,6 +5,6 @@ import java.time.Instant;
 /**
  * A pending schedule touching an asset (M27.4.4), in the {@code scheduled} list of asset views and Changes rows.
  * {@code locale} is the locale key it touches ({@code ""} = every locale); {@code runAt} is {@code null} for a
- * recurring action.
+ * recurring action; {@code ownerUserId} is who it runs as (M27.6.5).
  */
-public record ScheduledRefView(long actionId, String type, String locale, Instant runAt, Instant nextRunAt) {}
+public record ScheduledRefView(long actionId, String type, String locale, Instant runAt, Instant nextRunAt, Long ownerUserId) {}

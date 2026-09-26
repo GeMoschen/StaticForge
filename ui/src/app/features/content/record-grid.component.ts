@@ -17,6 +17,8 @@ import { debounceTime, distinctUntilChanged, Subject, Subscription } from 'rxjs'
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
+import { ReleaseBadgeComponent } from '../release/release-badge.component';
+import { ReleaseEventsStore } from '../release/release-events.store';
 import type { ContentDefinition } from '../forms/form.model';
 import { ContentService, type DatasetDetailView, type RecordRowView, type RecordSort } from './content.service';
 import {
@@ -78,12 +80,13 @@ export const EXCLUDED_INVALID_QUERY = 'Not shown on the site: the set query is i
   selector: 'sf-record-grid',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfIconComponent, SfRelativeTimePipe],
+  imports: [SfButtonComponent, SfIconComponent, SfRelativeTimePipe, ReleaseBadgeComponent],
   templateUrl: './record-grid.component.html',
   styleUrl: './record-grid.component.scss',
 })
 export class RecordGridComponent {
   readonly projectKey = input.required<string>();
+  private readonly releaseEvents = inject(ReleaseEventsStore);
   /** The set's dataset: its schema gives the columns. */
   readonly dataset = input.required<DatasetDetailView>();
   readonly recordSetUuid = input.required<string>();
@@ -161,6 +164,8 @@ export class RecordGridComponent {
         this.where();
         this.sort();
         this.refreshKey();
+        // Release actions change the rows' statuses (M27.6.1).
+        this.releaseEvents.version();
         const page = this.page();
         untracked(() => this.reload(page));
       },

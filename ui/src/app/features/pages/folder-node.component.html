@@ -29,6 +29,7 @@
     </button>
     <sf-icon class="folder-node__icon" [name]="expanded() && hasChildren() ? 'folder_open' : 'folder'" />
     <span class="folder-node__name">{{ node().displayName ?? node().uid }}</span>
+    <sf-release-badge class="folder-node__badge" [release]="node().release" [scheduled]="node().scheduled" [compact]="true" />
     @if (isProtected()) {
       <sf-icon class="folder-node__protected-icon" name="lock" title="Built-in folder — can't be renamed, moved, or deleted" />
     }

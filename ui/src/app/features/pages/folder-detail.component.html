@@ -1,4 +1,5 @@
 <div class="folder-detail">
+  <sf-release-bar [projectKey]="projectKey()" [assetUuid]="folder().uuid" [refreshKey]="folder().revision" />
   <header class="folder-detail__header">
     <sf-icon name="folder" class="folder-detail__icon" />
     @if (editingName()) {

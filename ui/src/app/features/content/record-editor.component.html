@@ -35,6 +35,12 @@
           <sf-button variant="primary" [disabled]="readOnly()" (click)="restoreRecord()">Restore</sf-button>
         }
       </header>
+      <sf-release-bar
+        [projectKey]="projectKey()"
+        [assetUuid]="rec.uuid"
+        [refreshKey]="releaseRefresh()"
+        (changed)="onReleaseChanged($event)"
+      />
 
       @if (timeTravelling()) {
         <p class="record-editor__notice" role="status">

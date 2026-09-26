@@ -17,6 +17,8 @@ import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../s
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { MediaNavNodeComponent } from './media-nav-node.component';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseBadgeComponent } from '../release/release-badge.component';
+import { deleteQuestion } from '../release/release-status.util';
 
 type FolderView = components['schemas']['FolderView'];
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
@@ -45,7 +47,13 @@ export interface FolderMoveEvent {
 @Component({
   selector: 'sf-media-folder-node',
   standalone: true,
-  imports: [SfIconComponent, SfCreateAssetDialogComponent, SfRenameAssetDialogComponent, MediaNavNodeComponent],
+  imports: [
+    SfIconComponent,
+    SfCreateAssetDialogComponent,
+    SfRenameAssetDialogComponent,
+    MediaNavNodeComponent,
+    ReleaseBadgeComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './media-folder-node.component.html',
   styleUrl: './media-folder-node.component.scss',
@@ -248,7 +256,7 @@ export class MediaFolderNodeComponent {
       return;
     }
     const name = this.node().displayName ?? this.node().uid ?? 'this folder';
-    if (!window.confirm(`Delete "${name}" and everything inside it? This cannot be undone.`)) {
+    if (!window.confirm(deleteQuestion(`Delete "${name}" and everything inside it? This cannot be undone.`, this.node().release))) {
       return;
     }
     this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({

@@ -42,6 +42,12 @@
   width: 16px;
 }
 
+.media-nav__localized {
+  flex-shrink: 0;
+  font-size: 0.95em;
+  color: var(--sf-slate);
+}
+
 .media-nav__icon {
   flex-shrink: 0;
   font-size: 1.1em;
@@ -49,6 +55,7 @@
 }
 
 .media-nav__name {
+  min-width: 0;
   font-size: var(--sf-text-sm);
   overflow: hidden;
   text-overflow: ellipsis;

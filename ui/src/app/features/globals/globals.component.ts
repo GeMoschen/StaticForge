@@ -19,6 +19,7 @@ import { consumeQueryParam } from '../../shared/deep-link';
 import { GlobalSetDetailComponent } from './global-set-detail.component';
 import { etagFor, GlobalsService, type FolderView, type GlobalSetSummaryView } from './globals.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 
 /** The CDL a newly created property set starts with — one field, so the Values tab is never blank. */
 const STARTER_CDL = `content {
@@ -62,6 +63,7 @@ export class GlobalsComponent {
   private readonly route = inject(ActivatedRoute);
 
   private readonly globals = inject(GlobalsService);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
 
@@ -114,8 +116,20 @@ export class GlobalsComponent {
   constructor() {
     effect(() => {
       const key = this.projectKey();
+      // Release actions change the statuses of the tree's folders and sets (M27.6.1).
+      this.releaseEvents.version();
       untracked(() => this.reload(key));
     });
+    effect(
+      () => {
+        const observed = this.releaseEvents.observed();
+        const next = untracked(() => withObservedRelease(this.sets(), observed));
+        if (next) {
+          this.sets.set(next);
+        }
+      },
+      { allowSignalWrites: true },
+    );
     effect(() => {
       const uuid = this.asset();
       if (!uuid) {
@@ -314,6 +328,8 @@ function leavesOf(folder: FolderView, byFolder: Map<string, GlobalSetSummaryView
       kind: 'LEAF' as const,
       icon: 'tune',
       revision: set.revision,
+      release: set.release,
+      scheduled: set.scheduled,
     }));
 }
 
@@ -325,6 +341,8 @@ function folderNode(folder: FolderView, byFolder: Map<string, GlobalSetSummaryVi
     kind: 'FOLDER',
     protectedFolder: folder.protectedFolder === true,
     revision: folder.revision,
+    release: folder.release,
+    scheduled: folder.scheduled,
     children: [
       ...(folder.children ?? []).map((child) => folderNode(child, byFolder)),
       ...leavesOf(folder, byFolder),

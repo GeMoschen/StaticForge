@@ -40,6 +40,8 @@ import { mergePayload } from './conflict-util';
 import { SfPreviewFrameComponent } from '../preview';
 import type { BodiesMap, FieldResolveEvent, ResolveMode, SectionInstance } from './types';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import type { ReleaseMode } from '../release/release-choice.util';
 
 type PageView = components['schemas']['PageView'];
 type TemplateSummary = components['schemas']['TemplateSummary'];
@@ -68,6 +70,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
     SfPreviewFrameComponent,
     SfAssetImpactComponent,
     SfUidRenameComponent,
+    ReleaseBarComponent,
   ],
   providers: [PageAutosaveService],
   templateUrl: './page-editor.component.html',
@@ -129,6 +132,11 @@ export class PageEditorComponent {
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
   /** The preview's revision pin: set only while time travelling, so a live preview reads current state. */
   protected readonly timeTravelRevision = this.timeTravel.activeRevision;
+
+  /** Re-reads the release bar whenever the page was saved, renamed or re-uid'd (M27.6.1). */
+  protected readonly releaseRefresh = computed(
+    () => `${this.autosave.revision() ?? ''}|${this.page()?.revision ?? ''}|${this.page()?.uid ?? ''}|${this.page()?.displayName ?? ''}`,
+  );
 
   protected readonly statusLabel = computed(() => {
     if (this.timeTravel.isTimeTravel()) {
@@ -569,6 +577,15 @@ export class PageEditorComponent {
     this.loadSectionDefs(this.projectKey(), page);
     // So an already-expanded nav-tree node for this same page (bodies/sections shown read-only alongside the editor) picks up the change without an F5.
     this.selfMutating = true;
+    this.store.notifyPageChanged(this.uuid());
+  }
+
+  /** A discard wrote the released version back as the draft: reload the page and its tree node (M27.6.1). */
+  protected onReleaseChanged(mode: ReleaseMode): void {
+    if (mode !== 'discard' || this.timeTravel.isTimeTravel()) {
+      return;
+    }
+    this.load(this.projectKey(), this.uuid(), null);
     this.store.notifyPageChanged(this.uuid());
   }
 

@@ -6,6 +6,8 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import { deleteQuestion } from '../release/release-status.util';
 
 type FolderView = components['schemas']['FolderView'];
 
@@ -20,7 +22,7 @@ type FolderView = components['schemas']['FolderView'];
 @Component({
   selector: 'sf-media-folder-detail',
   standalone: true,
-  imports: [SfButtonComponent, SfIconComponent, SfUidRenameComponent],
+  imports: [SfButtonComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './media-folder-detail.component.html',
   styleUrl: './media-folder-detail.component.scss',
@@ -99,7 +101,7 @@ export class MediaFolderDetailComponent {
     const message = hasContents
       ? `Delete "${name}" and everything inside it (${this.mediaCount()} media item(s), ${this.folderCount()} sub-folder(s))? This cannot be undone.`
       : `Delete "${name}"? This cannot be undone.`;
-    if (!window.confirm(message)) {
+    if (!window.confirm(deleteQuestion(message, this.folder().release))) {
       return;
     }
     this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({

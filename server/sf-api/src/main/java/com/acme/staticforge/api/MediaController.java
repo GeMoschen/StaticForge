@@ -125,6 +125,21 @@ public class MediaController {
         return result.map(v -> toSummary(v, release.get(v.uuid()), scheduled.getOrDefault(v.uuid(), List.of())));
     }
 
+    /**
+     * One media asset as the media drawer shows it (M27.6.4): metadata, release state and — for localized media — the
+     * file each language renders ({@code localeFiles}), resolved along the fallback chains here rather than in every
+     * client. {@code revision} reads the version valid then (time travel); {@code 404} for media that isn't there.
+     */
+    @GetMapping("/{uuid}")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public ResponseEntity<MediaView> detail(
+            @PathVariable String projectKey, @PathVariable UUID uuid, @RequestParam(required = false) Long revision) {
+        AssetVersionView view = mediaService.requireAt(projectId(projectKey), uuid, revision);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
+                .body(toMediaView(projectKey, view));
+    }
+
     @PostMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<MediaView> upload(
