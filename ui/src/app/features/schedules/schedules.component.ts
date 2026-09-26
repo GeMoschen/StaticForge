@@ -23,6 +23,7 @@ import {
   canEditSchedule,
   canRepin,
   canRunNow,
+  showsDrift,
   canTakeOver,
   outcomeLabel,
   scheduleStatusLabel,
@@ -125,6 +126,7 @@ export class SchedulesComponent {
   protected canCancel = canCancelSchedule;
   protected canRunNow = canRunNow;
   protected canRepin = canRepin;
+  protected showsDrift = showsDrift;
 
   protected canTakeOver(schedule: ScheduleView): boolean {
     return canTakeOver(schedule, this.currentUserId());

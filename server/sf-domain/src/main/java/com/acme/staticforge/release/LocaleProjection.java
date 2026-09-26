@@ -5,6 +5,7 @@ import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.common.L10nValues;
 import com.acme.staticforge.project.LocaleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -92,10 +93,34 @@ public final class LocaleProjection {
         }
         LocaleConfig locales = LocaleConfig.orEmpty(config);
         if (ReleaseLocales.ALL.equals(localeKey) || !locales.isLocalized()) {
-            return payload;
+            return withoutNulls(payload);
         }
         List<String> chain = locales.effectiveChain(localeKey);
-        return L10nValues.resolveDeep(payload, chain);
+        return withoutNulls(L10nValues.resolveDeep(payload, chain));
+    }
+
+    /**
+     * {@code node} without its {@code null}-valued object fields, at any depth. A field set to {@code null} renders
+     * like a missing one — the editor writes {@code "variant": null} into a media value the API created without it —
+     * so the two must not differ in the projection either; the Changes diff ({@code JsonDiffer}) already reads them
+     * the same, and a status must never say {@code CHANGED} over an empty diff. Array elements keep their positions.
+     */
+    static JsonNode withoutNulls(JsonNode node) {
+        if (node.isObject()) {
+            ObjectNode out = JsonNodeFactory.instance.objectNode();
+            node.fields().forEachRemaining(field -> {
+                if (!field.getValue().isNull()) {
+                    out.set(field.getKey(), withoutNulls(field.getValue()));
+                }
+            });
+            return out;
+        }
+        if (node.isArray()) {
+            ArrayNode out = JsonNodeFactory.instance.arrayNode();
+            node.forEach(element -> out.add(withoutNulls(element)));
+            return out;
+        }
+        return node;
     }
 
     /** The version fields a projection reads, for callers that hold no {@link AssetVersion} (tests, previews). */

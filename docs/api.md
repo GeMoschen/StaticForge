@@ -1,6 +1,6 @@
 # StaticForge CMS — API reference
 
-Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (98 paths), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
+Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (137 paths as of M27), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
 
 ## 1. Conventions
 
@@ -42,7 +42,7 @@ refresh returns a token with the current roles.
 | `GET` | `/projects/{key}/locales` | VIEWER |
 | `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |
 | `GET` / `POST` | `/projects/{key}/export` / `/projects/{key}/export/selection` | PROJECT_ADMIN |
-| `POST` | `/projects/{key}/import/analyze`, `/projects/{key}/import` (multipart `file`, `?skipExistingImplicit=`) | PROJECT_ADMIN |
+| `POST` | `/projects/{key}/import/analyze`, `/projects/{key}/import` (multipart `file`, `?skipExistingImplicit=`, `?releaseMode=KEEP\|DRAFT` — M27) | PROJECT_ADMIN |
 
 **Import conflicts.** `import/analyze` returns `{conflicts: [{severity, type, elementUuid, elementLabel, detail,
 explicit, blocksImport}], hasBlocking, blocksImport}` and writes nothing. `hasBlocking` is true when any conflict is
@@ -50,6 +50,13 @@ explicit, blocksImport}], hasBlocking, blocksImport}` and writes nothing. `hasBl
 rejects only its own asset, which stays out while the rest of the archive imports — today only
 `RECORD_OUTSIDE_RECORD_SET` (M25: a record from before record sets, never migrated). `import` refuses exactly when
 `blocksImport` is true: `409 SF-API-0409` with those conflicts under `conflicts` (each with `blocksImport`).
+
+**Release state (M27, protocol 8).** The analysis also answers `releaseState` (the archive carries release state) and
+`releaseMode` (the mode that applies: `DRAFT` for an archive without release state). `releaseMode=KEEP` (default)
+restores the archive's statuses; `DRAFT` imports everything as draft and leaves deletion-pending assets out. A kept
+release for a language the target doesn't have is the warning `RELEASE_LOCALE_MISSING`; a protocol ≤ 7 archive lists
+the `INFO` entry `ARCHIVE_WITHOUT_RELEASE_STATE` (severity `INFO` neither blocks nor warns). The import result counts
+the opened release pointers in `releasedCount`. Schedules are not exported.
 
 ### 3.1 Content languages (M24)
 
@@ -111,6 +118,14 @@ answers with an empty list.
 | `PATCH` | `/projects/{projectKey}/assets/{uuid}/uid` |
 | `POST` | `/projects/{projectKey}/assets/{uuid}/move` |
 | `DELETE` | `/projects/{projectKey}/assets/{uuid}` |
+
+**Release blocks (M27).** Every view of a releasable asset — pages, records, record sets, global sets, media, page
+references and editorial folders, with their list rows, tree nodes and `GET /assets/{uuid}` — carries
+`release: {localeKey: {status, releasedRevision, releasedAt, releasedBy}}` (key `""` = every language; `null` for
+templates, store roots and past versions) and `scheduled: [{actionId, type, locale, runAt, nextRunAt, ownerUserId}]`,
+the pending schedules touching it. `status` is `NEW`, `PUBLISHED`, `CHANGED`, `UNPUBLISHED` or `DELETION_PENDING`
+(spec §5.5). Deleting an asset that is released somewhere writes a tombstone that stays online (`DELETION_PENDING`)
+until the deletion is released.
 
 ## 5. Pages
 
@@ -207,8 +222,11 @@ Records are added with `POST /datasets/{uuid}/records` and `recordSetUuid` (§6.
 | `POST` | `/projects/{projectKey}/media/bulk` |
 | `PUT` | `/projects/{projectKey}/media/{uuid}` (`?locale=`) |
 | `POST` | `/projects/{projectKey}/media/{uuid}/replace` |
-| `GET` | `/projects/{projectKey}/media/{uuid}/binary` (`?variant=`) |
-| `GET` | `/projects/{projectKey}/media/{uuid}/thumbnail` |
+| `GET` | `/projects/{projectKey}/media/{uuid}` (`?revision=`) — one media view with `localeFiles` (M27) |
+| `GET` | `/projects/{projectKey}/media/{uuid}/binary` (`?variant=`, `?locale=`) |
+| `GET` | `/projects/{projectKey}/media/{uuid}/thumbnail` (`?locale=`) |
+| `PUT` | `/projects/{projectKey}/media/{uuid}/localized` — see §7.2 |
+| `POST`/`DELETE` | `/projects/{projectKey}/media/{uuid}/files/{locale}` — see §7.2 |
 | `GET` | `/projects/{projectKey}/media/{uuid}/share?t=` (public, token-gated; see §12) |
 
 ### 7.1 Text media and CMS processing (M18)
@@ -235,6 +253,31 @@ with a non-text file switched processing off.
 (`/share?t=`), which page previews link to, serves a processed file rendered at the token's
 revision with `Cache-Control: no-store`; when the file doesn't compile or render it serves the source
 with the diagnostic in `X-SF-Render-Error`.
+
+### 7.2 Localized media (M27)
+
+In a project with languages a media asset can hold one file per language (spec §11.6). The media view answers
+`localized` and, for every project language, the file it renders:
+
+```json
+{ "uuid": "…", "uid": "hero", "localized": true, "fileName": "hero.png", "revision": 57,
+  "localeFiles": {
+    "de": { "own": true,  "fromLocale": "de", "fileName": "hero.png",    "mimeType": "image/png", "sizeBytes": 483920, "image": {"width": 2400, "height": 1350} },
+    "en": { "own": true,  "fromLocale": "en", "fileName": "hero-en.png", "mimeType": "image/png", "sizeBytes": 471002, "image": {"width": 2400, "height": 1350} },
+    "fr": { "own": false, "fromLocale": "de", "fileName": "hero.png",    "mimeType": "image/png", "sizeBytes": 483920, "image": {"width": 2400, "height": 1350} } },
+  "release": { "de": {"status": "PUBLISHED", "…": "…"}, "en": {"status": "CHANGED", "…": "…"}, "fr": {"status": "PUBLISHED", "…": "…"} } }
+```
+
+List rows carry `localized` only; `GET /media/{uuid}` returns the whole view (with `ETag`).
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `PUT` | `/projects/{projectKey}/media/{uuid}/localized` | `EDITOR` | `{localized, confirmDiscard?}`, `If-Match` required; one revision. Localizing makes the current file the default language's. Un-localizing keeps the default language's file; while other languages have their own, it answers `409 SF-MEDIA-0505` with `files: [{locale, fileName, sizeBytes}]` until repeated with `confirmDiscard: true`. `422 SF-MEDIA-0508` in a project without languages |
+| `POST` | `/projects/{projectKey}/media/{uuid}/files/{locale}` | `EDITOR` | multipart `file`; uploads or replaces that language's own file with the upload rules (sniffing, allow-list, size cap, SVG sanitizing) → `{media, warnings, processCmsCleared}`. `422 SF-MEDIA-0506` for media that isn't localized, `0507` for a language the project doesn't have |
+| `DELETE` | `/projects/{projectKey}/media/{uuid}/files/{locale}` | `EDITOR` | the language falls back again; `422 SF-MEDIA-0509` for the default language's file; a language without its own file changes nothing |
+
+`?locale=` on `binary`, `thumbnail`, `text` (`GET`/`PUT`), `process` and the rendered binary addresses the file that
+language renders; a text write for a language that falls back gives it its own file.
 
 ## 8. Templates (section, page) & structures
 
@@ -305,6 +348,70 @@ A run view carries `planSummary` (`null` for a run that never got past PLAN): `{
 
 `GET /assets/{uuid}/impact` answers what would rebuild if the asset changed, with the planner's own walk over the current state: `{asset: {uuid, type, uid}, revision, entryCount, pageCount, byFirstEdge, entries}` (entries as above, root = the asset, `rootRevision` null). It is an upper bound — every loop over a record's dataset, a page change counted as navigation-affecting — so a real edit rebuilds the same entries or fewer. `404` for an unknown or deleted asset.
 
+### 10.1 Schedules (M27)
+
+Scheduled releases, unpublishing and builds (spec §18.7). Every endpoint needs `VIEWER`; every change checks what the
+action type requires of the caller (`DEVELOPER` in M27, `403` otherwise). Times are ISO instants; a recurring
+schedule's cron is evaluated in its `zoneId`. Single-schedule responses carry `ETag: "v{version}"`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/projects/{projectKey}/schedules` | `type`, `status` (repeatable), `owner` (user id), `assetUuid`, `from`/`to` (on `nextRunAt`, `[from, to)`), `page`, `size` ≤ 200 → `{rows, page, size, totalElements, totalPages}`; next due first; rows carry `itemCount`, `driftCount` and `lastExecution`, not `items` |
+| `POST` | `/projects/{projectKey}/schedules` | creates; the answer is the detail |
+| `GET` | `/projects/{projectKey}/schedules/{id}` | detail with `items` |
+| `PUT` | `/projects/{projectKey}/schedules/{id}` | `If-Match: "v{n}"` (`409 SF-API-0409` stale, `412` missing); `PENDING` only; omitted `params` keep the stored ones; the type can't change |
+| `POST` | `/projects/{projectKey}/schedules/{id}/cancel` | a pending or paused schedule |
+| `POST` | `/projects/{projectKey}/schedules/{id}/take-over` | the caller becomes the owner; a paused recurring schedule resumes at its next slot, a failed one-off is due at its original time |
+| `POST` | `/projects/{projectKey}/schedules/{id}/run-now` | a pending schedule runs on the next poll (a recurring one keeps its cron) |
+| `POST` | `/projects/{projectKey}/schedules/{id}/repin` | pins a pending `PINNED` release to the current drafts (`422 SF-DOM-0168` otherwise) |
+| `GET` | `/projects/{projectKey}/schedules/{id}/executions` | newest first, `page`/`size` |
+| `POST` | `/projects/{projectKey}/schedules/preview-times` | `{cron, zoneId, count?}` (default 5) → `{cron, zoneId, times}`; the cron normalized to 6 fields; validated like a create (`422 SF-DOM-0165`) |
+
+A scheduled release of two languages of a page, pinned, with an incremental build right after:
+
+```http
+POST /api/v1/projects/acme/schedules
+{ "type": "RELEASE", "runAt": "2026-09-29T07:00:00Z",
+  "pinPolicy": "PINNED", "missedPolicy": "SKIP_IF_LATER_THAN", "maxLateness": "PT2H",
+  "thenGenerate": { "targetId": 3, "channels": [] },
+  "params": { "items": [ {"assetUuid": "0190…", "locale": "de"}, {"assetUuid": "0190…", "locale": "en"} ],
+              "includeDependencies": [ {"assetUuid": "0191…"} ], "comment": "Autumn campaign" } }
+```
+
+```json
+{ "id": 12, "type": "RELEASE", "status": "PENDING", "runAt": "2026-09-29T07:00:00Z", "nextRunAt": "2026-09-29T07:00:00Z",
+  "pinPolicy": "PINNED", "missedPolicy": "SKIP_IF_LATER_THAN", "maxLateness": "PT2H",
+  "thenGenerate": { "targetId": 3, "channels": [] },
+  "params": { "resolved": true, "comment": "Autumn campaign",
+              "items": [ {"assetUuid": "0190…", "locale": "de", "pinnedVersionId": 5812}, "…" ] },
+  "ownerUserId": 7, "createdBy": 7, "version": 0, "itemCount": 3, "driftCount": 0,
+  "items": [ { "assetUuid": "0190…", "assetType": "PAGE", "uid": "autumn", "displayName": "Autumn", "locale": "de",
+               "pinnedVersionId": 5812, "draftChangedSinceScheduled": false, "status": "CHANGED" }, "…" ],
+  "lastExecution": null }
+```
+
+The other types, `runAt` for one-off and `cron` + `zoneId` for recurring:
+
+```json
+{ "type": "UNPUBLISH", "runAt": "2026-10-31T23:00:00Z", "params": { "items": [ {"assetUuid": "0190…"} ] } }
+{ "type": "GENERATION", "runAt": "2026-09-29T02:00:00Z",
+  "params": { "mode": "FULL", "channels": ["html"], "targetId": 3, "scope": {"folderPath": "/products/"} } }
+{ "type": "RECURRING_GENERATION", "cron": "0 3 * * 1-5", "zoneId": "Europe/Berlin",
+  "params": { "mode": "INCREMENTAL", "channels": [], "targetId": null } }
+```
+
+`missedPolicy` is `RUN_LATE` (default) or `SKIP_IF_LATER_THAN` with `maxLateness` as an ISO-8601 duration. Errors:
+`422 SF-DOM-0160` unknown type, `0161` params that don't fit (`field` names the offender), `0164` `runAt` in the past,
+`0165` invalid cron or zone, `0166` a timing form that doesn't fit the type, the release codes (`SF-DOM-0150` a pinned
+version is incomplete, `0151`, `0153`), `409 SF-DOM-0167` while the schedule executes, `409 SF-DOM-0141` in an
+archived project.
+
+An execution is `{id, scheduledFor, startedAt, finishedAt, outcome, lateByMs, message, detail, revisionId,
+generationRunId, executedAsUserId}`, `outcome` one of `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED` (`null` while it
+runs). For releases `detail.items` lists `{assetUuid, locale, result: APPLIED|UNCHANGED|SKIPPED, reason?}`;
+`detail.waitingForRun` names the run a busy project waits for; a failure carries `detail.code` (`SF-DOM-0162` target
+gone, `0163` owner no longer permitted — the schedule is paused until taken over).
+
 ## 11. Revisions & restore
 
 | Method | Path |
@@ -314,13 +421,85 @@ A run view carries `planSummary` (`null` for a run that never got past PLAN): `{
 | `GET` | `/projects/{projectKey}/revisions/{revisionId}/diff` |
 | `POST` | `/projects/{projectKey}/restore` (project-wide rollback) |
 
+### 11.1 Release, unpublish, discard and Changes (M27)
+
+Saving writes a draft; a release makes the draft of chosen languages the version builds render (spec §5.5). Each
+action is one revision (`RELEASE`, `UNPUBLISH`, `DISCARD`) and starts no build. Request body of all four:
+`{items: [{assetUuid, locale?}], includeDependencies?: [{assetUuid, locale?}], comment?}` — an item without `locale`
+means every language the asset has.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `POST` | `/projects/{projectKey}/releases/plan` | `VIEWER` | dry run, also on archived projects |
+| `POST` | `/projects/{projectKey}/releases` | `DEVELOPER` | releases `items` and the kept `includeDependencies` |
+| `POST` | `/projects/{projectKey}/releases/unpublish` | `DEVELOPER` | takes the items offline; drafts stay |
+| `POST` | `/projects/{projectKey}/releases/discard` | `DEVELOPER` | writes the released versions back as drafts |
+| `GET` | `/projects/{projectKey}/changes` | `VIEWER` | every (asset, locale) that isn't `PUBLISHED` |
+| `GET` | `/projects/{projectKey}/changes/count` | `VIEWER` | `{NEW, CHANGED, UNPUBLISHED, DELETION_PENDING, total}` |
+| `GET` | `/projects/{projectKey}/changes/{uuid}/diff` | `VIEWER` | `?locale=` (omitted: the shared key) |
+
+Plan, then release:
+
+```http
+POST /api/v1/projects/acme/releases/plan
+{ "items": [ {"assetUuid": "0190…", "locale": "en"} ] }
+```
+
+```json
+{ "items": [ {"uuid": "0190…", "type": "PAGE", "uid": "about", "displayName": "About", "locale": "en", "status": "CHANGED", "versionId": 5812} ],
+  "dependencies": [
+    { "target": {"uuid": "0191…", "type": "MEDIA", "uid": "hero", "displayName": "Hero", "locale": "en", "status": "NEW", "versionId": 5790},
+      "reason": "REFERENCE", "via": "0190…", "includedByDefault": true } ],
+  "incomplete": [],
+  "warnings": [] }
+```
+
+`reason` is `REFERENCE` (the selection's drafts reference it), `CONTAINER` (an unreleased folder or record set the
+selection sits in), `SET_MEMBER` (an unreleased record of a selected set) or `DESCENDANT` (a changed descendant of a
+selected changed folder, `includedByDefault: false`). `incomplete` lists items with blocking completeness findings
+(`{uuid, locale, issues}`); releasing them is refused.
+
+```http
+POST /api/v1/projects/acme/releases
+{ "items": [ {"assetUuid": "0190…", "locale": "en"} ],
+  "includeDependencies": [ {"assetUuid": "0191…", "locale": "en"} ], "comment": "About page, English" }
+```
+
+```json
+{ "revision": 1902,
+  "applied": [ {"uuid": "0190…", "type": "PAGE", "uid": "about", "locale": "en", "status": "PUBLISHED", "versionId": 5812, "…": "…"},
+               {"uuid": "0191…", "type": "MEDIA", "uid": "hero", "locale": "en", "status": "PUBLISHED", "versionId": 5790, "…": "…"} ],
+  "skipped": [], "sharedFieldsKept": [] }
+```
+
+`revision` is `null` when every item was already live (nothing is written); `skipped` lists those. A discard lists in
+`sharedFieldsKept` the items whose shared (not per-language) fields stayed, because other languages have unreleased
+changes on them. Errors: `422 SF-DOM-0150` content incomplete (`assets[]` with the findings), `0151` unknown asset or
+language or a live type (templates have no release state), `0152` discard of something never released (`assets[]`),
+`0153` empty selection; `403` below `DEVELOPER`; `409 SF-DOM-0141` in an archived project.
+
+`GET /changes?type=PAGE&status=CHANGED&locale=en&sort=changedAt,desc&page=0&size=50` (filters `type`, `status`,
+`locale` repeat; also `changedBy`, `folderUuid` — the folder's subtree — and `q` on display name or uid;
+`sort=changedAt|displayName` with `,asc|,desc`; `size` 1–200):
+
+```json
+{ "rows": [ { "uuid": "0190…", "type": "PAGE", "uid": "about", "displayName": "About", "folderPath": "/pages_root/company/",
+              "locale": "en", "status": "CHANGED", "changedBy": 7, "changedAt": "2026-09-26T08:12:00Z",
+              "releasedRevision": 1840, "releasedBy": 7, "releasedAt": "2026-09-20T10:00:00Z", "scheduled": [] } ],
+  "page": 0, "size": 50, "totalElements": 1, "totalPages": 1 }
+```
+
+`folderPath` is the stored path (with the store root). `GET /changes/{uuid}/diff?locale=en` →
+`{uuid, locale, status, changes: [{path, before, after, blocks, add, remove}]}`, released → draft over the locale
+projection (`path` like `payload.content.headline`).
+
 ## 12. Preview
 
 | Method | Path |
 |---|---|
-| `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`, `?page=`, `?locale=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data. `page` (M21) renders that page of a paginated page, clamped to its page count; the response carries `X-SF-Total-Pages` and `X-SF-Page`. `locale` (M24) renders one content language; without it, the project's default |
+| `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`, `?page=`, `?locale=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data. `page` (M21) renders that page of a paginated page, clamped to its page count; the response carries `X-SF-Total-Pages` and `X-SF-Page`. `locale` (M24) renders one content language; without it, the project's default. `view=draft` (default) or `published` (M27): the draft renders the page's draft and the drafts of everything it reads, `published` what the next build publishes; `X-SF-View` names the view, a draft preview carries `X-SF-Release-Status` (the page's status in the language), a page not released in the language is `404 SF-DOM-0155` in the published view, anything but `draft`/`published` is `400` |
 | `POST` | `/projects/{projectKey}/preview/section` |
-| `GET` | `/projects/{projectKey}/preview/pages/{uuid}/share` (`?locale=`, issue a share link; the language is bound into the token) |
+| `GET` | `/projects/{projectKey}/preview/pages/{uuid}/share` (`?locale=`, `?view=`, issue a share link; the language and the view are bound into the token) |
 | `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token; `?page=` as above, not part of the token — the language is) |
 | `GET` | `/projects/{projectKey}/pagination/count` (`?kind=NAV\|DATASET&source=uuid`) — M21: `{itemCount, skipped}` of a pagination source now, counted like generation does; `404` when the source isn't a live Navigation folder or dataset, `422` for another `kind` |
 
@@ -336,7 +515,9 @@ what search returns.
 | `GET` | `/projects/{projectKey}/search/status` | VIEWER |
 | `POST` | `/projects/{projectKey}/search/reindex` | PROJECT_ADMIN |
 
-`GET /search?q=&type=&folder=&page=0&size=20&sort=relevance&locale=`:
+`GET /search?q=&type=&folder=&page=0&size=20&sort=relevance&locale=&releaseStatus=` (`releaseStatus`, M27: repeatable or
+comma-separated `NEW`, `PUBLISHED`, `CHANGED`, `UNPUBLISHED`, `DELETION_PENDING` — keeps assets with that status in any
+language; search itself indexes drafts):
 
 - `q` is required, 1–200 characters after trimming. It is never parsed as query syntax: words are matched in any of the
   analyzed fields (German and English stemming, umlaut folding), `"quoted words"` as a phrase, the last word also as a
@@ -407,7 +588,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-API-0401` | 401 | missing/expired access token — `ProblemEntryPoint` |
 | `SF-API-0403` | 403 | role insufficient — `ProjectAuthorizationService` |
 | `SF-API-0404` | 404 | not found / not visible (does not leak existence, §8.4) |
-| `SF-API-0409` | 409 | revision conflict (`If-Match` mismatch), §7.5 |
+| `SF-API-0409` | 409 | revision conflict (`If-Match` mismatch), §7.5; a stale schedule version or an edit racing a scheduler claim (M27) — `ProblemExceptionHandler` |
 | `SF-API-0412` | 412 | `If-Match` missing on a mutating request |
 | `SF-API-0413` | 413 | upload exceeds configured limit (§11.5) |
 | `SF-API-0415` | 415 | MIME type not allowed (Tika sniff, §11.4) |
@@ -437,6 +618,31 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0132` | 409 | an admin can't disable, delete or demote themselves — `UserAdministrationService` |
 | `SF-DOM-0140` | 409 | project key already exists — *implemented addition* |
 | `SF-DOM-0141` | 409 | project is archived: every write is refused (M26) — `ArchivedProjectInterceptor`, `RevisionService.allocate`, `ProjectWriteGuard` |
+| `SF-DOM-0150` | 422 | content incomplete: releasing (or pinning a scheduled release of) content with `ERROR` completeness findings; `assets[]` with the findings (M27) — `ReleaseProblems`, `ReleaseServiceImpl`, `ReleaseActionHandler` |
+| `SF-DOM-0151` | 422 | release item can't be resolved: unknown asset, a language the asset doesn't have, or a live type (M27) — `ReleaseServiceImpl` |
+| `SF-DOM-0152` | 422 | discard of something never released; `assets[]` (M27) — `ReleaseServiceImpl.discard` |
+| `SF-DOM-0153` | 422 | empty release selection (M27) — `ReleaseServiceImpl` |
+| `SF-DOM-0154` | 422 | a pinned version that isn't the asset's, or is a deletion (M27) — `ReleaseServiceImpl` |
+| `SF-DOM-0155` | 404 | published preview of a page not released in the language (M27) — `ReleaseProblems.notPublished` |
+| `SF-DOM-0160` | 422 | unknown schedule type; also a paused execution's `detail.code` (M27) — `SchedulerProblems` |
+| `SF-DOM-0161` | 422 | schedule params don't fit the type, `field` names the offender; also an execution failure when a channel was disabled since (M27) — handlers' `validate` |
+| `SF-DOM-0162` | — | execution failure: the generation target is gone; a recurring schedule pauses (M27) — `ScheduledGenerations` |
+| `SF-DOM-0163` | — | execution failure: the owner is no longer permitted; a recurring schedule pauses until taken over (M27) — `SchedulerEngine` |
+| `SF-DOM-0164` | 422 | schedule time in the past (M27) — `ScheduleService` |
+| `SF-DOM-0165` | 422 | invalid cron or unknown/missing time zone (M27) — `ScheduleTiming` |
+| `SF-DOM-0166` | 422 | a timing form that doesn't fit the type (M27) — `ScheduleService` |
+| `SF-DOM-0167` | 409 | the schedule is executing or waits for a busy project (M27) — `ScheduleService` |
+| `SF-DOM-0168` | 422 | re-pin of anything but a pending pinned release (M27) — `ReleaseActionHandler.repin` (the SPI default refuses too) |
+
+### Media (`SF-MEDIA-*`, localized media)
+
+| Code | HTTP | Raised by |
+|---|---|---|
+| `SF-MEDIA-0505` | 409 | un-localizing would discard other languages' files; `files[]`; repeat with `confirmDiscard` (M27) — `MediaProblems` |
+| `SF-MEDIA-0506` | 422 | per-language file operation on media that isn't localized (M27) |
+| `SF-MEDIA-0507` | 422 | a language the project doesn't declare (M27) |
+| `SF-MEDIA-0508` | 422 | localizing media in a project without languages (M27) |
+| `SF-MEDIA-0509` | 422 | removing the default language's file (M27) |
 
 ### Template (`SF-TPL-*`, `SF-CDL-*`)
 
@@ -464,6 +670,7 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | `SF-GEN-0120` | error (per page) | content incomplete; page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.incompletePages`) |
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
 | `SF-GEN-0220` | warning | reference to a deleted asset (`$CMS_REF`, `$CMS_INCLUDE`, body section); renders empty | `GenerationRenderer` |
+| `SF-GEN-0221` | warning | link (`$CMS_REF`, `media`/`link` value) to an asset not released in the render language; renders empty (M27; a cross-asset value of it is `SF-TPL-0112`) | `GenerationRenderer` (`GEN_UNRELEASED_REFERENCE`) |
 | `SF-GEN-0230` | error (per file) | a processed text media file's source blob is missing; the file isn't published, run `PARTIAL` | `GenerationDiagnosticCodes` (`MediaRenderStage`) |
 | `SF-GEN-0240` | warning | a record set's stored query no longer validates against its dataset (a field it reads was removed or retyped); the set renders no records, never all of them (M25) | `DiagnosticCodes.GEN_RECORD_SET_QUERY_INVALID` (`RecordSetQueries.invalidQueryWarning`) |
 | `SF-GEN-0241` | warning | a record set rendered as a value has no record template for the channel in its dataset; the set renders empty (M25) | `DiagnosticCodes.GEN_RECORD_TEMPLATE_MISSING` (`OctlRenderer`) |

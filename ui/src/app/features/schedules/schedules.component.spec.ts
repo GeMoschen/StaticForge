@@ -81,6 +81,15 @@ describe('SchedulesComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Draft changed since scheduled');
   });
 
+  it('drops the drift warning once the schedule has run', () => {
+    const row = PAGE.rows![0];
+    fixture.componentRef.setInput('status', undefined);
+    fixture.detectChanges();
+    http.expectOne((r) => r.url === `${BASE}/schedules`).flush({ ...PAGE, rows: [{ ...row, status: 'SUCCEEDED', nextRunAt: undefined }] });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Draft changed since scheduled');
+  });
+
   it('offers take over for another owner’s pending schedule', () => {
     const labels = Array.from(fixture.nativeElement.querySelectorAll('.schedules__action') as NodeListOf<HTMLElement>).map((b) =>
       b.textContent?.trim(),

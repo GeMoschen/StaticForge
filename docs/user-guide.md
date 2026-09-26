@@ -23,10 +23,11 @@ Templates are owned by **template developers** (see the [template-developer guid
    - Not every page template is offered. Templates marked **Abstract** (shown with an *Abstract* badge in the Templates store) are layouts that other templates build on, so no page can use them directly. Pick a template that extends the layout instead, or ask a developer to make one.
 3. Open the page editor — a split view: page fields on the left, live preview on the right.
 4. Fill the template's editors. Save is ambient: the header shows `Saved 12:04` with a revision link. There is no blocking save spinner (§24.6).
-   - A half-filled page always saves: an empty required field, too few list items or text that is too long doesn't stop the save. These are checked when you publish instead. A page with such a problem isn't published; the generation log lists it under `SF-GEN-0120` with the field paths, and the other pages are still published.
+   - A half-filled page always saves: an empty required field, too few list items or text that is too long doesn't stop the save. These are checked when you release the page instead: the release dialog lists each problem with its field and refuses to release until it's fixed (see [Publishing](#publishing-draft-release-unpublish-m27)). Generation keeps checking too: a page with such a problem isn't published, the generation log lists it under `SF-GEN-0120`, and the other pages are still published.
    - A save is rejected only when a value has the wrong shape for its field (for example text in a number field, a value that isn't one of the field's options, or a section whose template isn't allowed in that body). Nothing is stored, and the error lists each offending field path.
    - A page often also shows values from **Globals** (below), such as the site title. Those aren't fields of the page — change them in Globals.
 5. Preview updates live as you type (debounced), and the viewport switcher (mobile / tablet / desktop) resizes the preview.
+6. Saving doesn't put anything online: your page is a **draft** until someone releases it (see [Publishing](#publishing-draft-release-unpublish-m27)).
 
 #### Listing pages (pagination)
 
@@ -60,6 +61,26 @@ pagination link inside the preview. The selector also works in time travel, wher
 2. Set alt text, caption, copyright, and focal point in the detail drawer.
 3. Reference media from a `media` or `link` editor using the picker.
 4. The drawer shows **usages** ("where is this used?") before you delete anything. Usages are current as soon as a page or template is saved; you don't need to run a generation. Once you remove the media from every page that used it (or delete those pages), it can be deleted without forcing.
+
+#### A different file per language (M27)
+
+In a project with languages, the media drawer offers **Different file per language** — for a banner with text in it,
+a German and an English PDF, a screenshot of a localized interface.
+
+- Switch it on: the current file becomes the default language's file, and every other language uses it until it
+  gets its own.
+- The **Files** section lists every language: its own file (thumbnail, name, size, **Replace**, **Remove**) or
+  "Uses Deutsch's file" with **Upload**. You can also drop a file onto a language's row. The default language's
+  file can be replaced, not removed — every language without its own file falls back to it.
+- The library's thumbnails show the file of the language you are editing; a small marker shows which media is
+  localized.
+- Each language is released on its own, like a page's languages: releasing only the English file changes only the
+  English pages.
+- Switching it off keeps the default language's file. When other languages have their own files, the drawer lists
+  them ("These files will be discarded: EN hero-en.png (1.2 MB)") and asks before discarding them.
+- For a stylesheet or other text file, the **Source** tab gets a language selector.
+
+Pickers in page and link editors still pick the media, not one of its files: every language shows its own file.
 
 #### Stylesheets, scripts and other text files
 
@@ -230,6 +251,82 @@ asset detail lists them as orphaned translations in the meantime. Turning langua
 `localizable` off a field, *does* discard the other languages' values — both ask you to confirm first, naming how
 many translations would go.
 
+### Publishing: draft, release, unpublish (M27)
+
+**What goes online when.** Saving never changes the website. Everything you save — pages, records, record sets,
+property sets, media, navigation entries, folders — is a **draft**. **Releasing** makes the draft the version the
+site shows, and the site changes with the **next build** (started by a developer, or by a schedule). Templates are
+different: a template change reaches every released page with the next build, without a release.
+
+**Statuses.** A badge next to every page, record, file and navigation entry — and in each editor's release bar —
+shows its status in the language you are editing:
+
+| Status | Means |
+|---|---|
+| **New** | never released: not on the site |
+| **Published** | online, and the draft looks the same |
+| **Changed** | online, but the draft differs; the site still shows the released version |
+| **Unpublished** | taken offline; the draft is kept and can be released again |
+| **Deletion pending** | deleted in the draft, still online until the deletion is released |
+
+A clock on the badge means a schedule touches it; the tooltip lists every language ("DE published · EN changed").
+
+**Releasing** (developers; see the roles table). In the editor's release bar choose **Release…**:
+
+1. Tick the languages — the one you are editing is ticked; **All changed languages** ticks the rest.
+2. The dialog lists what the release **also needs**: files and pages the page links to that aren't released yet,
+   the folders it sits in, a set's new records, grouped by reason and ticked. Untick anything you don't want to
+   release now — it will simply be missing from the page (the generation log warns with `SF-GEN-0221`). A folder
+   whose name or place changed offers its changed contents unticked.
+3. Missing required fields block the release: each is listed with its field and an **Open** link.
+4. Add a comment if you like, and **Release**. "Released in r1902 — goes online with the next build."
+
+**Per language.** Each language is released on its own. Editing only the English headline leaves German
+**Published**; releasing English leaves the German page exactly as it was online — even when the page moved, was
+renamed or got new sections in the meantime (each language shows the whole version released for it). Changing a field
+that is the same in every language changes every language's status.
+
+**Moving, renaming, deleting.** These are drafts too: a moved or renamed page stays at its old address until
+released, and a deleted page stays online (**Deletion pending**) until you release the deletion. Deleting a page that
+was never released removes it at once, as before. Renaming or moving a folder makes everything in it **Changed**.
+
+**Unpublish…** takes a page offline in the languages you pick with the next build; its draft stays. **Discard
+changes…** throws the draft away and brings back what is online, as a new revision (the discarded draft stays in the
+history); the dialog lists the fields that would change. Discarding one language restores its translated fields;
+fields shared by all languages are restored only when no other language has unreleased changes on them — otherwise
+the dialog says they were kept.
+
+**Changes.** **Changes** in the nav — with a count of new, changed and deletion-pending items — lists everything that
+isn't released as it is, one row per language: type, name, folder, language, status, who changed it when, when it was
+last released. Filter by type, status, language, who changed it, folder and name (the filters show as chips and stay
+in the URL, so you can share a filtered list); sort by date or name. Select a row to see what changed since the
+release, field by field, with **Open in editor**. Tick rows (or all rows of the page) to **Release…**, **Discard
+changes…** or **Schedule release…** them together — one revision for the lot. With the keyboard: ↑/↓ move between
+rows, Space ticks, Enter shows the changes.
+
+**Preview: Draft or Published.** The preview toolbar switches between **Draft** — what you saved, with "Draft —
+Changed" under the toolbar — and **Published** — what the next build puts online. A page that isn't released in the
+language shows "Not published in Deutsch". **Share** asks which view the link shows ("Draft (latest saved)" or
+"Published"); the link keeps it, also for every page you click to from there.
+
+**Scheduling.** **Schedule…** in the release bar (or **Schedule release…** in Changes) releases or unpublishes at a
+time you pick, in your own time zone (the dialog names it, e.g. "Europe/Berlin (CEST)"):
+
+- **Which version:** *Release the versions as they are now* (default) or *Release whatever is saved at that time*.
+  With the first, later edits don't sneak in: the schedule shows "Draft changed since scheduled", and **Re-pin**
+  takes the current drafts instead.
+- **Then:** *Generate right after* starts an incremental build as soon as the release is done.
+- **If the time is missed** (server down, project archived): *Run as soon as possible*, or *Skip if more than N
+  minutes/hours late*.
+
+The release bar lists pending schedules ("Release scheduled for Tue 29 Sep 2026, 09:00 by Ana"); click one to open
+it. **Schedules** in the nav lists every schedule with its next run, owner and status — filter by type, status and
+owner — and lets developers **Edit**, **Run now**, **Take over** and **Cancel**; **History** shows each execution:
+when it was due, how late it started, the outcome and each item's result, with links to the revision it wrote and the
+build it started. **New generation schedule** plans builds: once, or repeating (every hour, every day, every weekday,
+every week at a time — or a cron expression under *Advanced*, with the next five runs shown). A schedule runs as the
+person who owns it; if they leave the project or lose the role, it stops ("Paused") until someone else takes it over.
+
 ### Generate & publish
 
 First, in **Settings → Targets**, create at least one target (the first one becomes the default). Each target writes into its own folder, `{projectKey}/{output folder}` under the server's output root (`{projectKey}/target-{id}` when the folder is left empty); two targets of a project may not share or nest folders (an imported target whose folder is invalid or clashes is imported without it and uses its default folder; the import analysis warns about this). Set **Base URL** for correct sitemap and absolute links.
@@ -245,6 +342,8 @@ In **Channels**, each channel's form sets how its output files and links are nam
 | **Index file name** | `index.` + extension | File name of a folder's index page, also used for pretty folder URLs; letters, digits, `.`, `-`, `_`, up to 64 |
 
 An invalid value is rejected with the field named. Changing the extension or URL settings moves every page of the channel: the next generation rebuilds all pages even in incremental mode, and generated URL registry entries are recomputed (manual overrides are kept).
+
+A build publishes what is **released** (see [Publishing](#publishing-draft-release-unpublish-m27)), not the latest drafts.
 
 1. Open **Generate**, pick full or incremental mode, channels, and a target, then start.
 2. A live log shows per-stage progress, error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5).
@@ -291,16 +390,22 @@ Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` search (see [Se
 In a project with several languages, the **Editing language** picker above the content area is an ordinary select you
 can `Tab` to; changing it switches every editor, the preview and the search palette to that language.
 
+In **Changes**, `↑`/`↓` move between rows, `Space` ticks a row and `Enter` shows its changes; the preview's
+**Draft | Published** switch is a radio group (arrow keys switch).
+
 In the Globals tree and the other store trees, `Tab` reaches each item, `Enter` or `Space` opens it, and `→`/`←` expand and collapse a folder. The Values and Schema tabs are ordinary buttons you can `Tab` to.
 
 ## Roles in detail
 
-| Role | Read | Edit content | Edit templates & channels | Generate/publish | Manage members |
-|---|---|---|---|---|---|
-| Viewer | yes | — | — | — | — |
-| Editor | yes | yes | — | preview only | — |
-| Developer | yes | yes | yes | yes | — |
-| Project admin | yes | yes | yes | yes | yes |
+| Role | Read | Edit content | Edit templates & channels | Release, unpublish, discard, schedule (M27) | Generate/publish | Manage members |
+|---|---|---|---|---|---|---|
+| Viewer | yes (statuses, Changes, Schedules) | — | — | — | — | — |
+| Editor | yes (statuses, Changes, Schedules) | yes | — | — | preview only | — |
+| Developer | yes | yes | yes | yes | yes | — |
+| Project admin | yes | yes | yes | yes | yes | yes |
+
+Editors see every status, the Changes view and the schedules but no release or schedule actions; a release needs a
+developer.
 
 ## Accessibility
 

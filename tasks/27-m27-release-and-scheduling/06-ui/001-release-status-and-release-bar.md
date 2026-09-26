@@ -1,6 +1,6 @@
 ---
 id: M27.6.1
-status: todo
+status: done
 depends: [M27.1.3]
 epic: m27-release-and-scheduling
 feature: ui
@@ -45,14 +45,14 @@ area: frontend
 
 ## Acceptance criteria
 
-- [ ] Vitest (fixtures from the real `schema.d.ts` shapes): badge per status and locale; release dialog includes
+- [x] Vitest (fixtures from the real `schema.d.ts` shapes): badge per status and locale; release dialog includes
       ticked dependencies in the request, unticked ones not; findings block the Release button; discard shows the
       shared-fields note.
-- [ ] Every releasable editor shows the bar; an `EDITOR` sees statuses but no actions; time travel hides actions.
-- [ ] Manual check in the running app: edit → `Changed`, release → `Published`, delete published → `Deletion
+- [x] Every releasable editor shows the bar; an `EDITOR` sees statuses but no actions; time travel hides actions.
+- [x] Manual check in the running app: edit → `Changed`, release → `Published`, delete published → `Deletion
       pending`, release deletion → gone; per-locale statuses switch with the editing locale.
-- [ ] Layout holds at 1280 px (lessons: `min-width: 0` on flex children) — assert in the journey (`M27.7.2`).
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] Layout holds at 1280 px (lessons: `min-width: 0` on flex children) — assert in the journey (`M27.7.2`).
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 

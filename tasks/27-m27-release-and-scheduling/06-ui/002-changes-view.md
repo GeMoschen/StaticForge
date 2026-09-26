@@ -1,6 +1,6 @@
 ---
 id: M27.6.2
-status: todo
+status: done
 depends: [M27.6.1, M27.6.5, M27.4.4]
 epic: m27-release-and-scheduling
 feature: ui
@@ -32,11 +32,11 @@ rendering), `M27.6.1` (release dialog, badges), `M27.6.5` (shared schedule dialo
 
 ## Acceptance criteria
 
-- [ ] Vitest: filters map to query params and back; multi-select sends the right items; count badge updates after a
+- [x] Vitest: filters map to query params and back; multi-select sends the right items; count badge updates after a
       release.
-- [ ] Manual check with ~200 changes: paging, filters, diff for localized vs shared change.
-- [ ] Keyboard-complete selection and release.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] Manual check with ~200 changes: paging, filters, diff for localized vs shared change.
+- [x] Keyboard-complete selection and release.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 

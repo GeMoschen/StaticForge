@@ -88,7 +88,7 @@
               <td>{{ typeLabel(row.type) }}</td>
               <td class="schedules__what">
                 {{ what(row) }}
-                @if ((row.driftCount ?? 0) > 0 && row.pinPolicy !== 'LATEST') {
+                @if (showsDrift(row)) {
                   <span class="schedules__drift">
                     <sf-icon name="warning" /> Draft changed since scheduled
                   </span>

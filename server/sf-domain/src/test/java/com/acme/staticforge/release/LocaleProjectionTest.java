@@ -94,6 +94,22 @@ class LocaleProjectionTest {
     }
 
     @Test
+    @DisplayName("a field set to null projects like a missing one, in every locale — as the Changes diff reads it")
+    void nullFieldIsAbsent() throws Exception {
+        // The API wrote the media value without the optional fields; the editor's save adds them as null.
+        JsonNode api = MAPPER.readTree(BASE);
+        JsonNode editor = set(api, "/content/hero", MAPPER.readTree("{\"type\": \"MEDIA_REF\", \"uuid\": \"m1\", \"variant\": null}"));
+        JsonNode apiHero = set(api, "/content/hero", MAPPER.readTree("{\"type\": \"MEDIA_REF\", \"uuid\": \"m1\"}"));
+
+        for (String locale : List.of("de", "en", ReleaseLocales.ALL)) {
+            assertThat(project(editor, "about", "/", locale)).as(locale).isEqualTo(project(apiHero, "about", "/", locale));
+        }
+        // A real value still differs.
+        JsonNode variant = set(api, "/content/hero", MAPPER.readTree("{\"type\": \"MEDIA_REF\", \"uuid\": \"m1\", \"variant\": \"w400\"}"));
+        assertThat(project(variant, "about", "/", "de")).isNotEqualTo(project(apiHero, "about", "/", "de"));
+    }
+
+    @Test
     @DisplayName("the all-locales key compares the whole payload, every translation included")
     void allKeyComparesEverything() throws Exception {
         JsonNode before = MAPPER.readTree(BASE);

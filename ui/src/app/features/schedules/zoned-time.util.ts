@@ -68,8 +68,8 @@ export function zoneOffsetMs(zone: string, instantMs: number): number {
 /**
  * The UTC instant (ISO string) of a wall-clock time in `zone`. `date` is `YYYY-MM-DD`, `time` `HH:mm`. A time that
  * occurs twice (the hour repeated when clocks go back) resolves to the first occurrence; a time that doesn't exist
- * (skipped when clocks go forward) to the instant the same distance after the gap starts — the local time the clock
- * shows then is one hour later, the same rule `java.time` applies. `null` for malformed input.
+ * (skipped when clocks go forward) to the next valid instant, the end of the gap (epic decision 24) — the same rule
+ * the server applies to a cron slot in the gap (`ScheduleTiming`). `null` for malformed input.
  */
 export function zonedToUtc(date: string, time: string, zone: string): string | null {
   const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
@@ -94,9 +94,22 @@ export function zonedToUtc(date: string, time: string, zone: string): string | n
   const candidates = [naive - before, naive - after]
     .filter((instant) => naive - zoneOffsetMs(zone, instant) === instant)
     .sort((a, b) => a - b);
-  // A gap: neither offset maps back to the wall time; the earlier offset gives the instant after the gap.
-  const instant = candidates.length > 0 ? candidates[0] : naive - before;
-  return new Date(instant).toISOString();
+  if (candidates.length > 0) {
+    return new Date(candidates[0]).toISOString();
+  }
+  // A gap: neither offset maps back to the wall time. The clock jumps somewhere between the two readings; the
+  // transition instant is the first valid one after the requested time.
+  let lo = naive - after;
+  let hi = naive - before;
+  while (hi - lo > 1000) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (zoneOffsetMs(zone, mid) === before) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return new Date(Math.ceil(hi / 60_000) * 60_000).toISOString();
 }
 
 /** The wall-clock date (`YYYY-MM-DD`) and time (`HH:mm`) of an instant in `zone`. */

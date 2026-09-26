@@ -155,11 +155,28 @@ Spring properties, settable in `application-*.yml` or as environment variables (
 |----------|---------|-------------|
 | `sf.security.password.min-length` | `12` | Minimum password length in characters (code points). Applies to new passwords only — own change, admin create and reset — never to sign-in, so existing passwords keep working |
 | `sf.security.password.require-mixed` | `false` | When `true`, a new password needs at least one letter and at least one digit or symbol |
+| `sf.scheduler.enabled` | `true` (`false` in `test`) | Whether this node polls for due schedules (M27). Any polling node may execute them; turn it off on nodes that shouldn't |
+| `sf.scheduler.poll-interval` | `15s` | How often a node looks for due schedules: an action starts at most this late on an idle system. A dev stack for the schedule journeys uses `2s` (`SF_SCHEDULER_POLL_INTERVAL=2s`) |
+| `sf.scheduler.batch-size` | `20` | Due actions one poll claims at most |
+| `sf.scheduler.lease` | `2m` | How long a claim is valid; the executing node extends it while it runs. Also the fail-over delay: when a node dies, another resumes its action after the lease expired |
+| `sf.scheduler.node-id` | `hostname:pid` | This node's name in `scheduled_action.lease_owner`; must differ between nodes |
 
 Always enforced, not configurable: at most **72 bytes** (UTF-8) per password — BCrypt's input limit; longer ones are
 rejected rather than silently truncated. Sign-in lockout is fixed as well: 15 failed attempts lock an account for 30
 minutes (an instance admin can unlock it earlier), and per IP and username more than 10 failures in 5 minutes are
 answered with `429` and a growing back-off.
+
+## Scheduler: several nodes are fine (M27)
+
+Scheduled releases, unpublishing and builds are executed by whichever node claims them first: every polling node runs
+the same conditional `UPDATE … WHERE lease_until IS NULL OR lease_until < now`, so a due action runs once even with
+several backends on one database. A node that dies mid-execution loses its lease; another node resumes the open
+execution after `sf.scheduler.lease` without repeating finished steps. Keep the clocks of the nodes in sync (NTP) —
+due times and leases compare the node's clock with the database's stored instants.
+
+Two limits stay: a scheduled build still goes through the single-node generation start (one run per project, an
+in-memory start lock), and search is single-instance (below). Metrics: `sf.scheduler.claims`, `sf.scheduler.lag`,
+`sf.scheduler.executions{type,outcome}`. Schedules are not part of project exports; a database backup keeps them.
 
 ## Search: single-instance constraint
 

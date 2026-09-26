@@ -73,15 +73,35 @@ delete they land on the sign-in page.
 - is read-only for everyone, instance admins included: every edit control is disabled, a banner says the project is
   archived, and the server refuses any change;
 - starts no generation runs and creates no share links; share links created earlier stop working; the published site
-  is left as it is.
+  is left as it is;
+- executes no schedules (M27): a scheduled release or build that comes due while the project is archived waits, and
+  after unarchiving runs late or is skipped, as its *If the time is missed* option says.
 
 **Unarchive** (on the Projects tab, or from the banner inside the project) makes it writable and visible again, with
 everyone's old role.
 
+## Schedules and people who leave (M27)
+
+A schedule (a timed release, unpublish or build, see the user guide *Publishing*) runs **as the person who owns it** —
+whoever created it, or last took it over — and the server checks at every run that this person may still do it
+(project `DEVELOPER` or above, account active; a *locked* account still counts). So removing someone from a project,
+lowering their role, disabling or deleting their account affects their schedules:
+
+- the next run fails with "Owner no longer permitted" (`SF-DOM-0163`) instead of acting with rights the person no
+  longer has;
+- a repeating schedule is **paused** ("Paused" on the Schedules page) and runs nothing until someone takes it over;
+- any developer of the project can **Take over** a failed or paused schedule on the Schedules page: they become the
+  owner, a paused schedule resumes at its next run time, and a failed one-off one runs right away (unless *Skip if
+  more than … late* says it is too late).
+
+Before removing a developer, filter the Schedules page by **Owner** to see what they own.
+
 ## The audit trail
 
 **Administration → Audit** lists every security-relevant event of the instance, newest first: sign-ins (and failed
-ones), account changes, membership changes, archiving, channel and generation-target changes. Filter by action, user,
+ones), account changes, membership changes, archiving, channel and generation-target changes, and schedules — created,
+changed, cancelled, taken over, run now, and each execution (as its owner). Releases are not audit entries: each is a
+revision, listed in the project's revision history. Filter by action, user,
 project (or *Instance only* for account events) and date range; the filters are part of the address, so a filtered
 view can be bookmarked or shared with another admin. (A project admin can read their own project's entries through
 the API, `GET /api/v1/projects/{key}/audit`.) There is no automatic clean-up of old entries yet.

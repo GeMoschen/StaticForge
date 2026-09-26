@@ -1,6 +1,6 @@
 ---
 id: M27.7.2
-status: todo
+status: done
 depends: [M27.6.1, M27.6.2, M27.6.3, M27.6.4, M27.6.5, M27.5.2]
 epic: m27-release-and-scheduling
 feature: docs-e2e
@@ -40,10 +40,10 @@ click what a user wouldn't):
 
 ## Acceptance criteria
 
-- [ ] Journey green against a clean dev stack, twice in a row (self-seeding, unique names per run).
-- [ ] The page editor with release bar and preview holds at 1280 px (elements in viewport asserted).
-- [ ] Defects found are fixed in their task's code with a unit/integration test each, and listed in the notes.
-- [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
+- [x] Journey green against a clean dev stack, twice in a row (self-seeding, unique names per run).
+- [x] The page editor with release bar and preview holds at 1280 px (elements in viewport asserted).
+- [x] Defects found are fixed in their task's code with a unit/integration test each, and listed in the notes.
+- [x] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
 
 ## Out of scope
 
@@ -53,3 +53,34 @@ click what a user wouldn't):
 
 - The scheduled steps must wait on observable state (execution row / badge), not fixed timers beyond the schedule
   time; set `sf.scheduler.poll-interval` low (e.g. 2 s) for the dev stack run and document it.
+
+## Implementation notes
+
+**Journey.** `ui/e2e/m27-journeys.spec.ts`, one test with the ten steps. The skeleton is seeded through the API:
+project, languages `de` (default, no prefix) and `en`, template, two pages referencing one image, a filesystem
+target, and the step-10 `EDITOR` account. Everything else happens in the UI, including every build (Settings →
+Generation → New generation → Full → Start). Generated files are read from the target's live build: `current` is a
+link, or on Windows a file naming the build directory. Waits are on observable state (badges, rows, the API's run
+and schedule status). The only waits on time are the scheduled release's two minutes and the "every minute" cron.
+The run needs `SF_SCHEDULER_POLL_INTERVAL=2s` on the backend. Each action has a 30 s timeout, so a missing control
+fails fast.
+
+Uploaded images are normalized by the server, so media outputs are compared with the bytes the server serves for
+each language (`/media/{uuid}/binary?locale=`), not with the uploaded bytes.
+
+**Defects found and fixed (each with a test):**
+- **`CHANGED` with an empty diff.** After an EN-only edit made in the editor, DE also read `Changed`. The editor's
+  save writes `"variant": null, "altOverride": null` into a media value that the API created without those fields.
+  The locale projection compared raw JSON, so `null` ≠ absent, while the Changes diff (`JsonDiffer`) treats them as
+  equal. `LocaleProjection` now drops null-valued fields at any depth.
+  `LocaleProjectionTest.nullFieldIsAbsent` fails on the old code.
+- **Drift shown after execution.** A succeeded (or cancelled) pinned release still said "Draft changed since
+  scheduled" in the list and in the history. It is now shown only while the schedule is pending (`showsDrift`,
+  covered by a spec in `schedules.component.spec.ts`).
+- **Skipped local times treated differently.** Found by the docs pass (M27.7.1). A one-off time typed inside a DST
+  gap was sent as java.time's shifted time (02:30 → 03:30), while a cron slot in the gap runs at the end of the gap
+  (03:00). `zonedToUtc` now also resolves a gap to its end, as decision 24 says: the next valid instant. Covered by
+  the Berlin spring-switch case in `zoned-time.util.spec.ts`.
+
+**Verification.** The journey passed twice in a row on a clean dev stack (fresh H2 file, output root, scheduler
+poll 2 s): see `tasks/todo.md`.
