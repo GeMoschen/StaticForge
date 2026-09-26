@@ -35,7 +35,7 @@
               @if (item.locale) {
                 <span class="history__tag">{{ item.locale.toUpperCase() }}</span>
               }
-              @if (item.draftChangedSinceScheduled) {
+              @if (item.draftChangedSinceScheduled && s.status === 'PENDING') {
                 <span class="history__drift">Draft changed since scheduled</span>
               }
             </li>

@@ -69,6 +69,40 @@ Goals G2, G3, and G4 are **proven** by committed automated tests. G1 and G5 need
 
 ## 4. Release notes — breaking changes
 
+### M27 — release state: saving is a draft
+
+Editorial content — pages, records, record sets, global property sets, media, navigation page references and the
+folders of the editorial stores — now has a **release state** (spec §5.5, user guide *Publishing*):
+
+- **Every save is a draft.** After the upgrade, saving no longer changes the next build: a build renders **released**
+  versions only, and an edit goes online after someone with the `DEVELOPER` role releases it (in the editor's release
+  bar, the Changes view, or a schedule). Editors see statuses but can't release — plan who releases before upgrading.
+  Templates, datasets, channels, targets and settings stay live: their changes reach the next build as before.
+- **Migration marks everything released.** On the first start, `ReleaseStateInitializer` releases every non-deleted
+  editorial asset of each project at its current version, in every language it has (one `RELEASE` revision per
+  project, "Initial release state (M27)"). A full build right after is byte-identical to the one before; the first
+  incremental build after the migration rebuilds nothing. The app doesn't start half migrated: a failure stops the
+  start-up.
+- **Deleting, moving, renaming are drafts.** A published page that is deleted stays online (`DELETION_PENDING`) until
+  the deletion is released; a moved or renamed page keeps its old URL until released. Deleting a never-released asset
+  is immediate, as before.
+- **References to unreleased content** render empty with the new warning `SF-GEN-0221` (like deleted ones).
+- **Preview** shows the draft by default and the released state with `?view=published`; share links created before
+  M27 keep showing the draft.
+- **API.** `ChangeType` gains `RELEASE`, `UNPUBLISH`, `DISCARD` (the unused `PUBLISH` is gone); asset DTOs gain
+  `release` and `scheduled`; plan root kinds gain `ASSET_RELEASED` and `ASSET_UNPUBLISHED` (clients must tolerate new
+  names); the search index is rebuilt once (schema version 2, `releaseStatus` facet).
+- **Archives.** The export protocol is now **8** and carries release state and per-language media files. Importing
+  offers *keep the archive's release state* (default) or *import everything as draft*. Archives of protocol 7 or older
+  import as drafts: everything they contain is `NEW` until released.
+- **Scheduler.** A new engine polls every 15 s (`sf.scheduler.*`, infra README); schedules run as their owner and
+  pause when the owner loses the role.
+
+Evidence: `ReleaseStateIntegrationTest` (migration of every type, idempotence), `ReleasedGenerationIntegrationTest` and
+the golden check in `ReleaseFixtures` (released view == draft view, byte for byte, on every generation fixture),
+`ReleaseIncrementalPlanIntegrationTest` (the initial release plans nothing), `ReleaseStateExportImportIntegrationTest`
+(protocol 8 round trip, protocol-7 fixture), `ScheduledActionsIntegrationTest`, `SchedulerEngineIntegrationTest`.
+
 ### M25 — records live in record sets
 
 Records are now always kept in a **record set** (`RECORD_SET`): a Content-store asset that fixes the dataset of its

@@ -10,8 +10,8 @@ describe('zoned time', () => {
     // 2026-03-29: clocks go from 02:00 CET to 03:00 CEST (01:00 UTC).
     expect(zonedToUtc('2026-03-29', '01:30', BERLIN)).toBe('2026-03-29T00:30:00.000Z');
     expect(zonedToUtc('2026-03-29', '03:30', BERLIN)).toBe('2026-03-29T01:30:00.000Z');
-    // 02:30 doesn't exist that night: it runs at the instant the clock shows 03:30, like java.time.
-    expect(zonedToUtc('2026-03-29', '02:30', BERLIN)).toBe('2026-03-29T01:30:00.000Z');
+    // 02:30 doesn't exist that night: it runs at the next valid instant, 03:00 CEST — like a cron slot in the gap.
+    expect(zonedToUtc('2026-03-29', '02:30', BERLIN)).toBe('2026-03-29T01:00:00.000Z');
   });
 
   it('takes the first occurrence of the repeated hour in autumn', () => {

@@ -1,6 +1,6 @@
 ---
 id: M27.6.4
-status: todo
+status: done
 depends: [M27.3.1, M27.6.1]
 epic: m27-release-and-scheduling
 feature: ui
@@ -30,11 +30,11 @@ Epic decisions 18, 19.
 
 ## Acceptance criteria
 
-- [ ] Vitest: toggle off with other files shows the list and resends with `confirmDiscard`; fallback rows labelled
+- [x] Vitest: toggle off with other files shows the list and resends with `confirmDiscard`; fallback rows labelled
       correctly (fixtures from real responses).
-- [ ] Manual check: upload an EN file, switch editing locale → thumbnail follows; release EN → badge per locale.
-- [ ] Hidden in projects without locales.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] Manual check: upload an EN file, switch editing locale → thumbnail follows; release EN → badge per locale.
+- [x] Hidden in projects without locales.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 

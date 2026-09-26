@@ -128,7 +128,7 @@ A dataset's **record template** (§2.9, M25) sees the record's fields as top-lev
 
 ### 2.6 Reference resolution (§16.4)
 
-`assetType:uid` resolves to a UUID at compile time; saving the template records one `asset_reference` row per resolved reference and use (`OCTL_VALUE`, `OCTL_REF`, `OCTL_INCLUDE`, source path `channelTemplates.<channel>`), so usages of the target list your template immediately. An unresolvable UID is a compile error (`SF-TPL-0110`). A reference to a soft-deleted asset renders empty with a warning, in preview and generation alike: `SF-TPL-0112` for a cross-asset value, `SF-GEN-0220` for a `$CMS_REF`, `$CMS_INCLUDE` or body section target in generation. `$CMS_REF` resolves pages → output path (per URL strategy), media → public path (`?variant=w800`), folders → index page.
+`assetType:uid` resolves to a UUID at compile time; saving the template records one `asset_reference` row per resolved reference and use (`OCTL_VALUE`, `OCTL_REF`, `OCTL_INCLUDE`, source path `channelTemplates.<channel>`), so usages of the target list your template immediately. An unresolvable UID is a compile error (`SF-TPL-0110`). A reference to a soft-deleted asset renders empty with a warning, in preview and generation alike: `SF-TPL-0112` for a cross-asset value, `SF-GEN-0220` for a `$CMS_REF`, `$CMS_INCLUDE` or body section target in generation. A link to an asset not released in the render language renders empty with `SF-GEN-0221`; a cross-asset value of it reads as missing (`SF-TPL-0112`) (M27, §2.13). `$CMS_REF` resolves pages → output path (per URL strategy), media → public path (`?variant=w800`), folders → index page.
 
 Cross-asset values walk the target's *root value object* exactly like a local value, so paths, `$CMS_IF`, `$CMS_SET`, `$CMS_FOR` and filters work unchanged (`$CMS_FOR(link : page:about.links)$`). The prefixes (`AssetReferencePrefixes` is their single registry) and what each reads:
 
@@ -1084,9 +1084,53 @@ default language:
 
 #### Incremental builds
 
-Translating one language of one page rebuilds that language's outputs only. Anything else — structure, a
-non-language-dependent value, the template, the UID, the folder, a media file — rebuilds every language, and the
-build-insight plan says which languages a narrowed entry covers.
+Since M27 content changes reach a build through **releases** (§2.13), and each language is released on its own:
+releasing one language of a page rebuilds that language's outputs (and what reads the page in that language).
+Releasing a change to a non-language-dependent value, the structure, the UID or the folder — in every language —
+rebuilds every language. A template change is live and rebuilds every language that renders it. The build-insight
+plan's entries carry their `locale`.
+
+### 2.13 Release state: what a build renders (M27)
+
+Editorial content — pages, records, record sets, global property sets, media, navigation page references and the
+folders of the editorial stores — has a **draft** and, per language, a **released version**. A build renders the
+released versions; saving changes nothing online until someone releases (spec §5.5). Everything you own as a template
+developer is **live**: page and section templates, datasets (schemas and record templates), template-store folders,
+channels and targets render at the build revision as they are. So:
+
+- **A template change reaches every released page at the next build** — no release needed, and none possible. Test a
+  template change against the released content with the preview's **Published** view before you build.
+- **Unreleased = absent.** In a language where an asset isn't released, it is missing exactly where a deleted asset
+  would be: pages, their outputs, navigation, sitemap, `search-index.json`, dataset and record-set loops, pagination
+  sources. A link to it (`$CMS_REF`, a `media` or `link` editor value) renders **empty** with the warning
+  `SF-GEN-0221` "Reference to an unreleased asset", where a deleted target gives `SF-GEN-0220`; a cross-asset value
+  (`$CMS_VALUE(page:about.title)$`) reads it as missing, empty with `SF-TPL-0112`. Guard optional links as you would
+  for deleted targets: `$CMS_IF(page:about)$…$CMS_END_IF$`.
+- **Each language renders the whole version released for it.** German may still render the old structure, path and
+  sections while English has the new ones; don't assume two languages of a page share a version.
+- **Navigation** lists what is released in the render language; a page reference whose target isn't released there is
+  left out (no dangling-reference error). The language switcher links only to languages the page is released in.
+- **Tolerant values.** A released version written before a field became `localizable` holds a plain value; a
+  `CHANGED` language may keep that shape until released. Values resolve by their stored shape, not by the current CDL,
+  so both read correctly.
+
+#### Localized media
+
+A media file can hold one file per language (spec §11.6). `$CMS_REF(media:hero)$` and a `media` editor value link the
+file of the **render language** (after its fallback chain), and `$CMS_VALUE(media:hero.width)$` reads that file's
+metadata. Where the files are written:
+
+| Media | Output |
+|---|---|
+| not localized | `assets/media/hero.png` (one file for every language) |
+| localized, English has its own file | `en/assets/media/hero.png` — under the language's prefix, like its pages |
+| localized, German is the default without prefix | `assets/media/hero.png` |
+| localized, French falls back to German | French pages link German's `assets/media/hero.png` when German publishes its own file there; otherwise French writes its own copy under `fr/` |
+
+Links stay relative to the page (`en/about.html` links `assets/media/hero.png` for its own copy, a French page
+falling back to the root German file gets `../assets/media/hero.png`). Variants follow their file
+(`en/assets/media/hero-w800.webp`). A processed text file (§2.8) is rendered once per language that writes it, with
+that language's source and values.
 
 ## Part 3 — Diagnostics
 
@@ -1164,6 +1208,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-GEN-0120` | error (per page) | content incomplete: the page has `ERROR` completeness findings (an empty required editor, a count or length out of bounds) and is not published; the message lists `path (message)`, other pages are written and the run ends `PARTIAL` |
 | `SF-GEN-0210` | warning | no channel template for an enabled channel |
 | `SF-GEN-0220` | warning | reference to a deleted asset: a `$CMS_REF`, `$CMS_INCLUDE` or body section target is soft-deleted and renders empty |
+| `SF-GEN-0221` | warning | reference to an unreleased asset: a link (`$CMS_REF`, a `media`/`link` value) to an asset not released in the render language renders empty; one per target, page and language (M27, §2.13) |
 | `SF-GEN-0230` | error (per file) | a processed text media file's source blob can't be read; the file is not published and the run ends `PARTIAL`. A processed file that fails to compile or render keeps its own `SF-TPL-*` code, with `Media '<uid>': ` in the message |
 | `SF-GEN-0240` | warning | a record set's stored query no longer validates against its dataset (a field it reads was removed or retyped since the set was saved): the set renders no records — never all of them — until an editor saves it with a valid query |
 | `SF-GEN-0241` | warning | a record set is rendered as a value (`$CMS_VALUE(recordset:uid)$`, or a `reference` editor pointing at a set) but its dataset has no record template for the channel: the set renders empty (M25) |

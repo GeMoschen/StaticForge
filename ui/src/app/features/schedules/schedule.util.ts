@@ -104,6 +104,11 @@ export function canTakeOver(schedule: ScheduleView, currentUserId: number | null
   return schedule.status === 'PENDING' && currentUserId != null && schedule.ownerUserId !== currentUserId;
 }
 
+/** "Draft changed since scheduled" matters only while a pinned release is still to run. */
+export function showsDrift(schedule: ScheduleView): boolean {
+  return schedule.type === 'RELEASE' && schedule.pinPolicy !== 'LATEST' && schedule.status === 'PENDING' && (schedule.driftCount ?? 0) > 0;
+}
+
 export function canRepin(schedule: ScheduleView): boolean {
   return schedule.type === 'RELEASE' && schedule.pinPolicy !== 'LATEST' && schedule.status === 'PENDING' && (schedule.driftCount ?? 0) > 0;
 }

@@ -81,7 +81,7 @@ Because rendering is fully separated from content, the same content can be emitt
 ### 2.2 Non-goals (v1)
 
 - No per-asset ACLs — permissions are per project only.
-- No editorial workflow engine (draft → review → approve). Revisions exist; approval gates do not.
+- No editorial approval workflow (draft → review → approve, four-eyes). Since M27 editorial content has a **release state** — saving writes a draft, releasing makes it the version builds render (§5.5) — and releases, unpublishing and builds can be scheduled (§18.7); approval gates still do not exist.
 - No live/dynamic rendering of the delivered site.
 - No visual drag-and-drop page *layout* builder; layout is template-owned, editors arrange sections inside bodies.
 - No multi-language content variants as a first-class dimension (achievable via separate projects or folder conventions in v1).
@@ -118,6 +118,9 @@ Because rendering is fully separated from content, the same content can be emitt
 | **Structure** | Asset that declaratively defines how a navigation is computed and rendered. |
 | **Generation** | Process turning content + templates into static files. |
 | **Target** | Where generated files are written (filesystem, ZIP, S3). |
+| **Draft / released version** | M27: an editorial asset's current version is its *draft*; per language, the version generation renders is its *released* version, set by a release (§5.5). Templates and other live types have no release state. |
+| **Release status** | M27: `NEW`, `PUBLISHED`, `CHANGED`, `UNPUBLISHED` or `DELETION_PENDING` per (asset, language), computed by comparing draft and released version (§5.5). |
+| **Scheduled action** | M27: a release, unpublish or one-off or recurring build that the scheduler executes at a time, as its owner (§18.7). |
 
 ---
 
@@ -296,6 +299,25 @@ This table powers:
 - **Incremental generation** — the reverse edges valid at the snapshot revision define what to rebuild (§18.2); an edge that closed since the last successful run belongs to an asset that itself changed, so it needs no separate lookup. Render-time-only dependencies, such as a `$CMS_NAVIGATION` over a folder whose descendants changed, are not edges and are not covered.
 - **Broken-link report** — dangling `to_asset_id` after a delete.
 
+### 5.5 Release state (M27)
+
+Editorial content has a **draft** — the asset's current version, what every save writes — and, per language, a **released version**: the version generation renders. Released types: `PAGE`, `RECORD`, `RECORD_SET`, `GLOBAL_SET`, `MEDIA`, `PAGE_REFERENCE`, and `FOLDER` in the editorial stores (pages, media, navigation, globals, content), except the fixed store roots (`ReleasableTypes`, the single place encoding this). Everything else is **live**: page and section templates, datasets (a schema), template-store folders, channels, targets, locales and project settings render at the build revision as they are, so a template change reaches released pages with the next build.
+
+```
+asset_release(id, project_id, asset_id, locale_key, released_version_id → asset_version,
+              released_uid, valid_from_revision, valid_to_revision, released_by, released_at)
+```
+
+A **pointer** row is revisioned exactly like `asset_reference` (§5.4): a release, unpublish or locale change closes the open row and opens the next one in the same revision, and "the release state at revision R" is the rows valid at R. No open row for (asset, locale) means not released there. `released_uid` is the uid the version was released under, because a uid change writes no version (§6.4): a rename stays a draft until released.
+
+**Locale keys.** A project without languages, and media that isn't localized (§11.6), use the one key `""` ("every language"). In a project with languages every other released asset has one pointer per language, so German can stay on the old text while English goes live — including structural changes (move, rename, sections): language L renders the **whole** version released for L, shared fields included. Adding a language opens no pointers (the language is `NEW` everywhere); removing one closes its pointers in the locale-change revision. A project's first languages turn each `""` pointer into one per language, and removing the last ones keeps the default language's pointer as `""`, so enabling or disabling languages never unpublishes the site.
+
+**Status** (`ReleaseStatus`, per asset and locale key, computed, never stored): `NEW` (never released), `PUBLISHED` (released, and the draft looks the same in that language), `CHANGED`, `UNPUBLISHED` (was released, isn't now; the draft exists), `DELETION_PENDING` (draft deleted, released version still live). "Looks the same in L" compares the **locale projections** (`LocaleProjection`) of draft and released version: uid, display name, folder path and parent, template, deleted flag, and the payload with every L10N value resolved along L's fallback chain (plain values as they are); for localized media the file L renders and its owner language instead of the file fields. Editing only the English value of a field leaves German `PUBLISHED`; a shared-field or structural edit changes every language. A deleted draft that is released nowhere has no status: it is gone. Every releasable asset DTO carries `release: {localeKey → {status, releasedRevision, releasedAt, releasedBy}}` (`null` for other assets and for past versions) and `scheduled: [{actionId, type, locale, runAt, nextRunAt, ownerUserId}]` — the pending schedules touching it (§18.7).
+
+**Migration.** Changeset `v1.0/020-release-state.xml` adds the table and `project.release_state_initialized`; on start `ReleaseStateInitializer` releases every non-deleted editorial asset of each unflagged project at its current version, for every key it has, in one `RELEASE` revision without author ("Initial release state (M27)", one `PROJECT/INITIAL_RELEASE` summary entry). A full build right after is byte-identical to the build before. New projects start initialized.
+
+**System migrations carry releases forward.** When a system migration rewrites an asset (the M24 localizable toggle and locale changes, CDL `renamedFrom` record migrations, record-set query migrations, localizing media), a pointer at the rewritten version — or one that projected equal to it — moves to the new version in the same revision (`ReleaseCarryForward`); a `CHANGED` language keeps its released version in the old shape, and every reader tolerates both shapes (a plain value where L10N is expected reads as every language, an L10N value where plain is expected resolves the render language).
+
 ---
 
 ## 6. Identity: UUID, display name, UID
@@ -374,7 +396,8 @@ revision
   revision_id     bigint    project-scoped, starts at 1
   created_at      timestamptz
   created_by      bigint    FK app_user
-  change_type     varchar   CREATE | UPDATE | DELETE | RESTORE | MOVE | RENAME | UID_CHANGE | BULK | IMPORT | PUBLISH
+  change_type     varchar   CREATE | UPDATE | DELETE | RESTORE | MOVE | RENAME | UID_CHANGE | BULK | IMPORT
+                            | RELEASE | UNPUBLISH | DISCARD   -- M27
   comment         varchar(500) nullable
   summary         json      denormalized list of touched assets
   PRIMARY KEY (project_id, revision_id)
@@ -390,6 +413,8 @@ revision
   ]
 }
 ```
+
+**Release revisions (M27).** One release, unpublish or discard action is one revision with change type `RELEASE`, `UNPUBLISH` or `DISCARD`; its summary lists every (asset, locale, released version) with `locale` and `releasedVersion` on the entry (a released deletion is an `UNPUBLISH` entry inside a `RELEASE` revision). There are no separate audit entries: revisions are the content audit trail. The never-written `PUBLISH` constant was removed.
 
 ### 7.3 Counter allocation
 
@@ -464,6 +489,7 @@ If the asset's current version has a different `valid_from_revision`, the server
 - `GET /projects/{p}/revisions/{r}/diff` — structural diff of the touched assets against `r-1`. Diff is computed on the canonical JSON payload with a field-path walker; rich text fields diff at block level.
 - `POST /projects/{p}/assets/{uuid}/restore?fromRevision=R` — writes the payload of revision `R` as a **new** revision. History is append-only; restoring never rewrites the past.
 - `POST /projects/{p}/restore?toRevision=R` — project-wide rollback, implemented as a bulk restore in one new revision. Requires `PROJECT_ADMIN`, requires an explicit typed confirmation in the UI.
+- **Release state (M27).** A restore — of one asset or of the project — writes drafts only; the release state is unchanged, and the Changes view shows what the restore made different from what is released. Time travel and a build at revision R use the release state valid at R, so republishing an old revision reproduces what was online then.
 
 ### 7.7 Retention
 
@@ -490,7 +516,7 @@ Projects are hard isolation boundaries. Every asset query is filtered by `projec
 **Archived projects (M26).** `POST /projects/{key}/archive` (instance admin) makes a project read-only and hides it from its members; `POST /projects/{key}/unarchive` reverses it. Both record a revision, audit `PROJECT_ARCHIVED` / `PROJECT_UNARCHIVED` and bump the token epoch of every member (§9.2), so the change applies on each member's next request. While a project is archived:
 
 - **Members** get `404` for every endpoint of the project, as for a non-member (it is left out of the token's `projects` claim); it is missing from their `GET /projects` and from the memberships of `/auth/me`. Their memberships stay and come back with unarchive.
-- **Instance admins** see it (`archived: true`) and can read everything, but every write answers `409 SF-DOM-0141` "Project is archived" — theirs too. The guard is central (every revision allocation) plus explicit checks on the writes that allocate no revision (generation start and promote, share-link creation, search reindex, URL-registry overrides, generation targets). The API admits only: unarchive, archive (a no-op), requests that change nothing (`/generations/plan`, `/cdl/validate`, `/octl/validate`, text-media validation, section preview, record-set `preview-query`, `export/selection`, `import/analyze`) and cancelling a run started before archiving, which may also finish.
+- **Instance admins** see it (`archived: true`) and can read everything, but every write answers `409 SF-DOM-0141` "Project is archived" — theirs too. The guard is central (every revision allocation) plus explicit checks on the writes that allocate no revision (generation start and promote, share-link creation, search reindex, URL-registry overrides, generation targets). The API admits only: unarchive, archive (a no-op), requests that change nothing (`/generations/plan`, `/cdl/validate`, `/octl/validate`, text-media validation, section preview, record-set `preview-query`, `export/selection`, `import/analyze`, `releases/plan` and `schedules/preview-times`, M27) and cancelling a run started before archiving, which may also finish. Schedules of an archived project don't execute (§18.7).
 - Share links issued earlier answer `404`; the search index is closed and catches up on unarchive; published output is left as it is.
 - Deleting an account (§8.2) still removes its memberships of archived projects.
 
@@ -696,13 +722,22 @@ Pages live in a folder tree. Folders are themselves assets (`type = FOLDER`) so 
 | Edit content | Field-level save (debounced batch, one revision per save action) |
 | Reorder sections | Body array reorder → revision |
 | Move | Change folder → revision, path rewrite |
-| Delete | `deleted = true` version; usage check warns about inbound references |
-| Restore | New version from a chosen revision |
+| Delete | `deleted = true` version; usage check warns about inbound references. A page released in some language stays online (`DELETION_PENDING`) until the deletion is released (M27); a page `NEW` in every language is simply gone |
+| Restore | New version from a chosen revision (a draft; the release state is unchanged) |
+| Release (M27) | Makes the draft of the chosen languages the released version, with the proposed unreleased dependencies, in one `RELEASE` revision; refused for incomplete content (§10.5). Changes nothing on the site until the next build |
+| Unpublish (M27) | Closes the release pointer of the chosen languages (`UNPUBLISH` revision); the draft stays and can be released again |
+| Discard changes (M27) | Writes the released version of a language back as a new draft version (`DISCARD` revision; append-only). Not offered for `NEW` |
+
+**Structural changes are drafts (M27).** Move, rename, uid change, section add/remove/reorder and delete are ordinary drafts: the released version keeps rendering at its old path until released. A folder rename or move writes a version of every descendant (their denormalized paths), so every descendant turns `CHANGED`; the release dialog offers them as the optional "descendants of a changed folder" group.
+
+**Dependencies (M27).** Releasing computes the selection's unreleased dependencies (`POST …/releases/plan`): transitively over the drafts' `asset_reference` edges to editorial assets that are `NEW`, `CHANGED` or `UNPUBLISHED` in the same language (`REFERENCE`), the folders and record sets the selection sits in when they aren't released at all (`CONTAINER`), a selected set's unreleased records (`SET_MEMBER`) — all proposed and ticked by default — and a selected changed folder's changed descendants (`DESCENDANT`, offered unticked). Whatever stays unreleased renders like a missing asset (§16.4).
+
+**Discard in one language.** Discarding language L restores L's language-dependent values and, only when every other language is `PUBLISHED` against the same released version, the shared fields too; otherwise the shared fields stay and the result lists the item in `sharedFieldsKept`.
 
 ### 10.5 Validation rules
 
 - `templateRef` must resolve to an existing, non-deleted `PAGE_TEMPLATE` in the same project.
-- Required editors must be non-empty **for publish**, not for save. Save always succeeds if structurally valid; publish holds back pages with `ERROR`-severity completeness findings and lists them.
+- Required editors must be non-empty **for publish**, not for save. Save always succeeds if structurally valid; releasing refuses content with `ERROR`-severity completeness findings (`422 SF-DOM-0150` with the findings per asset, M27 — pages against their template, records against their dataset, global sets against their own CDL), and generation still holds back such pages as a safety net (`SF-GEN-0120`).
 - Section instance `templateRef` must be an allowed section template for that body (`allow` list in CDL, §14.6).
 
 Content findings (`ContentIssue`: `path`, `code`, `severity`, `message`, `kind`) are produced by `ContentValidator` and `PageContentValidator` against the compiled CDL of the page template and of each section and catalog card template. `visibleWhen`-hidden editors are skipped. Paths are full, e.g. `content.title`, `bodies.main[2].content.cards.cards[0].content.headline`. Every finding has one of two kinds:
@@ -811,6 +846,29 @@ processed file and a replace of a processed file compile the source first: error
 - Allow-list by MIME family; SVG is sanitized (script/foreignObject/event attributes stripped) or rejected per project setting — on upload, on every text write, and, for a processed SVG (M18), again **after rendering**, so a rendered value can't reintroduce script.
 - Uploaded files are served from a **separate origin/path** with `Content-Disposition: attachment` for non-renderable types and a strict `Content-Security-Policy` for previews.
 - Media referenced by any non-deleted asset cannot be hard-deleted without confirmation; the UI shows the usage list first.
+
+### 11.6 Localized media (M27)
+
+In a project with languages a media asset may carry **one file per language**. The flag lives in the payload; the top-level file fields stay the file of `fileLocale` (the language it belongs to, recorded when localizing, so a later change of the default language doesn't hand it to another language), the other languages' own files live in `localeFiles`:
+
+```json
+{
+  "localized": true,
+  "fileLocale": "de",
+  "blobSha256": "9f2c…", "fileName": "hero.png", "mimeType": "image/png", "sizeBytes": 483920, "variants": [ … ],
+  "localeFiles": {
+    "en": { "blobSha256": "1a4b…", "fileName": "hero-en.png", "mimeType": "image/png", "sizeBytes": 471002,
+            "image": { … }, "variants": [ … ], "processCms": false }
+  }
+}
+```
+
+A language without its own file uses the first file along its fallback chain; the top-level file is the last resort (`MediaFiles.fileFor`). The media view answers `localized` and `localeFiles: {language → {own, fromLocale, blobSha256, fileName, mimeType, sizeBytes, image, processCms, textEditable}}` for every project language; `?locale=` on `binary`, `thumbnail`, `text` and `process` addresses the file a language renders (a text write for a language that falls back gives it its own file).
+
+- **Toggle** (`PUT /media/{uuid}/localized`, one revision). Localizing makes the existing file the default language's. Un-localizing keeps the default language's file and discards the others only when confirmed: without `confirmDiscard: true` the answer is `409 SF-MEDIA-0505` listing them (`files: [{locale, fileName, sizeBytes}]`). Release pointers are re-keyed in the same revision (`""` ↔ one per language), each keeping the status the shared or default pointer had.
+- **Files.** `POST /media/{uuid}/files/{locale}` uploads or replaces a language's own file through the upload rules of §11.4; `DELETE` removes it so the language falls back again. The default language's file can't be removed (`422 SF-MEDIA-0509`); media that isn't localized refuses both (`0506`), as does a language the project doesn't declare (`0507`); a project without languages can't localize (`0508`).
+- **Release.** Localized media is released per language; its status compares the file each language renders and who owns it, so replacing only the French file changes only the French status, and a language that gains its own file is `CHANGED` even with identical bytes (it publishes at another path).
+- **Output** (§18.3): a language's own file is written under that language's prefix; a language that falls back links the owner's published file.
 
 ---
 
@@ -1180,6 +1238,7 @@ At **compile time** the reference is resolved to a UUID; the compiled template s
 - Renaming an asset's UID does not break already-compiled templates, but the *source* still shows the old UID — the UID-change API therefore reports affected templates (§6.4).
 - An unresolvable UID is a **compile error** (`SF-TPL-0110`), not a silent empty string, so broken references cannot reach production.
 - A generation run without an explicit revision is pinned to the project's head revision, so its snapshot is identical to a pinned run's and includes soft-deleted versions. A cross-asset value whose target is soft-deleted renders empty with warning `SF-TPL-0112` (preview and generation alike); `$CMS_REF`, `$CMS_INCLUDE` and body sections pointing at a deleted asset render empty with warning `SF-GEN-0220` in generation.
+- **Unreleased = absent (M27).** Generation renders the released view (§5.5): an asset not released in the render language is absent exactly where a deleted one is — pages, outputs, navigation, sitemap, robots, redirects, `search-index.json`, dataset and record-set loops, pagination sources, global values, media copies. A link to it — `$CMS_REF`, a `media` or `link` editor value — renders empty with warning `SF-GEN-0221` "Reference to an unreleased asset" (one per target, page and language), never with the missing-page error; a cross-asset value of it reads as a deleted target (empty, `SF-TPL-0112`). Templates — and so `$CMS_INCLUDE` and body section templates — are live: they need no release.
 
 **Cross-asset values.** `$CMS_VALUE(assetType:uid.path)$`, and an asset accessor in `$CMS_IF`, `$CMS_SET` or a `$CMS_FOR` source (other than `nav:`), read the target's **root value object** and walk `path` over it exactly like a local value: dotted paths, truthiness, loop variables and filters behave identically, and escaping follows the channel default unless `raw` is used. Generation reads the revision-pinned snapshot (`SnapshotAssetValueResolver`); preview reads the version valid at the preview revision, live or time travel (`LiveAssetValueResolver`). Both project through the same function (`AssetValueProjection`), so they cannot disagree:
 
@@ -1491,6 +1550,8 @@ Per-channel renderers live in the same asset's `channelTemplates`, exactly like 
 
 Cycle protection: the tree walk tracks visited UUIDs; a cycle yields `SF-GEN-0410` and truncates the branch.
 
+**Released navigation (M27).** Generation computes navigation over the released view of the render language: folders, page references and target pages as released there. A page reference whose target page isn't released in the language is left out of that language's navigation (not a dangling-reference error); an unreleased reference or folder is absent like a deleted one. The published preview (§19.1) computes navigation the same way at the preview revision.
+
 ### 17.3 Other structure uses
 
 The same asset type also backs breadcrumbs, sitemaps and index listings; `navigation`, `breadcrumb`, `list` are the three declarable `kind` values, sharing the source/order/filter grammar.
@@ -1505,7 +1566,7 @@ The same asset type also backs breadcrumbs, sitemaps and index listings; `naviga
 |---|---|---|
 | `POST /projects/{p}/generations` | full or incremental | DEVELOPER / PROJECT_ADMIN |
 | Save (auto) | preview only, in-memory | any editor |
-| Scheduled | full, cron per project | system |
+| Scheduled (M27) | one-off or recurring (cron) generation, or "then generate" after a scheduled release — §18.7 | the schedule's owner |
 
 Request body:
 
@@ -1520,18 +1581,25 @@ Request body:
 }
 ```
 
-`revision: null` means "current". Passing a revision generates the site **as it was**, which is the mechanism behind reproducible republishing and rollback verification.
+`revision: null` means "current". Passing a revision generates the site **as it was** — its drafts of live types and its release state (§5.5) — which is the mechanism behind reproducible republishing and rollback verification.
+
+**Saving changes nothing online (M27).** A build renders released versions only; a release, unpublish or discard is a state change and starts no build. The site changes with the next run — started by hand, by a schedule, or by a scheduled release's "then generate".
 
 `scope` limits the pages a run renders: pages in `folderPath` (and below) or listed in `assetUuids`; with both, either qualifies. A scoped run publishes its pages on top of the build the target serves, so the rest of the site stays online (§18.4).
 
 ### 18.2 Stages
 
 ```
-1  SNAPSHOT    Pin revision R. Load an immutable in-memory index of all assets at R.
+1  SNAPSHOT    Pin revision R. Load an immutable in-memory index of all assets at R,
+               as one view per language: live types at R, releasable assets at
+               the version released for that language at R (M27; an unreleased
+               one is present as an absent marker, like a tombstone).
 2  PLAN        Determine the file set:
                full        → every page × every enabled channel
                incremental → assets changed since the target's baseline
-                             (version or uid changes), expanded over
+                             (live types: version or uid changes; releasable
+                             types: release pointer changes per language, M27),
+                             expanded over
                              asset_reference reverse edges (transitive;
                              navigation-affecting changes expand to all pages
                              that render that structure), plus any output the
@@ -1563,7 +1631,9 @@ Request body:
 
 **Baseline (M22).** An `INCREMENTAL` request builds on the build its target currently serves (the last published or the promoted one) when that build's manifest shows it holds every page in every requested channel. Changes are counted from the build's *consistent revision*: its own revision, or for a scoped build published on top of another, that build's consistent revision, so a scoped run never advances the baseline and a build of another target never counts. Otherwise the request plans a full build and says why (`fallbackCause`): `NO_COMPLETE_BUILD_FOR_TARGET`, `BASE_BUILD_MISSING` (gone, or published before builds had manifests), `CHANNEL_SETTINGS_CHANGED` (every page of that channel may have moved) or `REVISION_BEFORE_BASELINE`.
 
-**Reason chains (M22).** The planner's walk (`RebuildExpansion`) is a breadth-first search seeded in UUID order over neighbours in a stable order, keeping the first edge each asset is reached by. Every planned asset therefore has a deterministic shortest chain back to the change that reached it — `page:about ← section_template:teaser (bodies.main[0].templateRef) ← media:hero (changed in r1842)` — and a `causeCount` of all changes reaching it. Root kinds: `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL` (with the cause), `EXPLICIT_SCOPE` (listed in `assetUuids`), `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD` (nothing it depends on changed, but the base build lacks the output, e.g. the page was held back). Edges: `PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE` (named `TEMPLATE` reference rows), `REFERENCE` (any other row, with its kind and source path), `NAVIGATION`, `DATASET_MEMBERSHIP` (a loop that may select the changed record), `PAGINATION_SOURCE`, `RECORD_SET_MEMBERSHIP` (a reader of the record's set whose stored query — and loop `where` — may select it before or after the change, M25), `RECORD_SET_QUERY` (a reader of a set whose stored query changed), `RECORD_TEMPLATE` (a reader rendering a set through its dataset's record template, when only the record templates changed). Names are served as strings; clients tolerate names added later.
+**Reason chains (M22).** The planner's walk (`RebuildExpansion`) is a breadth-first search seeded in UUID order over neighbours in a stable order, keeping the first edge each asset is reached by. Every planned asset therefore has a deterministic shortest chain back to the change that reached it — `page:about ← section_template:teaser (bodies.main[0].templateRef) ← media:hero (changed in r1842)` — and a `causeCount` of all changes reaching it. Root kinds: `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL` (with the cause), `EXPLICIT_SCOPE` (listed in `assetUuids`), `ASSET_CHANGED`, `ASSET_DELETED`, `ASSET_RELEASED` and `ASSET_UNPUBLISHED` (M27: a release pointer of the language opened or moved, or closed with the draft kept), `NOT_IN_BASE_BUILD` (nothing it depends on changed, but the base build lacks the output, e.g. the page was held back). Edges: `PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE` (named `TEMPLATE` reference rows), `REFERENCE` (any other row, with its kind and source path), `NAVIGATION`, `DATASET_MEMBERSHIP` (a loop that may select the changed record), `PAGINATION_SOURCE`, `RECORD_SET_MEMBERSHIP` (a reader of the record's set whose stored query — and loop `where` — may select it before or after the change, M25), `RECORD_SET_QUERY` (a reader of a set whose stored query changed), `RECORD_TEMPLATE` (a reader rendering a set through its dataset's record template, when only the record templates changed). Names are served as strings; clients tolerate names added later.
+
+**Released planning (M27).** Saving plans nothing: only releases change output. The planner walks once per language, seeded by that language's pointer changes in `(baseline, R]` (own key, else `""`), with the release revision as root revision; the "before" version of a releasable root is its released version at the baseline. Plan entries carry their `locale`. The walk's edges are the edges valid at R plus the edges of released versions that are no longer their asset's draft, so a released page is reached over what it references even when its draft dropped the reference. A localized media root is also seeded in every language that falls back to a language whose pointer changed. The initial release-state migration seeds nothing: a baseline without any release state rendered the drafts, which is what the migration released. `GET /assets/{uuid}/impact` answers "what would rebuild if this draft were released".
 
 **Walk rules.** A merely reached page stops the walk (its output depends on what it references, not on who references it) unless its output path moved since the base build (a template `outputPath` edit), in which case every page linking it is reached too.
 
@@ -1582,6 +1652,8 @@ Placeholders: `{folder}`, `{uid}`, `{ext}`, `{displayNameSlug}`, `{year}`, `{mon
 Index handling (per channel, §15.2): for a page whose UID equals the channel's `indexUid` (default `index`), `{uid}` expands to the stem of the channel's `indexFileName` (default `index.{ext}`), so it renders to `{folder}index.{ext}` by default. With `trailingSlash: true` and `urlStrategy: PRETTY`, `/products/hammer.html` becomes `/products/hammer/index.html` and `$CMS_REF` emits a relative href to `/products/hammer/`.
 
 Path collisions between two pages are a **build error** (`SF-GEN-0110`) listing both assets.
+
+**Media paths.** Media is written to `assets/media/{uid}.{ext}` (variants `assets/media/{uid}-{variant}.{ext}`). Localized media (§11.6, M27): a language's own file is written under that language's prefix — `{localePrefix}assets/media/{uid}.{ext}`, where the prefix is the language tag and a slash as `{locale}` expands in page paths, empty for the default language when the project publishes it without prefix. A language that falls back links the owner language's output when the owner publishes its own file there; otherwise (owner not released, or no own file) it writes the file it renders under its own prefix, so no link points at a file nobody wrote. Links stay relative to the rendering page. Page outputs are checked against every media output path (`SF-GEN-0110`).
 
 **Paginated pages (M21).** A page whose template has a `pagination` editor with a value is planned as `max(1, ceil(items / pageSize))` outputs per channel, counted from the source at the snapshot revision. Page 1 is the path above. Pages 2..N use the page template's `paginationPath[c]` pattern when set — `{pageNumber}` (required), `{pagePath}` (page 1's path without its extension) plus the placeholders above — and otherwise sit next to page 1 with `-N` before the extension in every channel (`news/blog.html` → `news/blog-2.html`, `news/blog/index.html` → `news/blog/index-2.html`); pagination paths are never prettified. An output is owned by its page and page number, so a collision names the page number (`blog (page 2)`). Sitemap and search index list every output (search entries carry `pageNumber`; pages 2..N get the title suffix ` – page n`); navigation and `$CMS_REF(page:…)` always target page 1.
 
@@ -1640,6 +1712,37 @@ Runs are queued per project (one active run per project; a second request return
 
 Measured with 2 channels, 8 vCPU, media unchanged.
 
+### 18.7 Scheduler (M27)
+
+Releases, unpublishing and builds can be scheduled. Tables (`v1.0/022-scheduler.xml`): `scheduled_action` (type, `run_at` or `cron` + `zone_id`, `pin_policy`, `missed_policy`, `max_lateness_seconds`, `status`, `next_run_at`, lease columns, `params`/`then_generate` JSON, owner, `@Version`), `scheduled_action_execution` (one row per execution: `scheduled_for`, `started_at`, `finished_at`, `outcome`, `late_by_ms`, `message`, `detail` JSON, `revision_id`, `generation_run_id`, `executed_as_user_id`) and `scheduled_action_asset` (the (asset, locale key) pairs an action touches — the `scheduled` block of asset views and the `assetUuid` filter, in one indexed query).
+
+**Engine.** Every node with `sf.scheduler.enabled` polls every `sf.scheduler.poll-interval` (default 15 s) and claims up to `batch-size` due actions (status `PENDING`/`RUNNING`, `next_run_at ≤ now`, lease free or expired, project not archived) with a conditional update — `UPDATE … SET lease_owner, lease_until, status = 'RUNNING' WHERE id = ? AND version = ? AND (lease_until IS NULL OR lease_until < now)` — portable across H2 and PostgreSQL and safe with several nodes: a claim wins once. The executing node extends its lease every `lease / 3` (`sf.scheduler.lease`, default 2 min); a node that dies loses the lease, and another node resumes the open execution after it expired. Handlers checkpoint their progress in the transaction of each step (the release revision, the run row), so a resumed execution never repeats a committed step. Handlers implement the SPI `ScheduledActionHandler` (`type()`, `timing()`, `validate(spec, actor)`, `requirements(spec)`, `execute(ctx)`, and optionally `assets(spec)`, `describe(specs)`, `repin(spec, actor)`); a new action type is a new bean.
+
+**Action types.**
+
+| Type | Timing | Params | Effect |
+|---|---|---|---|
+| `RELEASE` | one-off | `{items: [{assetUuid, locale?}], includeDependencies: […], comment?}`; stored resolved, one item per locale key, with `pinnedVersionId` | Releases the items in one `RELEASE` revision ("Scheduled release #id: …"); an item that can't be released any more is skipped with its reason (asset or language gone, pinned draft deleted since, a `LATEST` item incomplete): outcome `PARTIAL` |
+| `UNPUBLISH` | one-off | `{items, comment?}` | Unpublishes the items in one revision |
+| `GENERATION` | one-off | `{mode, channels[], targetId?, scope?: {folderPath?, assetUuids[]}, comment?}` | Starts a run as the owner |
+| `RECURRING_GENERATION` | cron | as `GENERATION` | Starts a run per slot |
+
+`RELEASE`/`UNPUBLISH` take an optional **then generate** (`thenGenerate: {targetId?, channels[]}`): an `INCREMENTAL` run at the release revision, started right after it.
+
+**Pin policy** (`RELEASE`): `PINNED` (default) releases the versions that were the drafts when the schedule was created or last **re-pinned**; a pinned version with blocking completeness findings is refused when scheduling (`422 SF-DOM-0150`), and a pinned item whose draft changed since shows `draftChangedSinceScheduled` (the list counts them in `driftCount`). `LATEST` releases whatever is saved at execution.
+
+**Missed policy.** `RUN_LATE` (default) runs a missed action as soon as possible; `SKIP_IF_LATER_THAN` (`maxLateness`, ISO duration) skips it (outcome `SKIPPED`) when it starts later than that. A recurring action that missed several slots runs at most once for them, then continues with the next future slot.
+
+**Time zones.** One-off actions are stored as UTC instants. Recurring ones store the cron expression (5 fields, normalized to Spring's 6 with seconds `0`) **and** the creator's IANA zone, and are evaluated in that zone: a local time skipped by a DST switch runs at the end of the gap, a repeated one runs once. A one-off time the viewer enters follows the same rule (a skipped time becomes the end of the gap, a repeated one its first occurrence) before it is sent as an instant. The UI takes and shows times in the viewer's zone and names the schedule's zone where it differs; next-run previews come from the server (`POST …/schedules/preview-times`).
+
+**Authority.** An action runs as its **owner** (initially the creator). `requirements(spec)` returns an `ActionRequirements` (a minimum role plus named permissions — empty in M27; `DEVELOPER` for every type); the API checks it for the caller on create, edit, cancel, run-now, re-pin and take-over, and the engine checks it for the owner at every execution (`ActionAuthority`). An owner who lost it — removed, demoted, disabled, deleted — fails the execution with `SF-DOM-0163` and a recurring action is **paused** (`FAILED`, no `next_run_at`); a permitted user **takes over** (becomes the owner): a paused recurring action resumes at its next slot, a failed one-off becomes due at its original time with the missed policy applied to it.
+
+**Busy project.** A generation step that meets an active run stays open (`WAITING`, the action `PENDING` with its `next_run_at` unchanged) and is retried on every poll until the run ends, bounded by the missed policy; the execution's `detail.waitingForRun` names the run. A scheduled release that can't start its then-generate within a `SKIP_IF_LATER_THAN` bound ends `PARTIAL` with the release done.
+
+**Archived projects** execute nothing; after unarchiving, the missed policy applies. Creating or changing schedules of an archived project is refused (`409 SF-DOM-0141`).
+
+**Lifecycle.** `PENDING` → `RUNNING` (claimed) → `SUCCEEDED` | `FAILED` | `SKIPPED` for one-off actions; a recurring action returns to `PENDING` between slots and is `FAILED` only while paused; `CANCELLED` ends either. Edits (`PUT`, `If-Match: "v{version}"`) are allowed while `PENDING` and keep the stored items unless `params` are sent; an action a node is executing (or whose execution waits for a busy project) refuses changes with `409 SF-DOM-0167`, cancel excepted for a waiting one. Every change is audited (`SCHEDULE_CREATED`, `_UPDATED`, `_CANCELLED`, `_TAKEN_OVER`, `_RUN_NOW`) and so is every finished execution (`SCHEDULE_EXECUTED`, `_FAILED`, `_SKIPPED`, as the owner). Execution outcomes: `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED`.
+
 ---
 
 ## 19. Preview
@@ -1653,6 +1756,7 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 | **Section preview** | Renders one section instance in isolation with sample surroundings | `POST /projects/{p}/preview/section` |
 | **Channel preview** | Any of the above in a non-default channel; non-HTML channels render as syntax-highlighted text | `?channel=markdown` |
 | **Paginated page** | Page *n* of a paginated page (M21), clamped to `1..total`; `X-SF-Total-Pages`/`X-SF-Page` response headers; also on the share route, as a plain parameter outside the token | `?page=2` |
+| **Draft / published view** (M27) | `draft` (default) renders the page's draft and the drafts of everything it reads; `published` renders what the next build publishes — the release state at the preview revision, navigation included. `X-SF-View` names the view; a draft preview carries the page's status in the language in `X-SF-Release-Status`. A page not released in the language is `404 SF-DOM-0155` in the published view; `400` for any other value. Section preview is draft only | `?view=published` |
 
 ### 19.2 Mechanics
 
@@ -1668,7 +1772,8 @@ Measured with 2 channels, 8 vCPU, media unchanged.
 - Split view: editor left, preview right; the divider is draggable and the ratio persists per user.
 - Viewport switcher: mobile 375, tablet 768, desktop 1280, full width.
 - **Section highlighting:** rendered sections carry `data-sf-instance="{instanceId}"`; clicking a section in the preview focuses its editor form, and focusing a form field scrolls/outlines the section. Implemented with a tiny injected script that is present only in preview output.
-- Preview share links: a signed, expiring URL (`?t=<jwt>`, 7 days, read-only) for stakeholders without accounts. Scope: one page, one revision.
+- Preview share links: a signed, expiring URL (`?t=<jwt>`, 7 days, read-only) for stakeholders without accounts. Scope: one page, one revision, one language, one view (M27: the share dialog chooses "Draft (latest saved)" or "Published", the token binds it, and every link inside the shared preview keeps it; a token without a view — every pre-M27 token — shows the draft).
+- **Draft | Published toggle (M27).** The preview toolbar switches the view (remembered per browser, default Draft). Draft mode shows "Draft — {status}" under the toolbar and refreshes after each autosave; the published view refreshes only on release actions, language or page changes. A page not published in the language shows an empty state "Not published in {language}" instead of an error.
 ---
 
 ## 20. REST API specification
@@ -1771,8 +1876,11 @@ Guard rails on disable, delete and system role: `409 SF-DOM-0131` (last active i
 | `POST` | `/projects/{p}/media/bulk` | multi-file |
 | `PUT` | `/projects/{p}/media/{uuid}` | metadata (alt, caption, focal point) |
 | `POST` | `/projects/{p}/media/{uuid}/replace` | new binary, same asset identity |
-| `GET` | `/projects/{p}/media/{uuid}/binary` | original; `?variant=w800` |
-| `GET` | `/projects/{p}/media/{uuid}/thumbnail` | 320 px, cached, `Cache-Control: private, max-age=86400` |
+| `GET` | `/projects/{p}/media/{uuid}` | one media view with `localeFiles` (M27); `?revision=` for time travel |
+| `GET` | `/projects/{p}/media/{uuid}/binary` | original; `?variant=w800`; `?locale=` the file a language renders (M27) |
+| `GET` | `/projects/{p}/media/{uuid}/thumbnail` | 320 px, cached, `Cache-Control: private, max-age=86400`; `?locale=` (M27) |
+| `PUT` | `/projects/{p}/media/{uuid}/localized` | `{localized, confirmDiscard?}`, `If-Match`; `409 SF-MEDIA-0505` lists the files un-localizing would discard (§11.6, M27). EDITOR |
+| `POST`/`DELETE` | `/projects/{p}/media/{uuid}/files/{locale}` | upload or replace / remove one language's own file (§11.6, M27). EDITOR |
 
 **Templates**
 
@@ -1828,6 +1936,31 @@ kept after commit (§21.4). Time travel doesn't change what it returns.
 | `GET` | `/projects/{p}/search` | `?q=` (required, 1–200 chars), `type` (repeatable), `folder` (path prefix), `page`, `size` (≤ 100), `sort=relevance` only. `{content: [{uuid, type, uid, displayName, folderPath, templateUuid, score, matchedIn, snippet, highlights: [{start, end}]}], page: {…, totalIsLowerBound}, facets: {types}, indexedRevision, latestRevision}`. Facet counts ignore the `type` filter. Snippets are plain text; highlights are offsets into them. VIEWER |
 | `GET` | `/projects/{p}/search/status` | `{indexedRevision, latestRevision, lag, state: READY\|CATCHING_UP\|REBUILDING\|UNAVAILABLE, lastRebuildAt}`. VIEWER |
 | `POST` | `/projects/{p}/search/reindex` | Full rebuild without query downtime; `202` with the status, `409` while one runs. PROJECT_ADMIN |
+
+**Releases and changes** (M27, §5.5, §10.4) — body of the release calls: `{items: [{assetUuid, locale?}], includeDependencies?: [{assetUuid, locale?}], comment?}`; an item without `locale` means every language of the asset.
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `POST` | `/projects/{p}/releases/plan` | VIEWER | Dry run: `{items, dependencies: [{target, reason, via, includedByDefault}], incomplete: [{uuid, locale, issues}], warnings}`; allowed on archived projects |
+| `POST` | `/projects/{p}/releases` | DEVELOPER | Releases `items` + the kept `includeDependencies` in one revision → `{revision, applied, skipped, sharedFieldsKept}` (`revision: null` when nothing changed); `422 SF-DOM-0150` incomplete, `0151` unknown asset/locale or a live type, `0153` empty selection, `0154` foreign pinned version |
+| `POST` | `/projects/{p}/releases/unpublish` | DEVELOPER | Takes the items offline; drafts stay |
+| `POST` | `/projects/{p}/releases/discard` | DEVELOPER | Writes the released versions back as drafts; `422 SF-DOM-0152` for items never released |
+| `GET` | `/projects/{p}/changes` | VIEWER | Every (asset, locale) not `PUBLISHED`: `type`, `status`, `locale` (repeatable), `changedBy`, `folderUuid` (subtree), `q`, `sort=changedAt\|displayName[,asc\|desc]`, `page`, `size` ≤ 200 → `{rows: [{uuid, type, uid, displayName, folderPath, locale, status, changedBy, changedAt, releasedRevision, releasedBy, releasedAt, scheduled}], page, size, totalElements, totalPages}` |
+| `GET` | `/projects/{p}/changes/count` | VIEWER | `{NEW, CHANGED, UNPUBLISHED, DELETION_PENDING, total}` |
+| `GET` | `/projects/{p}/changes/{uuid}/diff` | VIEWER | `?locale=` → `{uuid, locale, status, changes: [FieldChange]}`: released → draft, per locale projection |
+
+**Schedules** (M27, §18.7) — every endpoint is VIEWER; changes check the action type's requirements for the caller (`DEVELOPER` in M27, `403` otherwise). Responses carry `ETag: "v{version}"`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/projects/{p}/schedules` | `type`, `status` (repeatable), `owner`, `assetUuid`, `from`/`to` (on `nextRunAt`), `page`, `size` ≤ 200; next due first; rows without `items` |
+| `POST` | `/projects/{p}/schedules` | `{type, runAt? \| cron + zoneId, pinPolicy?, missedPolicy?, maxLateness?, thenGenerate?, params}`; `422 SF-DOM-0160`–`0166` and the release codes |
+| `GET`/`PUT` | `/projects/{p}/schedules/{id}` | detail with `items` (drift per item) / edit a `PENDING` schedule (`If-Match: "v{n}"`, `409 SF-API-0409` stale, `412` missing; omitted `params` keep the stored ones) |
+| `POST` | `/projects/{p}/schedules/{id}/cancel` \| `/take-over` \| `/run-now` \| `/repin` | lifecycle actions (§18.7); `409 SF-DOM-0167` while executing, `422 0168` re-pin of anything but a pinned release |
+| `GET` | `/projects/{p}/schedules/{id}/executions` | newest first: `{scheduledFor, startedAt, finishedAt, outcome, lateByMs, message, detail, revisionId, generationRunId, executedAsUserId}` |
+| `POST` | `/projects/{p}/schedules/preview-times` | `{cron, zoneId, count?}` → `{cron (normalized), zoneId, times}`; validated like a create; allowed on archived projects |
+
+Every releasable asset view (pages, records, record sets, global sets, media, page references, editorial folders, their list rows and tree nodes, `GET /assets/{uuid}`) carries `release` and `scheduled` (§5.5). `GET /search` takes `releaseStatus` (repeatable) as a filter. Project import takes `releaseMode=KEEP|DRAFT` (§26.5).
 
 **Revisions**
 
@@ -1912,6 +2045,8 @@ com.acme.staticforge
 │   ├── folder/        FolderService, PathService
 │   ├── template/      TemplateService, CdlCompiler, ContentDefinition, ContentValidator
 │   └── structure/     StructureService, NavigationBuilder
+├── release/           AssetRelease, ReleaseService, ReleaseStatusService, LocaleProjection, ChangesService (M27)
+├── scheduler/         ScheduledAction, SchedulerEngine, LeaseClaimer, ScheduleService, actions/ (M27)
 ├── render/            OctlLexer, OctlParser, CompiledTemplate, RenderContext, Renderer, filters/
 ├── generate/          GenerationService, BuildPlanner, RenderTask, targets/, postprocessors/
 ├── preview/           PreviewService, PreviewLinkRewriter, PreviewTokenService
@@ -2001,6 +2136,12 @@ sf:
     keep-builds: 5
     max-file-size: 32MB
     render-timeout: 5s
+  scheduler:                  # M27, §18.7
+    enabled: true             # this node polls for due actions (any polling node is enough)
+    poll-interval: 15s
+    batch-size: 20
+    lease: 2m                 # also the fail-over delay after a node dies
+    # node-id: cms-1          # default hostname:pid; must differ between nodes
   revision:
     retention-days: unlimited
 
@@ -2033,9 +2174,12 @@ app_user ──< project_member >── project ──< output_channel
                                    ├──< revision >── (project_id, revision_id)
                                    ├──< project_revision_counter (1:1)
                                    ├──< generation_target ──< generation_run
+                                   ├──< scheduled_action ──< scheduled_action_execution   (M27)
+                                   │          └──< scheduled_action_asset
                                    └──< asset ──< asset_version
-                                                     │
-                                                     └──< asset_reference
+                                         │           │
+                                         │           └──< asset_reference
+                                         └──< asset_release ──> asset_version   (M27)
 blob ──< (asset_version.payload.blobSha256)
 refresh_token ──> app_user
 asset_uid_history ──> asset
@@ -2265,6 +2409,9 @@ ui/src/app/
 │   ├── channels/       channel CRUD
 │   ├── revisions/      timeline, diff viewer, restore
 │   ├── generation/     run dialog, live log (SSE), run history
+│   ├── release/        status badge, release bar, release/unpublish/discard dialog, dependency plan (M27)
+│   ├── changes/        Changes view (M27)
+│   ├── schedules/      Schedules page, schedule dialog, execution history, zoned-time and cron utils (M27)
 │   ├── settings/       project settings tabs, incl. Members
 │   └── admin/          users, projects, audit (lazy-loaded, instance admins only)
 └── design/             tokens.scss, typography.scss, themes/
@@ -2468,6 +2615,9 @@ Breakpoints: 1600 / 1280 / 1100 / 840 / 600. Below 840 px the app is **review-or
 11. **Admin** (`/admin`, instance admins). *Users*: server-paged list with search and status/role filters; create (generated password shown once, or typed with the policy as live checks; "must change password"; first project memberships); a user page with profile, account state, actions (disable/enable, unlock, reset password, sign out everywhere, grant/revoke instance admin, delete by typing the username) whose guard rails show as disabled buttons with the reason, and memberships. *Projects*: every project with members and last change; archive and unarchive. *Audit*: every entry, filterable by action, user, project (or instance only) and day range, the filters kept in the URL.
 12. **Account.** A user menu in the dashboard header and at the foot of the project rail (initials only when collapsed): *My account*, *Administration* for instance admins, *Sign out*. *My account* holds the profile (username and email ask for the current password), the password with live policy checks, the user's projects, and *Sign out everywhere*.
 13. **Members** (project settings tab). Everyone in the project sees the members; project admins add existing accounts through a lookup, change roles and remove members (removing yourself warns and leaves the project). Disabled members show greyed; emails only for project admins.
+14. **Release bar and badges (M27).** Every releasable editor (page, record, record set, global set, media drawer, navigation folder and reference, editorial folders) opens with a bar: the status in the editing language, a compact per-language list, the pending schedules ("Release scheduled for Tue 29 Sep, 09:00 by Ana", linking to the schedule) and — for `DEVELOPER`+, not in time travel or archived — *Release…*, *Unpublish…*, *Discard changes…*, *Schedule…*. Trees, lists and cards show a status badge per row: icon and text (icon only in trees, text for screen readers and in the tooltip, which lists every language), a clock when a schedule touches it. Deleting a published item says it stays online until the deletion is released.
+15. **Changes (M27).** Every unreleased (asset, language), server-paged; filters (type, status, language, changed by, folder, text) and sort in the URL, shown as removable chips; the selected row's released → draft diff with *Open in editor*; multi-select on the page with *Release…*, *Discard changes…*, *Schedule release…*; ↑/↓ move, Space selects, Enter opens the diff. The nav rail shows the count of new, changed and deletion-pending pairs.
+16. **Schedules (M27).** Every schedule, next due first, filtered by type, status and owner; times in the viewer's zone (plus the schedule's zone where it differs); drift warning with *Re-pin*; *Edit*, *Run now*, *Take over*, *Cancel*; an execution history drawer with lateness, outcome, per-item results and links to the revision and the generation run. The schedule dialog (from the release bar, Changes and this page) takes the date and time in the viewer's zone, recurring schedules as presets (hourly, daily, weekdays, weekly) or a cron with the next five runs, the pin, then-generate and missed-run options, and the release plan.
 
 ### 24.6 Interaction rules
 
@@ -2617,6 +2767,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 13. Find and fix (M23): a word only a page's rich text holds → Ctrl+K finds the page → Enter opens it → replace the word
     and save → the old word no longer finds it, the new one does → the search page filters by type and keeps the facet
     counts of the other types. A media file found by its alt text opens its drawer through the `?asset=` deep link.
+14. Release and schedule (M27): new pages release with their media (dependency proposed) and go online with the next build → an English edit shows `Changed` in English only, Draft and Published previews differ, a build leaves the site as it was → release from the Changes view → per-language structural release (uid change) → localized media per language → a scheduled pinned release with then-generate publishes the pinned version, not a later edit → recurring generation → deletion pending until released → export/import keeps the statuses → an `EDITOR` sees statuses but no actions.
 
 ### 25.7 Quality gates (CI)
 
@@ -2646,7 +2797,8 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 
 - 200 projects, 50,000 assets per project, 500 concurrent editors per instance.
 - Backend is stateless apart from the blob store → horizontal scaling behind a load balancer; sticky sessions unnecessary (JWT), SSE endpoints need connection affinity or a shared broker (Redis pub/sub in the multi-node profile).
-- Generation runs are claimed via a `FOR UPDATE SKIP LOCKED` queue row so exactly one node executes a run.
+- Generation start is single-node: a JVM lock serializes starts, a second active run of a project is refused (`409 SF-GEN-0500`), and idempotency keys live in memory. Several application nodes would need a shared claim for runs as well — not in scope.
+- **The scheduler is multi-node safe (M27).** Every node may poll; the conditional-update lease of §18.7 makes each due action execute once, and a crashed node's action is resumed by another after its lease expired. A scheduled build still goes through the single-node generation start above.
 - PostgreSQL: expected 30–80 GB at the top of the range; partitioning of `asset_version` by `project_id` is the documented escape hatch (not needed at v1 scale).
 - **Search is the exception to statelessness (M23).** Each project's search index is an embedded Lucene directory on the
   application node's disk (`SF_SEARCH_INDEX_ROOT`), and Lucene allows one writer per directory. v1 runs a single
@@ -2669,14 +2821,14 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 | SSRF | No server-side fetch of user-supplied URLs in v1 |
 | Path traversal | Output paths normalized and asserted to stay under the target root; `..` rejected at validation |
 | Secrets | Env/secret-manager only; never in the DB or logs |
-| Audit | Revisions cover content; a separate `audit_log` covers auth (`AUTH_LOGIN`, `AUTH_LOGIN_FAILED`), accounts (`USER_CREATED`, `USER_UPDATED`, `USER_RENAMED`, `USER_DISABLED`, `USER_ENABLED`, `USER_UNLOCKED`, `USER_PASSWORD_RESET`, `USER_PASSWORD_CHANGED`, `USER_SYSTEM_ROLE_SET`, `USER_SESSIONS_REVOKED`, `USER_DELETED` — instance-level, no project), membership (`MEMBER_ROLE_SET`, `MEMBER_REMOVED`), `PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`, channel and target changes. Instance admins read all of it (`/admin/audit`), project admins their project's. Intended retention 1 year — no purge job exists yet |
+| Audit | Revisions cover content; a separate `audit_log` covers auth (`AUTH_LOGIN`, `AUTH_LOGIN_FAILED`), accounts (`USER_CREATED`, `USER_UPDATED`, `USER_RENAMED`, `USER_DISABLED`, `USER_ENABLED`, `USER_UNLOCKED`, `USER_PASSWORD_RESET`, `USER_PASSWORD_CHANGED`, `USER_SYSTEM_ROLE_SET`, `USER_SESSIONS_REVOKED`, `USER_DELETED` — instance-level, no project), membership (`MEMBER_ROLE_SET`, `MEMBER_REMOVED`), `PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`, channel and target changes, schedules (`SCHEDULE_CREATED`, `_UPDATED`, `_CANCELLED`, `_TAKEN_OVER`, `_RUN_NOW`, and per execution `SCHEDULE_EXECUTED`/`_FAILED`/`_SKIPPED`, M27). Release actions are revisions, not audit entries. Instance admins read all of it (`/admin/audit`), project admins their project's. Intended retention 1 year — no purge job exists yet |
 | Rate limits | Login, preview render, generation start |
 | Headers | CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` |
 
 ### 26.4 Observability
 
 - Structured JSON logs with `traceId`, `projectKey`, `revision`, `userId`.
-- Micrometer metrics: `sf.search.index.lag{project}`, `sf.search.index.duration`, `sf.search.index.failures`, `sf.search.index.events` (M23), `sf.revision.allocate`, `sf.render.duration{template,channel}`, `sf.generation.duration{mode}`, `sf.generation.files`, `sf.media.upload.bytes`, cache hit ratios, HTTP histograms.
+- Micrometer metrics: `sf.search.index.lag{project}`, `sf.search.index.duration`, `sf.search.index.failures`, `sf.search.index.events` (M23), `sf.revision.allocate`, `sf.render.duration{template,channel}`, `sf.generation.duration{mode}`, `sf.generation.files`, `sf.media.upload.bytes`, `sf.scheduler.claims`, `sf.scheduler.lag` (how late actions started), `sf.scheduler.executions{type,outcome}` (M27), cache hit ratios, HTTP histograms.
 - OpenTelemetry tracing across request → service → render.
 - Health: `/actuator/health` with DB, blob store and Liquibase checks; `/actuator/info` exposes schema version.
 - Alerts: generation failure rate, p95 save latency, refresh-token reuse detections, disk headroom on the blob store.
@@ -2689,6 +2841,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 - Quarterly restore drill, documented in the runbook.
 - Project export/import (`ZIP`: assets JSON + blobs + manifest) as a portability and migration path.
 - **Export protocol 7 (M25).** Archives carry record sets; a record's archive parent is its set. Exporting a record pulls in its set and dataset implicitly, and a picked set brings its records. Import creates datasets, then sets, then records. Older archives (protocol ≤ 6) are still read, but a record whose parent is a Content folder or the store root is reported as the conflict `RECORD_OUTSIDE_RECORD_SET` and **not imported** — records are never grouped into sets automatically — while every other asset imports. `RECORD_SET_MISSING`, `RECORD_SET_DATASET_MISMATCH` and `RECORD_SET_DATASET_MISSING` block the import; a set query that doesn't validate against the target schema imports flagged (`RECORD_SET_QUERY_INVALID`, warning).
+- **Export protocol 8 (M27).** Each releasable asset carries its release state: per locale key `DRAFT_EQUALS` (the released version is the draft), `PAYLOAD` (the released version's payload, display name, folder, template and — media — MIME type and size, with `uid` when it was released under another uid) or `UNPUBLISHED` (released once, not now); deletion-pending assets are exported with their tombstone draft, and media carries its per-language files. Import offers `releaseMode`: `KEEP` (default) restores the archive's release state — a released version that differs from the draft becomes an extra version opened and closed in the import revision, read only by its pointer — and `DRAFT` imports everything as draft (`NEW`), leaving the target's release state and deletion-pending assets out. A `""` pointer releases the target languages the archive also has; an archive without languages counts as the target's default language; any other missing language is the warning `RELEASE_LOCALE_MISSING`. `KEEP` over an existing asset replaces its release state (the import wins). An import restores state: there is no completeness gate. Protocol ≤ 7 archives import as drafts (analysis `INFO` `ARCHIVE_WITHOUT_RELEASE_STATE`). Schedules are not exported.
 - The search index (M23) is not backed up: it is rebuilt from the database on start, and a restored database with a
   leftover index is detected (the index records the project it was built for) and rebuilt.
 
@@ -2716,7 +2869,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 
 Total ≈ 25 weeks with a team of 2 backend, 2 frontend, 1 designer, 0.5 QA.
 
-**Post-v1 candidates:** editorial workflow and scheduled publishing, multi-language content dimension, per-asset permissions, template packages shareable across projects, webhooks, headless JSON channel with an incremental delivery API, visual template scaffolding.
+**Post-v1 candidates:** editorial approval workflow (release state and scheduled publishing shipped in M27, §5.5, §18.7), multi-language content dimension (shipped in M24), per-asset permissions, template packages shareable across projects, webhooks, headless JSON channel with an incremental delivery API, visual template scaffolding.
 
 ---
 
@@ -2843,7 +2996,7 @@ Same content. Two channels. No duplication.
 | `SF-API-0401` | 401 | Missing or expired access token |
 | `SF-API-0403` | 403 | Role insufficient for this project action |
 | `SF-API-0404` | 404 | Asset, project or revision not found (or not visible) |
-| `SF-API-0409` | 409 | Revision conflict (`If-Match` mismatch) |
+| `SF-API-0409` | 409 | Revision conflict (`If-Match` mismatch); also a stale schedule version (`If-Match: "v{n}"`) or an edit that raced a scheduler claim (M27) |
 | `SF-API-0412` | 412 | `If-Match` header missing on a mutating request |
 | `SF-API-0413` | 413 | Upload exceeds the configured limit |
 | `SF-API-0415` | 415 | MIME type not allowed |
@@ -2863,6 +3016,26 @@ Same content. Two channels. No duplication.
 | `SF-DOM-0131` | 409 | The last active instance admin can't be disabled, deleted or demoted (§8.2) |
 | `SF-DOM-0132` | 409 | An admin can't disable, delete or demote their own account (§8.2) |
 | `SF-DOM-0141` | 409 | Project is archived: every write to an archived project is refused (M26); only `unarchive` and read-only requests (dry runs, validations, previews, exports) pass |
+| `SF-DOM-0150` | 422 | Content incomplete: a release (or a pinned scheduled release) of content with `ERROR` completeness findings; `assets[]` lists them with their findings (M27) |
+| `SF-DOM-0151` | 422 | Release item can't be resolved: unknown asset, a language the asset doesn't have, or a live (non-releasable) type (M27) |
+| `SF-DOM-0152` | 422 | Discard of an item that was never released — delete a new asset instead; `assets[]` lists them (M27) |
+| `SF-DOM-0153` | 422 | Empty release selection (M27) |
+| `SF-DOM-0154` | 422 | A pinned version that isn't a version of the asset, or is a deletion (scheduled release) (M27) |
+| `SF-DOM-0155` | 404 | Published preview of a page that isn't released in the language (M27) |
+| `SF-DOM-0160` | 422 | Unknown schedule type; also an execution's failure code (paused) (M27) |
+| `SF-DOM-0161` | 422 | Schedule params don't fit the type (`field` names the offender): unknown mode, target, channel or scope, `pinPolicy`/`thenGenerate` on a generation; also an execution failure when a channel was disabled since (M27) |
+| `SF-DOM-0162` | — | Execution failure: the generation target is gone; a recurring schedule pauses (M27) |
+| `SF-DOM-0163` | — | Execution failure: the owner is no longer permitted (removed, demoted, disabled, deleted); a recurring schedule pauses until taken over (M27) |
+| `SF-DOM-0164` | 422 | Schedule time lies in the past (M27) |
+| `SF-DOM-0165` | 422 | Invalid cron expression or unknown/missing time zone (M27) |
+| `SF-DOM-0166` | 422 | Timing doesn't fit the type: a cron on a one-off type, a run time on a recurring one, or neither (M27) |
+| `SF-DOM-0167` | 409 | The schedule is executing (or its execution waits for a busy project) and can't be changed now (M27) |
+| `SF-DOM-0168` | 422 | Re-pin of anything but a pending pinned release (M27) |
+| `SF-MEDIA-0505` | 409 | Un-localizing would discard other languages' files; `files[]` lists them; repeat with `confirmDiscard` (M27) |
+| `SF-MEDIA-0506` | 422 | Per-language file operation on media that isn't localized (M27) |
+| `SF-MEDIA-0507` | 422 | A language the project doesn't declare (M27) |
+| `SF-MEDIA-0508` | 422 | Localizing media in a project without languages (M27) |
+| `SF-MEDIA-0509` | 422 | Removing the default language's file, which every other language falls back to (M27) |
 | `SF-TPL-01xx` | 422 | CDL/OCTL compile errors (§16.11) |
 | `SF-TPL-0111` | — | Cross-asset value without an editor path (compile warning) |
 | `SF-TPL-0112` | — | Cross-asset value target missing or soft-deleted (render warning) |
@@ -2872,6 +3045,7 @@ Same content. Two channels. No duplication.
 | `SF-GEN-0120` | — | Content incomplete: page held back, run `PARTIAL` (§10.5) |
 | `SF-GEN-0210` | — | No channel template for an enabled channel (warning) |
 | `SF-GEN-0220` | — | Reference to a deleted asset: `$CMS_REF`, `$CMS_INCLUDE` or a body section target is soft-deleted; renders empty (warning, §16.4). Cross-asset values use `SF-TPL-0112` |
+| `SF-GEN-0221` | — | Reference to an unreleased asset: a link (`$CMS_REF`, `media`/`link` value) to an asset not released in the render language renders empty (warning, §16.4, M27); a cross-asset value of it is `SF-TPL-0112` |
 | `SF-GEN-0301` | — | `raw` filter on a plain-text editor (warning) |
 | `SF-GEN-0410` | — | Navigation cycle truncated (warning) |
 | `SF-GEN-0500` | 409 | A generation run is already active for this project |
@@ -2899,3 +3073,4 @@ Same content. Two channels. No duplication.
 - **Q5** — Membership is `(project, user)` only; there is no email-invite/guest-user concept. A member must already be an `app_user`. Instance admin creates users (or an invite-with-account-creation flow) out of band; the members API then binds them by `userId`. This matches the implemented `ProjectMemberRepository`/`ProjectController` members endpoints.
 - **Q6** — Filesystem + Nginx is the v1 pilot target (matches the committed `infra/` stack). S3 is implemented but de-prioritized: it is not the default and has no dedicated ops runbook at v1. M4 priorities were set accordingly (filesystem atomic staged publish + `current` symlink first).
 - **Q3/Q4/Q7** — Decisions recorded above are consistent with what the code implements; Q2 remains explicitly v2. No v1-affecting question is left open.
+- **Post-v1 "scheduled publishing" (§27)** — delivered in M27 together with a release state: drafts vs released versions per language (§5.5), release/unpublish/discard with dependency proposals and a completeness gate (§10.4), and a multi-node-safe scheduler for releases, unpublishing and one-off or recurring builds (§18.7). An approval (four-eyes) workflow remains out of scope (§2.2); opening release and scheduling to editors by project policy is M28.

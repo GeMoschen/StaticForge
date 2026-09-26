@@ -1,3 +1,42 @@
+# M27.7 — Docs and journey (branch `m27-release-and-scheduling`)
+
+Spec: `tasks/27-m27-release-and-scheduling/07-docs-e2e/`. 7.1 (docs, agent) and 7.2 (journey, me) in parallel.
+
+- [x] M27.7.1 — spec §2.2, §5, §7, §10.4/5, §11, §16.4, §17, §18.1/2, §19, Scheduler section, §20.2, §23/§24,
+      §26.2/4/5, Appendix B/C; `docs/api.md`, `user-guide.md`, `template-developer-guide.md`, `administration.md`,
+      `architecture.md`, `infra/README.md`, `release-readiness.md` §4; deviations recorded
+- [x] M27.7.2 — `ui/e2e/m27-journeys.spec.ts`, the 10 steps, self-seeding, 1280 px assertions
+- [x] Journey green twice on a clean dev stack (scheduler poll 2 s); defects fixed with a test each
+- [x] `./gradlew build test --rerun` (1328 tests, 0 failures, 6 skipped benchmarks), `npm run build`,
+      `npx vitest run` (89 files, 597 tests)
+
+
+## Review
+
+- **Docs (7.1)**, written by a parallel agent against the code:
+  - Spec: new subsections §5.5 (release state), §11.6 (localized media) and §18.7 (scheduler). No existing number
+    moved.
+  - Updated §2.2, §7, §10.4/5, §16.4, §17–§19, §20.2, §21, §23/§24, §26.2–§26.5, §27, and Appendix B/C.
+  - API reference, user guide, template developer guide, administration, architecture, infra README and release
+    notes.
+  - Every deviation from the epic decisions, with its reason, is in `07-docs-e2e/001-docs-and-spec.md`.
+  - Correction from checking the code: `SF-GEN-0221` covers links only. A value read from an unreleased asset
+    renders empty with `SF-TPL-0112`, like a deleted one.
+- **Journey (7.2)**:
+  - All ten steps pass through the UI, including builds, localized media on disk, a pinned scheduled release with
+    then-generate, a cron schedule, deletion, export/import and the `EDITOR` view.
+  - Green twice in a row on a clean stack.
+  - Several failed runs were script errors: the Windows `current` pointer file, server-normalized images, a step
+    that didn't reopen the editor after a build, and the media drawer left open.
+- **Defects found and fixed, each with a test:**
+  - `CHANGED` over an empty diff, from `null` vs absent fields in the locale projection (`LocaleProjectionTest`).
+  - Drift shown after a schedule ran (`schedules.component.spec.ts`).
+  - One-off times inside a DST gap resolved differently from cron slots (`zoned-time.util.spec.ts`; spec §18.7
+    states the rule).
+
+
+---
+
 # M27.6 — UI: release status, release bar, Changes, preview toggle, localized media, Schedules (branch `m27-release-and-scheduling`)
 
 Spec: `tasks/27-m27-release-and-scheduling/06-ui/`. Order 6.1 → 6.5 → 6.2; 6.3 and 6.4 in parallel (separate agents,

@@ -1,6 +1,6 @@
 ---
 id: M27.6.5
-status: todo
+status: done
 depends: [M27.4.4, M27.6.1]
 epic: m27-release-and-scheduling
 feature: ui
@@ -41,11 +41,11 @@ channels form for generation schedules). Epic decisions 16, 18–27.
 
 ## Acceptance criteria
 
-- [ ] Vitest: a local time in `Europe/Berlin` is sent as the correct UTC instant (test around a DST switch); presets
+- [x] Vitest: a local time in `Europe/Berlin` is sent as the correct UTC instant (test around a DST switch); presets
       produce the expected cron; invalid cron shows the server's `SF-DOM-0165` message; drift badge + re-pin.
-- [ ] Manual check: schedule a release 2 minutes ahead with then-generate; it executes, the page shows `Published`, the
+- [x] Manual check: schedule a release 2 minutes ahead with then-generate; it executes, the page shows `Published`, the
       run appears in generation history, the execution history links both.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 

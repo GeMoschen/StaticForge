@@ -155,8 +155,8 @@ Locale is a **content dimension**, not a second project. One project holds every
   in `OutputPathExpander`, and a localized project's default expression is `{locale}/{folder}{uid}.{ext}`. A path
   without `{locale}` is `SF-GEN-0111` before anything renders. `url_registry_entry` keys URLs by language too
   (`locale_key`, `''` without languages). `BuildManifest.Output` and `CarryForward` carry the language, so an
-  incremental run keeps the languages it didn't rebuild. `plan.LocaleValueDiff` narrows a page whose only change was
-  a translation to those languages; anything structural still rebuilds them all.
+  incremental run keeps the languages it didn't rebuild. Since M27 the planner walks once per language (§13), which
+  replaced M24's translation-diff narrowing (`plan.LocaleValueDiff`, removed).
 - **Search.** Text of a language-dependent value is indexed into that language's field (`text_de`, `text_en`), the
   neutral `text` field carrying everything so an unfiltered search still finds it; `GET /search?locale=` reads one
   language's field. Changing a project's languages requests a rebuild.
@@ -212,3 +212,44 @@ site's `search-index.json` (`SearchIndexPostProcessor`), which generation writes
   command palette (`core/ui/command-palette`) share `shared/asset-route.util.ts`, which maps a hit to its screen
   (`pages/:uuid`, `content/records/:uuid`, or `?asset=`/`?folder=` deep links that the stores apply once and clear).
 
+## 13. Release state and scheduler (M27)
+
+Spec §5.5, §10.4, §11.6, §18.2, §18.7. Editorial content has drafts and, per language, released versions; generation
+renders the released ones.
+
+- **Model** (`sf-domain` package `release`). `AssetRelease` rows (`asset_release`) are revisioned like
+  `asset_reference`; `ReleasableTypes` is the one place that says which assets are released, `ReleaseLocales` which
+  locale keys an asset has. `ReleaseStatusService` computes statuses in bulk (pointers, release history, released
+  versions — a fixed number of chunked queries per call) by comparing `LocaleProjection`s, a pure function with a
+  per-call memo. `ReleaseStates.at(project, R)` is the release state at a revision (builds, time travel, preview).
+- **Actions.** `ReleaseService` (plan, release, unpublish, discard) resolves and checks every item first and then
+  writes one batch revision, so a refusal leaves the counter untouched; `ReleaseCompleteness.checker` validates once
+  per call; the dependency walk is breadth-first per layer with bulk reads. Permission is one hook,
+  `ReleasePermissionCheck` (`RoleReleasePermissionCheck`: `DEVELOPER`+, read from the database because a schedule runs
+  without a token) — M28 replaces that bean. `ReleaseCarryForward` moves pointers along with system migrations (its own
+  component: the migrations are lower-level writers than `ReleaseService`). `ReleaseStateInitializer` migrates
+  unflagged projects on start. `ChangesService` answers the Changes list from a candidate query plus projections.
+- **Rendering.** `SnapshotService` loads a released `Snapshot`: a family of per-language views in which an asset not
+  released in the language is present as an *absent marker* (`deleted = true, unreleased = true`), so every consumer
+  that skipped tombstones skips it at the same places and a link to it resolves to `SF-GEN-0221`. `RenderPipeline`
+  holds one `GenerationRenderer` per view. `RebuildExpansion` seeds per language from pointer changes (`Delta`) and
+  walks released versions' edges too. Preview reads through `ContentView` (draft or published, current or at a
+  revision), the live counterpart of a snapshot view; share tokens carry the view.
+- **Localized media.** `MediaFiles` is the one payload helper (`fileFor`, `effective`); `MediaOutputs` the one output
+  rule for links, copies and carry-forward (own file under the language's prefix, fallback links the owner's file or
+  writes its own copy).
+- **Scheduler** (`sf-domain` package `scheduler`). `SchedulerEngine` is a plain class (a bean from
+  `SchedulerConfiguration`; tests build engines with their own node id and clock): one poller thread, executions on
+  virtual threads, a lease keeper. `LeaseClaimer` is the table-agnostic conditional-update claim (reusable by M29's
+  instance jobs). `ScheduleTiming` owns cron normalization, zones and DST. Handlers implement `ScheduledActionHandler`:
+  `ReleaseActionHandler`/`UnpublishActionHandler` in `sf-domain`, `GenerationActionHandler`/
+  `RecurringGenerationActionHandler` in `sf-generate`; "then generate" goes through the port
+  `ScheduledGenerationStarter` (declared in `sf-domain`, implemented by `sf-generate`'s `ScheduledGenerations`), since
+  `sf-domain` may not depend on generation. `ActionAuthority` is the single owner/caller check both the API and the
+  engine use. Handlers checkpoint progress in the transaction of each step, so a re-claimed execution never repeats a
+  committed one. `ScheduleService` holds the API rules; `scheduled_action_asset` answers "schedules touching these
+  assets" in one query.
+- **UI.** `features/release` (badge, release bar, dialogs, `ReleasePermissionsStore`, `ReleaseEventsStore` — a
+  counter every status display re-reads on, plus the last status a release bar read so lists patch their row without
+  reloading), `features/changes`, `features/schedules` (dialog, page, history, `zoned-time.util` on the platform `Intl`
+  API, cron presets). Statuses always come from the server's `release` blocks; the client never computes one.

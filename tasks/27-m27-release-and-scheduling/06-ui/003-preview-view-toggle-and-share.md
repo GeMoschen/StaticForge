@@ -1,6 +1,6 @@
 ---
 id: M27.6.3
-status: todo
+status: done
 depends: [M27.2.3]
 epic: m27-release-and-scheduling
 feature: ui
@@ -29,9 +29,9 @@ SF-DOM-0155`, share `view` parameter (`M27.2.3`). Epic decision 16.
 
 ## Acceptance criteria
 
-- [ ] Vitest: toggle sends `view`; `SF-DOM-0155` renders the empty state; share request carries the view.
-- [ ] Manual check: edit a published page → Draft shows the edit, Published shows the old text; per locale.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] Vitest: toggle sends `view`; `SF-DOM-0155` renders the empty state; share request carries the view.
+- [x] Manual check: edit a published page → Draft shows the edit, Published shows the old text; per locale.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 
