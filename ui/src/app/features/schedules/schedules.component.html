@@ -8,7 +8,7 @@
       <h1 class="schedules__title">Schedules</h1>
       <p class="schedules__hint">Times in your time zone: {{ viewerZoneLabel }}.</p>
     </div>
-    @if (permissions.canSchedule()) {
+    @if (permissions.canScheduleGeneration()) {
       <sf-button variant="primary" (click)="newSchedule()">New generation schedule</sf-button>
     }
   </header>
@@ -109,24 +109,22 @@
               </td>
               <td class="schedules__actions">
                 <button type="button" class="schedules__action" (click)="openHistory(row)">History</button>
-                @if (permissions.canSchedule()) {
-                  @if (canRepin(row)) {
-                    <button type="button" class="schedules__action" [disabled]="busyId() === row.id" (click)="act(row, 'repin')">Re-pin</button>
-                  }
-                  @if (canEdit(row)) {
-                    <button type="button" class="schedules__action" (click)="edit(row)">Edit</button>
-                  }
-                  @if (canRunNow(row)) {
-                    <button type="button" class="schedules__action" [disabled]="busyId() === row.id" (click)="act(row, 'run-now')">Run now</button>
-                  }
-                  @if (canTakeOver(row)) {
-                    <button type="button" class="schedules__action" [disabled]="busyId() === row.id" (click)="act(row, 'take-over')">Take over</button>
-                  }
-                  @if (canCancel(row)) {
-                    <button type="button" class="schedules__action schedules__action--danger" [disabled]="busyId() === row.id" (click)="act(row, 'cancel')">
-                      Cancel
-                    </button>
-                  }
+                @if (canRepin(row)) {
+                  <button type="button" class="schedules__action" [disabled]="busyId() === row.id" (click)="act(row, 'repin')">Re-pin</button>
+                }
+                @if (canEdit(row)) {
+                  <button type="button" class="schedules__action" (click)="edit(row)">Edit</button>
+                }
+                @if (canRunNow(row)) {
+                  <button type="button" class="schedules__action" [disabled]="busyId() === row.id" (click)="act(row, 'run-now')">Run now</button>
+                }
+                @if (canTakeOver(row)) {
+                  <button type="button" class="schedules__action" [disabled]="busyId() === row.id" (click)="act(row, 'take-over')">Take over</button>
+                }
+                @if (canCancel(row)) {
+                  <button type="button" class="schedules__action schedules__action--danger" [disabled]="busyId() === row.id" (click)="act(row, 'cancel')">
+                    Cancel
+                  </button>
                 }
               </td>
             </tr>

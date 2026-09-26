@@ -9,6 +9,7 @@ import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ContentService, type DatasetDetailView, type RecordSetDetailView } from './content.service';
 import { RecordSetViewComponent } from './record-set-view.component';
 import { stubReleaseBar } from '../release/testing/release-bar.stub';
+import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 
 const SET: RecordSetDetailView = {
   uuid: 'set-uuid',
@@ -65,6 +66,7 @@ async function setup(content: ReturnType<typeof contentStub>, options: { role?: 
       { provide: ApiClient, useValue: apiStub() },
       { provide: AuthStore, useValue: { roleFor: () => options.role ?? 'EDITOR' } },
       { provide: TimeTravelStore, useValue: timeTravel },
+      provideProjectPermissions({ role: () => options.role ?? 'EDITOR', readOnly: () => timeTravel.isTimeTravel() }),
     ],
   });
   const router = view.fixture.debugElement.injector.get(Router);
@@ -146,6 +148,8 @@ describe('RecordSetViewComponent', () => {
         provideRouter([]),
         { provide: ContentService, useValue: content },
         { provide: ApiClient, useValue: apiStub() },
+        // Role and read-only state from the real stores: the archived project lowers the editor to viewer.
+        provideProjectPermissions(),
       ],
       configureTestBed: (tb) => {
         const auth = tb.inject(AuthStore);

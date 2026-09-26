@@ -15,6 +15,10 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("select p.archived from Project p where p.id = :id")
     Optional<Boolean> findArchivedById(@Param("id") Long id);
 
+    /** The stored publish policy alone (M28): read on every permission check, so a change applies on the next one. */
+    @Query("select p.publishPolicy from Project p where p.id = :id")
+    Optional<com.fasterxml.jackson.databind.JsonNode> findPublishPolicyById(@Param("id") Long id);
+
     /** Ids of the projects whose pre-M27 assets still await their release pointers (M27.1.1), in id order. */
     @Query("select p.id from Project p where p.releaseStateInitialized = false order by p.id")
     java.util.List<Long> findIdsWithoutReleaseState();

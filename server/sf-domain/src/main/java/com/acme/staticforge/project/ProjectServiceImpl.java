@@ -7,6 +7,7 @@ import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.project.publish.PublishPolicy;
 import com.acme.staticforge.release.ReleaseLocaleTransition;
 import com.acme.staticforge.revision.AssetChange;
 import com.acme.staticforge.revision.ChangeType;
@@ -335,6 +336,40 @@ public class ProjectServiceImpl implements ProjectService {
         for (ProjectMember member : projectMemberRepository.findByProjectIdOrderByUserIdAsc(project.getId())) {
             userService.revokeAccess(member.getUserId());
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PublishPolicy publishPolicy(String key) {
+        return PublishPolicy.fromJson(requireByKey(key).getPublishPolicy());
+    }
+
+    @Override
+    @Transactional
+    public PublishPolicy updatePublishPolicy(String key, PublishPolicy policy, RevisionContext ctx) {
+        Project project = requireByKey(key);
+        writeGuard.requireWritable(project);
+        List<String> errors = policy.validate();
+        if (!errors.isEmpty()) {
+            throw new PublishPolicy.InvalidPolicyException(errors);
+        }
+        PublishPolicy before = PublishPolicy.fromJson(project.getPublishPolicy());
+        if (before.equals(policy)) {
+            return before;
+        }
+        project.setPublishPolicy(policy.toJson());
+        projectRepository.save(project);
+
+        Revision revision = revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        revisionService.appendSummary(
+                project.getId(),
+                revision.getRevisionId(),
+                AssetChange.create("project-" + project.getId(), "PROJECT", "UPDATE", List.of("publishPolicy")));
+        com.fasterxml.jackson.databind.node.ObjectNode detail = objectMapper.createObjectNode();
+        detail.set("before", before.toJson());
+        detail.set("after", policy.toJson());
+        auditService.record(project.getId(), ctx.userId(), "PUBLISH_POLICY_SET", "project:" + key, detail);
+        return policy;
     }
 
     @Override

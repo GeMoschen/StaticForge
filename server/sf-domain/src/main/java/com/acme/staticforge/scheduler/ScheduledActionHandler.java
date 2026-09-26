@@ -1,5 +1,6 @@
 package com.acme.staticforge.scheduler;
 
+import com.acme.staticforge.project.publish.PublishRequirements;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Map;
@@ -30,8 +31,11 @@ public interface ScheduledActionHandler {
      */
     ActionSpec validate(ActionSpec draft, long actorUserId);
 
-    /** What the owner, and anyone changing the action, needs (epic decision 20); evaluated by {@link ActionAuthority}. */
-    ActionRequirements requirements(ActionSpec spec);
+    /**
+     * What the owner, and anyone changing the action, needs (epic decision 20; M28 decision 9: the publish permissions
+     * of the action as saved, "then generate" included); evaluated by {@link ActionAuthority}.
+     */
+    PublishRequirements requirements(ActionSpec spec);
 
     /** Executes one slot as the owner; see {@link ExecutionContext} for re-runs. May throw — the execution then fails. */
     ExecutionResult execute(ExecutionContext ctx);

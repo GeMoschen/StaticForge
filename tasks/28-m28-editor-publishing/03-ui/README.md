@@ -17,9 +17,9 @@ screen, release bar, Changes view, schedules) showing only what the user may do.
 
 ## Feature exit criteria
 
-- [ ] No component derives rights from `ROLE_RANK`/`roleFor` any more; all read `ProjectPermissionsStore`.
-- [ ] A project admin edits the policy with implication rules and an impact warning; others see it read-only.
-- [ ] Editors see exactly the controls their permissions allow; the generation dialog is restricted accordingly and
+- [x] No component derives rights from `ROLE_RANK`/`roleFor` any more; all read `ProjectPermissionsStore`.
+- [x] A project admin edits the policy with implication rules and an impact warning; others see it read-only.
+- [x] Editors see exactly the controls their permissions allow; the generation dialog is restricted accordingly and
       gains a scope picker; runs show comment and who started them.
 
 ## Dependencies

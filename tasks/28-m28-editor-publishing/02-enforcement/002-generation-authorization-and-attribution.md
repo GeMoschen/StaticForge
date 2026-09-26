@@ -1,6 +1,6 @@
 ---
 id: M28.2.2
-status: todo
+status: done
 depends: [M28.1.1]
 epic: m28-editor-publishing
 feature: enforcement
@@ -46,18 +46,18 @@ changelog `v1.0/009-generation-run.xml`, `AuditService`. M27's scheduler starts 
 
 ## Acceptance criteria
 
-- [ ] Unit tests for `GenerationAuthorization.requiredFor`: missing mode → FULL_BUILD; INCREMENTAL + no target →
+- [x] Unit tests for `GenerationAuthorization.requiredFor`: missing mode → FULL_BUILD; INCREMENTAL + no target →
       INCREMENTAL_BUILD; INCREMENTAL + default target id → INCREMENTAL_BUILD; INCREMENTAL + other target →
       FULL_BUILD; any revision → ROLE:DEVELOPER; scoped incremental → INCREMENTAL_BUILD.
-- [ ] Integration: editor with `INCREMENTAL_BUILD` starts an incremental run to the default target (`202`); a FULL
+- [x] Integration: editor with `INCREMENTAL_BUILD` starts an incremental run to the default target (`202`); a FULL
       request or a second target → `403 permission: FULL_BUILD`; with `FULL_BUILD` both succeed; `VIEWER` → `403`;
       dry run follows the same answers.
-- [ ] Incremental request that falls back to a full plan (channel settings changed) succeeds for the editor and the
+- [x] Incremental request that falls back to a full plan (channel settings changed) succeeds for the editor and the
       run's plan summary shows `fallbackCause`.
-- [ ] Cancel: editor cancels their own queued run; another user's run → `403`; developer cancels any.
-- [ ] `comment` round-trips; `startedBy` shows the caller, and "Deleted user" after anonymizing the starter.
-- [ ] Audit entries for start (manual and scheduled, with `scheduledActionId`), cancel and promote.
-- [ ] Regenerated `schema.d.ts` committed; `./gradlew build` green.
+- [x] Cancel: editor cancels their own queued run; another user's run → `403`; developer cancels any.
+- [x] `comment` round-trips; `startedBy` shows the caller, and "Deleted user" after anonymizing the starter.
+- [x] Audit entries for start (manual and scheduled, with `scheduledActionId`), cancel and promote.
+- [x] Regenerated `schema.d.ts` committed; `./gradlew build` green.
 
 ## Out of scope
 

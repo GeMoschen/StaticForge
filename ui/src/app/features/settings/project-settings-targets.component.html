@@ -7,7 +7,9 @@
         server's output root; the default target is used when a run doesn't pick one.
       </p>
     </div>
-    <sf-button variant="primary" [disabled]="readOnly()" (click)="openCreate()">New target</sf-button>
+    @if (permissions.canCreateTargets()) {
+      <sf-button variant="primary" (click)="openCreate()">New target</sf-button>
+    }
   </header>
 
   @if (formOpen()) {
@@ -98,8 +100,10 @@
               <td><code class="mono">{{ target.outputPath ?? '—' }}</code></td>
               <td><code class="mono">{{ baseUrlOf(target) || '—' }}</code></td>
               <td class="table__actions">
-                <sf-button variant="ghost" [disabled]="readOnly()" (click)="openEdit(target)">Edit</sf-button>
-                <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete(target)">Delete</sf-button>
+                @if (permissions.canManageTargets()) {
+                  <sf-button variant="ghost" (click)="openEdit(target)">Edit</sf-button>
+                  <sf-button variant="danger" (click)="requestDelete(target)">Delete</sf-button>
+                }
               </td>
             </tr>
           }

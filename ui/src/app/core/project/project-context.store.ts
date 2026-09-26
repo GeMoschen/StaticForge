@@ -1,7 +1,9 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { NavigationEnd, Router } from '@angular/router';
 import {
   catchError,
+  filter,
   finalize,
   forkJoin,
   map,
@@ -19,10 +21,41 @@ type TemplateSummary = components['schemas']['TemplateSummary'];
 type RevisionView = components['schemas']['RevisionView'];
 type PageTemplateSummary = components['schemas']['PageTemplateSummary'];
 
+/** Returning to the tab re-reads the detail at most this often (M28.3.1). */
+const VISIBILITY_REFRESH_MS = 60_000;
+
 @Injectable({ providedIn: 'root' })
 export class ProjectContextStore {
   private readonly http = inject(HttpClient);
   private readonly access = inject(ProjectAccessStore);
+  /** When the detail was last read, for the visibility throttle. */
+  private detailReadAt = 0;
+  /** A detail read in flight, and whether another one was asked for meanwhile. */
+  private detailInFlight = false;
+  private detailAgain = false;
+
+  /**
+   * The detail carries the caller's publish permissions, which a project admin can change while this app is open
+   * (M28, epic decision 4: the server applies a change on the next request). So the detail is re-read on every
+   * navigation inside the project — a burst of navigations (redirects) shares one read, and a navigation during a read
+   * gets one more read that starts after it — and when the user comes back to the tab, at most once a minute.
+   */
+  constructor() {
+    inject(Router)
+      .events.pipe(filter((event) => event instanceof NavigationEnd))
+      .subscribe(() => {
+        if (this.project() !== null) {
+          this.refreshDetail();
+        }
+      });
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        this.refreshDetailIfOlderThan(VISIBILITY_REFRESH_MS);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    inject(DestroyRef).onDestroy(() => document.removeEventListener('visibilitychange', onVisible));
+  }
 
   readonly activeProjectKey = signal<string | null>(null);
   readonly project = signal<ProjectDetail | null>(null);
@@ -130,6 +163,7 @@ export class ProjectContextStore {
       ),
     }).pipe(
       tap((res) => {
+        this.detailReadAt = Date.now();
         this.project.set(res.detail);
         // Archived projects are read-only (M26): the effective role in them drops to VIEWER.
         this.access.enterProject(projectKey, res.detail.archived === true);
@@ -180,6 +214,52 @@ export class ProjectContextStore {
         /* the trees keep their last statuses; the next navigation reloads them */
       },
     });
+  }
+
+  /**
+   * Re-reads the open project's detail — its archived flag and the caller's publish permissions. Called after a `403`
+   * that names a permission (the policy changed under the open app) and by the refresh throttles.
+   */
+  refreshDetail(): void {
+    const key = this.activeProjectKey();
+    if (!key) {
+      return;
+    }
+    if (this.detailInFlight) {
+      // The read in flight may have started before what prompted this one: read once more when it returns.
+      this.detailAgain = true;
+      return;
+    }
+    this.detailInFlight = true;
+    this.detailReadAt = Date.now();
+    this.http
+      .get<ProjectDetail>(`/api/v1/projects/${key}`)
+      .pipe(
+        finalize(() => {
+          this.detailInFlight = false;
+          if (this.detailAgain) {
+            this.detailAgain = false;
+            this.refreshDetail();
+          }
+        }),
+      )
+      .subscribe({
+        next: (detail) => {
+          if (this.activeProjectKey() === key) {
+            this.project.set(detail);
+            this.access.enterProject(key, detail.archived === true);
+          }
+        },
+        error: () => {
+          /* keep the last detail; the next navigation tries again */
+        },
+      });
+  }
+
+  private refreshDetailIfOlderThan(maxAgeMs: number): void {
+    if (this.project() !== null && Date.now() - this.detailReadAt >= maxAgeMs) {
+      this.refreshDetail();
+    }
   }
 
   refreshRevision(projectKey: string): void {

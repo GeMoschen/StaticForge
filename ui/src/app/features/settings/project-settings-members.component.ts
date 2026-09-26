@@ -16,6 +16,7 @@ import { Subject, debounceTime, of, switchMap, catchError } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { AuthStore } from '../../core/auth/auth.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { PROJECT_ROLES, projectRoleLabel } from '../../core/auth/roles';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
@@ -56,7 +57,7 @@ export class ProjectSettingsMembersComponent {
   protected readonly busyUserId = signal<number | null>(null);
 
   /** The effective role: instance admins count as project admins, and nobody manages an archived project. */
-  protected readonly canManage = computed(() => this.auth.roleFor(this.projectKey()) === 'PROJECT_ADMIN');
+  protected readonly canManage = inject(ProjectPermissionsStore).isProjectAdmin;
   /** The server leaves emails out below project admin: show the column only when they came. */
   protected readonly showEmail = computed(() => this.members().some((m) => m.email != null));
   protected readonly selfId = this.auth.userId;

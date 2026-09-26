@@ -63,7 +63,7 @@ public class TargetController {
 
     @PostMapping
     @Transactional
-    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'ROLE:DEVELOPER')")
     public ResponseEntity<GenerationTargetView> create(
             @PathVariable String projectKey, @RequestBody GenerationTargetRequest body) {
         long projectId = projectService.requireWritable(projectKey).getId();
@@ -80,7 +80,7 @@ public class TargetController {
 
     @PutMapping("/{id}")
     @Transactional
-    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'ROLE:PROJECT_ADMIN')")
     public GenerationTargetView update(
             @PathVariable String projectKey, @PathVariable Long id, @RequestBody GenerationTargetRequest body) {
         projectService.requireWritable(projectKey);
@@ -100,7 +100,7 @@ public class TargetController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'ROLE:PROJECT_ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable String projectKey, @PathVariable Long id) {
         projectService.requireWritable(projectKey);
         targets.delete(requireTarget(projectKey, id));

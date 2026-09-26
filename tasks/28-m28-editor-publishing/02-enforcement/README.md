@@ -17,11 +17,11 @@ generation rules in one place shared with the scheduler, and close the generatio
 
 ## Feature exit criteria
 
-- [ ] Release/discard/unpublish, schedules and generation endpoints follow epic decisions 7–9 for every role × policy
+- [x] Release/discard/unpublish, schedules and generation endpoints follow epic decisions 7–9 for every role × policy
       combination (matrix test).
-- [ ] The scheduler re-checks owners through `PublishPermissionEvaluator` and fails actions whose owner lost the
+- [x] The scheduler re-checks owners through `PublishPermissionEvaluator` and fails actions whose owner lost the
       permission.
-- [ ] Runs store `comment`, expose `startedBy`; start/cancel/promote are audited.
+- [x] Runs store `comment`, expose `startedBy`; start/cancel/promote are audited.
 
 ## Dependencies
 

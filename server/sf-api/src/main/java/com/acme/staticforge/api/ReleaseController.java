@@ -23,8 +23,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Release state changes (M27.1.3): the dependency-aware dry run, release, unpublish and discard. Each mutation is one
- * revision; the rules live in {@link ReleaseService}, the permission in {@code releasePermissions} (one method per
- * operation, so M28's publish policy changes one class).
+ * revision; the rules live in {@link ReleaseService}. Release, unpublish and discard need the {@code RELEASE} publish
+ * permission (M28 decision 8: developers always, editors when the project's policy opens it); the dry run and every
+ * read stay {@code VIEWER}.
  */
 @RestController
 @RequestMapping("/api/v1/projects/{projectKey}/releases")
@@ -59,7 +60,7 @@ public class ReleaseController {
 
     /** Releases the selection and the kept dependencies, in one revision. */
     @PostMapping
-    @PreAuthorize("@releasePermissions.canRelease(#projectKey)")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'RELEASE')")
     public ReleaseResultView release(@PathVariable String projectKey, @RequestBody ReleaseRequest body) {
         List<ReleaseItem> items = new ArrayList<>(items(body.items()));
         items.addAll(items(body.includeDependencies()));
@@ -68,14 +69,14 @@ public class ReleaseController {
 
     /** Takes the selection offline; the drafts stay. */
     @PostMapping("/unpublish")
-    @PreAuthorize("@releasePermissions.canUnpublish(#projectKey)")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'RELEASE')")
     public ReleaseResultView unpublish(@PathVariable String projectKey, @RequestBody ReleaseRequest body) {
         return view(releaseService.unpublish(items(body.items()), ctx(projectKey, body.comment(), "unpublish")));
     }
 
     /** Writes the released versions of the selection back as its drafts. */
     @PostMapping("/discard")
-    @PreAuthorize("@releasePermissions.canDiscard(#projectKey)")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'RELEASE')")
     public ReleaseResultView discard(@PathVariable String projectKey, @RequestBody ReleaseRequest body) {
         return view(releaseService.discard(items(body.items()), ctx(projectKey, body.comment(), "discard changes")));
     }

@@ -1,6 +1,6 @@
 ---
 id: M28.3.1
-status: todo
+status: done
 depends: [M28.1.1]
 epic: m28-editor-publishing
 feature: ui
@@ -37,12 +37,12 @@ in `features/content/content.component.ts`, `dataset-schema-editor.component.ts`
 
 ## Acceptance criteria
 
-- [ ] Vitest: store truth table per role × permissions × readOnly (fixtures built from the generated
+- [x] Vitest: store truth table per role × permissions × readOnly (fixtures built from the generated
       `ProjectDetail` type, lessons "spec fixtures must have the API's real shape").
-- [ ] Grep shows no `roleRank(`/`ROLE_RANK` outside `core/auth/` and the store; the migrated components' existing
+- [x] Grep shows no `roleRank(`/`ROLE_RANK` outside `core/auth/` and the store; the migrated components' existing
       specs pass unchanged in behaviour.
-- [ ] `403` with `permission` refreshes the detail and shows the message once (spec with a mocked response).
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] `403` with `permission` refreshes the detail and shows the message once (spec with a mocked response).
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 

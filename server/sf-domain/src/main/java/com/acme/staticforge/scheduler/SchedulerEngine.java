@@ -2,6 +2,7 @@ package com.acme.staticforge.scheduler;
 
 import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.project.publish.PublishPermissionEvaluator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -250,11 +251,13 @@ public class SchedulerEngine implements AutoCloseable {
             return ExecutionResult.skipped("Skipped: " + human(lateBy) + " late, the limit is "
                     + human(attempt.maxLateness()) + ".");
         }
-        Optional<String> denial = authority.denial(
+        Optional<PublishPermissionEvaluator.Denial> denial = authority.check(
                 attempt.spec().projectId(), attempt.ownerUserId(), handler.get().requirements(attempt.spec()));
         if (denial.isPresent()) {
-            return ExecutionResult.failedAndPause(
-                    SchedulerProblems.OWNER_NOT_PERMITTED, "Owner no longer permitted: " + denial.get() + ".");
+            // "Owner no longer permitted (SCHEDULE_RELEASE): 'bob' is EDITOR without SCHEDULE_RELEASE …" (M28.2.1).
+            String missing = denial.get().missing() == null ? "" : " (" + denial.get().missing() + ")";
+            return ExecutionResult.failedAndPause(SchedulerProblems.OWNER_NOT_PERMITTED,
+                    "Owner no longer permitted" + missing + ": " + denial.get().reason() + ".");
         }
         return handler.get().execute(new Context(attempt));
     }

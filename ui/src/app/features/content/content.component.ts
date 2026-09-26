@@ -3,8 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { filter, forkJoin, map, type Observable } from 'rxjs';
-import { roleRank } from '../../core/auth/auth.guard';
-import { AuthStore } from '../../core/auth/auth.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
@@ -21,7 +20,6 @@ import {
 import { SfTreeComponent } from '../../shared/components/sf-tree.component';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
 import {
   contentTreeNodes,
   findFolder,
@@ -98,8 +96,6 @@ export class ContentComponent {
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly router = inject(Router);
-  private readonly auth = inject(AuthStore);
-  private readonly timeTravel = inject(TimeTravelStore);
   private readonly refresh = inject(ContentStoreRefresh);
   private readonly setActions = inject(RecordSetActions);
   private readonly projectContext = inject(ProjectContextStore);
@@ -127,11 +123,9 @@ export class ContentComponent {
   protected readonly movingSet = signal<FolderView | null>(null);
   protected readonly moving = signal(false);
 
-  private readonly role = computed(() => this.auth.roleFor(this.projectKey()));
-  protected readonly canEdit = computed(
-    () => !this.timeTravel.isTimeTravel() && roleRank(this.role()) >= roleRank('EDITOR'),
-  );
-  protected readonly isDeveloper = computed(() => roleRank(this.role()) >= roleRank('DEVELOPER'));
+  private readonly permissions = inject(ProjectPermissionsStore);
+  protected readonly canEdit = this.permissions.canEditContent;
+  protected readonly isDeveloper = this.permissions.isDeveloper;
 
   private readonly url = toSignal(
     this.router.events.pipe(

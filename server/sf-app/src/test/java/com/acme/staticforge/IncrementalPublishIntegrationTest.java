@@ -171,7 +171,7 @@ class IncrementalPublishIntegrationTest {
         assertThat(afterScoped.getPlanSummary().path("baselineRevision").asLong()).isEqualTo(second.getRevisionId());
 
         // Promote: the baseline is the promoted build.
-        generationService.promote(fx.project().getKey(), first.getId());
+        generationService.promote(fx.project().getKey(), first.getId(), null);
         GenerationRun afterPromote = fixtures.succeeded(fixtures.generate(fx, a, GenerationMode.INCREMENTAL));
         assertThat(afterPromote.getPlanSummary().path("baselineRevision").asLong()).isEqualTo(first.getRevisionId());
         assertThat(fixtures.files(fx, a, afterPromote).get("about.html")).isEqualTo("<p>about v3</p>");

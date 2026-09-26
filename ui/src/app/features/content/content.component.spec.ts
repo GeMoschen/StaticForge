@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { ContextMenuService } from '../../shared/services/context-menu.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ContentComponent } from './content.component';
@@ -91,6 +92,7 @@ async function setup(
       { provide: TimeTravelStore, useValue: new TimeTravelStore() },
       { provide: ContextMenuService, useValue: menu },
       { provide: ProjectContextStore, useValue: projectContext },
+      provideProjectPermissions({ role: () => role, readOnly: () => false }),
     ],
   });
   const router = view.fixture.debugElement.injector.get(Router);

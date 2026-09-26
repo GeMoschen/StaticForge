@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M28.1.1: the per-project publish policy, what editors may do to put content online
+         ({"editor": ["RELEASE", ...]}). Every existing project and every new one starts with nothing opened.
+         A JSON column declared per dialect like project.locale_config (017): PostgreSQL JSONB, H2 JSON. The column
+         default fills existing rows; the entity writes the value for new ones. -->
+    <changeSet id="025-publish-policy-postgresql" author="sf" dbms="postgresql">
+        <comment>Publish policy (M28) — PostgreSQL (jsonb).</comment>
+        <sql>ALTER TABLE project ADD COLUMN publish_policy JSONB NOT NULL DEFAULT '{"editor":[]}'::jsonb</sql>
+    </changeSet>
+
+    <changeSet id="025-publish-policy-h2" author="sf" dbms="h2">
+        <comment>Publish policy (M28) — H2 (json).</comment>
+        <sql>ALTER TABLE project ADD COLUMN publish_policy JSON DEFAULT JSON '{"editor":[]}' NOT NULL</sql>
+    </changeSet>
+
+</databaseChangeLog>

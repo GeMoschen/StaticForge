@@ -20,6 +20,8 @@ import {
 import { RouterLink } from '@angular/router';
 import { Observable, map } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
+import { ProjectContextStore } from '../../core/project/project-context.store';
+import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
 import { ChannelsService } from '../channels/channels.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ToastService } from '../../core/ui/toast.service';
@@ -48,7 +50,30 @@ import {
 
 type GenerationRunView = components['schemas']['GenerationRunView'];
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
+type FolderView = components['schemas']['FolderView'];
 type GenerationMode = 'FULL' | 'INCREMENTAL';
+
+/** A pages folder the scope can be limited to, indented by depth. */
+interface FolderOption {
+  path: string;
+  label: string;
+}
+
+/** The pages folders below the store's fixed root, depth first. */
+function folderOptions(tree: FolderView[]): FolderOption[] {
+  const out: FolderOption[] = [];
+  const walk = (nodes: FolderView[], depth: number) => {
+    for (const node of nodes) {
+      if (node.path && node.type !== 'RECORD_SET') {
+        out.push({ path: node.path, label: `${'\u00a0\u00a0'.repeat(depth)}${node.displayName ?? node.uid ?? node.path}` });
+      }
+      walk(node.children ?? [], depth + 1);
+    }
+  };
+  // The tree's single entry is the protected "All Pages" wrapper: its folders are the choices.
+  walk(tree.flatMap((root) => root.children ?? []), 0);
+  return out;
+}
 
 interface GenerationForm {
   mode: FormControl<GenerationMode>;
@@ -61,7 +86,15 @@ interface GenerationForm {
   selector: 'sf-generation-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, SfButtonComponent, SfFieldComponent, SfIconComponent, SfPlanEntriesTableComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    SfAssetPickerDialogComponent,
+    SfButtonComponent,
+    SfFieldComponent,
+    SfIconComponent,
+    SfPlanEntriesTableComponent,
+  ],
   templateUrl: './generation-dialog.component.html',
   styleUrl: './generation-dialog.component.scss',
   host: { '(keydown.alt.p)': 'onPreviewShortcut($event)' },
@@ -69,6 +102,13 @@ interface GenerationForm {
 export class GenerationDialogComponent {
   readonly projectKey = input.required<string>();
   readonly targets = input<GenerationTargetView[]>([]);
+  /**
+   * Whether the caller may start full builds and builds to any target (M28.3.3). Without it the run is incremental to
+   * the default target: both are shown, not chosen — the server refuses anything else with `403 FULL_BUILD`.
+   */
+  readonly fullBuild = input(true);
+  /** Where a run without a target goes (shown when the target is fixed). */
+  readonly defaultTargetId = input<number | null>(null);
   readonly started = output<GenerationRunView>();
   readonly cancelled = output<void>();
 
@@ -76,6 +116,7 @@ export class GenerationDialogComponent {
   private readonly apiClient = inject(ApiClient);
   private readonly channelsApi = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
+  private readonly context = inject(ProjectContextStore);
 
   readonly submitting = signal(false);
   readonly error = signal<string | null>(null);
@@ -89,6 +130,32 @@ export class GenerationDialogComponent {
     comment: new FormControl('', { nonNullable: true }),
     channels: new FormArray<FormControl<boolean>>([]),
   });
+
+  // ------------------------------------------------------------------
+  // Scope (M28.3.3): a pages folder and/or single pages; empty builds everything that changed.
+  // ------------------------------------------------------------------
+
+  readonly folderOptions = computed(() => folderOptions(this.context.pageFolderTree()));
+  readonly scopeFolder = signal('');
+  readonly scopePages = signal<AssetPicked[]>([]);
+  readonly pickingPage = signal(false);
+  readonly defaultTargetName = computed(() => {
+    const id = this.defaultTargetId();
+    return this.targets().find((t) => t.id === id)?.name ?? 'Default target';
+  });
+
+  addPage(page: AssetPicked): void {
+    this.pickingPage.set(false);
+    this.scopePages.update((pages) => (pages.some((p) => p.uuid === page.uuid) ? pages : [...pages, page]));
+  }
+
+  removePage(uuid: string): void {
+    this.scopePages.update((pages) => pages.filter((p) => p.uuid !== uuid));
+  }
+
+  onScopeFolder(event: Event): void {
+    this.scopeFolder.set((event.target as HTMLSelectElement).value);
+  }
 
   // ------------------------------------------------------------------
   // Plan preview (M22.3.1)
@@ -140,6 +207,17 @@ export class GenerationDialogComponent {
       const key = this.projectKey();
       untracked(() => this.loadChannels(key));
     });
+    // Without FULL_BUILD the mode and target are fixed: incremental, to the default target.
+    effect(() => {
+      const restricted = !this.fullBuild();
+      const target = this.defaultTargetId();
+      untracked(() => {
+        if (restricted) {
+          this.form.controls.mode.setValue('INCREMENTAL');
+          this.form.controls.targetId.setValue(target);
+        }
+      });
+    });
   }
 
   private loadChannels(projectKey: string): void {
@@ -164,11 +242,15 @@ export class GenerationDialogComponent {
     const channels = this.channelOptions().filter(
       (_, index) => this.form.controls.channels.at(index)?.value ?? false,
     );
+    const folderPath = this.scopeFolder();
+    const assetUuids = this.scopePages().map((page) => page.uuid);
     return {
       mode: this.form.controls.mode.value ?? 'FULL',
       targetId: this.form.controls.targetId.value ?? undefined,
       comment: this.form.controls.comment.value.trim() || undefined,
       ...(channels.length > 0 ? { channels } : {}),
+      ...(folderPath ? { folderPath } : {}),
+      ...(assetUuids.length > 0 ? { assetUuids } : {}),
     };
   }
 

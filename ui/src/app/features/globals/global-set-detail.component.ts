@@ -13,8 +13,7 @@ import {
   untracked,
 } from '@angular/core';
 import { FormGroup } from '@angular/forms';
-import { AuthStore } from '../../core/auth/auth.store';
-import { roleRank } from '../../core/auth/auth.guard';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
@@ -82,7 +81,6 @@ export class GlobalSetDetailComponent {
 
   private readonly forms = inject(FormBuilderService);
   private readonly toasts = inject(ToastService);
-  private readonly auth = inject(AuthStore);
   private readonly timeTravel = inject(TimeTravelStore);
 
   protected readonly timeTravelling = this.timeTravel.isTimeTravel;
@@ -106,15 +104,11 @@ export class GlobalSetDetailComponent {
   protected readonly valueIssues = signal<ContentIssue[]>([]);
   protected readonly copied = signal(false);
 
-  private readonly role = computed(() => this.auth.roleFor(this.projectKey()));
+  private readonly permissions = inject(ProjectPermissionsStore);
 
   /** Values need `EDITOR`; the schema needs `DEVELOPER`. Time travel makes the whole screen read-only. */
-  protected readonly canEditValues = computed(
-    () => !this.timeTravelling() && roleRank(this.role()) >= roleRank('EDITOR'),
-  );
-  protected readonly canEditSchema = computed(
-    () => !this.timeTravelling() && roleRank(this.role()) >= roleRank('DEVELOPER'),
-  );
+  protected readonly canEditValues = this.permissions.canEditContent;
+  protected readonly canEditSchema = this.permissions.canEditTemplates;
 
   /** The snippet a developer pastes into a channel template to read this set. */
   protected readonly usageSnippet = computed(() => {

@@ -155,22 +155,25 @@
     }
 
     @if (releaseState()) {
-      <fieldset class="sched__group">
-        <legend class="sched__legend">Then</legend>
-        <label class="sched__choice">
-          <input type="checkbox" [checked]="thenGenerate()" (change)="thenGenerate.set($any($event.target).checked)" />
-          Generate right after (incremental build)
-        </label>
-        @if (thenGenerate()) {
-          <sf-generation-options
-            [projectKey]="projectKey()"
-            [showMode]="false"
-            name="then"
-            [(targetId)]="targetId"
-            [(channels)]="channels"
-          />
-        }
-      </fieldset>
+      @if (permissions.canIncrementalBuild()) {
+        <fieldset class="sched__group">
+          <legend class="sched__legend">Then</legend>
+          <label class="sched__choice">
+            <input type="checkbox" [checked]="thenGenerate()" (change)="thenGenerate.set($any($event.target).checked)" />
+            Generate right after (incremental build)
+          </label>
+          @if (thenGenerate()) {
+            <sf-generation-options
+              [projectKey]="projectKey()"
+              [showMode]="false"
+              [anyTarget]="permissions.canFullBuild()"
+              name="then"
+              [(targetId)]="targetId"
+              [(channels)]="channels"
+            />
+          }
+        </fieldset>
+      }
     } @else {
       <fieldset class="sched__group">
         <legend class="sched__legend">Build</legend>

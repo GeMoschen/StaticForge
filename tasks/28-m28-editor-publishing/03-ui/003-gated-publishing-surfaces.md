@@ -1,6 +1,6 @@
 ---
 id: M28.3.3
-status: todo
+status: done
 depends: [M28.3.1, M28.2.1, M28.2.2]
 epic: m28-editor-publishing
 feature: ui
@@ -42,12 +42,12 @@ Discard / Schedule), the schedules list and dialogs. `ProjectPermissionsStore` (
 
 ## Acceptance criteria
 
-- [ ] Vitest per surface: controls present/absent/disabled for editor with each permission set, developer, viewer,
+- [x] Vitest per surface: controls present/absent/disabled for editor with each permission set, developer, viewer,
       read-only; dialog restrictions (fixed mode/target, no pin revision); `canCancelRun` own vs foreign run.
-- [ ] Scope fields send `folderPath`/`assetUuids` in the request shape of the generated schema.
-- [ ] Manual check in the running app as editor with (a) nothing, (b) `RELEASE` + `INCREMENTAL_BUILD`, (c) all four;
+- [x] Scope fields send `folderPath`/`assetUuids` in the request shape of the generated schema.
+- [x] Manual check in the running app as editor with (a) nothing, (b) `RELEASE` + `INCREMENTAL_BUILD`, (c) all four;
       and as developer (unchanged).
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 

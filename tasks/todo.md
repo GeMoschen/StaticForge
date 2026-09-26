@@ -1,3 +1,52 @@
+# M28 — Editor publishing (branch `m28-editor-publishing`)
+
+Spec: `tasks/28-m28-editor-publishing/`. Decisions 1–14 there are binding.
+Plan deviations known up front: `generation_run.comment` and its view field already exist (M27 follow-up, changelog
+`023`), so the publish policy gets changelog `025-publish-policy.xml`; M28.2.2 adds only `startedBy`, the 500-char
+`400` and the audit.
+
+- [x] M28.1.1 — `PublishPermission`, `PublishPolicy` (grants/validate/effective), changelog 025, `Project.publishPolicy`
+- [x] M28.1.1 — `PublishPermissionEvaluator` (membership row), `ProjectAuthorizationService.can/permissions` (403 +
+      `permission` extension), `ProjectService.publishPolicy/updatePublishPolicy` (revision + audit)
+- [x] M28.1.1 — `GET/PUT /publish-policy`, `POST /publish-policy/impact`, `ProjectDetail.publishPolicy/permissions`
+- [x] M28.1.1 — tests: grants table, validate, can≡permitted, next-request, PUT revision/audit/no-op/archived/403,
+      impact, SpEL literal scan
+- [x] M28.2.1 — release/unpublish/discard via `can(RELEASE)`; `ReleasePermissionCheck` via evaluator; handler
+      requirements (SCHEDULE_RELEASE + then-generate build permission); `ActionAuthority` evaluates permissions;
+      foreign schedules need DEVELOPER; execution message names the permission
+- [x] M28.2.2 — `GenerationAuthorization.requiredFor`; start/plan/cancel rules; `startedBy`; comment >500 → 400;
+      audit START/CANCEL/PROMOTE; idempotency key scoped by project+user; admin audit labels
+- [x] M28.2.3 — `PublishPermissionMatrixTest`
+- [x] M28.3.1 — `ProjectPermissionsStore`, migrate ad-hoc role checks, 403 `permission` handling, visibility refresh
+- [x] M28.3.2 — "Publishing by editors" card with impact dialog
+- [x] M28.3.3 — gated generation screen (dialog restrictions, scope, cancel/promote, startedBy), release surfaces,
+      schedules, Build now, empty state
+- [x] M28.4.1 — spec + docs
+- [x] M28.4.2 — `ui/e2e/m28-journeys.spec.ts` green twice; defects fixed with tests
+- [x] `./gradlew test --rerun` (1365 tests, 0 failures, 6 skipped benchmarks), `ng build`, `npx vitest run` (96 files, 645 tests)
+
+
+## Review
+
+- **Backend (M28.1–M28.2).** One rule for everything: `PublishRequirements.missing(role, policy)` over
+  `PublishPolicy.grants`, evaluated from the token (`ProjectAuthorizationService.can/satisfies`) and from the stored
+  membership (`PublishPermissionEvaluator`, used by the scheduler, the schedules API and the release service).
+  `GenerationAuthorization` decides what a generation request needs; release handlers state SCHEDULE_RELEASE plus the
+  "then generate" build permission. Denials carry `permission`. Tests: policy unit table, publish-policy API (incl. the
+  next-request check with a still-valid token and the SpEL literal scan), release/schedule and generation integration,
+  and the matrix walk (494 checks; negative control documented).
+- **UI (M28.3).** `ProjectPermissionsStore` replaces every ad-hoc role check and M27's `ReleasePermissionsStore`; the
+  "Publishing by editors" card with impact dialog; gated generation screen (restricted dialog, scope, own-run cancel,
+  started-by), release bar/Changes/schedules follow the server rules; "Build now" after a release.
+- **Found on the way:** toasts were never rendered (added `ToastHostComponent`); the journey found the navigation
+  refresh dropping updates inside its throttle window (now coalesced). Both with specs.
+- **Deviations** (recorded in `04-docs-e2e/001-docs-and-spec.md`): changelog 025; comment >500 truncated (M27 rule);
+  LOCKED accounts keep permissions; policy not versioned for time travel; a foreign target id is 403 FULL_BUILD, not 404;
+  no audit label table exists in the UI; the dialog never had "pin revision"; the publish policy is not part of export
+  archives (follow-up candidate).
+
+---
+
 # M27.8 — Schedules in archives, protocol 9 (branch `m27-8-schedule-export`)
 
 Spec: `tasks/27-m27-release-and-scheduling/08-schedule-export/`. Decisions 1–9 there (with the user, 2026-09-26).

@@ -17,8 +17,7 @@ import { RouterLink } from '@angular/router';
 import { forkJoin, Subscription } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
-import { AuthStore } from '../../core/auth/auth.store';
-import { roleRank } from '../../core/auth/auth.guard';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -101,7 +100,6 @@ export class RecordEditorComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly forms = inject(FormBuilderService);
   private readonly toasts = inject(ToastService);
-  private readonly auth = inject(AuthStore);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly refresh = inject(ContentStoreRefresh, { optional: true });
   protected readonly autosave = inject(RecordAutosaveService);
@@ -131,8 +129,8 @@ export class RecordEditorComponent implements OnDestroy {
 
   private formSubscription: Subscription | null = null;
 
-  private readonly canEditRole = computed(() => roleRank(this.auth.roleFor(this.projectKey())) >= roleRank('EDITOR'));
-  protected readonly readOnly = computed(() => this.timeTravelling() || !this.canEditRole());
+  private readonly canEditContent = inject(ProjectPermissionsStore).canEditContent;
+  protected readonly readOnly = computed(() => this.timeTravelling() || !this.canEditContent());
   /** The field that names the record; without one the record keeps its uuid as its name (M25). */
   protected readonly titleEditor = computed(() => this.dataset()?.titleEditor ?? null);
 

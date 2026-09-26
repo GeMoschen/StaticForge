@@ -100,6 +100,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/publish-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_1"];
+        put: operations["update_5"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/pages/{uuid}": {
         parameters: {
             query?: never;
@@ -108,7 +124,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_4"];
-        put: operations["update_5"];
+        put: operations["update_6"];
         post?: never;
         delete?: never;
         options?: never;
@@ -140,7 +156,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_5"];
-        put: operations["update_6"];
+        put: operations["update_7"];
         post?: never;
         delete: operations["delete_3"];
         options?: never;
@@ -284,7 +300,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_8"];
-        put: operations["update_7"];
+        put: operations["update_8"];
         post?: never;
         delete: operations["delete_6"];
         options?: never;
@@ -300,7 +316,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_8"];
+        put: operations["update_9"];
         post?: never;
         delete: operations["delete_7"];
         options?: never;
@@ -316,7 +332,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_10"];
-        put: operations["update_9"];
+        put: operations["update_10"];
         post?: never;
         delete?: never;
         options?: never;
@@ -654,6 +670,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["previewQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/publish-policy/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["impact"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1505,7 +1537,7 @@ export interface paths {
         delete: operations["delete_9"];
         options?: never;
         head?: never;
-        patch: operations["update_10"];
+        patch: operations["update_11"];
         trace?: never;
     };
     "/api/v1/users/lookup": {
@@ -2075,7 +2107,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["impact"];
+        get: operations["impact_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2497,6 +2529,9 @@ export interface components {
             /** Format: int32 */
             column?: number;
         };
+        PublishPolicyView: {
+            editor?: string[];
+        };
         PageView: {
             /** Format: uuid */
             uuid?: string;
@@ -2739,6 +2774,8 @@ export interface components {
             /** Format: int64 */
             createdBy?: number;
             allowedMimeTypes?: string[];
+            publishPolicy?: components["schemas"]["PublishPolicyView"];
+            permissions?: string[];
         };
         SetMemberRoleRequest: {
             role: string;
@@ -2955,6 +2992,20 @@ export interface components {
             /** Format: int64 */
             selectedCount?: number;
         };
+        FailingSchedule: {
+            /** Format: int64 */
+            id?: number;
+            type?: string;
+            /** Format: date-time */
+            runAt?: string;
+            /** Format: int64 */
+            ownerUserId?: number;
+            ownerName?: string;
+            missingPermission?: string;
+        };
+        PublishPolicyImpactView: {
+            failingSchedules?: components["schemas"]["FailingSchedule"][];
+        };
         PreviewSectionRequest: {
             /** Format: uuid */
             templateUuid?: string;
@@ -3107,6 +3158,7 @@ export interface components {
             diagnostics?: components["schemas"]["JsonNode"];
             planSummary?: components["schemas"]["PlanSummaryView"];
             comment?: string;
+            startedBy?: components["schemas"]["StartedBy"];
         };
         PlanSummaryView: {
             mode?: string;
@@ -3139,6 +3191,11 @@ export interface components {
             };
             via?: components["schemas"]["Via"][];
             planAvailable?: boolean;
+        };
+        StartedBy: {
+            /** Format: int64 */
+            id?: number;
+            displayName?: string;
         };
         Via: {
             edge?: string;
@@ -3444,20 +3501,20 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
-            numberOfElements?: number;
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -3465,11 +3522,11 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            pageSize?: number;
+            paged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
-            paged?: boolean;
+            /** Format: int32 */
+            pageSize?: number;
             unpaged?: boolean;
         };
         SortObject: {
@@ -3493,20 +3550,20 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
-            numberOfElements?: number;
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -3736,20 +3793,20 @@ export interface components {
             scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageMediaSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
-            numberOfElements?: number;
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -3853,20 +3910,20 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
-            numberOfElements?: number;
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
+            /** Format: int32 */
+            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
@@ -4329,6 +4386,54 @@ export interface operations {
             };
         };
     };
+    get_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PublishPolicyView"];
+                };
+            };
+        };
+    };
+    update_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishPolicyView"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PublishPolicyView"];
+                };
+            };
+        };
+    };
     detail_4: {
         parameters: {
             query?: never;
@@ -4352,7 +4457,7 @@ export interface operations {
             };
         };
     };
-    update_5: {
+    update_6: {
         parameters: {
             query?: never;
             header?: {
@@ -4434,7 +4539,7 @@ export interface operations {
             };
         };
     };
-    update_6: {
+    update_7: {
         parameters: {
             query?: {
                 confirmDiscard?: boolean;
@@ -4850,7 +4955,7 @@ export interface operations {
             };
         };
     };
-    update_7: {
+    update_8: {
         parameters: {
             query?: {
                 confirmDiscard?: boolean;
@@ -4902,7 +5007,7 @@ export interface operations {
             };
         };
     };
-    update_8: {
+    update_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -4972,7 +5077,7 @@ export interface operations {
             };
         };
     };
-    update_9: {
+    update_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -5689,6 +5794,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RecordSetQueryPreviewView"];
+                };
+            };
+        };
+    };
+    impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishPolicyView"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PublishPolicyImpactView"];
                 };
             };
         };
@@ -7409,7 +7540,7 @@ export interface operations {
             };
         };
     };
-    update_10: {
+    update_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -8369,7 +8500,7 @@ export interface operations {
             };
         };
     };
-    impact: {
+    impact_1: {
         parameters: {
             query?: {
                 channel?: string;

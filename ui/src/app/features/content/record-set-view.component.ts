@@ -14,8 +14,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
-import { roleRank } from '../../core/auth/auth.guard';
-import { AuthStore } from '../../core/auth/auth.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -79,7 +78,6 @@ export class RecordSetViewComponent {
 
   private readonly content = inject(ContentService);
   private readonly api = inject(ApiClient);
-  private readonly auth = inject(AuthStore);
   private readonly toasts = inject(ToastService);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly router = inject(Router);
@@ -103,8 +101,8 @@ export class RecordSetViewComponent {
 
   protected readonly invalidQueryWarning = INVALID_QUERY_WARNING;
 
-  private readonly canEditRole = computed(() => roleRank(this.auth.roleFor(this.projectKey())) >= roleRank('EDITOR'));
-  protected readonly readOnly = computed(() => this.timeTravelling() || !this.canEditRole());
+  private readonly canEditContent = inject(ProjectPermissionsStore).canEditContent;
+  protected readonly readOnly = computed(() => this.timeTravelling() || !this.canEditContent());
   protected readonly folderPath = computed(() => storeFolderPath(this.set()?.folderPath));
   protected readonly recordCountLabel = computed(() => {
     const count = this.set()?.recordCount ?? 0;

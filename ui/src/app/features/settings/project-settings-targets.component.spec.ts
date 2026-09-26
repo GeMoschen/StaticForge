@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { GenerationService } from '../generation/generation.service';
 import { ProjectSettingsTargetsComponent } from './project-settings-targets.component';
+import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
 type JsonNode = components['schemas']['JsonNode'];
@@ -35,10 +36,13 @@ function makeApiStub(targets: GenerationTargetView[] = [live, scratch]) {
   };
 }
 
-async function setup(api = makeApiStub()) {
+async function setup(api = makeApiStub(), role = 'PROJECT_ADMIN') {
   const view = await render(ProjectSettingsTargetsComponent, {
     componentInputs: { projectKey: 'proj' },
-    providers: [{ provide: GenerationService, useValue: api }],
+    providers: [
+      { provide: GenerationService, useValue: api },
+      provideProjectPermissions({ role: () => role, readOnly: () => false }),
+    ],
   });
   return { api, view };
 }

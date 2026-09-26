@@ -7,6 +7,7 @@ import com.acme.staticforge.api.dto.ProjectLocalesView;
 import com.acme.staticforge.api.dto.ProjectMemberView;
 import com.acme.staticforge.api.dto.ProjectSummary;
 import com.acme.staticforge.api.dto.ProjectUpdateRequest;
+import com.acme.staticforge.api.dto.PublishPolicyView;
 import com.acme.staticforge.api.dto.SetMemberRoleRequest;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.Problem;
@@ -17,6 +18,7 @@ import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectMember;
 import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.project.publish.PublishPolicy;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.AuthenticatedUser;
 import com.acme.staticforge.security.ProjectAuthorizationService;
@@ -247,7 +249,7 @@ public class ProjectController {
                 project.getKey(), project.getName(), project.getDescription(), role.name(), project.isArchived());
     }
 
-    private static ProjectDetail toDetail(Project project) {
+    private ProjectDetail toDetail(Project project) {
         return new ProjectDetail(
                 project.getKey(),
                 project.getName(),
@@ -255,7 +257,11 @@ public class ProjectController {
                 project.isArchived(),
                 project.getCreatedAt(),
                 project.getCreatedBy(),
-                project.allowedMimeTypesList());
+                project.allowedMimeTypesList(),
+                new PublishPolicyView(PublishPolicy.fromJson(project.getPublishPolicy()).editor().stream()
+                        .map(Enum::name)
+                        .toList()),
+                projectAuth.permissions(project.getKey()).stream().map(Enum::name).toList());
     }
 
     private static ProjectRole parseRole(String role) {

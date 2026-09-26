@@ -5,19 +5,30 @@ import com.acme.staticforge.api.dto.GenerationRequestDto;
 import com.acme.staticforge.api.dto.GenerationRunView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.generate.GenerationAuthorization;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
 import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.insight.PlanEntryRecord;
+import com.acme.staticforge.project.ProjectRole;
+import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.project.publish.PublishPermission;
+import com.acme.staticforge.project.publish.PublishRequirements;
+import com.acme.staticforge.security.ProjectAuthorizationService;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.user.AppUser;
+import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,6 +47,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * to {@link GenerationService}. {@code GET /{runId}/events} streams progress over SSE with
  * single-node affinity (§26.2) — the emitter registry is in-memory, so a project's runs and SSE
  * subscriptions must land on the same instance.
+ *
+ * <p>Who may start what (M28.2.2, epic decision 7) depends on the body, so start and dry run require {@code EDITOR}
+ * at the annotation and then {@link GenerationAuthorization}'s requirements for the request: {@code INCREMENTAL_BUILD}
+ * for an explicit incremental run to the default target, {@code FULL_BUILD} for a full run or another target,
+ * {@code DEVELOPER} for a pinned revision. An editor holding a build permission cancels the runs they started;
+ * promote stays {@code DEVELOPER}.
  */
 @RestController
 @RequestMapping("/api/v1/projects/{projectKey}/generations")
@@ -44,12 +61,26 @@ public class GenerationController {
     private static final long SSE_TIMEOUT_MILLIS = 30L * 60 * 1000;
 
     private final GenerationService generationService;
+    private final GenerationAuthorization generationAuthorization;
+    private final ProjectAuthorizationService projectAuth;
+    private final ProjectService projectService;
+    private final UserService userService;
     private final SecuritySupport securitySupport;
     private final ObjectMapper mapper;
 
     public GenerationController(
-            GenerationService generationService, SecuritySupport securitySupport, ObjectMapper mapper) {
+            GenerationService generationService,
+            GenerationAuthorization generationAuthorization,
+            ProjectAuthorizationService projectAuth,
+            ProjectService projectService,
+            UserService userService,
+            SecuritySupport securitySupport,
+            ObjectMapper mapper) {
         this.generationService = generationService;
+        this.generationAuthorization = generationAuthorization;
+        this.projectAuth = projectAuth;
+        this.projectService = projectService;
+        this.userService = userService;
         this.securitySupport = securitySupport;
         this.mapper = mapper;
     }
@@ -57,15 +88,16 @@ public class GenerationController {
     @GetMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public List<GenerationRunView> history(@PathVariable String projectKey) {
-        return generationService.history(projectKey).stream().map(this::toView).toList();
+        return toViews(generationService.history(projectKey));
     }
 
     @PostMapping
-    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'ROLE:EDITOR')")
     public ResponseEntity<GenerationRunView> start(
             @PathVariable String projectKey,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody GenerationRequestDto body) {
+        authorize(projectKey, body);
         GenerationRun run = generationService.start(projectKey, toRequest(body, idempotencyKey),
                 securitySupport.currentUserId());
         return ResponseEntity.accepted()
@@ -75,11 +107,12 @@ public class GenerationController {
 
     /**
      * Dry run (M22.2.1): the plan a run started now with the same request would build, with every entry's reason. Nothing
-     * is rendered, written, stored or locked, so it also works while a run is active.
+     * is rendered, written, stored or locked, so it also works while a run is active. Authorized like a start (M28.2.2):
+     * it shows what the caller could run.
      */
     @AllowedOnArchivedProject("A dry run: plans a build, writes nothing.")
     @PostMapping("/plan")
-    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'ROLE:EDITOR')")
     public GenerationPlanView plan(
             @PathVariable String projectKey,
             @RequestBody GenerationRequestDto body,
@@ -89,6 +122,7 @@ public class GenerationController {
             @RequestParam(required = false) String channel,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "false") boolean validate) {
+        authorize(projectKey, body);
         GenerationService.DryRun dryRun = generationService.dryRun(projectKey, toRequest(body, null), validate);
         Page<PlanEntryRecord> entries =
                 PlanViews.page(dryRun.entries(), PlanViews.filter(rootKind, channel, q), PlanViews.pageable(page, size));
@@ -131,17 +165,31 @@ public class GenerationController {
         return toView(generationService.status(projectKey, runId));
     }
 
+    /**
+     * Developers cancel any run; an editor holding {@code INCREMENTAL_BUILD} only a run they started — a scheduled run
+     * counts as started by the schedule's owner. Anyone else's run: {@code 403} with {@code ROLE:DEVELOPER}.
+     */
     @AllowedOnArchivedProject("Stops a run queued or started before the project was archived; creates nothing.")
     @PostMapping("/{runId}/cancel")
-    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'ROLE:EDITOR')")
     public GenerationRunView cancel(@PathVariable String projectKey, @PathVariable long runId) {
-        return toView(generationService.cancel(projectKey, runId));
+        Long caller = securitySupport.currentUserId();
+        if (projectAuth.missing(projectKey, PublishRequirements.role(ProjectRole.DEVELOPER)).isPresent()) {
+            GenerationRun run = generationService.status(projectKey, runId);
+            if (!Objects.equals(run.getStartedBy(), caller)) {
+                throw new SfException(ProblemFactory.forbidden(
+                        "Only developers may cancel a run someone else started.",
+                        PublishRequirements.ROLE_PREFIX + ProjectRole.DEVELOPER.name()));
+            }
+            projectAuth.can(projectKey, PublishPermission.INCREMENTAL_BUILD);
+        }
+        return toView(generationService.cancel(projectKey, runId, caller));
     }
 
     @PostMapping("/{runId}/promote")
-    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
+    @PreAuthorize("@projectAuth.can(#projectKey, 'ROLE:DEVELOPER')")
     public GenerationRunView promote(@PathVariable String projectKey, @PathVariable long runId) {
-        return toView(generationService.promote(projectKey, runId));
+        return toView(generationService.promote(projectKey, runId, securitySupport.currentUserId()));
     }
 
     @GetMapping("/{runId}/events")
@@ -179,6 +227,13 @@ public class GenerationController {
         }
     }
 
+    /** {@code 403} naming the permission the request needs unless the caller holds it (M28.2.2). */
+    private void authorize(String projectKey, GenerationRequestDto body) {
+        long projectId = projectService.requireByKey(projectKey).getId();
+        projectAuth.satisfies(
+                projectKey, generationAuthorization.requiredFor(projectId, body.mode(), body.targetId(), body.revision()));
+    }
+
     private static GenerationRequest toRequest(GenerationRequestDto body, String idempotencyKey) {
         return new GenerationRequest(
                 body.mode() == null ? GenerationMode.FULL : body.mode(),
@@ -192,6 +247,22 @@ public class GenerationController {
     }
 
     private GenerationRunView toView(GenerationRun run) {
+        return toView(run, starters(List.of(run)));
+    }
+
+    private List<GenerationRunView> toViews(List<GenerationRun> runs) {
+        Map<Long, AppUser> starters = starters(runs);
+        return runs.stream().map(run -> toView(run, starters)).toList();
+    }
+
+    /** Who started {@code runs}, in one lookup. */
+    private Map<Long, AppUser> starters(Collection<GenerationRun> runs) {
+        return userService.findAllById(
+                runs.stream().map(GenerationRun::getStartedBy).filter(Objects::nonNull).distinct().toList());
+    }
+
+    private GenerationRunView toView(GenerationRun run, Map<Long, AppUser> starters) {
+        AppUser starter = run.getStartedBy() == null ? null : starters.get(run.getStartedBy());
         return new GenerationRunView(
                 run.getId(),
                 run.getRevisionId(),
@@ -208,7 +279,8 @@ public class GenerationController {
                 run.getWarningCount(),
                 run.getDiagnostics(),
                 PlanViews.summary(run.getPlanSummary()),
-                run.getComment());
+                run.getComment(),
+                starter == null ? null : new GenerationRunView.StartedBy(starter.getId(), starter.getDisplayName()));
     }
 
     private List<String> parseChannels(String json) {

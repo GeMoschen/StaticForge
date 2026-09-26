@@ -6,6 +6,7 @@ import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ProjectSettingsMembersComponent } from './project-settings-members.component';
+import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 
 type ProjectMemberView = components['schemas']['ProjectMemberView'];
 type UserLookupHit = components['schemas']['UserLookupHit'];
@@ -53,7 +54,7 @@ async function setup(user: MeResponse, members: ProjectMemberView[] = [owner, ed
   };
   const view = await render(ProjectSettingsMembersComponent, {
     componentInputs: { projectKey: 'acme' },
-    providers: [provideRouter([]), { provide: ApiClient, useValue: api }],
+    providers: [provideRouter([]), { provide: ApiClient, useValue: api }, provideProjectPermissions({ projectKey: 'acme' })],
     configureTestBed: (tb) => tb.inject(AuthStore).setUser(user),
   });
   // The list loads from an effect, one change-detection pass after the first render.

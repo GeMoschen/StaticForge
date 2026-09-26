@@ -8,7 +8,7 @@ The interface is built around one idea (§24.1): **every change is on the record
 
 | Persona | Can do |
 |---|---|
-| **Editor** | create/edit page content, sections, media, records, global values; preview |
+| **Editor** | create/edit page content, sections, media, records, global values; preview; release, schedule and build when the project allows it (see [Publishing as an editor](#publishing-as-an-editor-m28)) |
 | **Project administrator** | + manage members, channels, generation targets, trigger publishes |
 | **Instance administrator** | + create/archive projects, manage global users |
 
@@ -255,7 +255,8 @@ many translations would go.
 
 **What goes online when.** Saving never changes the website. Everything you save — pages, records, record sets,
 property sets, media, navigation entries, folders — is a **draft**. **Releasing** makes the draft the version the
-site shows, and the site changes with the **next build** (started by a developer, or by a schedule). Templates are
+site shows, and the site changes with the **next build** (started by a developer, by a schedule, or — when the
+project allows it — by you, see [Publishing as an editor](#publishing-as-an-editor-m28)). Templates are
 different: a template change reaches every released page with the next build, without a release.
 
 **Statuses.** A badge next to every page, record, file and navigation entry — and in each editor's release bar —
@@ -271,7 +272,8 @@ shows its status in the language you are editing:
 
 A clock on the badge means a schedule touches it; the tooltip lists every language ("DE published · EN changed").
 
-**Releasing** (developers; see the roles table). In the editor's release bar choose **Release…**:
+**Releasing** (developers, and editors when the project allows it; see the roles table). In the editor's release bar
+choose **Release…**:
 
 1. Tick the languages — the one you are editing is ticked; **All changed languages** ticks the rest.
 2. The dialog lists what the release **also needs**: files and pages the page links to that aren't released yet,
@@ -321,11 +323,13 @@ time you pick, in your own time zone (the dialog names it, e.g. "Europe/Berlin (
 
 The release bar lists pending schedules ("Release scheduled for Tue 29 Sep 2026, 09:00 by Ana"); click one to open
 it. **Schedules** in the nav lists every schedule with its next run, owner and status — filter by type, status and
-owner — and lets developers **Edit**, **Run now**, **Take over** and **Cancel**; **History** shows each execution:
+owner — and lets developers **Edit**, **Run now**, **Take over** and **Cancel** (editors who may schedule releases:
+their own release schedules, and **Take over** of a release schedule); **History** shows each execution:
 when it was due, how late it started, the outcome and each item's result, with links to the revision it wrote and the
 build it started. **New generation schedule** plans builds: once, or repeating (every hour, every day, every weekday,
 every week at a time — or a cron expression under *Advanced*, with the next five runs shown). A schedule runs as the
-person who owns it; if they leave the project or lose the role, it stops ("Paused") until someone else takes it over.
+person who owns it; if they leave the project or lose the role — or, for an editor, the project stops allowing what the
+schedule does — it stops ("Paused") until someone else takes it over.
 
 **Schedules in exports.** A project export carries its pending and paused schedules (a selection export only with
 **Include schedules**, and a scheduled release only when all its pages are selected). Importing the archive brings them
@@ -334,6 +338,46 @@ content it was pinned to; a schedule whose time has passed, whose target is miss
 (a missing page or language) is left out and listed in the import's warnings. The owner stays the same person when
 they are a developer of the project here; otherwise whoever imports owns it. Importing the same archive again replaces
 the pending schedules it brought the first time instead of adding copies.
+
+### Publishing as an editor (M28)
+
+Whether you, as an editor, can put your changes online yourself is decided **per project** by its project admins, under
+**Settings → Generation → Publishing by editors**. You can read that card to see what your project allows. There are
+four switches, all off until an admin turns them on:
+
+| Switch | What it lets you do |
+|---|---|
+| **Release, discard and unpublish content** | **Release…**, **Unpublish…** and **Discard changes…** in every release bar, and the same for ticked rows in **Changes** |
+| **Schedule releases and unpublishing** | **Schedule…** / **Schedule release…**: release or unpublish at a later time; edit, run now, re-pin and cancel your own schedules |
+| **Start incremental builds to the default target** | **Build now** after a release, and **New generation** on the generation screen — incremental, to the default target, the whole site or only part of it; cancel builds you started |
+| **Start full builds and builds to any target** | the same with a free choice of mode (full or incremental) and target |
+
+A switch that needs another one ("Schedule…" needs "Release…", "full builds" need "incremental builds") only works
+together with it. Controls you may not use are simply not shown. If an admin switches something off while you are
+working, your next click says "You no longer have permission to …" and the page adjusts; a switch turned on shows up
+when you move to another page or come back to the tab.
+
+**Release, then build.** Releasing still changes nothing online by itself. After a successful release, a message
+offers **Build now** when you may build: it starts an incremental build to the default target (comment "Build after
+release"); **Show progress** opens
+it on the generation screen (**Settings → Generation**). There, **New generation** opens the dialog with the mode fixed
+to *Incremental* and the default target shown (unless you may also start full builds). Under **Scope** you can limit
+the build to **a folder** (*Limit to folder*) or **some pages** (*Only these pages*); the rest of the site stays
+online as it is. Add a comment if you like — every run in the history shows its comment and **Started by** with the
+person's name. If the plan preview says the build will be a full one (for example after channel settings changed),
+you can still start it.
+
+**Scheduling.** With **Schedule releases and unpublishing** you schedule a release or an unpublish as described under
+[Publishing](#publishing-draft-release-unpublish-m27). *Generate right after* is offered when you may start builds; a
+target other than the default only when you may start full builds. Scheduled builds on their own (**New generation
+schedule**) stay with developers. Your schedule runs as you: if an admin later switches off what it needs, it fails
+with "Owner no longer permitted" instead of running, and a developer — or you, once allowed again — can take it over.
+Admins are warned about such schedules before they save the change.
+
+**What stays with developers.** Rolling back to an earlier build (**Promote**), builds of an earlier revision,
+cancelling other people's builds, changing other people's schedules, scheduled and repeating builds, and the targets
+themselves. Without any build permission the generation screen says "Builds are started by developers in this
+project."
 
 ### Generate & publish
 
@@ -353,9 +397,13 @@ An invalid value is rejected with the field named. Changing the extension or URL
 
 A build publishes what is **released** (see [Publishing](#publishing-draft-release-unpublish-m27)), not the latest drafts.
 
-1. Open **Generate**, pick full or incremental mode, channels, and a target, then start.
+1. Open **Generate**, pick full or incremental mode, channels, and a target — optionally a **Scope** (a folder or
+   some pages) and a comment — then start. Editors see only what their project allows (see
+   [Publishing as an editor](#publishing-as-an-editor-m28)).
 2. A live log shows per-stage progress, error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5).
-3. Roll back to a previous build with **Promote** on a past run (the last few builds are retained).
+3. Roll back to a previous build with **Promote** on a past run (the last few builds are retained; developers only).
+
+Every run shows who started it (**Started by**; a scheduled run shows the schedule's owner) and its comment.
 
 An incremental run renders only what changed and publishes the complete site: the pages it didn't touch are carried over from the build the target currently serves, pages you deleted or moved disappear from their old place, and the sitemap and search index always list every page. A run limited to some pages (a folder or a selection) works the same way: the rest of the site stays online as it was.
 
@@ -408,12 +456,13 @@ In the Globals tree and the other store trees, `Tab` reaches each item, `Enter` 
 | Role | Read | Edit content | Edit templates & channels | Release, unpublish, discard, schedule (M27) | Generate/publish | Manage members |
 |---|---|---|---|---|---|---|
 | Viewer | yes (statuses, Changes, Schedules) | — | — | — | — | — |
-| Editor | yes (statuses, Changes, Schedules) | yes | — | — | preview only | — |
+| Editor | yes (statuses, Changes, Schedules) | yes | — | as the project's publish policy allows (M28) | preview; builds as the policy allows (M28) | — |
 | Developer | yes | yes | yes | yes | yes | — |
-| Project admin | yes | yes | yes | yes | yes | yes |
+| Project admin | yes | yes | yes | yes | yes | yes, and the publish policy |
 
-Editors see every status, the Changes view and the schedules but no release or schedule actions; a release needs a
-developer.
+Editors see every status, the Changes view and the schedules. Which release, schedule and build actions they get is
+set per project (see [Publishing as an editor](#publishing-as-an-editor-m28)); with the default policy a release needs
+a developer.
 
 ## Accessibility
 

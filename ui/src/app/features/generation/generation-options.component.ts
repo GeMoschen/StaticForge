@@ -39,6 +39,8 @@ type GenerationTargetView = components['schemas']['GenerationTargetView'];
         <span class="options__legend">Target</span>
         @if (targets().length === 0) {
           <span class="options__note">No generation target yet — the build uses the project's default output.</span>
+        } @else if (!anyTarget()) {
+          <span class="options__fixed">Default target</span>
         } @else {
           <select class="options__select" [value]="targetValue()" (change)="onTarget($event)">
             <option value="">Default target</option>
@@ -102,6 +104,10 @@ type GenerationTargetView = components['schemas']['GenerationTargetView'];
         color: var(--sf-ink);
         font-size: var(--sf-text-sm);
       }
+      .options__fixed {
+        font-size: var(--sf-text-sm);
+        color: var(--sf-ink);
+      }
       .options__note {
         font-size: var(--sf-text-xs);
         color: var(--sf-slate);
@@ -115,6 +121,8 @@ export class GenerationOptionsComponent {
 
   readonly projectKey = input.required<string>();
   readonly showMode = input(true);
+  /** Whether any target may be chosen (M28: `FULL_BUILD`); otherwise the build goes to the default target, shown. */
+  readonly anyTarget = input(true);
   /** Distinguishes the radio groups when two option blocks are on one page. */
   readonly name = input('generation');
   readonly mode = model<'FULL' | 'INCREMENTAL'>('FULL');

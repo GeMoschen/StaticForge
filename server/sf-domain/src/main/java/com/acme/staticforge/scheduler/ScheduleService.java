@@ -3,7 +3,10 @@ package com.acme.staticforge.scheduler;
 import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectWriteGuard;
+import com.acme.staticforge.project.publish.PublishPolicy;
+import com.acme.staticforge.project.publish.PublishRequirements;
 import com.acme.staticforge.release.Chunks;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -34,8 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The schedules of a project (M27.4.4): create, edit, cancel, take over, run now, re-pin, and the reads behind the
  * Schedules view. Type-specific rules — validation, what a user needs, which assets an action touches — come from the
- * {@link ScheduledActionHandler}; permissions are the handler's {@link ActionRequirements} evaluated by
+ * {@link ScheduledActionHandler}; permissions are the handler's {@link PublishRequirements} evaluated by
  * {@link ActionAuthority} for the caller, the same check the engine applies to the owner before every execution.
+ * Changing someone else's action also needs {@code DEVELOPER} (M28 decision 9).
  *
  * <p>A change is refused while a node executes the action, or while its execution waits for a busy project
  * ({@code 409 SF-DOM-0167}) — cancel excepted for a waiting one, which ends that execution. Writes allocate no
@@ -129,6 +133,28 @@ public class ScheduleService {
         return executions.findByActionIdOrderByIdDesc(id, pageable);
     }
 
+    /** A pending action that a proposed publish policy would make fail, and the permission its owner would lose. */
+    public record PolicyImpact(ScheduledAction action, String missing) {}
+
+    /**
+     * The pending actions whose owner satisfies their requirements now but wouldn't under {@code proposed} (M28.1.1,
+     * {@code POST …/publish-policy/impact}): what switching a permission off would make fail at execution. Only
+     * editors' actions can appear — the policy doesn't touch anyone else.
+     */
+    @Transactional(readOnly = true)
+    public List<PolicyImpact> policyImpact(long projectId, PublishPolicy proposed) {
+        List<PolicyImpact> failing = new ArrayList<>();
+        for (ScheduledAction action : actions.findByProjectIdAndStatusInOrderById(projectId, EnumSet.of(ActionStatus.PENDING))) {
+            PublishRequirements needed = requirements(action);
+            if (authority.check(projectId, action.getOwnerUserId(), needed).isPresent()) {
+                continue;
+            }
+            authority.check(projectId, action.getOwnerUserId(), needed, proposed)
+                    .ifPresent(denial -> failing.add(new PolicyImpact(action, denial.missing())));
+        }
+        return failing;
+    }
+
     /** The next {@code count} (≤ {@value #MAX_PREVIEW}) instants of {@code cron} in {@code zoneId} after now. */
     public List<Instant> previewTimes(String cron, String zoneId, int count) {
         if (count < 1 || count > MAX_PREVIEW) {
@@ -184,7 +210,7 @@ public class ScheduleService {
             throw SchedulerProblems.invalidParams("The type of a schedule can't change.", "type");
         }
         ScheduledActionHandler handler = handlers.require(action.getType());
-        authority.require(projectId, actorUserId, handler.requirements(ActionSpec.of(action)));
+        authority.require(projectId, actorUserId, forActor(action, actorUserId, handler.requirements(ActionSpec.of(action))));
         Instant now = clock.instant();
         JsonNode params = command.params() == null ? action.getParams() : command.params();
         ActionSpec spec = apply(action, handler, command, params, actorUserId, now);
@@ -209,7 +235,7 @@ public class ScheduleService {
         if (action.getStatus() != ActionStatus.PENDING && action.getStatus() != ActionStatus.FAILED) {
             throw new SfException(ProblemFactory.conflict("The schedule has already finished."));
         }
-        authority.require(projectId, actorUserId, requirements(action));
+        authority.require(projectId, actorUserId, forActor(action, actorUserId, requirements(action)));
         Instant now = clock.instant();
         executions.findFirstByActionIdAndFinishedAtIsNullOrderByIdDesc(id).ifPresent(open -> {
             open.setFinishedAt(now);
@@ -271,7 +297,7 @@ public class ScheduleService {
             throw new SfException(ProblemFactory.conflict(
                     "Only a pending schedule can run now; take over a paused or failed one first."));
         }
-        authority.require(projectId, actorUserId, requirements(action));
+        authority.require(projectId, actorUserId, forActor(action, actorUserId, requirements(action)));
         Instant now = clock.instant();
         if (!action.isRecurring()) {
             action.setRunAt(now);
@@ -293,7 +319,7 @@ public class ScheduleService {
             throw new SfException(ProblemFactory.conflict("Only a pending schedule can be re-pinned."));
         }
         ScheduledActionHandler handler = handlers.require(action.getType());
-        authority.require(projectId, actorUserId, handler.requirements(ActionSpec.of(action)));
+        authority.require(projectId, actorUserId, forActor(action, actorUserId, handler.requirements(ActionSpec.of(action))));
         action.setParams(handler.repin(ActionSpec.of(action), actorUserId));
         action.setUpdatedAt(clock.instant());
         action = actions.saveAndFlush(action);
@@ -494,10 +520,21 @@ public class ScheduleService {
         }
     }
 
-    private ActionRequirements requirements(ScheduledAction action) {
+    private PublishRequirements requirements(ScheduledAction action) {
         return handlers.find(action.getType())
                 .map(h -> h.requirements(ActionSpec.of(action)))
-                .orElse(ActionRequirements.role(com.acme.staticforge.project.ProjectRole.DEVELOPER));
+                .orElse(PublishRequirements.role(ProjectRole.DEVELOPER));
+    }
+
+    /**
+     * What {@code actorUserId} needs to change {@code action}: its requirements, and {@code DEVELOPER} on top when the
+     * action is someone else's (M28 decision 9) — an editor edits, re-pins, runs and cancels only their own. Taking
+     * over needs only the requirements: it makes the caller the owner.
+     */
+    private static PublishRequirements forActor(ScheduledAction action, long actorUserId, PublishRequirements needed) {
+        return action.getOwnerUserId() != null && action.getOwnerUserId() == actorUserId
+                ? needed
+                : needed.and(PublishRequirements.role(ProjectRole.DEVELOPER));
     }
 
     private List<Summary> summarize(List<ScheduledAction> page) {

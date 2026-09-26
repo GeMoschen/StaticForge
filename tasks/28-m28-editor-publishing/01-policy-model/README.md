@@ -15,11 +15,11 @@ from the scheduler (membership row), and expose the policy and the caller's effe
 
 ## Feature exit criteria
 
-- [ ] `publish_policy` exists for every project (empty after migration); `PUT` validates implications and records a
+- [x] `publish_policy` exists for every project (empty after migration); `PUT` validates implications and records a
       revision + audit.
-- [ ] `can(projectKey, permission)` and `PublishPermissionEvaluator.permitted(...)` agree for every role × policy
+- [x] `can(projectKey, permission)` and `PublishPermissionEvaluator.permitted(...)` agree for every role × policy
       combination (one shared rule, tested).
-- [ ] `ProjectDetail` carries `publishPolicy` and the caller's `permissions`; a policy change is visible on the next
+- [x] `ProjectDetail` carries `publishPolicy` and the caller's `permissions`; a policy change is visible on the next
       request without re-login.
 
 ## Dependencies

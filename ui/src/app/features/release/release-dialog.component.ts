@@ -17,6 +17,7 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { problemOf } from '../../core/api/problem.util';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { BuildNowService } from '../generation/build-now.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { formatDiffPath } from '../../shared/components/sf-diff.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
@@ -61,6 +62,7 @@ interface DiffSummary {
 export class ReleaseDialogComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly buildNow = inject(BuildNowService);
   private readonly events = inject(ReleaseEventsStore);
   private readonly locales = inject(LocalesStore);
 
@@ -170,7 +172,11 @@ export class ReleaseDialogComponent {
       next: (result) => {
         this.submitting.set(false);
         this.events.changed();
-        this.toast.show(this.successMessage(mode, result), result.revision != null ? 'success' : 'info');
+        if (mode === 'release' && result.revision != null) {
+          this.buildNow.announceRelease(this.projectKey(), this.successMessage(mode, result));
+        } else {
+          this.toast.show(this.successMessage(mode, result), result.revision != null ? 'success' : 'info');
+        }
         const kept = result.sharedFieldsKept ?? [];
         if (mode === 'discard' && kept.length > 0) {
           this.keptNote.set(kept.map((target) => this.targetLabel(target)));

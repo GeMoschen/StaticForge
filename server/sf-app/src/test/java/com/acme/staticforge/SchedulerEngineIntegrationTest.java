@@ -9,7 +9,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
-import com.acme.staticforge.scheduler.ActionRequirements;
+import com.acme.staticforge.project.publish.PublishRequirements;
 import com.acme.staticforge.scheduler.ActionSpec;
 import com.acme.staticforge.scheduler.ActionStatus;
 import com.acme.staticforge.scheduler.ExecutionContext;
@@ -86,8 +86,8 @@ class SchedulerEngineIntegrationTest {
         }
 
         @Override
-        public ActionRequirements requirements(ActionSpec spec) {
-            return ActionRequirements.role(ProjectRole.DEVELOPER);
+        public PublishRequirements requirements(ActionSpec spec) {
+            return PublishRequirements.role(ProjectRole.DEVELOPER);
         }
 
         @Override

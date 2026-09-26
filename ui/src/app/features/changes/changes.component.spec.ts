@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { ALL_PUBLISH_PERMISSIONS, projectDetail } from '../../core/project/testing/project-detail.fixture';
 import { NavRailComponent } from '../dashboard/nav-rail.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
 import { ChangesComponent } from './changes.component';
@@ -104,6 +105,7 @@ describe('ChangesComponent', () => {
     });
     http = TestBed.inject(HttpTestingController);
     TestBed.inject(ProjectContextStore).activeProjectKey.set('proj');
+    TestBed.inject(ProjectContextStore).project.set(projectDetail(ALL_PUBLISH_PERMISSIONS));
     TestBed.inject(AuthStore).setUser({ id: 1, username: 'me', projectRoles: { proj: 'DEVELOPER' } });
     fixture = TestBed.createComponent(ChangesComponent);
     fixture.componentRef.setInput('projectKey', 'proj');

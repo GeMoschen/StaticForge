@@ -17,6 +17,7 @@ import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component
 import { SfTableComponent } from '../../shared/components/sf-table.component';
 import { GenerationService } from '../generation/generation.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
 type GenerationTargetRequest = components['schemas']['GenerationTargetRequest'];
@@ -62,6 +63,8 @@ export class ProjectSettingsTargetsComponent {
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
+  /** New target for developers, edit and delete for project admins (as the API); none while read-only. */
+  protected readonly permissions = inject(ProjectPermissionsStore);
   protected readonly types = TARGET_TYPES;
 
   readonly targets = signal<GenerationTargetView[]>([]);

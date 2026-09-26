@@ -1,6 +1,6 @@
 ---
 id: M28.4.2
-status: todo
+status: done
 depends: [M28.3.2, M28.3.3]
 epic: m28-editor-publishing
 feature: docs-e2e
@@ -37,9 +37,9 @@ real user would do it:
 
 ## Acceptance criteria
 
-- [ ] Journey green against a clean dev stack, twice in a row (self-seeding, unique names per run).
-- [ ] Defects found are fixed in their task's code with a unit/integration test each, and listed in the notes.
-- [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
+- [x] Journey green against a clean dev stack, twice in a row (self-seeding, unique names per run).
+- [x] Defects found are fixed in their task's code with a unit/integration test each, and listed in the notes.
+- [x] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
 
 ## Out of scope
 
@@ -50,3 +50,18 @@ real user would do it:
 - Wait for scheduled executions by polling the schedule's state in the UI, not with a fixed timer.
 - Step 2 must prove "applies on the next request": no re-login and no page reload in the editor context — the
   detail refresh from `M28.3.1` (visibility/403 handling) or a normal navigation must be enough.
+
+## Notes (implementation)
+
+- `ui/e2e/m28-journeys.spec.ts`, green twice in a row on a clean dev stack (scheduler poll 2 s), ~5 min each; the
+  full-build and scoped steps assert the runs through the API (`mode`, `targetId`, `planSummary.scoped/pageCount`).
+- Defects found and fixed:
+  1. **Stale permissions after a policy change** (`ProjectContextStore`): the navigation refresh was throttled by time,
+     so a navigation within the window after the last read dropped the refresh and the editor kept the old controls.
+     Now every navigation re-reads the detail; a read in flight coalesces the others and runs once more afterwards.
+     Spec: `project-context.store.spec.ts` "re-reads the permissions on every navigation…" (fails on the throttle).
+  2. **Toasts were never rendered** (found while building "Build now"): `ToastService` existed since the initial commit
+     without a host. Added `ToastHostComponent` (polite/assertive regions, auto-dismiss, optional action); spec
+     `toast-host.component.spec.ts`. Every existing toast in the app is now visible.
+- Journey-only races fixed in the test itself: the app runs zoneless, so a native checkbox click flips at once while
+  the card's render (cascade, enabling) comes a tick later — the helper waits on the dependent switch.

@@ -9,7 +9,8 @@ Final acceptance against `cms-specification.md` §2.1 (goals G1–G6) and §27 (
 **Measure:** time-to-publish for a text change < 2 min.
 
 - **Evidence (authoring path):** the editor-facing API is fully revisioned and field-level — `PATCH /projects/{p}/pages/{uuid}/content` (JSON-Merge-Patch) plus `BodyService` (`AddSectionRequest`, `ReorderRequest` in `sf-api.dto`) for sections. Autosave/revision semantics are covered by `AssetRevisionIntegrationTests` and `RevisionInvariantsTest` (spec §25.5).
-- **Evidence (publish path):** generation is a self-service `POST /generations` (role DEVELOPER/PROJECT_ADMIN), covered by `GenerationIntegrationTest`; `FilesystemTargetWriter` performs atomic staged publish.
+- **Evidence (publish path):** generation is a self-service `POST /generations`, covered by `GenerationIntegrationTest`; `FilesystemTargetWriter` performs atomic staged publish.
+- **Evidence (editors publish, M28):** since M27 a change goes online by release + build; each project's publish policy (spec §8.3) opens release, scheduled release, incremental and full builds to editors, so no developer is needed once a project admin opts in. `PublishPolicyApiTest` (policy CRUD, implications, revision + `PUBLISH_POLICY_SET`, applies on an editor's next request with a still-valid token, token-side and domain evaluators agree, impact check), `EditorReleaseAndScheduleIntegrationTest` (release endpoints, schedule requirements and ownership, the execution re-check after a permission is switched off, demoted and disabled owners), `EditorGenerationApiTest` (incremental vs full vs pinned revision, fallback-to-full allowed, cancel-own, `comment`/`startedBy`, audit, per-user idempotency keys), `PublishPermissionMatrixTest` (every publishing handler × every role × every valid policy), unit tests `PublishPolicyTest` and `GenerationAuthorizationTest`. End to end: the journey `ui/e2e/m28-journeys.spec.ts` (M28.4.2: an editor releases, presses *Build now*, schedules a release with "then generate", sees a schedule fail after the admin switches a permission off; gated on `SF_RUN_E2E` like the other journeys).
 - **Gap:** no end-to-end wall-clock measurement of "text change → publish < 2 min" exists. The constituent operations are tested in isolation; the E2E journey that strings them together (Journey 1, `ui/e2e/m3-journeys.spec.ts`) is authored but gated.
 
 ### G2 — Every change is attributable and reversible
@@ -68,6 +69,25 @@ Goals G2, G3, and G4 are **proven** by committed automated tests. G1 and G5 need
 **Recommendation:** promote the spec's promised nightly jobs (PostgreSQL dialect, 5,000-page benchmark, axe sweep) into `.github/workflows/` and run the a11y/manual pass before declaring M7 fully met. This is deliberately not done by the documentation agent — those gates are owned by other agents.
 
 ## 4. Release notes — breaking changes
+
+### M28 — editors can publish, per project
+
+Nothing changes on upgrade: every project gets an empty publish policy (changelog `025`), so editors keep M27's rights
+until a project admin opens release, scheduled release or builds to them (spec §8.3, administration guide *Letting
+editors publish*). Changes clients may notice:
+
+- **`403` bodies** of publishing endpoints carry `permission` (a publish permission or `ROLE:<role>`); `GET
+  /projects/{key}` adds `publishPolicy` and `permissions`; run views add `startedBy`.
+- **Release, discard and unpublish** need the `RELEASE` publish permission instead of the `DEVELOPER` role (same
+  answer for developers); generation start and dry run admit editors and then check the body; target creation stays
+  `DEVELOPER`, target update and delete `PROJECT_ADMIN`.
+- **Run comments** longer than 500 characters are cut (ending in "…"), not refused. **`Idempotency-Key`** on
+  `POST /generations` is scoped by project and user: two users reusing one key now get two runs.
+- **Audit** gains `PUBLISH_POLICY_SET`, `GENERATION_STARTED`, `GENERATION_CANCELLED`, `GENERATION_PROMOTED`; the
+  instance audit therefore grows with every run.
+- The publish policy is not part of project export archives; set it on the target instance after an import.
+
+Evidence: see G1.
 
 ### M27.8 — schedules travel with exports
 
