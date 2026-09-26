@@ -44,6 +44,14 @@ public class Project {
     @Column(name = "locale_config")
     private JsonNode localeConfig;
 
+    /**
+     * What editors may do to put content online (M28, {@code {"editor": [...]}}); read through
+     * {@link com.acme.staticforge.project.publish.PublishPolicy#fromJson}. A new project opens nothing.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "publish_policy", nullable = false)
+    private JsonNode publishPolicy = com.acme.staticforge.project.publish.PublishPolicy.EMPTY.toJson();
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -121,6 +129,14 @@ public class Project {
 
     public void setAllowedMimeTypes(String allowedMimeTypes) {
         this.allowedMimeTypes = allowedMimeTypes;
+    }
+
+    public JsonNode getPublishPolicy() {
+        return publishPolicy;
+    }
+
+    public void setPublishPolicy(JsonNode publishPolicy) {
+        this.publishPolicy = publishPolicy;
     }
 
     public boolean isReleaseStateInitialized() {

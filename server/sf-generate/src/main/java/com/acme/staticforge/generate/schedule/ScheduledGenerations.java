@@ -119,7 +119,8 @@ public class ScheduledGenerations implements ScheduledGenerationStarter {
                         order.assetUuids().isEmpty() ? null : order.assetUuids(),
                         order.comment(),
                         order.idempotencyKey()),
-                order.userId());
+                order.userId(),
+                order.scheduledActionId());
         return new Started(run.getId());
     }
 

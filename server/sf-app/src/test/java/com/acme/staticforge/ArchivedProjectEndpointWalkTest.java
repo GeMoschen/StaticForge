@@ -66,7 +66,8 @@ class ArchivedProjectEndpointWalkTest {
             Map.entry("PreviewController#previewSection", "renders a section preview, stores nothing"),
             Map.entry("RecordSetController#previewQuery", "evaluates a draft set query, stores nothing"),
             Map.entry("ProjectExportController#exportSelection", "builds an export archive, changes nothing"),
-            Map.entry("ProjectImportController#analyzeImport", "read-only transaction: reports conflicts, imports nothing"));
+            Map.entry("ProjectImportController#analyzeImport", "read-only transaction: reports conflicts, imports nothing"),
+            Map.entry("PublishPolicyController#impact", "evaluates a proposed publish policy, stores nothing"));
 
     private static final Set<RequestMethod> MUTATING =
             Set.of(RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH, RequestMethod.DELETE);

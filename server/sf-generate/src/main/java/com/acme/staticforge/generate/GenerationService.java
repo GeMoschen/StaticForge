@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate;
 
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -118,6 +119,7 @@ public class GenerationService {
     private final Map<Long, List<SseEmitter>> emittersByRun = new ConcurrentHashMap<>();
 
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
+    private final AuditService audit;
 
     public GenerationService(
             GenerationRunRepository runs,
@@ -135,7 +137,8 @@ public class GenerationService {
             GenerationProperties properties,
             ObjectMapper mapper,
             MeterRegistry meterRegistry,
-            com.acme.staticforge.project.ProjectLocales projectLocales) {
+            com.acme.staticforge.project.ProjectLocales projectLocales,
+            AuditService audit) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
@@ -152,6 +155,7 @@ public class GenerationService {
         this.mapper = mapper;
         this.meterRegistry = meterRegistry;
         this.projectLocales = projectLocales;
+        this.audit = audit;
     }
 
     /**
@@ -160,11 +164,24 @@ public class GenerationService {
      *
      * <p>An archived project starts no run and promotes none ({@code 409 SF-DOM-0141}, M26); a run already queued or
      * running when the project was archived is allowed to finish, and can still be cancelled.
+     *
+     * <p>Who may start which run is decided before this call ({@code GenerationAuthorization}, M28.2.2). The start is
+     * audited ({@code GENERATION_STARTED}) as {@code userId}. An {@code Idempotency-Key} is scoped by project and
+     * user: another user reusing a key starts their own run instead of receiving someone else's.
      */
     @Transactional
     public GenerationRun start(String projectKey, GenerationRequest request, Long userId) {
+        return start(projectKey, request, userId, null);
+    }
+
+    /** As {@link #start(String, GenerationRequest, Long)} for a scheduled action, named in the audit entry. */
+    @Transactional
+    public GenerationRun start(String projectKey, GenerationRequest request, Long userId, Long scheduledActionId) {
         synchronized (startLock) {
-            String idemKey = trimmed(request.idempotencyKey());
+            String requestKey = trimmed(request.idempotencyKey());
+            String idemKey = requestKey == null
+                    ? null
+                    : projectService.requireByKey(projectKey).getId() + ":" + userId + ":" + requestKey;
             if (idemKey != null) {
                 Long previous = idempotencyKeys.get(idemKey);
                 if (previous != null) {
@@ -198,6 +215,8 @@ public class GenerationService {
             run.setComment(request.comment());
             run = runs.saveAndFlush(run);
             final long runId = run.getId();
+            audit.record(projectId, userId, "GENERATION_STARTED", "generation:" + runId,
+                    startDetail(run, request, scheduledActionId));
             if (idemKey != null) {
                 idempotencyKeys.putIfAbsent(idemKey, runId);
             }
@@ -229,7 +248,9 @@ public class GenerationService {
         return runs.findByProjectIdOrderByIdDesc(projectId);
     }
 
-    public GenerationRun cancel(String projectKey, long runId) {
+    /** Cancels a queued or running run as {@code actorUserId} (audited {@code GENERATION_CANCELLED}); else a no-op. */
+    @Transactional
+    public GenerationRun cancel(String projectKey, long runId, Long actorUserId) {
         GenerationRun run = requireRun(projectKey, runId);
         RunStatus status = run.getStatus();
         if (status == RunStatus.QUEUED || status == RunStatus.RUNNING) {
@@ -237,17 +258,53 @@ public class GenerationService {
             run.setFinishedAt(Instant.now());
             run = runs.save(run);
             completeRun(runId);
+            audit.record(run.getProjectId(), actorUserId, "GENERATION_CANCELLED", "generation:" + runId, runDetail(run));
         }
         return run;
     }
 
-    public GenerationRun promote(String projectKey, long runId) {
+    /** Promotes a run's output as {@code actorUserId} (audited {@code GENERATION_PROMOTED}). */
+    @Transactional
+    public GenerationRun promote(String projectKey, long runId, Long actorUserId) {
         projectService.requireWritable(projectKey);
         GenerationRun run = requireRun(projectKey, runId);
         GenerationTarget target = resolveTarget(run);
         TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
         writer.promote(runId);
+        audit.record(run.getProjectId(), actorUserId, "GENERATION_PROMOTED", "generation:" + runId, runDetail(run));
         return run;
+    }
+
+    private ObjectNode startDetail(GenerationRun run, GenerationRequest request, Long scheduledActionId) {
+        ObjectNode detail = runDetail(run);
+        detail.put("mode", (request.mode() == null ? GenerationMode.FULL : request.mode()).name());
+        ArrayNode channels = detail.putArray("channels");
+        if (request.channels() != null) {
+            request.channels().forEach(channels::add);
+        }
+        detail.put("scoped", (request.folderPath() != null && !request.folderPath().isBlank())
+                || (request.assetUuids() != null && !request.assetUuids().isEmpty()));
+        if (request.revision() == null) {
+            detail.putNull("revision");
+        } else {
+            detail.put("revision", request.revision());
+        }
+        if (scheduledActionId != null) {
+            detail.put("scheduledActionId", scheduledActionId);
+        }
+        return detail;
+    }
+
+    /** {@code {runId, targetId}}; the target as requested, {@code null} for the default. */
+    private ObjectNode runDetail(GenerationRun run) {
+        ObjectNode detail = mapper.createObjectNode();
+        detail.put("runId", run.getId());
+        if (run.getTargetId() == null) {
+            detail.putNull("targetId");
+        } else {
+            detail.put("targetId", run.getTargetId());
+        }
+        return detail;
     }
 
     /** Registers an SSE emitter to receive {@code progress} events for a run. */

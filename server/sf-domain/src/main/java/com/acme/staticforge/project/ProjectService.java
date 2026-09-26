@@ -86,6 +86,20 @@ public interface ProjectService {
             int discardedLocaleValues,
             java.util.List<java.util.UUID> affectedAssets) {}
 
+    /** The project's publish policy (M28), read from the row on every call: a change applies on the next check. */
+    com.acme.staticforge.project.publish.PublishPolicy publishPolicy(String key);
+
+    /**
+     * Replaces the publish policy (M28.1.1, epic decision 10) and returns it. Throws
+     * {@link com.acme.staticforge.project.publish.PublishPolicy.InvalidPolicyException} when it breaks an implication
+     * and {@code 409 SF-DOM-0141} on an archived project. An identical policy changes nothing: no revision, no audit.
+     * Otherwise one {@code UPDATE} revision (summary entry {@code PROJECT}, field {@code publishPolicy}) and the audit
+     * action {@code PUBLISH_POLICY_SET} with {@code {before, after}}. Nobody's token changes: the policy is read per
+     * check, never carried in a claim.
+     */
+    com.acme.staticforge.project.publish.PublishPolicy updatePublishPolicy(
+            String key, com.acme.staticforge.project.publish.PublishPolicy policy, RevisionContext ctx);
+
     List<ProjectMember> members(String key);
 
     /** Upserts a membership and records an {@code UPDATE} revision + summary entry. */

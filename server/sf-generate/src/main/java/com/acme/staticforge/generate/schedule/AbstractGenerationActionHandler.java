@@ -3,7 +3,7 @@ package com.acme.staticforge.generate.schedule;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.project.ProjectRole;
-import com.acme.staticforge.scheduler.ActionRequirements;
+import com.acme.staticforge.project.publish.PublishRequirements;
 import com.acme.staticforge.scheduler.ActionSpec;
 import com.acme.staticforge.scheduler.ExecutionContext;
 import com.acme.staticforge.scheduler.ExecutionOutcome;
@@ -49,10 +49,10 @@ abstract class AbstractGenerationActionHandler implements ScheduledActionHandler
         this.tx = new TransactionTemplate(transactionManager);
     }
 
-    /** {@code DEVELOPER}: building stays a developer operation in M27 and M28. */
+    /** {@code DEVELOPER} whatever the publish policy (M28 decision 9): scheduled and recurring builds stay with developers. */
     @Override
-    public ActionRequirements requirements(ActionSpec spec) {
-        return ActionRequirements.role(ProjectRole.DEVELOPER);
+    public PublishRequirements requirements(ActionSpec spec) {
+        return PublishRequirements.role(ProjectRole.DEVELOPER);
     }
 
     @Override
@@ -90,7 +90,7 @@ abstract class AbstractGenerationActionHandler implements ScheduledActionHandler
             }
         }
         generations.validate(new ScheduledGenerationStarter.Order(
-                draft.projectId(), mode, null, targetId, channels, folderPath, assetUuids, null, actorUserId, null));
+                draft.projectId(), mode, null, targetId, channels, folderPath, assetUuids, null, actorUserId, null, null));
 
         ObjectNode stored = JSON.objectNode();
         stored.put("mode", mode.name());
@@ -136,7 +136,8 @@ abstract class AbstractGenerationActionHandler implements ScheduledActionHandler
                 assetUuids,
                 "Scheduled generation #" + ctx.actionId() + (userComment == null ? "" : ": " + userComment),
                 ctx.ownerUserId(),
-                "schedule-" + ctx.actionId() + "-" + ctx.scheduledFor().toEpochMilli());
+                "schedule-" + ctx.actionId() + "-" + ctx.scheduledFor().toEpochMilli(),
+                ctx.actionId());
 
         ScheduledGenerationStarter.Start start;
         try {

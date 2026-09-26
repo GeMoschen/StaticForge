@@ -1,5 +1,6 @@
 package com.acme.staticforge.scheduler.actions;
 
+import com.acme.staticforge.generate.GenerationAuthorization;
 import com.acme.staticforge.release.ReleaseItem;
 import com.acme.staticforge.release.ReleaseOutcome;
 import com.acme.staticforge.release.ReleasePlan;
@@ -35,8 +36,11 @@ public class UnpublishActionHandler extends ReleaseStateActionHandler {
     public static final String TYPE = "UNPUBLISH";
 
     public UnpublishActionHandler(
-            ReleaseService releases, ScheduledGenerationStarter generations, PlatformTransactionManager transactionManager) {
-        super(releases, generations, transactionManager);
+            ReleaseService releases,
+            ScheduledGenerationStarter generations,
+            PlatformTransactionManager transactionManager,
+            GenerationAuthorization generationAuthorization) {
+        super(releases, generations, transactionManager, generationAuthorization);
     }
 
     @Override

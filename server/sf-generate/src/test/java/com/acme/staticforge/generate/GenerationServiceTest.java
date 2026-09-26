@@ -63,7 +63,7 @@ class GenerationServiceTest {
         service = new GenerationService(runs, targets, projects, mock(ChannelService.class), snapshots, planner, renderer, assetsStage,
                 mock(MediaRenderStage.class), postStage,
                 writers, mock(RunPlanStore.class), new GenerationProperties(), new ObjectMapper(), new SimpleMeterRegistry(),
-                mock(com.acme.staticforge.project.ProjectLocales.class));
+                mock(com.acme.staticforge.project.ProjectLocales.class), mock(com.acme.staticforge.audit.AuditService.class));
 
         Project project = project(1L);
         lenient().when(projects.requireByKey("p")).thenReturn(project);
@@ -106,7 +106,7 @@ class GenerationServiceTest {
         when(runs.findById(5L)).thenReturn(Optional.of(run));
         when(runs.save(run)).thenReturn(run);
 
-        GenerationRun result = service.cancel("p", 5L);
+        GenerationRun result = service.cancel("p", 5L, 7L);
 
         verify(run).setStatus(RunStatus.CANCELLED);
         verify(run).setFinishedAt(any());
@@ -123,7 +123,7 @@ class GenerationServiceTest {
         when(targets.findByProjectIdAndDefaultTargetTrue(anyLong())).thenReturn(Optional.of(target));
         when(writers.forTarget("p", target)).thenReturn(writer);
 
-        service.promote("p", 5L);
+        service.promote("p", 5L, 7L);
 
         verify(writer).promote(5L);
     }

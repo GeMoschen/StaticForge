@@ -18,6 +18,7 @@ public interface ScheduledGenerationStarter {
      * @param targetId {@code null} for the project's default target
      * @param channels empty for every channel
      * @param idempotencyKey a key unique to the action and slot, so a retry never starts a second run
+     * @param scheduledActionId the action starting the run, for the {@code GENERATION_STARTED} audit entry
      */
     record Order(
             long projectId,
@@ -29,7 +30,8 @@ public interface ScheduledGenerationStarter {
             List<UUID> assetUuids,
             String comment,
             long userId,
-            String idempotencyKey) {
+            String idempotencyKey,
+            Long scheduledActionId) {
 
         public Order {
             channels = channels == null ? List.of() : List.copyOf(channels);

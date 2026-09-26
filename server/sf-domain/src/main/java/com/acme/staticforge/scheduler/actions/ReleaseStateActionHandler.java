@@ -1,14 +1,15 @@
 package com.acme.staticforge.scheduler.actions;
 
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.generate.GenerationAuthorization;
 import com.acme.staticforge.generate.GenerationMode;
-import com.acme.staticforge.project.ProjectRole;
+import com.acme.staticforge.project.publish.PublishPermission;
+import com.acme.staticforge.project.publish.PublishRequirements;
 import com.acme.staticforge.release.ReleaseItem;
 import com.acme.staticforge.release.ReleasePlan;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.release.ReleaseTarget;
 import com.acme.staticforge.scheduler.ActionAsset;
-import com.acme.staticforge.scheduler.ActionRequirements;
 import com.acme.staticforge.scheduler.ActionSpec;
 import com.acme.staticforge.scheduler.ExecutionContext;
 import com.acme.staticforge.scheduler.ExecutionOutcome;
@@ -53,12 +54,17 @@ abstract class ReleaseStateActionHandler implements ScheduledActionHandler {
     protected final ReleaseService releases;
     protected final ScheduledGenerationStarter generations;
     protected final TransactionTemplate tx;
+    private final GenerationAuthorization generationAuthorization;
 
     ReleaseStateActionHandler(
-            ReleaseService releases, ScheduledGenerationStarter generations, PlatformTransactionManager transactionManager) {
+            ReleaseService releases,
+            ScheduledGenerationStarter generations,
+            PlatformTransactionManager transactionManager,
+            GenerationAuthorization generationAuthorization) {
         this.releases = releases;
         this.generations = generations;
         this.tx = new TransactionTemplate(transactionManager);
+        this.generationAuthorization = generationAuthorization;
     }
 
     /** The verb in comments and messages ("release", "unpublish"). */
@@ -70,13 +76,22 @@ abstract class ReleaseStateActionHandler implements ScheduledActionHandler {
     }
 
     /**
-     * {@code DEVELOPER} (epic decision 15) — the same rule as {@code ReleasePermissionCheck}, which the release service
-     * applies to the owner again. M28 adds the publish-policy permissions here, including the build permission of a
-     * "then generate" step.
+     * {@link PublishPermission#SCHEDULE_RELEASE} (M28 decision 9), plus, with "then generate", what that incremental
+     * run to its target needs ({@link GenerationAuthorization}: {@code INCREMENTAL_BUILD} for the default target,
+     * {@code FULL_BUILD} for another). Evaluated against the target as stored: a target that stops being the default
+     * later raises the requirement, and the execution re-check catches it. The release service checks the owner's
+     * {@code RELEASE} again, which {@code SCHEDULE_RELEASE} implies.
      */
     @Override
-    public ActionRequirements requirements(ActionSpec spec) {
-        return ActionRequirements.role(ProjectRole.DEVELOPER);
+    public PublishRequirements requirements(ActionSpec spec) {
+        PublishRequirements schedule = PublishRequirements.permission(PublishPermission.SCHEDULE_RELEASE);
+        JsonNode then = spec.thenGenerate();
+        if (then == null || then.isNull() || then.isMissingNode()) {
+            return schedule;
+        }
+        Long targetId = then.path("targetId").isIntegralNumber() ? then.path("targetId").asLong() : null;
+        return schedule.and(
+                generationAuthorization.requiredFor(spec.projectId(), GenerationMode.INCREMENTAL, targetId, null));
     }
 
     @Override
@@ -142,7 +157,7 @@ abstract class ReleaseStateActionHandler implements ScheduledActionHandler {
             list.forEach(c -> channels.add(c.asText()));
         }
         generations.validate(new ScheduledGenerationStarter.Order(
-                projectId, GenerationMode.INCREMENTAL, null, targetId, channels, null, null, null, actorUserId, null));
+                projectId, GenerationMode.INCREMENTAL, null, targetId, channels, null, null, null, actorUserId, null, null));
         ObjectNode normalized = JSON.objectNode();
         if (targetId == null) {
             normalized.putNull("targetId");
@@ -284,7 +299,8 @@ abstract class ReleaseStateActionHandler implements ScheduledActionHandler {
                 null,
                 "After scheduled " + verb() + " #" + ctx.actionId(),
                 ctx.ownerUserId(),
-                "schedule-" + ctx.actionId() + "-" + ctx.scheduledFor().toEpochMilli() + "-then");
+                "schedule-" + ctx.actionId() + "-" + ctx.scheduledFor().toEpochMilli() + "-then",
+                ctx.actionId());
         ScheduledGenerationStarter.Start start;
         try {
             start = tx.execute(status -> {

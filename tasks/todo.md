@@ -1,3 +1,33 @@
+# M28 — Editor publishing (branch `m28-editor-publishing`)
+
+Spec: `tasks/28-m28-editor-publishing/`. Decisions 1–14 there are binding.
+Plan deviations known up front: `generation_run.comment` and its view field already exist (M27 follow-up, changelog
+`023`), so the publish policy gets changelog `025-publish-policy.xml`; M28.2.2 adds only `startedBy`, the 500-char
+`400` and the audit.
+
+- [x] M28.1.1 — `PublishPermission`, `PublishPolicy` (grants/validate/effective), changelog 025, `Project.publishPolicy`
+- [x] M28.1.1 — `PublishPermissionEvaluator` (membership row), `ProjectAuthorizationService.can/permissions` (403 +
+      `permission` extension), `ProjectService.publishPolicy/updatePublishPolicy` (revision + audit)
+- [x] M28.1.1 — `GET/PUT /publish-policy`, `POST /publish-policy/impact`, `ProjectDetail.publishPolicy/permissions`
+- [x] M28.1.1 — tests: grants table, validate, can≡permitted, next-request, PUT revision/audit/no-op/archived/403,
+      impact, SpEL literal scan
+- [x] M28.2.1 — release/unpublish/discard via `can(RELEASE)`; `ReleasePermissionCheck` via evaluator; handler
+      requirements (SCHEDULE_RELEASE + then-generate build permission); `ActionAuthority` evaluates permissions;
+      foreign schedules need DEVELOPER; execution message names the permission
+- [x] M28.2.2 — `GenerationAuthorization.requiredFor`; start/plan/cancel rules; `startedBy`; comment >500 → 400;
+      audit START/CANCEL/PROMOTE; idempotency key scoped by project+user; admin audit labels
+- [x] M28.2.3 — `PublishPermissionMatrixTest`
+- [ ] M28.3.1 — `ProjectPermissionsStore`, migrate ad-hoc role checks, 403 `permission` handling, visibility refresh
+- [ ] M28.3.2 — "Publishing by editors" card with impact dialog
+- [ ] M28.3.3 — gated generation screen (dialog restrictions, scope, cancel/promote, startedBy), release surfaces,
+      schedules, Build now, empty state
+- [ ] M28.4.1 — spec + docs
+- [ ] M28.4.2 — `ui/e2e/m28-journeys.spec.ts` green twice; defects fixed with tests
+- [ ] `./gradlew build test --rerun`, `npm run build`, `npx vitest run`
+
+
+---
+
 # M27.8 — Schedules in archives, protocol 9 (branch `m27-8-schedule-export`)
 
 Spec: `tasks/27-m27-release-and-scheduling/08-schedule-export/`. Decisions 1–9 there (with the user, 2026-09-26).

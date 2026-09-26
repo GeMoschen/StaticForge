@@ -48,6 +48,22 @@ public final class ProblemFactory {
         return of(403, "SF-API-0403", "Forbidden", detail);
     }
 
+    /**
+     * A 403 naming what the caller lacks under {@code permission} (M28, epic decision 6): a publish permission such as
+     * {@code RELEASE}, or {@code "ROLE:DEVELOPER"} for an operation no policy opens. Clients refresh their view of the
+     * project's permissions on it.
+     */
+    public static Problem forbidden(String detail, String permission) {
+        return Problem.builder()
+                .type(PROBLEMS_BASE + "sf-api-0403")
+                .title("Forbidden")
+                .status(403)
+                .detail(detail)
+                .property("code", "SF-API-0403")
+                .property("permission", permission)
+                .build();
+    }
+
     public static Problem notFound(String detail) {
         return of(404, "SF-API-0404", "Not Found", detail);
     }
