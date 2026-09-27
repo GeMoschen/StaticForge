@@ -1,6 +1,6 @@
 <div class="sf-content-form">
   @for (editor of definition().editors; track editor.name) {
-    <div class="sf-content-form__editor">
+    <div class="sf-content-form__editor" [attr.data-sf-editor]="editor.name">
       @if (localized()) {
         <p class="sf-content-form__lang">
           @if (editor.localizable) {

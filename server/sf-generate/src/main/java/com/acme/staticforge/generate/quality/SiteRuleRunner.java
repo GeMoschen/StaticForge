@@ -2,6 +2,7 @@ package com.acme.staticforge.generate.quality;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -29,9 +30,18 @@ public class SiteRuleRunner {
      * @param afterHoldBack {@code false} for the rules that run before the hold-back, {@code true} for the others
      */
     public List<Finding> run(SiteIndex site, EffectiveQualityConfig config, boolean afterHoldBack) {
+        return run(site, config, afterHoldBack, rule -> true);
+    }
+
+    /**
+     * As {@link #run(SiteIndex, EffectiveQualityConfig, boolean)}, running only the rules {@code include} accepts — a
+     * draft check (M30.3.1) leaves out the rules that need the whole build.
+     */
+    public List<Finding> run(
+            SiteIndex site, EffectiveQualityConfig config, boolean afterHoldBack, Predicate<SiteRule> include) {
         List<Finding> findings = new ArrayList<>();
         for (SiteRule rule : registry.siteRules()) {
-            if (rule.afterHoldBack() != afterHoldBack || !config.enabled(rule)) {
+            if (rule.afterHoldBack() != afterHoldBack || !config.enabled(rule) || !include.test(rule)) {
                 continue;
             }
             try {

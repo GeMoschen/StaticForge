@@ -64,6 +64,14 @@ export class SectionEditorComponent {
   readonly readOnly = input(false);
   /** When true, the move/remove action buttons are hidden (e.g. single-section focus view). */
   readonly hideActions = input(false);
+  /**
+   * The page's content findings (`PageView.issues`, M30.3.2); the form shows the ones under this section
+   * (`bodies.<body>[<index>].content.…`) at their fields.
+   */
+  readonly issues = input<ReadonlyArray<{ path?: string; message?: string }>>([]);
+
+  /** Where this section's fields sit in the page's content, as the findings' paths spell it. */
+  protected readonly issuePrefix = computed(() => `bodies.${this.bodyName()}[${this.index()}].content`);
 
   readonly valueChange = output<Record<string, unknown>>();
   readonly remove = output<void>();

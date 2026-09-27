@@ -53,8 +53,9 @@ const VIEWPORTS: ViewportOption[] = [
  * the rendered HTML and injected into the sandboxed `srcdoc` document. It (a)
  * forwards clicks on any element carrying `[data-sf-instance]` to the parent
  * editor window, and (b) reacts to `sf-focus-section` messages from the parent
- * to outline the matching section. It lives exclusively in the srcdoc, so it
- * cannot touch the host application.
+ * to outline the matching section — or, when the page doesn't mark its sections,
+ * the element a quality finding names by selector (M30.3.2) — and scroll it into
+ * view. It lives exclusively in the srcdoc, so it cannot touch the host application.
  */
 const HIGHLIGHT_SCRIPT = `<script>
 (function () {
@@ -84,12 +85,24 @@ const HIGHLIGHT_SCRIPT = `<script>
     try { window.parent.postMessage({ type: 'sf-preview-page', page: Number(match[1]) }, '*'); } catch (err) {}
   }, true);
   var focused = null;
+  function find(d) {
+    var el = null;
+    try {
+      if (typeof d.instanceId === 'string') { el = document.querySelector('[data-sf-instance="' + d.instanceId + '"]'); }
+      if (!el && typeof d.selector === 'string') { el = document.querySelector(d.selector); }
+    } catch (err) { el = null; }
+    return el;
+  }
   window.addEventListener('message', function (e) {
     var d = e.data;
-    if (!d || d.type !== 'sf-focus-section' || typeof d.instanceId !== 'string') { return; }
+    if (!d || d.type !== 'sf-focus-section') { return; }
     if (focused) { focused.style.outline = ''; focused = null; }
-    var el = document.querySelector('[data-sf-instance="' + d.instanceId + '"]');
-    if (el) { el.style.outline = '2px solid var(--sf-signal, #ff5d5d)'; focused = el; }
+    var el = find(d);
+    if (el) {
+      el.style.outline = '2px solid var(--sf-signal, #ff5d5d)';
+      focused = el;
+      if (el.scrollIntoView) { el.scrollIntoView({ block: 'center' }); }
+    }
   });
 })();
 </script>`;
@@ -142,6 +155,8 @@ export class SfPreviewFrameComponent implements OnDestroy {
   readonly refreshKey = input<unknown>(null);
 
   readonly sectionClick = output<string>();
+  /** The view the preview switched to (Draft or Published); the Issues panel says its checks cover the draft. */
+  readonly viewChange = output<PreviewView>();
 
   protected readonly viewports = VIEWPORTS;
 
@@ -243,6 +258,7 @@ export class SfPreviewFrameComponent implements OnDestroy {
     }
     this.view.set(view);
     storeView(view);
+    this.viewChange.emit(view);
     this.refreshManually();
   }
 
@@ -283,11 +299,15 @@ export class SfPreviewFrameComponent implements OnDestroy {
     this.goToPage(Number((event.target as HTMLSelectElement).value));
   }
 
-  /** Focus (outline) a section inside the preview iframe by instance id. */
-  focusSection(instanceId: string): void {
+  /**
+   * Outlines a section inside the preview iframe by instance id and scrolls it into view. `selector` names an element
+   * to outline instead when the page doesn't mark its sections with `data-sf-instance` (a quality finding's element,
+   * M30.3.2); either may be missing.
+   */
+  focusSection(instanceId: string | null, selector: string | null = null): void {
     const el = this.frameRef()?.nativeElement;
     const win = el?.contentWindow;
-    win?.postMessage({ type: 'sf-focus-section', instanceId }, '*');
+    win?.postMessage({ type: 'sf-focus-section', instanceId, selector }, '*');
   }
 
   protected refreshManually(): void {

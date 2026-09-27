@@ -1,9 +1,20 @@
 package com.acme.staticforge.api;
 
+import com.acme.staticforge.api.dto.DraftCheckView;
 import com.acme.staticforge.api.dto.PreviewSectionRequest;
 import com.acme.staticforge.api.dto.PreviewShareLink;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.asset.AssetService;
+import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.page.PageService;
+import com.acme.staticforge.generate.quality.DraftCheckService;
+import com.acme.staticforge.generate.quality.EffectiveQualityConfig;
+import com.acme.staticforge.generate.quality.Finding;
+import com.acme.staticforge.generate.quality.QualityRule;
+import com.acme.staticforge.generate.quality.QualityRuleConfigService;
+import com.acme.staticforge.security.RenderRateLimiter;
+import com.acme.staticforge.security.SecuritySupport;
 import com.acme.staticforge.preview.PagePreview;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.preview.PreviewTokenService;
@@ -68,6 +79,12 @@ public class PreviewController {
     static final String PAGE_HEADER = "X-SF-Page";
 
     private final CompactedReads compactedReads;
+    private final DraftCheckService draftChecks;
+    private final QualityRuleConfigService qualityConfig;
+    private final AssetService assetService;
+    private final PageService pageService;
+    private final RenderRateLimiter rateLimiter;
+    private final SecuritySupport securitySupport;
 
     public PreviewController(
             ProjectService projectService,
@@ -75,8 +92,20 @@ public class PreviewController {
             PreviewTokenService previewTokenService,
             ContentViews contentViews,
             ReleaseStatusService releaseStatus,
-            CompactedReads compactedReads) {
+            CompactedReads compactedReads,
+            DraftCheckService draftChecks,
+            QualityRuleConfigService qualityConfig,
+            AssetService assetService,
+            PageService pageService,
+            RenderRateLimiter rateLimiter,
+            SecuritySupport securitySupport) {
         this.compactedReads = compactedReads;
+        this.draftChecks = draftChecks;
+        this.qualityConfig = qualityConfig;
+        this.assetService = assetService;
+        this.pageService = pageService;
+        this.rateLimiter = rateLimiter;
+        this.securitySupport = securitySupport;
         this.projectService = projectService;
         this.pageRenderService = pageRenderService;
         this.previewTokenService = previewTokenService;
@@ -189,6 +218,55 @@ public class PreviewController {
                 sharedProjectId(projectKey), target.pageUuid(), target.revision(), resolvedChannel, true, apiBase(request),
                 page, target.locale(), target.view());
         return respond(preview, resolvedChannel);
+    }
+
+    /**
+     * The checks of a page's draft (M30.3.1, epic decision 13): renders the draft as a build of the drafts would write it,
+     * with section markers, runs the project's enabled page rules and the link rules against the draft's planned output
+     * paths, and returns the findings with the page's completeness {@code issues} — what the page editor's Issues panel
+     * shows. {@code ?revision=R} checks the drafts at a past revision (time travel). Stores nothing; rate limited per
+     * user ({@code 429 SF-API-0429}).
+     */
+    @AllowedOnArchivedProject("read-only check render")
+    @PostMapping("/pages/{uuid}/checks")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public DraftCheckView checkPage(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestParam(defaultValue = "html") String channel,
+            @RequestParam(required = false) String locale,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Long revision) {
+        long projectId = projectId(projectKey);
+        rateLimiter.acquireCheck(securitySupport.currentUserId());
+        DraftCheckService.Result result =
+                draftChecks.check(new DraftCheckService.Request(projectId, uuid, revision, channel, locale, page));
+        AssetVersionView version = revision == null
+                ? assetService.requireCurrent(projectId, uuid)
+                : assetService.findAt(projectId, uuid, revision)
+                        .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found at revision " + revision + ".")));
+        EffectiveQualityConfig config = qualityConfig.effective(projectId);
+        return new DraftCheckView(
+                pageService.contentIssues(projectId, version.payload()),
+                result.findings().stream().map(finding -> finding(finding, config)).toList(),
+                result.channel(),
+                result.locale(),
+                result.pageNumber(),
+                result.skippedRules());
+    }
+
+    private static DraftCheckView.DraftFindingView finding(Finding finding, EffectiveQualityConfig config) {
+        QualityRule rule = config.registry().find(finding.code()).orElse(null);
+        return new DraftCheckView.DraftFindingView(
+                finding.code(),
+                rule == null ? finding.code() : rule.name(),
+                finding.category().name(),
+                finding.severity().name(),
+                rule == null ? null : rule.fixHint().name(),
+                finding.message(),
+                finding.selector(),
+                finding.sectionInstanceId(),
+                finding.editorPath());
     }
 
     /** Section template preview against sample content (spec §19.1). */

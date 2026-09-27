@@ -788,6 +788,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/preview/pages/{uuid}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkPage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/pages": {
         parameters: {
             query?: never;
@@ -3345,6 +3361,26 @@ export interface components {
             /** Format: uuid */
             templateUuid?: string;
             sampleContent?: components["schemas"]["JsonNode"];
+        };
+        DraftCheckView: {
+            completeness?: components["schemas"]["ContentIssue"][];
+            findings?: components["schemas"]["DraftFindingView"][];
+            checkedChannel?: string;
+            checkedLocale?: string;
+            /** Format: int32 */
+            checkedPage?: number;
+            skippedRules?: string[];
+        };
+        DraftFindingView: {
+            code?: string;
+            name?: string;
+            category?: string;
+            severity?: string;
+            fixHint?: string;
+            message?: string;
+            selector?: string;
+            sectionInstanceId?: string;
+            editorPath?: string;
         };
         CreatePageRequest: {
             displayName?: string;
@@ -6619,6 +6655,34 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    checkPage: {
+        parameters: {
+            query?: {
+                channel?: string;
+                locale?: string;
+                page?: number;
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DraftCheckView"];
                 };
             };
         };

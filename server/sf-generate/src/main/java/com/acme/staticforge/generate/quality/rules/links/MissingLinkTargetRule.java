@@ -70,8 +70,9 @@ public class MissingLinkTargetRule implements SiteRule {
         for (Map.Entry<IndexedOutput, ReferenceEvent> entry : LinkScan.events(site, ReferenceEvent.Kind.MISSING)) {
             ReferenceEvent event = entry.getValue();
             findings.add(context.finding(entry.getKey().key(), null,
-                    "Reference to a " + LinkScan.kindName(event.targetKind()) + " that doesn't exist (" + event.target()
-                            + ")" + LinkScan.field(event) + ": it renders an empty link."));
+                            "Reference to a " + LinkScan.kindName(event.targetKind()) + " that doesn't exist ("
+                                    + event.target() + ")" + LinkScan.field(event) + ": it renders an empty link.")
+                    .withEditorPath(event.editorPath()));
         }
         return findings;
     }

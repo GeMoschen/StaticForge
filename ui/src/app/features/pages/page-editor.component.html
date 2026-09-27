@@ -96,6 +96,7 @@
                 [count]="ctx.count"
                 [readOnly]="readOnly()"
                 [hideActions]="true"
+                [issues]="issues()"
                 (valueChange)="onSectionValueChange(ctx.bodyName, ctx.section.instanceId, $event)"
                 (remove)="removeSection(ctx.bodyName, ctx.section.instanceId)"
                 (moveUp)="moveSectionBy(ctx.bodyName, ctx.index, -1)"
@@ -151,6 +152,7 @@
                     [index]="$index"
                     [count]="bodyCount(body.name)"
                     [readOnly]="readOnly()"
+                    [issues]="issues()"
                     (valueChange)="onSectionValueChange(body.name, section.instanceId, $event)"
                     (remove)="removeSection(body.name, section.instanceId)"
                     (moveUp)="moveSectionBy(body.name, $index, -1)"
@@ -165,9 +167,11 @@
               <!-- Page scope: only the page's own fields, no bodies/sections. -->
               @if (contentDefinition(); as def) {
                 <sf-content-form
+                  data-sf-page-fields
                   [definition]="def"
                   [formGroup]="fieldsForm()!"
                   [projectKey]="projectKey()"
+                  [issues]="issues()"
                   [editingLocale]="editingLocale()"
                   [storedValue]="storedContent()"
                   [localeLabels]="localeLabels()"
@@ -178,6 +182,21 @@
               </div>
             }
           }
+        }
+        @if (!error()) {
+          <!-- Every scope: an issue opens the field or section it is about (M30.3.2). -->
+          <div class="page-editor__issues">
+            <sf-page-issues-panel
+              [projectKey]="projectKey()"
+              [pageUuid]="uuid()"
+              [revision]="timeTravelRevision()"
+              [refreshKey]="autosave.revision()"
+              [completeness]="issues()"
+              [previewView]="previewView()"
+              (issueSelect)="onIssueSelect($event)"
+              (checked)="onIssuesChecked($event)"
+            />
+          </div>
         }
       </div>
 
@@ -195,6 +214,7 @@
           [revision]="timeTravelRevision()"
           [refreshKey]="autosave.revision()"
           (sectionClick)="onPreviewSectionClick($event)"
+          (viewChange)="previewView.set($event)"
         />
       </div>
     </div>
