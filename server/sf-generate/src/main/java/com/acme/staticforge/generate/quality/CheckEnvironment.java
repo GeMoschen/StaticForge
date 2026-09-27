@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * What a check knows besides the document (M30): the target's {@code baseUrl}, the project's locales, the channels'
@@ -24,6 +25,7 @@ public final class CheckEnvironment {
     private final Map<String, IndexedOutput> outputs;
     private final Function<String, ChannelOutputSettings> channels;
     private final Function<UUID, AssetLabel> assets;
+    private final Predicate<OutputKey> noIndex;
     private final Map<String, LinkResolver> resolvers = new ConcurrentHashMap<>();
 
     /**
@@ -39,11 +41,29 @@ public final class CheckEnvironment {
             Map<String, IndexedOutput> outputs,
             Function<String, ChannelOutputSettings> channels,
             Function<UUID, AssetLabel> assets) {
+        this(baseUrl, locales, outputs, channels, assets, null);
+    }
+
+    /**
+     * As {@link #CheckEnvironment(String, LocaleConfig, Map, Function, Function)}, knowing which page outputs belong to
+     * a page with {@code nav.noIndex} (M30.2.2).
+     *
+     * @param noIndex whether a page output's page, in the output's language, sets {@code nav.noIndex}; {@code null}
+     *     reads as none does
+     */
+    public CheckEnvironment(
+            String baseUrl,
+            LocaleConfig locales,
+            Map<String, IndexedOutput> outputs,
+            Function<String, ChannelOutputSettings> channels,
+            Function<UUID, AssetLabel> assets,
+            Predicate<OutputKey> noIndex) {
         this.baseUrl = baseUrl == null ? "" : baseUrl;
         this.locales = LocaleConfig.orEmpty(locales);
         this.outputs = Map.copyOf(outputs);
         this.channels = channels == null ? ChannelOutputSettings::defaults : channels;
         this.assets = assets == null ? uuid -> null : assets;
+        this.noIndex = noIndex == null ? key -> false : noIndex;
     }
 
     /** The target's {@code baseUrl}; {@code ""} when it has none. */
@@ -90,6 +110,11 @@ public final class CheckEnvironment {
         return resolvers.computeIfAbsent(
                 channel == null ? "" : channel,
                 key -> new LinkResolver(baseUrl, channelSettings(channel).indexFileName()));
+    }
+
+    /** Whether the page of output {@code key} asks search engines not to index it ({@code nav.noIndex}, M30.2.2). */
+    public boolean noIndex(OutputKey key) {
+        return key != null && key.asset() != null && noIndex.test(key);
     }
 
     /** How to name asset {@code uuid} in a message. */

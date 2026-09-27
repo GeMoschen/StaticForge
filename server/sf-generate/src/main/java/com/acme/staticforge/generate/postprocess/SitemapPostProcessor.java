@@ -19,6 +19,9 @@ import org.springframework.stereotype.Service;
  * hreflang="…">} for each language the same page exists in, plus {@code x-default} pointing at the
  * project's default language — the standard way to tell a search engine these outputs are
  * translations of one another rather than duplicates.
+ *
+ * <p>A page with {@code nav.noIndex} (M30, epic decision 12) is left out in the languages it sets it in: every page
+ * number of it, and as an alternate of its other languages too — a sitemap names only URLs a search engine should index.
  */
 @Service
 public final class SitemapPostProcessor implements PostProcessor {
@@ -28,10 +31,11 @@ public final class SitemapPostProcessor implements PostProcessor {
         if (ctx.baseUrl().isBlank() || ctx.pages().isEmpty()) {
             return files;
         }
+        List<SitePage> indexed = ctx.pages().stream().filter(page -> !page.noIndex()).toList();
         // Same page, same channel, same page number, different language: each other's alternates.
         Map<AlternateKey, List<SitePage>> alternates = new LinkedHashMap<>();
         boolean localized = false;
-        for (SitePage page : ctx.pages()) {
+        for (SitePage page : indexed) {
             if (page.locale() != null) {
                 localized = true;
                 alternates
@@ -49,7 +53,7 @@ public final class SitemapPostProcessor implements PostProcessor {
             xml.append(" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\"");
         }
         xml.append(">\n");
-        for (SitePage page : ctx.pages()) {
+        for (SitePage page : indexed) {
             List<SitePage> siblings = page.locale() == null
                     ? List.of()
                     : alternates.getOrDefault(

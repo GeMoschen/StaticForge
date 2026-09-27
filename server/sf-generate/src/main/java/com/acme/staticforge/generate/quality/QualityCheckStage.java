@@ -1,5 +1,6 @@
 package com.acme.staticforge.generate.quality;
 
+import com.acme.staticforge.asset.page.PageNav;
 import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.generate.GenerationProperties;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
@@ -30,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -175,8 +177,8 @@ public class QualityCheckStage {
                     new OutputKey(path, null, null, null, null), BuildManifest.Kind.SITE, false));
         }
 
-        CheckEnvironment environment = new CheckEnvironment(
-                input.baseUrl(), input.locales(), outputs, input.channels(), labels(input.snapshot()));
+        CheckEnvironment environment = new CheckEnvironment(input.baseUrl(), input.locales(), outputs, input.channels(),
+                labels(input.snapshot()), noIndex(input.snapshot()));
 
         // Page rules: new HTML outputs are parsed here, carried ones bring facts and findings from the base sidecar.
         Map<String, HtmlFacts> facts = new LinkedHashMap<>();
@@ -213,8 +215,8 @@ public class QualityCheckStage {
         publishedFacts.keySet().removeAll(held);
         Set<String> heldBack = new LinkedHashSet<>(input.notRendered());
         heldBack.addAll(held);
-        CheckEnvironment afterHoldBack = new CheckEnvironment(
-                input.baseUrl(), input.locales(), published, input.channels(), labels(input.snapshot()));
+        CheckEnvironment afterHoldBack = new CheckEnvironment(input.baseUrl(), input.locales(), published,
+                input.channels(), labels(input.snapshot()), noIndex(input.snapshot()));
         findings.addAll(siteRules.run(
                 new SiteIndex(afterHoldBack, publishedFacts, heldBack, events, Set.of()), config, true));
 
@@ -345,6 +347,14 @@ public class QualityCheckStage {
         return uuid -> {
             SnapshotAsset asset = snapshot.assetByUuid(uuid);
             return asset == null ? null : new AssetLabel(uuid, asset.uid(), asset.displayName(), asset.type().name());
+        };
+    }
+
+    /** A page output's {@code nav.noIndex}: its page's, as released in the output's language. */
+    private static Predicate<OutputKey> noIndex(Snapshot snapshot) {
+        return key -> {
+            SnapshotAsset page = snapshot.asset(key.asset(), key.locale());
+            return page != null && !page.deleted() && PageNav.noIndex(page.payload());
         };
     }
 

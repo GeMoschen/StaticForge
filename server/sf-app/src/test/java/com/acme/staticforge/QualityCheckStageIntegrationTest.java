@@ -92,6 +92,9 @@ class QualityCheckStageIntegrationTest {
 
     private Site site(String prefix) {
         Fixture fx = q.project(prefix);
+        // Only the test rules: the production rules' findings on these pages are their own tests' business.
+        q.only(fx, java.util.Set.of(QualityTestRules.FLAG, QualityTestRules.MISSING, QualityTestRules.TO_HELD_BACK,
+                QualityTestRules.EVENTS, QualityCodes.OUTPUT_NOT_CHECKED));
         AssetVersionView home = q.htmlPage(fx, "Home", document("Home",
                 "<nav><a href=\"flagged.html\">flagged</a> <a href=\"gone.html\">gone</a> <a href=\"clean.html\">clean</a></nav>"));
         AssetVersionView flagged = q.htmlPage(fx, "Flagged", document("Flagged",

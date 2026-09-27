@@ -10,6 +10,9 @@ package com.acme.staticforge.generate.postprocess;
  * <p>{@code locale} is the language the output was rendered in (M24.3.2), {@code null} in a project
  * without locales. Outputs of one page that differ only by language are each other's {@code hreflang}
  * alternates.
+ *
+ * <p>{@code noIndex} is the page's {@code nav.noIndex} in that language (M30, epic decision 12): the sitemap leaves the
+ * output out. The search index still lists it — site search is the site's own, not a search engine's.
  */
 public record SitePage(
         String uid,
@@ -18,7 +21,8 @@ public record SitePage(
         String title,
         Integer pageNumber,
         Integer totalPages,
-        String locale) {
+        String locale,
+        boolean noIndex) {
 
     public SitePage {
         path = path == null ? "" : path;
@@ -27,13 +31,19 @@ public record SitePage(
         title = title == null ? "" : title;
     }
 
+    /** A page search engines may index. */
+    public SitePage(
+            String uid, String path, String channel, String title, Integer pageNumber, Integer totalPages, String locale) {
+        this(uid, path, channel, title, pageNumber, totalPages, locale, false);
+    }
+
     /** A page that isn't paginated, in a project without locales. */
     public SitePage(String uid, String path, String channel, String title) {
-        this(uid, path, channel, title, null, null, null);
+        this(uid, path, channel, title, null, null, null, false);
     }
 
     /** A page in a project without locales. */
     public SitePage(String uid, String path, String channel, String title, Integer pageNumber, Integer totalPages) {
-        this(uid, path, channel, title, pageNumber, totalPages, null);
+        this(uid, path, channel, title, pageNumber, totalPages, null, false);
     }
 }

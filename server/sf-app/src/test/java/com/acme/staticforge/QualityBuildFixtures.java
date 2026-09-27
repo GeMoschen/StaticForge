@@ -77,6 +77,18 @@ final class QualityBuildFixtures {
         config.update(fx.project().getKey(), entries, fx.ctx());
     }
 
+    /**
+     * Switches every rule but {@code codes} off (those keep their defaults): a test about the framework or one rule
+     * isn't disturbed by the production rules' findings on its fixture pages.
+     */
+    void only(Fixture fx, java.util.Set<String> codes) {
+        Map<String, QualityRuleConfig.Entry> entries = new java.util.LinkedHashMap<>();
+        config.effective(fx.projectId()).settings().keySet().stream()
+                .filter(code -> !codes.contains(code))
+                .forEach(code -> entries.put(code, new QualityRuleConfig.Entry("OFF", null)));
+        config.update(fx.project().getKey(), entries, fx.ctx());
+    }
+
     /** Switches every rule off. */
     void allOff(Fixture fx) {
         Map<String, QualityRuleConfig.Entry> entries = new java.util.LinkedHashMap<>();
