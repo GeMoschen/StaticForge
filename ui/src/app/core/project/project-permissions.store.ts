@@ -69,6 +69,8 @@ export class ProjectPermissionsStore {
   /** Promote/rollback and generation schedules stay with developers, whatever the policy. */
   readonly canPromote = computed(() => this.isDeveloper() && this.writable());
   readonly canScheduleGeneration = computed(() => this.isDeveloper() && this.writable());
+  /** The quality rule configuration is the developers' (M30, epic decision 4): the templates own the checked markup. */
+  readonly canEditQualityRules = computed(() => this.isDeveloper() && this.writable());
   /** Manual redirects are the developers' (M30, epic decision 17), like URL registry overrides. */
   readonly canEditRedirects = computed(() => this.isDeveloper() && this.writable());
   /**

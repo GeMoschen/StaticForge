@@ -34,6 +34,30 @@ const configOf = (target: GenerationTargetView | null): TargetConfig =>
 const textOf = (config: TargetConfig, key: string): string =>
   typeof config[key] === 'string' ? (config[key] as string) : '';
 
+/** How a target publishes its builds' redirects (M30, epic decision 18): `config.redirectFormats`. */
+type RedirectFormat = 'HTML_STUB' | 'HTACCESS' | 'JSON';
+
+/** The target form's "Redirect output" choices, in the server's order. */
+const REDIRECT_FORMATS: readonly { format: RedirectFormat; label: string; hint: string }[] = [
+  {
+    format: 'HTML_STUB',
+    label: 'HTML redirect pages',
+    hint: 'A small page at each old URL that forwards to the new one. Works on every host.',
+  },
+  { format: 'HTACCESS', label: 'Apache .htaccess', hint: 'Apache only: permanent redirect rules in the site’s .htaccess.' },
+  { format: 'JSON', label: 'redirects.json', hint: 'The list of redirects, for a host or proxy that reads it.' },
+];
+
+/** What a target without `config.redirectFormats` writes (the server's `RedirectFormat.DEFAULT`). */
+const DEFAULT_REDIRECT_FORMATS: readonly RedirectFormat[] = ['HTML_STUB'];
+
+/** The form's checkbox group for `formats`. */
+const redirectChecks = (formats: readonly string[]): Record<RedirectFormat, boolean> => ({
+  HTML_STUB: formats.includes('HTML_STUB'),
+  HTACCESS: formats.includes('HTACCESS'),
+  JSON: formats.includes('JSON'),
+});
+
 /**
  * Project settings tab: "Targets" — the output destinations generation runs publish to
  * (spec §18.4). Each target writes into its own directory under the server's output root,
@@ -66,6 +90,7 @@ export class ProjectSettingsTargetsComponent {
   /** New target for developers, edit and delete for project admins (as the API); none while read-only. */
   protected readonly permissions = inject(ProjectPermissionsStore);
   protected readonly types = TARGET_TYPES;
+  protected readonly redirectFormats = REDIRECT_FORMATS;
 
   readonly targets = signal<GenerationTargetView[]>([]);
   readonly loading = signal(false);
@@ -82,6 +107,7 @@ export class ProjectSettingsTargetsComponent {
     path: [''],
     baseUrl: [''],
     isDefault: [false],
+    redirectFormats: this.fb.nonNullable.group(redirectChecks(DEFAULT_REDIRECT_FORMATS)),
   });
 
   constructor() {
@@ -135,6 +161,7 @@ export class ProjectSettingsTargetsComponent {
       baseUrl: '',
       // The first target becomes the default so generation works without a second step.
       isDefault: this.targets().length === 0,
+      redirectFormats: redirectChecks(DEFAULT_REDIRECT_FORMATS),
     });
     this.formOpen.set(true);
   }
@@ -152,6 +179,8 @@ export class ProjectSettingsTargetsComponent {
       path: textOf(config, 'path'),
       baseUrl: textOf(config, 'baseUrl'),
       isDefault: target.isDefault ?? false,
+      // The server's view resolves a missing config key to the default, so this is what the target writes.
+      redirectFormats: redirectChecks(target.redirectFormats ?? DEFAULT_REDIRECT_FORMATS),
     });
     this.formOpen.set(true);
   }
@@ -171,6 +200,10 @@ export class ProjectSettingsTargetsComponent {
     const config: TargetConfig = { ...configOf(editing) };
     setOrDelete(config, 'path', value.path.trim());
     setOrDelete(config, 'baseUrl', value.baseUrl.trim());
+    // Always explicit: `[]` means "no redirect output", which a missing key can't say.
+    config['redirectFormats'] = REDIRECT_FORMATS.map((item) => item.format).filter(
+      (format) => value.redirectFormats[format],
+    );
     const req: GenerationTargetRequest = {
       name: value.name.trim(),
       type: value.type,

@@ -16,15 +16,18 @@ const live: GenerationTargetView = {
   config: { path: 'site', baseUrl: 'https://example.com', keep: 'me' } as unknown as JsonNode,
   isDefault: true,
   outputPath: 'proj/site',
+  // No `config.redirectFormats`: the server's view resolves it to the default.
+  redirectFormats: ['HTML_STUB'],
 };
 
 const scratch: GenerationTargetView = {
   id: 2,
   name: 'Scratch',
   type: 'ZIP',
-  config: {} as JsonNode,
+  config: { redirectFormats: ['HTACCESS', 'JSON'] } as unknown as JsonNode,
   isDefault: false,
   outputPath: 'proj/target-2',
+  redirectFormats: ['HTACCESS', 'JSON'],
 };
 
 function makeApiStub(targets: GenerationTargetView[] = [live, scratch]) {
@@ -52,6 +55,11 @@ function input(label: string): HTMLInputElement {
   return screen.getByLabelText(new RegExp(`^${label}`)) as HTMLInputElement;
 }
 
+/** A "Redirect output" checkbox, by the start of its label. */
+function format(label: RegExp): HTMLInputElement {
+  return screen.getByRole('checkbox', { name: label }) as HTMLInputElement;
+}
+
 describe('ProjectSettingsTargetsComponent', () => {
   it('lists targets with their output folder and default badge', async () => {
     const { api } = await setup();
@@ -76,7 +84,7 @@ describe('ProjectSettingsTargetsComponent', () => {
     expect(api.createTarget).toHaveBeenCalledWith('proj', {
       name: 'Live',
       type: 'FILESYSTEM',
-      config: { path: 'site/live' },
+      config: { path: 'site/live', redirectFormats: ['HTML_STUB'] },
       isDefault: true,
     });
     expect(api.listTargets).toHaveBeenCalledTimes(2);
@@ -94,9 +102,69 @@ describe('ProjectSettingsTargetsComponent', () => {
     expect(api.updateTarget).toHaveBeenCalledWith('proj', 1, {
       name: 'Live',
       type: 'FILESYSTEM',
-      config: { path: 'site', keep: 'me' },
+      config: { path: 'site', keep: 'me', redirectFormats: ['HTML_STUB'] },
       isDefault: true,
     });
+  });
+
+  it('a new target writes HTML redirect pages by default; unchecking all saves an explicit empty list', async () => {
+    const { api } = await setup();
+    await waitFor(() => expect(screen.getByText('proj/site')).toBeTruthy());
+
+    fireEvent.click(screen.getByText('New target'));
+    expect(format(/HTML redirect pages/).checked).toBe(true);
+    expect(format(/\.htaccess/).checked).toBe(false);
+    expect(format(/redirects\.json/).checked).toBe(false);
+    expect(screen.getByText(/Apache only/)).toBeTruthy();
+
+    fireEvent.input(input('Name'), { target: { value: 'Bare' } });
+    fireEvent.click(format(/HTML redirect pages/));
+    fireEvent.click(screen.getByText('Create target'));
+
+    expect(api.createTarget).toHaveBeenCalledWith('proj', {
+      name: 'Bare',
+      type: 'FILESYSTEM',
+      config: { redirectFormats: [] },
+      isDefault: false,
+    });
+  });
+
+  it('editing shows the target’s redirect formats and saves the changed choice in the server’s order', async () => {
+    const { api } = await setup();
+    await waitFor(() => expect(screen.getByText('proj/target-2')).toBeTruthy());
+
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    expect(format(/HTML redirect pages/).checked).toBe(false);
+    expect(format(/\.htaccess/).checked).toBe(true);
+    expect(format(/redirects\.json/).checked).toBe(true);
+
+    fireEvent.click(format(/redirects\.json/));
+    fireEvent.click(format(/HTML redirect pages/));
+    fireEvent.click(screen.getByText('Save changes'));
+
+    expect(api.updateTarget).toHaveBeenCalledWith('proj', 2, {
+      name: 'Scratch',
+      type: 'ZIP',
+      config: { redirectFormats: ['HTML_STUB', 'HTACCESS'] },
+      isDefault: false,
+    });
+  });
+
+  it('shows the server’s message when it rejects the redirect formats', async () => {
+    const api = makeApiStub();
+    api.updateTarget.mockReturnValue(
+      throwError(() => ({
+        status: 400,
+        error: { detail: 'Redirect format HTACCESS is listed twice.', field: 'config.redirectFormats' },
+      })),
+    );
+    await setup(api);
+    await waitFor(() => expect(screen.getByText('proj/site')).toBeTruthy());
+
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    fireEvent.click(screen.getByText('Save changes'));
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('listed twice'));
   });
 
   it('shows the server validation message when saving fails', async () => {
