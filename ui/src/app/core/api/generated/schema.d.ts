@@ -2792,6 +2792,7 @@ export interface components {
             category?: string;
             kind?: string;
             description?: string;
+            fixHint?: string;
             defaultSeverity?: string;
             severity?: string;
             maxSeverity?: string;

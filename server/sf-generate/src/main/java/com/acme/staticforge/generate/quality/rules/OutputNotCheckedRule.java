@@ -5,6 +5,7 @@ import com.acme.staticforge.generate.quality.PageRule;
 import com.acme.staticforge.generate.quality.ParsedOutput;
 import com.acme.staticforge.generate.quality.QualityCategory;
 import com.acme.staticforge.generate.quality.QualityCodes;
+import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.QualitySeverity;
 import com.acme.staticforge.generate.quality.RuleContext;
 import java.util.List;
@@ -39,6 +40,11 @@ public class OutputNotCheckedRule implements PageRule {
     public String description() {
         return "The output could not be parsed, or a check failed on it, so some or all rules did not run for it. "
                 + "The message names the cause. Usually a malformed or very large document: fix it in the template.";
+    }
+
+    @Override
+    public QualityFixHint fixHint() {
+        return QualityFixHint.TEMPLATE;
     }
 
     @Override

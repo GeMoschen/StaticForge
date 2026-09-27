@@ -31,6 +31,15 @@ public interface QualityRule {
      */
     String description();
 
+    /**
+     * Where the rule's findings are usually fixed, for the UI's "fix in content" / "fix in template" hint; the
+     * {@link #description()} says the same in words. {@code TEMPLATE} unless the rule says otherwise: the templates own
+     * the markup the rules check.
+     */
+    default QualityFixHint fixHint() {
+        return QualityFixHint.TEMPLATE;
+    }
+
     /** The severity when the project configures none. */
     default QualitySeverity defaultSeverity() {
         return QualitySeverity.WARNING;

@@ -101,6 +101,7 @@ public class QualityRulesController {
                 rule.category().name(),
                 rule instanceof SiteRule ? "SITE" : "PAGE",
                 rule.description(),
+                rule.fixHint().name(),
                 rule.defaultSeverity().name(),
                 setting.severity().name(),
                 rule.maxSeverity().name(),

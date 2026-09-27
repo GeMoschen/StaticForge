@@ -1,6 +1,6 @@
 ---
 id: M30.2.3
-status: todo
+status: done
 depends: [M30.1.3]
 epic: m30-quality-checks-and-redirects
 feature: rules
@@ -33,10 +33,10 @@ media `altText` (localizable, `MediaServiceImpl:272`–`:282`) and `altOverride`
 
 ## Acceptance criteria
 
-- [ ] Positive and negative fixture per rule, incl. `aria-labelledby` pointing at a missing id (fails), nested
+- [x] Positive and negative fixture per rule, incl. `aria-labelledby` pointing at a missing id (fails), nested
       `img[alt]` inside a link (passes), `alt=""` (passes `0301`, but a link containing only that image fails `0302`).
-- [ ] `0301` message names the media uid when resolvable.
-- [ ] `./gradlew build` green.
+- [x] `0301` message names the media uid when resolvable.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -48,3 +48,12 @@ media `altText` (localizable, `MediaServiceImpl:272`–`:282`) and `altOverride`
 - The rules check the markup the templates produce; a finding may be fixed by content (alt text on the media) or by the
   template (a hard-coded icon link). Say which in each rule's `description` so the UI can hint "fix in content" vs "fix in
   template".
+- Done: rules in `generate/quality/rules/a11y/` (`MissingAltRule`, `LinkWithoutTextRule`, `ButtonWithoutTextRule`,
+  `SkippedHeadingLevelRule`, `DuplicateIdRule`, `UnlabelledFormControlRule`, `IframeWithoutTitleRule`,
+  `MissingDocumentLangRule`), shared name test `AccessibleNames`; fixtures in `quality/a11y/`; tests
+  `AccessibilityRulesTest` (harness) and `AccessibilityRulesIntegrationTest` (real build: media uid, hold-back).
+- Deviation: "fix in content" vs "fix in template" is also machine-readable: `QualityRule.fixHint()` returns
+  `QualityFixHint` (`CONTENT`, `TEMPLATE`, `CONTENT_OR_TEMPLATE`; default `TEMPLATE`), exposed as `fixHint` in
+  `GET /quality-rules`. `SF-CHK-0001` is `TEMPLATE`. The description still says it in words.
+- Hidden elements (`hidden`, `aria-hidden="true"` on it or an ancestor) are skipped by `0302`/`0303`/`0306`/`0307`
+  (they need no name); `0301` is not (HTML requires `alt` regardless). `a[role=button]` is left to `0303`.

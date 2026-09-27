@@ -78,6 +78,8 @@ class QualityRulesApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rules[*].code", hasItem("SF-CHK-0001")))
                 .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0001')].maxSeverity").value("WARNING"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0001')].fixHint").value("TEMPLATE"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0390')].fixHint").value("TEMPLATE"))
                 .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0390')].kind").value("PAGE"))
                 .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0390')].category").value("ACCESSIBILITY"))
                 .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0390')].severity").value("WARNING"))
@@ -91,6 +93,26 @@ class QualityRulesApiTest {
                 .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0190')].kind").value("SITE"))
                 .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0191')].maxSeverity").value("WARNING"));
         assertThat(projects.requireByKey(fx.key()).getQualityRuleConfig()).isNull();
+    }
+
+    /** M30.2.3: the accessibility rules are listed with their fix hint for the UI's "fix in content / template". */
+    @Test
+    void theAccessibilityRulesAreListedWithTheirFixHints() throws Exception {
+        Fixture fx = fixture("qr-a11y");
+
+        perform(get("/api/v1/projects/{key}/quality-rules", fx.key()), fx.adminToken())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rules[?(@.category == 'ACCESSIBILITY' && @.code != 'SF-CHK-0390')].code",
+                        containsInAnyOrder("SF-CHK-0301", "SF-CHK-0302", "SF-CHK-0303", "SF-CHK-0304", "SF-CHK-0305",
+                                "SF-CHK-0306", "SF-CHK-0307", "SF-CHK-0308")))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0301')].name").value("Image without alt attribute"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0301')].kind").value("PAGE"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0301')].severity").value("WARNING"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0301')].fixHint").value("CONTENT_OR_TEMPLATE"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0302')].fixHint").value("CONTENT_OR_TEMPLATE"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0304')].fixHint").value("CONTENT_OR_TEMPLATE"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0303')].fixHint").value("TEMPLATE"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0308')].fixHint").value("TEMPLATE"));
     }
 
     @Test
