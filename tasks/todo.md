@@ -1,3 +1,35 @@
+# M30 — Quality checks and redirects (branch `m30-quality-checks-and-redirects`)
+
+Spec: `tasks/30-m30-quality-checks-and-redirects/`. Decisions 1–20 there are binding.
+Plan deviations known up front: changelogs 026/027 are taken (M29), so quality checks use `028-quality-checks.xml`
+and redirects `029-redirects.xml`. Export protocol 9 is taken (M27.8 schedules), so M30 archives are protocol **10**
+(redirect registry + quality rule config); protocol-9 archives import without them.
+
+Execution: phase A two lanes (A1 check framework in the main tree; A2 redirect registry in a worktree), phase B
+parallel streams (rules ×3, redirect detection + output), phase C editor issues + UI, phase D docs + journey + full
+verification.
+
+- [ ] A1 — M30.1.1 rule SPI, jsoup, `HtmlFacts`, `LinkResolver`, registry, selectors, section markers
+- [ ] A1 — M30.1.2 rule config per project, findings table + API, run view counts
+- [ ] A1 — M30.1.3 `CHECK` stage, hold-back `SF-GEN-0125`, reference events, sidecar, fallback causes, metrics
+- [ ] A2 — M30.4.1 redirect registry model, manual API, for-asset, export/import (protocol 10)
+- [ ] B — M30.2.1 link rules
+- [ ] B — M30.2.2 SEO rules + `nav.noIndex`
+- [ ] B — M30.2.3 accessibility rules
+- [ ] B — M30.4.2 redirect detection on build
+- [ ] B — M30.5.1 redirect formats per target
+- [ ] C — M30.3.1 draft check endpoint
+- [ ] C — M30.3.2 page editor Issues panel
+- [ ] C — M30.6.1 Quality tab
+- [ ] C — M30.6.2 run findings report
+- [ ] C — M30.6.3 Redirects tab, target formats, unpublish redirect
+- [ ] D — M30.7.1 spec + docs
+- [ ] D — M30.7.2 `ui/e2e/m30-journeys.spec.ts` green twice
+- [ ] Benchmark: 5,000-page full build within +15 % of pre-M30 (baseline measured on master before phase A merges)
+- [ ] `./gradlew spotlessCheck test --rerun`, `ng build`, `npx vitest run`, journey green twice
+
+---
+
 # M29 — Housekeeping jobs (branch `m29-housekeeping-jobs`)
 
 Spec: `tasks/29-m29-housekeeping-jobs/`. Decisions 1–14 there are binding.
