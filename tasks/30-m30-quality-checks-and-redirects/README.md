@@ -172,7 +172,7 @@ This milestone delivers:
 
 ## Exit criteria (epic is done when)
 
-- [ ] A full build of a fixture site reports every seeded defect (broken page/media link, missing anchor, link to an
+- [x] A full build of a fixture site reports every seeded defect (broken page/media link, missing anchor, link to an
       unreleased and to a deleted page, missing title/description/h1, duplicate title, missing alt, heading skip,
       duplicate id, unlabeled input, untitled iframe, missing lang, noIndex page without robots meta) with the right
       code, page, channel, locale and selector — and nothing on the clean pages (golden fixture).

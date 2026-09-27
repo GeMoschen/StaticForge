@@ -32,6 +32,12 @@ dependencies {
     testImplementation(libs.jsoup)
 }
 
+tasks.named<Test>("test") {
+    // `-Dsf.quality.golden.update=true` rewrites quality/expected-findings.json from the golden build
+    // (GoldenQualityFixtureIntegrationTest); off by default, so the test only compares.
+    System.getProperty("sf.quality.golden.update")?.let { systemProperty("sf.quality.golden.update", it) }
+}
+
 tasks.named<Jar>("bootJar") {
     archiveBaseName.set("staticforge-server")
 }
