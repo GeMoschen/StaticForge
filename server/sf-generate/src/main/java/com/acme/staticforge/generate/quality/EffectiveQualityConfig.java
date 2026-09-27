@@ -47,6 +47,8 @@ public final class EffectiveQualityConfig {
      * later version doesn't break a project), a parameter the rule doesn't have or a value it doesn't accept keeps its
      * default. Validation that reports these belongs to the write path.
      *
+     * <p>Parameter values that don't fit together ({@link QualityRule#paramsProblem}) are all replaced by the defaults.
+     *
      * @param overrides by code; a setting's params may name only some parameters, the rest keep their defaults
      */
     public static EffectiveQualityConfig of(QualityRuleRegistry registry, Map<String, RuleSetting> overrides) {
@@ -57,6 +59,11 @@ public final class EffectiveQualityConfig {
             for (RuleParam param : rule.params()) {
                 Object value = override == null ? null : override.params().get(param.name());
                 params.put(param.name(), value != null && param.problemWith(value) == null ? value : param.defaultValue());
+            }
+            if (rule.paramsProblem(params) != null) {
+                // Values that don't fit together (a stored range with min above max) all fall back to the defaults.
+                params.clear();
+                rule.params().forEach(param -> params.put(param.name(), param.defaultValue()));
             }
             QualitySeverity severity = override == null ? rule.defaultSeverity() : override.severity();
             settings.put(rule.code(), new RuleSetting(severity, params));

@@ -36,6 +36,7 @@ import { SectionEditorComponent } from './section-editor.component';
 import { ConflictDrawerComponent } from './conflict-drawer.component';
 import { PageAutosaveService, PagePayload } from './autosave.service';
 import { composePagePayload } from './page-payload.util';
+import { PageNav, PageNavSettingsComponent } from './page-nav-settings.component';
 import { mergePayload } from './conflict-util';
 import { SfPreviewFrameComponent } from '../preview';
 import type { BodiesMap, FieldResolveEvent, ResolveMode, SectionInstance } from './types';
@@ -71,6 +72,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
     SfAssetImpactComponent,
     SfUidRenameComponent,
     ReleaseBarComponent,
+    PageNavSettingsComponent,
   ],
   providers: [PageAutosaveService],
   templateUrl: './page-editor.component.html',
@@ -317,6 +319,21 @@ export class PageEditorComponent {
           this.toast.show('Could not rename page — try again in a moment.', 'error');
         },
       });
+  }
+
+  /** The page's `nav` settings (a `JsonNode` in the API types). */
+  protected navOf(page: PageView): PageNav | undefined {
+    return page.nav as PageNav | undefined;
+  }
+
+  /** "Show in navigation" / "Hide from search engines" (M30.2.2): saved with the page right away. */
+  protected onNavChange(nav: PageNav): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.page.update((cur) => (cur ? { ...cur, nav: nav as PageView['nav'] } : cur));
+    this.autosave.markDirty();
+    this.autosave.flush();
   }
 
   protected onUidChanged(newUid: string): void {

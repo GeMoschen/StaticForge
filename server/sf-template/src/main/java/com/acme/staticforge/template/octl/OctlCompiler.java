@@ -50,6 +50,13 @@ public final class OctlCompiler {
     public static final String LOCALES_ROOT = "CMS_LOCALES";
 
     /**
+     * The render's {@code $CMS_META} values as a read-only expression root (M30.2.2): {@code $CMS_META(noIndex)$}
+     * prints a value, {@code $CMS_IF(CMS_META.noIndex)$} tests it — a template writes the robots meta only for a page
+     * that asks search engines not to index it.
+     */
+    public static final String META_ROOT = "CMS_META";
+
+    /**
      * The per-render position names of a dataset record template (M25): the record's place in the list a
      * record set renders — {@code _index} (0-based), {@code _first}, {@code _last} and {@code _count}. Known at
      * compile time, bound by the renderer.
@@ -685,9 +692,9 @@ public final class OctlCompiler {
             }
             return;
         }
-        if (LOCALES_ROOT.equals(name)) {
-            // The language switcher is available everywhere, including processed text media:
-            // it reads project settings, not page structure.
+        if (LOCALES_ROOT.equals(name) || META_ROOT.equals(name)) {
+            // The language switcher and the meta values are available everywhere, including processed text media:
+            // they read the render, not page structure.
             return;
         }
         if (ctx.contentDef.findEditor(name).isPresent()) {
@@ -872,14 +879,14 @@ public final class OctlCompiler {
     }
 
     /**
-     * {@code CMS_PAGINATION} (M21.3.1) and {@code CMS_LOCALES} (M24.3.1) are read-only: no
+     * {@code CMS_PAGINATION} (M21.3.1), {@code CMS_LOCALES} (M24.3.1) and {@code CMS_META} (M30.2.2) are read-only: no
      * {@code $CMS_SET} or loop variable may take their names.
      */
     private static void checkNotPaginationRoot(String name, int line, int col, ValidateCtx ctx) {
-        if (LOCALES_ROOT.equals(name)) {
+        if (LOCALES_ROOT.equals(name) || META_ROOT.equals(name)) {
             ctx.diagnostics.add(Diagnostic.error(
                     DiagnosticCodes.OCTL_PAGINATION_READ_ONLY,
-                    LOCALES_ROOT + " is read-only: pick another variable name",
+                    name + " is read-only: pick another variable name",
                     line, col));
             return;
         }

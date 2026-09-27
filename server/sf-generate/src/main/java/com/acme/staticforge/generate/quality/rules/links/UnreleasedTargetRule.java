@@ -1,5 +1,6 @@
 package com.acme.staticforge.generate.quality.rules.links;
 
+import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.ReferenceEvent;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +32,11 @@ public class UnreleasedTargetRule extends UnresolvedReferenceRule {
         return "The content or the template references a page, media file or folder that isn't released (never "
                 + "released, or unpublished), so the reference renders an empty link. Release the target, or remove "
                 + "the reference from the field the finding names.";
+    }
+
+    @Override
+    public QualityFixHint fixHint() {
+        return QualityFixHint.CONTENT_OR_TEMPLATE;
     }
 
     @Override

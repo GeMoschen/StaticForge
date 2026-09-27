@@ -1,5 +1,7 @@
 package com.acme.staticforge.generate.render;
 
+import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.acme.staticforge.asset.page.PageNav;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.dataset.RecordTemplates;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
@@ -222,6 +224,8 @@ final class GenerationRenderer {
                 .meta("revision", TextNode.valueOf(String.valueOf(snapshot.revision())))
                 .meta("channel", TextNode.valueOf(emptyIfNull(entry.channel())))
                 .meta("projectKey", TextNode.valueOf(projectKey))
+                // The language's own nav.noIndex (M30): a template writes the robots meta from it.
+                .meta(PageNav.NO_INDEX, BooleanNode.valueOf(PageNav.noIndex(page.payload())))
                 .pagination(pagination)
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)

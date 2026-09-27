@@ -4,6 +4,7 @@ import com.acme.staticforge.generate.quality.Finding;
 import com.acme.staticforge.generate.quality.HtmlFacts;
 import com.acme.staticforge.generate.quality.IndexedOutput;
 import com.acme.staticforge.generate.quality.QualityCategory;
+import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.RuleContext;
 import com.acme.staticforge.generate.quality.SiteIndex;
 import com.acme.staticforge.generate.quality.SiteRule;
@@ -53,6 +54,11 @@ public class MissingAnchorRule implements SiteRule {
         return "A link's #fragment names no element id (or <a name>) on the target page, so the browser opens the page "
                 + "at the top instead of the section. Fix the fragment, or give the target element that id. A bare "
                 + "# and #top are fine; fragments on media files are not checked.";
+    }
+
+    @Override
+    public QualityFixHint fixHint() {
+        return QualityFixHint.CONTENT_OR_TEMPLATE;
     }
 
     @Override

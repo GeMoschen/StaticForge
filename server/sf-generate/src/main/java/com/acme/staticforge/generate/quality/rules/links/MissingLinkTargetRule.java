@@ -3,6 +3,7 @@ package com.acme.staticforge.generate.quality.rules.links;
 import com.acme.staticforge.generate.quality.Finding;
 import com.acme.staticforge.generate.quality.IndexedOutput;
 import com.acme.staticforge.generate.quality.QualityCategory;
+import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.ReferenceEvent;
 import com.acme.staticforge.generate.quality.RuleContext;
 import com.acme.staticforge.generate.quality.SiteIndex;
@@ -49,6 +50,11 @@ public class MissingLinkTargetRule implements SiteRule {
                 + "in the content points to an asset that no longer exists (it renders an empty link). Relative, "
                 + "root-relative and absolute links under the target's base URL are checked; external links are not. "
                 + "Fix the link in the content or the template, or restore the target.";
+    }
+
+    @Override
+    public QualityFixHint fixHint() {
+        return QualityFixHint.CONTENT_OR_TEMPLATE;
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.acme.staticforge.generate.quality.rules.links;
 
 import com.acme.staticforge.generate.quality.Finding;
 import com.acme.staticforge.generate.quality.QualityCategory;
+import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.RuleContext;
 import com.acme.staticforge.generate.quality.SiteIndex;
 import com.acme.staticforge.generate.quality.SiteRule;
@@ -42,6 +43,11 @@ public class HeldBackTargetRule implements SiteRule {
         return "A link points to a page this build held back (incomplete content, or a quality check configured as "
                 + "error), so the link is broken until that page is fixed and built again. Fix the held-back page. "
                 + "Reported at most as a warning: a held-back page never holds back the pages that link to it.";
+    }
+
+    @Override
+    public QualityFixHint fixHint() {
+        return QualityFixHint.CONTENT;
     }
 
     @Override

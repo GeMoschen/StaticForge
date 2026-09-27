@@ -2,6 +2,7 @@ package com.acme.staticforge.generate.quality.rules.links;
 
 import com.acme.staticforge.generate.quality.Finding;
 import com.acme.staticforge.generate.quality.QualityCategory;
+import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.RuleContext;
 import com.acme.staticforge.generate.quality.SiteIndex;
 import com.acme.staticforge.generate.quality.SiteRule;
@@ -42,6 +43,11 @@ public class RedirectedTargetRule implements SiteRule {
         return "A link points to an old URL that this build only serves as a redirect (the page moved or was renamed). "
                 + "It works, but every visit takes an extra hop. Link the page's current URL, e.g. with "
                 + "$CMS_REF(page:…)$, which follows moves by itself.";
+    }
+
+    @Override
+    public QualityFixHint fixHint() {
+        return QualityFixHint.CONTENT_OR_TEMPLATE;
     }
 
     @Override

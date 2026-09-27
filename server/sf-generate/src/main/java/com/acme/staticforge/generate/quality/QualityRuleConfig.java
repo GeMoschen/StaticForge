@@ -84,10 +84,22 @@ public final class QualityRuleConfig {
                 params.put(declared.name(), value);
             }
             if (paramsValid) {
+                String problem = rule.paramsProblem(effective(rule, params));
+                if (problem != null) {
+                    errors.add(code + ": " + problem + ".");
+                    continue;
+                }
                 settings.put(code, new RuleSetting(severity, params));
             }
         }
         return new Validation(settings, errors);
+    }
+
+    /** {@code rule}'s defaults overlaid with {@code given}. */
+    private static Map<String, Object> effective(QualityRule rule, Map<String, Object> given) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        rule.params().forEach(param -> values.put(param.name(), given.getOrDefault(param.name(), param.defaultValue())));
+        return values;
     }
 
     /** JSON numbers arrive as Integer, Long or Double: an integral value within int range becomes an Integer. */

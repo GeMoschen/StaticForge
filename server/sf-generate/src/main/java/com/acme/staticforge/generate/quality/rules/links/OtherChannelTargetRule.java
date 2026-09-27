@@ -3,6 +3,7 @@ package com.acme.staticforge.generate.quality.rules.links;
 import com.acme.staticforge.generate.quality.Finding;
 import com.acme.staticforge.generate.quality.IndexedOutput;
 import com.acme.staticforge.generate.quality.QualityCategory;
+import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.RuleContext;
 import com.acme.staticforge.generate.quality.SiteIndex;
 import com.acme.staticforge.generate.quality.SiteRule;
@@ -44,6 +45,11 @@ public class OtherChannelTargetRule implements SiteRule {
         return "A link on a page goes to a page output of another channel (an HTML page linking a page's Markdown "
                 + "output). Readers land on a file meant for another use. Link the page in the same channel; switch the "
                 + "rule off when the site offers other formats on purpose.";
+    }
+
+    @Override
+    public QualityFixHint fixHint() {
+        return QualityFixHint.CONTENT_OR_TEMPLATE;
     }
 
     @Override

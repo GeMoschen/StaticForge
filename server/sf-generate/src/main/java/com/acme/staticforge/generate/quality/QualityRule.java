@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate.quality;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * A build-time check over rendered HTML (M30, epic decision 3). Every rule is a Spring bean collected by
@@ -56,5 +57,15 @@ public interface QualityRule {
     /** The rule's parameters with their defaults and bounds; empty for most rules. */
     default List<RuleParam> params() {
         return List.of();
+    }
+
+    /**
+     * Why the parameter values {@code params} don't fit together (a length range whose {@code min} exceeds its
+     * {@code max}), as a message fragment; {@code null} when they do. Each value is already within its own bounds.
+     *
+     * @param params every parameter's effective value, by name
+     */
+    default String paramsProblem(Map<String, Object> params) {
+        return null;
     }
 }

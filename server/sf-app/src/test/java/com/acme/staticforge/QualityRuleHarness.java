@@ -61,6 +61,7 @@ public final class QualityRuleHarness {
     private final Set<String> heldBack = new LinkedHashSet<>();
     private final Map<String, List<ReferenceEvent>> events = new LinkedHashMap<>();
     private final Set<String> redirectSources = new LinkedHashSet<>();
+    private final Set<String> noIndex = new LinkedHashSet<>();
     private final Map<String, ChannelOutputSettings> channels = new HashMap<>();
     private final Map<UUID, AssetLabel> assets = new HashMap<>();
     private String baseUrl = "https://example.com";
@@ -179,6 +180,12 @@ public final class QualityRuleHarness {
         return this;
     }
 
+    /** Marks the page output at {@code path} as one of a page with {@code nav.noIndex} (M30.2.2). */
+    public QualityRuleHarness noIndex(String path) {
+        noIndex.add(path);
+        return this;
+    }
+
     // ------------------------------------------------------------------
     // Configuration
     // ------------------------------------------------------------------
@@ -227,7 +234,8 @@ public final class QualityRuleHarness {
     public Result run() {
         EffectiveQualityConfig config = EffectiveQualityConfig.of(registry, settings);
         CheckEnvironment environment = new CheckEnvironment(baseUrl, locales, outputs,
-                channel -> channels.getOrDefault(channel, ChannelOutputSettings.defaults(channel)), assets::get, events);
+                channel -> channels.getOrDefault(channel, ChannelOutputSettings.defaults(channel)), assets::get, events,
+                key -> noIndex.contains(key.path()));
         PageRuleRunner pages = new PageRuleRunner(registry);
         SiteRuleRunner sites = new SiteRuleRunner(registry);
 
@@ -260,7 +268,8 @@ public final class QualityRuleHarness {
         Map<String, HtmlFacts> publishedFacts = new LinkedHashMap<>(facts);
         publishedFacts.keySet().removeAll(held);
         CheckEnvironment afterHoldBack = new CheckEnvironment(baseUrl, locales, published,
-                channel -> channels.getOrDefault(channel, ChannelOutputSettings.defaults(channel)), assets::get, events);
+                channel -> channels.getOrDefault(channel, ChannelOutputSettings.defaults(channel)), assets::get, events,
+                key -> noIndex.contains(key.path()));
         findings.addAll(sites.run(
                 new SiteIndex(afterHoldBack, publishedFacts, held, events, redirectSources), config, true));
         return new Result(List.copyOf(findings), Map.copyOf(facts), Set.copyOf(held));

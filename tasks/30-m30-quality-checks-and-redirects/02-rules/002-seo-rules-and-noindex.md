@@ -1,6 +1,6 @@
 ---
 id: M30.2.2
-status: todo
+status: done
 depends: [M30.1.3]
 epic: m30-quality-checks-and-redirects
 feature: rules
@@ -39,11 +39,11 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Fixtures for each rule incl. localized (`de`, `en`, `de-CH` fallback) and paginated cases.
-- [ ] `noIndex`: sitemap without the page (all page numbers, all locales), `$CMS_META(noIndex)$` in a golden render,
+- [x] Fixtures for each rule incl. localized (`de`, `en`, `de-CH` fallback) and paginated cases.
+- [x] `noIndex`: sitemap without the page (all page numbers, all locales), `$CMS_META(noIndex)$` in a golden render,
       `0212` positive/negative, the editor switch saves `nav.noIndex` (vitest spec + manual check).
-- [ ] Duplicate rules don't report across channels or locales.
-- [ ] `./gradlew build`, `ui` `npm run build` and `npx vitest run` green.
+- [x] Duplicate rules don't report across channels or locales.
+- [x] `./gradlew build`, `ui` `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 
@@ -56,3 +56,19 @@ area: backend
 - `noIndex` changes the sitemap of existing projects only when someone sets it — default `false`, no migration.
 - A `noIndex` change must re-plan the sitemap: site files are always rewritten from the full list (§18.4), so no
   planner change is needed — verify with an incremental test.
+- Deviation: `$CMS_META(noIndex)$` alone can't drive a conditional robots meta (meta keys weren't readable in
+  expressions), so `CMS_META` is now also a read-only expression root: `$CMS_IF(CMS_META.noIndex)$<meta name="robots"
+  content="noindex">$CMS_END_IF$` (`OctlCompiler.META_ROOT`; `$CMS_SET`/loop variables can't take the name). Docs:
+  M30.7.1 (template guide: `noIndex` meta key, `CMS_META.` root).
+- Deviation: the length rules reject `min > max` on `PUT /quality-rules` through a new `QualityRule.paramsProblem` hook
+  (a stored pair that doesn't fit falls back to the defaults).
+- `noIndex` pages are left out of `0205`/`0206` duplicate groups (search engines don't list them); `0210` runs after the
+  hold-back (reads held-back paths) and is capped at `WARNING`; `0211` runs before it and may be an `ERROR`.
+- `0210` reciprocity is per page and language, not per page number: page 2 may name page 1 of the other languages, as
+  `CMS_LOCALES` hrefs do. An output without any alternates is only reported on itself, not as "not answered".
+- Fixed on the way: paginated outputs lost their locale in `CarryForward.sitePages()` (no sitemap alternates for pages
+  2..N of a localized paginated page). A scoped run lists carried out-of-scope pages with the page's current
+  `nav.noIndex` (the base build doesn't record it; the sitemap is rewritten whole each run).
+- `CheckEnvironment` has a new constructor taking `Predicate<OutputKey> noIndex`; the old one reads "no page is
+  noIndex". Draft checks (M30.3.1) should pass the draft's `nav.noIndex` so `0212` works there.
+

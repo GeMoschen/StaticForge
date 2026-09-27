@@ -1,5 +1,7 @@
 package com.acme.staticforge.preview;
 
+import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.acme.staticforge.asset.page.PageNav;
 import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
@@ -385,6 +387,7 @@ public class PageRenderService {
                 .meta("revision", TextNode.valueOf(emptyIfNull(page.revision())))
                 .meta("channel", TextNode.valueOf(emptyIfNull(channel)))
                 .meta("projectKey", TextNode.valueOf(emptyIfNull(projectKey)))
+                .meta(PageNav.NO_INDEX, BooleanNode.valueOf(page.noIndex()))
                 .pagination(pagination.scope())
                 .urlResolver(urlResolver)
                 .blockResolver(blocks)
@@ -967,10 +970,11 @@ public class PageRenderService {
             UUID pageTemplateUuid,
             JsonNode content,
             JsonNode bodies,
-            JsonNode pagination) {
+            JsonNode pagination,
+            boolean noIndex) {
 
         PageView withPagination(JsonNode scope) {
-            return new PageView(uuid, uid, displayName, path, revision, pageTemplateUuid, content, bodies, scope);
+            return new PageView(uuid, uid, displayName, path, revision, pageTemplateUuid, content, bodies, scope, noIndex);
         }
 
         JsonNode body(String name) {
@@ -989,11 +993,12 @@ public class PageRenderService {
                     templateRef.isBlank() ? null : UUID.fromString(templateRef),
                     payload == null ? null : payload.get("content"),
                     payload == null ? null : payload.get("bodies"),
-                    null);
+                    null,
+                    PageNav.noIndex(payload));
         }
 
         static PageView contextOnly(JsonNode pageContent, JsonNode pagination) {
-            return new PageView(null, "", "", "", "", null, pageContent, null, pagination);
+            return new PageView(null, "", "", "", "", null, pageContent, null, pagination, false);
         }
     }
 }

@@ -91,7 +91,7 @@ class QualityCheckStageIntegrationTest {
     private Fixture project(String prefix) {
         Fixture fx = q.project(prefix);
         q.only(fx, List.of(QualityTestRules.FLAG, QualityTestRules.MISSING, QualityTestRules.TO_HELD_BACK,
-                QualityTestRules.EVENTS));
+                QualityTestRules.EVENTS, QualityCodes.OUTPUT_NOT_CHECKED));
         return fx;
     }
 

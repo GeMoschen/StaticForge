@@ -4,6 +4,7 @@ import com.acme.staticforge.generate.quality.Finding;
 import com.acme.staticforge.generate.quality.PageRule;
 import com.acme.staticforge.generate.quality.ParsedOutput;
 import com.acme.staticforge.generate.quality.QualityCategory;
+import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.ReferenceEvent;
 import com.acme.staticforge.generate.quality.RuleContext;
 import java.util.ArrayList;
@@ -55,6 +56,11 @@ public class EmptyLinkRule implements PageRule {
                 + "real target, or use a <button> for an action. Elements with role=\"button\" are not reported, nor "
                 + "empty links that come from a reference to an unreleased, deleted or missing asset (reported as "
                 + "SF-CHK-0104, SF-CHK-0105 or SF-CHK-0101 with the target).";
+    }
+
+    @Override
+    public QualityFixHint fixHint() {
+        return QualityFixHint.CONTENT_OR_TEMPLATE;
     }
 
     @Override
