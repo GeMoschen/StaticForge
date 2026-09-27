@@ -17,4 +17,5 @@ public record AssetDetailView(
         Long changedBy,
         Instant changedAt,
         java.util.Map<String, LocaleReleaseView> release,
-        java.util.List<ScheduledRefView> scheduled) {}
+        java.util.List<ScheduledRefView> scheduled,
+        boolean compacted) {}

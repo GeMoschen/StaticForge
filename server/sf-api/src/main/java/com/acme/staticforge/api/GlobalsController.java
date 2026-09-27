@@ -54,12 +54,16 @@ public class GlobalsController {
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
 
+    private final CompactedReads compactedReads;
+
     public GlobalsController(
             ProjectService projectService,
             GlobalSetService globalSetService,
             AssetService assetService,
             SecuritySupport securitySupport,
-            ReleaseBlocks releaseBlocks) {
+            ReleaseBlocks releaseBlocks,
+            CompactedReads compactedReads) {
+        this.compactedReads = compactedReads;
         this.releaseBlocks = releaseBlocks;
         this.projectService = projectService;
         this.globalSetService = globalSetService;
@@ -89,9 +93,10 @@ public class GlobalsController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam(value = "revision", required = false) Long revision) {
-        GlobalSetView view = globalSetService.find(projectId(projectKey), uuid, revision)
+        long projectId = projectId(projectKey);
+        GlobalSetView view = globalSetService.find(projectId, uuid, revision)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Property set not found.")));
-        return ok(projectKey, view);
+        return compactedReads.mark(ok(projectKey, view), projectId, uuid, revision);
     }
 
     @PostMapping

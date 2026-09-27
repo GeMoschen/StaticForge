@@ -56,9 +56,12 @@ public class AssetController {
     private final FolderService folderService;
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
+    private final CompactedReads compactedReads;
 
     public AssetController(ProjectService projectService, AssetService assetService,
-            FolderService folderService, SecuritySupport securitySupport, ReleaseBlocks releaseBlocks) {
+            FolderService folderService, SecuritySupport securitySupport, ReleaseBlocks releaseBlocks,
+            CompactedReads compactedReads) {
+        this.compactedReads = compactedReads;
         this.projectService = projectService;
         this.assetService = assetService;
         this.folderService = folderService;
@@ -114,18 +117,23 @@ public class AssetController {
     @GetMapping("/{uuid}/versions/{revision}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public AssetDetailView version(@PathVariable String projectKey, @PathVariable UUID uuid, @PathVariable long revision) {
-        AssetVersionView view = assetService.findAt(projectId(projectKey), uuid, revision)
+        long projectId = projectId(projectKey);
+        AssetVersionView view = assetService.findAt(projectId, uuid, revision)
                 .orElseThrow(() -> new com.acme.staticforge.common.SfException(
                         com.acme.staticforge.common.ProblemFactory.notFound("No version at revision " + revision + ".")));
-        // A past version has no current release status or schedule of its own.
-        return toDetail(view, null, null);
+        // A past version has no current release status or schedule of its own. compacted (M29.4.3): the exact state at
+        // the revision was absorbed; this is the state at the end of its group.
+        return toDetail(view, null, null, compactedReads.compacted(projectId, uuid, revision));
     }
 
     @PostMapping("/{uuid}/restore")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public AssetDetailView restore(@PathVariable String projectKey, @PathVariable UUID uuid, @RequestBody RestoreRequest body) {
+        // compacted (M29.4.3): the revision restored from shows compacted history, so what was restored is the
+        // surviving version (the state at the end of its group), not the exact state at that revision.
+        boolean compacted = compactedReads.compacted(projectId(projectKey), uuid, body.fromRevision());
         AssetVersionView view = assetService.restore(uuid, body.fromRevision(), ctx(projectKey, "restore"));
-        return toDetail(projectKey, view);
+        return toDetail(projectKey, view, compacted);
     }
 
     @PatchMapping("/{uuid}/uid")
@@ -196,17 +204,22 @@ public class AssetController {
     }
 
     private AssetDetailView toDetail(String projectKey, AssetVersionView v) {
+        return toDetail(projectKey, v, false);
+    }
+
+    private AssetDetailView toDetail(String projectKey, AssetVersionView v, boolean compacted) {
         long projectId = projectId(projectKey);
-        return toDetail(v, releaseBlocks.of(projectId, v.uuid()), releaseBlocks.scheduled(projectId, v.uuid()));
+        return toDetail(v, releaseBlocks.of(projectId, v.uuid()), releaseBlocks.scheduled(projectId, v.uuid()), compacted);
     }
 
     private static AssetDetailView toDetail(
             AssetVersionView v,
             java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
-            List<ScheduledRefView> scheduled) {
+            List<ScheduledRefView> scheduled,
+            boolean compacted) {
         return new AssetDetailView(
                 v.uuid(), v.uid(), v.type().name(), v.displayName(), v.payload(), v.validFromRevision(),
-                v.deleted(), v.folderPath(), v.changedBy(), v.changedAt(), release, scheduled);
+                v.deleted(), v.folderPath(), v.changedBy(), v.changedAt(), release, scheduled, compacted);
     }
 
     private static UsageDto toUsage(UsageView u) {

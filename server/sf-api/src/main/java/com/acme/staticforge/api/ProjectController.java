@@ -261,7 +261,8 @@ public class ProjectController {
                 new PublishPolicyView(PublishPolicy.fromJson(project.getPublishPolicy()).editor().stream()
                         .map(Enum::name)
                         .toList()),
-                projectAuth.permissions(project.getKey()).stream().map(Enum::name).toList());
+                projectAuth.permissions(project.getKey()).stream().map(Enum::name).toList(),
+                project.getCompactedThrough());
     }
 
     private static ProjectRole parseRole(String role) {

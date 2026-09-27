@@ -67,12 +67,16 @@ public class PreviewController {
     /** The page number rendered, after clamping. */
     static final String PAGE_HEADER = "X-SF-Page";
 
+    private final CompactedReads compactedReads;
+
     public PreviewController(
             ProjectService projectService,
             PageRenderService pageRenderService,
             PreviewTokenService previewTokenService,
             ContentViews contentViews,
-            ReleaseStatusService releaseStatus) {
+            ReleaseStatusService releaseStatus,
+            CompactedReads compactedReads) {
+        this.compactedReads = compactedReads;
         this.projectService = projectService;
         this.pageRenderService = pageRenderService;
         this.previewTokenService = previewTokenService;
@@ -115,6 +119,11 @@ public class PreviewController {
             String status = releaseStatusOf(projectId, uuid, locale);
             if (status != null) {
                 headers.set(RELEASE_STATUS_HEADER, status);
+            }
+            // M29.4.3: the page itself shows compacted history at the revision (only the page is checked, not every
+            // asset it renders; a published preview renders released versions, which compaction never touches).
+            if (compactedReads.compacted(projectId, uuid, revision)) {
+                headers.set(CompactedReads.HEADER, "true");
             }
         }
         return ResponseEntity.status(response.getStatusCode()).headers(headers).body(response.getBody());

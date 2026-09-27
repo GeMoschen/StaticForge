@@ -63,11 +63,15 @@ public class RecordSetController {
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
 
+    private final CompactedReads compactedReads;
+
     public RecordSetController(
             ProjectService projectService,
             RecordSetService recordSetService,
             SecuritySupport securitySupport,
-            ReleaseBlocks releaseBlocks) {
+            ReleaseBlocks releaseBlocks,
+            CompactedReads compactedReads) {
+        this.compactedReads = compactedReads;
         this.releaseBlocks = releaseBlocks;
         this.projectService = projectService;
         this.recordSetService = recordSetService;
@@ -98,7 +102,8 @@ public class RecordSetController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam(value = "revision", required = false) Long revision) {
-        return ok(projectKey, require(projectId(projectKey), uuid, revision));
+        long projectId = projectId(projectKey);
+        return compactedReads.mark(ok(projectKey, require(projectId, uuid, revision)), projectId, uuid, revision);
     }
 
     /** {@code 400} naming {@code datasetUuid} without one; {@code 422} with {@code diagnostics} for a bad query. */
@@ -164,7 +169,7 @@ public class RecordSetController {
      */
     @GetMapping("/{uuid}/records")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public RecordPageView records(
+    public ResponseEntity<RecordPageView> records(
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam(defaultValue = "0") int page,
@@ -177,7 +182,7 @@ public class RecordSetController {
             @RequestParam(value = "revision", required = false) Long revision,
             HttpServletRequest request) {
         long projectId = projectId(projectKey);
-        return RecordController.toPageView(recordSetService.listRecords(
+        RecordPageView view = RecordController.toPageView(recordSetService.listRecords(
                 projectId,
                 uuid,
                 new RecordListQuery(q, null, where, RecordController.sortKeys(request)),
@@ -186,6 +191,10 @@ public class RecordSetController {
                 revision,
                 page,
                 size), releaseBlocks, projectId);
+        // X-SF-Compacted (M29.4.3) when the set or any listed record shows compacted history at the revision.
+        java.util.List<UUID> shown = new java.util.ArrayList<>(view.content().stream().map(r -> r.uuid()).toList());
+        shown.add(uuid);
+        return compactedReads.markAny(ResponseEntity.ok(view), projectId, shown, revision);
     }
 
     /**

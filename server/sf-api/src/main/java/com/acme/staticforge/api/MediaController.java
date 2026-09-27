@@ -87,6 +87,8 @@ public class MediaController {
     private final ContentViews contentViews;
     private final ProjectLocales projectLocales;
 
+    private final CompactedReads compactedReads;
+
     public MediaController(
             ProjectService projectService,
             MediaService mediaService,
@@ -95,7 +97,9 @@ public class MediaController {
             PageRenderService pageRenderService,
             ReleaseBlocks releaseBlocks,
             ContentViews contentViews,
-            ProjectLocales projectLocales) {
+            ProjectLocales projectLocales,
+            CompactedReads compactedReads) {
+        this.compactedReads = compactedReads;
         this.projectService = projectService;
         this.mediaService = mediaService;
         this.securitySupport = securitySupport;
@@ -134,10 +138,15 @@ public class MediaController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public ResponseEntity<MediaView> detail(
             @PathVariable String projectKey, @PathVariable UUID uuid, @RequestParam(required = false) Long revision) {
-        AssetVersionView view = mediaService.requireAt(projectId(projectKey), uuid, revision);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toMediaView(projectKey, view));
+        long projectId = projectId(projectKey);
+        AssetVersionView view = mediaService.requireAt(projectId, uuid, revision);
+        return compactedReads.mark(
+                ResponseEntity.ok()
+                        .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
+                        .body(toMediaView(projectKey, view)),
+                projectId,
+                uuid,
+                revision);
     }
 
     @PostMapping
