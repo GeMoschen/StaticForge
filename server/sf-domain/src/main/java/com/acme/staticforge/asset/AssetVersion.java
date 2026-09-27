@@ -30,7 +30,11 @@ public class AssetVersion {
     @Column(name = "asset_id", nullable = false)
     private Long assetId;
 
-    @Column(name = "valid_from_revision", nullable = false)
+    /**
+     * Inclusive start of the interval. Never updated through JPA: only revision compaction ({@code RevisionCompactor},
+     * JDBC) moves it back, so a stale entity flushed by a concurrent writer can't undo that (M29.4.2).
+     */
+    @Column(name = "valid_from_revision", nullable = false, updatable = false)
     private long validFromRevision;
 
     @Column(name = "valid_to_revision")
@@ -66,6 +70,14 @@ public class AssetVersion {
 
     @Column(name = "changed_at", nullable = false)
     private Instant changedAt;
+
+    /**
+     * {@code validFromRevision} before revision compaction first moved it back (M29.4.1), {@code null} when it never
+     * did: a read at {@code R < originalValidFrom} shows a state later than the exact one at {@code R}. Written only by
+     * {@code RevisionCompactor} (JDBC).
+     */
+    @Column(name = "original_valid_from", insertable = false, updatable = false)
+    private Long originalValidFrom;
 
     /** Read-only association to the asset identity row, for JPQL joins in queries. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -173,6 +185,27 @@ public class AssetVersion {
 
     public JsonNode getPayload() {
         return payload;
+    }
+
+    public Long getOriginalValidFrom() {
+        return originalValidFrom;
+    }
+
+    /**
+     * The revision this version's own change was made in: {@code originalValidFrom} when compaction moved
+     * {@code validFromRevision} back, else {@code validFromRevision}. Unlike {@code validFromRevision} it never changes,
+     * so it identifies the version together with the asset (cache keys, M29.4.2).
+     */
+    public long getOwnRevision() {
+        return originalValidFrom == null ? validFromRevision : originalValidFrom;
+    }
+
+    /**
+     * Whether a read at {@code revision} (which this version is valid at) shows a compacted state: the exact state at
+     * {@code revision} was absorbed into this version by revision compaction (M29.4.3).
+     */
+    public boolean isCompactedAt(long revision) {
+        return originalValidFrom != null && revision < originalValidFrom;
     }
 
     public Long getChangedBy() {

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M29.4.1: revision compaction (spec §7.7, epic decision 13), opt-in per project.
+
+         project.compaction_policy  {"enabled", "olderThanDays", "enabledAt", "enabledBy"}; NULL = never configured
+                                    (off). A JSON column declared per dialect like project.locale_config (017).
+         project.compacted_through  the newest revision the revision-compaction job has processed (NULL = never
+                                    compacted); reads at a later revision are never compacted, so hot paths
+                                    short-circuit on it.
+         revision.compacted         the revision's own changes were absorbed: some removed version started at it.
+                                    Existing revisions get false through the column default.
+         asset_version.original_valid_from
+                                    the version's valid_from_revision before compaction first moved it back (NULL =
+                                    never moved). A read at R with valid_from_revision <= R < original_valid_from
+                                    shows a state later than the exact one at R. -->
+    <changeSet id="027-compaction-policy-postgresql" author="sf" dbms="postgresql">
+        <comment>Revision compaction policy (M29.4.1) — PostgreSQL (jsonb).</comment>
+        <addColumn tableName="project">
+            <column name="compaction_policy" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="027-compaction-policy-h2" author="sf" dbms="h2">
+        <comment>Revision compaction policy (M29.4.1) — H2 (json).</comment>
+        <addColumn tableName="project">
+            <column name="compaction_policy" type="JSON"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="027-revision-compaction-columns" author="sf">
+        <comment>Revision compaction markers (M29.4.1).</comment>
+        <addColumn tableName="project">
+            <column name="compacted_through" type="BIGINT"/>
+        </addColumn>
+        <addColumn tableName="revision">
+            <column name="compacted" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <addColumn tableName="asset_version">
+            <column name="original_valid_from" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

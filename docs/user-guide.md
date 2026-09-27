@@ -339,6 +339,9 @@ content it was pinned to; a schedule whose time has passed, whose target is miss
 they are a developer of the project here; otherwise whoever imports owns it. Importing the same archive again replaces
 the pending schedules it brought the first time instead of adding copies.
 
+**Compaction and exports.** Whether a project compacts its old history (revision compaction, M29) is an operational
+setting of this instance, not content: an export doesn't carry it, and an imported project starts with compaction off.
+
 ### Publishing as an editor (M28)
 
 Whether you, as an editor, can put your changes online yourself is decided **per project** by its project admins, under
