@@ -28,6 +28,8 @@ dependencies {
     // Search recovery tests forge Lucene commits (outdated schema, foreign owner); production code reaches Lucene only
     // through sf-domain.
     testImplementation(libs.lucene.core)
+    // Quality rule tests read the parsed document (jsoup) the rules see; production code parses only in sf-generate.
+    testImplementation(libs.jsoup)
 }
 
 tasks.named<Jar>("bootJar") {

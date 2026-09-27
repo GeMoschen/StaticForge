@@ -1,6 +1,6 @@
 ---
 id: M30.1.1
-status: todo
+status: done
 depends: []
 epic: m30-quality-checks-and-redirects
 feature: check-framework
@@ -44,13 +44,13 @@ Epic decisions 1, 2, 3, 7, 11.
 
 ## Acceptance criteria
 
-- [ ] Unit tests for `LinkResolver`: relative, root-relative, `baseUrl`-absolute, pretty URL → index file, fragments,
+- [x] Unit tests for `LinkResolver`: relative, root-relative, `baseUrl`-absolute, pretty URL → index file, fragments,
       queries, encoded characters, `..` escaping the root, external/mailto/tel/data skipped.
-- [ ] Unit tests for `HtmlFacts` over small fixture documents (every extracted field, `srcset` with several
+- [x] Unit tests for `HtmlFacts` over small fixture documents (every extracted field, `srcset` with several
       candidates and descriptors, duplicate ids kept as a multiset for the duplicate-id rule).
-- [ ] Registry rejects duplicate codes at start-up (test).
-- [ ] Selector is stable across two parses of the same document (test).
-- [ ] `./gradlew build` green.
+- [x] Registry rejects duplicate codes at start-up (test).
+- [x] Selector is stable across two parses of the same document (test).
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -64,3 +64,15 @@ Epic decisions 1, 2, 3, 7, 11.
 - jsoup lower-cases tag and attribute names; ids are case-sensitive — keep them as written.
 - Keep the facts small (they are persisted per output in the sidecar): cap stored ids/links per output (e.g. 2,000
   each) and record that the cap was hit.
+- Deviation: `Finding` also carries its `output` (`OutputKey`), `category` and a `carried` flag, and rules never build
+  one themselves: `RuleContext.finding(element, msg)` / `finding(msg)` (page rules, selector and section filled in) and
+  `finding(outputKey, selector, msg)` (site rules). So both shapes return `List<Finding>` as specified.
+- Deviation: `LinkRef` also records the `element` (tag name) so link rules tell media references from page links.
+- Deviation: `http` and `https` links count as internal alike when the host (and base path) match the `baseUrl`.
+- Added for the rule lanes: `EffectiveQualityConfig` (defaults + overrides, capped severity, fingerprint),
+  `PageRuleRunner` (standalone: bytes/document + config + `CheckEnvironment` → findings; used by draft checks M30.3.1),
+  `SiteRuleRunner` (two phases), `QualityRule.maxSeverity()` / `SiteRule.afterHoldBack()` (decision 6 cap),
+  `RuleParam` (typed, bounded), `CheckEnvironment` (baseUrl, locales, channel settings, every output, asset names),
+  `SF-CHK-0001` as `rules/OutputNotCheckedRule` (capped at WARNING). jsoup 1.23.2 (MIT); no dependency gate is wired.
+- Test infrastructure: `QualityRuleHarness` (sf-app test sources) runs rules over fixture HTML in the build's order
+  without rendering; fixtures live in `server/sf-app/src/test/resources/quality/` (README describes the convention).
