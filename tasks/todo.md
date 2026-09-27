@@ -12,7 +12,7 @@ verification.
 - [ ] A1 — M30.1.1 rule SPI, jsoup, `HtmlFacts`, `LinkResolver`, registry, selectors, section markers
 - [ ] A1 — M30.1.2 rule config per project, findings table + API, run view counts
 - [ ] A1 — M30.1.3 `CHECK` stage, hold-back `SF-GEN-0125`, reference events, sidecar, fallback causes, metrics
-- [ ] A2 — M30.4.1 redirect registry model, manual API, for-asset, export/import (protocol 10)
+- [x] A2 — M30.4.1 redirect registry model, manual API, for-asset, export/import (protocol 10)
 - [ ] B — M30.2.1 link rules
 - [ ] B — M30.2.2 SEO rules + `nav.noIndex`
 - [ ] B — M30.2.3 accessibility rules
