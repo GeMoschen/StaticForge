@@ -147,6 +147,11 @@ The record set prefix is `recordset`, not `record_set`. Every asset also exposes
 
 `$CMS_REF` on another asset follows the same rule as a local editor: path-less (`$CMS_REF(page:about)$`) links the asset itself, while a path (`$CMS_REF(page:about.heroImage)$`) links whatever that editor holds — the image, not the page. The media that is linked this way is a dependency of the rendering page, so generation copies the file to the output.
 
+A `media` **editor value** reads the same way: `$CMS_VALUE(heroImage.altText)$`, `.width`, `.height` (any field of
+the `media` row above) read the picked media's root value object — the stored value is only `{type: MEDIA_REF, uuid}`, so a
+field it doesn't store is taken from the media, like a record reference, and the media becomes a render dependency of
+the page. (Before M30 these rendered empty.)
+
 ### 2.7 Global property sets (M17)
 
 A **property set** is a named group of site-wide values — the site title, the social links, the footer copyright line, the brand logo — that editors maintain in the **Globals** store instead of each template hardcoding them. A set has a CDL schema and values, like a page has a template and content, but both live in the one set.
@@ -914,7 +919,8 @@ inside it. On any other page it is missing: `$CMS_IF(CMS_PAGINATION)$` is false 
 | `CMS_PAGINATION.pages` | `{number, href, current}` for a numbered pager |
 
 A navigation item is `{uuid, uid, displayName, label, href, date?, position, content}`: the target page's identity,
-its navigation label, a link to it, its `nav.date`/`publishedOn`, `nav.position`, and its editor values under
+its navigation label, a link to it in the listing's language (in a project with languages the item `href` carries the
+language prefix like every other page link — before M30 it lacked it and pointed at pages that don't exist), its `nav.date`/`publishedOn`, `nav.position`, and its editor values under
 `content` (`post.content.teaser`). A dataset item is the record's fields, exactly as a dataset loop sees them, plus
 `uuid` and `uid`. `$CMS_META(pageNumber)$` and `$CMS_META(totalPages)$` repeat `current` and `total` (empty on other
 pages).
@@ -1137,16 +1143,16 @@ that language's source and values.
 Every build checks the HTML it wrote (spec §18.8): internal links, the SEO basics and the accessibility checks that
 static HTML can answer. The rules read your **rendered markup** — most of what they look for is written by page and
 section templates, so most findings are fixed in a template, once for every page. Each rule says whether its findings
-are usually fixed in content, in the template, or either (its *fix hint*, served by `GET /quality-rules`).
-<!-- M30-VERIFY: M30.6.1 Quality tab and M30.3.2 Issues panel show the fix hint --> *Settings → Quality* and the page
-editor's Issues panel show it. The checks run on outputs of channels whose file extension is `html` or `htm`; a Markdown channel is
+are usually fixed in content, in the template, or either (its *fix hint*, served by `GET /quality-rules` and with
+every draft-check finding). *Settings → Quality* and the page editor's Issues panel show it. The checks run on outputs of channels whose file extension is `html` or `htm`; a Markdown channel is
 never checked. They only read: switching rules off never changes a byte of output.
 
-A developer sets each rule *Off*, *Warning* (the default) or *Error* per project (`PUT /quality-rules`; <!-- M30-VERIFY: M30.6.1 Quality tab --> in
-*Settings → Quality*). Warnings are reported with the run <!-- M30-VERIFY: M30.6.2 run details Findings section --> (*Findings* in the run
-details) and leave a clean run `SUCCESS`. An *Error* holds the page back —
-not published, `SF-GEN-0125` "Quality check failed", run `PARTIAL` — like a page with incomplete content. A page that
-links a held-back page is never held back for that link (`SF-CHK-0103` is capped at warning).
+A developer sets each rule *Off*, *Warning* (the default) or *Error* per project (`PUT /quality-rules`, or
+*Settings → Quality*). Warnings are reported with the run (the *Findings* tab of the run details) and leave a clean run
+`SUCCESS`. An *Error* holds the page back — not published, `SF-GEN-0125` "Quality check failed", run `PARTIAL` — like a
+page with incomplete content; the run's `diagnostics.heldBack` lists those pages as data. A page that links a held-back
+page is never held back for that link: `SF-CHK-0103`, like `0210` and `0001`, is capped at warning (`maxSeverity`), and
+the Quality tab shows its *Error* option disabled.
 
 **What a page template should write.**
 
@@ -1172,7 +1178,8 @@ links a held-back page is never held back for that link (`SF-CHK-0103` is capped
 - **`<title>` and meta description** (`0201`–`0206`). Write both from page fields, not fixed text: a fixed text makes
   every page a duplicate (`0205`/`0206` compare the pages of one channel and language). The length rules count
   characters of the whitespace-normalized text (defaults: title 10–60, description 50–160, adjustable per project). On
-  a paginated page, add the page number to the title (`$CMS_META(pageNumber)$`) so pages 2..N aren't duplicates.
+  a paginated page each page number is its own URL, so pages 2..N with page 1's title or description are reported:
+  add the page number to both (`$CMS_META(pageNumber)$`).
 - **One `h1`** (`0207`, `0208`). The page template writes the headline as `h1`; section templates start at `h2`. A
   section that renders its title as `h1` gives every page with two such sections a second `h1`.
 - **Heading levels** (`0304`). Don't skip a level: a section title as `h4` directly under the page's `h2` is reported.
@@ -1313,8 +1320,9 @@ The UI copies this philosophy (§24.6): a diagnostic includes "did you mean?" su
 Findings of the build-time checks (§2.14), one code per rule: `SF-CHK-0001` output could not be checked; links
 `SF-CHK-0101`–`0109`; SEO `SF-CHK-0201`–`0212`; accessibility `SF-CHK-0301`–`0308`. The full catalogue with names, kinds,
 fix hints and parameters is spec §18.8. They are not template diagnostics: a template with findings compiles and
-renders; the findings are stored with the build run. <!-- M30-VERIFY: M30.3.1/M30.3.2 draft checks in the Issues panel --> While a page is
-edited, the page editor's Issues panel shows the findings of its draft.
+renders; the findings are stored with the build run. While a page is edited, the page editor's Issues panel shows the
+findings of its draft (`POST …/preview/pages/{uuid}/checks`, spec §19.4) — every rule except those that need the whole
+build (`0103`, `0109`, `0205`, `0206`, `0210`; `0107` for anchors on other pages).
 
 ## Part 4 — Worked end-to-end
 

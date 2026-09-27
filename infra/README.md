@@ -167,6 +167,7 @@ Spring properties, settable in `application-*.yml` or as environment variables (
 | `sf.generate.idempotency-ttl` | `24h` | How long an `Idempotency-Key` of `POST /generations` is remembered (M29, evicted by `memory-eviction`) |
 | `sf.quality.max-findings-per-output` | `50` | Quality check findings stored per rule and output (M30); the run's counts stay complete, the rest is counted as truncated |
 | `sf.quality.max-findings-per-run` | `100000` | Quality check findings stored per run (M30), errors first; the rest is counted as truncated |
+| `sf.preview.rate-limit.checks-per-minute` | `60` | Draft checks (`POST …/preview/pages/{uuid}/checks`, M30) per user in any sliding minute; one more is answered `429 SF-API-0429` with a retry-after hint. Per node, in memory. The page editor checks at most once per autosave; the plain preview (`GET …/preview/pages/{uuid}`) is not limited |
 
 Always enforced, not configurable: at most **72 bytes** (UTF-8) per password — BCrypt's input limit; longer ones are
 rejected rather than silently truncated. Sign-in lockout is fixed as well: 15 failed attempts lock an account for 30
@@ -176,7 +177,8 @@ answered with `429` and a growing back-off.
 ## Serving redirects (M30)
 
 When a page's address changes, builds write redirects from the old address (spec §18.9). Each generation target chooses
-the formats in its `config.redirectFormats` (<!-- M30-VERIFY: M30.6.3 target form section name --> the target form's *Redirect output*):
+the formats in its `config.redirectFormats` (*Settings → Generation*, the target form's *Redirect output*; none
+checked writes no redirects):
 
 | Format | File(s) | Web server |
 |---|---|---|

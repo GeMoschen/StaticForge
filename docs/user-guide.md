@@ -436,15 +436,17 @@ text, links and buttons without text, skipped heading levels, duplicate ids, for
 without title, a page without language). Only links inside your site are checked; nothing is fetched from the
 internet.
 
-**While you edit.** <!-- M30-VERIFY: M30.3.2 Issues panel (placement, groups, refresh, jump targets, published-view note, error text) --> The page editor has an **Issues** panel next to the impact panel, with a count in its header. *Content*
-lists what the release would refuse or warn about — an empty required field, too many items — and the same problems
-show on their fields. *Output* lists what the checks find on the page's **draft** as it would be built: each with the
-rule, severity, message and whether it is usually fixed in the content or in the template. The panel checks again
-after each save and when you switch language or channel ("checked at 14:05"); if the checks can't run it says
-"Checks unavailable" and you keep editing. Click a finding to jump to its field, or to its section in the form and the
-preview. The checks always cover the draft, also while the preview shows *Published*. Some checks need the whole
-built site — duplicate titles, anchors on other pages, language alternates, links to held-back pages or to old URLs —
-and only run in a build.
+**While you edit.** At the foot of the page editor, below the fields and sections, the **Issues** panel shows a
+count in its header (marked when it includes errors). *Content* lists what the release would refuse or warn about —
+an empty required field, too many items — and the same problems show on their fields. *Output* lists what the checks
+find on the page's **draft** as it would be built (the HTML channel): each with the rule, severity, message and where
+it is usually fixed ("Fix in content", "Fix in template", "Fix in content or template"); errors come first. The panel
+checks again shortly after each save, when you switch language and when you look at an older revision ("checked at
+14:05"); if the checks can't run it says "Checks unavailable", offers *Check again*, and you keep editing. Click an
+issue to see its rule code and element and to jump to its field, or to its section in the form and the preview. The
+checks always cover the draft, also while the preview shows *Published*. Some checks need the whole built site —
+duplicate titles and descriptions, anchors on other pages, language alternates, links to held-back pages or to old
+URLs — and only run in a build; the panel names them below the list.
 
 **Fixing a finding.**
 
@@ -454,25 +456,28 @@ and only run in a build.
 - *Fix in template* — the markup comes from the template (a hard-coded icon link, a fixed `lang`, a section that writes
   its title as `h1`, no `<meta name="description">` at all). Tell the template developer; the fix then reaches every
   page at the next build.
-- *Either* — the message says which: an image the message names as a media asset needs alt text on the media; a
-  hard-coded image needs a template fix.
+- *Fix in content or template* — the message says which: an image the message names as a media asset needs alt
+  text on the media; a hard-coded image needs a template fix.
 
-**After a build.** <!-- M30-VERIFY: M30.6.2 run list chip and run details Findings section --> The run list shows the findings per run ("3 errors · 41 warnings"); **Details → Findings**
-lists them with filters (severity, category, rule, channel, language, path) that stay in the URL, so you can share a
-filtered list. Each finding names the page (click it to open the editor in that language), the rule, the message and
-the element; *carried* marks a finding an incremental build took over from the previous build for a page it didn't
-rebuild. Warnings leave a build **Success**. A rule set to *Error* holds its pages back: they aren't published, the
-run is **Partial**, and the log lists them under `SF-GEN-0125` "Quality check failed" with the rule codes — the rest
-of the site is published, and pages linking a held-back page are never held back for it. Live progress shows the
-stage **Checking output**.
+**After a build.** The run list has a *Findings* column: "3 errors" and "41 warnings" chips (click one to see
+those findings) or "No findings". In a run's details, *Summary* adds the redirect counts and a findings line, and the
+**Findings** tab lists them with filters (severity, category, rule, channel, language, output path) that stay in the
+URL, so you can share a filtered list. Each finding names the page (click it to open the editor in that language),
+the rule, the message and the element; *carried* marks a finding an incremental build took over from the previous
+build for a page it didn't rebuild. Warnings leave a build **Success**. A rule set to *Error* holds its pages back:
+they aren't published, the run is **Partial**, and the log lists them under `SF-GEN-0125` "Quality check failed" with
+the rule codes and a *Show findings* link to that page's findings — the rest of the site is published, and pages
+linking a held-back page are never held back for it. The live log shows the check stage as **Checking output**.
 
-**Choosing the rules (developers).** <!-- M30-VERIFY: M30.6.1 Quality tab (groups, segmented control, reset, save gating, hint, 0103 error disabled, read-only for non-developers) --> **Settings → Quality** lists every rule in three groups (Links, SEO,
+**Choosing the rules (developers).** **Settings → Quality** lists every rule in three groups (Links, SEO,
 Accessibility) with what it checks and where it is usually fixed. Set each one *Off*, *Warning* (the default) or
 *Error*; the title and description length rules take a range, the canonical rule a "required" switch; *Reset to
-default* undoes a rule's change. The checks apply to HTML channels only. Everyone in the project can read the tab;
-only developers change it. After saving, the next incremental build runs as a full build, because every page has to be
-checked against the new rules. "Link to a page held back in this build" and "Language alternates incomplete or broken"
-are never errors — holding back one page must not hold back the pages that link to it.
+default* undoes a rule's change, *Discard* all unsaved changes, and *Save* is enabled once something changed and every
+value is valid. The checks apply to HTML channels only. Everyone in the project can read the tab; only developers
+change it. After saving, the next incremental build runs as a full build, because every page has to be checked against
+the new rules. "Output could not be checked", "Link to a page held back in this build" and "Language alternates
+incomplete or broken" are never errors — their *Error* option is disabled: holding back one page must not hold back
+the pages that link to it.
 
 ### Redirects: old URLs keep working (M30)
 
@@ -508,7 +513,8 @@ redirect is added after the page went offline; until a build no longer contains 
 the confirmation links to the Redirects tab. If adding the redirect fails, the unpublish still stands — add the
 redirect in the Redirects tab.
 
-**How redirects are published** — per target, in *Settings → Targets*: <!-- M30-VERIFY: M30.6.3 target form "Redirect output" checkboxes and labels -->
+**How redirects are published** — per target, in *Settings → Generation*, the target form's *Redirect output*
+(developers; none checked publishes no redirects):
 
 - **HTML redirect pages** (default) — a small page at each old address that forwards at once. Works on every web
   server, from a ZIP opened locally, and on any static host.
