@@ -170,7 +170,7 @@ class RedirectOutputIntegrationTest {
         Map<String, String> apacheFiles = build.files(site.fx(), apache, apacheRun);
         assertThat(apacheFiles).doesNotContainKey("docs/about.html");
         assertThat(apacheFiles.get(".htaccess")).isEqualTo("# BEGIN StaticForge redirects\n"
-                + "Redirect 301 \"/site/docs/about.html\" \"/site/guides/about.html\"\n"
+                + "RedirectMatch 301 \"^/site/docs/about\\.html$\" \"/site/guides/about.html\"\n"
                 + "# END StaticForge redirects\n");
         assertThat(build.json(apacheFiles.get("redirects.json")))
                 .extracting(entry -> entry.path("from").asText(), entry -> entry.path("to").asText(),
@@ -248,7 +248,7 @@ class RedirectOutputIntegrationTest {
         GenerationRun again = build.succeeded(build.generate(site.fx(), target, GenerationMode.INCREMENTAL));
 
         String expected = "Options -Indexes\n# BEGIN StaticForge redirects\n"
-                + "Redirect 301 \"/docs/about.html\" \"/guides/about.html\"\n# END StaticForge redirects\n";
+                + "RedirectMatch 301 \"^/docs/about\\.html$\" \"/guides/about.html\"\n# END StaticForge redirects\n";
         assertThat(build.files(site.fx(), target, moved).get(".htaccess")).isEqualTo(expected);
         assertThat(build.files(site.fx(), target, again).get(".htaccess")).isEqualTo(expected);
         assertThat(output(site, target, again, ".htaccess").kind()).as("the page's output stays a page output")

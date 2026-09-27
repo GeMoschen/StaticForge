@@ -134,16 +134,22 @@ class RedirectFormatsGoldenTest {
             assertThat(file.path()).isEqualTo(".htaccess");
             String text = new String(file.bytes(), StandardCharsets.UTF_8);
             assertThat(text).isEqualTo(golden("htaccess-pretty-base-path.txt"));
+            // Read back as Apache would: tokenize, match the decoded request path, substitute the target.
+            Map<String, String> expected = Map.of(
+                    "/site/about/", "/site/company/about/",
+                    "/site/legacy.html", "https://example.org/x?a=1&b=2",
+                    "/site/old page.html", "/site/new%20page.html",
+                    "/site/say \"hi\".html", "/site/hello.html");
             List<String> lines = text.lines().toList();
-            assertThat(lines.subList(1, lines.size() - 1)).allSatisfy(line -> {
+            assertThat(lines.subList(1, lines.size() - 1)).hasSize(expected.size()).allSatisfy(line -> {
                 List<String> words = apacheWords(line);
                 assertThat(words).hasSize(4);
-                assertThat(words.subList(0, 2)).containsExactly("Redirect", "301");
-                assertThat(words.get(2)).startsWith("/site/");
-                assertThat(words.get(3)).matches("(/site/|https://).*");
+                assertThat(words.subList(0, 2)).containsExactly("RedirectMatch", "301");
+                List<String> matched = expected.keySet().stream().filter(path -> matches(words.get(2), path)).toList();
+                assertThat(matched).as("%s matches exactly one source", line).hasSize(1);
+                assertThat(substitute(words.get(3))).isEqualTo(expected.get(matched.get(0)));
+                assertThat(matches(words.get(2), "/site/about/team/")).isFalse();
             });
-            assertThat(apacheWords(lines.get(4))).containsExactly("Redirect", "301", "/site/say \"hi\".html", "/site/hello.html");
-            assertThat(apacheWords(lines.get(3))).containsExactly("Redirect", "301", "/site/old page.html", "/site/new%20page.html");
         });
     }
 
@@ -170,6 +176,35 @@ class RedirectFormatsGoldenTest {
         assertThat(new String(off.get(1).bytes(), StandardCharsets.UTF_8))
                 .isEqualTo("Options -Indexes\nErrorDocument 404 /404.html\n");
         assertThat(new HtaccessPostProcessor().process(ctx("", ctx.redirects(), Map.of(), Set.of()), List.of())).isEmpty();
+    }
+
+    @Test
+    void anAnchoredRuleNeverMatchesThePagesBelowItsDirectory() {
+        String regex = HtaccessPostProcessor.pattern("/about/");
+
+        assertThat(regex).isEqualTo("^/about/$");
+        assertThat(matches(regex, "/about/")).isTrue();
+        assertThat(matches(regex, "/about/team/")).isFalse();
+        assertThat(matches(regex, "/about/index.html")).isFalse();
+        assertThat(matches(regex, "/x/about/")).isFalse();
+    }
+
+    @Test
+    void regexMetacharactersInAPathMatchOnlyThemselves() {
+        String path = "/c++ (v1.2)/[draft]{2}^$|*?.html";
+        String line = new String(new HtaccessPostProcessor().process(
+                ctx("", List.of(new Redirect(path.substring(1), "to $1 & more.html#a", "html", "")), Map.of(),
+                        Set.of(RedirectFormat.HTACCESS)), List.of()).get(0).bytes(), StandardCharsets.UTF_8).lines().toList().get(1);
+
+        List<String> words = apacheWords(line);
+
+        assertThat(words.get(2)).isEqualTo("^/c\\+\\+ \\(v1\\.2\\)/\\[draft\\]\\{2\\}\\^\\$\\|\\*\\?\\.html$");
+        assertThat(matches(words.get(2), path)).isTrue();
+        assertThat(matches(words.get(2), "/cc (v1x2)/d2.html")).isFalse();
+        assertThat(matches(words.get(2), "/c++ (v1.2)/[draft]{2}^$|*?xhtml")).isFalse();
+        // The target is literal: no backreference, no whole-match '&'.
+        assertThat(words.get(3)).isEqualTo("/to%20\\$1%20\\&%20more.html#a");
+        assertThat(substitute(words.get(3))).isEqualTo("/to%20$1%20&%20more.html#a");
     }
 
     // ------------------------------------------------------------------
@@ -218,6 +253,30 @@ class RedirectFormatsGoldenTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** Whether {@code regex} (PCRE; these simple anchored patterns read the same in java.util.regex) matches {@code path}. */
+    private static boolean matches(String regex, String path) {
+        return java.util.regex.Pattern.compile(regex).matcher(path).find();
+    }
+
+    /**
+     * mod_alias's substitution of a {@code RedirectMatch} target ({@code ap_pregsub}): {@code $0}–{@code $9} and
+     * {@code &} insert the match, a backslash makes the next character literal. The targets here must come back
+     * literal, so an unescaped reference fails the test.
+     */
+    private static String substitute(String target) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < target.length(); i++) {
+            char c = target.charAt(i);
+            boolean reference = c == '&' || (c == '$' && i + 1 < target.length() && Character.isDigit(target.charAt(i + 1)));
+            assertThat(reference).as("unescaped reference at %d in %s", i, target).isFalse();
+            if (c == '\\' && i + 1 < target.length()) {
+                c = target.charAt(++i);
+            }
+            out.append(c);
+        }
+        return out.toString();
     }
 
     /**

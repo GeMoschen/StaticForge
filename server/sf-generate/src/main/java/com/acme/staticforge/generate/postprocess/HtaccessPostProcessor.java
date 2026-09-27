@@ -13,29 +13,31 @@ import java.util.TreeMap;
 import org.springframework.stereotype.Service;
 
 /**
- * Writes the build's redirects for Apache (M30.5.1, epic decision 18): a marked block in the site-root
- * {@code .htaccess},
+ * Writes the build's redirects for Apache (M30.5.1, epic decision 18 as amended by the user on 2026-09-27): a marked
+ * block in the site-root {@code .htaccess},
  *
  * <pre>
  * # BEGIN StaticForge redirects
- * Redirect 301 "/old page.html" "/new%20page.html"
+ * RedirectMatch 301 "^/old page\.html$" "/new%20page.html"
  * # END StaticForge redirects
  * </pre>
  *
- * one line per source URL path, sorted. Paths are the URL paths visitors request: {@code /} + the output path, below
- * the path of the target's {@code baseUrl} when it has one, and a directory ({@code /about/}) for an index file when the
- * channel uses pretty URLs with a trailing slash. The source is written <em>decoded</em>, because Apache's
- * {@code Redirect} matches the %-decoded request path; the target is percent-encoded (it is sent as the
- * {@code Location}), an absolute URL as it is. Both are quoted, a {@code "} escaped as {@code \"}; registry paths never
- * contain a backslash or a control character (the registry refuses them).
+ * one line per source URL path, sorted. Each rule is an anchored {@code RedirectMatch}, so it matches its source path
+ * exactly — never the URLs below a directory source, as {@code Redirect}'s prefix match would. Paths are the URL paths
+ * visitors request: {@code /} + the output path, below the path of the target's {@code baseUrl} when it has one, and a
+ * directory ({@code /about/}) for an index file when the channel uses pretty URLs with a trailing slash.
+ *
+ * <p><b>Escaping.</b> The source is the <em>decoded</em> path (mod_alias matches the %-decoded request path) with every
+ * regex metacharacter escaped by a backslash. The target is percent-encoded (it is sent as the {@code Location}), an
+ * absolute URL as it is; {@code $}, {@code &} and {@code \} in it are backslash-escaped, since mod_alias substitutes
+ * {@code $1}-style backreferences (and, in some versions, {@code &}) into it. Both are then double-quoted with
+ * {@code "} written as {@code \"}: Apache's directive tokenizer drops a backslash only before the quote, so every other
+ * escape reaches the regex engine and the substitution as written. Registry paths never contain a control character.
  *
  * <p><b>An existing {@code .htaccess}.</b> When the build has a {@code .htaccess} of its own — a page whose template
  * writes one — the block is appended to it instead of replacing it; a block a previous build appended (a carried file)
  * is removed first, so there is always exactly one. Without the format, such a stale block is removed and nothing is
  * appended.
- *
- * <p>Note that Apache's {@code Redirect} matches by path prefix: a directory source ({@code /about/}) also redirects
- * the URLs below it.
  */
 @Service
 public final class HtaccessPostProcessor implements PostProcessor {
@@ -45,6 +47,9 @@ public final class HtaccessPostProcessor implements PostProcessor {
 
     static final String BEGIN = "# BEGIN StaticForge redirects";
     static final String END = "# END StaticForge redirects";
+
+    /** The PCRE metacharacters outside a character class. */
+    private static final String REGEX_META = "\\.+*?^$|()[]{}";
 
     @Override
     public List<OutputFile> process(PostProcessContext ctx, List<OutputFile> files) {
@@ -87,11 +92,38 @@ public final class HtaccessPostProcessor implements PostProcessor {
                     : RedirectLinks.urlPath(ctx.baseUrl(), RedirectPaths.pathOf(redirect.to()), settings, true)
                             + RedirectLinks.suffix(redirect.to());
             // The first redirect of a source path wins, as Apache's first matching directive would.
-            lines.putIfAbsent(from, "Redirect " + RedirectLinks.STATUS + " " + quoted(from) + " " + quoted(to));
+            lines.putIfAbsent(from, "RedirectMatch " + RedirectLinks.STATUS + " " + quoted(pattern(from)) + " "
+                    + quoted(substitution(to)));
         }
         StringBuilder block = new StringBuilder(BEGIN).append('\n');
         lines.values().forEach(line -> block.append(line).append('\n'));
         return block.append(END).append('\n').toString();
+    }
+
+    /** The anchored regex matching exactly {@code path}: {@code ^} + the path with its metacharacters escaped + {@code $}. */
+    static String pattern(String path) {
+        StringBuilder regex = new StringBuilder(path.length() + 8).append('^');
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (REGEX_META.indexOf(c) >= 0) {
+                regex.append('\\');
+            }
+            regex.append(c);
+        }
+        return regex.append('$').toString();
+    }
+
+    /** {@code target} as a literal mod_alias substitution: {@code $}, {@code &} and {@code \} backslash-escaped. */
+    static String substitution(String target) {
+        StringBuilder out = new StringBuilder(target.length() + 4);
+        for (int i = 0; i < target.length(); i++) {
+            char c = target.charAt(i);
+            if (c == '$' || c == '&' || c == '\\') {
+                out.append('\\');
+            }
+            out.append(c);
+        }
+        return out.toString();
     }
 
     private static String quoted(String value) {

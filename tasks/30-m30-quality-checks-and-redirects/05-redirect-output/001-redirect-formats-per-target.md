@@ -29,7 +29,8 @@ area: backend
   own path** (lessons 2026-09-15), `ABS` uses the target's `baseUrl` when set; every value HTML-attribute-escaped and
   the JS string JSON-escaped. External `to_path` URLs are used as-is (http/https only).
 - **`.htaccess`** at the site root: a marked block `# BEGIN StaticForge redirects` … `# END StaticForge redirects`
-  with `Redirect 301 "<from-url-path>" "<to-url-path-or-URL>"` per redirect. URL paths are site-root paths as visitors
+  with `RedirectMatch 301 "^<regex-escaped from-url-path>$" "<to-url-path-or-URL>"` per redirect (amended
+  2026-09-27, see Notes). URL paths are site-root paths as visitors
   request them (`/` + path, prefixed with the path part of `baseUrl` when there is one; `index.html` suffix replaced by
   `/` when the channel uses pretty URLs with trailing slash), percent-encoded, quotes and backslashes escaped; sorted
   for stable output. If the build also has a real `.htaccess` output (e.g. a media file), the block is **appended** to it
@@ -79,12 +80,14 @@ area: backend
 - A carried `.htaccess` *page* output is re-read from the base build and post-processed again, and keeps its PAGE
   manifest entry (`CarryForward.publication`: a processed file over a kept output keeps its description), so the block
   is replaced, never duplicated.
-- Deviation: in `.htaccess` the *source* URL path is written decoded (quoted, `\"` escaped), not percent-encoded:
-  Apache's `Redirect` matches the %-decoded request path (mod_alias docs), so an encoded source with a space would
-  never match. The target is percent-encoded. Backslashes can't occur (the registry refuses them).
-- Risk (needs a user decision, epic decision 18 is binding): Apache `Redirect` matches by path *prefix*; a directory
-  source (`/about/` with pretty URLs) also redirects URLs below it, e.g. a live `/about/team/`. An anchored
-  `RedirectMatch 301 "^/about/$" …` would avoid it. Documented in `HtaccessPostProcessor`.
+- Decision amended by the user 2026-09-27: RedirectMatch, anchored, because Redirect matches by prefix (a directory
+  source `/about/` would also redirect a live `/about/team/`). Each line is `RedirectMatch 301 "^<source>$" "<target>"`:
+  the source is the *decoded* URL path (mod_alias matches the %-decoded request path) with the PCRE metacharacters
+  `\ . + * ? ^ $ | ( ) [ ] { }` backslash-escaped; the target is percent-encoded with `$`, `&` and `\` backslash-escaped
+  (no `$1`/`&` substitution); both quoted with `"` as `\"` (Apache's tokenizer drops a backslash only before the
+  quote). Tested: tokenizer read-back, the regex evaluated with java.util.regex (`^/about/$` doesn't match
+  `/about/team/`; a path full of metacharacters matches only itself), the target read back through an `ap_pregsub`
+  emulation.
 - Deviation: `redirects.json` and `.htaccess` are written whenever their format is configured (an empty list / empty
   block when nothing redirects), so a host reading them always finds them; stubs only exist per redirect.
 - Stubs checked in a real browser (Chromium via Playwright, `file://`): the nested and the spaces-and-`&` golden stubs

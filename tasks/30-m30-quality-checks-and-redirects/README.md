@@ -29,7 +29,7 @@ This milestone delivers:
   current build; a changed path adds old → new to a persistent per-project **redirect registry**. Manual redirects
   can be added, edited and deleted in a Redirects tab; unpublishing or deleting a page offers "Redirect old URL to…".
 - **Redirect output per target**: HTML stub pages (meta refresh + canonical + JS fallback), Apache `.htaccess`
-  (`Redirect 301`) and the existing `redirects.json`.
+  (anchored `RedirectMatch 301`) and the existing `redirects.json`.
 
 ## Findings from planning (2026-09-25)
 
@@ -157,8 +157,10 @@ This milestone delivers:
     `["HTML_STUB"]`. HTML stubs are written at `from_path` (meta refresh 0, `<link rel="canonical">` absolute when the
     target has a `baseUrl`, `location.replace` JS fallback, `<meta name="robots" content="noindex">`, a visible link);
     the stub's link is **relative to the stub's own path** (lessons: "links relative to the current page"). `.htaccess`
-    `Redirect 301 "<url-path>" "<url-path-or-URL>"` needs site-root URL paths (prefixed with the `baseUrl` path when it
-    has one). All three are `SITE` outputs in the manifest; stubs never appear in `sitemap.xml` or `search-index.json`.
+    `RedirectMatch 301 "^<regex-escaped decoded url-path>$" "<url-path-or-URL>"` (anchored; `$`, `&` and `\` in the
+    target escaped) needs site-root URL paths (prefixed with the `baseUrl` path when it has one). *Decision amended by
+    the user 2026-09-27: RedirectMatch, anchored, because `Redirect` matches by prefix* (a directory source would also
+    redirect the live pages below it). All three are `SITE` outputs in the manifest; stubs never appear in `sitemap.xml` or `search-index.json`.
     A stub whose path collides with a real output is shadowed (decision 16), never a build error.
 19. **Error codes.** Checks `SF-CHK-0001` (output could not be checked) and `SF-CHK-0101…0399` (one per rule, catalogue
     in feature 2); hold-back `SF-GEN-0125`; redirects `SF-DOM-0190` (redirect not found, `404`), `SF-DOM-0191`
