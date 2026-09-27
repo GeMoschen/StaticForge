@@ -1,6 +1,6 @@
 ---
 id: M30.6.3
-status: todo
+status: in-progress
 depends: [M30.4.1, M30.5.1]
 epic: m30-quality-checks-and-redirects
 feature: ui
@@ -37,7 +37,7 @@ Changes view), the shared page picker used by link/reference editors, M28 effect
       role, target form round trip of `redirectFormats` (default checked on a new target), unpublish dialog option
       (preselection, call order, failure warning).
 - [ ] Manual check in the running app: move a page, build, see the AUTO entry and the stub in the output folder.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 
@@ -47,3 +47,26 @@ Changes view), the shared page picker used by link/reference editors, M28 effect
 
 - `from_path` input: the user types a URL path as they know it (`/old/page.html` or `/old/page/`); normalize to the
   output-path form the API expects and show the normalized value before saving.
+
+- **Progress (2026-09-27, first part):** the Redirects tab and "Redirect old URL to…" are done; the target form's
+  `redirectFormats` checkboxes are **pending** (the target DTO field arrives with `M30.5.1`), so the task stays
+  `in-progress`. Specs so far: `redirect.util.spec` (normalization mirrors `RedirectPaths`, labels incl. `LOOP`),
+  `project-settings-redirects.component.spec` (states + tooltips, filters in the URL and as chips, read-only per role
+  and in time travel, delete with `If-Match` and the `409` reload prompt), `redirect-dialog.component.spec` (add/edit,
+  normalized paths, `If-Match`, `409` → reload), `redirect-option.util.spec` (preselection),
+  `release-dialog.redirect.spec` (preselection, call order, failure warning, rights, release of a deletion),
+  `page-delete-dialog.component.spec`. Manual check (own backend 8083 / UI 4302): manual add/edit/filter, unpublish
+  and tree delete with a redirect → `SHADOWED` rows, Changes-view release of a deletion offers the option. The AUTO
+  entry + stub part of the manual check needs `M30.4.2`/`M30.5.x` and is still open.
+- Deviation: the list API had no state filter, so `GET /redirects` gained `state` (`ACTIVE|SHADOWED|DANGLING|LOOP`;
+  computed per row, paged after filtering; nothing matches while the default target has no build) —
+  `RedirectService.Filter.state`, tested in `RedirectApiIntegrationTest.states`, `schema.d.ts` updated by hand (one
+  line; a regenerated file only reorders unrelated `Page*` properties).
+- Deviation: "M27 delete dialogs" — the page tree's delete was a `window.confirm`; it is now `sf-page-delete-dialog`.
+  The page editor has no delete action, and the Changes view deletes nothing itself: there the option appears when a
+  release publishes a page's **deletion** (`DELETION_PENDING`), the moment the page goes offline.
+- Deviation: a project UID is unique per type, so only one page can carry the index UID. The preselected "folder
+  index page" is the page in the folder with a channel's `indexUid`, or else the page beside the folder named like it
+  (`products` next to `products/`), nearest folder first, online pages only, never a page going offline itself.
+- Deviation: the redirect after the dialog is reported as a toast with an "Open Redirects" action: info ("…once a
+  build no longer contains the page. Until then the redirect shows as Shadowed.") or a warning on failure.

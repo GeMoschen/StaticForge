@@ -1,6 +1,8 @@
 package com.acme.staticforge;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -328,6 +330,10 @@ class RedirectApiIntegrationTest {
                 .andExpect(jsonPath("$.basisRunId").value(nullValue()))
                 .andExpect(jsonPath("$.rows[0].state").value(nullValue()))
                 .andExpect(jsonPath("$.rows[0].resolvedTarget").value(nullValue()));
+        // Without a build no row has a state, so a state filter matches nothing.
+        perform(get(BASE, fx.key()).param("state", "ACTIVE"), viewer).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.rows", hasSize(0)));
 
         long runId = publish(fx,
                 pageOutput("new/moved.html", moved, "html", null, null),
@@ -356,6 +362,24 @@ class RedirectApiIntegrationTest {
         assertThat(byId.get(loop).path("sourceRunId").asLong()).isEqualTo(runId);
 
         perform(get(BASE + "/{id}", fx.key(), shadowed), viewer).andExpect(jsonPath("$.state").value("SHADOWED"));
+
+        // The state filter (computed per row, paged after filtering) and its combination with the other filters.
+        perform(get(BASE, fx.key()).param("state", "active"), viewer).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.rows[*].id", containsInAnyOrder((int) active, (int) fixed)));
+        perform(get(BASE, fx.key()).param("state", "ACTIVE").param("size", "1").param("page", "1"), viewer)
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.rows", hasSize(1)))
+                .andExpect(jsonPath("$.rows[0].id").value((int) active));
+        perform(get(BASE, fx.key()).param("state", "ACTIVE").param("q", "ext"), viewer)
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.rows[0].id").value((int) fixed));
+        perform(get(BASE, fx.key()).param("state", "LOOP").param("kind", "AUTO"), viewer)
+                .andExpect(jsonPath("$.rows[*].id", contains((int) loop)));
+        perform(get(BASE, fx.key()).param("state", "DANGLING"), viewer)
+                .andExpect(jsonPath("$.rows[*].id", contains((int) dangling)));
+        perform(get(BASE, fx.key()).param("state", "BROKEN"), viewer).andExpect(status().isBadRequest());
 
         // Unpublishing the squatter (a new build without it) makes the shadowed redirect active.
         publish(fx, pageOutput("new/moved.html", moved, "html", null, null));

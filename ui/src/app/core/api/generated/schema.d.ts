@@ -6400,6 +6400,7 @@ export interface operations {
                 channel?: string;
                 locale?: string;
                 kind?: string;
+                state?: string;
                 q?: string;
                 page?: number;
                 size?: number;
