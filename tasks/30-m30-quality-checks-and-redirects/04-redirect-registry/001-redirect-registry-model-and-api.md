@@ -1,6 +1,6 @@
 ---
 id: M30.4.1
-status: todo
+status: done
 depends: []
 epic: m30-quality-checks-and-redirects
 feature: redirect-registry
@@ -43,14 +43,14 @@ and the default target (`GenerationService.resolveTarget`, `:591`), channel outp
 
 ## Acceptance criteria
 
-- [ ] CRUD integration tests incl. validation (each `SF-DOM-019x`), `If-Match`, roles (`EDITOR` without `RELEASE` →
+- [x] CRUD integration tests incl. validation (each `SF-DOM-019x`), `If-Match`, roles (`EDITOR` without `RELEASE` →
       `403` on CRUD and for-asset; with `RELEASE` → for-asset allowed, CRUD still `403`), archived → `409 SF-DOM-0141`.
-- [ ] `for-asset` for a localized, paginated page creates the right entries per channel/locale/page number.
-- [ ] `state` computation: active, shadowed (source path is a live output), dangling (target not in the manifest).
-- [ ] Audit entries for manual changes only.
-- [ ] Export/import round trip of the registry (protocol 9), conflict on an existing source path, protocol-8 archive
+- [x] `for-asset` for a localized, paginated page creates the right entries per channel/locale/page number.
+- [x] `state` computation: active, shadowed (source path is a live output), dangling (target not in the manifest).
+- [x] Audit entries for manual changes only.
+- [x] Export/import round trip of the registry (protocol 10), conflict on an existing source path, protocol-9 archive
       imports without redirects.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -67,3 +67,25 @@ and the default target (`GenerationService.resolveTarget`, `:591`), channel outp
   redirects. Add these to the acceptance tests below.
 - Deleting a page asset leaves its AUTO redirects pointing at it; they become `DANGLING` (not emitted) — that is the
   intended "nothing by default" behaviour; the UI shows them so someone can retarget or delete them.
+- Deviation: changelog `v1.0/029-redirects.xml` (027 was taken) and export protocol **10**
+  (`ProjectExportImportService.QUALITY_AND_REDIRECTS_PROTOCOL`; 9 is M27.8's schedules): a protocol `<= 9` archive
+  imports without redirects even if it contains `redirects.json`.
+- Deviation: `LOOP` is a fourth `RedirectState` (reported by the registry view, never emitted) instead of dropping the
+  entry from the resolution, so the list can show why an entry isn't written. The resolver also marks redirects on (or
+  leading into) a cycle of fixed-path redirects as `LOOP`, and the manual API rejects such cycles with `SF-DOM-0192`.
+- Deviation: site files (sitemap, robots, search index, redirect stubs) are not "live outputs" for shadowing —
+  otherwise the stubs M30.5.1 writes would shadow their own redirects in the next build.
+- Deviation: `PUT` on an `AUTO` entry turns it `MANUAL` (someone owns it now, detection must not overwrite it);
+  `DELETE` takes an optional `If-Match` (checked when sent). `for-asset` is `@projectAuth.can(#projectKey,'RELEASE')`
+  alone: developers and admins always hold `RELEASE` (`PublishPolicy.grants`), so it already means "RELEASE or
+  DEVELOPER+".
+- Deviation: a second non-blocking import conflict `REDIRECT_INVALID` (unknown channel/locale, malformed paths in a
+  hand-edited archive); `ConflictReport.redirectCount`, `ImportResult.importedRedirectCount/redirectWarnings`, and the
+  import screen lists redirect warnings and counts (no provenance badge), like schedules.
+- Paths: a directory source/target (`old/`, `/`) means the channel's `indexFileName`; `%XX` escapes are decoded; target
+  query/fragment kept; everything but `http(s)` absolute URLs is refused (`SF-DOM-0193`).
+- Seams for M30.4.2/M30.5.1: `RedirectService.upsertAuto(projectId, sourceRunId, List<AutoCandidate>)` →
+  `AutoResult(added, replaced, keptManual)` (native insert-if-absent/update-AUTO, joins the caller's transaction);
+  `RedirectResolver.resolve(List<RedirectRule>, RedirectOutputs)` (pure) and `RedirectService.resolve(...)`;
+  `ManifestRedirectOutputs.of(BuildManifest | Collection<BuildManifest.Output>)` builds `RedirectOutputs`;
+  `RedirectEntry.rule()`, `RedirectRule.toAsset/toPath(...)` for candidates.

@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/redirects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["redirect"];
+        put: operations["updateRedirect"];
+        post?: never;
+        delete: operations["deleteRedirect"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/records/{uuid}": {
         parameters: {
             query?: never;
@@ -670,6 +686,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["discard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/redirects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRedirects"];
+        put?: never;
+        post: operations["createRedirect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/redirects/for-asset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["redirectForAsset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2573,6 +2621,44 @@ export interface components {
             items?: components["schemas"]["ScheduleItemView"][];
             lastExecution?: components["schemas"]["ScheduleExecutionView"];
         };
+        RedirectRequest: {
+            channel?: string;
+            locale?: string;
+            fromPath?: string;
+            /** Format: uuid */
+            toAssetUuid?: string;
+            /** Format: int32 */
+            toPageNumber?: number;
+            toPath?: string;
+        };
+        RedirectView: {
+            /** Format: int64 */
+            id?: number;
+            channel?: string;
+            locale?: string;
+            fromPath?: string;
+            /** Format: uuid */
+            toAssetUuid?: string;
+            /** Format: int32 */
+            toPageNumber?: number;
+            toAssetName?: string;
+            toPath?: string;
+            kind?: string;
+            state?: string;
+            resolvedTarget?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: int64 */
+            createdBy?: number;
+            /** Format: int64 */
+            sourceRunId?: number;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: int64 */
+            updatedBy?: number;
+            /** Format: int64 */
+            version?: number;
+        };
         UpdateRecordRequest: {
             content?: components["schemas"]["JsonNode"];
             comment?: string;
@@ -3214,6 +3300,13 @@ export interface components {
             incomplete?: components["schemas"]["Incomplete"][];
             warnings?: string[];
         };
+        RedirectForAssetRequest: {
+            /** Format: uuid */
+            assetUuid?: string;
+            /** Format: uuid */
+            toAssetUuid?: string;
+            toPath?: string;
+        };
         CreateRecordSetRequest: {
             /** Format: uuid */
             folderUuid?: string;
@@ -3342,6 +3435,9 @@ export interface components {
             /** Format: int32 */
             updatedScheduleCount?: number;
             scheduleWarnings?: components["schemas"]["ImportConflictView"][];
+            /** Format: int32 */
+            importedRedirectCount?: number;
+            redirectWarnings?: components["schemas"]["ImportConflictView"][];
         };
         ConflictReportView: {
             conflicts?: components["schemas"]["ImportConflictView"][];
@@ -3351,6 +3447,8 @@ export interface components {
             releaseMode?: string;
             /** Format: int32 */
             scheduleCount?: number;
+            /** Format: int32 */
+            redirectCount?: number;
         };
         CreateGlobalSetRequest: {
             /** Format: uuid */
@@ -3863,12 +3961,12 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            unpaged?: boolean;
-            paged?: boolean;
-            /** Format: int32 */
-            pageSize?: number;
             /** Format: int32 */
             pageNumber?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            paged?: boolean;
+            unpaged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -4028,6 +4126,19 @@ export interface components {
             assets?: components["schemas"]["AssetDiff"][];
             compacted?: boolean;
             message?: string;
+        };
+        RedirectPageView: {
+            rows?: components["schemas"]["RedirectView"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            /** Format: int64 */
+            basisRunId?: number;
         };
         RecordSetSummaryView: {
             /** Format: uuid */
@@ -4640,6 +4751,81 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ScheduleView"];
                 };
+            };
+        };
+    };
+    redirect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RedirectView"];
+                };
+            };
+        };
+    };
+    updateRedirect: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedirectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RedirectView"];
+                };
+            };
+        };
+    };
+    deleteRedirect: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6203,6 +6389,87 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ReleaseResultView"];
+                };
+            };
+        };
+    };
+    listRedirects: {
+        parameters: {
+            query?: {
+                channel?: string;
+                locale?: string;
+                kind?: string;
+                q?: string;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RedirectPageView"];
+                };
+            };
+        };
+    };
+    createRedirect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedirectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RedirectView"];
+                };
+            };
+        };
+    };
+    redirectForAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedirectForAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RedirectView"][];
                 };
             };
         };

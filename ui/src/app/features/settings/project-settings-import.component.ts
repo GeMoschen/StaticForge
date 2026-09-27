@@ -46,6 +46,8 @@ const CONFLICT_ICONS: Record<string, string> = {
   SCHEDULE_TARGET_MISSING: 'link_off',
   SCHEDULE_INVALID: 'event_busy',
   SCHEDULE_OWNER_REPLACED: 'person',
+  REDIRECT_SOURCE_EXISTS: 'alt_route',
+  REDIRECT_INVALID: 'link_off',
 };
 
 /**
@@ -184,9 +186,13 @@ export class ProjectSettingsImportComponent {
     });
   }
 
-  /** Whether a conflict is about an archived asset, whose explicit/implicit pick the badge shows (a schedule's isn't). */
+  /**
+   * Whether a conflict is about an archived asset, whose explicit/implicit pick the badge shows (a schedule's or a
+   * redirect's isn't).
+   */
   protected hasProvenance(conflict: ImportConflictView): boolean {
-    return !(conflict.type ?? '').includes('SCHEDULE');
+    const type = conflict.type ?? '';
+    return !type.includes('SCHEDULE') && !type.startsWith('REDIRECT_');
   }
 
   protected iconFor(type: string | undefined): string {
@@ -201,6 +207,12 @@ export class ProjectSettingsImportComponent {
       return '';
     }
     return `Imported ${created} schedule(s)` + (replaced > 0 ? `, replaced ${replaced}` : '') + '.';
+  }
+
+  /** "Imported 3 redirect(s)." — empty when the import brought none (M30.4.1). */
+  protected redirectsSummary(result: ImportResultView): string {
+    const imported = result.importedRedirectCount ?? 0;
+    return imported > 0 ? `Imported ${imported} redirect(s).` : '';
   }
 
   /** The badge of an asset left out of the import: a record outside a record set says what it is. */
@@ -332,12 +344,14 @@ export class ProjectSettingsImportComponent {
         const updated = result.updatedAssetCount ?? 0;
         const released = result.releasedCount ?? 0;
         const schedules = (result.importedScheduleCount ?? 0) + (result.updatedScheduleCount ?? 0);
+        const redirects = result.importedRedirectCount ?? 0;
         this.toasts.show(
           `Imported ${result.importedAssetCount ?? 0} asset(s)`
             + (updated > 0 ? `, overwrote ${updated}` : '')
             + `, ${result.importedBlobCount ?? 0} blob(s)`
             + (released > 0 ? `, ${released} release(s) kept` : '')
-            + (schedules > 0 ? `, ${schedules} schedule(s)` : ''),
+            + (schedules > 0 ? `, ${schedules} schedule(s)` : '')
+            + (redirects > 0 ? `, ${redirects} redirect(s)` : ''),
           'success',
         );
       },

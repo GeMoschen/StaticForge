@@ -44,6 +44,7 @@
             Kept {{ r.releasedCount }} release(s).
           }
           {{ schedulesSummary(r) }}
+          {{ redirectsSummary(r) }}
         </span>
       </div>
       @if (r.scheduleWarnings?.length) {
@@ -57,6 +58,23 @@
               <li class="conflict-item">
                 <sf-icon [name]="iconFor(c.type)" />
                 <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+                <span class="conflict-item__detail">{{ c.detail }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+      @if (r.redirectWarnings?.length) {
+        <section class="conflict-section conflict-section--warning">
+          <h2 class="conflict-section__title">
+            Redirects
+            <span class="badge badge--warning">{{ r.redirectWarnings!.length }}</span>
+          </h2>
+          <ul class="conflict-list">
+            @for (c of r.redirectWarnings; track $index) {
+              <li class="conflict-item">
+                <sf-icon [name]="iconFor(c.type)" />
+                <span class="conflict-item__label">{{ c.elementLabel ?? 'Unknown' }}</span>
                 <span class="conflict-item__detail">{{ c.detail }}</span>
               </li>
             }
