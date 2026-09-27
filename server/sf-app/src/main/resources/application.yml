@@ -82,6 +82,13 @@ sf:
     batch-size: 20
     lease: 2m
     # node-id: cms-1
+  housekeeping:
+    # System jobs (M29): instance-level background work on the scheduler's poll, at most once at a time on any node.
+    # These values seed each job's row on the first start (and "Reset to defaults"); after that the admin's settings
+    # in the Jobs page win. Each job adds its own block here: sf.housekeeping.<job-key>.enabled / .cron / its keys.
+    enabled: true
+    zone: UTC
+    history-per-job: 200
   revision:
     retention-days: unlimited
   cache:

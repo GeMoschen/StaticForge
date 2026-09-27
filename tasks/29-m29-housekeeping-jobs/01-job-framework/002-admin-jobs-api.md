@@ -1,6 +1,6 @@
 ---
 id: M29.1.2
-status: todo
+status: done
 depends: [M29.1.1]
 epic: m29-housekeeping-jobs
 feature: job-framework
@@ -43,11 +43,11 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] API tests: list/detail/history paging; PATCH validation (bad cron, bad zone, bad settings, stale `If-Match` →
+- [x] API tests: list/detail/history paging; PATCH validation (bad cron, bad zone, bad settings, stale `If-Match` →
       `409 SF-API-0409`); reset; run now plus dry run; `409` while running; `403` for a non-admin; `404` for an unknown
       key.
-- [ ] Audit entries `JOB_SETTINGS_SET` and `JOB_RUN` are written with the actor, target `job:<key>` and detail.
-- [ ] `./gradlew build` green.
+- [x] Audit entries `JOB_SETTINGS_SET` and `JOB_RUN` are written with the actor, target `job:<key>` and detail.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -59,3 +59,14 @@ area: backend
 - `settings` is typed per job. Validate through `HousekeepingJob.validateSettings`, and never store unknown keys.
 - A run started through the API while the engine's scheduled run of the same job is claiming the lease: exactly one
   wins, and the other gets `409`, or is skipped (scheduled). Cover this with a test.
+
+### Deviations
+
+- **Extra response fields**: `version` and `updatedAt` (for `If-Match`, also sent as `ETag: "v{version}"`),
+  `currentRunId` and `progress` while running; runs carry `startedBy` (`{id, username}`), `sample` and `sampleTotal`.
+  The list is a plain array (a handful of jobs), the history uses the `{content, page}` shape.
+- **Orphaned jobs** (row without bean) are listed and readable; `PATCH`, `reset` and `run` on them answer
+  `404 SF-DOM-0184` ("no longer installed").
+- A `PATCH` that changes nothing is not audited and keeps the version. A missing `If-Match` is `412 SF-API-0412`, like
+  schedules.
+- The audit-label list in `admin-audit.util.ts` is left to `M29.5.1` as the task says.

@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,6 +43,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * it ({@code SF-DOM-0163}, paused); otherwise the handler runs as the owner. A {@code WAITING} result keeps the
  * execution open and the action due, so it is retried on the next tick. A finished recurring action is due again at
  * its next slot <em>after now</em>, so slots missed while the system was down collapse into one execution.
+ *
+ * <p>Every poll also runs the registered {@link SchedulerTickParticipant}s (M29.1.1: the system jobs), so the engine
+ * stays the application's single scheduler.
  *
  * <p>A plain class rather than a component so tests can run several engines (node ids, clocks) against one database;
  * {@link SchedulerConfiguration} makes the application's instance. All time comes from the injected {@link Clock}.
@@ -69,6 +73,7 @@ public class SchedulerEngine implements AutoCloseable {
     private final ScheduledExecutorService leaseKeeper = Executors.newSingleThreadScheduledExecutor(
             Thread.ofPlatform().name("sf-scheduler-lease").daemon().factory());
     private final Set<Long> reportedUnknown = ConcurrentHashMap.newKeySet();
+    private final List<SchedulerTickParticipant> participants = new CopyOnWriteArrayList<>();
     private ScheduledExecutorService poller;
 
     public SchedulerEngine(
@@ -109,6 +114,11 @@ public class SchedulerEngine implements AutoCloseable {
         return nodeId;
     }
 
+    /** Adds work that runs on every poll after the scheduled actions ({@link #poll()}). */
+    public void addTickParticipant(SchedulerTickParticipant participant) {
+        participants.add(participant);
+    }
+
     /** Starts polling every {@code poll-interval}; idempotent. */
     public synchronized void start() {
         if (poller != null) {
@@ -117,7 +127,7 @@ public class SchedulerEngine implements AutoCloseable {
         long interval = Math.max(1, properties.getPollInterval().toMillis());
         poller = Executors.newSingleThreadScheduledExecutor(
                 Thread.ofPlatform().name("sf-scheduler-tick").daemon().factory());
-        poller.scheduleWithFixedDelay(this::pollSafely, interval, interval, TimeUnit.MILLISECONDS);
+        poller.scheduleWithFixedDelay(this::poll, interval, interval, TimeUnit.MILLISECONDS);
         log.info("Scheduler started on node {} (poll every {} ms)", nodeId, interval);
     }
 
@@ -139,11 +149,22 @@ public class SchedulerEngine implements AutoCloseable {
         }
     }
 
-    private void pollSafely() {
+    /**
+     * One full poll: {@link #tick()} for the scheduled actions, then each {@link SchedulerTickParticipant}. A failure
+     * of one part is logged and never keeps the others from running.
+     */
+    public void poll() {
         try {
             tick();
         } catch (RuntimeException e) {
             log.warn("Scheduler poll failed on node {}", nodeId, e);
+        }
+        for (SchedulerTickParticipant participant : participants) {
+            try {
+                participant.onTick();
+            } catch (RuntimeException e) {
+                log.warn("Scheduler tick participant {} failed on node {}", participant, nodeId, e);
+            }
         }
     }
 

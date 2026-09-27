@@ -1,3 +1,33 @@
+# M29 — Housekeeping jobs (branch `m29-housekeeping-jobs`)
+
+Spec: `tasks/29-m29-housekeeping-jobs/`. Decisions 1–14 there are binding.
+Plan deviations known up front: changelogs 024/025 are taken (M27.8, M28), so system jobs use
+`026-system-jobs.xml` and compaction `027-revision-compaction.xml`. `LeaseClaimer` is keyed by `id`; it is
+generalized to a configurable key column for `system_job.key` without changing M27 behaviour.
+
+Execution: phase A sequential (framework), phase B three parallel streams (B1 main tree, B2/B3 worktrees, merged
+back), phase C UI, phase D docs + journey + full verification.
+
+- [x] A — M29.1.1 system job model, SPI, runner on the engine tick, metrics
+- [x] A — M29.1.2 admin jobs API (+ OpenAPI / schema.d.ts)
+- [ ] B1 — M29.2.1 heartbeat, interrupted-run recovery, real cancel
+- [ ] B1 — M29.2.2 build output cleanup, published-only rollback slots, promote refusal, `retainedRunIds()`
+- [ ] B1 — M29.3.1 generation-run retention
+- [ ] B2 — M29.2.4 audit purge, refresh-token cleanup, memory eviction
+- [ ] B2 — M29.3.2 `media_variant`, resolver, variant backfill
+- [ ] B2 — M29.2.3 blob sweep (marks variants, localized files, `media_variant`)
+- [ ] B2 — M29.3.3 search maintenance
+- [ ] B3 — M29.4.1 compaction policy + schema + API
+- [ ] B3 — M29.4.2 compactor + job + estimate
+- [ ] B3 — M29.4.3 compacted reads (revisions, time travel, diff, restore, preview header)
+- [ ] C — M29.5.1 admin Jobs page
+- [ ] C — M29.5.2 compaction card + compacted notices
+- [ ] D — M29.6.1 spec + docs
+- [ ] D — M29.6.2 `ui/e2e/m29-journeys.spec.ts` green twice
+- [ ] `./gradlew test --rerun`, `ng build`, `npx vitest run`
+
+---
+
 # M28 — Editor publishing (branch `m28-editor-publishing`)
 
 Spec: `tasks/28-m28-editor-publishing/`. Decisions 1–14 there are binding.

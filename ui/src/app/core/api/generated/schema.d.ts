@@ -1412,6 +1412,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/jobs/{key}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["runNow_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{key}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reset_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/url-registry/{id}": {
         parameters: {
             query?: never;
@@ -1538,6 +1570,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["update_11"];
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_12"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_12"];
         trace?: never;
     };
     "/api/v1/users/lookup": {
@@ -2180,7 +2228,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/audit": {
+    "/api/v1/admin/jobs": {
         parameters: {
             query?: never;
             header?: never;
@@ -2188,6 +2236,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_20"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{key}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{key}/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_21"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3398,6 +3494,88 @@ export interface components {
             generatePassword?: boolean;
             mustChangePassword?: boolean;
         };
+        Actor: {
+            /** Format: int64 */
+            id?: number;
+            username?: string;
+        };
+        AdminJobRunView: {
+            /** Format: int64 */
+            id?: number;
+            jobKey?: string;
+            trigger?: string;
+            dryRun?: boolean;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: int64 */
+            durationMs?: number;
+            outcome?: string;
+            /** Format: int64 */
+            itemsExamined?: number;
+            /** Format: int64 */
+            itemsAffected?: number;
+            /** Format: int64 */
+            bytesFreed?: number;
+            message?: string;
+            startedBy?: components["schemas"]["Actor"];
+            sample?: components["schemas"]["JsonNode"];
+            /** Format: int64 */
+            sampleTotal?: number;
+            report?: components["schemas"]["JsonNode"];
+        };
+        AdminJobView: {
+            key?: string;
+            name?: string;
+            description?: string;
+            enabled?: boolean;
+            cron?: string;
+            zone?: string;
+            settings?: components["schemas"]["JsonNode"];
+            defaults?: components["schemas"]["JobDefaults"];
+            /** Format: date-time */
+            nextRunAt?: string;
+            running?: boolean;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: int64 */
+            currentRunId?: number;
+            progress?: string;
+            supportsDryRun?: boolean;
+            orphaned?: boolean;
+            /** Format: int64 */
+            version?: number;
+            /** Format: date-time */
+            updatedAt?: string;
+            lastRun?: components["schemas"]["JobRunSummary"];
+        };
+        JobDefaults: {
+            enabled?: boolean;
+            cron?: string;
+            zone?: string;
+            settings?: components["schemas"]["JsonNode"];
+        };
+        JobRunSummary: {
+            /** Format: int64 */
+            id?: number;
+            outcome?: string;
+            trigger?: string;
+            dryRun?: boolean;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: int64 */
+            durationMs?: number;
+            /** Format: int64 */
+            itemsExamined?: number;
+            /** Format: int64 */
+            itemsAffected?: number;
+            /** Format: int64 */
+            bytesFreed?: number;
+            message?: string;
+        };
         UrlRegistryOverrideRequest: {
             url?: string;
         };
@@ -3486,6 +3664,12 @@ export interface components {
             email?: string;
             displayName?: string;
         };
+        UpdateJobRequest: {
+            enabled?: boolean;
+            cron?: string;
+            zone?: string;
+            settings?: components["schemas"]["JsonNode"];
+        };
         UserLookupHit: {
             /** Format: int64 */
             id?: number;
@@ -3505,14 +3689,14 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -3522,11 +3706,11 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
+            paged?: boolean;
             unpaged?: boolean;
         };
         SortObject: {
@@ -3554,14 +3738,14 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -3675,8 +3859,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            add?: boolean;
             remove?: boolean;
+            add?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -3797,14 +3981,14 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -3914,14 +4098,14 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -3997,10 +4181,9 @@ export interface components {
             /** Format: date-time */
             lastChangeAt?: string;
         };
-        Actor: {
-            /** Format: int64 */
-            id?: number;
-            username?: string;
+        AdminJobRunPage: {
+            content?: components["schemas"]["AdminJobRunView"][];
+            page?: components["schemas"]["PageMeta"];
         };
         AdminAuditEntry: {
             /** Format: int64 */
@@ -7257,6 +7440,52 @@ export interface operations {
             };
         };
     };
+    runNow_1: {
+        parameters: {
+            query?: {
+                dryRun?: boolean;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobRunView"];
+                };
+            };
+        };
+    };
+    reset_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobView"];
+                };
+            };
+        };
+    };
     override: {
         parameters: {
             query?: never;
@@ -7562,6 +7791,56 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AdminUserDetail"];
+                };
+            };
+        };
+    };
+    detail_12: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobView"];
+                };
+            };
+        };
+    };
+    update_12: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateJobRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobView"];
                 };
             };
         };
@@ -8617,6 +8896,78 @@ export interface operations {
         };
     };
     list_20: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobView"][];
+                };
+            };
+        };
+    };
+    runs: {
+        parameters: {
+            query?: {
+                /** @description Zero-based page index (0..N) */
+                page?: number;
+                /** @description The size of the page to be returned */
+                size?: number;
+                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
+                sort?: string[];
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobRunPage"];
+                };
+            };
+        };
+    };
+    run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                runId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobRunView"];
+                };
+            };
+        };
+    };
+    list_21: {
         parameters: {
             query?: {
                 action?: string[];

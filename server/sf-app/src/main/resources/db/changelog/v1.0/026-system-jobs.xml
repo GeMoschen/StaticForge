@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M29.1.1: instance-level system jobs (housekeeping). One row per job, keyed by the job bean's key and seeded
+         from sf.housekeeping.<key>.* on the first start; after that the row holds the admin's schedule and settings.
+         next_run_at is the UTC instant the job is next due (null while disabled). A node claims a job with the same
+         conditional update of lease_owner / lease_until / version as scheduled_action (LeaseClaimer), so a job runs at
+         most once at a time on any node. last_run_id is the newest started run (no foreign key: history is capped).
+         `key` is a reserved word in H2, so the H2 table is created with an explicit quoted "key" (lowercase) to match
+         PostgreSQL's unquoted key, like output_channel (010). The JSON column is declared per dialect.
+
+         Later M29 tasks append their own changesets to this file (generation_run heartbeat, media_variant, …). -->
+    <changeSet id="026-system-job-postgresql" author="sf" dbms="postgresql">
+        <comment>System jobs (M29.1.1) — PostgreSQL (jsonb settings).</comment>
+        <createTable tableName="system_job">
+            <column name="key" type="VARCHAR(64)">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_system_job"/>
+            </column>
+            <column name="enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cron" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="zone_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="settings" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="next_run_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="lease_owner" type="VARCHAR(120)"/>
+            <column name="lease_until" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="last_run_id" type="BIGINT"/>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="BIGINT"/>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="026-system-job-h2" author="sf" dbms="h2">
+        <comment>System jobs (M29.1.1) — H2 (json settings; "key" is a reserved word).</comment>
+        <sql>
+            CREATE TABLE system_job (
+                "key" VARCHAR(64) NOT NULL,
+                enabled BOOLEAN NOT NULL,
+                cron VARCHAR(120) NOT NULL,
+                zone_id VARCHAR(64) NOT NULL,
+                settings JSON NOT NULL,
+                next_run_at TIMESTAMP WITH TIME ZONE,
+                lease_owner VARCHAR(120),
+                lease_until TIMESTAMP WITH TIME ZONE,
+                last_run_id BIGINT,
+                updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                updated_by BIGINT,
+                version BIGINT DEFAULT 0 NOT NULL,
+                CONSTRAINT pk_system_job PRIMARY KEY ("key")
+            )
+        </sql>
+    </changeSet>
+
+    <!-- M29.1.1: one run of a system job (epic decision 2). A run is written when it starts (finished_at and outcome
+         null while it runs; message then holds its progress line) and completed when it ends. report is a bounded
+         sample (at most 50 items) plus the job's structured data. started_by is the admin of a manual run, null for
+         the system. The history of each job is capped at sf.housekeeping.history-per-job. -->
+    <changeSet id="026-system-job-run" author="sf">
+        <createTable tableName="system_job_run">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="job_key" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trigger" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dry_run" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finished_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="outcome" type="VARCHAR(20)"/>
+            <column name="items_examined" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="items_affected" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bytes_freed" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="VARCHAR(2000)"/>
+            <column name="started_by" type="BIGINT">
+                <constraints foreignKeyName="fk_system_job_run_started_by" references="app_user(id)"/>
+            </column>
+        </createTable>
+        <createIndex tableName="system_job_run" indexName="idx_system_job_run_job">
+            <column name="job_key"/>
+            <column name="started_at" descending="true"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="026-system-job-run-json-postgresql" author="sf" dbms="postgresql">
+        <comment>System job run report (M29.1.1) — PostgreSQL (jsonb).</comment>
+        <addColumn tableName="system_job_run">
+            <column name="report" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="026-system-job-run-json-h2" author="sf" dbms="h2">
+        <comment>System job run report (M29.1.1) — H2 (json).</comment>
+        <addColumn tableName="system_job_run">
+            <column name="report" type="JSON"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

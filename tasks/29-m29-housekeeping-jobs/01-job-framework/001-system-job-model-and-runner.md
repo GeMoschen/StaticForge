@@ -1,6 +1,6 @@
 ---
 id: M29.1.1
-status: todo
+status: done
 depends: [M27.4.1]
 epic: m29-housekeeping-jobs
 feature: job-framework
@@ -56,15 +56,15 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Seeding: properties → row on the first start. An edited row survives a restart with different properties.
-- [ ] Two runner instances (two engines against one DB in a test) never run the same job concurrently. A crashed
+- [x] Seeding: properties → row on the first start. An edited row survives a restart with different properties.
+- [x] Two runner instances (two engines against one DB in a test) never run the same job concurrently. A crashed
       holder's lease expires and the job runs again.
-- [ ] Cron with a zone: `0 3 * * *` in `Europe/Berlin` runs once across both DST changes (the clock is injected).
+- [x] Cron with a zone: `0 3 * * *` in `Europe/Berlin` runs once across both DST changes (the clock is injected).
       Missed slots run once.
-- [ ] `FAILED` outcome recorded, and the next scheduled run still happens. The history cap is enforced.
-- [ ] `sf.job.duration`, `sf.job.items`, `sf.job.bytes.freed` and `sf.job.last.success.age` are visible on
+- [x] `FAILED` outcome recorded, and the next scheduled run still happens. The history cap is enforced.
+- [x] `sf.job.duration`, `sf.job.items`, `sf.job.bytes.freed` and `sf.job.last.success.age` are visible on
       `/actuator/prometheus`.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -75,3 +75,29 @@ area: backend
 - No `@EnableScheduling` for this: the engine's tick is the single scheduler. Don't add a second polling mechanism.
 - Lessons: every overload on a Spring service interface is abstract (no `default` delegating into `@Transactional`).
 - Keep `run` outside one long transaction. Jobs open their own short transactions per batch.
+
+### Deviations
+
+- **Changelog `026-system-jobs.xml`**, not `024`: `024` and `025` were taken by M27.8/M28. It is picked up by the master
+  changelog's `includeAll`; later M29 tasks append their changesets to the same file. `key` is quoted in H2 (reserved
+  word), like `output_channel` (010).
+- **`LeaseClaimer` generalized, not extracted**: M27.4.1 had already made it table-independent; it now takes a key
+  column (default `id`, `system_job` uses `"key"`), binds any key type and gained `release(key, owner)`. M27 behaviour
+  is unchanged (scheduler tests green).
+- **Tick hook**: `SchedulerTickParticipant` beans join `SchedulerEngine.poll()` (actions first, then each participant,
+  failures isolated). `SystemJobRunner.tick()` stays callable directly for tests.
+- **Node id and lease**: the runner reuses `sf.scheduler.node-id` (`SchedulerProperties.effectiveNodeId()`) and
+  `sf.scheduler.lease`; no `sf.node-id` yet (M29.2.1 may introduce it).
+- **Per-job property blocks** are one `@ConfigurationProperties` class per job extending `JobProperties`
+  (`sf.housekeeping.<key>.*`) next to the job, rather than nested classes in `HousekeepingProperties`, so parallel job
+  tasks don't edit one shared class. `HousekeepingProperties` holds `enabled`, `zone`, `history-per-job`.
+- **`sf.housekeeping.enabled`** (added; default `true`, off in the `test` profile) gates scheduled ticks and startup
+  runs on a node; seeding and the API work regardless.
+- **SPI additions**: `run` returns a `JobResult` (outcome + optional message) and may throw; `JobContext` also offers
+  `report()` (structured report data), `inTransaction(...)` (short `REQUIRES_NEW` batches) and typed `settings()`
+  (`JobSettings`); `SettingsSpec` declares and validates settings (unknown keys refused).
+- **Effective settings**: a run (and the API) uses each key of the job's defaults with the stored value where present,
+  so a key added by a newer job version works before the admin saves it.
+- **Manual and startup runs keep the schedule** (`next_run_at` unchanged); only scheduled runs move to the next slot.
+- **Metrics**: dry runs record only `sf.job.duration`; `sf.job.last.success.age` counts successful non-dry runs and is
+  `NaN` before the first one.

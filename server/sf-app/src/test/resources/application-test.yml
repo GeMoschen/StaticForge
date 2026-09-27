@@ -25,6 +25,9 @@ sf:
   # Tests drive SchedulerEngine.tick() themselves (M27.4.1).
   scheduler:
     enabled: false
+  # Tests run system jobs through their own runners or the admin API (M29.1.1): no startup runs.
+  housekeeping:
+    enabled: false
   search:
     directory: memory
     refresh-interval: 200ms
