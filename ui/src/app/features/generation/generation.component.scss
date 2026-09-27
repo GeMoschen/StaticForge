@@ -226,3 +226,22 @@
   font-size: var(--sf-text-sm);
   color: var(--sf-ink);
 }
+
+.muted {
+  color: var(--sf-slate);
+}
+
+.link-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--sf-signal);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.diagnostic__link {
+  margin-left: var(--sf-2);
+  font-family: var(--sf-font-ui);
+}

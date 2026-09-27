@@ -167,6 +167,25 @@
               </ul>
             }
           }
+          @if (redirectCandidates().length > 0) {
+            <button
+              type="button"
+              class="preview__changed-toggle"
+              [attr.aria-expanded]="showRedirects()"
+              (click)="showRedirects.set(!showRedirects())"
+            >
+              {{ showRedirects() ? 'Hide' : 'Show' }} {{ redirectsToAdd() }}
+            </button>
+            @if (showRedirects()) {
+              <ul class="preview__changed" aria-label="Automatic redirects the run would add">
+                @for (candidate of redirectCandidates(); track $index) {
+                  <li>
+                    <code>{{ candidate.fromPath }}</code> → <code>{{ candidate.toPath }}</code><span class="preview__revision"> · {{ candidate.channel }}{{ candidate.locale ? ', ' + candidate.locale : '' }}</span>
+                  </li>
+                }
+              </ul>
+            }
+          }
           @if (diagnostics().length > 0) {
             <ul class="preview__diagnostics">
               @for (group of diagnostics(); track $index) {

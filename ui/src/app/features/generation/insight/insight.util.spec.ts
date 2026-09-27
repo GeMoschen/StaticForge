@@ -11,6 +11,7 @@ import {
   planSummaryLine,
   reasonBadge,
   reasonText,
+  redirectsLine,
   rootKindRows,
   viaRows,
   type PlanEntryView,
@@ -167,5 +168,15 @@ describe('build insight summaries', () => {
       q: 'news',
       validate: 'true',
     });
+  });
+});
+
+describe('redirectsLine', () => {
+  it('reads the redirect counts of a run, leaving out what the summary lacks', () => {
+    expect(redirectsLine({ redirectsAdded: 2, redirectsActive: 14 })).toBe('2 redirects added · 14 redirects active');
+    expect(redirectsLine({ redirectsAdded: 1 })).toBe('1 redirect added');
+    expect(redirectsLine({ redirectsAdded: 0, redirectsActive: 0 })).toBe('0 redirects added · 0 redirects active');
+    expect(redirectsLine({ pageCount: 3 })).toBe('');
+    expect(redirectsLine(null)).toBe('');
   });
 });
