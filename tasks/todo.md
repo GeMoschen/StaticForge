@@ -24,7 +24,7 @@ verification.
 - [x] C — M30.6.2 run findings report
 - [x] C — M30.6.3 Redirects tab, target formats, unpublish redirect
 - [x] D — M30.7.1 spec + docs
-- [ ] D — M30.7.2 `ui/e2e/m30-journeys.spec.ts` green twice
+- [ ] D — M30.7.2 `ui/e2e/m30-journeys.spec.ts` green twice — **deferred by the user (2026-09-27)**; unfinished work on branch `m30-d-journey` (WIP commit)
 - [ ] Benchmark: 5,000-page full build within +15 % of pre-M30 (baseline measured on master before phase A merges)
 - [ ] `./gradlew spotlessCheck test --rerun`, `ng build`, `npx vitest run`, journey green twice
 
