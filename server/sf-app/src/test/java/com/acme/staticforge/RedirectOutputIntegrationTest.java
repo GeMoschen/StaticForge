@@ -41,6 +41,7 @@ import com.acme.staticforge.generate.quality.SiteRule;
 import com.acme.staticforge.generate.target.BuildManifest;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.redirect.RedirectEntry;
+import com.acme.staticforge.redirect.RedirectKind;
 import com.acme.staticforge.redirect.RedirectService;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -186,6 +187,46 @@ class RedirectOutputIntegrationTest {
         assertThat(noneFiles).doesNotContainKeys("docs/about.html", ".htaccess", "redirects.json");
         assertThat(noneRun.getPlanSummary().path("redirectsActive").asInt()).isZero();
         assertThat(stubRun.getPlanSummary().path("redirectsActive").asInt()).isEqualTo(1);
+    }
+
+    /**
+     * Epic exit criterion 6 end to end: a page moved twice leaves two AUTO entries, and every format the target writes
+     * sends both old URLs straight to the newest one — one hop, never old → older → new.
+     */
+    @Test
+    @DisplayName("a page moved twice: stubs, .htaccess and redirects.json send both old URLs to the new one in one hop")
+    void aPageMovedTwiceIsOneHopInEveryFormat() {
+        Site site = site("rohop");
+        UUID manuals = folderService.create(null, "manuals", FolderScope.PAGES, site.fx().ctx()).uuid();
+        GenerationTarget target = target(site.fx(), "all", "https://example.com",
+                List.of("HTML_STUB", "HTACCESS", "JSON"));
+        build.succeeded(build.generate(site.fx(), target, GenerationMode.FULL));
+        move(site);
+        build.succeeded(build.generate(site.fx(), target, GenerationMode.INCREMENTAL));
+        assetService.move(site.about(), manuals, site.fx().ctx());
+
+        GenerationRun run = build.succeeded(build.generate(site.fx(), target, GenerationMode.INCREMENTAL));
+
+        assertThat(redirectService.all(site.fx().projectId()))
+                .extracting(RedirectEntry::getFromPath, RedirectEntry::getKind, RedirectEntry::getToAssetUuid)
+                .containsExactlyInAnyOrder(
+                        tuple("docs/about.html", RedirectKind.AUTO, site.about()),
+                        tuple("guides/about.html", RedirectKind.AUTO, site.about()));
+        Map<String, String> files = build.files(site.fx(), target, run);
+        for (String from : List.of("docs/about.html", "guides/about.html")) {
+            assertThat(files.get(from)).as(from)
+                    .contains("<meta http-equiv=\"refresh\" content=\"0; url=../manuals/about.html\">")
+                    .contains("<link rel=\"canonical\" href=\"https://example.com/manuals/about.html\">");
+        }
+        assertThat(files.get(".htaccess")).isEqualTo("# BEGIN StaticForge redirects\n"
+                + "RedirectMatch 301 \"^/docs/about\\.html$\" \"/manuals/about.html\"\n"
+                + "RedirectMatch 301 \"^/guides/about\\.html$\" \"/manuals/about.html\"\n"
+                + "# END StaticForge redirects\n");
+        assertThat(build.json(files.get("redirects.json")))
+                .extracting(entry -> entry.path("from").asText(), entry -> entry.path("to").asText())
+                .containsExactlyInAnyOrder(
+                        tuple("docs/about.html", "manuals/about.html"), tuple("guides/about.html", "manuals/about.html"));
+        assertThat(run.getPlanSummary().path("redirectsActive").asInt()).isEqualTo(2);
     }
 
     // ------------------------------------------------------------------

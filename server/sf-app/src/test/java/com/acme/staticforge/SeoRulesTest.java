@@ -220,10 +220,36 @@ class SeoRulesTest {
                     .noIndex("de/hidden.html")
                     .page(key("de/d1.html", CONTACT, "de"), QualityRuleHarness.fixture("seo/0206-dup-a.html"))
                     .page(key("de-ch/d1.html", CONTACT, "de-CH"), QualityRuleHarness.fixture("seo/0206-dup-b.html"))
+                    .page(new OutputKey("amp/de/d1.html", CONTACT, "amp", "de", null),
+                            QualityRuleHarness.fixture("seo/0206-dup-b.html"))
                     .run();
 
             assertThat(result.of("SF-CHK-0205")).isEmpty();
             assertThat(result.of("SF-CHK-0206")).isEmpty();
+        }
+
+        /**
+         * Every page number of a paginated page is its own URL: page numbers that share a title (or description) are
+         * duplicates for search engines and are reported (decision recorded in the feature README; the rule
+         * descriptions name the fix, {@code $CMS_META(pageNumber)$}).
+         */
+        @Test
+        void thePageNumbersOfOnePaginatedPageThatShareATitleAreDuplicates() {
+            QualityRuleHarness.Result result = QualityRuleHarness.of(new DuplicateTitleRule(), new DuplicateDescriptionRule())
+                    .locales(LOCALES)
+                    .page(new OutputKey("de/news.html", NEWS, "html", "de", 1),
+                            QualityRuleHarness.fixture("seo/0205-dup-a.html"))
+                    .page(new OutputKey("de/news-2.html", NEWS, "html", "de", 2),
+                            QualityRuleHarness.fixture("seo/0205-dup-a.html"))
+                    .run();
+
+            assertThat(result.of("SF-CHK-0205"))
+                    .extracting(f -> f.output().path(), Finding::message)
+                    .containsExactly(
+                            tuple("de/news-2.html", "Title \"Our products and services\" is also used by de/news.html."),
+                            tuple("de/news.html", "Title \"Our products and services\" is also used by de/news-2.html."));
+            assertThat(result.of("SF-CHK-0206")).extracting(f -> f.output().path())
+                    .containsExactly("de/news-2.html", "de/news.html");
         }
     }
 

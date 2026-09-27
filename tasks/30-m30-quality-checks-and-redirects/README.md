@@ -176,12 +176,12 @@ This milestone delivers:
       unreleased and to a deleted page, missing title/description/h1, duplicate title, missing alt, heading skip,
       duplicate id, unlabeled input, untitled iframe, missing lang, noIndex page without robots meta) with the right
       code, page, channel, locale and selector — and nothing on the clean pages (golden fixture).
-- [ ] Rule configuration per project works: `OFF` silences a rule, `ERROR` holds the page back (run `PARTIAL`,
+- [x] Rule configuration per project works: `OFF` silences a rule, `ERROR` holds the page back (run `PARTIAL`,
       `SF-GEN-0125`), warnings leave a clean run `SUCCESS`.
-- [ ] An incremental run reuses carried outputs' facts and findings, re-runs site-wide rules, and reports a broken
+- [x] An incremental run reuses carried outputs' facts and findings, re-runs site-wide rules, and reports a broken
       link in a carried page after its target was unpublished; a pre-M30 base or a changed rule config plans FULL with
       the new fallback cause.
-- [ ] A link to a missing page uuid no longer fails the run; it is a finding on the linking page.
+- [x] A link to a missing page uuid no longer fails the run; it is a finding on the linking page.
 - [ ] The page editor shows completeness issues and draft check findings, and jumps to the field or section.
 - [ ] Moving or renaming a released page and building adds an AUTO redirect; the next build of each configured format
       contains a working stub / `.htaccess` line / JSON entry; moving it again keeps one hop; putting a new page at the
@@ -219,6 +219,25 @@ sidecar and findings back carried outputs).
   `ui/src/app/core/api/generated/schema.d.ts` after each backend task that changes the API. `quality-rules` and
   `redirects` writes are refused on archived projects by the M26 interceptor (no annotation needed); the draft-check
   `POST` carries `@AllowedOnArchivedProject("read-only check render")` and joins the endpoint-walk allowlist.
+- **Backend exit-criteria audit (phase C, golden lane)** — the test that proves each backend criterion:
+  1 `GoldenQualityFixtureIntegrationTest` (`quality/expected-findings.json`);
+  2 `AccessibilityRulesIntegrationTest.aRuleSwitchedOffReportsNothingAndAWarningLeavesTheRunSuccessful` (OFF,
+  production rule), `QualityCheckStageIntegrationTest.anErrorHoldsThePageBackEverywhereAndTheRunIsPartial` /
+  `anErrorHoldsBackEveryPageNumberOfThePageInThatLanguageOnly` (ERROR, SF-GEN-0125, PARTIAL, all page numbers, one
+  language), `warningsAloneLeaveTheRunSuccessfulAndTheWarningCountUnchanged`;
+  3 `QualityCheckStageIntegrationTest.incrementalRunsCarryFactsAndFindingsAndFallBackWhenTheyCant` (carried
+  findings, both fallback causes), `LinkRulesIntegrationTest.aCarriedPageReportsItsLinkToAnUnpublishedPage…`;
+  4 `QualityCheckStageIntegrationTest.aLinkToAPageMissingFromTheSnapshotNoLongerFailsTheRun`,
+  `LinkRulesIntegrationTest.referencesToUnreleasedDeletedAndMissingPages…`;
+  6 (backend) `RedirectDetectionIntegrationTest` (every change kind × FULL/INCREMENTAL, shadowing),
+  `RedirectOutputIntegrationTest.formatsPerTarget` and `aPageMovedTwiceIsOneHopInEveryFormat` (stub, `.htaccess`,
+  JSON after one and two moves), `RedirectApiIntegrationTest` (manual CRUD, for-asset).
+  Also added: CHECK stage on the event stream (`theCheckStageIsReportedOnTheEventStream`), findings deleted by run
+  retention (`GenerationRunRetentionIntegrationTest`), SEO rules in `GET /quality-rules`, 0206 channel separation and
+  the paginated-duplicate decision (`SeoRulesTest`), redirect role gaps. Defects found and fixed: pagination item
+  links without the `{locale}` prefix; media editor values not reading the media's `altText`/`width`.
+  Open: PostgreSQL changelog unproven (no PostgreSQL here); the `SF-CHK-0001` parse-failure branch is unreachable
+  with jsoup's lenient parser (the rule-threw branch is tested); benchmark (orchestrator).
 - **Not in scope:** external link checking (network access), colour contrast and other checks that need a browser
   (layout, computed styles), runtime crawling of the published site, checks of non-HTML channels, CSS `url()` in
   processed text media, redirect rules with wildcards/regex, nginx map and `_redirects` formats (not chosen), automatic
