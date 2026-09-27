@@ -905,9 +905,9 @@ public class GenerationService {
     /**
      * The site files post-processing writes for a target with {@code baseUrl} and {@code redirectFormats} (a link to
      * them is no broken link, and no redirect replaces them). The HTML stubs are not among them: they are where the
-     * build serves its redirects.
+     * build serves its redirects. A draft check (M30.3.1) resolves links against the same files.
      */
-    private static Set<String> siteFiles(String baseUrl, Set<RedirectFormat> redirectFormats) {
+    public static Set<String> siteFiles(String baseUrl, Set<RedirectFormat> redirectFormats) {
         Set<String> files = new LinkedHashSet<>();
         files.add(SEARCH_INDEX_PATH);
         if (!baseUrl.isBlank()) {
@@ -1112,7 +1112,8 @@ public class GenerationService {
         return List.copyOf(keys);
     }
 
-    private static String baseUrl(GenerationTarget target) {
+    /** The {@code baseUrl} of {@code target}'s configuration; {@code ""} when it has none. */
+    public static String baseUrl(GenerationTarget target) {
         JsonNode config = target.getConfig();
         if (config == null || !config.path("baseUrl").isTextual()) {
             return "";

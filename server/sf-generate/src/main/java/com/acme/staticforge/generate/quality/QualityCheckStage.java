@@ -375,10 +375,7 @@ public class QualityCheckStage {
      */
     private static List<ReferenceEvent> located(List<ReferenceEvent> references, Snapshot snapshot, PlanEntry entry) {
         SnapshotAsset page = entry.pageUuid() == null ? null : snapshot.asset(entry.pageUuid(), entry.locale());
-        Map<UUID, String> paths = EditorPaths.of(page == null ? null : page.payload());
-        return references.stream()
-                .map(event -> paths.containsKey(event.target()) ? event.withEditorPath(paths.get(event.target())) : event)
-                .toList();
+        return EditorPaths.locate(references, page == null ? null : page.payload());
     }
 
     private static Diagnostic heldBackError(Snapshot snapshot, PageKey page, Collection<String> codes) {
@@ -392,7 +389,7 @@ public class QualityCheckStage {
                 0);
     }
 
-    private static Function<UUID, AssetLabel> labels(Snapshot snapshot) {
+    static Function<UUID, AssetLabel> labels(Snapshot snapshot) {
         return uuid -> {
             SnapshotAsset asset = snapshot.assetByUuid(uuid);
             return asset == null ? null : new AssetLabel(uuid, asset.uid(), asset.displayName(), asset.type().name());
@@ -400,7 +397,7 @@ public class QualityCheckStage {
     }
 
     /** A page output's {@code nav.noIndex}: its page's, as released in the output's language. */
-    private static Predicate<OutputKey> noIndex(Snapshot snapshot) {
+    static Predicate<OutputKey> noIndex(Snapshot snapshot) {
         return key -> {
             SnapshotAsset page = snapshot.asset(key.asset(), key.locale());
             return page != null && !page.deleted() && PageNav.noIndex(page.payload());

@@ -103,10 +103,12 @@ public final class CheckEnvironment {
 
     /** Whether {@code channel} writes HTML (its file extension is {@code html} or {@code htm}) — the only channels checked. */
     public boolean isHtmlChannel(String channel) {
-        if (channel == null) {
-            return false;
-        }
-        String extension = channelSettings(channel).extension().toLowerCase(Locale.ROOT);
+        return channel != null && isHtml(channelSettings(channel));
+    }
+
+    /** Whether a channel with {@code settings} writes HTML: its file extension is {@code html} or {@code htm}. */
+    public static boolean isHtml(ChannelOutputSettings settings) {
+        String extension = settings.extension().toLowerCase(Locale.ROOT);
         return extension.equals("html") || extension.equals("htm");
     }
 

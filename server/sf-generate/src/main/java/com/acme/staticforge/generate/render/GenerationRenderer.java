@@ -106,6 +106,9 @@ final class GenerationRenderer {
     /** Where media links point per render locale (M27.3.2); follows {@link #localeConfig}. */
     private MediaOutputs mediaOutputs;
 
+    /** Whether rendered section instances are marked for a draft check (M30.3.1); never in a build. */
+    private boolean sectionMarkers;
+
     GenerationRenderer(
             Snapshot snapshot,
             OutputPathResolver paths,
@@ -160,6 +163,16 @@ final class GenerationRenderer {
         this.mediaOutputs = new MediaOutputs(snapshot, localeConfig);
         // Before any entry renders, so nothing has been memoized yet: media values read the view's locale file.
         this.assetValues = new SnapshotAssetValueResolver(snapshot, compiledTemplates, localeConfig);
+        return this;
+    }
+
+    /**
+     * Marks every rendered section instance with {@code <!--sf:section {instanceId}-->…<!--/sf:section-->} where a
+     * comment is harmless ({@link SectionMarkerWriter}) — for the draft check render (M30.3.1) only: a build never sets
+     * it, so generation output stays byte-identical. Set before any entry renders.
+     */
+    GenerationRenderer withSectionMarkers() {
+        this.sectionMarkers = true;
         return this;
     }
 
@@ -242,8 +255,8 @@ final class GenerationRenderer {
         deps.addAll(result.dependencies());
         warnings.addAll(result.warnings());
 
-        return new RenderedFile(
-                entry.outputPath(), result.output().getBytes(StandardCharsets.UTF_8), deps, warnings, events);
+        String output = sectionMarkers ? SectionMarkerWriter.finish(result.output()) : result.output();
+        return new RenderedFile(entry.outputPath(), output.getBytes(StandardCharsets.UTF_8), deps, warnings, events);
     }
 
     /**
@@ -783,9 +796,10 @@ final class GenerationRenderer {
         }
         JsonNode values = section.path("content");
         String instanceId = section.path("instanceId").asText();
-        return renderSection(
+        String output = renderSection(
                 sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, pagination, deps, warnings,
                 events, budget, locale);
+        return sectionMarkers ? SectionMarkerWriter.wrap(instanceId, output) : output;
     }
 
     private String renderSection(

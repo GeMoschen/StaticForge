@@ -305,6 +305,26 @@ public class RenderPipeline {
     }
 
     /**
+     * Renders one plan entry for a draft check (M30.3.1): the page exactly as a build of {@code snapshot} would write it
+     * — links relative to its output path, the renderer's reference events — plus section markers around every rendered
+     * section instance ({@code <!--sf:section {instanceId}-->…<!--/sf:section-->}, only in body text). Stores nothing:
+     * navigation links resolve straight to the planned paths instead of through the URL registry, which assigns on first
+     * use.
+     *
+     * @throws RenderLimitException when the page hits a render limit or a dangling navigation reference — a build would
+     *     hold it back
+     */
+    public RenderedFile renderForCheck(Snapshot snapshot, PlanEntry entry, OutputPathResolver paths) {
+        String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
+        GenerationRenderer renderer = new GenerationRenderer(
+                        snapshot.in(entry.locale()), paths, projectKey, channelService, null, null,
+                        compiledTemplates.buildMemo(snapshot.root()))
+                .withLocales(com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales()))
+                .withSectionMarkers();
+        return renderer.render(entry);
+    }
+
+    /**
      * The renderers of one build, one per language view (M27.2.1): a page renders against its language's view of the
      * snapshot, so its references, navigation and values resolve to what that language has released. Every renderer
      * shares the build's compile memo. Created on first use, from the render threads.

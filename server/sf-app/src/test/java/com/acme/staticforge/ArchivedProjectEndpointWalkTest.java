@@ -64,6 +64,7 @@ class ArchivedProjectEndpointWalkTest {
             Map.entry("OctlValidateController#validate", "validates a draft template, stores nothing"),
             Map.entry("MediaController#validateText", "validates a draft text medium, stores nothing"),
             Map.entry("PreviewController#previewSection", "renders a section preview, stores nothing"),
+            Map.entry("PreviewController#checkPage", "read-only check render: renders and checks a page draft, stores nothing"),
             Map.entry("RecordSetController#previewQuery", "evaluates a draft set query, stores nothing"),
             Map.entry("ProjectExportController#exportSelection", "builds an export archive, changes nothing"),
             Map.entry("ProjectImportController#analyzeImport", "read-only transaction: reports conflicts, imports nothing"),

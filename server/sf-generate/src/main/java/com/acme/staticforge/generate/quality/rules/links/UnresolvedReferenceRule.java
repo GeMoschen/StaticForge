@@ -35,7 +35,8 @@ abstract class UnresolvedReferenceRule implements SiteRule {
         List<Finding> findings = new ArrayList<>();
         for (Map.Entry<IndexedOutput, ReferenceEvent> entry : LinkScan.events(site, kind)) {
             findings.add(context.finding(entry.getKey().key(), null,
-                    message(LinkScan.target(context.environment(), entry.getValue()))));
+                            message(LinkScan.target(context.environment(), entry.getValue())))
+                    .withEditorPath(entry.getValue().editorPath()));
         }
         return findings;
     }

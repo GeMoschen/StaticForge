@@ -57,6 +57,20 @@ final class EditorPaths {
         return paths;
     }
 
+    /**
+     * {@code references} rendered by a page with {@code payload}, each located at the editor path of the content that
+     * holds it — when the page's content holds it at all, not a template.
+     */
+    static List<ReferenceEvent> locate(List<ReferenceEvent> references, JsonNode payload) {
+        if (references.isEmpty()) {
+            return references;
+        }
+        Map<UUID, String> paths = of(payload);
+        return references.stream()
+                .map(event -> paths.containsKey(event.target()) ? event.withEditorPath(paths.get(event.target())) : event)
+                .toList();
+    }
+
     private static UUID uuid(String value) {
         if (value == null || value.isBlank()) {
             return null;
