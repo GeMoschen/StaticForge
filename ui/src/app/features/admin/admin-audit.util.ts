@@ -14,6 +14,24 @@ export interface AuditFilterState {
 }
 
 export const INSTANCE_ONLY = '_instance';
+
+/**
+ * Readable names of audit actions, shown next to the code in the audit view. Actions are free strings read from the
+ * log (`GET /admin/audit/actions`); one without an entry is shown by its code alone.
+ */
+export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
+  // System jobs (M29, epic decision 5): instance-level entries.
+  JOB_SETTINGS_SET: 'Job schedule or settings changed',
+  JOB_RUN: 'Job run started manually',
+  // Revision compaction (M29): project-level entries.
+  COMPACTION_POLICY_SET: 'Revision compaction policy changed',
+  REVISIONS_COMPACTED: 'Revisions compacted',
+};
+
+/** The readable name of an audit action, or `null` when it has none (then the code is shown alone). */
+export function auditActionLabel(action: string | null | undefined): string | null {
+  return action ? (AUDIT_ACTION_LABELS[action] ?? null) : null;
+}
 export const AUDIT_PAGE_SIZE = 50;
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;

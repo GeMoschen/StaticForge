@@ -1,5 +1,7 @@
 import { Routes } from '@angular/router';
 import { AdminAuditComponent } from './admin-audit.component';
+import { AdminJobDetailComponent } from './admin-job-detail.component';
+import { AdminJobsComponent } from './admin-jobs.component';
 import { AdminProjectsComponent } from './admin-projects.component';
 import { AdminShellComponent } from './admin-shell.component';
 import { AdminUserDetailComponent } from './admin-user-detail.component';
@@ -15,6 +17,8 @@ export const ADMIN_ROUTES: Routes = [
       { path: 'users', component: AdminUsersComponent },
       { path: 'users/:id', component: AdminUserDetailComponent },
       { path: 'projects', component: AdminProjectsComponent },
+      { path: 'jobs', component: AdminJobsComponent },
+      { path: 'jobs/:key', component: AdminJobDetailComponent },
       { path: 'audit', component: AdminAuditComponent },
     ],
   },

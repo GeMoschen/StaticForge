@@ -1,0 +1,62 @@
+@use 'admin';
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+}
+
+.report__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sf-2);
+  margin: 0;
+
+  .chip {
+    margin-left: 0;
+  }
+}
+
+.report__message {
+  margin: 0;
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+}
+
+.report__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-5);
+  margin: 0;
+
+  dt {
+    color: var(--sf-slate);
+    font-size: var(--sf-text-xs);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--sf-ink);
+    font-size: var(--sf-text-lg);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.report__caption {
+  padding: var(--sf-1) 0;
+  caption-side: top;
+  text-align: left;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}
+
+.report__extras pre {
+  margin: var(--sf-2) 0 0;
+  padding: var(--sf-2);
+  overflow: auto;
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-slate) 8%, transparent);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+}

@@ -103,3 +103,9 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.action-label {
+  display: block;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}

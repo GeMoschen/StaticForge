@@ -3,7 +3,7 @@
     <span class="filter__label">Actions</span>
     <select class="select select--multi" multiple size="4" aria-label="Actions" (change)="setActions($any($event.target))">
       @for (action of actions(); track action) {
-        <option [value]="action" [selected]="filter().actions.includes(action)">{{ action }}</option>
+        <option [value]="action" [selected]="filter().actions.includes(action)">{{ action }}{{ actionLabel(action) ? ' — ' + actionLabel(action) : '' }}</option>
       }
     </select>
     @if (filter().actions.length > 0) {
@@ -92,7 +92,12 @@
         @for (entry of entries(); track entry.id) {
           <tr>
             <td class="nowrap">{{ entry.timestamp | date: 'medium' }}</td>
-            <td><span class="mono">{{ entry.action }}</span></td>
+            <td>
+              <span class="mono">{{ entry.action }}</span>
+              @if (actionLabel(entry.action); as label) {
+                <span class="action-label">{{ label }}</span>
+              }
+            </td>
             <td>{{ entry.actor?.username ?? (entry.actor ? 'User #' + entry.actor.id : '—') }}</td>
             <td>
               @if (entry.projectKey) {

@@ -1,0 +1,75 @@
+@use 'admin';
+
+.intro {
+  margin: 0 0 var(--sf-3);
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+}
+
+.job {
+  min-width: 14rem;
+}
+
+.job__name {
+  margin-right: var(--sf-1);
+  color: var(--sf-ink);
+  font-weight: 600;
+}
+
+.job__description,
+.job__note {
+  margin: var(--sf-1) 0 0;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  font-size: var(--sf-text-sm);
+  cursor: pointer;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.when-job {
+  display: block;
+}
+
+.last {
+  display: block;
+  margin-top: var(--sf-1);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.running {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  color: var(--sf-signal);
+  font-size: var(--sf-text-sm);
+}
+
+.running__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--sf-signal);
+  animation: sf-job-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sf-job-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running__dot {
+    animation: none;
+  }
+}
