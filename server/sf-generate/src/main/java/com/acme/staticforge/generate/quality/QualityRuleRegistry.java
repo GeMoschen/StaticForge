@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  * </ul>
  */
 @Component
-public class QualityRuleRegistry {
+public class QualityRuleRegistry implements QualityRuleCatalog {
 
     private static final Pattern CODE = Pattern.compile("SF-CHK-\\d{4}");
 
@@ -120,6 +120,7 @@ public class QualityRuleRegistry {
     }
 
     /** Every registered code. */
+    @Override
     public Set<String> codes() {
         return byCode.keySet();
     }

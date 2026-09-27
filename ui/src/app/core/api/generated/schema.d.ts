@@ -100,7 +100,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/publish-policy": {
+    "/api/v1/projects/{projectKey}/quality-rules": {
         parameters: {
             query?: never;
             header?: never;
@@ -116,6 +116,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/publish-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_2"];
+        put: operations["update_6"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/pages/{uuid}": {
         parameters: {
             query?: never;
@@ -124,7 +140,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_4"];
-        put: operations["update_6"];
+        put: operations["update_7"];
         post?: never;
         delete?: never;
         options?: never;
@@ -156,7 +172,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_5"];
-        put: operations["update_7"];
+        put: operations["update_8"];
         post?: never;
         delete: operations["delete_3"];
         options?: never;
@@ -300,7 +316,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_8"];
-        put: operations["update_8"];
+        put: operations["update_9"];
         post?: never;
         delete: operations["delete_6"];
         options?: never;
@@ -315,8 +331,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["get_2"];
-        put: operations["update_9"];
+        get: operations["get_3"];
+        put: operations["update_10"];
         post?: never;
         delete?: never;
         options?: never;
@@ -332,7 +348,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_10"];
+        put: operations["update_11"];
         post?: never;
         delete: operations["delete_7"];
         options?: never;
@@ -348,7 +364,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_10"];
-        put: operations["update_11"];
+        put: operations["update_12"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1585,7 +1601,7 @@ export interface paths {
         delete: operations["delete_9"];
         options?: never;
         head?: never;
-        patch: operations["update_12"];
+        patch: operations["update_13"];
         trace?: never;
     };
     "/api/v1/admin/jobs/{key}": {
@@ -1601,7 +1617,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["update_13"];
+        patch: operations["update_14"];
         trace?: never;
     };
     "/api/v1/users/lookup": {
@@ -1980,6 +1996,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["storedPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/generations/{runId}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["findings"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2657,6 +2689,43 @@ export interface components {
             /** Format: int32 */
             column?: number;
         };
+        QualityRuleSetting: {
+            severity?: string;
+            params?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        QualityRulesRequest: {
+            rules?: {
+                [key: string]: components["schemas"]["QualityRuleSetting"];
+            };
+        };
+        QualityRuleItem: {
+            code?: string;
+            name?: string;
+            category?: string;
+            kind?: string;
+            description?: string;
+            defaultSeverity?: string;
+            severity?: string;
+            maxSeverity?: string;
+            params?: components["schemas"]["QualityRuleParam"][];
+            channels?: string;
+        };
+        QualityRuleParam: {
+            name?: string;
+            type?: string;
+            value?: number | boolean;
+            defaultValue?: number | boolean;
+            /** Format: int32 */
+            min?: number;
+            /** Format: int32 */
+            max?: number;
+            description?: string;
+        };
+        QualityRulesView: {
+            rules?: components["schemas"]["QualityRuleItem"][];
+        };
         PublishPolicyView: {
             editor?: string[];
         };
@@ -3302,6 +3371,17 @@ export interface components {
             assetUuids?: string[];
             comment?: string;
         };
+        FindingCountsView: {
+            /** Format: int32 */
+            errors?: number;
+            /** Format: int32 */
+            warnings?: number;
+            byCategory?: {
+                [key: string]: number;
+            };
+            /** Format: int32 */
+            truncated?: number;
+        };
         GenerationRunView: {
             /** Format: int64 */
             id?: number;
@@ -3330,6 +3410,7 @@ export interface components {
             planSummary?: components["schemas"]["PlanSummaryView"];
             comment?: string;
             startedBy?: components["schemas"]["StartedBy"];
+            findingCounts?: components["schemas"]["FindingCountsView"];
         };
         PlanSummaryView: {
             mode?: string;
@@ -3761,10 +3842,12 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -3774,16 +3857,14 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
             unpaged?: boolean;
+            paged?: boolean;
             /** Format: int32 */
             pageSize?: number;
             /** Format: int32 */
@@ -3810,10 +3891,12 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -3823,8 +3906,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -3936,8 +4017,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            remove?: boolean;
             add?: boolean;
+            remove?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -4056,10 +4137,12 @@ export interface components {
             scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageMediaSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -4069,8 +4152,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -4092,6 +4173,33 @@ export interface components {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
             scheduled?: components["schemas"]["ScheduledRefView"][];
+        };
+        FindingAsset: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+        };
+        FindingPageView: {
+            content?: components["schemas"]["FindingView"][];
+            page?: components["schemas"]["PageMeta"];
+        };
+        FindingView: {
+            /** Format: int64 */
+            id?: number;
+            code?: string;
+            category?: string;
+            severity?: string;
+            message?: string;
+            selector?: string;
+            sectionInstanceId?: string;
+            carried?: boolean;
+            outputPath?: string;
+            channel?: string;
+            locale?: string;
+            /** Format: int32 */
+            pageNumber?: number;
+            page?: components["schemas"]["FindingAsset"];
         };
         SseEmitter: {
             /** Format: int64 */
@@ -4191,10 +4299,12 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -4204,8 +4314,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -4683,12 +4791,60 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PublishPolicyView"];
+                    "*/*": components["schemas"]["QualityRulesView"];
                 };
             };
         };
     };
     update_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualityRulesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QualityRulesView"];
+                };
+            };
+        };
+    };
+    get_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PublishPolicyView"];
+                };
+            };
+        };
+    };
+    update_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -4737,7 +4893,7 @@ export interface operations {
             };
         };
     };
-    update_6: {
+    update_7: {
         parameters: {
             query?: never;
             header?: {
@@ -4819,7 +4975,7 @@ export interface operations {
             };
         };
     };
-    update_7: {
+    update_8: {
         parameters: {
             query?: {
                 confirmDiscard?: boolean;
@@ -5235,7 +5391,7 @@ export interface operations {
             };
         };
     };
-    update_8: {
+    update_9: {
         parameters: {
             query?: {
                 confirmDiscard?: boolean;
@@ -5287,7 +5443,7 @@ export interface operations {
             };
         };
     };
-    get_2: {
+    get_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -5309,7 +5465,7 @@ export interface operations {
             };
         };
     };
-    update_9: {
+    update_10: {
         parameters: {
             query?: {
                 confirm?: string;
@@ -5337,7 +5493,7 @@ export interface operations {
             };
         };
     };
-    update_10: {
+    update_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -5407,7 +5563,7 @@ export interface operations {
             };
         };
     };
-    update_11: {
+    update_12: {
         parameters: {
             query?: never;
             header?: never;
@@ -7916,7 +8072,7 @@ export interface operations {
             };
         };
     };
-    update_12: {
+    update_13: {
         parameters: {
             query?: never;
             header?: never;
@@ -7964,7 +8120,7 @@ export interface operations {
             };
         };
     };
-    update_13: {
+    update_14: {
         parameters: {
             query?: never;
             header?: {
@@ -8626,6 +8782,39 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["GenerationPlanView"];
+                };
+            };
+        };
+    };
+    findings: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+                severity?: string;
+                category?: string;
+                code?: string[];
+                assetUuid?: string;
+                channel?: string;
+                locale?: string;
+                pathPrefix?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                runId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FindingPageView"];
                 };
             };
         };

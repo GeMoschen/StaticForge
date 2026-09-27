@@ -1,5 +1,7 @@
 package com.acme.staticforge.exportimport;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.acme.staticforge.generate.quality.QualityRuleCatalog;
 import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
@@ -831,6 +833,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         List<TargetImportPlan.Decision> targetPlan = targetPlan(targetProjectId, content);
         if (content.settings() != null) {
             importSettings(targetProjectId, content.settings());
+            importQualityRules(targetProjectId, content.manifest(), content.settings());
         }
 
         ScheduleArchive.Result schedules = new ScheduleArchive.Result(0, 0, List.of());
@@ -1098,6 +1101,78 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         return assetVersionRepository.save(version);
     }
 
+    // ------------------------------------------------------------------
+    // Quality rule configuration (M30.1.2)
+    // ------------------------------------------------------------------
+
+    /** The first protocol whose archives carry the quality rule configuration (M30.1.2). */
+    private static final int QUALITY_RULES_PROTOCOL = 10;
+
+    private QualityRuleCatalog qualityRuleCatalog;
+
+    /** The rule codes this server knows; the import drops the configuration of any other. */
+    @Autowired
+    void setQualityRuleCatalog(QualityRuleCatalog qualityRuleCatalog) {
+        this.qualityRuleCatalog = qualityRuleCatalog;
+    }
+
+    /** The archive's quality rule configuration; {@code null} when it has none or predates protocol 10. */
+    private static JsonNode archivedQualityRules(ExportManifest manifest, ExportedSettings settings) {
+        if (manifest.protocolVersion() < QUALITY_RULES_PROTOCOL || settings == null) {
+            return null;
+        }
+        JsonNode rules = settings.qualityRules() == null ? null : settings.qualityRules().get("rules");
+        return rules != null && rules.isObject() ? settings.qualityRules() : null;
+    }
+
+    /** The codes of the archive's configuration this server doesn't know, in archive order. */
+    private List<String> unknownQualityRules(JsonNode config) {
+        List<String> unknown = new ArrayList<>();
+        config.get("rules").fieldNames().forEachRemaining(code -> {
+            if (!qualityRuleCatalog.codes().contains(code)) {
+                unknown.add(code);
+            }
+        });
+        return unknown;
+    }
+
+    /** One {@link ConflictType#UNKNOWN_QUALITY_RULE} warning naming the rules whose settings the import drops. */
+    private List<ImportConflict> qualityRuleConflicts(ArchiveContent content) {
+        JsonNode config = archivedQualityRules(content.manifest(), content.settings());
+        if (config == null) {
+            return List.of();
+        }
+        List<String> unknown = unknownQualityRules(config);
+        if (unknown.isEmpty()) {
+            return List.of();
+        }
+        return List.of(ImportConflict.of(
+                ConflictType.UNKNOWN_QUALITY_RULE,
+                null,
+                null,
+                "The archive configures quality rules this server doesn't know " + unknown
+                        + "; their settings are not imported."));
+    }
+
+    /**
+     * Adopts the archive's quality rule configuration without the rules this server doesn't know — like the language
+     * configuration, only when the target project has none of its own: settings import never overwrites.
+     */
+    private void importQualityRules(long targetProjectId, ExportManifest manifest, ExportedSettings settings) {
+        JsonNode config = archivedQualityRules(manifest, settings);
+        if (config == null) {
+            return;
+        }
+        projectRepository.findById(targetProjectId)
+                .filter(project -> project.getQualityRuleConfig() == null)
+                .ifPresent(project -> {
+                    ObjectNode known = config.deepCopy();
+                    ((ObjectNode) known.get("rules")).remove(unknownQualityRules(config));
+                    project.setQualityRuleConfig(known.get("rules").isEmpty() ? null : known);
+                    projectRepository.save(project);
+                });
+    }
+
     /**
      * What the languages of the archive and of the target project say about each other (M24.5.1).
      * Both findings are warnings: nothing is lost either way, but the operator should know that some
@@ -1172,6 +1247,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
         List<ImportConflict> conflicts = new ArrayList<>();
         conflicts.addAll(localeConflicts(targetProjectId, content));
+        conflicts.addAll(qualityRuleConflicts(content));
         boolean releaseState = manifest.protocolVersion() >= RELEASE_STATE_PROTOCOL;
         ReleaseMode releaseMode = releaseMode(manifest, options);
         if (!releaseState) {
@@ -1843,7 +1919,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // The language configuration travels with the settings, so an archive restores a localized
         // project as one rather than as a single-language project holding L10N values (M24.5.1).
         com.acme.staticforge.project.LocaleConfig locales = projectLocales.forProject(projectId);
-        return new ExportedSettings(channels, targets, locales.isLocalized() ? locales : null);
+        JsonNode qualityRules = projectRepository.findById(projectId).map(Project::getQualityRuleConfig).orElse(null);
+        return new ExportedSettings(channels, targets, locales.isLocalized() ? locales : null, qualityRules);
     }
 
     /**

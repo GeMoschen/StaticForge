@@ -41,7 +41,8 @@ import org.springframework.stereotype.Component;
  * </ul>
  *
  * A run's age is its finish time (its start time while it has none). Deleted runs take their stored plan
- * ({@code generation_run_plan_entry}, {@code generation_run_plan_node}) with them in the same batch transaction.
+ * ({@code generation_run_plan_entry}, {@code generation_run_plan_node}) and quality findings
+ * ({@code generation_run_finding}, M30.1.2) with them in the same batch transaction.
  * {@code scheduled_action_execution.generation_run_id} has no foreign key; the job unlinks it in the same batch and
  * records the old id as {@code detail.deletedGenerationRunId}, so the schedule history shows "run deleted" instead of a
  * dead link. A dry run reports the same runs and deletes nothing. The report lists, per project, the runs deleted and
@@ -207,7 +208,7 @@ public class GenerationRunRetentionJob implements HousekeepingJob {
         return at == null || at.isBefore(cutoff);
     }
 
-    /** Deletes one batch of runs with their plan rows, unlinking schedule executions first. */
+    /** Deletes one batch of runs with their plan and finding rows, unlinking schedule executions first. */
     private void delete(List<Long> runIds) {
         List<ScheduledActionExecution> linked = executions.findByGenerationRunIdIn(runIds);
         for (ScheduledActionExecution execution : linked) {
@@ -223,6 +224,7 @@ public class GenerationRunRetentionJob implements HousekeepingJob {
         String in = String.join(",", runIds.stream().map(String::valueOf).toList());
         jdbc.update("DELETE FROM generation_run_plan_entry WHERE run_id IN (" + in + ")");
         jdbc.update("DELETE FROM generation_run_plan_node WHERE run_id IN (" + in + ")");
+        jdbc.update("DELETE FROM generation_run_finding WHERE run_id IN (" + in + ")");
         runs.deleteAllByIdInBatch(runIds);
     }
 }

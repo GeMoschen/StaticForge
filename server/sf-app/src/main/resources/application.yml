@@ -71,6 +71,11 @@ sf:
     heartbeat-interval: 15s
     # How long an Idempotency-Key of POST /generations is remembered (M29.2.4, evicted by the memory-eviction job).
     idempotency-ttl: 24h
+  quality:
+    # Build-time quality check findings stored per run (M30.1.2): per rule and output, and per run. What the caps drop
+    # is counted as the run's truncated findings.
+    max-findings-per-output: 50
+    max-findings-per-run: 100000
   search:
     # Embedded Lucene index per project (M23). Derived from the database: deleting it is safe, it is rebuilt on start.
     # One application instance per index root (Lucene write lock), see infra/docs/deploy-runbook.md.

@@ -1,5 +1,6 @@
 package com.acme.staticforge.exportimport;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 
 /**
@@ -13,14 +14,26 @@ import java.util.List;
  * <p>{@code locales} is the project's content language configuration (M24.5.1). It is absent from
  * archives written before M24 and reads back as {@code null}, which means "this archive says nothing
  * about languages" — never "this project has none".
+ *
+ * <p>{@code qualityRules} is the project's quality rule configuration (M30.1.2, protocol {@code 10}) as the project
+ * stores it; {@code null} when every rule is at its default, and in every archive written before M30.
  */
 public record ExportedSettings(
         List<ExportedChannel> channels,
         List<ExportedGenerationTarget> targets,
-        com.acme.staticforge.project.LocaleConfig locales) {
+        com.acme.staticforge.project.LocaleConfig locales,
+        JsonNode qualityRules) {
+
+    /** Settings without a quality rule configuration — every archive written before M30. */
+    public ExportedSettings(
+            List<ExportedChannel> channels,
+            List<ExportedGenerationTarget> targets,
+            com.acme.staticforge.project.LocaleConfig locales) {
+        this(channels, targets, locales, null);
+    }
 
     /** Settings without a language configuration — every archive written before M24. */
     public ExportedSettings(List<ExportedChannel> channels, List<ExportedGenerationTarget> targets) {
-        this(channels, targets, null);
+        this(channels, targets, null, null);
     }
 }

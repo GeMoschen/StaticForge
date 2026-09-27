@@ -37,7 +37,7 @@ public interface ProjectExportImportService {
      * {@code schedules/<uuid>.json}) and each generation target's uuid, which the schedules name. An older server
      * would drop the schedules silently; an archive of protocol {@code <= 8} has none.
      */
-    int PROTOCOL_VERSION = 9;
+    int PROTOCOL_VERSION = 10;
 
     /** The first protocol whose archives carry release state (M27.5.1). */
     int RELEASE_STATE_PROTOCOL = 8;

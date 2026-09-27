@@ -52,6 +52,12 @@ public enum ConflictType {
     LOCALE_CONFIG_MISMATCH(ConflictSeverity.WARNING),
 
     /**
+     * The archive's quality rule configuration names rules this server doesn't know (M30.1.2): their settings are
+     * dropped, every other rule's configuration is imported. The message names the codes.
+     */
+    UNKNOWN_QUALITY_RULE(ConflictSeverity.WARNING),
+
+    /**
      * An imported asset carries language-dependent values but the target project has no languages
      * (or the other way round) (M24.5.1). The payload is imported as it is; the next template save
      * or language change migrates its shape, so exactly one migration implementation exists.
