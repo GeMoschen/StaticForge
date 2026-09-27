@@ -187,6 +187,40 @@ opens. A client that gets one should re-read the project detail — the policy m
 An incremental request that the planner turns into a full build (`fallbackCause`) is allowed with `INCREMENTAL_BUILD`.
 A `VIEWER` is refused every publishing operation (`ROLE:EDITOR` on generation, the missing permission elsewhere).
 
+### 3.4 Revision compaction (M29)
+
+Opt-in per project, `PROJECT_ADMIN` for all three (spec §7.7). Compaction removes old versions for good; the
+`revision-compaction` system job (§14.2) runs it weekly for every non-archived project with an enabled policy.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/projects/{projectKey}/compaction` | the policy |
+| `PUT` | `/projects/{projectKey}/compaction` (`?confirm=<projectKey>`) | body `{enabled, olderThanDays?}` → the policy |
+| `GET` | `/projects/{projectKey}/compaction/estimate?olderThanDays=N` | dry run; allowed on archived projects |
+
+```json
+{ "enabled": true, "olderThanDays": 90, "enabledAt": "2026-09-27T08:12:00Z", "enabledBy": 7,
+  "compactedThrough": 1840,
+  "lastRun": { "runId": 311, "finishedAt": "2026-09-27T03:00:41Z", "dryRun": false, "outcome": "SUCCEEDED",
+               "cutoff": "2026-06-29T03:00:00Z", "error": null, "versionsInWindow": 5120, "assetsTouched": 212,
+               "versionsRemoved": 3877, "referencesRewritten": 940, "revisionsMarked": 1502, "bytesFreed": 18233411 } }
+```
+
+- `olderThanDays` is at least 30 (`422 SF-DOM-0183`, checked first). Omitted, it keeps the current value (90 for a
+  project that never set one).
+- **Enabling**, or lowering `olderThanDays` while enabled, needs `confirm` equal to the project key (`422 SF-DOM-0182`).
+  Disabling (stored as `{enabled: false, olderThanDays, enabledAt: null, enabledBy: null}`) and raising need nothing;
+  raising keeps `enabledAt`/`enabledBy`.
+- A change is audited `COMPACTION_POLICY_SET` (before/after) and records **no revision**; an unchanged policy records
+  nothing. An archived project refuses it (`409 SF-DOM-0141`).
+- `lastRun` is this project's entry of the newest of the job's last 50 runs that reported on it (`null` otherwise);
+  `runId` is a `system_job_run` id (`/admin/jobs/revision-compaction/runs/{runId}`, instance admins).
+- The **estimate** runs the compaction as a dry run with the cutoff "now − N days" and answers
+  `{olderThanDays, cutoff, versionsInWindow, versionsRemoved, assetsTouched, referencesRewritten, revisionsMarked,
+  bytesFreed}` (`bytesFreed` = serialized payload size of the removed versions; blob bytes are freed later by
+  `blob-sweep`). `N` below 30 is `422 SF-DOM-0183`.
+- The policy is not part of project exports; an imported project starts with compaction off.
+
 ## 4. Assets (generic)
 
 | Method | Path |
@@ -415,6 +449,22 @@ pinned `revision`. Start, cancel and promote are audited (`GENERATION_STARTED`, 
 `GENERATION_PROMOTED`). An `Idempotency-Key` is scoped by project and user: another user reusing a key starts their own
 run.
 
+**Cancel, interrupted runs, promote and retention (M29).**
+
+- `cancel` is real: the run stops before its next page or stage and **never publishes** once `CANCELLED` is committed;
+  SSE subscribers get a final `REPORT` event with the terminal status. Cancelling a run that already finished changes
+  nothing.
+- A run left `QUEUED`/`RUNNING` by a node that died or restarted is failed by the `generation-run-recovery` job (at
+  startup and every 5 minutes) with the diagnostic `SF-GEN-0504` "Run interrupted (node restart or lost heartbeat)"
+  (`errorCount` 1); a new `POST /generations` then starts normally instead of answering `409 SF-GEN-0500`.
+- `promote` of a run that isn't `SUCCESS`/`PARTIAL`, has no target, or whose build is no longer on disk is
+  `409 SF-GEN-0505`; `current` stays. Rollback points (`sf.generate.keep-builds`) count published builds only.
+- Idempotency keys are remembered for `sf.generate.idempotency-ttl` (24 h); a re-submission after that starts a new
+  run.
+- Old runs are deleted by `generation-run-retention` (spec §18.5): run ids may have gaps, `GET /generations/{id}` and
+  `/plan` of a deleted run are `404`, and a schedule execution whose run was deleted answers `generationRunId: null`
+  (the id stays in its `detail.deletedGenerationRunId`).
+
 **Build insight (M22).** `POST /generations/plan` takes the body of `POST /generations` and returns the plan a run started now would build — same snapshot, baseline and planner — without rendering, writing, storing a run or taking the run lock (it works while a run is active). `GET /generations/{runId}/plan` returns what a past run planned; `404` for a run of another project or one that never got past PLAN. Both answer `GenerationPlanView`:
 
 ```json
@@ -513,6 +563,21 @@ publish policy.").
 | `GET` | `/projects/{projectKey}/revisions/{revisionId}` |
 | `GET` | `/projects/{projectKey}/revisions/{revisionId}/diff` |
 | `POST` | `/projects/{projectKey}/restore` (project-wide rollback) |
+
+**Compacted history (M29, spec §7.7).** In a project that uses revision compaction, some old versions were removed
+and their intervals absorbed by the last version of the day. Reads say so; projects without compaction get
+`compacted: false` (and no header) everywhere.
+
+- Revision views (list, detail, and the project restore response) carry `compacted`; `GET /projects/{key}` carries
+  `compactedThrough` (`null` = never compacted).
+- `GET /assets/{uuid}/versions/{revision}` and `POST /assets/{uuid}/restore` carry `compacted: true` when the version
+  served (or restored) absorbed that revision: it shows a later, end-of-day state.
+- The typed time-travel reads (`?revision=` on media, property sets, datasets, records, record sets and the record-set
+  grid), `POST /projects/{key}/restore` and the draft preview at a revision answer the header `X-SF-Compacted: true`
+  instead (absent otherwise). The preview checks only the page itself; a published preview is never compacted.
+- `GET /revisions/{r}/diff` carries `compacted` and `message` (`"Exact changes of this revision were compacted; the
+  state at the end of the day is kept"`, `null` otherwise); an asset whose change was absorbed has `compacted: true`,
+  `changes: []` and the summary's `action`, the others diff normally.
 
 ### 11.1 Release, unpublish, discard and Changes (M27)
 
@@ -670,6 +735,63 @@ All `INSTANCE_ADMIN` only (`403` otherwise).
 | `GET` | `/api/v1/admin/audit` (`?action=&action=&userId=&project=&from=&to=&page=&size=`) | every audit entry, newest first (paged, `size` ≤ 200, `sort` ignored); `project` is a key or `_instance` (entries without a project); `from` inclusive, `to` exclusive ISO instants; row `id, timestamp, action, actor{id, username}, projectKey, target, detail` — a deleted actor reads `Deleted user` |
 | `GET` | `/api/v1/admin/audit/actions` | the distinct action names, alphabetically |
 
+### 14.2 System jobs (M29)
+
+Instance-level background jobs (spec §26.6), `INSTANCE_ADMIN` only. Operator guide: [administration guide,
+Housekeeping jobs](administration.md#housekeeping-jobs-m29).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/admin/jobs` | every job by key (a plain array), orphaned ones included |
+| `GET` | `/api/v1/admin/jobs/{key}` | one job, `ETag: "v{version}"` |
+| `GET` | `/api/v1/admin/jobs/{key}/runs` (`?page=&size=`) | history, newest first, `{content, page}`; `size` ≤ 200 (default 20), `sort` ignored |
+| `GET` | `/api/v1/admin/jobs/{key}/runs/{runId}` | one run with its full `report` |
+| `PATCH` | `/api/v1/admin/jobs/{key}` | `{enabled?, cron?, zone?, settings?}`, `If-Match: "v{n}"` |
+| `POST` | `/api/v1/admin/jobs/{key}/reset` | back to the `sf.housekeeping.*` defaults |
+| `POST` | `/api/v1/admin/jobs/{key}/run` (`?dryRun=true\|false`) | `202` with the run and a `Location` to it |
+
+```json
+{ "key": "blob-sweep", "name": "Blob sweep", "description": "Deletes stored media bytes that no version …",
+  "enabled": true, "cron": "30 3 * * *", "zone": "UTC", "settings": {"graceHours": 24, "batchSize": 1000},
+  "defaults": {"enabled": true, "cron": "30 3 * * *", "zone": "UTC", "settings": {"graceHours": 24, "batchSize": 1000}},
+  "nextRunAt": "2026-09-28T03:30:00Z", "running": false, "startedAt": null, "currentRunId": null, "progress": null,
+  "supportsDryRun": true, "orphaned": false, "version": 3, "updatedAt": "2026-09-27T09:02:11Z",
+  "lastRun": { "id": 412, "outcome": "SUCCEEDED", "trigger": "SCHEDULE", "dryRun": false,
+               "startedAt": "2026-09-27T03:30:00Z", "finishedAt": "2026-09-27T03:30:07Z", "durationMs": 7012,
+               "itemsExamined": 18344, "itemsAffected": 12, "bytesFreed": 48122880, "message": null } }
+```
+
+- A run: `{id, jobKey, trigger (SCHEDULE|MANUAL|STARTUP), dryRun, startedAt, finishedAt, durationMs, outcome
+  (SUCCEEDED|FAILED|PARTIAL|SKIPPED; null while running), itemsExamined, itemsAffected, bytesFreed, message,
+  startedBy {id, username} (null for the system), sample (at most 50 items), sampleTotal, report}`; `report` (the
+  job's structured counts, e.g. `byAction` for `audit-purge` or `projects[]` for `revision-compaction`) only on
+  `GET …/runs/{runId}`. While a job runs, the job view has `running: true`, `startedAt`, `currentRunId` and a
+  `progress` line.
+- `settings` are typed per job (camelCase keys, durations as strings, ISO-8601 such as `PT1H` or `30m`/`24h` style; stored defaults read like `PT1H`); `PATCH` merges them into the stored
+  settings. Unknown keys, out-of-range values, an invalid cron or zone are one `422 SF-DOM-0180` with
+  an `errors` list (one message per problem, e.g. `Setting 'graceHours' must be a whole number from 1 to 8760.`). A missing
+  `If-Match` is `412 SF-API-0412`, a stale one `409 SF-API-0409`. A change recomputes `nextRunAt` and is audited
+  `JOB_SETTINGS_SET` (target `job:<key>`, before/after); a `PATCH` that changes nothing isn't audited and keeps the
+  version. `reset` is audited the same way.
+- `run` answers `202`; poll `GET …/runs/{id}` until `finishedAt` is set. `409 SF-DOM-0181` while the job runs on any
+  node (a scheduled run claiming the same lease included), `422 SF-DOM-0180` for `dryRun=true` on a job without dry
+  run. Audited `JOB_RUN` (detail `dryRun`). Manual runs don't move `nextRunAt`.
+- An unknown key is `404 SF-DOM-0184`. An *orphaned* job (its row remains, its code was removed) is listed and
+  readable, but `PATCH`, `reset` and `run` answer `404 SF-DOM-0184`.
+
+| Key | Default cron (UTC) | Settings (defaults) | Dry run |
+|---|---|---|---|
+| `generation-run-recovery` | startup + `*/5 * * * *` | `staleAfter` (`PT5M`, ≥ 1 min) | — |
+| `build-output-cleanup` | `10 3 * * *` | `minAge` (`PT1H`) | ✅ |
+| `blob-sweep` | `30 3 * * *` | `graceHours` (24, 1–8760), `batchSize` (1000) | ✅ |
+| `audit-purge` | `0 4 * * *` | `retentionDays` (365, 30–36500), `batchSize` (5000) | ✅ |
+| `refresh-token-cleanup` | `15 * * * *` | `reuseWindow` (`PT168H` = 7 days, ≤ 365 days) | — |
+| `memory-eviction` | `*/10 * * * *` | — | — |
+| `generation-run-retention` | `15 4 * * *` | `keepDays` (90), `keepPerProject` (50) | ✅ |
+| `media-variant-backfill` | `0 2 * * *` | `maxPerRun` (500), `includeHistorical` (false) | — |
+| `search-maintenance` | `0 5 * * *` | `mergeDeletesPct` (20, 1–100) | — |
+| `revision-compaction` | `0 3 * * 0` | `batchAssets` (200, 1–10000) | ✅ |
+
 ## 15. Error catalogue
 
 Codes from `cms-specification.md` Appendix B, annotated with where they are raised in code. `ProblemFactory` (in `sf-common`) constructs the `problem+json` bodies.
@@ -727,6 +849,11 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0166` | 422 | a timing form that doesn't fit the type (M27) — `ScheduleService` |
 | `SF-DOM-0167` | 409 | the schedule is executing or waits for a busy project (M27) — `ScheduleService` |
 | `SF-DOM-0168` | 422 | re-pin of anything but a pending pinned release (M27) — `ReleaseActionHandler.repin` (the SPI default refuses too) |
+| `SF-DOM-0180` | 422 | invalid system-job cron, zone or settings, or a dry run of a job without one; `errors` lists every problem (M29) — `HousekeepingProblems`, `SystemJobService` |
+| `SF-DOM-0181` | 409 | the system job is already running, on any node (M29) — `SystemJobService.runNow` |
+| `SF-DOM-0182` | 422 | enabling compaction, or lowering `olderThanDays`, without `confirm` = the project key (M29) — `CompactionPolicyService` |
+| `SF-DOM-0183` | 422 | compaction `olderThanDays` below 30 (policy and estimate) (M29) — `CompactionPolicyService` |
+| `SF-DOM-0184` | 404 | unknown system job, or an orphaned one on edit, reset or run (M29) — `SystemJobService` |
 
 ### Media (`SF-MEDIA-*`, localized media)
 
@@ -771,3 +898,8 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | `SF-GEN-0301` | warning | `raw` filter on a plain-text editor | (spec §16.3 — raised via `SF-TPL-0301` at compile time) |
 | `SF-GEN-0410` | warning | navigation cycle truncated | `GenerationDiagnosticCodes` |
 | `SF-GEN-0500` | 409 | a generation run is already active | `GenerationService` (`CONFLICT_CODE`) |
+| `SF-GEN-0501` | error | unexpected failure of a run; run `FAILED` | `GenerationService` (`UNEXPECTED_CODE`) |
+| `SF-GEN-0502` | 422 | generation target not found, or no target configured | `GenerationService` (`NO_TARGET_CODE`) |
+| `SF-GEN-0503` | 500 | a stored run's channels can't be decoded | `GenerationController` |
+| `SF-GEN-0504` | error | run interrupted (node restart or lost heartbeat); run `FAILED` by recovery (M29) | `GenerationService` (`INTERRUPTED_CODE`, `GenerationRunRecoveryJob`) |
+| `SF-GEN-0505` | 409 | promote of a run that isn't `SUCCESS`/`PARTIAL`, has no target, or whose build is gone; `current` unchanged (M29) | `GenerationService` (`NOT_PROMOTABLE_CODE`) |
