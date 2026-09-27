@@ -174,6 +174,24 @@ class CrossAssetValueRenderTest {
         assertThat(seen).contains("media:" + logo, "media:" + GONE);
     }
 
+    @Test
+    void aMediaEditorValuesAltOverrideWinsOverTheMediasAltText() {
+        UUID logo = UUID.fromString("a0000000-0000-0000-0000-000000000003");
+        AssetValueResolver media = (assetType, uuid) ->
+                logo.equals(uuid) ? json("{\"altText\":\"Our logo\",\"width\":640}") : MissingNode.getInstance();
+        String source = "[$CMS_VALUE(own.altText)$|$CMS_VALUE(blank.altText)$|$CMS_VALUE(own.width)$|$CMS_VALUE(own.altOverride)$]";
+        JsonNode content = json("{\"own\":{\"type\":\"MEDIA_REF\",\"uuid\":\"" + logo + "\",\"altOverride\":\"Logo, left\"},"
+                + "\"blank\":{\"type\":\"MEDIA_REF\",\"uuid\":\"" + logo + "\",\"altOverride\":\" \"}}");
+        OctlResult compiled = compiler.compile(source, "html", (type, uid) -> Optional.empty());
+        assertThat(compiled.hasErrors()).withFailMessage("compile errors: %s", compiled.diagnostics()).isFalse();
+
+        RenderResult result = renderer.render(
+                compiled.template(), RenderContext.builder().values(content).assetValueResolver(media).build());
+
+        // A blank override (the editor's empty "Alt text" box) falls back to the media's alt text.
+        assertThat(result.output()).isEqualTo("[Logo, left|Our logo|640|Logo, left]");
+    }
+
     private RenderResult render(String source, AssetValueResolver resolver) {
         OctlResult compiled = compiler.compile(source, "html", (type, uid) -> Optional.ofNullable(UUIDS.get(type + ":" + uid)));
         assertThat(compiled.hasErrors()).withFailMessage("compile errors: %s", compiled.diagnostics()).isFalse();

@@ -796,7 +796,8 @@ public final class OctlRenderer implements Renderer {
      *
      * <p>A {@code media} editor value ({@code MEDIA_REF}) continues in the media asset's root value object the same
      * way: {@code $CMS_VALUE(heroImage.altText)$}, {@code heroImage.width} read the picked media's alt text (in the
-     * render language) and size, as the editor reference documents; {@code heroImage.variant} stays the stored value.
+     * render language) and size, as the editor reference documents; {@code heroImage.variant} stays the stored value,
+     * and {@code heroImage.altText} is the value's own {@code altOverride} when it has a non-blank one.
      *
      * @return the field of the referenced record, record set or media, or {@code null} when {@code node} is not such
      *     a reference or the target is missing
@@ -810,6 +811,11 @@ public final class OctlRenderer implements Renderer {
         String type = node.path("type").asText("");
         String kind;
         if ("MEDIA_REF".equals(type)) {
+            // The value's own alt text for this use of the media wins over the media's (media editor "Alt text").
+            JsonNode override = node.get("altOverride");
+            if ("altText".equals(segment) && override != null && override.isTextual() && !override.asText().isBlank()) {
+                return override;
+            }
             kind = "media";
         } else if ("ASSET_REF".equals(type) && "RECORD".equalsIgnoreCase(node.path("assetType").asText(""))) {
             kind = "record";
