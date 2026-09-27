@@ -124,4 +124,54 @@
         </addColumn>
     </changeSet>
 
+    <!-- M29.3.2 (epic decision 10): media variants as derived data. A variant is a pure function of its source bytes
+         and its definition (name, width, format, quality), so rows are keyed by the source blob, not by an asset or a
+         project, and shared across projects like blobs. Uploads record the variants they create here as well as in
+         the version payload; the media-variant-backfill job fills in missing ones here only (no revision, no draft).
+         MediaVariantResolver merges these rows with payload variants for every reader. quality is the effective
+         encoder quality (JPEG: the definition's or 82), 0 for formats without one. No JSON columns: one changeset. -->
+    <changeSet id="026-media-variant" author="sf">
+        <createTable tableName="media_variant">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="source_sha" type="CHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="width" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="format" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quality" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="blob_sha" type="CHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="media_variant" constraintName="uq_media_variant_definition"
+                             columnNames="source_sha, name, width, format, quality"/>
+        <createIndex tableName="media_variant" indexName="idx_media_variant_blob">
+            <column name="blob_sha"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- M29.2.3: when a blob was last referenced by a write (an upload, a text write, a variant or an import that
+         reused or created it; BlobWriter). The blob sweep deletes a blob only when COALESCE(last_referenced_at,
+         created_at) is older than its grace period, re-checked under the row lock, so bytes a write reused after the
+         sweep's mark are never lost. Null for rows written before M29.2.3 (created_at then stands in). -->
+    <changeSet id="026-blob-last-referenced" author="sf">
+        <addColumn tableName="blob">
+            <column name="last_referenced_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>

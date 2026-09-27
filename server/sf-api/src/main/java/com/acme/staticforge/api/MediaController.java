@@ -19,6 +19,7 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.media.FocalPoint;
 import com.acme.staticforge.asset.media.MediaBinary;
 import com.acme.staticforge.asset.media.MediaFiles;
+import com.acme.staticforge.asset.media.MediaVariantResolver;
 import com.acme.staticforge.asset.media.MediaService;
 import com.acme.staticforge.asset.media.MediaText;
 import com.acme.staticforge.asset.media.MediaWriteResult;
@@ -86,6 +87,7 @@ public class MediaController {
     private final ReleaseBlocks releaseBlocks;
     private final ContentViews contentViews;
     private final ProjectLocales projectLocales;
+    private final MediaVariantResolver variantResolver;
 
     public MediaController(
             ProjectService projectService,
@@ -95,7 +97,8 @@ public class MediaController {
             PageRenderService pageRenderService,
             ReleaseBlocks releaseBlocks,
             ContentViews contentViews,
-            ProjectLocales projectLocales) {
+            ProjectLocales projectLocales,
+            MediaVariantResolver variantResolver) {
         this.projectService = projectService;
         this.mediaService = mediaService;
         this.securitySupport = securitySupport;
@@ -104,6 +107,7 @@ public class MediaController {
         this.releaseBlocks = releaseBlocks;
         this.contentViews = contentViews;
         this.projectLocales = projectLocales;
+        this.variantResolver = variantResolver;
     }
 
     @GetMapping
@@ -575,7 +579,7 @@ public class MediaController {
     private MediaView toMediaView(String projectKey, AssetVersionView v) {
         long projectId = projectId(projectKey);
         return toMediaView(v, null, releaseBlocks.of(projectId, v.uuid()), releaseBlocks.scheduled(projectId, v.uuid()),
-                projectLocales.forProject(projectId));
+                projectLocales.forProject(projectId), variantResolver.variantsFor(v.payload()));
     }
 
     /**
@@ -587,7 +591,8 @@ public class MediaController {
             java.util.List<String> locale,
             java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
             List<ScheduledRefView> scheduled,
-            LocaleConfig locales) {
+            LocaleConfig locales,
+            JsonNode variants) {
         JsonNode payload = v.payload();
         return new MediaView(
                 v.uuid(),
@@ -605,7 +610,7 @@ public class MediaController {
                 localizedMap(payload, "altText"),
                 localizedMap(payload, "caption"),
                 focalPoint(payload),
-                variants(payload),
+                variants(variants),
                 TextMediaTypes.isProcessed(payload),
                 TextMediaTypes.isText(text(payload, "mimeType")),
                 MediaFiles.isLocalized(payload),
@@ -658,8 +663,8 @@ public class MediaController {
         return new FocalPointView(doubleOrNull(fp, "x"), doubleOrNull(fp, "y"));
     }
 
-    private static List<MediaVariantView> variants(JsonNode payload) {
-        JsonNode arr = payload == null ? null : payload.get("variants");
+    /** The file's variants as {@link MediaVariantResolver#variantsFor} merged them (payload and derived, M29.3.2). */
+    private static List<MediaVariantView> variants(JsonNode arr) {
         List<MediaVariantView> out = new ArrayList<>();
         if (arr != null && arr.isArray()) {
             for (JsonNode node : arr) {

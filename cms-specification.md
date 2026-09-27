@@ -799,11 +799,12 @@ blob
   size_bytes    bigint
   mime_type     varchar(150)
   storage_key   varchar(500)     -- fs path or S3 key
-  ref_count     bigint
+  ref_count     bigint           -- derived, informational (recomputed by the sweep)
   created_at
+  last_referenced_at             -- last write that created or reused it (M29.2.3)
 ```
 
-`asset_version.payload.blobSha256` links a media version to its bytes. A blob is deletable only when `ref_count = 0` **and** no retained revision references it; a nightly job performs the sweep.
+`asset_version.payload.blobSha256` (and `variants[].blobSha256`, also inside each `localeFiles` entry) links a media version to its bytes. The nightly `blob-sweep` system job (M29.2.3) collects blobs by **mark and sweep**: it marks every blob referenced by any `asset_version` row of any revision (closed and deleted versions included), by `media_variant` (§11.4) and by `generation_run.log_blob_sha`; it deletes unmarked rows whose `COALESCE(last_referenced_at, created_at)` is older than the grace period (default 24 h) and store objects without a row older than the grace period (orphan bytes of failed commits and imports). Each deletion re-checks under the blob row's lock, the same lock every blob write takes to reuse a row, so a concurrent upload of the same bytes is never lost. `ref_count` is derived and informational: the sweep recomputes it, and no code path deletes by it. Deleting or replacing media frees no space while history references the old bytes; revision compaction (§7.7) removes such versions and the next sweep collects their blobs.
 
 Backends behind a `BlobStore` interface: `FilesystemBlobStore` (default, `sf.media.root`), `S3BlobStore` (optional). Path layout `{root}/{sha[0:2]}/{sha[2:4]}/{sha}`.
 

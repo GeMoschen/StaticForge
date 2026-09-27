@@ -15,6 +15,10 @@ The blob store is **content-addressed** by SHA-256 (`sha/sh/sha` layout, spec §
 
 - Blobs are immutable → incremental backup is cheap (only new SHAs are copied).
 - A DB restore to an earlier point never references a missing blob. Restoring the DB before any blob sweep/GC is always safe.
+- The `blob-sweep` system job (M29.2.3) deletes blobs no version references once they are older than its grace period
+  (default 24 h). A DB restored to an earlier point may reference blobs swept after that point: keep blob-store
+  snapshots at least as old as the grace period plus the backup interval, or run restore drills with the job disabled
+  (admin Jobs page, or `sf.housekeeping.blob-sweep.enabled=false` before the first start).
 
 ## 1. PostgreSQL — nightly base + WAL (PITR)
 
