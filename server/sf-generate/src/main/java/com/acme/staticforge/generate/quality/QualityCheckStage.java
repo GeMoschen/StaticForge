@@ -126,6 +126,7 @@ public class QualityCheckStage {
      * @param findings every finding to store: page rules (new and carried), then both site phases
      * @param heldBack the page outputs the checks hold back (rendered and carried)
      * @param pageErrors one {@code SF-GEN-0125} per held-back page, channel and language
+     * @param heldBackPages the same pages as data, in the same order: what the run diagnostics' {@code heldBack} lists
      * @param sidecar the new build's sidecar (facts and page-local findings of every checked output it publishes)
      * @param outputs every output of the build before the hold-back, by path
      * @param checkedOutputs how many outputs were checked (parsed this run or carried with facts)
@@ -134,6 +135,7 @@ public class QualityCheckStage {
             List<Finding> findings,
             Set<String> heldBack,
             List<Diagnostic> pageErrors,
+            List<HeldBackPage> heldBackPages,
             QualitySidecar sidecar,
             Map<String, IndexedOutput> outputs,
             int checkedOutputs) {
@@ -161,6 +163,13 @@ public class QualityCheckStage {
             return findings.size() - errorCount();
         }
     }
+
+    /**
+     * A page the checks held back in one channel and language, and the codes of the {@code ERROR} findings that did
+     * (sorted). {@code uid} is the page's in that language, {@code null} when the snapshot no longer has it;
+     * {@code locale} is {@code null} in a project without languages.
+     */
+    public record HeldBackPage(UUID asset, String uid, String channel, String locale, List<String> codes) {}
 
     /** The page a hold-back decides about: one page in one channel and language. */
     private record PageKey(UUID asset, String channel, String locale) {
@@ -234,7 +243,11 @@ public class QualityCheckStage {
             }
         }
         List<Diagnostic> pageErrors = new ArrayList<>();
-        codesByPage.forEach((page, codes) -> pageErrors.add(heldBackError(input.snapshot(), page, codes)));
+        List<HeldBackPage> heldBackPages = new ArrayList<>();
+        codesByPage.forEach((page, codes) -> {
+            pageErrors.add(heldBackError(input.snapshot(), page, codes));
+            heldBackPages.add(heldBackPage(input.snapshot(), page, codes));
+        });
 
         Map<String, IndexedOutput> published = new LinkedHashMap<>(outputs);
         published.keySet().removeAll(held);
@@ -253,7 +266,8 @@ public class QualityCheckStage {
         QualitySidecar sidecar = sidecar(config, publishedFacts, pageFindings, events, held);
         sample.stop(meterRegistry.timer("sf.quality.check.duration"));
         count(findings);
-        return new CheckResult(List.copyOf(findings), Set.copyOf(held), pageErrors, sidecar, outputs, checked);
+        return new CheckResult(List.copyOf(findings), Set.copyOf(held), List.copyOf(pageErrors),
+                List.copyOf(heldBackPages), sidecar, outputs, checked);
     }
 
     /** Parses and page-checks the rendered HTML outputs in parallel; results keep the rendered order. */
@@ -376,6 +390,12 @@ public class QualityCheckStage {
     private static List<ReferenceEvent> located(List<ReferenceEvent> references, Snapshot snapshot, PlanEntry entry) {
         SnapshotAsset page = entry.pageUuid() == null ? null : snapshot.asset(entry.pageUuid(), entry.locale());
         return EditorPaths.locate(references, page == null ? null : page.payload());
+    }
+
+    private static HeldBackPage heldBackPage(Snapshot snapshot, PageKey page, Collection<String> codes) {
+        SnapshotAsset asset = page.asset() == null ? null : snapshot.asset(page.asset(), page.locale());
+        return new HeldBackPage(
+                page.asset(), asset == null ? null : asset.uid(), page.channel(), page.locale(), List.copyOf(codes));
     }
 
     private static Diagnostic heldBackError(Snapshot snapshot, PageKey page, Collection<String> codes) {

@@ -124,6 +124,14 @@ class QualityCheckStageIntegrationTest {
             assertThat(error.path("messages").get(0).asText())
                     .isEqualTo("Quality check failed for page '" + site.flagged().uid() + "' (html): SF-CHK-0390");
         });
+        // The same page as data (M30.6.2): clients link it to its findings without reading the message.
+        assertThat(run.getDiagnostics().path("heldBack")).singleElement().satisfies(page -> {
+            assertThat(page.path("asset").asText()).isEqualTo(site.flagged().uuid().toString());
+            assertThat(page.path("uid").asText()).isEqualTo(site.flagged().uid());
+            assertThat(page.path("channel").asText()).isEqualTo("html");
+            assertThat(page.path("locale").isNull()).as("a project without languages").isTrue();
+            assertThat(page.path("codes")).extracting(JsonNode::asText).containsExactly(QualityTestRules.FLAG);
+        });
         assertThat(run.getWarningCount()).isZero();
         assertThat(run.getFindingErrors()).isEqualTo(1);
         assertThat(run.getFindingWarnings()).isEqualTo(2);
@@ -163,6 +171,7 @@ class QualityCheckStageIntegrationTest {
         assertThat(run.getStatus()).as("diagnostics: %s", run.getDiagnostics()).isEqualTo(RunStatus.SUCCESS);
         assertThat(run.getWarningCount()).isZero();
         assertThat(run.getErrorCount()).isZero();
+        assertThat(run.getDiagnostics().has("heldBack")).as("nothing held back").isFalse();
         assertThat(run.getFindingWarnings()).isEqualTo(2);
         assertThat(run.getFindingCounts().path("links").asInt()).isEqualTo(1);
         assertThat(run.getFindingCounts().path("accessibility").asInt()).isEqualTo(1);

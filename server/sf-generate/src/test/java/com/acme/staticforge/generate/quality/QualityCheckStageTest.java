@@ -113,6 +113,8 @@ class QualityCheckStageTest {
         assertThat(result.heldBack()).containsExactlyInAnyOrder("blog.html", "blog-2.html", "blog-3.html");
         assertThat(result.pageErrors()).extracting(Diagnostic::code, Diagnostic::message).containsExactly(
                 tuple("SF-GEN-0125", "Quality check failed for page 'blog' (html): SF-CHK-0390"));
+        assertThat(result.heldBackPages()).containsExactly(
+                new QualityCheckStage.HeldBackPage(BLOG, "blog", "html", null, List.of("SF-CHK-0390")));
         assertThat(result.finalOutputs()).containsOnlyKeys("blog.md", "about.html", "assets/logo.png", "sitemap.xml");
         assertThat(result.published(input(QualitySeverity.ERROR, null).rendered()))
                 .extracting(RenderedFile::outputPath).containsExactly("blog.md");

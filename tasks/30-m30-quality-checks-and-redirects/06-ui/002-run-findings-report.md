@@ -46,10 +46,10 @@ as the paged-table model, `insight.util.ts` cause labels), `GenerationRunView.fi
 - Deviation: the manual check ran against a project seeded via the API with the same defect kinds (templates without
   title/alt, broken page and media links, a moved page, SF-CHK-0301 set to ERROR) — the golden fixture is built by
   the parallel golden lane. Fixtures in `findings/testing/findings.fixtures.ts` are captured from that backend.
-- Held-back pages: the `SF-GEN-0125` message names the page by uid only, so "Show findings" parses it
-  (`heldBackPage`, pinned to `QualityCheckStage.heldBackError`'s format) and reads the page's uuid from its `ERROR`
-  findings; if none is stored it falls back to channel + language + codes + severity. A changed message format
-  there must update `HELD_BACK_MESSAGE` in `findings.util.ts`.
+- Held-back pages: the run's `diagnostics.heldBack` lists them as data — `[{asset, uid, channel, locale, codes}]`, one
+  per page, channel and language, in the order of the `SF-GEN-0125` messages (`QualityCheckStage.HeldBackPage`,
+  written by `GenerationService.diagnosticsJson`). "Show findings" filters by `assetUuid` + `channel` + `locale`, no
+  message parsing and no extra request; runs without `heldBack` (before this change) show no link.
 - URL: `?run=&tab=findings&fSeverity&fCategory&fCode…&fAsset&fChannel&fLocale&fPath&fPage` (prefixed; the Generation
   settings view binds `tab` next to `run`). Also added: redirect counts (`redirectsAdded/redirectsActive`) in the run
   summary and the dry run's `redirectCandidates` in the plan dialog.

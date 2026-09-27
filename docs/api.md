@@ -562,7 +562,10 @@ run.
 
 Every build checks its HTML outputs (spec §18.8) and stores the findings with the run. `WARNING` findings never change
 the status or `warningCount`; an `ERROR` finding on an output the run rendered holds its page back with the file
-error `SF-GEN-0125` (run `PARTIAL`). The run view's `findingCounts` counts every finding, stored or not:
+error `SF-GEN-0125` (run `PARTIAL`). The same pages are listed as data in the run's `diagnostics.heldBack` —
+`[{"asset": "<uuid>", "uid": "about", "channel": "html", "locale": "de", "codes": ["SF-CHK-0301"]}]` (`locale` `null`
+without languages; absent when nothing was held back) — for linking to their findings (`assetUuid` + `channel` +
+`locale`). The run view's `findingCounts` counts every finding, stored or not:
 
 ```json
 "findingCounts": { "errors": 2, "warnings": 41, "byCategory": {"links": 5, "seo": 30, "accessibility": 8}, "truncated": 0 }

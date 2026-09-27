@@ -13,6 +13,7 @@ type GenerationPlanView = components['schemas']['GenerationPlanView'];
 
 export const ABOUT = '852d2ed6-741b-40e0-bc03-193d760ff9cd';
 export const ALPHA = 'c7969335-210e-4a59-8110-1fe2261a5e88';
+export const BETA = '28020eec-0cfe-495c-ae8b-17af1f983b10';
 export const GAMMA = '252019da-bb99-4b5b-a827-b5f34069d740';
 
 /** `GET /generations/2` after the move: held-back pages, findings and redirect counts. */
@@ -44,6 +45,12 @@ export const RUN_WITH_FINDINGS: GenerationRunView = {
       },
     ],
     warnings: [],
+    heldBack: [
+      { asset: ALPHA, uid: 'alpha', channel: 'html', locale: 'de', codes: ['SF-CHK-0301'] },
+      { asset: BETA, uid: 'beta', channel: 'html', locale: 'de', codes: ['SF-CHK-0301'] },
+      { asset: ALPHA, uid: 'alpha', channel: 'html', locale: 'en', codes: ['SF-CHK-0301'] },
+      { asset: BETA, uid: 'beta', channel: 'html', locale: 'en', codes: ['SF-CHK-0301'] },
+    ],
   } as unknown as GenerationRunView['diagnostics'],
   planSummary: {
     mode: 'INCREMENTAL',

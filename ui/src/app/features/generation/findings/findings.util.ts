@@ -20,14 +20,8 @@ const CATEGORY_LABELS: Record<FindingCategory, string> = {
 
 export const FINDINGS_PAGE_SIZE = 25;
 
-/** How many `ERROR` findings are read to find a held-back page's uuid: the API's largest page. */
-export const HELD_BACK_LOOKUP_SIZE = 200;
-
 /** The run details tab the findings live in, as `?tab=` names it. */
 export const FINDINGS_TAB = 'findings';
-
-/** The file error a page held back by an `ERROR` finding gets (M30.1.3, epic decision 5). */
-export const HELD_BACK_CODE = 'SF-GEN-0125';
 
 /**
  * A run's findings filters as they live in the URL query (like the M26 audit view), so a findings view can be shared.
@@ -187,48 +181,4 @@ export function findingCountsLabel(counts: FindingCountsView | null | undefined)
     parts.push(severityCountLabel(counts.warnings, 'WARNING'));
   }
   return parts.length > 0 ? parts.join(' · ') : 'No findings';
-}
-
-/** A page the quality checks held back, as its `SF-GEN-0125` file error names it. */
-export interface HeldBackPage {
-  uid: string;
-  channel: string;
-  locale: string | null;
-  codes: string[];
-}
-
-/**
- * The `SF-GEN-0125` message `Quality check failed for page '{uid}' ({channel}[, {locale}]): {code}, {code}` as the
- * server writes it (`QualityCheckStage.heldBackError`). The uid is the page's (or its uuid when the page is gone).
- */
-const HELD_BACK_MESSAGE = /^Quality check failed for page '(.+)' \(([^,()]+)(?:, ([^()]+))?\): (.+)$/;
-
-/** The page a `SF-GEN-0125` message names, or `null` for any other message. */
-export function heldBackPage(message: string): HeldBackPage | null {
-  const match = HELD_BACK_MESSAGE.exec(message.trim());
-  if (!match) {
-    return null;
-  }
-  const codes = match[4]
-    .split(',')
-    .map((code) => code.trim())
-    .filter((code) => code !== '');
-  return { uid: match[1], channel: match[2].trim(), locale: match[3]?.trim() ?? null, codes };
-}
-
-/**
- * The filter that shows a held-back page's findings. `findings` are the page's `ERROR` findings in its channel and
- * language (the query {@link heldBackQuery} makes); the one whose page has the message's uid names the page's uuid.
- * Without it (the page's findings weren't stored, e.g. truncated) the filter falls back to what the message says:
- * the channel, language, the failing codes and severity `ERROR`.
- */
-export function heldBackFilter(held: HeldBackPage, findings: FindingView[]): FindingFilter {
-  const asset = findings.find((f) => f.page?.uid === held.uid || f.page?.uuid === held.uid)?.page?.uuid ?? null;
-  const where = { ...NO_FINDING_FILTER, channel: held.channel, locale: held.locale };
-  return asset ? { ...where, asset } : { ...where, severity: 'ERROR', codes: held.codes };
-}
-
-/** The findings query that finds a held-back page's uuid (its `ERROR` findings of the failing codes). */
-export function heldBackQuery(held: HeldBackPage): FindingFilter {
-  return { ...NO_FINDING_FILTER, severity: 'ERROR', codes: held.codes, channel: held.channel, locale: held.locale };
 }

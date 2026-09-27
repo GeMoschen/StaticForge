@@ -841,7 +841,7 @@ public class GenerationService {
             // A page or processed media file held back makes the run PARTIAL; the rest is published. Quality findings
             // don't: they are stored apart from the diagnostics (a warning alone leaves the run SUCCESS).
             boolean partial = !warnings.isEmpty() || !fileErrors.isEmpty();
-            JsonNode diagnostics = diagnosticsJson(fileErrors, warnings);
+            JsonNode diagnostics = diagnosticsJson(fileErrors, warnings, check.heldBackPages());
             byte[] qualityFacts = check.sidecar().toJson();
             // The manifest marks a published build (M29.2.2): it is written right before the flip, and both happen
             // only while the run is still RUNNING, on its locked row — a cancel that committed first wins. The
@@ -1154,9 +1154,32 @@ public class GenerationService {
     }
 
     private JsonNode diagnosticsJson(List<Diagnostic> errors, List<Diagnostic> warnings) {
+        return diagnosticsJson(errors, warnings, List.of());
+    }
+
+    /**
+     * A run's diagnostics: {@code errors} and {@code warnings} grouped by code ({@code [{code, count, messages}]}) and,
+     * when the quality checks held pages back (M30.6.2), {@code heldBack}: one
+     * {@code {asset, uid, channel, locale, codes}} per page, channel and language — the {@code SF-GEN-0125} errors as
+     * data, so clients can link them to the page's findings without reading the message.
+     */
+    private JsonNode diagnosticsJson(
+            List<Diagnostic> errors, List<Diagnostic> warnings, List<QualityCheckStage.HeldBackPage> heldBack) {
         ObjectNode root = mapper.createObjectNode();
         root.set("errors", groupByCode(errors));
         root.set("warnings", groupByCode(warnings));
+        if (!heldBack.isEmpty()) {
+            ArrayNode pages = root.putArray("heldBack");
+            for (QualityCheckStage.HeldBackPage page : heldBack) {
+                ObjectNode node = pages.addObject();
+                node.put("asset", page.asset() == null ? null : page.asset().toString());
+                node.put("uid", page.uid());
+                node.put("channel", page.channel());
+                node.put("locale", page.locale());
+                ArrayNode codes = node.putArray("codes");
+                page.codes().forEach(codes::add);
+            }
+        }
         return root;
     }
 

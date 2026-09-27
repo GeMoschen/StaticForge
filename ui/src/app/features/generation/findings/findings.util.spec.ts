@@ -6,11 +6,7 @@ import {
   findingCountsLabel,
   findingFilterFromParams,
   hasFindingFilters,
-  heldBackFilter,
-  heldBackPage,
-  heldBackQuery,
   paramsFromFindingFilter,
-  type FindingView,
 } from './findings.util';
 
 const ALPHA = '0b7e5a0c-4f7e-4c1e-9a55-3b1f7d2c9e11';
@@ -105,49 +101,5 @@ describe('finding counts', () => {
     const counts = { errors: 0, warnings: 5, byCategory: { links: 2, seo: 3, accessibility: 0 }, truncated: 0 };
     expect(categoryCount(counts, 'SEO')).toBe(3);
     expect(categoryCount(counts, 'ACCESSIBILITY')).toBe(0);
-  });
-});
-
-describe('held-back pages', () => {
-  // As QualityCheckStage.heldBackError writes them.
-  const localized = "Quality check failed for page 'alpha' (html, en): SF-CHK-0301, SF-CHK-0201";
-  const single = "Quality check failed for page 'news_2026' (html): SF-CHK-0301";
-
-  it('reads the page, channel, language and codes from the SF-GEN-0125 message', () => {
-    expect(heldBackPage(localized)).toEqual({
-      uid: 'alpha',
-      channel: 'html',
-      locale: 'en',
-      codes: ['SF-CHK-0301', 'SF-CHK-0201'],
-    });
-    expect(heldBackPage(single)).toEqual({ uid: 'news_2026', channel: 'html', locale: null, codes: ['SF-CHK-0301'] });
-    expect(heldBackPage('Template error in about.html')).toBeNull();
-  });
-
-  it("filters by the page's uuid once its findings name it", () => {
-    const held = heldBackPage(localized)!;
-    expect(heldBackQuery(held)).toEqual({
-      ...NO_FINDING_FILTER,
-      severity: 'ERROR',
-      codes: ['SF-CHK-0301', 'SF-CHK-0201'],
-      channel: 'html',
-      locale: 'en',
-    });
-    const findings: FindingView[] = [
-      { id: 1, code: 'SF-CHK-0301', page: { uuid: 'b1d9c1f0-0000-4000-8000-000000000001', uid: 'beta', displayName: 'Beta' } },
-      { id: 2, code: 'SF-CHK-0301', page: { uuid: ALPHA, uid: 'alpha', displayName: 'Alpha' } },
-    ];
-    expect(heldBackFilter(held, findings)).toEqual({ ...NO_FINDING_FILTER, asset: ALPHA, channel: 'html', locale: 'en' });
-  });
-
-  it('falls back to the codes, channel and language when no finding names the page', () => {
-    const held = heldBackPage(localized)!;
-    expect(heldBackFilter(held, [])).toEqual({
-      ...NO_FINDING_FILTER,
-      severity: 'ERROR',
-      codes: ['SF-CHK-0301', 'SF-CHK-0201'],
-      channel: 'html',
-      locale: 'en',
-    });
   });
 });

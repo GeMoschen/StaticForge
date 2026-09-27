@@ -21,7 +21,13 @@ import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { GenerationService } from './generation.service';
 import { GenerationDialogComponent } from './generation-dialog.component';
-import { DiagnosticGroup, parseDiagnostics } from './generation-diagnostics';
+import {
+  DiagnosticGroup,
+  HELD_BACK_CODE,
+  parseDiagnostics,
+  parseHeldBack,
+  type HeldBackPage,
+} from './generation-diagnostics';
 import { GenerationRunEvent } from './generation-sse';
 import {
   planSummaryLine,
@@ -34,12 +40,7 @@ import { SfPlanEntriesTableComponent } from './insight/sf-plan-entries-table.com
 import {
   FINDINGS_TAB,
   FINDING_PARAM_NAMES,
-  HELD_BACK_CODE,
-  HELD_BACK_LOOKUP_SIZE,
   findingCountsLabel,
-  heldBackFilter,
-  heldBackPage,
-  heldBackQuery,
   paramsFromFindingFilter,
   NO_FINDING_FILTER,
   type FindingFilter,
@@ -133,6 +134,7 @@ export class GenerationComponent implements OnDestroy {
   readonly expandedRunId = signal<number | null>(null);
   /** The open tab of a run's details (M22.3.2). */
   readonly detailsTab = signal<DetailsTab>('summary');
+  protected readonly heldBackCode = HELD_BACK_CODE;
   private readonly runPlanFetches = new Map<number, (query: PlanEntryQuery) => Observable<EntryPage | undefined>>();
 
   private liveSub: Subscription | null = null;
@@ -275,24 +277,20 @@ export class GenerationComponent implements OnDestroy {
     });
   }
 
-  /** Whether a diagnostic of `code` names a page the quality checks held back, whose findings can be shown. */
-  isHeldBack(run: GenerationRunView, code: string, message: string): boolean {
-    return code === HELD_BACK_CODE && !!run.findingCounts && heldBackPage(message) !== null;
+  /**
+   * The pages `run`'s `SF-GEN-0125` messages are about, by message index (the server lists `heldBack` in the order of
+   * those messages). Empty — no links — for a run without findings or from before `heldBack`, or when the two
+   * disagree.
+   */
+  heldBackOf(run: GenerationRunView, groups: DiagnosticGroup[]): HeldBackPage[] {
+    const pages = run.findingCounts ? parseHeldBack(run.diagnostics) : [];
+    const messages = groups.find((group) => group.code === HELD_BACK_CODE)?.messages.length ?? 0;
+    return pages.length === messages ? pages : [];
   }
 
-  /**
-   * Opens the findings of the page a `SF-GEN-0125` diagnostic held back. The message names the page by uid; its
-   * `ERROR` findings in that channel and language name its uuid, which the asset filter takes.
-   */
-  showHeldBack(run: GenerationRunView, message: string): void {
-    const held = heldBackPage(message);
-    if (!held || run.id == null) {
-      return;
-    }
-    this.api.findings(this.projectKey(), run.id, heldBackQuery(held), HELD_BACK_LOOKUP_SIZE).subscribe({
-      next: (page) => this.showFindings(run, heldBackFilter(held, page.content ?? [])),
-      error: () => this.showFindings(run, heldBackFilter(held, [])),
-    });
+  /** Opens the findings of a page the quality checks held back: that page, channel and language. */
+  showHeldBack(run: GenerationRunView, page: HeldBackPage): void {
+    this.showFindings(run, { asset: page.asset, channel: page.channel, locale: page.locale });
   }
 
   /**

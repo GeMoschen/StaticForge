@@ -192,16 +192,17 @@
                   }
                 </dl>
                 @let groups = diagnosticsOf(run);
+                @let heldBack = heldBackOf(run, groups);
                 @if (groups.length === 0) {
                   <p class="details__empty">No errors or warnings.</p>
                 } @else {
                   <ul class="diagnostics">
                     @for (group of groups; track $index) {
-                      @for (message of group.messages; track $index) {
+                      @for (message of group.messages; track $index; let messageIndex = $index) {
                         <li class="diagnostic" [class.diagnostic--error]="group.severity === 'error'">
                           <span class="diagnostic__code">{{ group.code }}</span>{{ message }}
-                          @if (isHeldBack(run, group.code, message)) {
-                            <button type="button" class="link-button diagnostic__link" (click)="showHeldBack(run, message)">
+                          @if (group.code === heldBackCode && heldBack[messageIndex]; as page) {
+                            <button type="button" class="link-button diagnostic__link" (click)="showHeldBack(run, page)">
                               Show findings
                             </button>
                           }

@@ -193,18 +193,25 @@ describe('GenerationComponent findings (M30.6.2)', () => {
     expect(diagnostics).toHaveLength(4);
     expect(diagnostics.every((d) => button(d, 'Show findings'))).toBe(true);
 
-    // "alpha (html, en)": its ERROR findings name its uuid.
+    // "alpha (html, en)": the third message, the third heldBack entry — no request needed to find the page.
     button(diagnostics[2], 'Show findings').click();
-    const lookup = http.expectOne((req) => req.url.endsWith('/generations/2/findings'));
-    expect(lookup.request.params.get('severity')).toBe('ERROR');
-    expect(lookup.request.params.getAll('code')).toEqual(['SF-CHK-0301']);
-    expect(lookup.request.params.get('channel')).toBe('html');
-    expect(lookup.request.params.get('locale')).toBe('en');
-    expect(lookup.request.params.get('size')).toBe('200');
-    lookup.flush(FINDINGS_PAGE);
     await flushFindings();
     expect(query()).toEqual({ run: '2', tab: 'findings', fAsset: ALPHA, fChannel: 'html', fLocale: 'en' });
     expect(selectedTab()).toBe('Findings');
+  });
+
+  it('offers no findings link for held-back pages of a run without heldBack', async () => {
+    const diagnostics = { ...(RUN_WITH_FINDINGS.diagnostics as unknown as Record<string, unknown>) };
+    delete diagnostics['heldBack'];
+    const older = { ...RUN_WITH_FINDINGS, diagnostics: diagnostics as unknown as GenerationRunView['diagnostics'] };
+    await harness.navigateByUrl('/generation');
+    http.expectOne('/api/v1/projects/proj/generations').flush([older]);
+    http.expectOne('/api/v1/projects/proj/targets').flush([]);
+    harness.detectChanges();
+    button(row(2), 'Details').click();
+    harness.detectChanges();
+    expect(el().querySelectorAll('.diagnostic')).toHaveLength(4);
+    expect(el().querySelector('.diagnostic__link')).toBeNull();
   });
 
   it('labels the CHECK stage in the live log', async () => {
