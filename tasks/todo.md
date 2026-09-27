@@ -18,8 +18,8 @@ verification.
 - [x] B — M30.2.3 accessibility rules
 - [x] B — M30.4.2 redirect detection on build
 - [x] B — M30.5.1 redirect formats per target
-- [ ] C — M30.3.1 draft check endpoint
-- [ ] C — M30.3.2 page editor Issues panel
+- [x] C — M30.3.1 draft check endpoint
+- [x] C — M30.3.2 page editor Issues panel
 - [x] C — M30.6.1 Quality tab
 - [ ] C — M30.6.2 run findings report
 - [x] C — M30.6.3 Redirects tab, target formats, unpublish redirect
