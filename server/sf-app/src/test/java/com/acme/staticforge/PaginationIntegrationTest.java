@@ -48,7 +48,9 @@ import com.acme.staticforge.generate.snapshot.SnapshotView;
 import com.acme.staticforge.preview.PagePreview;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
+import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
+import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
@@ -274,6 +276,47 @@ class PaginationIntegrationTest {
         assertThat(collided.getStatus()).isEqualTo(RunStatus.FAILED);
         assertThat(collided.getDiagnostics().toString()).contains("news/blog-2.html").contains(blog.uid() + " (page 2)");
         assertThat(savedBlog).isNotNull();
+    }
+
+    /**
+     * In a project with languages every page number of a listing links its items in its own language (found by the
+     * M30 golden quality fixture: the item links lacked the {@code {locale}} prefix, so every localized listing linked
+     * pages that don't exist).
+     */
+    @Test
+    void aLocalizedListingLinksItsItemsInItsOwnLanguage() throws Exception {
+        Fixture fx = newFixture();
+        projectService.updateLocales(fx.project().getKey(), LocaleConfig.of(
+                List.of(new ProjectLocale("de", "Deutsch"), new ProjectLocale("en", "English"),
+                        new ProjectLocale("de-CH", "Deutsch (Schweiz)")),
+                "de", Map.of("de-CH", List.of("de")), false), true, fx.ctx());
+        GenerationTarget target = createTarget(fx);
+        Map<String, String> localized = Map.of("html", "{locale}/{folder}{displayNameSlug}.{ext}");
+        TemplateView postTemplate = pageTemplate(fx, "Post", "", "<article>post</article>", localized);
+        AssetVersionView postsFolder = folderService.create(null, "Posts", FolderScope.PAGES, fx.ctx());
+        AssetVersionView navFolder = folderService.create(null, "Blog Nav " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
+        for (int i = 1; i <= 3; i++) {
+            AssetVersionView post = pageService.create(new CreatePageCommand("Post " + i, postsFolder.uuid(), postTemplate.uuid()), fx.ctx());
+            pageReferenceService.create(
+                    new CreatePageReferenceCommand("0" + i + " post", navFolder.uuid(), PageReferenceTargetKind.PAGE, post.uuid(), null),
+                    fx.ctx());
+        }
+        TemplateView blogTemplate = pageTemplate(fx, "Blog", BLOG_CDL,
+                "<ul>$CMS_FOR(post : CMS_PAGINATION.items)$<li><a class=\"item\" href=\"$CMS_VALUE(post.href)$\">"
+                        + "$CMS_VALUE(post.displayName)$</a></li>$CMS_END_FOR$</ul>"
+                        + "$CMS_IF(CMS_PAGINATION.nextHref)$<a rel=\"next\" href=\"$CMS_VALUE(CMS_PAGINATION.nextHref)$\">next</a>$CMS_END_IF$",
+                localized);
+        AssetVersionView blog = pageService.create(new CreatePageCommand("Blog", null, blogTemplate.uuid()), fx.ctx());
+        savePagination(fx, blog, navFolder.uuid(), "NAV", 2, "navigation");
+
+        Path build = buildDir(fx, target, runToSuccess(fx, target, GenerationMode.FULL));
+
+        assertThat(Files.readString(build.resolve("de/blog.html")))
+                .contains("href=\"posts/post-1.html\">Post 1</a>", "href=\"posts/post-2.html\">Post 2</a>",
+                        "<a rel=\"next\" href=\"blog-2.html\">");
+        assertThat(Files.readString(build.resolve("en/blog-2.html"))).contains("href=\"posts/post-3.html\">Post 3</a>");
+        assertThat(Files.readString(build.resolve("de-CH/blog-2.html"))).contains("href=\"posts/post-3.html\">Post 3</a>");
+        assertThat(brokenLinks(build)).isEmpty();
     }
 
     @Test

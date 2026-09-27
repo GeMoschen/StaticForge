@@ -275,7 +275,10 @@ final class GenerationRenderer {
 
                     @Override
                     public String item(PaginationItem item) {
-                        return paths == null ? "" : relativeUrl(entry.outputPath(), paths.resolvePageUrl(item.uuid(), channel));
+                        // The item in this entry's language: {locale}-prefixed paths, like every other page link (M24).
+                        return paths == null
+                                ? ""
+                                : relativeUrl(entry.outputPath(), paths.resolvePageUrl(item.uuid(), channel, entry.locale()));
                     }
                 },
                 item -> assetValues.valueOf("page", item.uuid()));
