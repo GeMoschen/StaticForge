@@ -1,6 +1,6 @@
 ---
 id: M30.4.2
-status: todo
+status: done
 depends: [M30.4.1, M30.1.3]
 epic: m30-quality-checks-and-redirects
 feature: redirect-registry
@@ -36,14 +36,14 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Integration tests (filesystem target): page moved to another folder, UID change, folder rename, template
+- [x] Integration tests (filesystem target): page moved to another folder, UID change, folder rename, template
       `outputPath` change, channel `urlStrategy` change — each adds AUTO entries on the next FULL and on the next
       INCREMENTAL build; a failed or cancelled build adds none.
-- [ ] A → B, then B → C: the registry holds two AUTO entries (A→asset, B→asset), both emitted to C (one hop each).
-- [ ] New page published at A: entry shadowed, not emitted; unpublishing that page makes it active again.
-- [ ] Localized project: moving the page in `en` only (M27 per-locale release) adds an `en` entry only.
-- [ ] Paginated page moved: one entry per page number.
-- [ ] `./gradlew build` green.
+- [x] A → B, then B → C: the registry holds two AUTO entries (A→asset, B→asset), both emitted to C (one hop each).
+- [x] New page published at A: entry shadowed, not emitted; unpublishing that page makes it active again.
+- [x] Localized project: moving the page in `en` only (M27 per-locale release) adds an `en` entry only.
+- [x] Paginated page moved: one entry per page number.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -58,3 +58,15 @@ area: backend
   change the registry here.
 - Two targets with different current builds may detect different candidates; the registry is per project, so both end up
   in it — harmless (an entry is emitted only where it resolves).
+- Implemented in `generate/redirect/BuildRedirects` (pure: current-manifest index, candidates, merge with the registry,
+  resolve) and `GenerationService` (reads the current manifest in `planFor` → `PlannedBuild.current`; detection after
+  the CHECK hold-back on `check.finalOutputs()`; `upsertAuto` in the REPORT transaction *before* `writer.publish`, so a
+  publish that throws rolls the entries back with the run). Counts: `planSummary.redirectsAdded` (added + re-pointed)
+  and `redirectsActive`; the dry run returns `redirectCandidates` (with the planned `toPath`) and `redirectsAdded`.
+- Deviation: a folder *UID change* does not change output paths in this codebase — `folder_path` is materialized at
+  placement and `changeUid` doesn't rewrite descendants (pre-existing; not changed here). "Folder rename" is therefore
+  tested as a folder move, the operation that rewrites the folder segment of its pages' paths.
+- Deviation: the dry run reports `redirectsAdded` but not `redirectsActive` (`null`): it can't know which pages a run
+  would hold back or which media shadow a source path.
+- Tests: `BuildRedirectsTest` (unit), `RedirectDetectionIntegrationTest` (every change kind × FULL/INCREMENTAL, failed
+  publish, cancel, chain, shadow/unpublish, promote, en-only move, pagination, dry run), `BuildInsightApiTest` (views).

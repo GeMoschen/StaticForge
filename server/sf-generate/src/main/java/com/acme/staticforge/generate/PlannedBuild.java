@@ -19,6 +19,8 @@ import java.util.Set;
  * @param base that build's manifest; {@code null} with {@code baseRunId == -1}
  * @param quality the project's quality rule configuration the build is checked under (M30.1.3)
  * @param baseQuality the base build's quality check facts; {@code null} without a base build or when it has none
+ * @param current the manifest of the build the target serves now (M30.4.2, redirect detection); {@code null} when
+ *     nothing was published there or its manifest can't be read
  */
 public record PlannedBuild(
         Project project,
@@ -31,7 +33,8 @@ public record PlannedBuild(
         BuildManifest base,
         BuildPlan plan,
         EffectiveQualityConfig quality,
-        QualitySidecar baseQuality) {
+        QualitySidecar baseQuality,
+        BuildManifest current) {
 
     public boolean carries() {
         return base != null;

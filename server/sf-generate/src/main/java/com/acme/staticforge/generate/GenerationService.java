@@ -13,6 +13,7 @@ import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanRequest;
 import com.acme.staticforge.generate.quality.EffectiveQualityConfig;
+import com.acme.staticforge.generate.quality.OutputKey;
 import com.acme.staticforge.generate.quality.QualityCheckStage;
 import com.acme.staticforge.generate.quality.QualityRuleConfigService;
 import com.acme.staticforge.generate.quality.QualitySidecar;
@@ -20,6 +21,7 @@ import com.acme.staticforge.generate.quality.RunFindingStore;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.pipeline.RunAbortedException;
+import com.acme.staticforge.generate.redirect.BuildRedirects;
 import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.RenderOutcome;
@@ -39,6 +41,9 @@ import com.acme.staticforge.generate.target.TargetWriter;
 import com.acme.staticforge.generate.target.TargetWriterSelector;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.redirect.RedirectOutputs;
+import com.acme.staticforge.redirect.RedirectService;
+import com.acme.staticforge.redirect.RedirectService.AutoCandidate;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -146,6 +151,7 @@ public class GenerationService {
     private final QualityCheckStage qualityCheckStage;
     private final QualityRuleConfigService qualityConfig;
     private final RunFindingStore findingStore;
+    private final RedirectService redirectService;
 
     /** A remembered {@code Idempotency-Key}: the run it started and when (M29.2.4). */
     private record IdempotentStart(long runId, Instant at) {}
@@ -171,7 +177,8 @@ public class GenerationService {
             GenerationRunControl control,
             QualityCheckStage qualityCheckStage,
             QualityRuleConfigService qualityConfig,
-            RunFindingStore findingStore) {
+            RunFindingStore findingStore,
+            RedirectService redirectService) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
@@ -193,6 +200,7 @@ public class GenerationService {
         this.qualityCheckStage = qualityCheckStage;
         this.qualityConfig = qualityConfig;
         this.findingStore = findingStore;
+        this.redirectService = redirectService;
     }
 
     /**
@@ -501,8 +509,29 @@ public class GenerationService {
             }
         }
         BuildPlan plan = buildPlanner.plan(snapshot, planRequest, paths);
-        return new PlannedBuild(
-                project, target, writer, snapshot, paths, channels, baseRunId, base, plan, quality, baseQuality);
+        return new PlannedBuild(project, target, writer, snapshot, paths, channels, baseRunId, base, plan, quality,
+                baseQuality, currentManifest(writer, baseRunId, base));
+    }
+
+    /**
+     * The manifest of the build {@code writer}'s target serves now (M30.4.2): what redirect detection compares with —
+     * the base build when the run carries the current one, else read; {@code null} when there is none. Never fails the
+     * plan: an unreadable current build only means nothing is detected.
+     */
+    private static BuildManifest currentManifest(TargetWriter writer, long baseRunId, BuildManifest base) {
+        try {
+            long current = writer.currentRunId();
+            if (current < 0) {
+                return null;
+            }
+            if (base != null && current == baseRunId) {
+                return base;
+            }
+            return writer.readManifest(current).orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("Could not read the current build of the target; no redirects are detected: {}", e.toString());
+            return null;
+        }
     }
 
     /**
@@ -510,11 +539,23 @@ public class GenerationService {
      *
      * @param diagnostics the VALIDATE findings grouped by code, like a run's diagnostics; {@code null} unless requested
      */
-    public record DryRun(PlannedBuild build, ObjectNode summary, List<PlanEntryRecord> entries, JsonNode diagnostics) {}
+    public record DryRun(
+            PlannedBuild build,
+            ObjectNode summary,
+            List<PlanEntryRecord> entries,
+            JsonNode diagnostics,
+            List<PlannedRedirect> redirectCandidates) {}
+
+    /** An automatic redirect a dry run would add (M30.4.2), and the path the plan renders its page at. */
+    public record PlannedRedirect(AutoCandidate candidate, String toPath) {}
 
     /**
      * Plans {@code request} exactly as a run started now would, and explains the plan (M22.2.1). Nothing is rendered,
      * written, stored or locked: no run row, no plan rows, no SSE, no idempotency key, so it works while a run is active.
+     *
+     * <p>It also names the automatic redirects the run would add (M30.4.2): each planned page output whose path differs
+     * from the target's current build. A page the run would then hold back (incomplete content, a failed quality check)
+     * is only known once it renders, so a run may add fewer.
      *
      * @param validate also compile every template the plan needs and return the findings (never renders)
      */
@@ -524,7 +565,30 @@ public class GenerationService {
         JsonNode diagnostics = validate
                 ? diagnosticsJson(renderPipeline.validate(build.snapshot(), build.plan()), List.of())
                 : null;
-        return new DryRun(build, PlanInsight.summary(mapper, build, request, entries), entries, diagnostics);
+        List<OutputKey> planned = plannedPages(build.plan());
+        Map<RedirectOutputs.PageKey, String> plannedPaths = new HashMap<>();
+        planned.forEach(key -> plannedPaths.putIfAbsent(
+                new RedirectOutputs.PageKey(key.asset(), key.channel(), key.locale(), key.number()), key.path()));
+        List<PlannedRedirect> candidates = buildRedirects(build).candidates(planned).stream()
+                .map(candidate -> new PlannedRedirect(candidate, plannedPaths.get(new RedirectOutputs.PageKey(
+                        candidate.toAssetUuid(), candidate.channel(), candidate.locale(), candidate.toPageNumber()))))
+                .toList();
+        ObjectNode summary = PlanInsight.summary(mapper, build, request, entries);
+        return new DryRun(build, PlanInsight.redirects(summary, candidates.size(), null), entries, diagnostics, candidates);
+    }
+
+    /** The redirects of {@code build}: the target's current build, the project's registry and its languages. */
+    private BuildRedirects buildRedirects(PlannedBuild build) {
+        return BuildRedirects.of(
+                build.current(), redirectService.all(build.project().getId()), build.paths().locales().isLocalized());
+    }
+
+    /** The page outputs {@code plan} renders, as output keys. */
+    private static List<OutputKey> plannedPages(BuildPlan plan) {
+        return plan.entries().stream()
+                .map(entry -> new OutputKey(entry.outputPath(), entry.pageUuid(), entry.channel(), entry.locale(),
+                        entry.pagination() == null ? null : entry.pageNumber()))
+                .toList();
     }
 
     /**
@@ -730,6 +794,10 @@ public class GenerationService {
             List<RenderedFile> published = check.published(outcome.files());
             emit(runId, STAGE_CHECK, checkedMessage(check), 0, fileErrors.size(), warnings.size(), null);
 
+            // Redirects (M30.4.2): what moved since the build the target serves, and the redirects this build emits —
+            // against what it publishes after the hold-back. Stored only with the published run, below.
+            BuildRedirects.Result redirects = buildRedirects(build).forOutputs(check.finalOutputs().values());
+
             List<OutputFile> allFiles = new ArrayList<>();
             for (RenderedFile file : published) {
                 allFiles.add(file.toOutputFile());
@@ -741,7 +809,7 @@ public class GenerationService {
             List<String> channels = request.channels() == null ? parseChannels(run.getChannels()) : request.channels();
             PostProcessContext ctx = new PostProcessContext(
                     build.project().getId(), projectKey, baseUrl, channels, carry.sitePages(),
-                    false, java.util.List.of(), java.util.List.of(), carry.carriedText(),
+                    false, redirects.redirects(), java.util.List.of(), carry.carriedText(),
                     locales.isLocalized() ? locales.defaultLocale() : null);
             List<OutputFile> processed = postProcessStage.apply(ctx, allFiles);
 
@@ -763,9 +831,15 @@ public class GenerationService {
             byte[] qualityFacts = check.sidecar().toJson();
             // The manifest marks a published build (M29.2.2): it is written right before the flip, and both happen
             // only while the run is still RUNNING, on its locked row — a cancel that committed first wins. The
-            // findings are stored in the same transaction: a run that isn't recorded stores none.
+            // findings are stored in the same transaction: a run that isn't recorded stores none. So are the detected
+            // redirects (M30.4.2): written before the publish, so a failed publish rolls them back with the run.
+            int activeRedirects = redirects.active().size();
             GenerationRun done = control.whileRunning(runId, active -> {
                         findingStore.save(runId, check.findings()).applyTo(active);
+                        RedirectService.AutoResult stored =
+                                redirectService.upsertAuto(active.getProjectId(), runId, redirects.candidates());
+                        active.setPlanSummary(PlanInsight.redirects(
+                                active.getPlanSummary(), stored.added() + stored.replaced(), activeRedirects));
                         writer.writeSidecar(runId, QualitySidecar.NAME, qualityFacts);
                         writer.writeManifest(runId, publication.manifest());
                         writer.publish(runId);

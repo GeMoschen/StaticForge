@@ -19,6 +19,9 @@ import java.util.Map;
  * @param byFirstEdge entry counts by the first edge of their chain ({@code NONE} without a chain)
  * @param via the largest groups of entries by first edge and the asset it leads to, largest first
  * @param planAvailable {@code false} once retention pruned a run's entries
+ * @param redirectsAdded automatic redirects the build added or re-pointed (M30.4.2); a dry run: those it would add
+ *     (it can't know which pages a run would hold back); {@code null} for a run that isn't published (or before M30)
+ * @param redirectsActive redirects the build emitted; {@code null} for a dry run and a run that isn't published
  */
 public record PlanSummaryView(
         String mode,
@@ -37,7 +40,9 @@ public record PlanSummaryView(
         Map<String, Integer> byFirstEdge,
         Map<String, Integer> byChannel,
         List<Via> via,
-        boolean planAvailable) {
+        boolean planAvailable,
+        Integer redirectsAdded,
+        Integer redirectsActive) {
 
     /** {@code count} entries whose chain starts with {@code edge} to the asset. */
     public record Via(String edge, String assetUuid, String assetType, String uid, int count) {}

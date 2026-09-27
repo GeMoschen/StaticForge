@@ -145,7 +145,8 @@ public class GenerationController {
                 PlanViews.summary(dryRun.summary()),
                 PlanViews.changedAssets(dryRun.summary()),
                 PlanViews.entries(entries),
-                dryRun.diagnostics());
+                dryRun.diagnostics(),
+                PlanViews.redirectCandidates(dryRun));
     }
 
     /** The stored plan of a past run (M22.2.1); {@code entries} is {@code null} once retention pruned them. */
@@ -169,6 +170,7 @@ public class GenerationController {
                 PlanViews.summary(stored.summary()),
                 PlanViews.changedAssets(stored.summary()),
                 stored.entries() == null ? null : PlanViews.entries(stored.entries()),
+                null,
                 null);
     }
 

@@ -3541,6 +3541,10 @@ export interface components {
             };
             via?: components["schemas"]["Via"][];
             planAvailable?: boolean;
+            /** Format: int32 */
+            redirectsAdded?: number;
+            /** Format: int32 */
+            redirectsActive?: number;
         };
         StartedBy: {
             /** Format: int64 */
@@ -3582,6 +3586,7 @@ export interface components {
             changedAssets?: components["schemas"]["ChangedAsset"][];
             entries?: components["schemas"]["EntryPage"];
             diagnostics?: components["schemas"]["JsonNode"];
+            redirectCandidates?: components["schemas"]["RedirectCandidate"][];
         };
         PageMeta: {
             /** Format: int32 */
@@ -3615,6 +3620,16 @@ export interface components {
             causeCount?: number;
             fallbackCause?: string;
             steps?: components["schemas"]["StepView"][];
+        };
+        RedirectCandidate: {
+            channel?: string;
+            locale?: string;
+            fromPath?: string;
+            /** Format: uuid */
+            toAssetUuid?: string;
+            /** Format: int32 */
+            toPageNumber?: number;
+            toPath?: string;
         };
         StepView: {
             /** Format: uuid */
@@ -3940,10 +3955,10 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -3958,15 +3973,15 @@ export interface components {
             empty?: boolean;
         };
         PageableObject: {
+            unpaged?: boolean;
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
+            paged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
-            paged?: boolean;
-            unpaged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -3989,10 +4004,10 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -4248,10 +4263,10 @@ export interface components {
             scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageMediaSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
@@ -4410,10 +4425,10 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             first?: boolean;
             last?: boolean;
             /** Format: int32 */
