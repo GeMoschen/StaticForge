@@ -5,6 +5,7 @@ import { SfButtonComponent } from '../../../shared/components/sf-button.componen
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { EditorDefinition } from '../form.model';
 import { buildRowGroup, errorMessageFor } from '../form-builder.service';
+import { controlChanges } from '../control-changes';
 import { SfEditorOutlet } from '../editor-outlet.component';
 
 @Component({
@@ -19,15 +20,23 @@ export class SfListEditor {
   readonly definition = input.required<EditorDefinition>();
   readonly control = input.required<FormArray>();
 
-  readonly message = computed(() => errorMessageFor(this.definition(), this.control()));
+  /** Re-runs the computeds below when the control changes (a form control is not a signal). */
+  private readonly changes = controlChanges(() => this.control());
+
+  readonly message = computed(() => {
+    this.changes();
+    return errorMessageFor(this.definition(), this.control());
+  });
 
   readonly canAdd = computed(() => {
     const max = this.definition().max;
+    this.changes();
     return max == null || this.control().length < max;
   });
 
   readonly canRemove = computed(() => {
     const min = this.definition().min ?? 0;
+    this.changes();
     return this.control().length > min;
   });
 

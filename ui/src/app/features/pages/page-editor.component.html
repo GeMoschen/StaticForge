@@ -81,7 +81,7 @@
         } @else if (page()) {
           @if (focusedSection(); as ctx) {
             <!-- Section scope: only this one section. -->
-            <section class="page-editor__body">
+            <section class="page-editor__body" [attr.data-sf-section-scope]="ctx.section.instanceId">
               <header class="page-editor__body-header">
                 <span class="page-editor__body-title">{{ sectionTitle(ctx.section.templateRef) }}</span>
               </header>

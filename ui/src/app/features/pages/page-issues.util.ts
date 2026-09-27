@@ -137,6 +137,35 @@ export interface IssueDestination {
   preview: { instanceId: string | null; selector: string | null } | null;
 }
 
+/**
+ * The element an issue focuses in the page editor's centre column: the field `editor` of the page's own form (`section`
+ * `null`) or of section `section`, else that section's card. A section counts only inside the section scope the editor
+ * opens for it (`[data-sf-section-scope]`): right after `?section=` changes, the body scope's card with the same id is
+ * still on screen and is about to be replaced — focusing it lost the focus and the highlight with it.
+ *
+ * @returns `null` while the scope isn't rendered yet
+ */
+export function issueFocusTarget(root: ParentNode, section: string | null, editor: string | null): HTMLElement | null {
+  const scope =
+    section === null
+      ? root.querySelector<HTMLElement>('[data-sf-page-fields]')
+      : root.querySelector<HTMLElement>(
+          `[data-sf-section-scope="${cssValue(section)}"] [data-sf-section="${cssValue(section)}"]`,
+        );
+  const field =
+    scope && editor
+      ? scope.querySelector<HTMLElement>(
+          `:scope ${section === null ? '' : '> .section-card__body > sf-content-form '}> .sf-content-form > [data-sf-editor="${cssValue(editor)}"]`,
+        )
+      : null;
+  return field ?? (section === null ? null : scope);
+}
+
+/** `value` quoted for a CSS attribute selector (`[data-x="…"]`). */
+function cssValue(value: string): string {
+  return value.replace(/["\\]/g, (char) => `\\${char}`);
+}
+
 /** Whether clicking an issue can take the editor anywhere (else it only expands). */
 export function hasTarget(target: IssueTarget): boolean {
   return target.editorPath !== null || target.sectionInstanceId !== null || target.selector !== null;

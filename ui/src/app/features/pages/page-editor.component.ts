@@ -42,7 +42,13 @@ import { SfPreviewFrameComponent } from '../preview';
 import { readStoredView } from '../preview/preview-view.util';
 import type { PreviewView } from '../../core/api/api.client';
 import { PageIssuesPanelComponent } from './page-issues-panel.component';
-import { issueDestination, type ContentIssue, type DraftCheckView, type IssueTarget } from './page-issues.util';
+import {
+  issueDestination,
+  issueFocusTarget,
+  type ContentIssue,
+  type DraftCheckView,
+  type IssueTarget,
+} from './page-issues.util';
 import type { BodiesMap, FieldResolveEvent, ResolveMode, SectionInstance } from './types';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseBarComponent } from '../release/release-bar.component';
@@ -934,16 +940,7 @@ export class PageEditorComponent {
    * field is named (or the card is collapsed), and focuses it. Waits for the scope switch to render.
    */
   private focusField(section: string | null, editor: string | null, attempt = 0): void {
-    const root = this.mainRef().nativeElement;
-    const scope = section === null
-      ? root.querySelector<HTMLElement>('[data-sf-page-fields]')
-      : root.querySelector<HTMLElement>(`[data-sf-section="${cssValue(section)}"]`);
-    const field = scope && editor
-      ? scope.querySelector<HTMLElement>(
-          `:scope ${section === null ? '' : '> .section-card__body > sf-content-form '}> .sf-content-form > [data-sf-editor="${cssValue(editor)}"]`,
-        )
-      : null;
-    const found = field ?? (section === null ? null : scope);
+    const found = issueFocusTarget(this.mainRef().nativeElement, section, editor);
     if (!found) {
       if (attempt < 20) {
         setTimeout(() => this.focusField(section, editor, attempt + 1), 50);
@@ -951,8 +948,9 @@ export class PageEditorComponent {
       return;
     }
     found.scrollIntoView?.({ block: 'center' });
+    const field = found.hasAttribute('data-sf-editor');
     const focusable = field
-      ? field.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select, [contenteditable="true"], button')
+      ? found.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select, [contenteditable="true"], button')
       : found.querySelector<HTMLElement>('.section-card__header');
     focusable?.focus({ preventScroll: true });
     found.classList.add('sf-issue-target');
@@ -983,9 +981,4 @@ export class PageEditorComponent {
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
   }
-}
-
-/** `value` quoted for a CSS attribute selector (`[data-x="…"]`). */
-function cssValue(value: string): string {
-  return value.replace(/["\\]/g, (char) => `\\${char}`);
 }

@@ -59,7 +59,7 @@ OCTL renders content into a channel. One template per (template asset, channel).
 
 Built-ins: `html`, `attr`, `js`, `url`, `raw`, `upper`, `lower`, `capitalize`, `trim`, `truncate(n[,suffix])`, `default("…")`, `date("pattern")`, `number("pattern")`, `stripTags`, `nl2br`, `md`, `plain`, `json`, `slug`, `join(", ")`, `size`.
 
-Channel `default_escaping` is applied automatically as the final step unless the chain already contains an escaping filter or `raw` (§16.3).
+Channel `default_escaping` is applied automatically as the final step unless the chain already contains an escaping filter or `raw` (§16.3). `md` and `nl2br` count as escaping: they escape their input themselves and write markup (`<p>`, `<a>`, `<br>`), so `$CMS_VALUE(notes | md)$` renders HTML in an HTML channel. A Markdown link or image whose URL has a scheme other than `http`, `https`, `mailto` or `tel` (e.g. `javascript:`) keeps only its text.
 
 ### 2.3 Example — section HTML template (§16.6)
 

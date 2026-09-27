@@ -28,7 +28,8 @@ editor media heroImage {
 ## Rendering
 
 `$CMS_REF$` resolves the public path (optionally with a `variant`); `$CMS_VALUE$` reads the
-sub-fields (`width`, `height`, `altText`, …):
+sub-fields (`width`, `height`, `altText`, …) of the picked media. `altText` is the field's own alt text
+(`altOverride`, the editor's "Alt text" box) when it is filled in, else the media's:
 
 ```
 <img src="$CMS_REF(heroImage, variant="w1600")$"

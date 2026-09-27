@@ -155,7 +155,11 @@ export class GenerationComponent implements OnDestroy {
     return id != null && this.runs().some((run) => run.id === id);
   });
 
-  /** Opens {@link openRun}'s details (on {@link openTab}) once the history holds it. */
+  /**
+   * Opens {@link openRun}'s details (on {@link openTab}) once the history holds it, and follows it in the live log while
+   * it is still queued or running — "Show progress" after "Build now" lands here, and the row would otherwise keep the
+   * status it had when the history was read.
+   */
   private readonly openRunEffect = effect(
     () => {
       const id = this.openRun();
@@ -165,6 +169,10 @@ export class GenerationComponent implements OnDestroy {
           this.expandedRunId.set(id);
           if (findings) {
             this.detailsTab.set('findings');
+          }
+          const run = this.runs().find((r) => r.id === id);
+          if (run && (run.status === 'QUEUED' || run.status === 'RUNNING') && this.liveRunId() !== id) {
+            this.watchLive(run);
           }
         });
       }
