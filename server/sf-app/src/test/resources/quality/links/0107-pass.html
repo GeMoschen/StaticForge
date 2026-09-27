@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Links to existing anchors</title>
+  <meta name="description" content="Served at docs/guide.html: every fragment names an id or anchor of its target, or is not checked.">
+</head>
+<body>
+  <h1 id="intro">Links to existing anchors</h1>
+  <h2 id="café">Café</h2>
+  <a name="legacy"></a>
+  <a href="#intro">an id on this page</a>
+  <a href="#legacy">an a name on this page</a>
+  <a href="#caf%C3%A9">a percent-encoded id</a>
+  <a href="#" role="button">a bare # (SF-CHK-0108's, and exempt here as a button)</a>
+  <a href="#top">the top</a>
+  <a href="#TOP">the top, any case</a>
+  <a href="#intro:~:text=anchors">an id with a text directive</a>
+  <a href="#:~:text=anchors">a text fragment</a>
+  <a href="/about/#team">root-relative pretty URL</a>
+  <a href="https://example.com/blog-2.html#page-2">baseUrl-absolute, paginated page 2</a>
+  <a href="../de/docs/guide.html#einfuehrung">localized</a>
+  <a href="../assets/media/doc.pdf#page=2">media: not checked</a>
+  <a href="guide.md#anything">another channel: not checked</a>
+  <a href="../gone.html#intro">a missing page is SF-CHK-0101</a>
+</body>
+</html>

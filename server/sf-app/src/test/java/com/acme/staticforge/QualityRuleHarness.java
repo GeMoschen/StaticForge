@@ -227,7 +227,7 @@ public final class QualityRuleHarness {
     public Result run() {
         EffectiveQualityConfig config = EffectiveQualityConfig.of(registry, settings);
         CheckEnvironment environment = new CheckEnvironment(baseUrl, locales, outputs,
-                channel -> channels.getOrDefault(channel, ChannelOutputSettings.defaults(channel)), assets::get);
+                channel -> channels.getOrDefault(channel, ChannelOutputSettings.defaults(channel)), assets::get, events);
         PageRuleRunner pages = new PageRuleRunner(registry);
         SiteRuleRunner sites = new SiteRuleRunner(registry);
 
@@ -260,7 +260,7 @@ public final class QualityRuleHarness {
         Map<String, HtmlFacts> publishedFacts = new LinkedHashMap<>(facts);
         publishedFacts.keySet().removeAll(held);
         CheckEnvironment afterHoldBack = new CheckEnvironment(baseUrl, locales, published,
-                channel -> channels.getOrDefault(channel, ChannelOutputSettings.defaults(channel)), assets::get);
+                channel -> channels.getOrDefault(channel, ChannelOutputSettings.defaults(channel)), assets::get, events);
         findings.addAll(sites.run(
                 new SiteIndex(afterHoldBack, publishedFacts, held, events, redirectSources), config, true));
         return new Result(List.copyOf(findings), Map.copyOf(facts), Set.copyOf(held));

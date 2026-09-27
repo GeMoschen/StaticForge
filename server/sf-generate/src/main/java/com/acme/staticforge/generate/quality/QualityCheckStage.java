@@ -161,7 +161,7 @@ public class QualityCheckStage {
                     entry.pagination() == null ? null : entry.pageNumber());
             outputs.put(key.path(), new IndexedOutput(key, BuildManifest.Kind.PAGE, false));
             if (!file.references().isEmpty()) {
-                events.put(key.path(), file.references());
+                events.put(key.path(), located(file.references(), input.snapshot(), entry));
             }
             toCheck.add(file);
         }
@@ -176,13 +176,13 @@ public class QualityCheckStage {
         }
 
         CheckEnvironment environment = new CheckEnvironment(
-                input.baseUrl(), input.locales(), outputs, input.channels(), labels(input.snapshot()));
+                input.baseUrl(), input.locales(), outputs, input.channels(), labels(input.snapshot()), events);
 
         // Page rules: new HTML outputs are parsed here, carried ones bring facts and findings from the base sidecar.
         Map<String, HtmlFacts> facts = new LinkedHashMap<>();
         Map<String, List<Finding>> pageFindings = new LinkedHashMap<>();
         checkRendered(toCheck, outputs, config, environment, input.checkpoint(), facts, pageFindings);
-        carryForward(input, outputs, environment, config, facts, pageFindings);
+        carryForward(input, outputs, environment, config, facts, pageFindings, events);
         int checked = pageFindings.size();
 
         List<Finding> findings = new ArrayList<>();
@@ -214,11 +214,11 @@ public class QualityCheckStage {
         Set<String> heldBack = new LinkedHashSet<>(input.notRendered());
         heldBack.addAll(held);
         CheckEnvironment afterHoldBack = new CheckEnvironment(
-                input.baseUrl(), input.locales(), published, input.channels(), labels(input.snapshot()));
+                input.baseUrl(), input.locales(), published, input.channels(), labels(input.snapshot()), events);
         findings.addAll(siteRules.run(
                 new SiteIndex(afterHoldBack, publishedFacts, heldBack, events, Set.of()), config, true));
 
-        QualitySidecar sidecar = sidecar(config, publishedFacts, pageFindings, held);
+        QualitySidecar sidecar = sidecar(config, publishedFacts, pageFindings, events, held);
         sample.stop(meterRegistry.timer("sf.quality.check.duration"));
         count(findings);
         return new CheckResult(List.copyOf(findings), Set.copyOf(held), pageErrors, sidecar, outputs, checked);
@@ -280,9 +280,9 @@ public class QualityCheckStage {
     }
 
     /**
-     * Carried outputs take their facts and page-local findings from the base build's sidecar (epic decision 7): the
-     * findings under the current configuration (a rule switched off drops them, the severity is the current one), and
-     * marked as carried.
+     * Carried outputs take their facts, page-local findings and reference events from the base build's sidecar (epic
+     * decision 7): the findings under the current configuration (a rule switched off drops them, the severity is the
+     * current one), and marked as carried; the events for the site rules, which run fresh over them.
      */
     private static void carryForward(
             CheckInput input,
@@ -290,7 +290,8 @@ public class QualityCheckStage {
             CheckEnvironment environment,
             EffectiveQualityConfig config,
             Map<String, HtmlFacts> facts,
-            Map<String, List<Finding>> findings) {
+            Map<String, List<Finding>> findings,
+            Map<String, List<ReferenceEvent>> events) {
         if (input.baseSidecar() == null) {
             return;
         }
@@ -304,6 +305,9 @@ public class QualityCheckStage {
             }
             if (entry.facts() != null) {
                 facts.put(output.path(), entry.facts());
+            }
+            if (!entry.references().isEmpty()) {
+                events.put(output.path(), entry.references());
             }
             List<Finding> carried = new ArrayList<>();
             for (QualitySidecar.PageFinding finding : entry.findings()) {
@@ -319,15 +323,30 @@ public class QualityCheckStage {
             EffectiveQualityConfig config,
             Map<String, HtmlFacts> publishedFacts,
             Map<String, List<Finding>> pageFindings,
+            Map<String, List<ReferenceEvent>> events,
             Set<String> held) {
         Map<String, QualitySidecar.Entry> entries = new LinkedHashMap<>();
         pageFindings.forEach((path, findings) -> {
             if (!held.contains(path)) {
                 entries.put(path, new QualitySidecar.Entry(
-                        publishedFacts.get(path), findings.stream().map(QualitySidecar.PageFinding::of).toList()));
+                        publishedFacts.get(path),
+                        findings.stream().map(QualitySidecar.PageFinding::of).toList(),
+                        events.getOrDefault(path, List.of())));
             }
         });
         return new QualitySidecar(QualitySidecar.VERSION, config.fingerprint(), entries);
+    }
+
+    /**
+     * {@code references} of the output {@code entry} rendered, each located at the editor path of the rendering page's
+     * content that holds it (when the page's content holds it at all, not a template).
+     */
+    private static List<ReferenceEvent> located(List<ReferenceEvent> references, Snapshot snapshot, PlanEntry entry) {
+        SnapshotAsset page = entry.pageUuid() == null ? null : snapshot.asset(entry.pageUuid(), entry.locale());
+        Map<UUID, String> paths = EditorPaths.of(page == null ? null : page.payload());
+        return references.stream()
+                .map(event -> paths.containsKey(event.target()) ? event.withEditorPath(paths.get(event.target())) : event)
+                .toList();
     }
 
     private static Diagnostic heldBackError(Snapshot snapshot, PageKey page, Collection<String> codes) {

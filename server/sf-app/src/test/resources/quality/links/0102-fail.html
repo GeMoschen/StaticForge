@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>References to missing media</title>
+  <meta name="description" content="Served at docs/guide.html: every media reference below resolves to a path the build doesn't publish.">
+  <link rel="stylesheet" href="/css/site.css">
+  <script src="app.js"></script>
+</head>
+<body>
+  <h1>References to missing media</h1>
+  <img src="../assets/media/nope.png" alt="relative">
+  <img src="../assets/media/logo.png" srcset="../assets/media/logo.png 1x, /assets/media/logo@3x.png 3x" alt="srcset">
+  <picture>
+    <source srcset="https://example.com/assets/media/hero.webp" type="image/webp">
+    <img src="../assets/media/logo.png" alt="picture">
+  </picture>
+  <video src="../de/assets/media/missing-clip.mp4" poster="poster.jpg"></video>
+  <audio src="/assets/media/podcast.mp3"></audio>
+</body>
+</html>

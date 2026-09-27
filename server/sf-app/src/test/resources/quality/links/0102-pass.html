@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Media that all resolves</title>
+  <meta name="description" content="Served at docs/guide.html: every media reference resolves to an output of the build.">
+  <link rel="canonical" href="https://example.com/docs/missing-canonical.html">
+  <link rel="alternate" hreflang="de" href="/de/docs/missing.html">
+  <link rel="stylesheet" href="https://cdn.example.org/site.css">
+  <link rel="icon" href="/assets/media/logo.png">
+  <script src="../assets/media/app.js"></script>
+</head>
+<body>
+  <h1>Media that all resolves</h1>
+  <img src="../assets/media/logo.png" srcset="../assets/media/logo.png 1x, /assets/media/logo@2x.png 2x" alt="srcset">
+  <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="inline">
+  <video src="https://example.com/de/assets/media/clip.mp4" poster="../assets/media/logo.png"></video>
+  <a href="../missing.html">a missing page is SF-CHK-0101, not 0102</a>
+</body>
+</html>
