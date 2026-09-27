@@ -13,11 +13,11 @@ verification.
 - [x] A1 — M30.1.2 rule config per project, findings table + API, run view counts
 - [x] A1 — M30.1.3 `CHECK` stage, hold-back `SF-GEN-0125`, reference events, sidecar, fallback causes, metrics
 - [x] A2 — M30.4.1 redirect registry model, manual API, for-asset, export/import (protocol 10)
-- [ ] B — M30.2.1 link rules
-- [ ] B — M30.2.2 SEO rules + `nav.noIndex`
-- [ ] B — M30.2.3 accessibility rules
-- [ ] B — M30.4.2 redirect detection on build
-- [ ] B — M30.5.1 redirect formats per target
+- [x] B — M30.2.1 link rules
+- [x] B — M30.2.2 SEO rules + `nav.noIndex`
+- [x] B — M30.2.3 accessibility rules
+- [x] B — M30.4.2 redirect detection on build
+- [x] B — M30.5.1 redirect formats per target
 - [ ] C — M30.3.1 draft check endpoint
 - [ ] C — M30.3.2 page editor Issues panel
 - [ ] C — M30.6.1 Quality tab
