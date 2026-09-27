@@ -12,6 +12,7 @@ import { SfFieldComponent } from '../../../shared/components/sf-field.component'
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { EditorDefinition } from '../form.model';
 import { errorMessageFor } from '../form-builder.service';
+import { controlChanges } from '../control-changes';
 
 @Component({
   selector: 'sf-rich-text-editor',
@@ -29,11 +30,16 @@ export class SfRichTextEditor {
 
   readonly valueControl = computed(() => this.control().get('value') as FormControl);
 
-  readonly message = computed(() =>
-    errorMessageFor(this.definition(), this.valueControl()),
-  );
+  /** Re-runs the computeds below when the control changes (a form control is not a signal). */
+  private readonly changes = controlChanges(() => this.valueControl());
+
+  readonly message = computed(() => {
+    this.changes();
+    return errorMessageFor(this.definition(), this.valueControl());
+  });
 
   readonly count = computed(() => {
+    this.changes();
     const html = String(this.valueControl().value ?? '');
     return html.replace(/<[^>]*>/g, '').length;
   });
@@ -41,6 +47,7 @@ export class SfRichTextEditor {
   constructor() {
     effect(() => {
       const element = this.editor().nativeElement;
+      this.changes();
       const value = String(this.valueControl().value ?? '');
       if (document.activeElement !== element && element.innerHTML !== value) {
         element.innerHTML = value;
