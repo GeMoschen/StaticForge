@@ -1,0 +1,113 @@
+<section class="issues" [attr.aria-labelledby]="headingId">
+  <h3 class="issues__heading" [id]="headingId">
+    <button type="button" class="issues__toggle" [attr.aria-expanded]="open()" (click)="toggle()">
+      <span aria-hidden="true">{{ open() ? '▾' : '▸' }}</span>
+      Issues
+      <span
+        class="issues__count"
+        [class.issues__count--error]="errors() > 0"
+        [class.issues__count--none]="count() === 0"
+        [attr.aria-label]="count() + (count() === 1 ? ' issue' : ' issues')"
+        >{{ count() }}</span
+      >
+    </button>
+    <span class="issues__status" aria-live="polite">
+      @if (state().kind === 'checking') {
+        <span class="issues__spinner" aria-hidden="true"></span>
+      }
+      {{ status() }}
+    </span>
+  </h3>
+
+  @if (open()) {
+    @if (previewView() === 'published') {
+      <p class="issues__note">The preview shows the published page; these checks cover the draft.</p>
+    }
+
+    <h4 class="issues__group">Content</h4>
+    @if (content().length === 0) {
+      <p class="issues__empty">No content issues.</p>
+    } @else {
+      <ul class="issues__list" aria-label="Content issues">
+        @for (issue of content(); track $index; let i = $index) {
+          <li>
+            <button
+              type="button"
+              class="issues__item"
+              [class.issues__item--error]="issue.severity === 'ERROR'"
+              [attr.aria-expanded]="isExpanded('content:' + i)"
+              (click)="selectContent(issue, i)"
+            >
+              <span class="issues__severity">{{ severity(issue.severity) }}</span>
+              <span class="issues__line">
+                <code class="issues__path">{{ issue.path }}</code>
+                <span class="issues__message" [class.issues__message--open]="isExpanded('content:' + i)">{{
+                  issue.message
+                }}</span>
+              </span>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+
+    <h4 class="issues__group">Output</h4>
+    @switch (state().kind) {
+      @case ('error') {
+        <p class="issues__empty">
+          Checks unavailable — the draft could not be checked right now. Editing is not affected.
+          <button type="button" class="issues__retry" (click)="retry()">Check again</button>
+        </p>
+      }
+      @case ('checked') {
+        @if (findings().length === 0) {
+          <p class="issues__empty">No problems found in the draft.</p>
+        } @else {
+          <ul class="issues__list" aria-label="Output issues">
+            @for (finding of findings(); track $index; let i = $index) {
+              <li>
+                <button
+                  type="button"
+                  class="issues__item"
+                  [class.issues__item--error]="finding.severity === 'ERROR'"
+                  [attr.aria-expanded]="isExpanded('output:' + i)"
+                  (click)="selectFinding(finding, i)"
+                >
+                  <span class="issues__severity">{{ severity(finding.severity) }}</span>
+                  <span class="issues__line">
+                    <span class="issues__rule">{{ finding.name ?? finding.code }}</span>
+                    @if (fixHint(finding.fixHint); as hint) {
+                      <span class="issues__hint">{{ hint }}</span>
+                    }
+                    <span class="issues__message" [class.issues__message--open]="isExpanded('output:' + i)">{{
+                      finding.message
+                    }}</span>
+                    @if (isExpanded('output:' + i)) {
+                      <span class="issues__detail">
+                        <code>{{ finding.code }}</code>
+                        @if (finding.editorPath) {
+                          · field <code>{{ finding.editorPath }}</code>
+                        }
+                        @if (finding.selector) {
+                          · <code>{{ finding.selector }}</code>
+                        }
+                      </span>
+                    }
+                  </span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        @if (skipped().length > 0) {
+          <p class="issues__skipped">
+            Not fully checked on a draft, a build checks them: {{ skipped().join(', ') }}.
+          </p>
+        }
+      }
+      @default {
+        <p class="issues__empty">Checking the draft…</p>
+      }
+    }
+  }
+</section>
