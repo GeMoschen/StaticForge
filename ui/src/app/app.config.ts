@@ -8,6 +8,7 @@ import { routes } from './app.routes';
 import { jwtInterceptor } from './core/auth/jwt.interceptor';
 import { passwordRequiredInterceptor } from './core/auth/password-required.interceptor';
 import { refreshInterceptor } from './core/auth/refresh.interceptor';
+import { compactedReadInterceptor } from './core/api/compacted-read.interceptor';
 import { errorInterceptor } from './core/api/error.interceptor';
 import { etagInterceptor } from './core/api/etag.interceptor';
 import { readonlyInterceptor } from './core/api/readonly.interceptor';
@@ -29,6 +30,8 @@ export const appConfig: ApplicationConfig = {
         // registered after it.
         readonlyInterceptor,
         etagInterceptor,
+        // Notes past-revision reads that come back compacted, for the time-travel banner (M29.5.2).
+        compactedReadInterceptor,
       ]),
     ),
   ],

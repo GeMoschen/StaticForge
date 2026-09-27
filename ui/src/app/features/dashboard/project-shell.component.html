@@ -29,16 +29,7 @@
       </div>
     }
     <sf-archived-banner [projectKey]="projectKey()" />
-    @if (timeTravel.isTimeTravel()) {
-      <div class="shell__timemachine">
-        <span class="shell__timemachine-label">
-          Viewing revision {{ timeTravel.activeRevision() }}
-        </span>
-        <button class="shell__timemachine-back" type="button" (click)="backToNow()">
-          Back to now
-        </button>
-      </div>
-    }
+    <sf-time-travel-banner [revisions]="store.revisions()" (back)="backToNow()" />
     <router-outlet />
   </main>
 </div>

@@ -12,10 +12,12 @@ import { DialogService } from '../../core/ui/dialog.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfVisualDiffComponent } from './visual-diff/visual-diff.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { COMPACTED_ASSET_RESTORE_NOTICE, COMPACTED_RESTORE_NOTICE } from './compaction.util';
 
 type RevisionDiff = components['schemas']['RevisionDiff'];
 type AssetDiff = components['schemas']['AssetDiff'];
@@ -23,7 +25,7 @@ type AssetDiff = components['schemas']['AssetDiff'];
 @Component({
   selector: 'sf-revision-diff',
   standalone: true,
-  imports: [SfButtonComponent, SfEmptyStateComponent, SfSpinnerComponent, SfVisualDiffComponent],
+  imports: [SfButtonComponent, SfEmptyStateComponent, SfIconComponent, SfSpinnerComponent, SfVisualDiffComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './revision-diff.component.html',
   styleUrl: './revision-diff.component.scss',
@@ -43,10 +45,17 @@ export class RevisionDiffComponent {
   protected readonly diff = signal<RevisionDiff | null>(null);
   protected readonly assets = computed<AssetDiff[]>(() => this.diff()?.assets ?? []);
   protected readonly revisionNumber = computed<number>(() => Number(this.revisionId()));
+  /** The server's message for a compacted revision (M29.4.3), shown instead of an empty field diff. */
+  protected readonly compactedMessage = computed(
+    () => this.diff()?.message ?? 'Exact changes of this revision were compacted; the state at the end of the day is kept',
+  );
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly restoring = signal(false);
   protected readonly confirmText = signal('');
+  /** The compacted asset whose restore waits for confirmation. */
+  protected readonly assetToConfirm = signal<AssetDiff | null>(null);
+  protected readonly compactedAssetRestoreNotice = COMPACTED_ASSET_RESTORE_NOTICE;
 
   constructor() {
     effect(
@@ -79,7 +88,34 @@ export class RevisionDiffComponent {
       });
   }
 
+  /**
+   * Restores one asset. An asset whose change at this revision was compacted (`AssetDiff.compacted`) restores its
+   * surviving end-of-day version, so that asks first; an exact one restores with one click.
+   */
   protected restoreAsset(asset: AssetDiff): void {
+    if (!asset.uuid || this.restoring()) {
+      return;
+    }
+    if (asset.compacted) {
+      this.assetToConfirm.set(asset);
+      return;
+    }
+    this.doRestoreAsset(asset);
+  }
+
+  protected confirmAssetRestore(): void {
+    const asset = this.assetToConfirm();
+    this.assetToConfirm.set(null);
+    if (asset) {
+      this.doRestoreAsset(asset);
+    }
+  }
+
+  protected cancelAssetRestore(): void {
+    this.assetToConfirm.set(null);
+  }
+
+  private doRestoreAsset(asset: AssetDiff): void {
     if (!asset.uuid || this.restoring()) {
       return;
     }
@@ -89,9 +125,15 @@ export class RevisionDiffComponent {
         fromRevision: Number(this.revisionId()),
       })
       .subscribe({
-        next: () => {
+        next: (restored) => {
           this.restoring.set(false);
-          this.toast.show('A new revision was created', 'success');
+          // `compacted`: the exact version was compacted away, the surviving end-of-day version was restored.
+          this.toast.show(
+            restored?.compacted
+              ? 'A new revision was created — the state at the end of that day was restored'
+              : 'A new revision was created',
+            'success',
+          );
         },
         error: () => {
           this.restoring.set(false);
@@ -104,7 +146,10 @@ export class RevisionDiffComponent {
     this.confirmText.set('');
     this.dialog.open({
       title: `Roll back to revision ${this.revisionId()}`,
-      message: 'Rolling back appends a new revision restoring the project state at this revision. Existing history is never rewritten. Type ROLLBACK to confirm.',
+      message:
+        'Rolling back appends a new revision restoring the project state at this revision. Existing history is never rewritten. ' +
+        (this.diff()?.compacted ? COMPACTED_RESTORE_NOTICE + ' ' : '') +
+        'Type ROLLBACK to confirm.',
       confirmLabel: 'Roll back',
       cancelLabel: 'Cancel',
       kind: 'danger',

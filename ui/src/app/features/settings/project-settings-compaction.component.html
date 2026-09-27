@@ -1,0 +1,143 @@
+<section class="compaction" aria-labelledby="compaction-title">
+  <header>
+    <h2 class="compaction__title" id="compaction-title">Revision compaction</h2>
+    <p class="compaction__subtitle">
+      Compaction keeps the project's history small. For changes older than the age you set, it keeps every released
+      version, the versions of builds still on disk, the versions pinned by scheduled releases, and the state of each
+      page, record and file at the end of every day (UTC). It drops the exact in-between states of those days: you can
+      still travel to such a revision, but you see the state at the end of its day. Removed states can't be brought
+      back.
+    </p>
+  </header>
+
+  <dl class="compaction__facts">
+    <dt>Compacted through</dt>
+    <dd>
+      @if (compactedThrough(); as through) {
+        revision {{ through }}
+      } @else {
+        nothing compacted yet
+      }
+    </dd>
+  </dl>
+
+  @if (!canRead()) {
+    <p class="compaction__note">Only project admins can see and change this setting.</p>
+  } @else if (saved()) {
+    @let policy = saved()!;
+    <dl class="compaction__facts">
+      <dt>Status</dt>
+      <dd data-testid="compaction-status">
+        @if (policy.enabled) {
+          On — older than {{ policy.olderThanDays }} days
+          @if (policy.enabledAt) {
+            <span class="compaction__muted">(since {{ formatInstant(policy.enabledAt) }})</span>
+          }
+        } @else {
+          Off
+        }
+      </dd>
+      <dt>Last compaction</dt>
+      <dd data-testid="compaction-last-run">
+        @if (lastRun(); as run) {
+          {{ formatInstant(run.finishedAt) }} — {{ run.outcome }}{{ run.dryRun ? ' (dry run)' : '' }}:
+          {{ run.versionsRemoved ?? 0 }} versions removed, {{ run.bytesFreed ?? 0 | sfFileSize }} freed
+          @if (run.error) {
+            <span class="compaction__error-inline">{{ run.error }}</span>
+          }
+        } @else {
+          none yet
+        }
+      </dd>
+    </dl>
+
+    <sf-field label="Older than (days)" [hint]="'At least ' + minDays + ' days — the server refuses less.'">
+      <input
+        class="input compaction__days"
+        type="number"
+        inputmode="numeric"
+        [min]="minDays"
+        step="1"
+        [value]="daysValue()"
+        [disabled]="!editable() || saving()"
+        [attr.aria-invalid]="daysInvalid()"
+        (input)="onDaysInput($event)"
+      />
+    </sf-field>
+    @if (editable() && daysInvalid()) {
+      <p class="compaction__invalid" role="alert">Enter a whole number of days, at least {{ minDays }}.</p>
+    }
+
+    @if (!editable()) {
+      <p class="compaction__note">
+        Read-only while the project is archived or you are viewing a past revision.
+      </p>
+    } @else {
+      <div class="compaction__actions">
+        @if (policy.enabled) {
+          @if (dirty()) {
+            <sf-button variant="ghost" [disabled]="saving()" (click)="discardDays()">Discard</sf-button>
+            <sf-button variant="primary" [disabled]="saving()" (click)="saveDays()">Save</sf-button>
+          }
+          <sf-button variant="secondary" [disabled]="saving()" (click)="disable()">Disable compaction</sf-button>
+        } @else {
+          <sf-button variant="danger" [disabled]="daysInvalid() || saving()" (click)="requestEnable()">
+            Enable compaction…
+          </sf-button>
+        }
+      </div>
+    }
+  } @else if (loadError()) {
+    <p class="compaction__errors" role="alert">{{ loadError() }}</p>
+  } @else {
+    <p class="compaction__note">Loading…</p>
+  }
+
+  @if (errors().length > 0) {
+    <ul class="compaction__errors" role="alert">
+      @for (error of errors(); track $index) {
+        <li>{{ error }}</li>
+      }
+    </ul>
+  }
+</section>
+
+@if (confirmation(); as pending) {
+  <div class="scrim" (click)="cancelConfirmation()"></div>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="compaction-confirm-title">
+    <h3 class="dialog__title" id="compaction-confirm-title">
+      {{ pending.lowering ? 'Compact more history?' : 'Enable compaction?' }}
+    </h3>
+    <p class="dialog__text">
+      Exact states older than {{ pending.days }} days are removed for good; the end of each day, releases, retained
+      builds and scheduled pins stay. The job compacts on its next run.
+    </p>
+    <div class="dialog__estimate" data-testid="compaction-estimate" aria-live="polite">
+      @if (estimate(); as e) {
+        If it ran now: <strong>{{ e.versionsRemoved ?? 0 }} versions removed</strong> of {{ e.versionsInWindow ?? 0 }}
+        older than {{ pending.days }} days, in {{ e.assetsTouched ?? 0 }} assets —
+        <strong>{{ e.bytesFreed ?? 0 | sfFileSize }}</strong> freed.
+      } @else if (!estimateError()) {
+        Estimating…
+      }
+    </div>
+    <sf-field [label]="'Type ' + projectKey() + ' to confirm'">
+      <input
+        class="input"
+        type="text"
+        autocomplete="off"
+        [value]="confirmText()"
+        (input)="onConfirmInput($event)"
+      />
+    </sf-field>
+    @if (estimateError(); as message) {
+      <p class="compaction__errors" role="alert">{{ message }}</p>
+    }
+    <footer class="dialog__footer">
+      <sf-button variant="ghost" (click)="cancelConfirmation()">Cancel</sf-button>
+      <sf-button variant="danger" [disabled]="!confirmMatches() || saving()" (click)="confirm()">
+        {{ saving() ? 'Saving…' : pending.lowering ? 'Compact more history' : 'Enable compaction' }}
+      </sf-button>
+    </footer>
+  </div>
+}

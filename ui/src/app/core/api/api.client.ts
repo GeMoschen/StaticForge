@@ -1166,6 +1166,38 @@ export class ApiClient {
     });
   }
 
+  // ── Revision compaction (M29.4) ──────────────────────────────────────────
+
+  /** The project's compaction policy, how far it has compacted and the last run on it (`PROJECT_ADMIN`). */
+  compactionPolicy(projectKey: string): Observable<S['CompactionPolicyView']> {
+    return this.http.get<S['CompactionPolicyView']>(`${BASE}/projects/${projectKey}/compaction`, { withCredentials: true });
+  }
+
+  /**
+   * Sets the policy (`PROJECT_ADMIN`). Enabling or lowering `olderThanDays` needs `confirm` = the project key
+   * (`422 SF-DOM-0182`); `olderThanDays` below 30 is `422 SF-DOM-0183`. Errors are shown by the card itself.
+   */
+  updateCompactionPolicy(
+    projectKey: string,
+    body: S['CompactionPolicyRequest'],
+    confirm?: string,
+  ): Observable<S['CompactionPolicyView']> {
+    return this.http.put<S['CompactionPolicyView']>(`${BASE}/projects/${projectKey}/compaction`, body, {
+      withCredentials: true,
+      params: this.params({ confirm }),
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** What compacting now with `olderThanDays` would remove: a dry run that changes nothing (`PROJECT_ADMIN`). */
+  compactionEstimate(projectKey: string, olderThanDays: number): Observable<S['CompactionEstimateView']> {
+    return this.http.get<S['CompactionEstimateView']>(`${BASE}/projects/${projectKey}/compaction/estimate`, {
+      withCredentials: true,
+      params: this.params({ olderThanDays }),
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
   /** The next run times of a cron in a zone, validated like a create (`422 SF-DOM-0165` for an invalid cron). */
   schedulePreviewTimes(projectKey: string, body: S['PreviewTimesRequest']): Observable<S['PreviewTimesView']> {
     return this.http.post<S['PreviewTimesView']>(`${BASE}/projects/${projectKey}/schedules/preview-times`, body, {

@@ -77,4 +77,23 @@ describe('RevisionsListComponent', () => {
 
     expect(screen.getByText(/8 assets/)).toBeTruthy();
   });
+
+  it('marks a compacted revision with an icon and the compacted tooltip', async () => {
+    const compacted: RevisionView = { ...singleAssetRevision, revisionId: 4, compacted: true };
+    const exact: RevisionView = { ...multiAssetRevision, compacted: false };
+    await render(RevisionsListComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: ApiClient, useValue: apiStub() },
+        { provide: RevisionsService, useValue: serviceStub([exact, compacted]) },
+        provideRouter([]),
+      ],
+    });
+
+    const row = screen.getByRole('link', { name: 'Revision 4 — Exact changes compacted — end-of-day state kept' });
+    const mark = screen.getByTestId('list-compacted');
+    expect(row.contains(mark)).toBe(true);
+    expect(mark.getAttribute('title')).toBe('Exact changes compacted — end-of-day state kept');
+    expect(screen.getByRole('link', { name: 'Revision 6' }).querySelector('[data-testid="list-compacted"]')).toBeNull();
+  });
 });

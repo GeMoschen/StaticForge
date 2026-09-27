@@ -126,8 +126,16 @@ export class AuthStore {
    * refuses every write there. `null` for a project the user can't reach.
    */
   roleFor(projectKey: string): string | null {
-    const role = this.isInstanceAdmin() ? 'PROJECT_ADMIN' : (this.projectRoles()[projectKey] ?? null);
+    const role = this.memberRoleFor(projectKey);
     return role !== null && this.archivedProjects().has(projectKey) ? 'VIEWER' : role;
+  }
+
+  /**
+   * The role by membership, not lowered in an archived project: what the server authorizes *reads* by (M29.5.2 — a
+   * project admin still reads the compaction policy of an archived project). Gate edit controls on {@link roleFor}.
+   */
+  memberRoleFor(projectKey: string): string | null {
+    return this.isInstanceAdmin() ? 'PROJECT_ADMIN' : (this.projectRoles()[projectKey] ?? null);
   }
 
   isArchived(projectKey: string | null | undefined): boolean {

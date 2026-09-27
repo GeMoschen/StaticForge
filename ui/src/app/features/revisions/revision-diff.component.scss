@@ -129,3 +129,24 @@
   gap: var(--sf-2);
   padding: var(--sf-4);
 }
+
+/* Compacted history (M29.5.2): the revision's exact changes are gone, the end-of-day state is kept. */
+.diff__compacted {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-amber);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-amber) 10%, transparent);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+}
+
+.diff__asset-compacted {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  font-style: italic;
+  color: var(--sf-slate);
+}

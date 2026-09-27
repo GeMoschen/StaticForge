@@ -99,9 +99,19 @@
 }
 
 .revisions__rev {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
   font-family: var(--sf-font-mono, monospace);
   font-size: var(--sf-text-sm);
   color: var(--sf-ink);
+}
+
+/* A revision whose exact changes were compacted (M29.5.2); the title explains it. */
+.revisions__compacted {
+  display: inline-flex;
+  color: var(--sf-amber);
+  font-size: var(--sf-text-sm);
 }
 
 .revisions__type {

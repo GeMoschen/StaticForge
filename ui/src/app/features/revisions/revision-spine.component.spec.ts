@@ -71,4 +71,23 @@ describe('RevisionSpineComponent', () => {
 
     expect(screen.getByText(/8 assets/)).toBeTruthy();
   });
+
+  it('marks a compacted revision with an icon and the compacted tooltip, and leaves the others plain', async () => {
+    // `GET /revisions` after compaction: revision 4's own changes were absorbed (RevisionView.compacted).
+    const compacted: RevisionView = { ...singleAssetRevision, revisionId: 4, compacted: true };
+    const exact: RevisionView = { ...singleAssetRevision, revisionId: 5, compacted: false };
+    await render(RevisionSpineComponent, {
+      componentInputs: { revisions: [compacted, exact], currentRevision: 5 },
+      providers: [
+        { provide: ApiClient, useValue: apiStub() },
+        { provide: ProjectContextStore, useValue: storeStub() },
+      ],
+    });
+
+    expect(screen.getAllByTestId('spine-compacted')).toHaveLength(1);
+    const tick = screen.getByRole('button', { name: /Revision 4 ·/ });
+    expect(tick.textContent).toContain('Exact changes compacted — end-of-day state kept');
+    expect(tick.querySelector('[data-testid="spine-compacted"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /Revision 5 ·/ }).textContent).not.toContain('compacted');
+  });
 });
