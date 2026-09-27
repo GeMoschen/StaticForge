@@ -77,6 +77,18 @@ final class QualityBuildFixtures {
         config.update(fx.project().getKey(), entries, fx.ctx());
     }
 
+    /**
+     * Switches every rule off except {@code codes}, which keep their setting — a test that asserts the findings of some
+     * rules isn't disturbed by the rest of the production rule set.
+     */
+    void only(Fixture fx, java.util.Collection<String> codes) {
+        Map<String, QualityRuleConfig.Entry> entries = new java.util.LinkedHashMap<>();
+        config.effective(fx.projectId()).settings().forEach((code, setting) -> entries.put(code, codes.contains(code)
+                ? new QualityRuleConfig.Entry(setting.severity().name(), setting.params())
+                : new QualityRuleConfig.Entry("OFF", null)));
+        config.update(fx.project().getKey(), entries, fx.ctx());
+    }
+
     /** Switches every rule off. */
     void allOff(Fixture fx) {
         Map<String, QualityRuleConfig.Entry> entries = new java.util.LinkedHashMap<>();

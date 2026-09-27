@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Links that all resolve</title>
+  <meta name="description" content="Served at docs/guide.html: every internal link resolves to an output of the build.">
+</head>
+<body>
+  <h1>Links that all resolve</h1>
+  <nav>
+    <a href="../index.html">relative</a>
+    <a href="/about/">root-relative pretty URL</a>
+    <a href="https://example.com/blog-2.html">baseUrl-absolute, paginated page 2</a>
+    <a href="//example.com/blog.html">protocol-relative</a>
+    <a href="../de/docs/guide.html">localized</a>
+    <a href="guide.html?print=1#top">itself, with a query</a>
+    <a href="../assets/media/doc.pdf">a media file</a>
+    <a href="/sitemap.xml">a site file</a>
+    <a href="https://other.example.org/gone.html">external: never checked</a>
+    <a href="mailto:team@example.com">mail</a>
+    <a href="tel:+491234">phone</a>
+    <a href="../held.html">held back: SF-CHK-0103, not 0101</a>
+    <a href="../old.html">a redirect: SF-CHK-0109, not 0101</a>
+  </nav>
+  <img src="../assets/media/nope.png" alt="Missing media is SF-CHK-0102, not 0101">
+</body>
+</html>

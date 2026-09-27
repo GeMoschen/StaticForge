@@ -47,3 +47,17 @@ relative, or absolute under the harness `baseUrl` `https://example.com`). Declar
 `com.acme.staticforge.QualityBuildFixtures` (test sources, M30.1.3) builds a small project through the services, runs
 a generation, and reads the stored findings of the run — use it for anything that needs the renderer (reference events,
 hold-back in a real build, incremental runs) and for the golden fixture (`golden/expected-findings.json`).
+
+A test that asserts the findings of some rules can switch the rest off with `QualityBuildFixtures.only(fx, codes)`, so
+rules added later (by another lane) don't disturb it.
+
+## Link fixtures (`links/`, M30.2.1)
+
+`com.acme.staticforge.LinkRulesTest` serves each fixture at `docs/guide.html` in one site (locales `en`/`de`, a
+paginated blog, a pretty-URL page, a Markdown channel, media, a site file, the held-back page `held.html` and the
+redirect sources `old.html`, `old-section/index.html`, `de/docs/alt.html`) and runs every link rule on it, so a fixture
+also shows which neighbouring rule a case belongs to. `reference-fail.html`/`reference-pass.html` are the rendered
+output of a page whose `$CMS_REF`s did (not) resolve: `SF-CHK-0104`, `0105` and the missing-target case of `0101` come
+from the renderer's reference events the test declares with them, not from the markup. Build-level cases (reference
+events with the field path, carried pages in incremental runs, `SF-GEN-0120` hold-back) are in
+`LinkRulesIntegrationTest`.
