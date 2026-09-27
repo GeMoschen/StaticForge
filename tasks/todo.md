@@ -21,9 +21,9 @@ verification.
 - [x] C — M30.3.1 draft check endpoint
 - [x] C — M30.3.2 page editor Issues panel
 - [x] C — M30.6.1 Quality tab
-- [ ] C — M30.6.2 run findings report
+- [x] C — M30.6.2 run findings report
 - [x] C — M30.6.3 Redirects tab, target formats, unpublish redirect
-- [ ] D — M30.7.1 spec + docs
+- [x] D — M30.7.1 spec + docs
 - [ ] D — M30.7.2 `ui/e2e/m30-journeys.spec.ts` green twice
 - [ ] Benchmark: 5,000-page full build within +15 % of pre-M30 (baseline measured on master before phase A merges)
 - [ ] `./gradlew spotlessCheck test --rerun`, `ng build`, `npx vitest run`, journey green twice
