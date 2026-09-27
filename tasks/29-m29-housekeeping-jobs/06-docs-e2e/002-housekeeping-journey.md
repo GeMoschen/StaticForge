@@ -41,7 +41,7 @@ One journey, `ui/e2e/m29-journeys.spec.ts`, every step as a real user would do i
 - [x] Journey green against a clean dev stack, twice in a row (self-seeding, unique names per run). *2026-09-27: fresh
       `SF_DB_FILE`/`SF_MEDIA_ROOT`/`SF_OUTPUT_ROOT`/`SF_SEARCH_INDEX_ROOT`, 1.1 min and 57 s.*
 - [x] Defects found are fixed in their task's code with a unit or integration test each, and listed in the notes.
-- [ ] Full `./gradlew build` (`test --rerun`), `npm run build` and `npx vitest run` green. *`npx ng build` and
+- [x] Full `./gradlew build` (`test --rerun`), `npm run build` and `npx vitest run` green. *`npx ng build` and *(Coordinator, 2026-09-27: `spotlessCheck test --rerun` 1475 tests, 0 failures; vitest 709; `ng build` green.)*
       `npx vitest run` (104 files, 708 tests) green; the changed backend classes' tests green
       (`DevFixtureController*`, `SecuritySmokeTests`, `ArchivedProjectEndpointWalkTest`, `PublishPermissionMatrixTest`,
       `PublishPolicyApiTest`). The full suite is left to the coordinator.*

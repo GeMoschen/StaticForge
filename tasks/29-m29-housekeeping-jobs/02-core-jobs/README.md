@@ -26,13 +26,13 @@ Tasks 3 and 4 are independent of 1 and 2.
 
 ## Feature exit criteria
 
-- [ ] A run interrupted by a restart is `FAILED` (`SF-GEN-0504`), and the project can build again. A cancelled run
+- [x] A run interrupted by a restart is `FAILED` (`SF-GEN-0504`), and the project can build again. A cancelled run
       never publishes.
-- [ ] Staged output of failed/cancelled/interrupted runs, stale temp links and deleted targets' directories are
+- [x] Staged output of failed/cancelled/interrupted runs, stale temp links and deleted targets' directories are
       removed. `keep-builds` counts published builds only, and a failed run can't be promoted.
-- [ ] The blob sweep deletes exactly the unreachable blobs older than the grace period, including orphan store
+- [x] The blob sweep deletes exactly the unreachable blobs older than the grace period, including orphan store
       objects, on both stores. `ref_count` is recomputed.
-- [ ] Audit entries past retention and dead refresh-token families are deleted; login-limiter and idempotency maps stay
+- [x] Audit entries past retention and dead refresh-token families are deleted; login-limiter and idempotency maps stay
       bounded.
 
 ## Dependencies

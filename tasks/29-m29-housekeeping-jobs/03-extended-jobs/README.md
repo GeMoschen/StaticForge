@@ -18,10 +18,10 @@
 
 ## Feature exit criteria
 
-- [ ] Old unprotected runs are deleted with their plans. Promote, incremental baselines and schedule histories still
+- [x] Old unprotected runs are deleted with their plans. Promote, incremental baselines and schedule histories still
       resolve.
-- [ ] Missing variants appear in `media_variant` without a revision, and preview, generation and export use them.
-- [ ] Search maintenance repairs lag and count mismatches, and merges when deletes pile up.
+- [x] Missing variants appear in `media_variant` without a revision, and preview, generation and export use them.
+- [x] Search maintenance repairs lag and count mismatches, and merges when deletes pile up.
 
 ## Dependencies
 

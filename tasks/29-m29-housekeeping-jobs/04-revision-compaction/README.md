@@ -19,12 +19,12 @@ read stays defined and explained.
 
 ## Feature exit criteria
 
-- [ ] A project admin enables compaction with a typed confirmation (`older than` ≥ 30 days). It is audited, and
+- [x] A project admin enables compaction with a typed confirmation (`older than` ≥ 30 days). It is audited, and
       refused on archived projects.
-- [ ] The weekly job compacts opted-in projects exactly per decision 13.
-- [ ] Extended property-based invariants hold, and a rebuild at a released or retained-build revision is byte-identical
+- [x] The weekly job compacts opted-in projects exactly per decision 13.
+- [x] Extended property-based invariants hold, and a rebuild at a released or retained-build revision is byte-identical
       before and after.
-- [ ] Time travel and diff at compacted revisions answer with `compacted: true`, and the diff explains that exact
+- [x] Time travel and diff at compacted revisions answer with `compacted: true`, and the diff explains that exact
       changes were compacted.
 
 ## Dependencies
