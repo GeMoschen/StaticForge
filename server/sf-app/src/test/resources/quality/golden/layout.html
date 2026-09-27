@@ -1,0 +1,16 @@
+<!doctype html>
+<html$CMS_BLOCK(lang)$ lang="$CMS_META(language)$"$CMS_END_BLOCK$>
+<head>
+<meta charset="utf-8">
+$CMS_BLOCK(head)$<title>$CMS_VALUE(title)$</title>
+$CMS_IF(description)$<meta name="description" content="$CMS_VALUE(description | attr)$">
+$CMS_END_IF$$CMS_END_BLOCK$$CMS_BLOCK(robots)$$CMS_IF(CMS_META.noIndex)$<meta name="robots" content="noindex">
+$CMS_END_IF$$CMS_END_BLOCK$$CMS_FOR(l : CMS_LOCALES)$$CMS_IF(l.href)$<link rel="alternate" hreflang="$CMS_VALUE(l.code)$" href="$CMS_VALUE(l.href)$">
+$CMS_END_IF$$CMS_END_FOR$</head>
+<body>
+<main>
+$CMS_BLOCK(main)$<h1>$CMS_VALUE(title)$</h1>
+$CMS_BLOCK(content)$<p>$CMS_VALUE(intro)$</p>
+$CMS_END_BLOCK$$CMS_END_BLOCK$</main>
+</body>
+</html>

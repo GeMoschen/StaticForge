@@ -146,6 +146,7 @@ class RedirectApiIntegrationTest {
         perform(put(BASE + "/{id}", fx.key(), id).header("If-Match", "\"v0\"")
                 .contentType(MediaType.APPLICATION_JSON).content(body), editor).andExpect(status().isForbidden());
         perform(delete(BASE + "/{id}", fx.key(), id), viewer).andExpect(status().isForbidden());
+        perform(delete(BASE + "/{id}", fx.key(), id), editor).andExpect(status().isForbidden());
 
         // An editor under a policy with RELEASE may redirect a page's URLs (for-asset), but still not edit the registry.
         UUID page = page(fx, "home");
@@ -162,6 +163,8 @@ class RedirectApiIntegrationTest {
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].fromPath").value("home.html"));
         create(fx, editor, pathBody("html", "", "other.html", "new.html")).andExpect(status().isForbidden());
+        perform(put(BASE + "/{id}", fx.key(), id).header("If-Match", "\"v0\"")
+                .contentType(MediaType.APPLICATION_JSON).content(body), editor).andExpect(status().isForbidden());
         perform(delete(BASE + "/{id}", fx.key(), id), editor).andExpect(status().isForbidden());
 
         perform(delete(BASE + "/{id}", fx.key(), id), developer).andExpect(status().isNoContent());

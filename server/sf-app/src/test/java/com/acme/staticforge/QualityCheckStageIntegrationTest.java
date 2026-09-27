@@ -27,15 +27,20 @@ import com.acme.staticforge.generate.quality.QualitySidecar;
 import com.acme.staticforge.generate.quality.RunFindingStore;
 import com.acme.staticforge.generate.quality.RunFindingStore.StoredFinding;
 import com.acme.staticforge.generate.target.BuildManifest;
+import com.acme.staticforge.project.LocaleConfig;
+import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.user.UserService;
+import com.acme.staticforge.common.L10nValues;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +49,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * The {@code CHECK} stage in real builds (M30.1.3) with the test rules ({@link QualityTestRules}): findings stored with
@@ -288,6 +294,130 @@ class QualityCheckStageIntegrationTest {
         assertThat(run.getFindingCounts()).isNull();
         assertThat(q.manifest(fx, target, run)).isEmpty();
         assertThat(q.sidecar(fx, target, run)).isEmpty();
+    }
+
+    /**
+     * Epic decision 5 in a localized build: an {@code ERROR} on the English outputs of a paginated page holds back every
+     * English page number of it and nothing else — the German listing and the pages it lists are published, and one
+     * {@code SF-GEN-0125} names the page and the language.
+     */
+    @Test
+    void anErrorHoldsBackEveryPageNumberOfThePageInThatLanguageOnly() {
+        Fixture fx = project("qclocale");
+        projectService.updateLocales(fx.project().getKey(), LocaleConfig.of(
+                List.of(new ProjectLocale("de", "Deutsch"), new ProjectLocale("en", "English")), "de", Map.of(), false),
+                true, fx.ctx());
+        String pattern = "{locale}/{displayNameSlug}.{ext}";
+        TemplateView post = q.build.pageTemplate(fx, "Post", "", document("Post", "<p>post</p>"));
+        q.build.updateTemplate(fx, post.uuid(), document("Post", "<p>post</p>"), pattern);
+        UUID navRoot = q.build.navigationRoot(fx);
+        for (int i = 1; i <= 3; i++) {
+            AssetVersionView page = q.build.page(fx, "Post " + i, post.uuid());
+            q.build.pageReference(fx, "0" + i + " post", navRoot, page.uuid());
+        }
+        String listing = document("News", "<main>$CMS_VALUE(body | raw)$<ul>$CMS_FOR(item : CMS_PAGINATION.items)$"
+                + "<li><a href=\"$CMS_VALUE(item.href)$\">$CMS_VALUE(item.label)$</a></li>$CMS_END_FOR$</ul></main>");
+        TemplateView news = q.build.pageTemplate(fx, "News", """
+                content {
+                  editor text body { label "Body" localizable }
+                  editor pagination posts { label "Posts" sources ["nav"] pageSize 1 maxPageSize 20 sort ["navigation"] }
+                }
+                """, listing);
+        q.build.updateTemplate(fx, news.uuid(), listing, pattern);
+        AssetVersionView newsPage = q.build.page(fx, "News", news.uuid(), payload -> {
+            ObjectNode body = L10nValues.empty();
+            body.withObject("values").put("de", "<p>gut</p>").put("en", "<p data-sf-flag=\"bad\">bad</p>");
+            payload.withObject("content").set("body", body);
+            ObjectNode posts = payload.withObject("content").putObject("posts").put("type", "PAGINATION");
+            posts.putObject("source").put("kind", "NAV").put("uuid", navRoot.toString());
+            posts.put("pageSize", 1);
+            posts.putObject("sort").put("key", "navigation").put("direction", "ASC");
+        });
+        q.configure(fx, Map.of(QualityTestRules.FLAG, QualitySeverity.ERROR));
+        GenerationTarget target = q.target(fx, "t");
+
+        GenerationRun run = q.generate(fx, target, GenerationMode.FULL);
+
+        assertThat(run.getStatus()).as("diagnostics: %s", run.getDiagnostics()).isEqualTo(RunStatus.PARTIAL);
+        assertThat(run.getDiagnostics().path("errors")).singleElement().satisfies(error -> {
+            assertThat(error.path("code").asText()).isEqualTo(QualityCodes.GEN_QUALITY_CHECK_FAILED);
+            assertThat(error.path("messages").get(0).asText()).contains(newsPage.uid(), "en", QualityTestRules.FLAG);
+        });
+        Map<String, String> files = q.files(fx, target, run);
+        assertThat(files).containsKeys("de/news.html", "de/news-2.html", "de/news-3.html", "en/post-1.html",
+                "en/post-3.html");
+        assertThat(files).doesNotContainKeys("en/news.html", "en/news-2.html", "en/news-3.html");
+        assertThat(files.get("sitemap.xml")).contains("de/news-3.html").doesNotContain("en/news");
+        assertThat(q.manifest(fx, target, run).orElseThrow().outputs()).extracting(BuildManifest.Output::path)
+                .contains("de/news-2.html").doesNotContain("en/news.html", "en/news-2.html", "en/news-3.html");
+        assertThat(q.findings(fx, run, QualityTestRules.FLAG))
+                .extracting(StoredFinding::outputPath, StoredFinding::locale, StoredFinding::severity)
+                .containsExactlyInAnyOrder(
+                        tuple("en/news.html", "en", QualitySeverity.ERROR),
+                        tuple("en/news-2.html", "en", QualitySeverity.ERROR),
+                        tuple("en/news-3.html", "en", QualitySeverity.ERROR));
+    }
+
+    /** The {@code CHECK} stage on the run's event stream (epic decision 10): "Checking output", then its counts. */
+    @Test
+    void theCheckStageIsReportedOnTheEventStream() throws InterruptedException {
+        Site site = site("qcsse");
+        Fixture fx = site.fx();
+        q.configure(fx, Map.of(QualityTestRules.FLAG, QualitySeverity.ERROR));
+        GenerationTarget target = q.target(fx, "t");
+        releaseFixtures.releaseAll(fx.projectId());
+        RecordingEmitter events = new RecordingEmitter();
+        // Held where the stage starts, before its first event: the stream is listening when the stage runs.
+        RunLatches.Gate gate = latches.arm(fx.projectId(), "CHECK");
+        GenerationRun started;
+        try {
+            started = generationService.start(fx.project().getKey(), new GenerationRequest(
+                    GenerationMode.FULL, null, List.of("html"), target.getId(), null, null, null, null), fx.user().getId());
+            assertThat(gate.awaitArrival()).isEqualTo(started.getId());
+            generationService.registerEmitter(started.getId(), events);
+        } finally {
+            latches.disarm(fx.projectId(), "CHECK");
+        }
+
+        GenerationRun run = q.build.await(fx, started.getId());
+
+        assertThat(run.getStatus()).isEqualTo(RunStatus.PARTIAL);
+        assertThat(events.stage("CHECK")).containsExactly(
+                "Checking output", "Checked 3 outputs: 1 error, 2 warnings; 1 held back");
+        List<String> stages = events.stages();
+        assertThat(stages.indexOf("CHECK")).as("stages %s", stages)
+                .isGreaterThan(stages.indexOf("ASSETS")).isLessThan(stages.indexOf("POST"));
+    }
+
+    /** An event stream that records what the service sends. */
+    private static final class RecordingEmitter extends SseEmitter {
+
+        private final List<JsonNode> events = new CopyOnWriteArrayList<>();
+
+        RecordingEmitter() {
+            super(60_000L);
+        }
+
+        @Override
+        public void send(SseEventBuilder builder) {
+            for (var part : builder.build()) {
+                if (part.getData() instanceof JsonNode json) {
+                    events.add(json);
+                }
+            }
+        }
+
+        @Override
+        public void complete() {}
+
+        List<String> stage(String stage) {
+            return events.stream().filter(e -> stage.equals(e.path("stage").asText()))
+                    .map(e -> e.path("message").asText()).toList();
+        }
+
+        List<String> stages() {
+            return events.stream().map(e -> e.path("stage").asText()).distinct().toList();
+        }
     }
 
     private UUID templateOf(Fixture fx, AssetVersionView page) {

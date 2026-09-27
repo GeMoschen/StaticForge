@@ -63,9 +63,22 @@ Every rule also declares where its findings are usually fixed, `QualityRule.fixH
 ## Feature exit criteria
 
 - [ ] Every rule has a positive and a negative fixture and appears in `GET /quality-rules`.
-- [ ] The golden fixture build reports exactly the seeded findings (`quality/expected-findings.json`).
+- [x] The golden fixture build reports exactly the seeded findings (`quality/expected-findings.json`) —
+      `GoldenQualityFixtureIntegrationTest` (regenerate with `-Dsf.quality.golden.update=true`).
 - [ ] Benchmark with the full rule set within budget (`M30.1.3`).
 - [ ] `./gradlew build` green.
+
+## Notes
+
+- Golden fixture (`GoldenQualityFixtureIntegrationTest`, templates in `quality/golden/`): de/en/de-CH (fallback de),
+  HTML + Markdown channels, an abstract layout every template extends, a paginated news page, a media image; 49
+  findings over 16 codes, nothing on the clean pages or in the Markdown channel. It found two pre-existing defects,
+  fixed with their own tests: pagination item links lacked the `{locale}` prefix in localized projects
+  (`PaginationIntegrationTest.aLocalizedListingLinksItsItemsInItsOwnLanguage`), and a media editor value's
+  `heroImage.altText`/`.width` rendered empty (`CrossAssetValueRenderTest.aMediaEditorValueReadsThePickedMediasFields`).
+- Decision (`SF-CHK-0205`/`0206` on paginated pages): every page number is its own URL, so page numbers of one
+  paginated page that share a title (or description) are real duplicates for search engines and stay reported. Both
+  rule descriptions tell the fix (`$CMS_META(pageNumber)$`); the golden news template does it and stays clean.
 
 ## Dependencies
 

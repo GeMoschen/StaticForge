@@ -1,0 +1,10 @@
+$CMS_EXTENDS(page_template:layout)$
+$CMS_COMMENT$ Every page number is its own URL: the page number keeps titles and descriptions apart (SF-CHK-0205/0206). $CMS_END_COMMENT$
+$CMS_BLOCK(head)$<title>$CMS_VALUE(title)$ – $CMS_META(pageNumber)$/$CMS_META(totalPages)$</title>
+<meta name="description" content="$CMS_VALUE(description | attr)$ ($CMS_META(pageNumber)$/$CMS_META(totalPages)$)">
+$CMS_END_BLOCK$
+$CMS_BLOCK(content)$<ul>
+$CMS_FOR(post : CMS_PAGINATION.items)$<li><a href="$CMS_VALUE(post.href)$">$CMS_VALUE(post.label)$</a></li>
+$CMS_END_FOR$</ul>
+<nav>$CMS_IF(CMS_PAGINATION.prevHref)$<a rel="prev" href="$CMS_VALUE(CMS_PAGINATION.prevHref)$">Previous</a>$CMS_END_IF$$CMS_IF(CMS_PAGINATION.nextHref)$<a rel="next" href="$CMS_VALUE(CMS_PAGINATION.nextHref)$">Next</a>$CMS_END_IF$</nav>
+$CMS_END_BLOCK$

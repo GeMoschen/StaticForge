@@ -146,6 +146,34 @@ class CrossAssetValueRenderTest {
                 .doesNotContain(DiagnosticCodes.OCTL_CROSS_ASSET_VALUE_WITHOUT_PATH);
     }
 
+    /**
+     * A media editor value reads the picked media's fields (M30 golden fixture): {@code heroImage.altText} is the
+     * media's alt text, as the media editor reference and the template guide's teaser example use it. Stored fields of
+     * the value itself ({@code variant}) keep their meaning; the media becomes a dependency; a missing media is empty.
+     */
+    @Test
+    void aMediaEditorValueReadsThePickedMediasFields() {
+        UUID logo = UUID.fromString("a0000000-0000-0000-0000-000000000003");
+        List<String> seen = new ArrayList<>();
+        AssetValueResolver media = (assetType, uuid) -> {
+            seen.add(assetType + ":" + uuid);
+            return logo.equals(uuid) ? json("{\"altText\":\"Our logo\",\"width\":640}") : MissingNode.getInstance();
+        };
+        String source = "[$CMS_VALUE(hero.altText | attr)$|$CMS_VALUE(hero.width)$|$CMS_VALUE(hero.variant)$"
+                + "|$CMS_VALUE(gone.altText)$]";
+        JsonNode content = json("{\"hero\":{\"type\":\"MEDIA_REF\",\"uuid\":\"" + logo + "\",\"variant\":\"w800\"},"
+                + "\"gone\":{\"type\":\"MEDIA_REF\",\"uuid\":\"" + GONE + "\"}}");
+        OctlResult compiled = compiler.compile(source, "html", (type, uid) -> Optional.empty());
+        assertThat(compiled.hasErrors()).withFailMessage("compile errors: %s", compiled.diagnostics()).isFalse();
+
+        RenderResult result = renderer.render(
+                compiled.template(), RenderContext.builder().values(content).assetValueResolver(media).build());
+
+        assertThat(result.output()).isEqualTo("[Our logo|640|w800|]");
+        assertThat(result.dependencies()).contains(logo, GONE);
+        assertThat(seen).contains("media:" + logo, "media:" + GONE);
+    }
+
     private RenderResult render(String source, AssetValueResolver resolver) {
         OctlResult compiled = compiler.compile(source, "html", (type, uid) -> Optional.ofNullable(UUIDS.get(type + ":" + uid)));
         assertThat(compiled.hasErrors()).withFailMessage("compile errors: %s", compiled.diagnostics()).isFalse();

@@ -127,6 +127,8 @@ class GenerationRunRetentionIntegrationTest {
         // keep-builds 2: current (r5) and the two newest other published builds are on disk.
         assertThat(writer.retainedRunIds()).containsExactlyInAnyOrder(r3, r4, r5);
         assertThat(planRows(r1)).isPositive();
+        // The plain page has no title, h1 or lang: every build stores quality findings (M30).
+        assertThat(findingRows(r1)).isPositive();
         ScheduledAction action = schedules.oneOff(fx.projectId(), "GENERATION",
                 fixtures.mapper.readTree("{\"mode\":\"FULL\"}"), Instant.parse("2025-01-01T00:00:00Z"), fx.user().getId());
         ScheduledActionExecution execution = execution(action, r1, Instant.now().minus(Duration.ofDays(3)));
@@ -146,10 +148,12 @@ class GenerationRunRetentionIntegrationTest {
         for (long id : List.of(r1, r2, f1)) {
             assertThat(runs.findById(id)).as("run %s", id).isEmpty();
             assertThat(planRows(id)).as("plan rows of run %s", id).isZero();
+            assertThat(findingRows(id)).as("quality findings of run %s", id).isZero();
         }
         for (long id : List.of(r3, r4, f2, r5)) {
             assertThat(runs.findById(id)).as("run %s", id).isPresent();
         }
+        assertThat(findingRows(r5)).as("a kept run keeps its findings").isPositive();
         String token = jwt.issueAccessToken(fx.user());
         mvc.perform(get("/api/v1/projects/{key}/generations/{id}/plan", fx.project().getKey(), r1)
                         .header("Authorization", "Bearer " + token))
@@ -274,6 +278,10 @@ class GenerationRunRetentionIntegrationTest {
         Integer entries = jdbc.queryForObject("SELECT COUNT(*) FROM generation_run_plan_entry WHERE run_id = ?", Integer.class, runId);
         Integer nodes = jdbc.queryForObject("SELECT COUNT(*) FROM generation_run_plan_node WHERE run_id = ?", Integer.class, runId);
         return entries + nodes;
+    }
+
+    private int findingRows(long runId) {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM generation_run_finding WHERE run_id = ?", Integer.class, runId);
     }
 
     private static String sample(Fixture fx, long runId) {

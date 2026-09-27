@@ -26,7 +26,7 @@ public class DuplicateDescriptionRule extends DuplicateTextRule {
     public String description() {
         return "Several pages of one channel and language have the same meta description. Each finding names the "
                 + "other pages. Describe each page on its own, typically in a page field rather than a fixed text in "
-                + "the template.";
+                + "the template; on a paginated page add the page number ($CMS_META(pageNumber)$).";
     }
 
     @Override

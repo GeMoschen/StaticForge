@@ -12,7 +12,8 @@ quality/
   links/                     SF-CHK-01xx fixtures (M30.2.1)
   seo/                       SF-CHK-02xx fixtures (M30.2.2)
   a11y/                      SF-CHK-03xx fixtures (M30.2.3)
-  golden/                    the golden fixture project (templates, pages) and expected-findings.json
+  golden/                    the golden fixture's templates (GoldenQualityFixtureIntegrationTest)
+  expected-findings.json     every finding of the golden build, sorted, one per line
 ```
 
 ## Naming
@@ -46,7 +47,7 @@ relative, or absolute under the harness `baseUrl` `https://example.com`). Declar
 
 `com.acme.staticforge.QualityBuildFixtures` (test sources, M30.1.3) builds a small project through the services, runs
 a generation, and reads the stored findings of the run — use it for anything that needs the renderer (reference events,
-hold-back in a real build, incremental runs) and for the golden fixture (`golden/expected-findings.json`).
+hold-back in a real build, incremental runs) and for the golden fixture.
 
 A test that asserts the findings of some rules can switch the rest off with `QualityBuildFixtures.only(fx, codes)`, so
 rules added later (by another lane) don't disturb it.
@@ -61,3 +62,24 @@ output of a page whose `$CMS_REF`s did (not) resolve: `SF-CHK-0104`, `0105` and 
 from the renderer's reference events the test declares with them, not from the markup. Build-level cases (reference
 events with the field path, carried pages in incremental runs, `SF-GEN-0120` hold-back) are in
 `LinkRulesIntegrationTest`.
+
+## Golden fixture (`golden/`, `expected-findings.json`)
+
+`com.acme.staticforge.GoldenQualityFixtureIntegrationTest` builds one real site end to end with the production rule set
+at its defaults: languages `de`, `en` and `de-CH` (falling back to `de`), an HTML and a Markdown channel, an abstract
+`layout` that every page template extends (`golden/*.html`; `golden/page.md` is every template's Markdown source), a
+paginated news page and a media image. The defect templates override one layout block each (`untitled`, `no-lang`,
+`no-robots`) or add broken markup (`broken-links`, `opening-hours`); content seeds the rest (an English-only
+description, two pages with the same English title, links to an unpublished and to a deleted page). Home, About,
+News (both page numbers), the posts and the `noIndex` page "Private" are clean.
+
+The stored findings must equal `expected-findings.json` exactly: output path, channel, locale, page uid, code,
+severity, selector and message (an entry may leave its `message` out; then it is not compared). After a deliberate
+change, regenerate the file and review the diff:
+
+```
+./gradlew :server:sf-app:test --tests "*GoldenQualityFixtureIntegrationTest" -Pfrontend.skip=true --rerun \
+    -Dsf.quality.golden.update=true
+```
+
+(or `SF_QUALITY_GOLDEN_UPDATE=true`). Without it the test only compares.

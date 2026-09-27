@@ -95,6 +95,27 @@ class QualityRulesApiTest {
         assertThat(projects.requireByKey(fx.key()).getQualityRuleConfig()).isNull();
     }
 
+    /** M30.2.2: the SEO rules are listed, with the length rules' bounds and the canonical rule's switch. */
+    @Test
+    void theSeoRulesAreListedWithTheirParameters() throws Exception {
+        Fixture fx = fixture("qr-seo");
+
+        perform(get("/api/v1/projects/{key}/quality-rules", fx.key()), fx.adminToken())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rules[?(@.category == 'SEO')].code",
+                        containsInAnyOrder("SF-CHK-0201", "SF-CHK-0202", "SF-CHK-0203", "SF-CHK-0204", "SF-CHK-0205",
+                                "SF-CHK-0206", "SF-CHK-0207", "SF-CHK-0208", "SF-CHK-0209", "SF-CHK-0210", "SF-CHK-0211",
+                                "SF-CHK-0212")))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0202')].params[*].name", containsInAnyOrder("min", "max")))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0202')].params[*].value", containsInAnyOrder(10, 60)))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0204')].params[*].value", containsInAnyOrder(50, 160)))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0211')].params[*].name", containsInAnyOrder("required")))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0211')].params[*].value", containsInAnyOrder(false)))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0205')].kind").value("SITE"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0210')].maxSeverity").value("WARNING"))
+                .andExpect(jsonPath("$.rules[?(@.code == 'SF-CHK-0212')].kind").value("PAGE"));
+    }
+
     /** M30.2.3: the accessibility rules are listed with their fix hint for the UI's "fix in content / template". */
     @Test
     void theAccessibilityRulesAreListedWithTheirFixHints() throws Exception {

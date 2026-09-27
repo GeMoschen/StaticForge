@@ -1,0 +1,11 @@
+$CMS_EXTENDS(page_template:layout)$
+$CMS_COMMENT$ Seeded: SF-CHK-0101, 0102, 0104, 0105, 0107. $CMS_END_COMMENT$
+$CMS_BLOCK(content)$<p>$CMS_VALUE(intro)$</p>
+<ul>
+<li><a href="discontinued.html">A page that was never built</a></li>
+<li><a href="$CMS_REF(about)$#nowhere">A section the page doesn't have</a></li>
+<li><a href="$CMS_REF(draft)$">A page that isn't released</a></li>
+<li><a href="$CMS_REF(retired)$">A deleted page</a></li>
+</ul>
+<p><img src="images/brochure.png" alt="Product brochure"></p>
+$CMS_END_BLOCK$

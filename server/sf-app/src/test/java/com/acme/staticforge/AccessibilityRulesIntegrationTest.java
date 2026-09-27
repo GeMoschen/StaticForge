@@ -116,6 +116,30 @@ class AccessibilityRulesIntegrationTest {
                 .containsExactly(tuple(QualitySeverity.ERROR, "iframe without title: https://maps.example.org/embed."));
     }
 
+    /**
+     * Epic exit criterion 2 with a production rule in real builds: at its default a finding leaves the run
+     * {@code SUCCESS}; switched {@code OFF} the same page reports nothing and its bytes don't change.
+     */
+    @Test
+    void aRuleSwitchedOffReportsNothingAndAWarningLeavesTheRunSuccessful() {
+        Fixture fx = q.project("a11yoff");
+        q.htmlPage(fx, "Home", document("Home", "<p><iframe src=\"https://maps.example.org/embed\"></iframe></p>"));
+        GenerationTarget target = q.target(fx, "t");
+
+        GenerationRun warned = q.generate(fx, target, GenerationMode.FULL);
+        assertThat(warned.getStatus()).as("diagnostics: %s", warned.getDiagnostics()).isEqualTo(RunStatus.SUCCESS);
+        assertThat(q.findings(fx, warned, "SF-CHK-0307")).extracting(StoredFinding::severity)
+                .containsExactly(QualitySeverity.WARNING);
+
+        q.configure(fx, Map.of("SF-CHK-0307", QualitySeverity.OFF));
+        GenerationRun silent = q.generate(fx, target, GenerationMode.FULL);
+
+        assertThat(silent.getStatus()).isEqualTo(RunStatus.SUCCESS);
+        assertThat(q.findings(fx, silent)).extracting(StoredFinding::code)
+                .as("the other rules still report").isNotEmpty().doesNotContain("SF-CHK-0307");
+        assertThat(q.files(fx, target, silent).get("home.html")).isEqualTo(q.files(fx, target, warned).get("home.html"));
+    }
+
     /** The media's output path as the page links it (the page sits at the site root). */
     private String mediaPath(Fixture fx, GenerationTarget target, GenerationRun run, AssetVersionView media) {
         return q.manifest(fx, target, run).orElseThrow().outputs().stream()
