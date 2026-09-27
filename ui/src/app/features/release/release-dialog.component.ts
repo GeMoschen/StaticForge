@@ -16,12 +16,17 @@ import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { problemOf } from '../../core/api/problem.util';
 import { LocalesStore } from '../../core/project/locales.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { BuildNowService } from '../generation/build-now.service';
+import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { formatDiffPath } from '../../shared/components/sf-diff.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { ReleaseEventsStore } from './release-events.store';
+import { RedirectAfterService } from './redirect-after.service';
+import { RedirectOptionComponent } from './redirect-option.component';
+import { type RedirectIntent, type RedirectSource, NO_REDIRECT, intentReady } from './redirect-option.util';
 import { type ReleaseChoice, type ReleaseMode, assetName, itemsOf } from './release-choice.util';
 import { ReleasePlanComponent, type ReleasePlanState } from './release-plan.component';
 import { localeTag, statusLabel } from './release-status.util';
@@ -55,7 +60,7 @@ interface DiffSummary {
   selector: 'sf-release-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfSpinnerComponent, ReleasePlanComponent],
+  imports: [SfAssetPickerDialogComponent, SfButtonComponent, SfSpinnerComponent, ReleasePlanComponent, RedirectOptionComponent],
   templateUrl: './release-dialog.component.html',
   styleUrl: './release-dialog.component.scss',
 })
@@ -65,6 +70,8 @@ export class ReleaseDialogComponent {
   private readonly buildNow = inject(BuildNowService);
   private readonly events = inject(ReleaseEventsStore);
   private readonly locales = inject(LocalesStore);
+  private readonly permissions = inject(ProjectPermissionsStore);
+  private readonly redirectAfter = inject(RedirectAfterService);
 
   readonly projectKey = input.required<string>();
   readonly mode = input<ReleaseMode>('release');
@@ -76,6 +83,7 @@ export class ReleaseDialogComponent {
   readonly closed = output<void>();
 
   private readonly plan = viewChild(ReleasePlanComponent);
+  private readonly redirectOption = viewChild(RedirectOptionComponent);
 
   protected readonly selection = signal<ReleaseChoice[]>([]);
   protected readonly comment = signal('');
@@ -85,6 +93,32 @@ export class ReleaseDialogComponent {
   /** After a discard that kept shared fields: the note, shown before the dialog closes. */
   protected readonly keptNote = signal<string[] | null>(null);
   protected readonly diffs = signal<DiffSummary[] | null>(null);
+  protected readonly redirectIntent = signal<RedirectIntent>(NO_REDIRECT);
+  protected readonly pickingRedirect = signal(false);
+
+  /**
+   * The pages whose URLs go offline with this action (M30.6.3): the ticked pages of an unpublish (every status it
+   * offers has a released version), or of a release that publishes a page's deletion.
+   */
+  protected readonly redirectSources = computed<RedirectSource[]>(() => {
+    const mode = this.mode();
+    const sources = new Map<string, RedirectSource>();
+    for (const choice of this.selection()) {
+      const goesOffline = mode === 'unpublish' || (mode === 'release' && choice.status === 'DELETION_PENDING');
+      if (choice.checked && goesOffline && choice.assetType === 'PAGE' && !sources.has(choice.assetUuid)) {
+        sources.set(choice.assetUuid, {
+          uuid: choice.assetUuid,
+          name: choice.assetName ?? choice.label,
+          folderPath: choice.folderPath,
+        });
+      }
+    }
+    return [...sources.values()];
+  });
+  /** "Redirect old URL to…" for whoever may unpublish, and developers (epic decision 17). */
+  protected readonly offersRedirect = computed(
+    () => this.permissions.canRedirectOldUrls() && this.redirectSources().length > 0,
+  );
 
   protected readonly title = computed(() => {
     const name = this.subjectName();
@@ -101,6 +135,9 @@ export class ReleaseDialogComponent {
   });
   protected readonly canSubmit = computed(() => {
     if (this.submitting() || this.checkedCount() === 0) {
+      return false;
+    }
+    if (this.offersRedirect() && !intentReady(this.redirectIntent())) {
       return false;
     }
     if (this.mode() !== 'release') {
@@ -127,7 +164,16 @@ export class ReleaseDialogComponent {
 
   @HostListener('document:keydown.escape')
   protected onEscape(): void {
+    if (this.pickingRedirect()) {
+      this.pickingRedirect.set(false);
+      return;
+    }
     this.close();
+  }
+
+  protected onRedirectPicked(picked: AssetPicked): void {
+    this.pickingRedirect.set(false);
+    this.redirectOption()?.choose(picked);
   }
 
   protected toggle(index: number, event: Event): void {
@@ -166,12 +212,18 @@ export class ReleaseDialogComponent {
         : mode === 'unpublish'
           ? this.api.unpublish(this.projectKey(), body)
           : this.api.discard(this.projectKey(), body);
+    // What goes offline is fixed at submit time: the redirect follows the action that actually ran.
+    const redirect = this.offersRedirect() ? this.redirectIntent() : NO_REDIRECT;
+    const redirectSources = this.redirectSources();
     this.submitting.set(true);
     this.error.set(null);
     request.subscribe({
       next: (result) => {
         this.submitting.set(false);
         this.events.changed();
+        if (redirect.wanted && redirect.page && result.revision != null) {
+          this.redirectAfter.redirect(this.projectKey(), redirectSources, redirect.page);
+        }
         if (mode === 'release' && result.revision != null) {
           this.buildNow.announceRelease(this.projectKey(), this.successMessage(mode, result));
         } else {

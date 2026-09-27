@@ -69,6 +69,13 @@ export class ProjectPermissionsStore {
   /** Promote/rollback and generation schedules stay with developers, whatever the policy. */
   readonly canPromote = computed(() => this.isDeveloper() && this.writable());
   readonly canScheduleGeneration = computed(() => this.isDeveloper() && this.writable());
+  /** Manual redirects are the developers' (M30, epic decision 17), like URL registry overrides. */
+  readonly canEditRedirects = computed(() => this.isDeveloper() && this.writable());
+  /**
+   * "Redirect old URL to…" in the unpublish and delete dialogs (M30, epic decision 17): whoever may unpublish
+   * (`RELEASE`), and developers.
+   */
+  readonly canRedirectOldUrls = computed(() => (this.holds('RELEASE') || this.isDeveloper()) && this.writable());
   /** Anything that puts content online — or nothing, for the explanatory empty states. */
   readonly canPublishAnything = computed(() => this.canRelease() || this.canIncrementalBuild());
 

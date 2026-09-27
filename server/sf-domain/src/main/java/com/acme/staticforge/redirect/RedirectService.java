@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -73,8 +74,18 @@ public class RedirectService {
         this.clock = clock;
     }
 
-    /** Filters of {@link #list}; {@code null} (or blank) means any. {@code q} matches the source and fixed target path. */
-    public record Filter(String channel, String locale, RedirectKind kind, String q) {}
+    /**
+     * Filters of {@link #list}; {@code null} (or blank) means any. {@code q} matches the source and fixed target path.
+     * {@code state} keeps the rows with that state against the default target's current build — none while nothing is
+     * published there, since no row has a state then.
+     */
+    public record Filter(String channel, String locale, RedirectKind kind, String q, RedirectState state) {
+
+        /** The filters without a state. */
+        public Filter(String channel, String locale, RedirectKind kind, String q) {
+            this(channel, locale, kind, q, null);
+        }
+    }
 
     /**
      * A manual redirect as a request states it. Exactly one of {@code toAssetUuid} (with {@code toPageNumber}, default
@@ -110,18 +121,45 @@ public class RedirectService {
     /** One page of the project's registry, each row resolved against the default target's current build. */
     @Transactional(readOnly = true)
     public Listing list(long projectId, Filter filter, Pageable pageable) {
-        Page<RedirectEntry> page = repository.search(
+        Optional<PublishedBuild> build = published.current(projectId);
+        Long basisRunId = build.map(PublishedBuild::runId).orElse(null);
+        if (filter.state() != null) {
+            return new Listing(listByState(projectId, filter, build, pageable), basisRunId);
+        }
+        Page<RedirectEntry> page = search(projectId, filter, pageable);
+        Map<Long, ResolvedRedirect> resolved = build.isPresent() && page.hasContent()
+                ? resolvedById(projectId, build.get().outputs())
+                : Map.of();
+        return new Listing(page.map(entry -> row(entry, resolved)), basisRunId);
+    }
+
+    /**
+     * A state is computed, not stored: the other filters select in the database, every match is resolved against the
+     * build (the resolver needs the whole registry anyway, for chains and loops), and the page is cut from the rows
+     * with the requested state.
+     */
+    private Page<Row> listByState(long projectId, Filter filter, Optional<PublishedBuild> build, Pageable pageable) {
+        if (build.isEmpty()) {
+            return Page.empty(pageable);
+        }
+        Map<Long, ResolvedRedirect> resolved = resolvedById(projectId, build.get().outputs());
+        List<Row> matching = search(projectId, filter, Pageable.unpaged()).stream()
+                .map(entry -> row(entry, resolved))
+                .filter(row -> row.state() == filter.state())
+                .toList();
+        int from = (int) Math.min(pageable.getOffset(), matching.size());
+        int to = Math.min(from + pageable.getPageSize(), matching.size());
+        return new PageImpl<>(matching.subList(from, to), pageable, matching.size());
+    }
+
+    private Page<RedirectEntry> search(long projectId, Filter filter, Pageable pageable) {
+        return repository.search(
                 projectId,
                 blankToNull(filter.channel()),
                 filter.locale() == null || filter.locale().isBlank() ? null : filter.locale().trim(),
                 filter.kind(),
                 escapeLike(blankToNull(filter.q())),
                 pageable);
-        Optional<PublishedBuild> build = published.current(projectId);
-        Map<Long, ResolvedRedirect> resolved = build.isPresent() && page.hasContent()
-                ? resolvedById(projectId, build.get().outputs())
-                : Map.of();
-        return new Listing(page.map(entry -> row(entry, resolved)), build.map(PublishedBuild::runId).orElse(null));
     }
 
     /** One redirect with its state against the default target's current build. */

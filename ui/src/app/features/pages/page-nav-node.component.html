@@ -79,4 +79,13 @@
     (uidChanged)="onRenameUidChanged()"
     (closed)="closeRename()"
   />
+
+  @if (deleteOpen()) {
+    <sf-page-delete-dialog
+      [projectKey]="projectKey()"
+      [page]="summary()"
+      (deleted)="changed.emit()"
+      (closed)="deleteOpen.set(false)"
+    />
+  }
 </div>

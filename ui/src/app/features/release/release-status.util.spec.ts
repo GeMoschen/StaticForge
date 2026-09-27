@@ -52,6 +52,9 @@ describe('release status util', () => {
       ['fr', false],
     ]);
     expect(release[0].label).toBe('English (EN) — Changed');
+    // What "Redirect old URL to…" needs to know about the page (M30.6.3).
+    const page = choicesFor({ ...subject, type: 'PAGE', folderPath: '/about/' }, 'unpublish', 'de')[0];
+    expect([page.assetType, page.assetName, page.folderPath]).toEqual(['PAGE', 'Home', '/about/']);
     expect(itemsOf(release)).toEqual([{ assetUuid: 'page-1', locale: 'en' }]);
 
     // The editing locale has nothing to unpublish: nothing is preselected among several.

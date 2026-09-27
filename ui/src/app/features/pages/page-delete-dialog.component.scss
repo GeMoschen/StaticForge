@@ -1,0 +1,15 @@
+@use '../../design/dialog-shell';
+
+:host {
+  display: contents;
+}
+
+.dialog {
+  width: min(32rem, 92vw);
+}
+
+.delete__question {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+}

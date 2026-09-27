@@ -11,6 +11,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.redirect.RedirectEntry;
 import com.acme.staticforge.redirect.RedirectKind;
 import com.acme.staticforge.redirect.RedirectService;
+import com.acme.staticforge.redirect.RedirectState;
 import com.acme.staticforge.security.SecuritySupport;
 import java.util.HashMap;
 import java.util.List;
@@ -68,7 +69,9 @@ public class RedirectController {
     /**
      * One page of redirects, sorted by channel, locale and source path, each with its state against the default
      * target's current build. Filters combine: {@code channel}, {@code locale} ({@code ""} is not a filter — every
-     * locale), {@code kind} ({@code AUTO}/{@code MANUAL}), {@code q} (part of the source or fixed target path).
+     * locale), {@code kind} ({@code AUTO}/{@code MANUAL}), {@code state} ({@code ACTIVE}/{@code SHADOWED}/
+     * {@code DANGLING}/{@code LOOP}; nothing matches while the default target has no build), {@code q} (part of the
+     * source or fixed target path).
      */
     @GetMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
@@ -77,6 +80,7 @@ public class RedirectController {
             @RequestParam(required = false) String channel,
             @RequestParam(required = false) String locale,
             @RequestParam(required = false) String kind,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
@@ -85,7 +89,7 @@ public class RedirectController {
         }
         long projectId = projectId(projectKey);
         RedirectService.Listing listing = redirectService.list(
-                projectId, new RedirectService.Filter(channel, locale, kind(kind), q), PageRequest.of(page, size));
+                projectId, new RedirectService.Filter(channel, locale, kind(kind), q, state(state)), PageRequest.of(page, size));
         Map<UUID, String> names = new HashMap<>();
         List<RedirectView> rows = listing.rows().getContent().stream().map(row -> view(projectId, row, names)).toList();
         return new RedirectPageView(
@@ -207,6 +211,18 @@ public class RedirectController {
             return RedirectKind.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new SfException(ProblemFactory.badRequest("Unknown kind: " + value + " (expected AUTO or MANUAL).", "kind"));
+        }
+    }
+
+    private static RedirectState state(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return RedirectState.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new SfException(ProblemFactory.badRequest(
+                    "Unknown state: " + value + " (expected ACTIVE, SHADOWED, DANGLING or LOOP).", "state"));
         }
     }
 
