@@ -1,6 +1,6 @@
 ---
 id: M30.6.2
-status: todo
+status: done
 depends: [M30.1.3]
 epic: m30-quality-checks-and-redirects
 feature: ui
@@ -30,10 +30,10 @@ as the paged-table model, `insight.util.ts` cause labels), `GenerationRunView.fi
 
 ## Acceptance criteria
 
-- [ ] Vitest specs with fixtures from the real API shape: chips, filters → query params, paging, carried marker,
+- [x] Vitest specs with fixtures from the real API shape: chips, filters → query params, paging, carried marker,
       link to the page editor, truncated notice, stage label.
-- [ ] Manual check with the golden fixture project.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] Manual check with the golden fixture project.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 
@@ -43,3 +43,13 @@ as the paged-table model, `insight.util.ts` cause labels), `GenerationRunView.fi
 
 - Keep the filters in the URL (like the M26 audit view) so a findings view can be shared; show the chosen filters as
   chips (M26 journey defect: hidden multi-select state).
+- Deviation: the manual check ran against a project seeded via the API with the same defect kinds (templates without
+  title/alt, broken page and media links, a moved page, SF-CHK-0301 set to ERROR) — the golden fixture is built by
+  the parallel golden lane. Fixtures in `findings/testing/findings.fixtures.ts` are captured from that backend.
+- Held-back pages: the `SF-GEN-0125` message names the page by uid only, so "Show findings" parses it
+  (`heldBackPage`, pinned to `QualityCheckStage.heldBackError`'s format) and reads the page's uuid from its `ERROR`
+  findings; if none is stored it falls back to channel + language + codes + severity. A changed message format
+  there must update `HELD_BACK_MESSAGE` in `findings.util.ts`.
+- URL: `?run=&tab=findings&fSeverity&fCategory&fCode…&fAsset&fChannel&fLocale&fPath&fPage` (prefixed; the Generation
+  settings view binds `tab` next to `run`). Also added: redirect counts (`redirectsAdded/redirectsActive`) in the run
+  summary and the dry run's `redirectCandidates` in the plan dialog.

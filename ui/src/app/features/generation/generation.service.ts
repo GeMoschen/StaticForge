@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import {
   GenerationRunEvent,
@@ -12,11 +12,19 @@ import {
   type GenerationPlanView,
   type PlanEntryQuery,
 } from './insight/insight.util';
+import {
+  FINDINGS_PAGE_SIZE,
+  findingApiParams,
+  type FindingFilter,
+  type FindingPageView,
+  type QualityRuleItem,
+} from './findings/findings.util';
 
 type GenerationRunView = components['schemas']['GenerationRunView'];
 type GenerationRequestDto = components['schemas']['GenerationRequestDto'];
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
 type GenerationTargetRequest = components['schemas']['GenerationTargetRequest'];
+type QualityRulesView = components['schemas']['QualityRulesView'];
 
 /** Request shape accepted by {@link GenerationService.start}; adds the
  * optional idempotency header carrier on top of the backend DTO. */
@@ -85,6 +93,26 @@ export class GenerationService {
       `${BASE}/projects/${projectKey}/assets/${assetUuid}/impact`,
       { params: entryQueryParams(query) },
     );
+  }
+
+  /** One page of a run's quality check findings (M30.1.2), narrowed by `filter`. */
+  findings(
+    projectKey: string,
+    runId: number,
+    filter: FindingFilter,
+    size = FINDINGS_PAGE_SIZE,
+  ): Observable<FindingPageView> {
+    return this.http.get<FindingPageView>(
+      `${BASE}/projects/${projectKey}/generations/${runId}/findings`,
+      { params: findingApiParams(filter, size) },
+    );
+  }
+
+  /** The project's quality rules with their names (M30.1.2): what the findings' codes mean. */
+  qualityRules(projectKey: string): Observable<QualityRuleItem[]> {
+    return this.http
+      .get<QualityRulesView>(`${BASE}/projects/${projectKey}/quality-rules`)
+      .pipe(map((view) => view.rules ?? []));
   }
 
   status(projectKey: string, runId: number): Observable<GenerationRunView> {

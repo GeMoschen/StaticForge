@@ -9,6 +9,7 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { SfAssetPickerDialogComponent } from '../../shared/components/sf-asset-picker-dialog.component';
 import { GenerationDialogComponent } from './generation-dialog.component';
+import { PLAN_AFTER_MOVE } from './findings/testing/findings.fixtures';
 
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
 type GenerationRequestDto = components['schemas']['GenerationRequestDto'];
@@ -145,5 +146,33 @@ describe('GenerationDialogComponent', () => {
     expect(start()).toEqual(expected);
     // The run started after a preview checks whether content moved on meanwhile.
     http.expectOne((r) => r.url === `${BASE}/revisions`).flush([]);
+  });
+  it('lists the redirects the run would add (M30.4.2)', () => {
+    open(false);
+    button('Preview plan').click();
+    const plan = http.expectOne((r) => r.method === 'POST' && r.url === `${BASE}/generations/plan`);
+    plan.flush(PLAN_AFTER_MOVE);
+    fixture.detectChanges();
+    // The entries table loads nothing: the preview carries its first page.
+    const el = fixture.nativeElement as HTMLElement;
+    const toggle = button('Show 2 redirects to add');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    toggle.click();
+    fixture.detectChanges();
+    const items = Array.from(el.querySelectorAll('[aria-label="Automatic redirects the run would add"] li')).map((li) =>
+      li.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(items).toEqual(['gamma.html → gamma_moved.html · html, de', 'en/gamma.html → en/gamma_moved.html · html, en']);
+    expect(button('Hide 2 redirects to add').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('shows no redirect list when the run adds none', () => {
+    open(false);
+    button('Preview plan').click();
+    http
+      .expectOne((r) => r.method === 'POST' && r.url === `${BASE}/generations/plan`)
+      .flush({ ...PLAN_AFTER_MOVE, summary: { ...PLAN_AFTER_MOVE.summary, redirectsAdded: 0 }, redirectCandidates: [] });
+    fixture.detectChanges();
+    expect(Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).some((b) => /redirect/.test(b.textContent ?? ''))).toBe(false);
   });
 });

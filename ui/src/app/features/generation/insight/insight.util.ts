@@ -216,6 +216,23 @@ export function planSummaryLine(summary: PlanSummaryView | undefined | null): st
   return `${scope} · ${pages}${fallback}`;
 }
 
+/**
+ * A run's redirect counts (M30.4.2): "2 redirects added · 14 redirects active"; `active` is left out for a run that
+ * published nothing, and the line is empty for a run from before redirects.
+ */
+export function redirectsLine(summary: PlanSummaryView | undefined | null): string {
+  const added = summary?.redirectsAdded;
+  const active = summary?.redirectsActive;
+  const parts: string[] = [];
+  if (added != null) {
+    parts.push(`${count(added, 'redirect')} added`);
+  }
+  if (active != null) {
+    parts.push(`${count(active, 'redirect')} active`);
+  }
+  return parts.join(' · ');
+}
+
 export interface CountRow {
   key: string;
   label: string;

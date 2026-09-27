@@ -166,6 +166,7 @@ export class GenerationDialogComponent {
   readonly planError = signal<string | null>(null);
   readonly plan = signal<GenerationPlanView | null>(null);
   readonly showChanged = signal(false);
+  readonly showRedirects = signal(false);
   /** The request the shown preview was computed for. */
   private readonly planKey = signal<string | null>(null);
   private readonly formValue = toSignal(this.form.valueChanges, { initialValue: this.form.getRawValue() });
@@ -184,6 +185,11 @@ export class GenerationDialogComponent {
   readonly rootKindKeys = computed(() => this.rootKinds().map((row) => row.key));
   readonly via = computed(() => viaRows(this.plan()?.summary));
   readonly diagnostics = computed(() => parseDiagnostics(this.plan()?.diagnostics));
+  /** The automatic redirects the run would add (M30.4.2): planned pages whose path moved since the target's build. */
+  readonly redirectCandidates = computed(() => this.plan()?.redirectCandidates ?? []);
+  readonly redirectsToAdd = computed(
+    () => `${count(this.plan()?.summary?.redirectsAdded ?? this.redirectCandidates().length, 'redirect')} to add`,
+  );
   readonly counts = computed(() => {
     const summary = this.plan()?.summary;
     return summary
@@ -278,6 +284,7 @@ export class GenerationDialogComponent {
         this.plan.set(plan);
         this.planKey.set(key);
         this.showChanged.set(false);
+        this.showRedirects.set(false);
         this.previewRequest.set(request);
       },
       error: (err: unknown) => {

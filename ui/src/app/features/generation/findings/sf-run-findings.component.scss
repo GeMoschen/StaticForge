@@ -1,0 +1,225 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  min-width: 0;
+}
+
+.findings__facets,
+.findings__filters,
+.findings__chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-2);
+}
+
+.findings__divider {
+  align-self: stretch;
+  width: 1px;
+  background: var(--sf-line);
+}
+
+.facet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  padding: 0 var(--sf-2);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-ink);
+  font: inherit;
+  font-size: var(--sf-text-xs);
+  line-height: 1.8;
+  cursor: pointer;
+}
+
+.facet[aria-pressed='true'] {
+  border-color: var(--sf-signal);
+  background: color-mix(in srgb, var(--sf-signal) 14%, transparent);
+  font-weight: 600;
+}
+
+.facet--error {
+  color: var(--sf-rust);
+}
+
+.facet--warning {
+  color: var(--sf-amber);
+}
+
+.facet__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--sf-slate);
+}
+
+.findings__select,
+.findings__search {
+  padding: var(--sf-1) var(--sf-2);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+}
+
+.findings__search {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  background: color-mix(in srgb, var(--sf-signal) 14%, transparent);
+  color: var(--sf-signal);
+  font-size: var(--sf-text-xs);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.chip__clear {
+  margin-left: var(--sf-1);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--sf-text-sm);
+}
+
+.findings__carried {
+  margin-left: var(--sf-1);
+  background: color-mix(in srgb, var(--sf-slate) 16%, transparent);
+  color: var(--sf-slate);
+}
+
+.findings__notice {
+  margin: 0;
+  padding: var(--sf-1) var(--sf-2);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-amber) 14%, transparent);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+}
+
+.findings__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sf-text-sm);
+}
+
+.findings__table th,
+.findings__table td {
+  text-align: left;
+  padding: var(--sf-1) var(--sf-2);
+  border-bottom: 1px solid var(--sf-line);
+  vertical-align: top;
+}
+
+.findings__path,
+.findings__code {
+  font-family: var(--sf-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.findings__code {
+  display: block;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.findings__rule {
+  display: block;
+}
+
+.findings__meta {
+  display: block;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.findings__message {
+  overflow-wrap: anywhere;
+}
+
+.severity {
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+}
+
+.severity--error {
+  color: var(--sf-rust);
+}
+
+.severity--warning {
+  color: var(--sf-amber);
+}
+
+/* The element a finding points at: a CSS path, shown in a monospace tooltip on hover or focus. */
+.selector {
+  position: relative;
+  display: inline-block;
+  margin-left: var(--sf-1);
+}
+
+.selector__trigger {
+  padding: 0 var(--sf-1);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-slate);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+  cursor: help;
+}
+
+.selector__tip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 10;
+  display: none;
+  width: max-content;
+  max-width: 32rem;
+  padding: var(--sf-1) var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-ink);
+  color: var(--sf-surface);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.selector:hover .selector__tip,
+.selector:focus-within .selector__tip {
+  display: block;
+}
+
+.findings__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-2);
+}
+
+.findings__muted {
+  margin: 0;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-sm);
+}
+
+.findings__error {
+  margin: 0;
+  color: var(--sf-rust);
+  font-size: var(--sf-text-sm);
+}
