@@ -9,9 +9,13 @@ import java.time.Instant;
 /**
  * A content-addressed blob of stored media bytes (spec §11.2). The SHA-256 digest is the
  * immutable primary key, so re-uploading identical bytes references the same row instead of
- * duplicating storage. {@link #refCount} tracks live references; a blob becomes collectable
- * only when it hits zero <em>and</em> no retained revision still points at it, which the
- * nightly sweep (out of scope here) enforces.
+ * duplicating storage.
+ *
+ * <p>Blobs are collected by the {@code blob-sweep} job (M29.2.3, mark and sweep): a blob that no version of any
+ * revision, no {@code media_variant} row and no generation run references, and that was neither created nor
+ * referenced by a write within the grace period ({@link #lastReferencedAt}), is deleted with its bytes.
+ * {@link #refCount} is <em>derived and informational</em>: writers increment it, the sweep recomputes it to the
+ * number of references it found. No code path may decide a deletion by it.
  */
 @Entity
 @Table(name = "blob")
@@ -36,6 +40,10 @@ public class Blob {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** When a write last created or reused the blob ({@link BlobWriter}); {@code null} before M29.2.3. */
+    @Column(name = "last_referenced_at")
+    private Instant lastReferencedAt;
+
     protected Blob() {}
 
     public Blob(String sha256, long sizeBytes, String mimeType, String storageKey, long refCount, Instant createdAt) {
@@ -45,6 +53,7 @@ public class Blob {
         this.storageKey = storageKey;
         this.refCount = refCount;
         this.createdAt = createdAt;
+        this.lastReferencedAt = createdAt;
     }
 
     public String getSha256() {
@@ -73,5 +82,13 @@ public class Blob {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getLastReferencedAt() {
+        return lastReferencedAt;
+    }
+
+    public void setLastReferencedAt(Instant lastReferencedAt) {
+        this.lastReferencedAt = lastReferencedAt;
     }
 }

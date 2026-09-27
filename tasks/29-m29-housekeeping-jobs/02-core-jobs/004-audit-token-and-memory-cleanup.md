@@ -1,6 +1,6 @@
 ---
 id: M29.2.4
-status: todo
+status: done
 depends: [M29.1.1]
 epic: m29-housekeeping-jobs
 feature: core-jobs
@@ -46,17 +46,17 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Audit: entries at 366 days are deleted and entries at 364 days kept. The dry run counts match. Instance and
+- [x] Audit: entries at 366 days are deleted and entries at 364 days kept. The dry run counts match. Instance and
       project entries are both handled.
-- [ ] Refresh tokens:
-  - [ ] a live family with revoked rows is kept, and presenting a revoked row still triggers reuse detection;
-  - [ ] a family past its absolute expiry is deleted;
-  - [ ] a family fully expired for longer than the reuse window is deleted.
+- [x] Refresh tokens:
+  - [x] a live family with revoked rows is kept, and presenting a revoked row still triggers reuse detection;
+  - [x] a family past its absolute expiry is deleted;
+  - [x] a family fully expired for longer than the reuse window is deleted.
 - [x] Login limiter: after 10,000 distinct failed keys and one eviction past the window, the map is empty. A blocked key
       survives eviction until its block ends.
 - [x] Idempotency: a key older than the TTL is evicted, and a re-submission with it starts a new run (documented
       behaviour).
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green (audit purge and refresh-token cleanup part).
 
 ## Out of scope
 
@@ -67,3 +67,22 @@ area: backend
 - Delete in batches by id range, not one huge `DELETE`, so PostgreSQL WAL and locks stay small.
 - The audit UI filter list (`actions()`) is derived from the DB, so purged actions disappear from it. That is expected.
 - memory-eviction: done by B1 (`MemoryEvictionJob` in `sf-api`, package `com.acme.staticforge.housekeeping.memory`, no settings; `LoginAttemptService.evictIdle(now)`/`size()`; `GenerationService.evictIdempotencyKeys(olderThan)`, `idempotencyKeyCount()`, keys timestamped, `sf.generate.idempotency-ttl` default 24h; tests `LoginAttemptServiceTest`, `MemoryEvictionIntegrationTest`).
+
+### Deviations
+
+- **Split across streams:** this stream (B2) built `audit-purge` and `refresh-token-cleanup` and the Javadoc updates.
+  The `memory-eviction` job (`LoginAttemptService.evictIdle`, `GenerationService.evictIdempotencyKeys`) was done by
+  stream B1; its two checkboxes (login limiter, idempotency) are B1's.
+- Packages `com.acme.staticforge.housekeeping.audit` (`AuditPurgeJob`, `AuditPurgeProperties`) and
+  `com.acme.staticforge.housekeeping.tokens` (`RefreshTokenCleanupJob`, `RefreshTokenCleanupProperties`); defaults in
+  `application.yml` (`sf.housekeeping.audit-purge.retention-days`/`batch-size`,
+  `sf.housekeeping.refresh-token-cleanup.reuse-window`).
+- `audit-purge` report: `byAction`, `instanceEntries`, `projectEntries`, `cutoff`, `oldestRemaining`, and a sample of
+  up to 50 entries (id, action, project, time). Each batch selects the oldest `batchSize` expired ids and deletes that
+  id range (re-checking `created_at`) in its own transaction.
+- `refresh-token-cleanup` has no dry run (not in epic decision 4's list). It deletes up to 500 families per
+  transaction and repeats the dead-family rule inside the `DELETE`, so a family rotated in between is not touched.
+- **Bug fixed on the way:** `RefreshTokenService.rotate` threw its `401` inside the transaction that deleted the
+  family, so the deletion of a reused (or expired) family was rolled back and the family stayed alive. It is now
+  `@Transactional(noRollbackFor = SfException.class)`; the test asserts the family is gone after reuse detection.
+- Tests: `AuditAndTokenCleanupJobsTest` (sf-app).

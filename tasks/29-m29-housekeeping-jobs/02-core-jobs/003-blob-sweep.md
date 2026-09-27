@@ -1,6 +1,6 @@
 ---
 id: M29.2.3
-status: todo
+status: done
 depends: [M29.1.1, M27.3.1]
 epic: m29-housekeeping-jobs
 feature: core-jobs
@@ -45,18 +45,18 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] A blob referenced only by an old (closed) version of a media asset is kept. A blob referenced by nothing and older
+- [x] A blob referenced only by an old (closed) version of a media asset is kept. A blob referenced by nothing and older
       than the grace period is deleted (row and bytes).
-- [ ] A blob uploaded one minute ago with no version yet (in-flight upload) is kept.
-- [ ] Orphan bytes (an object without a row) from a simulated failed upload (bytes stored, transaction rolled back)
+- [x] A blob uploaded one minute ago with no version yet (in-flight upload) is kept.
+- [x] Orphan bytes (an object without a row) from a simulated failed upload (bytes stored, transaction rolled back)
       are deleted after the grace period.
-- [ ] Variants, localized files (M27) and `media_variant` blobs are marked (one test each).
-- [ ] Filesystem and S3 stores (the S3 store against its existing test double or MinIO test container, as the
+- [x] Variants, localized files (M27) and `media_variant` blobs are marked (one test each).
+- [x] Filesystem and S3 stores (the S3 store against its existing test double or MinIO test container, as the
       `S3BlobStore` tests do).
-- [ ] A dry run reports the same numbers and deletes nothing. `ref_count` is recomputed correctly.
-- [ ] A concurrent upload of the same content during the sweep (same hash) never loses its bytes (test with a latch
+- [x] A dry run reports the same numbers and deletes nothing. `ref_count` is recomputed correctly.
+- [x] A concurrent upload of the same content during the sweep (same hash) never loses its bytes (test with a latch
       between mark and delete).
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -75,3 +75,41 @@ area: backend
 - A restore drill (§26.5) that restores the DB to an earlier point may reference blobs swept after that point. Document
   it: the blob store snapshot must be at least as old as the grace period plus the backup interval, or run restore
   drills with the sweep disabled.
+
+### Deviations
+
+- **Job** `housekeeping.blobs.BlobSweepJob` + `BlobSweepProperties` (`sf.housekeeping.blob-sweep.grace-hours`/
+  `batch-size`). Report: `versionsScanned`, `marked`, `rowsExamined`, `objectsExamined`, `rowsDeleted`,
+  `orphanObjectsDeleted`, `keptWithinGrace`, `skippedChanged`, `refCountsUpdated`, sample items
+  `{sha256, kind: row|object, mimeType, sizeBytes}`; counters examined/affected/bytes freed.
+- **Mark in Java, not SQL JSON paths**: `MEDIA` payloads are streamed in id pages (`MediaVersionRepository.
+  findEveryMediaVersionAfter`, deleted and closed versions included) and read with the new `MediaFiles.blobShas`
+  (file, variants, and every `localeFiles` entry — the M27 key `localeFiles`). A test pins `AssetType.values()` and
+  checks that no non-media payload in the test DB contains `blobSha256`, so a new referencing type fails loudly.
+- **Concurrency: `blob.last_referenced_at` (new column, changeset `026-blob-last-referenced`)** instead of comparing
+  `ref_count`/`created_at` with the mark: a write that reused a blob after the mark had committed its increment before
+  the sweep read the row, so a mark-time comparison needs a snapshot of every row. `BlobWriter` (the new shared write
+  path for uploads, text writes, variants and imports) locks an existing row `FOR UPDATE`
+  (`BlobRepository.findForUpdate`), increments `ref_count` and sets `last_referenced_at`; the sweep deletes only when
+  `COALESCE(last_referenced_at, created_at)` is older than the grace period, re-checked under the same lock (plus the
+  `media_variant`/run references). A writer waiting on the lock finds no row afterwards and stores the bytes again.
+- **Delete order**: under the lock, the object first, then the row, in one transaction. A crash in between leaves a
+  row without bytes: the next sweep deletes the (still unreferenced) row, and `BlobWriter` rewrites missing bytes
+  when it reuses a row.
+- **Orphan objects** are claimed by inserting a placeholder row with their key (deleted with the object in the same
+  transaction). `BlobWriter` now inserts a new row (flushed) *before* writing the bytes, so a concurrent write of the
+  same bytes waits for the claim and then writes them, or makes the claim fail (skipped).
+- **`ref_count`** = version rows + `media_variant` rows naming the blob as variant + runs; a variant's `source_sha` is
+  marked (kept) but not counted. Surviving unmarked rows within the grace period get `0`.
+- **S3**: `S3BlobStore` is still a stub (every call "not implemented"), and there were no S3 tests or MinIO here.
+  `BlobStore.forEachObject` was added (filesystem walk; S3 stub throws like its other methods, to be done with
+  `ListObjectsV2`). `BlobSweepObjectStoreIntegrationTest` runs the sweep against an in-memory object-store double
+  selected by `sf.media.store`, proving the sweep only depends on the `BlobStore` contract.
+- The sweep test context uses its own `sf.media.root`: the sweep lists the whole store, and the shared test root holds
+  bytes of other contexts (other in-memory databases).
+- **Health**: `BlobStoreHealthIndicator` details gain `lastSweep` `{outcome, finishedAt, dryRun}`.
+- **Docs**: `Blob`/`BlobStore`/`BlobWriter` Javadoc, the `007` changelog comment, spec §11.2 (mark and sweep,
+  derived `ref_count`, `last_referenced_at`) and the backup runbook (restore drills vs. the sweep) are updated.
+- Tests: `BlobSweepIntegrationTest` (7: mark/sweep + dry run + in-flight + health; orphan bytes of a rolled-back
+  write; variants, per-locale files, `media_variant`, `ref_count`; re-upload after the mark; an upload waiting on the
+  row lock; an upload waiting on an orphan claim; asset types pinned), `BlobSweepObjectStoreIntegrationTest` (1).

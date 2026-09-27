@@ -29,9 +29,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -40,18 +37,13 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
 import org.apache.tika.Tika;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,7 +69,9 @@ public class MediaServiceImpl implements MediaService {
     private final AssetService assetService;
     private final AssetRepository assetRepository;
     private final MediaVersionRepository mediaVersionRepository;
-    private final BlobRepository blobRepository;
+    private final BlobWriter blobWriter;
+    private final MediaVariantGenerator variantGenerator;
+    private final MediaVariantResolver variantResolver;
     private final BlobStore blobStore;
     private final MediaProperties properties;
     private final ProjectRepository projectRepository;
@@ -91,14 +85,14 @@ public class MediaServiceImpl implements MediaService {
     private final ReleaseCarryForward releaseCarryForward;
 
     public MediaServiceImpl(AssetService assetService, AssetRepository assetRepository,
-            MediaVersionRepository mediaVersionRepository, BlobRepository blobRepository,
+            MediaVersionRepository mediaVersionRepository,
             BlobStore blobStore, MediaProperties properties, ProjectRepository projectRepository,
             TextMediaCompiler textMediaCompiler, MeterRegistry meterRegistry,
-            ProjectLocales projectLocales, ReleaseCarryForward releaseCarryForward) {
+            ProjectLocales projectLocales, ReleaseCarryForward releaseCarryForward, BlobWriter blobWriter,
+            MediaVariantGenerator variantGenerator, MediaVariantResolver variantResolver) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.mediaVersionRepository = mediaVersionRepository;
-        this.blobRepository = blobRepository;
         this.blobStore = blobStore;
         this.properties = properties;
         this.projectRepository = projectRepository;
@@ -108,6 +102,9 @@ public class MediaServiceImpl implements MediaService {
                 .register(meterRegistry);
         this.projectLocales = projectLocales;
         this.releaseCarryForward = releaseCarryForward;
+        this.blobWriter = blobWriter;
+        this.variantGenerator = variantGenerator;
+        this.variantResolver = variantResolver;
     }
 
     @Override
@@ -555,14 +552,12 @@ public class MediaServiceImpl implements MediaService {
             return new MediaBinary(mime, blobStore.get(sha), fileName);
         }
 
-        JsonNode variants = payload.get("variants");
-        if (variants != null && variants.isArray()) {
-            for (JsonNode node : variants) {
-                if (variantName.equals(node.path("name").asText())) {
-                    String sha = node.path("blobSha256").asText();
-                    String format = node.path("format").asText();
-                    return new MediaBinary(formatMime(format), blobStore.get(sha), fileName);
-                }
+        // Payload variants and the derived ones of media_variant (M29.3.2), the payload winning on a name.
+        for (JsonNode node : variantResolver.variantsFor(payload)) {
+            if (variantName.equals(node.path("name").asText())) {
+                String sha = node.path("blobSha256").asText();
+                String format = node.path("format").asText();
+                return new MediaBinary(formatMime(format), blobStore.get(sha), fileName);
             }
         }
         throw new SfException(ProblemFactory.notFound("Variant '" + variantName + "' not found."));
@@ -580,16 +575,16 @@ public class MediaServiceImpl implements MediaService {
         AssetVersionView view = require(projectId, uuid);
         JsonNode payload = effectivePayload(projectId, view.payload(), locale);
         String mime = JsonUtil.text(payload, "mimeType").orElse("");
-        if (!isRasterImage(mime)) {
+        if (!MediaVariantGenerator.isRasterImage(mime)) {
             throw new SfException(ProblemFactory.unprocessableEntity("Thumbnails require an image media asset."));
         }
         String sha = JsonUtil.text(payload, "blobSha256")
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Media blob is missing.")));
-        BufferedImage image = decode(blobStore.get(sha), mime);
+        BufferedImage image = MediaVariantGenerator.decode(blobStore.get(sha), mime);
         if (image == null) {
             throw new SfException(ProblemFactory.unprocessableEntity("Image could not be decoded."));
         }
-        BufferedImage thumb = image.getWidth() > 320 ? resize(image, 320) : image;
+        BufferedImage thumb = image.getWidth() > 320 ? MediaVariantGenerator.resize(image, 320) : image;
         byte[] encoded;
         try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -638,7 +633,7 @@ public class MediaServiceImpl implements MediaService {
         String mimeType = sniff(bytes, fileName);
         requireAllowed(mimeType, effectiveAllowedMime(projectId));
         int orientation = readOrientation(bytes);
-        BufferedImage image = decode(bytes, mimeType);
+        BufferedImage image = MediaVariantGenerator.decode(bytes, mimeType);
         checkDimensions(image);
         return new Prepared(trimFileName(fileName), mimeType, strip(bytes, image, mimeType), image, orientation);
     }
@@ -664,7 +659,7 @@ public class MediaServiceImpl implements MediaService {
             }
         }
         ArrayNode variants = file.putArray("variants");
-        generateVariants(prepared.bytes(), image, prepared.mimeType()).forEach(variants::add);
+        generateVariants(sha, image, prepared.mimeType()).forEach(variants::add);
         file.put(TextMediaTypes.PROCESS_FLAG, processCms);
         return file;
     }
@@ -735,7 +730,7 @@ public class MediaServiceImpl implements MediaService {
             try {
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 if ("image/jpeg".equals(mimeType)) {
-                    writeJpeg(toRgb(image), bos, 90);
+                    MediaVariantGenerator.writeJpeg(MediaVariantGenerator.toRgb(image), bos, 90);
                 } else {
                     ImageIO.write(image, "png", bos);
                 }
@@ -753,105 +748,29 @@ public class MediaServiceImpl implements MediaService {
         return original;
     }
 
-    private List<ObjectNode> generateVariants(byte[] sourceBytes, BufferedImage image, String mimeType) {
+    /**
+     * The policy's variants of an uploaded raster image, stored and recorded in {@code media_variant} (M29.3.2) as well
+     * as returned for the payload. A definition this JVM can't encode ({@code webp}) or a failed encode is skipped; the
+     * {@code media-variant-backfill} job reports and retries both.
+     */
+    private List<ObjectNode> generateVariants(String sourceSha, BufferedImage image, String mimeType) {
         List<ObjectNode> variants = new ArrayList<>();
-        if (image == null || !isRasterImage(mimeType)) {
+        if (image == null || !MediaVariantGenerator.isRasterImage(mimeType)) {
             return variants;
         }
-        for (MediaProperties.VariantDefinition def : properties.getVariants()) {
-            if (def.width() == null || def.width() <= 0) {
+        for (MediaVariantSpec spec : MediaVariantSpec.policy(properties)) {
+            if (!spec.supported()) {
+                LOG.info("Skipping {} variant '{}': no {} encoder available on this JVM.", spec.format(), spec.name(),
+                        spec.format());
                 continue;
             }
-            if ("webp".equalsIgnoreCase(def.format())) {
-                LOG.info("Skipping webp variant '{}': no webp encoder available on this JVM.", def.name());
-                continue;
+            try {
+                variants.add(variantGenerator.generate(sourceSha, image, spec));
+            } catch (MediaVariantGenerator.EncodingException e) {
+                LOG.warn("Failed to encode variant ({}:{}): {}", spec.format(), spec.width(), e.getMessage());
             }
-            String format = def.format() == null ? "jpeg" : def.format().toLowerCase(Locale.ROOT);
-            byte[] variantBytes = encodeVariant(image, def.width(), format, def.quality());
-            if (variantBytes == null) {
-                continue;
-            }
-            String variantSha = sha256(variantBytes);
-            storeBlob(variantSha, variantBytes, formatMime(format));
-            ObjectNode entry = mapper.createObjectNode();
-            entry.put("name", def.name());
-            entry.put("blobSha256", variantSha);
-            entry.put("width", def.width());
-            entry.put("format", format);
-            variants.add(entry);
         }
         return variants;
-    }
-
-    private byte[] encodeVariant(BufferedImage image, int width, String format, Integer quality) {
-        BufferedImage scaled = resize(image, width);
-        try {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            if ("jpeg".equals(format) || "jpg".equals(format)) {
-                writeJpeg(toRgb(scaled), bos, quality == null ? 82 : quality);
-            } else {
-                ImageIO.write(scaled, format, bos);
-            }
-            return bos.toByteArray();
-        } catch (IOException e) {
-            LOG.warn("Failed to encode variant ({}:{}): {}", format, width, e.getMessage());
-            return null;
-        }
-    }
-
-    private static void writeJpeg(BufferedImage image, java.io.OutputStream out, int quality) throws IOException {
-        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
-        try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
-            writer.setOutput(ios);
-            ImageWriteParam param = writer.getDefaultWriteParam();
-            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(quality / 100.0f);
-            writer.write(null, new IIOImage(image, null, null), param);
-        } finally {
-            writer.dispose();
-        }
-    }
-
-    private static BufferedImage toRgb(BufferedImage image) {
-        if (image.getType() == BufferedImage.TYPE_INT_RGB) {
-            return image;
-        }
-        BufferedImage rgb = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = rgb.createGraphics();
-        g.setColor(Color.WHITE);
-        g.fillRect(0, 0, rgb.getWidth(), rgb.getHeight());
-        g.drawImage(image, 0, 0, null);
-        g.dispose();
-        return rgb;
-    }
-
-    private static BufferedImage resize(BufferedImage src, int targetWidth) {
-        int targetHeight = (int) Math.round(src.getHeight() * ((double) targetWidth / src.getWidth()));
-        if (targetHeight < 1) {
-            targetHeight = 1;
-        }
-        BufferedImage out = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = out.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-        g.drawImage(src, 0, 0, targetWidth, targetHeight, null);
-        g.dispose();
-        return out;
-    }
-
-    private static BufferedImage decode(byte[] bytes, String mimeType) {
-        if (!isRasterImage(mimeType)) {
-            return null;
-        }
-        try {
-            return ImageIO.read(new ByteArrayInputStream(bytes));
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    private static boolean isRasterImage(String mimeType) {
-        return mimeType != null && mimeType.startsWith("image/") && !"image/svg+xml".equals(mimeType);
     }
 
     private static int readOrientation(byte[] bytes) {
@@ -890,15 +809,7 @@ public class MediaServiceImpl implements MediaService {
     }
 
     private void storeBlob(String sha, byte[] bytes, String mimeType) {
-        blobRepository.findById(sha).ifPresentOrElse(
-                existing -> {
-                    existing.setRefCount(existing.getRefCount() + 1);
-                    blobRepository.save(existing);
-                },
-                () -> {
-                    blobStore.put(sha, bytes);
-                    blobRepository.save(new Blob(sha, bytes.length, mimeType, blobStore.storageKey(sha), 1, Instant.now()));
-                });
+        blobWriter.store(sha, bytes, mimeType);
     }
 
     private static String displayName(String fileName) {

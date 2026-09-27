@@ -125,6 +125,41 @@ sf:
       enabled: true
       cron: "0 3 * * 0"
       batch-assets: 200
+    blob-sweep:
+      enabled: true
+      cron: "30 3 * * *"
+      # Mark and sweep of the blob store (spec §11.2): blobs no version of any revision, media_variant row or run
+      # references are deleted once they were neither created nor referenced within grace-hours; store bytes without
+      # a row once their modification time is that old. Restore drills: the blob store snapshot must be at least as
+      # old as grace-hours plus the backup interval, or run them with this job disabled (§26.5).
+      grace-hours: 24
+      batch-size: 1000
+    audit-purge:
+      enabled: true
+      cron: "0 4 * * *"
+      # Audit entries older than this are deleted (spec §26.3), in batches of batch-size. At least 30.
+      retention-days: 365
+      batch-size: 5000
+    refresh-token-cleanup:
+      enabled: true
+      cron: "15 * * * *"
+      # A family whose every token is revoked or expired is kept this long after its newest token expired, so a
+      # stolen token presented shortly after expiry is still detected as reuse. Families past their absolute expiry go.
+      reuse-window: 7d
+    media-variant-backfill:
+      enabled: true
+      cron: "0 2 * * *"
+      # Creates variants of the current sf.media.variants policy that media files lack (added definitions, failed
+      # encodes) in the media_variant table only: no revision, no draft. At most max-per-run attempts per run.
+      max-per-run: 500
+      # Also closed (historical) versions, so rebuilding old revisions gets the variants.
+      include-historical: false
+    search-maintenance:
+      enabled: true
+      cron: "0 5 * * *"
+      # Per non-archived project: sync (catches up lost indexing events), compare the document count with the
+      # indexable current versions (rebuild on a mismatch), and merge away deleted documents above this percentage.
+      merge-deletes-pct: 20
   cache:
     # Compiled CDL + OCTL reused across preview requests (spec §21.5); generation memoizes per build.
     compiled-templates:

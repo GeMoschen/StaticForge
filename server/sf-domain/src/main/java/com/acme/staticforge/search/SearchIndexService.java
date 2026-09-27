@@ -47,6 +47,27 @@ public interface SearchIndexService {
     /** Closes the project's writer and searchers; the next operation reopens them. */
     void close(long projectId);
 
+    /**
+     * The project's document counts as its writer sees them (M29.3.3, search maintenance): live documents and
+     * {@code maxDoc}, which also counts deleted documents not merged away yet.
+     */
+    IndexStats stats(long projectId);
+
+    /**
+     * Merges away the segments' deleted documents ({@code forceMergeDeletes}, not a full merge) and commits, keeping the
+     * latest commit's revision stamp and owner (M29.3.3).
+     */
+    void forceMergeDeletes(long projectId);
+
+    /** Document counts of a project's index. */
+    record IndexStats(int documents, int maxDoc) {
+
+        /** Deleted documents still held by segments. */
+        public int deleted() {
+            return maxDoc - documents;
+        }
+    }
+
     /** Projects with an open writer. */
     Set<Long> openProjects();
 
