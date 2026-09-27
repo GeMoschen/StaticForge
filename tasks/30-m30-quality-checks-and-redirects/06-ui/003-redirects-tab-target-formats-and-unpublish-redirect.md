@@ -1,6 +1,6 @@
 ---
 id: M30.6.3
-status: in-progress
+status: done
 depends: [M30.4.1, M30.5.1]
 epic: m30-quality-checks-and-redirects
 feature: ui
@@ -33,10 +33,10 @@ Changes view), the shared page picker used by link/reference editors, M28 effect
 
 ## Acceptance criteria
 
-- [ ] Vitest specs with API-shaped fixtures: table states, filters in the URL, add/edit/delete incl. `409`, read-only per
+- [x] Vitest specs with API-shaped fixtures: table states, filters in the URL, add/edit/delete incl. `409`, read-only per
       role, target form round trip of `redirectFormats` (default checked on a new target), unpublish dialog option
       (preselection, call order, failure warning).
-- [ ] Manual check in the running app: move a page, build, see the AUTO entry and the stub in the output folder.
+- [x] Manual check in the running app: move a page, build, see the AUTO entry and the stub in the output folder.
 - [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
@@ -70,3 +70,14 @@ Changes view), the shared page picker used by link/reference editors, M28 effect
   (`products` next to `products/`), nearest folder first, online pages only, never a page going offline itself.
 - Deviation: the redirect after the dialog is reported as a toast with an "Open Redirects" action: info ("…once a
   build no longer contains the page. Until then the redirect shows as Shadowed.") or a warning on failure.
+- **Done (2026-09-27, second part):** the target form has a "Redirect output" group — *HTML redirect pages*
+  (checked on a new target), *Apache .htaccess* ("Apache only: …"), *redirects.json*. Editing shows the view's
+  `redirectFormats` (the server resolves a missing key to the default); saving always writes an explicit
+  `config.redirectFormats` in the server's order (`[]` when none is checked, which a missing key can't say); a `400`
+  on the field shows the server's message. Specs: `project-settings-targets.component.spec` (default on a new target,
+  empty list, edit round trip, rejected formats). Manual check (backend 8092 / UI 4312, Playwright + output folder):
+  new target defaults to HTML stubs, `.htaccess` added to the default target and shown again on reopen; page `about`
+  moved from `docs/` to `guides/`, released, incremental build → Redirects tab shows `docs/about.html` *Automatic*,
+  *Active*, → `guides/about.html`, "from run #2"; `builds/2/docs/about.html` is the stub (refresh to
+  `../guides/about.html`, canonical `https://example.com/guides/about.html`, noindex) and `builds/2/.htaccess` holds
+  `RedirectMatch 301 "^/docs/about\.html$" "/guides/about.html"`.
