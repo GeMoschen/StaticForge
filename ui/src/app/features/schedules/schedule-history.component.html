@@ -90,6 +90,8 @@
                 <a [routerLink]="['/p', projectKey(), 'settings', 'generation']" [queryParams]="{ run: row.execution.generationRunId }">
                   Generation run #{{ row.execution.generationRunId }}
                 </a>
+              } @else if (row.deletedRun !== null) {
+                <span class="history__muted">Generation run #{{ row.deletedRun }} (run deleted)</span>
               }
             </div>
           </li>

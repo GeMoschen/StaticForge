@@ -1,6 +1,6 @@
 ---
 id: M29.4.3
-status: todo
+status: done
 depends: [M29.4.2]
 epic: m29-housekeeping-jobs
 feature: revision-compaction
@@ -33,15 +33,15 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] API tests on a compacted fixture:
-  - [ ] revision list flags;
-  - [ ] asset read at a compacted revision flagged, and at a non-compacted one not;
-  - [ ] diff with a mix of compacted and exact assets;
-  - [ ] restore from a compacted revision;
-  - [ ] preview header.
-- [ ] Projects without compaction show `compacted: false` everywhere (no behaviour change; golden JSON of an existing
-      diff test unchanged apart from the new field).
-- [ ] `./gradlew build` green.
+- [x] API tests on a compacted fixture (`CompactedHistoryApiTest`):
+  - [x] revision list flags;
+  - [x] asset read at a compacted revision flagged, and at a non-compacted one not;
+  - [x] diff with a mix of compacted and exact assets;
+  - [x] restore from a compacted revision;
+  - [x] preview header.
+- [x] Projects without compaction show `compacted: false` everywhere (no behaviour change; golden JSON of a diff
+      unchanged apart from the new fields — `noCompactionNoChange`).
+- [x] `./gradlew build` green (server `test --rerun`).
 
 ## Out of scope
 
@@ -51,3 +51,21 @@ area: backend
 
 - The flag has to be cheap on hot paths (the page editor loads at the current revision: never compacted). Short-circuit
   when `project.compacted_through` is null or R > `compacted_through`.
+
+### Deviations
+
+- **Fields the UI uses.** `RevisionView.compacted` (list, detail, and the project restore response);
+  `ProjectDetail.compactedThrough`; `AssetDetailView.compacted` (`GET /assets/{uuid}/versions/{r}` and
+  `POST /assets/{uuid}/restore`, where it means "restored the surviving version"); `RevisionDiff.compacted` +
+  `RevisionDiff.message` (`"Exact changes of this revision were compacted; the state at the end of the day is kept"`,
+  `null` otherwise) and `AssetDiff.compacted` (then `changes: []` and the summary's `action`).
+- **Header instead of body field** on the typed time-travel reads — media, property sets, datasets, records, record
+  sets and the record-set grid (`?revision=`) — and on `POST /projects/{key}/restore`: `X-SF-Compacted: true` (absent
+  otherwise), like the preview. Their many DTOs stay unchanged; `CompactedReads` (sf-api) adds the header.
+- **Diff rule.** An asset is compacted in the diff of `R` when its version at `R` absorbed `R` or its version at
+  `R − 1` absorbed `R − 1` (the "before" isn't exact) — e.g. a survivor's own revision. The diff's `compacted` is the
+  revision's flag or any asset's; the revision flag itself stays "some removed version started here" (decision 13).
+- **Preview header** only for the draft view with `revision` (a published preview renders released versions, which
+  compaction never removes), and only the page itself is checked.
+- Cheap path: `CompactedHistory` short-circuits on `project.compacted_through` (null or `R` newer → no version query);
+  a read without `revision` never queries versions.

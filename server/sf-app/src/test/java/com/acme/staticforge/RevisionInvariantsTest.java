@@ -3,6 +3,15 @@ package com.acme.staticforge;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.staticforge.asset.Asset;
+import org.springframework.jdbc.core.JdbcTemplate;
+import net.jqwik.api.constraints.IntRange;
+import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
+import java.time.LocalDate;
+import java.time.Duration;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.acme.staticforge.revision.compaction.RevisionCompactor;
+import com.acme.staticforge.revision.compaction.CompactionResult;
 import com.acme.staticforge.asset.AssetReferenceRepository;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
@@ -350,6 +359,170 @@ class RevisionInvariantsTest {
             }
         }
     }
+
+    /**
+     * M29.4.2: revision compaction keeps the invariants. Random histories of three pages over several (back-dated) days,
+     * with random releases, are compacted with a random cutoff; then, for every page and every revision:
+     *
+     * <ul>
+     *   <li>exactly one version is valid (from the page's first revision on) and intervals stay contiguous;
+     *   <li>where the version valid before survived, the read is byte-identical to before (outside compacted groups,
+     *       and at every protected version);
+     *   <li>where it was removed, the read is the group's survivor: the next surviving version of the removed one's UTC
+     *       day, and the removed version was neither released, open, the last of its day nor newer than the cutoff;
+     *   <li>the reference rows valid at R equal the edges extracted from the version valid at R.
+     * </ul>
+     *
+     * A dry run first must report exactly what the real run then does.
+     */
+    @Property(tries = 20)
+    void compactionKeepsRevisionInvariants(
+            @ForAll("historyOps") List<HistoryOp> ops, @ForAll @IntRange(min = 0, max = 6) int cutoffDay) {
+        CtxHolder h = context();
+        ReleaseService releases = h.ctx.getBean(ReleaseService.class);
+        RevisionCompactor compactor = h.ctx.getBean(RevisionCompactor.class);
+        CompactionFixtures history = h.ctx.getBean(CompactionFixtures.class);
+        JdbcTemplate jdbc = h.ctx.getBean(JdbcTemplate.class);
+        AppUser actor = h.fixtures.user("u-" + suffix());
+        Project project = h.fixtures.project("p-" + suffix(), actor);
+        RevisionContext ctx = RevisionContext.of(project.getId(), actor.getId(), "compaction invariants");
+
+        List<UUID> media = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            media.add(h.assets.create(new CreateAssetCommand(
+                    project.getId(), AssetType.MEDIA, "m" + i, null, h.mapper.createObjectNode(), null), ctx).uuid());
+        }
+        List<UUID> uuids = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            uuids.add(h.assets.create(new CreateAssetCommand(
+                    project.getId(), AssetType.PAGE, "c" + i, null, payloadFor(h, "c" + i, media), null), ctx).uuid());
+        }
+
+        // Run the history, remembering the day of every revision.
+        Map<Long, Integer> dayOf = new HashMap<>();
+        int day = 0;
+        long seen = 0;
+        for (HistoryOp op : ops) {
+            UUID uuid = uuids.get(op.index());
+            switch (op.kind()) {
+                case EDIT -> h.assets.update(
+                        uuid,
+                        new UpdateAssetCommand(op.name(), payloadFor(h, op.name(), media)),
+                        h.assets.requireCurrent(project.getId(), uuid).validFromRevision(),
+                        ctx);
+                case RELEASE -> releases.release(List.of(ReleaseItem.of(uuid)), ctx);
+                case NEXT_DAY -> day++;
+            }
+            long now = history.head(project.getId());
+            for (long r = seen + 1; r <= now; r++) {
+                dayOf.put(r, day);
+            }
+            seen = now;
+        }
+        long head = history.head(project.getId());
+        for (long r = 1; r <= head; r++) {
+            Instant at = CompactionFixtures.DAY_1.plus(Duration.ofDays(dayOf.getOrDefault(r, 0))).plusSeconds(60 * r);
+            history.backdate(project.getId(), r, r, at);
+        }
+        Instant cutoff = CompactionFixtures.DAY_1.plus(Duration.ofDays(cutoffDay)).plusSeconds(3600);
+
+        Map<Long, Map<Long, AssetVersion>> before = new HashMap<>();
+        Map<Long, List<AssetVersion>> versionsBefore = new HashMap<>();
+        Map<Long, Map<Long, JsonNode>> readsBefore = new HashMap<>();
+        List<Long> assetIds = new ArrayList<>();
+        for (UUID uuid : uuids) {
+            long assetId = history.assetId(project.getId(), uuid);
+            assetIds.add(assetId);
+            before.put(assetId, history.versionAt(assetId, head));
+            versionsBefore.put(assetId, history.versions(assetId));
+            readsBefore.put(assetId, history.readsAt(assetId, head));
+        }
+        Set<Long> released = new HashSet<>(jdbc.queryForList(
+                "SELECT released_version_id FROM asset_release WHERE project_id = ?", Long.class, project.getId()));
+        Map<Long, Instant> createdAt = new HashMap<>();
+        jdbc.query("SELECT revision_id, created_at FROM revision WHERE project_id = ?",
+                rs -> {
+                    createdAt.put(rs.getLong(1), rs.getObject(2, OffsetDateTime.class).toInstant());
+                },
+                project.getId());
+
+        CompactionResult dry = compactor.compact(project.getId(), cutoff, true, null);
+        for (long assetId : assetIds) {
+            assertThat(history.readsAt(assetId, head)).as("a dry run changes nothing").isEqualTo(readsBefore.get(assetId));
+        }
+        CompactionResult real = compactor.compact(project.getId(), cutoff, false, null);
+        assertThat(real).usingRecursiveComparison().ignoringFields("sample").isEqualTo(dry);
+        assertThat(h.revisionRepository.findByProjectIdOrderByRevisionIdDesc(project.getId()))
+                .as("revisions stay")
+                .hasSize((int) head);
+
+        for (long assetId : assetIds) {
+            history.assertGapless(assetId, head);
+            List<AssetVersion> old = versionsBefore.get(assetId);
+            Set<Long> survivors = new HashSet<>();
+            history.versions(assetId).forEach(v -> survivors.add(v.getId()));
+            Map<Long, AssetVersion> now = history.versionAt(assetId, head);
+            Map<Long, JsonNode> readsNow = history.readsAt(assetId, head);
+            for (AssetVersion v : old) {
+                boolean lastOfDay = old.stream().noneMatch(o -> o.getValidFromRevision() > v.getValidFromRevision()
+                        && dayOf(createdAt, o).equals(dayOf(createdAt, v)));
+                boolean inWindow = v.getValidToRevision() != null
+                        && createdAt.get(v.getValidFromRevision()).isBefore(cutoff);
+                if (released.contains(v.getId()) || lastOfDay || !inWindow) {
+                    assertThat(survivors)
+                            .as("protected version %s (released %s, last of day %s, in window %s) survives",
+                                    v.getId(), released.contains(v.getId()), lastOfDay, inWindow)
+                            .contains(v.getId());
+                }
+            }
+            for (Map.Entry<Long, AssetVersion> entry : before.get(assetId).entrySet()) {
+                long r = entry.getKey();
+                AssetVersion was = entry.getValue();
+                if (survivors.contains(was.getId())) {
+                    assertThat(now.get(r).getId()).as("r%s: the surviving version is still the one read", r)
+                            .isEqualTo(was.getId());
+                    assertThat(readsNow.get(r)).as("r%s: byte-identical read", r)
+                            .isEqualTo(readsBefore.get(assetId).get(r));
+                } else {
+                    AssetVersion survivor = old.stream()
+                            .filter(o -> o.getValidFromRevision() > was.getValidFromRevision()
+                                    && survivors.contains(o.getId()))
+                            .findFirst()
+                            .orElseThrow();
+                    assertThat(now.get(r).getId()).as("r%s: the group's survivor is read", r).isEqualTo(survivor.getId());
+                    assertThat(dayOf(createdAt, survivor)).as("r%s: absorbed within its day", r)
+                            .isEqualTo(dayOf(createdAt, was));
+                    assertThat(now.get(r).isCompactedAt(r)).as("r%s: flagged compacted", r).isTrue();
+                }
+            }
+            Map<Long, Set<ReferenceEdge>> edges = history.edgesAt(assetId, head);
+            now.forEach((r, v) -> assertThat(edges.get(r))
+                    .as("edges at r%s", r)
+                    .isEqualTo(v.isDeleted()
+                            ? Set.of()
+                            : h.materializer.extract(project.getId(), AssetType.PAGE, v.getPayload())));
+        }
+    }
+
+    private static LocalDate dayOf(Map<Long, Instant> createdAt, AssetVersion version) {
+        return LocalDate.ofInstant(createdAt.get(version.getValidFromRevision()), ZoneOffset.UTC);
+    }
+
+    @Provide
+    Arbitrary<List<HistoryOp>> historyOps() {
+        Arbitrary<HistoryKind> kind = Arbitraries.frequencyOf(
+                Tuple.of(6, Arbitraries.just(HistoryKind.EDIT)),
+                Tuple.of(2, Arbitraries.just(HistoryKind.RELEASE)),
+                Tuple.of(2, Arbitraries.just(HistoryKind.NEXT_DAY)));
+        Arbitrary<HistoryOp> op = Combinators.combine(
+                        kind, Arbitraries.integers().between(0, 2), Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(8))
+                .as(HistoryOp::new);
+        return op.list().ofMinSize(3).ofMaxSize(30);
+    }
+
+    private enum HistoryKind { EDIT, RELEASE, NEXT_DAY }
+
+    private record HistoryOp(HistoryKind kind, int index, String name) {}
 
     @Provide
     Arbitrary<List<ReleaseOp>> releaseOps() {

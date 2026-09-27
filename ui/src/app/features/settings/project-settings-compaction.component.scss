@@ -1,0 +1,135 @@
+@use '../../design/forms';
+
+:host {
+  display: block;
+}
+
+.compaction {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding: var(--sf-4);
+  max-width: 40rem;
+}
+
+.compaction__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+  color: var(--sf-ink);
+}
+
+.compaction__subtitle {
+  margin: var(--sf-1) 0 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.compaction__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sf-1) var(--sf-4);
+  margin: 0;
+  font-size: var(--sf-text-sm);
+
+  dt {
+    color: var(--sf-slate);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--sf-ink);
+  }
+}
+
+.compaction__muted {
+  color: var(--sf-slate);
+}
+
+.compaction__error-inline {
+  display: block;
+  color: var(--sf-rust);
+}
+
+.input {
+  @include forms.sf-form-control;
+}
+
+.compaction__days {
+  max-width: 10rem;
+}
+
+.compaction__invalid,
+.compaction__errors {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-rust);
+}
+
+ul.compaction__errors {
+  padding-left: var(--sf-4);
+}
+
+.compaction__note {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.compaction__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 51;
+  width: min(34rem, 92vw);
+  max-height: 90vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  padding: var(--sf-4);
+  box-sizing: border-box;
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-lg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.dialog__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-lg);
+}
+
+.dialog__text {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.dialog__estimate {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+}
+
+.dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+}

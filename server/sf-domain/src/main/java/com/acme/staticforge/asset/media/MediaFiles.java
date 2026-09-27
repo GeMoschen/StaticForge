@@ -148,6 +148,34 @@ public final class MediaFiles {
         return out;
     }
 
+    /**
+     * Every blob a media payload references: each file's {@code blobSha256} and its {@code variants[].blobSha256}, for
+     * the top-level file and every {@code localeFiles} entry (what the blob sweep marks, M29.2.3).
+     */
+    public static java.util.Set<String> blobShas(JsonNode payload) {
+        java.util.Set<String> shas = new java.util.LinkedHashSet<>();
+        if (payload == null || !payload.isObject()) {
+            return shas;
+        }
+        List<JsonNode> files = new ArrayList<>();
+        files.add(payload);
+        localeFileKeys(payload).forEach(locale -> files.add(payload.path(LOCALE_FILES).get(locale)));
+        for (JsonNode file : files) {
+            addSha(shas, file == null ? null : file.get("blobSha256"));
+            JsonNode variants = file == null ? null : file.get("variants");
+            if (variants != null && variants.isArray()) {
+                variants.forEach(variant -> addSha(shas, variant.get("blobSha256")));
+            }
+        }
+        return shas;
+    }
+
+    private static void addSha(java.util.Set<String> shas, JsonNode sha) {
+        if (sha != null && sha.isTextual() && !sha.asText().isBlank()) {
+            shas.add(sha.asText());
+        }
+    }
+
     /** The locales of {@code localeFiles}, in stored order. */
     public static List<String> localeFileKeys(JsonNode payload) {
         List<String> keys = new ArrayList<>();

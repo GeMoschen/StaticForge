@@ -3,7 +3,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { UserMenuComponent } from '../account/user-menu.component';
 
-/** Administration (M26, spec §24 screen 11): users, projects and the audit trail of the whole instance. */
+/** Administration (M26, spec §24 screen 11): users, projects, system jobs (M29) and the audit trail of the whole instance. */
 @Component({
   selector: 'sf-admin-shell',
   standalone: true,
@@ -22,6 +22,9 @@ import { UserMenuComponent } from '../account/user-menu.component';
         </a>
         <a class="admin__tab" routerLink="projects" routerLinkActive="admin__tab--active" ariaCurrentWhenActive="page">
           Projects
+        </a>
+        <a class="admin__tab" routerLink="jobs" routerLinkActive="admin__tab--active" ariaCurrentWhenActive="page">
+          Jobs
         </a>
         <a class="admin__tab" routerLink="audit" routerLinkActive="admin__tab--active" ariaCurrentWhenActive="page">
           Audit

@@ -1,6 +1,6 @@
 ---
 id: M29.5.2
-status: todo
+status: done
 depends: [M29.4.1, M29.4.3]
 epic: m29-housekeeping-jobs
 feature: ui
@@ -39,14 +39,24 @@ area: frontend
 
 ## Acceptance criteria
 
-- [ ] Vitest specs:
-  - [ ] card gating by role and archived;
-  - [ ] confirm dialog enables Save only with the exact key;
-  - [ ] estimate shown;
-  - [ ] spine/list/diff/banner render the compacted states from fixtures shaped like the API.
-- [ ] Manual check in the running app with a compacted fixture project (seed via the job with a 30-day cutoff on
-      back-dated revisions, per the journey setup).
-- [ ] `ui` `npm run build` and `npx vitest run` green.
+- [x] Vitest specs:
+  - [x] card gating by role and archived;
+  - [x] confirm dialog enables Save only with the exact key;
+  - [x] estimate shown;
+  - [x] spine/list/diff/banner render the compacted states from fixtures shaped like the API.
+- [x] Manual check in the running app with a compacted fixture project (seed via the job with a 30-day cutoff on
+      back-dated revisions, per the journey setup). *Done in M29.6.2 (2026-09-27): project with three edits back-dated
+      40 days (dev fixture endpoint) and one today; the card refuses 29 days, the Enable dialog shows "3 versions
+      removed of 4 … in 1 asset" and enables only with the exact key; after the job, "Compacted through revision 6"
+      and the last run. Spine and Revisions list mark revisions 3–5 with the icon and tooltip; time travel to 3
+      shows the banner notice and the page's end-of-day headline, while 6 (the survivor's own, exact revision) shows
+      none; the diff shows the message at the top and per asset; "Restore this asset" and "Roll back project" say that
+      the end-of-day state is restored. Found and fixed: the card's last run showed the raw enum ("SUCCEEDED") and
+      "1 versions"/"1 assets" — now "Succeeded" (`outcomeLabel`, as on the Jobs page) and singular counts (spec
+      added). Noticed, not changed: a Revisions-list row opens the diff without entering time travel (only spine ticks
+      do, and the spine shows the newest 40), so in a busy project time travel to an old compacted revision is only
+      reachable through a record's History panel; pre-existing design.*
+- [x] `ui` `npm run build` and `npx vitest run` green (`npx ng build`; vitest 104 files / 707 tests).
 
 ## Out of scope
 
@@ -56,3 +66,35 @@ area: frontend
 
 - Don't let the "older than" input accept values below 30 silently. Show the server rule as a hint and validate
   client-side too.
+
+### Deviations
+
+- **Manual run-app check not done here** (left to the coordinator, as agreed): it needs a compacted fixture project.
+- **Members see only part of the card.** `GET /projects/{key}/compaction` is `PROJECT_ADMIN` on the server, so every
+  member sees the explanation and "Compacted through" (from `ProjectDetail.compactedThrough`) plus "Only project admins
+  can see and change this setting."; project admins also see status, age, last run and the controls.
+- **Archived admins still read the policy.** The UI lowers the effective role to `VIEWER` in an archived project, but
+  the server authorizes reads by membership. New `AuthStore.memberRoleFor` (the un-lowered role; `roleFor` now uses it)
+  and `ProjectPermissionsStore.readsAsProjectAdmin` let the card load the policy there, read-only
+  (`canAdminProject` gates editing, so time travel is read-only too). `provideProjectPermissions` got a `memberRole`
+  option.
+- **Age changes while enabled.** Raising `olderThanDays` saves at once; lowering opens the same estimate + type-the-key
+  dialog (the server needs `confirm` then too). While disabled the age is only the value Enable uses. The client
+  refuses anything but a whole number ≥ 30 (inline message, Enable/Save disabled) and shows the rule as the field hint.
+- **How the banner learns `compacted`.** The notice shows when the travelled-to revision has `RevisionView.compacted`
+  (the shell's loaded revision list) **or** a read at that revision came back compacted. The revision flag alone misses
+  revisions whose own changes were kept but whose assets show a later same-day state, so a new
+  `compactedReadInterceptor` (registered last in `app.config.ts`) looks at `GET`s with `?revision=` (header
+  `X-SF-Compacted: true`) and `GET …/assets/{uuid}/versions/{r}` (`AssetDetailView.compacted`) and reports the revision
+  to `TimeTravelStore.noteCompactedRead`; `readCompacted` compares with the active revision, `exit()` clears. The banner
+  moved from the shell into `TimeTravelBannerComponent` (`features/revisions/`) to be testable; it keeps the
+  `shell__timemachine*` classes the e2e journeys select.
+- **Diff and restore.** The diff shows `RevisionDiff.message` at the top when `compacted`, and the same message in
+  place of the field diff for each `AssetDiff.compacted` asset. The roll-back confirmation adds "the state at the end of
+  its day will be restored" when `RevisionDiff.compacted`. "Restore this asset" on an asset with `AssetDiff.compacted`
+  first opens a confirmation ("… the state at the end of that day will be restored", confirm → restore); exact assets
+  keep the one-click restore. `AssetDiff.compacted` is the per-asset signal: the diff lists only assets changed at the
+  revision, and such an asset's state there is inexact exactly when its change was absorbed (the interceptor's state is
+  per revision, too coarse for one asset). The success toast also says the end-of-day state was restored when the
+  response's `AssetDetailView.compacted` is true.
+- Notice wording lives in `features/revisions/compaction.util.ts`; the marks use the `compress` Material symbol.

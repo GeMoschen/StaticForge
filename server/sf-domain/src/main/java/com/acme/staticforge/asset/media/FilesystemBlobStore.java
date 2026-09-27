@@ -3,10 +3,17 @@ package com.acme.staticforge.asset.media;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +25,8 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "sf.media.store", havingValue = "filesystem", matchIfMissing = true)
 public class FilesystemBlobStore implements BlobStore {
+
+    private static final Pattern BLOB_NAME = Pattern.compile("[0-9a-f]{64}");
 
     private final Path root;
 
@@ -69,6 +78,47 @@ public class FilesystemBlobStore implements BlobStore {
                     ProblemFactory.other(500, "SF-MEDIA-0503", "Storage Failure", "Failed to delete blob from disk."),
                     e.getMessage(), e);
         }
+    }
+
+    /** Walks {@code {root}/xx/yy/}; only files named by a 64-digit hex hash under the matching shards are blobs. */
+    @Override
+    public void forEachObject(Consumer<StoredObject> consumer) {
+        if (!Files.isDirectory(root)) {
+            return;
+        }
+        List<Path> files;
+        try (Stream<Path> walk = Files.walk(root, 3)) {
+            files = walk.filter(path -> isBlobPath(root.relativize(path))).toList();
+        } catch (IOException | UncheckedIOException e) {
+            throw new SfException(
+                    ProblemFactory.other(500, "SF-MEDIA-0502", "Storage Failure", "Failed to list the blob store."),
+                    e.getMessage(), e);
+        }
+        for (Path file : files) {
+            try {
+                BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
+                if (attributes.isRegularFile()) {
+                    consumer.accept(new StoredObject(file.getFileName().toString(), attributes.size(),
+                            attributes.lastModifiedTime().toInstant()));
+                }
+            } catch (NoSuchFileException e) {
+                // Deleted since the walk: nothing to report.
+            } catch (IOException e) {
+                throw new SfException(
+                        ProblemFactory.other(500, "SF-MEDIA-0502", "Storage Failure", "Failed to list the blob store."),
+                        e.getMessage(), e);
+            }
+        }
+    }
+
+    private static boolean isBlobPath(Path relative) {
+        if (relative.getNameCount() != 3) {
+            return false;
+        }
+        String name = relative.getFileName().toString();
+        return BLOB_NAME.matcher(name).matches()
+                && relative.getName(0).toString().equals(name.substring(0, 2))
+                && relative.getName(1).toString().equals(name.substring(2, 4));
     }
 
     @Override

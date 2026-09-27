@@ -143,3 +143,24 @@
     background: var(--sf-signal);
   }
 }
+
+/* A revision whose exact changes were compacted (M29.5.2): a small mark on the badge, explained by the label. */
+.spine__compacted {
+  position: absolute;
+  right: -2px;
+  bottom: 0;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--sf-amber);
+  pointer-events: none;
+}
+
+@media (max-width: 1099px) {
+  .spine__compacted {
+    display: none;
+  }
+
+  .spine__dot--compacted {
+    background: color-mix(in srgb, var(--sf-amber) 60%, var(--sf-line));
+  }
+}

@@ -1,7 +1,7 @@
 # StaticForge — Administration guide
 
-For instance administrators: accounts, sign-in problems and archiving projects — and, for project admins, what
-editors may publish. Everything here is under
+For instance administrators: accounts, sign-in problems, archiving projects and housekeeping jobs — and, for project
+admins, what editors may publish. Everything here is under
 **Administration** in the user menu (top right on the dashboard, bottom of the project rail); only instance
 administrators see it. The rules behind it are in `cms-specification.md` §8.1–§8.3 and §9.2; operator setup (the
 seeded `Admin` account, password policy settings) is in [`infra/README.md`](../infra/README.md).
@@ -15,6 +15,8 @@ seeded `Admin` account, password policy settings) is in [`infra/README.md`](../i
 | Add existing accounts to a project, change roles, remove members | ✅ (every project) | ✅ (their project) | — |
 | See who is in a project | ✅ | ✅ (with emails) | ✅ (members, without emails) |
 | Choose what editors may publish (publish policy, M28) | ✅ (every project) | ✅ (their project) | read-only (members) |
+| Turn on revision compaction for a project (M29) | ✅ (every project) | ✅ (their project) | read-only (members) |
+| Housekeeping jobs: schedules, settings, run now (M29) | ✅ | — | — |
 | Archive and unarchive projects, read the whole audit trail | ✅ | — | — |
 | Change own profile and password, sign out everywhere | ✅ | ✅ | ✅ |
 
@@ -138,14 +140,112 @@ lowering their role, disabling or deleting their account affects their schedules
 
 Before removing a developer, filter the Schedules page by **Owner** to see what they own.
 
+## Housekeeping jobs (M29)
+
+**Administration → Jobs** lists the instance's *system jobs*: background work that keeps storage, the database and
+memory from growing without limit and repairs what a crash leaves behind. Each row shows the schedule in words with its
+time zone (the raw cron in the tooltip), the next run in your time zone (and the job's zone where it differs), the last
+run (outcome, when, how long, how many items it removed, bytes freed) and a spinner while the job runs. The switch on
+the row turns a job on or off at once. Open a job to change its schedule and settings, run it, and read its history.
+The rules behind it are in `cms-specification.md` §26.6; the API is in [`docs/api.md`](api.md) §14.2.
+
+A job runs at most once at a time, on any node. Times are cron expressions in the job's zone (default `UTC`,
+`sf.housekeeping.zone`). A slot missed while the server was down runs once when it is back, not once per missed slot.
+
+### The jobs
+
+| Job | Default schedule | What it deletes or changes | What it never touches |
+|---|---|---|---|
+| **Generation run recovery** | at startup and every 5 minutes | Fails builds stuck in *Queued*/*Running* whose node restarted or whose heartbeat is older than `staleAfter` (5 min): diagnostic `SF-GEN-0504` | Builds still executing on a live node, whatever their heartbeat says |
+| **Build output cleanup** | daily 03:10 | Staged output of failed, cancelled and vanished runs; leftover `.current-*.link` files and output of runs without a row older than `minAge` (1 h); output folders of deleted targets | `current`, the build it points at, published builds (rollback points), builds still running, S3 targets |
+| **Blob sweep** | daily 03:30 | Stored media bytes no version of any revision, no variant and no run references, once they were neither created nor reused within `graceHours` (24); bytes in the store without a database row (failed uploads and imports) after the same grace | Anything a version references — current, old, deleted or closed; variants; anything written or reused within the grace period |
+| **Audit purge** | daily 04:00 | Audit entries older than `retentionDays` (365, at least 30), instance and project entries | Newer entries; revisions (content history is not the audit log) |
+| **Refresh-token cleanup** | hourly at :15 | Whole sign-in token families past their absolute expiry, or whose every token is revoked or expired for longer than `reuseWindow` (7 days) | Families with a usable token, including their revoked tokens — those detect a stolen token being reused |
+| **Memory eviction** | every 10 minutes | In-memory sign-in rate-limit entries idle for 5 minutes, build idempotency keys older than `sf.generate.idempotency-ttl` (24 h) | Rate-limit entries still blocking |
+| **Generation run retention** | daily 04:15 | Build records (with their stored plans) older than `keepDays` (90) **and** beyond the newest `keepPerProject` (50) of the project | Runs with a build on disk (rollback points), each target's current run, running builds, the builds those were carried from, runs of schedule executions younger than `keepDays` |
+| **Media variant backfill** | daily 02:00 | Creates missing image variants of the current variant policy (a definition added later, an encode that failed), at most `maxPerRun` (500) per run; `includeHistorical` also covers old versions | Content: it writes no revision, creates no draft and changes no release status |
+| **Search maintenance** | daily 05:00 | Per project: catches up missed indexing, rebuilds the index when its document count is off, merges away deleted documents above `mergeDeletesPct` (20 %) | Archived projects; a project whose rebuild is already running (reported *skipped*) |
+| **Revision compaction** | Sundays 03:00 | Old versions of projects that opted in (project settings → General): history older than their *N* days collapses to the last version of each day | Projects that didn't opt in; released versions, versions of builds on disk, versions pinned by pending schedules, the last version of each day, anything newer than *N* days |
+
+The defaults come from `sf.housekeeping.<job>.*` (see [`infra/README.md`](../infra/README.md#housekeeping-jobs-m29)).
+They are copied into the database on the first start; after that, **what you save on the Jobs page wins**, also over
+changed properties. **Reset to defaults** copies the properties again.
+
+### Changing a job
+
+The job page has a form for **Enabled**, the **cron** expression (described in words as you type, e.g. "Every day at
+03:30 (UTC)"), the **time zone** and the job's own settings. Durations are written like `PT1H`, `30m`, `24h` or `7d`.
+**Save** is enabled once something changed and the form is valid; the server checks again and shows its message under
+the field. The next run time is recomputed when you save. If another admin saved the job meanwhile, you get a notice
+and the form reloads with their values. Every save and reset is in the audit trail (`JOB_SETTINGS_SET`, with the values
+before and after) — so lowering the audit retention leaves a trace that the purge can't remove until it ages out.
+
+### Dry run first
+
+Jobs that delete things — **Blob sweep**, **Audit purge**, **Build output cleanup**, **Generation run retention** and
+**Revision compaction** — offer **Dry run**: it does all the work of finding what to delete and deletes nothing. Before
+you change a destructive setting (a shorter grace period, a lower retention), save it, run a dry run and read the
+report; nothing forces you to, but it costs nothing. A real run right after deletes exactly what the dry run reported
+when nothing changed in between.
+
+**Run now** and **Dry run** start the job immediately (both are audited, `JOB_RUN`); a manual run doesn't move the
+next scheduled run. The page shows progress and then the **report**: items examined and affected, bytes freed, a table
+of up to 50 sample items (e.g. blob hashes with type and size, audit entries, run ids, removed paths) and the job's own
+counts (e.g. per audit action, per project). The **history** below lists every run with its trigger (*schedule*,
+*manual*, *startup*), whether it was a dry run and who started it; open a row for its report. The newest 200 runs per
+job are kept (`sf.housekeeping.history-per-job`).
+
+### Outcomes and what to do when a job fails
+
+| Outcome | Meaning | What to do |
+|---|---|---|
+| **Succeeded** | Done | — |
+| **Partial** | Done, but some items failed: a project's search index was unavailable or timed out, a variant couldn't be encoded, one project failed to compact | Read the report; the job retries on its next run. A variant that keeps failing is usually a broken source file |
+| **Skipped** | Nothing could be done now, e.g. a search index rebuild was already running | Nothing; the next run picks it up |
+| **Failed** | The job stopped with an error; the message says why | Read the message, fix the cause (disk full, database unreachable, permissions on the output or media folder) and press **Run now**. A failed job keeps its schedule and runs again at the next slot |
+
+A **greyed** job marked as no longer installed is a leftover row of a job that was removed in an upgrade; it never
+runs and can't be changed. Monitoring: every job exposes `sf.job.duration`, `sf.job.items`, `sf.job.bytes.freed` and
+`sf.job.last.success.age` on `/actuator/prometheus`. Alert when `sf.job.last.success.age{job}` exceeds twice the job's
+interval (more than 2 days for a daily job, more than 10 minutes for run recovery) — see `cms-specification.md` §26.4.
+The blob store health (`/actuator/health`) shows the last sweep's outcome.
+
+### Interrupted builds
+
+When the server stops during a build — a restart, a crash, a node that loses contact — the build can't finish. Before
+M29 it stayed *Running* and blocked every later build of the project. Now **Generation run recovery** marks it
+*Failed* with "Run interrupted (node restart or lost heartbeat)" (`SF-GEN-0504`): at startup for the node's own builds,
+otherwise within `staleAfter` plus 5 minutes. After that the project builds normally again, and a scheduled build that
+was waiting for it starts. The published site is untouched: an interrupted build never flips `current`, and its staged
+files are removed by the next **Build output cleanup**. Just start the build again.
+
+Give each server a stable name (`sf.node-id` / `SF_NODE_ID`) so a restarted node recognizes its own interrupted builds
+at once; without one it still recognizes them by the dead process id on the same host. **Cancel** on a running build
+really stops it: it never publishes after you cancelled.
+
+### Backups and restore drills
+
+Two jobs delete data for good, which matters for backups (`cms-specification.md` §26.5, the backup runbook in
+`infra/docs/backup-recovery-runbook.md`):
+
+- **Blob sweep** may delete media bytes that an **older database backup** still references (media removed from history
+  by compaction, or orphans of that time). For a restore drill, either keep blob-store snapshots from at least *grace
+  period + backup interval* before the database backup, or **disable Blob sweep** for the drill (the switch on the Jobs
+  page; on a fresh instance `sf.housekeeping.blob-sweep.enabled=false` before the first start). Never let the sweep run
+  against a restored database before you checked that the blob store is complete.
+- **Revision compaction** removes old versions of opted-in projects; only a database backup from before the run brings
+  them back.
+
 ## The audit trail
 
 **Administration → Audit** lists every security-relevant event of the instance, newest first: sign-ins (and failed
 ones), account changes, membership changes, archiving, channel and generation-target changes, publish policy changes
 (`PUBLISH_POLICY_SET`), generation runs started, cancelled and promoted (`GENERATION_STARTED` — as the schedule's owner
 for a scheduled build —, `GENERATION_CANCELLED`, `GENERATION_PROMOTED`), and schedules — created, changed, cancelled,
-taken over, run now, and each execution (as its owner). Releases are not audit entries: each is a
+taken over, run now, and each execution (as its owner), housekeeping job changes and manual runs (`JOB_SETTINGS_SET`,
+`JOB_RUN`) and revision compaction (`COMPACTION_POLICY_SET`, `REVISIONS_COMPACTED`). Releases are not audit entries: each is a
 revision, listed in the project's revision history. Filter by action, user,
 project (or *Instance only* for account events) and date range; the filters are part of the address, so a filtered
 view can be bookmarked or shared with another admin. (A project admin can read their own project's entries through
-the API, `GET /api/v1/projects/{key}/audit`.) There is no automatic clean-up of old entries yet.
+the API, `GET /api/v1/projects/{key}/audit`.) Entries older than a year are deleted by the **Audit purge** job (see
+[Housekeeping jobs](#housekeeping-jobs-m29)); purged action names disappear from the action filter.

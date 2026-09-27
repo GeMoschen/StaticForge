@@ -18,12 +18,19 @@ sf:
     jwt:
       algorithm: HS256
       secret: test-secret-please-do-not-use-in-production-0123456789
+  # Every context writes generated output to a directory of its own: the default ./build/out outlives the run, and
+  # the next run's projects (same keys, same target ids in a fresh database) would find the old builds there.
+  generate:
+    output-root: ${java.io.tmpdir}/sf-test-out/${random.uuid}
   media:
     store: filesystem
     root: ${java.io.tmpdir}/sf-test-media
   # Each Spring context gets its own in-memory indexes; tests that need a directory set their own temp root.
   # Tests drive SchedulerEngine.tick() themselves (M27.4.1).
   scheduler:
+    enabled: false
+  # Tests run system jobs through their own runners or the admin API (M29.1.1): no startup runs.
+  housekeeping:
     enabled: false
   search:
     directory: memory

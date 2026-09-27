@@ -12,9 +12,11 @@ import {
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { revisionSummaryLabel } from '../../shared/revision-summary.util';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { COMPACTED_REVISION_HINT } from './compaction.util';
 
 type RevisionView = components['schemas']['RevisionView'];
 
@@ -25,7 +27,7 @@ const POLL_MS = 5000;
 @Component({
   selector: 'sf-revision-spine',
   standalone: true,
-  imports: [SfRelativeTimePipe],
+  imports: [SfRelativeTimePipe, SfIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './revision-spine.component.html',
   styleUrl: './revision-spine.component.scss',
@@ -41,6 +43,7 @@ export class RevisionSpineComponent implements OnDestroy {
   readonly tickSelected = output<number>();
 
   protected readonly pulseRevision = signal<number | null>(null);
+  protected readonly compactedHint = COMPACTED_REVISION_HINT;
 
   private readonly members = signal<Record<number, string>>({});
   private membersLoadedFor = '';

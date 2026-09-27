@@ -1,8 +1,10 @@
 package com.acme.staticforge.scheduler;
 
 import com.acme.staticforge.audit.AuditService;
+import com.acme.staticforge.node.NodeIdentity;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
@@ -13,6 +15,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 /**
  * The application's {@link SchedulerEngine} (M27.4.1): claims rows of {@code scheduled_action} as this node, and polls
  * once the application is ready when {@code sf.scheduler.enabled}. The engine stops with the context ({@code close}).
+ * Every {@link SchedulerTickParticipant} bean joins the engine's poll (M29.1.1).
  * No {@code @EnableScheduling}: that would change how other beans behave.
  */
 @Configuration
@@ -32,6 +35,7 @@ public class SchedulerConfiguration {
             PlatformTransactionManager transactionManager,
             MeterRegistry meters,
             SchedulerProperties properties,
+            NodeIdentity node,
             Clock clock) {
         return new SchedulerEngine(
                 actions,
@@ -43,13 +47,17 @@ public class SchedulerConfiguration {
                 transactionManager,
                 meters,
                 properties,
-                properties.effectiveNodeId(),
+                properties.effectiveNodeId(node),
                 clock);
     }
 
     @Bean
-    public ApplicationListener<ApplicationReadyEvent> schedulerStarter(SchedulerEngine engine, SchedulerProperties properties) {
+    public ApplicationListener<ApplicationReadyEvent> schedulerStarter(
+            SchedulerEngine engine,
+            SchedulerProperties properties,
+            ObjectProvider<SchedulerTickParticipant> participants) {
         return event -> {
+            participants.orderedStream().forEach(engine::addTickParticipant);
             if (properties.isEnabled()) {
                 engine.start();
             }

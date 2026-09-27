@@ -144,6 +144,7 @@ npm test
 | `SF_JWT_KEYSTORE`   | backend  | RS256 keystore location (prod; provisioned in M1)             |
 | `SF_MEDIA_ROOT`     | backend  | Media blob store root (mounted volume in compose)             |
 | `SF_SEARCH_INDEX_ROOT` | backend | Root of the embedded search indexes, one directory per project (`search-index` volume in compose; default `./build/search-index`). Derived data: safe to delete, rebuilt on start. **One backend instance per index root** — see [Search: single-instance constraint](#search-single-instance-constraint) |
+| `SF_NODE_ID`        | backend  | This node's name (`sf.node-id`, M29): recorded on the builds it runs and, unless `sf.scheduler.node-id` overrides it, the lease owner of schedules and system jobs. Default `<hostname>-<pid>`; set a stable, unique name per node |
 | `SF_OUTPUT_ROOT`    | backend  | Generated output root; each target publishes to `{projectKey}/{path}/current` beneath it. Old shared-root output (`builds/`, `current`, `s3/`) is deleted at startup unless `sf.generate.cleanup-legacy-output=false` — repoint web servers first |
 
 ## Configuration properties
@@ -159,12 +160,59 @@ Spring properties, settable in `application-*.yml` or as environment variables (
 | `sf.scheduler.poll-interval` | `15s` | How often a node looks for due schedules: an action starts at most this late on an idle system. A dev stack for the schedule journeys uses `2s` (`SF_SCHEDULER_POLL_INTERVAL=2s`) |
 | `sf.scheduler.batch-size` | `20` | Due actions one poll claims at most |
 | `sf.scheduler.lease` | `2m` | How long a claim is valid; the executing node extends it while it runs. Also the fail-over delay: when a node dies, another resumes its action after the lease expired |
-| `sf.scheduler.node-id` | `hostname:pid` | This node's name in `scheduled_action.lease_owner`; must differ between nodes |
+| `sf.scheduler.node-id` | `sf.node-id` | Overrides this node's name in the scheduler's and system jobs' leases (`lease_owner`); must differ between nodes |
+| `sf.node-id` | `<hostname>-<pid>` | This node's name (M29), logged at startup: `generation_run.executor_node` and the default lease owner. Env `SF_NODE_ID` |
+| `sf.generate.keep-builds` | `5` | Published builds kept per target for rollback, besides `current` (M29: failed and cancelled builds don't count) |
+| `sf.generate.heartbeat-interval` | `15s` | How often a running build refreshes its heartbeat (M29); keep it well below the recovery job's `stale-after` |
+| `sf.generate.idempotency-ttl` | `24h` | How long an `Idempotency-Key` of `POST /generations` is remembered (M29, evicted by `memory-eviction`) |
 
 Always enforced, not configurable: at most **72 bytes** (UTF-8) per password — BCrypt's input limit; longer ones are
 rejected rather than silently truncated. Sign-in lockout is fixed as well: 15 failed attempts lock an account for 30
 minutes (an instance admin can unlock it earlier), and per IP and username more than 10 failures in 5 minutes are
 answered with `429` and a growing back-off.
+
+## Housekeeping jobs (M29)
+
+The backend runs instance-level **system jobs** on the scheduler's poll (`sf.scheduler.poll-interval`) with the same
+lease, so each job runs at most once at a time even with several nodes. Admins manage them under
+**Administration → Jobs** (see [the administration guide](../docs/administration.md#housekeeping-jobs-m29)).
+
+The `sf.housekeeping.*` values only **seed** each job's database row on the first start (and *Reset to defaults*);
+after that the settings saved on the Jobs page win, even when you change the properties. To change a default on an
+existing instance, edit the job in the UI or reset it after changing the property.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `sf.housekeeping.enabled` | `true` (`false` in `test`) | Whether this node runs scheduled and startup job runs. Seeding and the admin API (incl. *Run now*) work regardless |
+| `sf.housekeeping.zone` | `UTC` | Default time zone of the job crons (and of *Reset to defaults*) |
+| `sf.housekeeping.history-per-job` | `200` | Runs kept per job in the history |
+| `sf.housekeeping.<job-key>.enabled` / `.cron` | per job | Seed of each job's switch and schedule |
+| `sf.housekeeping.generation-run-recovery.stale-after` | `5m` | A running build whose heartbeat is older is failed (`SF-GEN-0504`); at least 1 min. Cron `*/5 * * * *`, also at startup |
+| `sf.housekeeping.build-output-cleanup.min-age` | `1h` | Age before leftovers of unknown runs, temporary links and deleted targets' folders are removed. Cron `10 3 * * *` |
+| `sf.housekeeping.blob-sweep.grace-hours` / `.batch-size` | `24` / `1000` | Blobs unreferenced and neither written nor reused for this long are deleted. Cron `30 3 * * *` |
+| `sf.housekeeping.audit-purge.retention-days` / `.batch-size` | `365` / `5000` | Audit retention (at least 30). Cron `0 4 * * *` |
+| `sf.housekeeping.refresh-token-cleanup.reuse-window` | `7d` | Dead token families are kept this long for reuse detection. Cron `15 * * * *` |
+| `sf.housekeeping.memory-eviction.*` | — | Only `enabled`/`cron` (`*/10 * * * *`) |
+| `sf.housekeeping.generation-run-retention.keep-days` / `.keep-per-project` | `90` / `50` | Runs older than `keep-days` beyond the newest `keep-per-project` are deleted unless protected. Cron `15 4 * * *` |
+| `sf.housekeeping.media-variant-backfill.max-per-run` / `.include-historical` | `500` / `false` | Variant encode attempts per run; also old versions. Cron `0 2 * * *` |
+| `sf.housekeeping.search-maintenance.merge-deletes-pct` | `20` | Merge an index when deleted documents exceed this share. Cron `0 5 * * *` |
+| `sf.housekeeping.revision-compaction.batch-assets` | `200` | Assets per short transaction under the project's revision lock. Cron `0 3 * * 0`; acts only on projects that opted in |
+
+`sf.revision.retention-days` is gone (it was never read): revision retention is the per-project compaction policy
+(project settings, `PUT /api/v1/projects/{key}/compaction`, spec §7.7). Remove it from your own profiles.
+
+**Node name.** Every build records the node that runs it (`sf.node-id`, env `SF_NODE_ID`, default `<hostname>-<pid>`).
+Set a stable, unique name per node: then a restarted node fails its interrupted builds at startup. With the default the
+restarted node still recognizes them by the dead pid on the same host, and any node fails a build whose heartbeat is
+older than `stale-after`.
+
+**Monitoring.** `sf.job.duration{job,outcome}`, `sf.job.items{job,kind}`, `sf.job.bytes.freed{job}` and the gauge
+`sf.job.last.success.age{job}` (seconds since the last successful real run, `NaN` before the first). Alert when the age
+exceeds twice the job's interval. The blob store health details show `lastSweep`.
+
+**Backups.** The blob sweep and revision compaction delete data for good. Restore drills: see the backup runbook
+(`infra/docs/backup-recovery-runbook.md`) — keep blob snapshots at least grace + backup interval older than the
+database backup, or disable `blob-sweep` for the drill.
 
 ## Scheduler: several nodes are fine (M27)
 

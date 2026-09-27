@@ -21,9 +21,9 @@ A single place for instance-level background work. Each job:
 
 ## Feature exit criteria
 
-- [ ] A test job registered as a bean is seeded from properties, runs on its cron, can't run twice concurrently (two
+- [x] A test job registered as a bean is seeded from properties, runs on its cron, can't run twice concurrently (two
       engines in one test), and records `system_job_run` rows and `sf.job.*` metrics.
-- [ ] Instance admins list jobs, read history, change schedule/settings (validated) and trigger *Run now* or a dry
+- [x] Instance admins list jobs, read history, change schedule/settings (validated) and trigger *Run now* or a dry
       run through `/api/v1/admin/jobs`. Everyone else gets `403`.
 
 ## Dependencies

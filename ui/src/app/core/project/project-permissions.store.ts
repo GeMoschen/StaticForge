@@ -45,7 +45,16 @@ export class ProjectPermissionsStore {
   readonly isDeveloper = computed(() => this.atLeast('DEVELOPER'));
   readonly isProjectAdmin = computed(() => this.atLeast('PROJECT_ADMIN'));
 
-  readonly canEditContent = computed(() => this.isEditor() && this.writable());
+  /**
+   * A project admin by membership, also in an archived project (where {@link isProjectAdmin} is lowered to viewer):
+   * may read admin-only settings such as the compaction policy, which the server allows there.
+   */
+  readonly readsAsProjectAdmin = computed(() => {
+    const key = this.context.activeProjectKey();
+    return key !== null && roleRank(this.auth.memberRoleFor(key)) >= roleRank('PROJECT_ADMIN');
+  });
+
+  readonly canEditContent =computed(() => this.isEditor() && this.writable());
   readonly canEditTemplates = computed(() => this.isDeveloper() && this.writable());
   readonly canAdminProject = computed(() => this.isProjectAdmin() && this.writable());
   readonly canManageMembers = this.canAdminProject;

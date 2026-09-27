@@ -8,6 +8,8 @@ import { ProjectPermissionsStore } from '../project-permissions.store';
 export interface TestPermissionOptions {
   /** The effective role; omitted, the spec's `AuthStore.roleFor` decides. */
   role?: () => string | null;
+  /** The role by membership (not lowered by archiving); omitted, `role` (or the spec's `AuthStore`) decides. */
+  memberRole?: () => string | null;
   /** `ProjectDetail.permissions` as the server would send them. */
   permissions?: () => string[];
   /** Read-only (time travel, archived); omitted, the spec's `ProjectAccessStore` decides. */
@@ -36,12 +38,20 @@ export function provideProjectPermissions(options: TestPermissionOptions = {}): 
           },
         },
       ];
-      if (options.role || options.userId) {
+      if (options.role || options.memberRole || options.userId) {
         const auth = parent.get(AuthStore, null, { optional: true });
         providers.push({
           provide: AuthStore,
           useValue: {
             roleFor: (key: string) => (options.role ? options.role() : (auth?.roleFor(key) ?? null)),
+            memberRoleFor: (key: string) =>
+              options.memberRole
+                ? options.memberRole()
+                : options.role
+                  ? options.role()
+                  : typeof auth?.memberRoleFor === 'function'
+                    ? auth.memberRoleFor(key)
+                    : null,
             userId: computed(() =>
               options.userId ? options.userId() : typeof auth?.userId === 'function' ? auth.userId() : null,
             ),

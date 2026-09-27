@@ -6,9 +6,8 @@
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <!-- Content-addressed blob store (spec §11.2). sha256 is the immutable primary key;
-         identical bytes dedupe to one row. ref_count tracks live references; a nightly
-         sweep (out of scope here) deletes blobs at ref_count = 0 with no retained revision
-         referencing them. -->
+         identical bytes dedupe to one row. ref_count is derived and informational; the
+         blob-sweep job (M29.2.3, mark and sweep) deletes blobs nothing references. -->
     <changeSet id="007-media-blobs" author="sf">
         <comment>Content-addressed blob store backing media assets (spec §11.2).</comment>
         <createTable tableName="blob">

@@ -1,3 +1,59 @@
+# M29 — Housekeeping jobs (branch `m29-housekeeping-jobs`)
+
+Spec: `tasks/29-m29-housekeeping-jobs/`. Decisions 1–14 there are binding.
+Plan deviations known up front: changelogs 024/025 are taken (M27.8, M28), so system jobs use
+`026-system-jobs.xml` and compaction `027-revision-compaction.xml`. `LeaseClaimer` is keyed by `id`; it is
+generalized to a configurable key column for `system_job.key` without changing M27 behaviour.
+
+Execution: phase A sequential (framework), phase B three parallel streams (B1 main tree, B2/B3 worktrees, merged
+back), phase C UI, phase D docs + journey + full verification.
+
+- [x] A — M29.1.1 system job model, SPI, runner on the engine tick, metrics
+- [x] A — M29.1.2 admin jobs API (+ OpenAPI / schema.d.ts)
+- [x] B1 — M29.2.1 heartbeat, interrupted-run recovery, real cancel
+- [x] B1 — M29.2.2 build output cleanup, published-only rollback slots, promote refusal, `retainedRunIds()`
+- [x] B1 — M29.3.1 generation-run retention
+- [x] B2 — M29.2.4 audit purge, refresh-token cleanup, memory eviction
+- [x] B2 — M29.3.2 `media_variant`, resolver, variant backfill
+- [x] B2 — M29.2.3 blob sweep (marks variants, localized files, `media_variant`)
+- [x] B2 — M29.3.3 search maintenance
+- [x] B3 — M29.4.1 compaction policy + schema + API
+- [x] B3 — M29.4.2 compactor + job + estimate
+- [x] B3 — M29.4.3 compacted reads (revisions, time travel, diff, restore, preview header)
+- [x] C — M29.5.1 admin Jobs page
+- [x] C — M29.5.2 compaction card + compacted notices
+- [x] D — M29.6.1 spec + docs
+- [x] D — M29.6.2 `ui/e2e/m29-journeys.spec.ts` green twice
+- [x] `./gradlew spotlessCheck test --rerun` (1475 tests, 0 failures, 6 skipped benchmarks), `ng build`, `npx vitest run`
+      (105 files, 709 tests), `m29-journeys.spec.ts` green twice
+
+
+## Review
+
+- **Framework (M29.1).** `system_job`/`system_job_run` (changelog 026), `HousekeepingJob` SPI with `JobContext`
+  (dry run, counters, bounded sample, short transactions), `SettingsSpec` validation, per-job
+  `sf.housekeeping.<key>.*` defaults seeded once; the runner joins the scheduler's poll as a
+  `SchedulerTickParticipant` and claims with the generalized `LeaseClaimer`. `/api/v1/admin/jobs/**`, audit
+  `JOB_SETTINGS_SET`/`JOB_RUN`, `sf.job.*` metrics.
+- **Jobs (M29.2–M29.3).** All ten jobs of decision 7. Real cancel (checkpoints + locked final write before publish),
+  heartbeat + `sf.node-id`, `SF-GEN-0504` recovery; `keep-builds` counts published builds, promote refuses
+  unpublished runs (`SF-GEN-0505`), `TargetWriter.retainedRunIds()`; mark-and-sweep with `blob.last_referenced_at`
+  and one locked blob write path; `media_variant` + `MediaVariantResolver`; search maintenance API on the indexer.
+- **Compaction (M29.4).** Opt-in policy (changelog 027), `CompactionPlanner` + `RevisionCompactor` under the revision
+  counter lock, protected releases/retained builds/pins/active builds, `original_valid_from` for exact read flags,
+  compacted flags in revisions, reads, diff, restore and the `X-SF-Compacted` header.
+- **UI (M29.5).** Admin Jobs list/detail (settings form, run now/dry run with polled report, history); compaction card
+  with estimate and type-the-key dialog; compacted notices in spine, list, banner, diff and restore confirmation.
+- **Found on the way:** refresh-token reuse detection rolled back its own family deletion; test contexts shared
+  `build/out` (reruns failed); the template cache keyed versions by `(uuid, validFrom)`, which compaction makes
+  ambiguous; `media_variant` rows kept compacted images' bytes forever (integration pass); phone-width overflow on
+  admin tables; General settings Save enabled with nothing changed. Each with a test.
+- **Deviations** are recorded in each task file (changelogs 026/027, per-job property classes,
+  `sf.housekeeping.enabled`, variants merged in `SnapshotService`, no real S3 listing, dev-only
+  `DevFixtureController` for back-dated journeys).
+
+---
+
 # M28 — Editor publishing (branch `m28-editor-publishing`)
 
 Spec: `tasks/28-m28-editor-publishing/`. Decisions 1–14 there are binding.

@@ -10,6 +10,7 @@ import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component
 import {
   AuditFilterState,
   INSTANCE_ONLY,
+  auditActionLabel,
   auditApiQuery,
   auditFilterFromParams,
   paramsFromAuditFilter,
@@ -40,6 +41,7 @@ export class AdminAuditComponent {
   private readonly route = inject(ActivatedRoute);
 
   protected readonly instanceOnly = INSTANCE_ONLY;
+  protected readonly actionLabel = auditActionLabel;
 
   protected readonly filter = toSignal(this.route.queryParams.pipe(map(auditFilterFromParams)), {
     initialValue: auditFilterFromParams(this.route.snapshot.queryParams),

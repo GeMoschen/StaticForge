@@ -6,13 +6,14 @@ import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { RevisionSpineComponent } from '../revisions/revision-spine.component';
+import { TimeTravelBannerComponent } from '../revisions/time-travel-banner.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ReleaseEventsStore } from '../release/release-events.store';
 
 @Component({
   selector: 'sf-project-shell',
   standalone: true,
-  imports: [RouterOutlet, NavRailComponent, RevisionSpineComponent, ArchivedBannerComponent],
+  imports: [RouterOutlet, NavRailComponent, RevisionSpineComponent, ArchivedBannerComponent, TimeTravelBannerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-shell.component.html',
   styleUrl: './project-shell.component.scss',

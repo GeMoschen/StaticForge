@@ -64,9 +64,16 @@
             class="revisions__row"
             [style.height.px]="ITEM_HEIGHT"
             [routerLink]="['/p', projectKey(), 'settings', 'revisions', rev.revisionId]"
-            [attr.aria-label]="'Revision ' + rev.revisionId"
+            [attr.aria-label]="'Revision ' + rev.revisionId + (rev.compacted ? ' — ' + compactedHint : '')"
           >
-            <span class="revisions__rev">{{ rev.revisionId }}</span>
+            <span class="revisions__rev">
+              {{ rev.revisionId }}
+              @if (rev.compacted) {
+                <span class="revisions__compacted" [title]="compactedHint" data-testid="list-compacted">
+                  <sf-icon name="compress" />
+                </span>
+              }
+            </span>
             <span class="revisions__type" [class.revisions__type--own]="isOwn(rev)">
               {{ rev.changeType }}
             </span>

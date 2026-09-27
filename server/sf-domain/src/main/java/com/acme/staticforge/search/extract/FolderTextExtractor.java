@@ -33,10 +33,15 @@ public class FolderTextExtractor implements SearchTextExtractor {
     }
 
     @Override
+    public boolean indexes(IndexableAsset asset) {
+        return !FIXED_FOLDERS.contains(asset.uid())
+                && FolderScope.fromPayload(asset.payload()) != null
+                && !FolderScope.isProtected(asset.payload());
+    }
+
+    @Override
     public Optional<SearchDocument> extract(IndexableAsset asset, ExtractionContext context) {
-        if (FIXED_FOLDERS.contains(asset.uid())
-                || FolderScope.fromPayload(asset.payload()) == null
-                || FolderScope.isProtected(asset.payload())) {
+        if (!indexes(asset)) {
             return Optional.empty();
         }
         return Optional.of(Documents.of(asset, "", ""));

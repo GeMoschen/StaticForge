@@ -1,5 +1,6 @@
 package com.acme.staticforge.scheduler;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -23,4 +24,14 @@ public interface ScheduledActionExecutionRepository extends JpaRepository<Schedu
             where e.id in (select max(x.id) from ScheduledActionExecution x where x.actionId in :actionIds group by x.actionId)
             """)
     List<ScheduledActionExecution> findLatest(@Param("actionIds") Collection<Long> actionIds);
+
+    /** The generation runs linked by executions that started at or after {@code since} (M29.3.1: protected runs). */
+    @Query("""
+            select distinct e.generationRunId from ScheduledActionExecution e
+            where e.generationRunId is not null and e.startedAt >= :since
+            """)
+    List<Long> findGenerationRunIdsStartedSince(@Param("since") Instant since);
+
+    /** The executions that link one of {@code runIds} (M29.3.1: unlinked before the runs are deleted). */
+    List<ScheduledActionExecution> findByGenerationRunIdIn(Collection<Long> runIds);
 }

@@ -49,11 +49,15 @@ public class DatasetController {
     private final AssetService assetService;
     private final SecuritySupport securitySupport;
 
+    private final CompactedReads compactedReads;
+
     public DatasetController(
             ProjectService projectService,
             DatasetService datasetService,
             AssetService assetService,
-            SecuritySupport securitySupport) {
+            SecuritySupport securitySupport,
+            CompactedReads compactedReads) {
+        this.compactedReads = compactedReads;
         this.projectService = projectService;
         this.datasetService = datasetService;
         this.assetService = assetService;
@@ -76,7 +80,8 @@ public class DatasetController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam(value = "revision", required = false) Long revision) {
-        return ok(require(projectId(projectKey), uuid, revision));
+        long projectId = projectId(projectKey);
+        return compactedReads.mark(ok(require(projectId, uuid, revision)), projectId, uuid, revision);
     }
 
     @PostMapping

@@ -27,6 +27,16 @@ public class SearchTextExtractorRegistry {
         this.extractors = List.copyOf(extractors);
     }
 
+    /** Whether {@link #extract} yields a document for {@code asset}; see {@link SearchTextExtractor#indexes}. */
+    public boolean indexes(IndexableAsset asset) {
+        for (SearchTextExtractor extractor : extractors) {
+            if (extractor.supports(asset.type())) {
+                return extractor.indexes(asset);
+            }
+        }
+        return false;
+    }
+
     public Optional<SearchDocument> extract(IndexableAsset asset, ExtractionContext context) {
         for (SearchTextExtractor extractor : extractors) {
             if (extractor.supports(asset.type())) {

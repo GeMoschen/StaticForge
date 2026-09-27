@@ -1,6 +1,6 @@
 ---
 id: M29.4.2
-status: todo
+status: done
 depends: [M29.4.1, M29.2.2]
 epic: m29-housekeeping-jobs
 feature: revision-compaction
@@ -58,26 +58,28 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] **Unit fixture.** One asset with 5 versions on day D, where the 2nd is released (closed release row) and the 5th
-      is the last of the day:
-  - [ ] versions 1 → absorbed into 2, 3 and 4 → into 5;
-  - [ ] reads at each original revision return the expected survivor;
-  - [ ] no gaps or overlaps (query every revision).
-- [ ] **Protected.** Versions of open and closed release rows (every locale), versions valid at a retained build's
-      revision and at its consistent revision, and pinned schedule versions all survive.
-- [ ] **Invariants** (extend `RevisionInvariantsTest` with a jqwik property: random histories over several days plus
-      random releases, compacted with a random cutoff):
-  - [ ] exactly one valid version per (asset, revision) for every revision;
-  - [ ] reads outside compacted groups and at protected versions are byte-identical to before;
-  - [ ] reads inside a group equal the group survivor;
-  - [ ] references at R equal the references materialized from the version valid at R.
-- [ ] **Builds.** A full build at a released or retained-build revision is byte-identical before and after compaction
-      (golden comparison on a fixture project). An incremental build after compaction plans the same entries as before.
-- [ ] **Concurrency.** `ConcurrentWritersTest`-style: 8 writers saving while the job compacts. No lost update, no
-      deadlock, and the invariants hold afterwards.
-- [ ] A dry run changes nothing and reports the same counts as the real run.
-- [ ] Running the job twice is idempotent: the second run removes nothing new for the same cutoff.
-- [ ] `./gradlew build` green.
+- [x] **Unit fixture.** One asset with 5 versions on day D, where the 2nd is released (closed release row) and the 5th
+      is the last of the day (`RevisionCompactionIntegrationTest.fiveVersionsOnOneDay`, plus `CompactionPlannerTest`):
+  - [x] versions 1 → absorbed into 2, 3 and 4 → into 5;
+  - [x] reads at each original revision return the expected survivor;
+  - [x] no gaps or overlaps (query every revision).
+- [x] **Protected.** Versions of open and closed release rows (every locale), versions valid at a retained build's
+      revision and at its consistent revision, and pinned schedule versions all survive (`protectedVersionsSurvive`,
+      with a real manifest on disk read by `TargetRetainedBuildRevisions`; also a queued build's revision).
+- [x] **Invariants** (extend `RevisionInvariantsTest` with a jqwik property: random histories over several days plus
+      random releases, compacted with a random cutoff — `compactionKeepsRevisionInvariants`):
+  - [x] exactly one valid version per (asset, revision) for every revision;
+  - [x] reads outside compacted groups and at protected versions are byte-identical to before;
+  - [x] reads inside a group equal the group survivor;
+  - [x] references at R equal the references materialized from the version valid at R.
+- [x] **Builds.** A full build at a released or retained-build revision is byte-identical before and after compaction
+      (golden comparison on a fixture project). An incremental build after compaction plans the same entries as before
+      (`RevisionCompactionBuildIntegrationTest`).
+- [x] **Concurrency.** `ConcurrentWritersTest`-style: 8 writers saving while the job compacts. No lost update, no
+      deadlock, and the invariants hold afterwards (`RevisionCompactionConcurrencyTest`, one asset per batch).
+- [x] A dry run changes nothing and reports the same counts as the real run (job test and the jqwik property).
+- [x] Running the job twice is idempotent: the second run removes nothing new for the same cutoff.
+- [x] `./gradlew build` green (server `test --rerun`).
 
 ## Out of scope
 
@@ -99,3 +101,46 @@ area: backend
   period. Test the hand-off.
 - The M27 release rows reference `asset_version.id`. P(a) guarantees no FK breaks. Assert FK integrity in the test on
   PostgreSQL semantics (H2 in PostgreSQL mode).
+
+### Deviations
+
+- **Protected set (b) behind an SPI.** `RetainedBuildRevisions` (`revision.compaction`, sf-domain) answers the
+  manifest revisions and consistent revisions of a project's builds on disk. Its implementation
+  `TargetRetainedBuildRevisions` (new class in sf-generate) probes `TargetWriter.readManifest` for every
+  `generation_run` of each target (a run without target id belongs to the default target) and adds the revision of the
+  run `current` points at; `TargetWriter` and the writers are untouched, so the coordinator can switch it to
+  `retainedRunIds()` (M29.3.1). The compactor also protects the revisions of `QUEUED`/`RUNNING` runs (a build at an old
+  revision in progress). (a), (c) and the running builds are read per batch, under the lock.
+- **Survivor rule, precisely** (`CompactionPlanner`): day groups are maximal runs of consecutive versions whose
+  revisions share a UTC date; a version without a revision row is never in the window. A removed run is absorbed only
+  when its next survivor is itself in the window — so the open version, and versions newer than the cutoff, are never
+  moved (their predecessors stay until a later run).
+- **Candidates** are prefiltered to assets with at least two closed versions in the window (an asset with fewer can't
+  lose any). The job scans the whole window every run (protection can end: a pruned build, a finished schedule).
+- **References** are rewritten from the stored rows, not re-extracted: rows inside an absorbed interval are deleted,
+  rows valid at the survivor's start that begin inside it start at the interval's start, rows ending inside it end at
+  its start. Adjacent rows of the same edge are not merged (equal semantics; open rows are never touched beyond moving
+  their start back).
+- **Marks.** `revision.compacted` is set for each removed version's `valid_from_revision` and its own change revision
+  (`original_valid_from` when an earlier run had moved it). `compacted_through` = the newest revision before the cutoff;
+  it is advanced (monotonic) in every batch that changes something and after a complete real run, never by a dry run.
+- **Job.** Setting `batchAssets` (1–10 000, default 200). Report `projects[]`: `{projectId, projectKey, olderThanDays,
+  cutoff, versionsInWindow, assetsTouched, versionsRemoved, referencesRewritten, revisionsMarked, bytesFreed, error?}`;
+  counters `examined` = versions in the window, `affected` = versions removed, `bytesFreed` = serialized payload size of
+  removed versions; sample `"<projectKey>: <asset uuid>@r<revision>"`. `REVISIONS_COMPACTED` (actor: system, detail:
+  the counts, `cutoff`, `jobRunId`) is written only for projects that lost versions. A failing project is reported and
+  the others go on (`PARTIAL`; all failed → `FAILED`).
+- **Blob hand-off.** `blob-sweep` (M29.2.x) is not on this branch: the test proves the removed media version's blob is
+  referenced by no `asset_version` row any more and that compaction deletes no blob row.
+- **Cache identity (found while testing).** `(asset uuid, validFromRevision)` stops identifying a version once a
+  survivor moves back onto a removed version's start. `CompiledTemplateCache` keys now include the compiled sources, and
+  `TemplateHierarchies` keys template versions by `AssetVersion.getOwnRevision()` (`original_valid_from` or
+  `valid_from_revision`), so a preview at an old revision never serves a removed template version's compile
+  (`CompactedHistoryApiTest.previewUsesTheSurvivingTemplate` fails without it).
+- **Guard.** `RevisionHistoryRewriteGuardTest` (sf-domain): the JPA mappings of `valid_from_revision` are
+  non-updatable and setter-free, an ArchUnit check fails on any assignment of the field outside the entity
+  constructors, and a scan of every server module's main sources fails on SQL/JPQL updating `valid_from_revision`
+  anywhere but `RevisionCompactor`.
+- **Uid history** needs nothing: a uid change writes no version (`asset_uid_history` is keyed by revision), so absorbing
+  versions can't change it, and incremental baselines are retained-build revisions, which are protected.
+- FK integrity is asserted on H2 in PostgreSQL mode (no PostgreSQL here).

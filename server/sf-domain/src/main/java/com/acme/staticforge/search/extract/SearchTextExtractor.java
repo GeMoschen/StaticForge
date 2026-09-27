@@ -12,6 +12,15 @@ public interface SearchTextExtractor {
 
     boolean supports(AssetType type);
 
+    /**
+     * Whether {@link #extract} yields a document for {@code asset} (a supported type), decided without extracting —
+     * the predicate search maintenance counts indexable versions with (M29.3.3). {@link #extract} must return a
+     * document exactly when this is {@code true} (extraction failures aside).
+     */
+    default boolean indexes(IndexableAsset asset) {
+        return true;
+    }
+
     /** The document to index, or empty when the asset is never searchable (e.g. a store's root folder). */
     Optional<SearchDocument> extract(IndexableAsset asset, ExtractionContext context);
 }

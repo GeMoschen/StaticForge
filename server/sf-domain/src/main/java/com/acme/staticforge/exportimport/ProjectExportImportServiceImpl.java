@@ -15,10 +15,10 @@ import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.folder.RecordSetContainment;
-import com.acme.staticforge.asset.media.Blob;
-import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.BlobStore;
+import com.acme.staticforge.asset.media.BlobWriter;
 import com.acme.staticforge.asset.media.MediaFiles;
+import com.acme.staticforge.asset.media.MediaVariantResolver;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.channel.OutputChannel;
@@ -184,7 +184,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final FolderService folderService;
     private final RevisionService revisionService;
     private final BlobStore blobStore;
-    private final BlobRepository blobRepository;
+    private final BlobWriter blobWriter;
+    private final MediaVariantResolver variantResolver;
     private final ObjectMapper objectMapper;
     private final OutputChannelRepository outputChannelRepository;
     private final GenerationTargetRepository generationTargetRepository;
@@ -203,15 +204,18 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             FolderService folderService,
             RevisionService revisionService,
             BlobStore blobStore,
-            BlobRepository blobRepository,
             ObjectMapper objectMapper,
             OutputChannelRepository outputChannelRepository,
             GenerationTargetRepository generationTargetRepository,
             ReferenceMaterializer referenceMaterializer,
             com.acme.staticforge.project.ProjectLocales projectLocales,
             AssetReleaseRepository releaseRepository,
-            ScheduleArchive scheduleArchive) {
+            ScheduleArchive scheduleArchive,
+            BlobWriter blobWriter,
+            MediaVariantResolver variantResolver) {
         this.projectRepository = projectRepository;
+        this.blobWriter = blobWriter;
+        this.variantResolver = variantResolver;
         this.scheduleArchive = scheduleArchive;
         this.projectLocales = projectLocales;
         this.releaseRepository = releaseRepository;
@@ -223,7 +227,6 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         this.folderService = folderService;
         this.revisionService = revisionService;
         this.blobStore = blobStore;
-        this.blobRepository = blobRepository;
         this.objectMapper = objectMapper;
         this.outputChannelRepository = outputChannelRepository;
         this.generationTargetRepository = generationTargetRepository;
@@ -309,6 +312,11 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         Map<String, byte[]> blobs = new TreeMap<>();
         for (AssetVersion version : exported) {
             Asset asset = version.getAsset();
+            // Media is exported with its merged variants (payload and media_variant, M29.3.2), so the archive carries
+            // backfilled variants and their blobs; an import stores them in the payload.
+            JsonNode payload = asset.getAssetType() == AssetType.MEDIA
+                    ? variantResolver.withVariants(version.getPayload())
+                    : version.getPayload();
             List<ExportedRelease> release = ReleasableTypes.isReleasable(asset.getAssetType(), version.getPayload(), asset.getUid())
                     ? releaseEntries(version, pointers.getOrDefault(version.getAssetId(), List.of()), releasedVersions,
                             everReleased.getOrDefault(version.getAssetId(), Set.of()), uuidByAssetId)
@@ -321,14 +329,14 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     version.getFolderId() == null ? null : uuidByAssetId.get(version.getFolderId()),
                     version.getFolderPath(),
                     version.getTemplateAssetId() == null ? null : uuidByAssetId.get(version.getTemplateAssetId()),
-                    version.getPayload(),
+                    payload,
                     version.getMimeType(),
                     version.getSizeBytes(),
                     !ancestorIds.contains(version.getAssetId()),
                     release,
                     version.isDeleted() ? Boolean.TRUE : null));
             if (asset.getAssetType() == AssetType.MEDIA) {
-                collectBlobs(version.getPayload(), blobs);
+                collectBlobs(payload, blobs);
                 if (release != null) {
                     release.forEach(entry -> collectBlobs(entry.payload(), blobs));
                 }
@@ -460,7 +468,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
      * has none: it is gone there, not pending). A pointer whose version is gone (only reachable through manual SQL) is
      * left out.
      */
-    private static List<ExportedRelease> releaseEntries(
+    private List<ExportedRelease> releaseEntries(
             AssetVersion draft, List<AssetRelease> pointers, Map<Long, AssetVersion> releasedVersions,
             Set<String> everReleased, Map<Long, String> uuidByAssetId) {
         Asset asset = draft.getAsset();
@@ -486,7 +494,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     pointer.getLocaleKey(),
                     ExportedRelease.State.PAYLOAD,
                     uid,
-                    released.getPayload(),
+                    media ? variantResolver.withVariants(released.getPayload()) : released.getPayload(),
                     released.getDisplayName(),
                     released.getFolderId() == null ? null : uuidByAssetId.get(released.getFolderId()),
                     released.getFolderPath(),
@@ -1709,16 +1717,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         if (bytes == null) {
             return;
         }
-        blobRepository.findById(sha).ifPresentOrElse(
-                existing -> {
-                    existing.setRefCount(existing.getRefCount() + 1);
-                    blobRepository.save(existing);
-                },
-                () -> {
-                    blobStore.put(sha, bytes);
-                    blobRepository.save(new Blob(
-                            sha, bytes.length, mimeType, blobStore.storageKey(sha), 1, Instant.now()));
-                });
+        // The shared write path: reuses and locks an existing row, so the blob sweep can't race it (M29.2.3).
+        blobWriter.store(sha, bytes, mimeType);
         importedShas.add(sha);
     }
 

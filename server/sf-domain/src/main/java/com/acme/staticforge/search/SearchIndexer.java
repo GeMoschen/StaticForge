@@ -197,6 +197,85 @@ public class SearchIndexer implements DisposableBean {
         }
     }
 
+    // ------------------------------------------------------------------ maintenance (M29.3.3)
+
+    /**
+     * A project's index against the database: the current versions the index should hold ({@code indexable}, the
+     * rebuild's own predicate), its live documents, and deleted documents not merged away yet.
+     */
+    public record IndexCounts(long indexable, int documents, int deleted, int maxDoc) {
+
+        /** Deleted documents as a percentage of {@code maxDoc}. */
+        public double deletedPercent() {
+            return maxDoc == 0 ? 0 : deleted * 100.0 / maxDoc;
+        }
+    }
+
+    /** Requests a sync and waits until the project has no sync queued or running; {@code false} on timeout. */
+    public boolean syncAndAwait(long projectId, Duration timeout) throws InterruptedException {
+        requestSync(projectId);
+        return awaitProject(projectId, timeout);
+    }
+
+    /** Waits until the project has no sync or rebuild queued or running; {@code false} on timeout. */
+    public boolean awaitProject(long projectId, Duration timeout) throws InterruptedException {
+        ProjectState state = state(projectId);
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (state.pending.get() || state.rebuildRequested.get() || state.lock.isLocked()) {
+            if (System.nanoTime() >= deadline) {
+                return false;
+            }
+            Thread.sleep(20);
+        }
+        return true;
+    }
+
+    /**
+     * The project's {@link IndexCounts}, read while no sync runs for it; empty for an unknown or archived project.
+     * The indexable count uses the rebuild's query ({@code findCurrentVersionIdsByProject}) and the extractors' own
+     * {@link SearchTextExtractorRegistry#indexes} predicate, so a healthy index always matches.
+     *
+     * @throws SfException {@code 503 SF-SEARCH-0503} when the index is unavailable
+     */
+    public Optional<IndexCounts> counts(long projectId) {
+        ProjectState state = state(projectId);
+        state.lock.lock();
+        try {
+            Optional<ProjectInfo> info = project(projectId);
+            if (info.isEmpty() || info.get().archived()) {
+                return Optional.empty();
+            }
+            long indexable = countIndexable(projectId);
+            SearchIndexService.IndexStats stats = index.stats(projectId);
+            return Optional.of(new IndexCounts(indexable, stats.documents(), stats.deleted(), stats.maxDoc()));
+        } finally {
+            state.lock.unlock();
+        }
+    }
+
+    /** Merges away the index's deleted documents, while no sync runs for the project. */
+    public void forceMergeDeletes(long projectId) {
+        ProjectState state = state(projectId);
+        state.lock.lock();
+        try {
+            index.forceMergeDeletes(projectId);
+        } finally {
+            state.lock.unlock();
+        }
+    }
+
+    private long countIndexable(long projectId) {
+        List<Long> ids = inReadOnly(() -> versions.findCurrentVersionIdsByProject(projectId));
+        long count = 0;
+        for (List<Long> chunk : chunks(ids)) {
+            count += inReadOnly(() -> versions.findWithAssetByIdIn(chunk).stream()
+                    .filter(v -> v.getValidToRevision() == null && !v.isDeleted())
+                    .filter(v -> extractors.indexes(indexable(v.getAsset(), v)))
+                    .count());
+        }
+        return count;
+    }
+
     @Override
     public void destroy() {
         executor.shutdownNow();

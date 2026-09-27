@@ -14,6 +14,7 @@ import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanRequest;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
+import com.acme.staticforge.generate.pipeline.RunAbortedException;
 import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.RenderOutcome;
@@ -41,6 +42,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,6 +53,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -75,6 +78,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * JVM lock plus a DB-state check, and SSE emitters are held in-memory. Multi-node deployments must
  * route generation + SSE for a project to one instance (or add a distributed lock) — out of scope
  * for M4.
+ *
+ * <p><b>Interrupts and cancel (M29.2.1).</b> A run records the node that executes it and a heartbeat
+ * ({@link GenerationRunControl}); the {@code generation-run-recovery} job fails runs nothing executes any more
+ * ({@link #interrupt}, {@code SF-GEN-0504}). Cancel is real: the executor checks between stages and before each page,
+ * and every status change of an active run — the final one together with its publish — happens on the locked row
+ * while the run is still in the expected state, so a cancelled or recovered run is never overwritten and never
+ * published after {@code CANCELLED} committed.
  */
 @Service
 public class GenerationService {
@@ -96,6 +106,11 @@ public class GenerationService {
     private static final String NO_TARGET_CODE = "SF-GEN-0502";
     private static final String UNEXPECTED_CODE = "SF-GEN-0501";
     private static final String SEARCH_INDEX_PATH = "search-index.json";
+    /** A run the recovery job failed: its node restarted or its heartbeat stopped (M29.2.1). */
+    public static final String INTERRUPTED_CODE = "SF-GEN-0504";
+    static final String INTERRUPTED_MESSAGE = "Run interrupted (node restart or lost heartbeat)";
+    /** Promote of a run that was never published to its target (M29.2.2). */
+    public static final String NOT_PROMOTABLE_CODE = "SF-GEN-0505";
 
     private final GenerationRunRepository runs;
     private final GenerationTargetRepository targets;
@@ -115,11 +130,15 @@ public class GenerationService {
 
     private final Object startLock = new Object();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-    private final Map<String, Long> idempotencyKeys = new ConcurrentHashMap<>();
+    private final Map<String, IdempotentStart> idempotencyKeys = new ConcurrentHashMap<>();
     private final Map<Long, List<SseEmitter>> emittersByRun = new ConcurrentHashMap<>();
 
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
     private final AuditService audit;
+    private final GenerationRunControl control;
+
+    /** A remembered {@code Idempotency-Key}: the run it started and when (M29.2.4). */
+    private record IdempotentStart(long runId, Instant at) {}
 
     public GenerationService(
             GenerationRunRepository runs,
@@ -138,7 +157,8 @@ public class GenerationService {
             ObjectMapper mapper,
             MeterRegistry meterRegistry,
             com.acme.staticforge.project.ProjectLocales projectLocales,
-            AuditService audit) {
+            AuditService audit,
+            GenerationRunControl control) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
@@ -156,6 +176,7 @@ public class GenerationService {
         this.meterRegistry = meterRegistry;
         this.projectLocales = projectLocales;
         this.audit = audit;
+        this.control = control;
     }
 
     /**
@@ -183,9 +204,9 @@ public class GenerationService {
                     ? null
                     : projectService.requireByKey(projectKey).getId() + ":" + userId + ":" + requestKey;
             if (idemKey != null) {
-                Long previous = idempotencyKeys.get(idemKey);
+                IdempotentStart previous = idempotencyKeys.get(idemKey);
                 if (previous != null) {
-                    return runs.findById(previous).orElse(null);
+                    return runs.findById(previous.runId()).orElse(null);
                 }
             }
 
@@ -213,12 +234,15 @@ public class GenerationService {
                     null,
                     null);
             run.setComment(request.comment());
+            run.setExecutorNode(control.nodeId());
             run = runs.saveAndFlush(run);
             final long runId = run.getId();
+            // Held before the row commits: the recovery job never sees this node's queued run without its executor.
+            control.hold(runId, projectId);
             audit.record(projectId, userId, "GENERATION_STARTED", "generation:" + runId,
                     startDetail(run, request, scheduledActionId));
             if (idemKey != null) {
-                idempotencyKeys.putIfAbsent(idemKey, runId);
+                idempotencyKeys.putIfAbsent(idemKey, new IdempotentStart(runId, Instant.now()));
             }
             // Defer submission until the row we just saved is actually committed and visible to
             // other sessions — executor.submit(...) hands off to a virtual thread that can start
@@ -230,6 +254,13 @@ public class GenerationService {
                     @Override
                     public void afterCommit() {
                         executor.submit(() -> executeRun(projectKey, runId, request));
+                    }
+
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (status != STATUS_COMMITTED) {
+                            control.release(runId);
+                        }
                     }
                 });
             } else {
@@ -248,31 +279,108 @@ public class GenerationService {
         return runs.findByProjectIdOrderByIdDesc(projectId);
     }
 
-    /** Cancels a queued or running run as {@code actorUserId} (audited {@code GENERATION_CANCELLED}); else a no-op. */
+    /**
+     * Cancels a queued or running run as {@code actorUserId} (audited {@code GENERATION_CANCELLED}); else a no-op that
+     * returns the run as it is (a run that finished meanwhile stays finished). The status is written on the locked row
+     * while the run is still active (M29.2.1). Once committed, the run's executor stops at its next checkpoint without
+     * publishing, and the event stream gets a final {@code CANCELLED} event.
+     */
     @Transactional
     public GenerationRun cancel(String projectKey, long runId, Long actorUserId) {
         GenerationRun run = requireRun(projectKey, runId);
-        RunStatus status = run.getStatus();
-        if (status == RunStatus.QUEUED || status == RunStatus.RUNNING) {
-            run.setStatus(RunStatus.CANCELLED);
-            run.setFinishedAt(Instant.now());
-            run = runs.save(run);
-            completeRun(runId);
-            audit.record(run.getProjectId(), actorUserId, "GENERATION_CANCELLED", "generation:" + runId, runDetail(run));
+        Optional<GenerationRun> cancelled = control.whileActive(runId, active -> true, active -> {
+            active.setStatus(RunStatus.CANCELLED);
+            active.setFinishedAt(Instant.now());
+        });
+        if (cancelled.isEmpty()) {
+            return runs.findById(runId).orElse(run);
         }
-        return run;
+        GenerationRun done = cancelled.get();
+        audit.record(done.getProjectId(), actorUserId, "GENERATION_CANCELLED", "generation:" + runId, runDetail(done));
+        afterCommit(() -> {
+            control.abort(runId);
+            finished(done);
+        });
+        return done;
     }
 
-    /** Promotes a run's output as {@code actorUserId} (audited {@code GENERATION_PROMOTED}). */
+    /**
+     * Promotes a run's output as {@code actorUserId} (audited {@code GENERATION_PROMOTED}). Only a published build can
+     * be promoted (M29.2.2): a run that isn't {@code SUCCESS}/{@code PARTIAL}, never got a target, or whose build is no
+     * longer on disk answers {@code 409 SF-GEN-0505}, and {@code current} stays as it is.
+     */
     @Transactional
     public GenerationRun promote(String projectKey, long runId, Long actorUserId) {
         projectService.requireWritable(projectKey);
         GenerationRun run = requireRun(projectKey, runId);
+        if (run.getStatus() != RunStatus.SUCCESS && run.getStatus() != RunStatus.PARTIAL) {
+            throw notPromotable("Run " + runId + " is " + run.getStatus()
+                    + "; only a published build (SUCCESS or PARTIAL) can be promoted.");
+        }
+        if (run.getTargetId() == null) {
+            throw notPromotable("Run " + runId + " has no build for any target.");
+        }
         GenerationTarget target = resolveTarget(run);
         TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
-        writer.promote(runId);
+        try {
+            writer.promote(runId);
+        } catch (IllegalStateException e) {
+            throw notPromotable("The build of run " + runId + " is no longer on disk.");
+        }
         audit.record(run.getProjectId(), actorUserId, "GENERATION_PROMOTED", "generation:" + runId, runDetail(run));
         return run;
+    }
+
+    private static SfException notPromotable(String detail) {
+        return new SfException(ProblemFactory.other(409, NOT_PROMOTABLE_CODE, "Conflict", detail));
+    }
+
+    /**
+     * Fails an interrupted run (M29.2.1, the {@code generation-run-recovery} job): when run {@code runId} is still
+     * {@code QUEUED}/{@code RUNNING}, not held by this node's executor, and {@code stillInterrupted} holds for its fresh
+     * locked state, it becomes {@code FAILED} with {@code SF-GEN-0504}; local event streams get the final event. Its
+     * staged output stays for {@code build-output-cleanup}.
+     *
+     * @return the failed run, or empty when it finished, is executing here, or no longer qualifies
+     */
+    public Optional<GenerationRun> interrupt(long runId, Predicate<GenerationRun> stillInterrupted) {
+        Optional<GenerationRun> failed = control.whileActive(
+                runId,
+                run -> !control.isHeld(runId) && stillInterrupted.test(run),
+                run -> {
+                    run.setStatus(RunStatus.FAILED);
+                    run.setErrorCount(1);
+                    run.setDiagnostics(diagnosticsJson(
+                            List.of(Diagnostic.error(INTERRUPTED_CODE, INTERRUPTED_MESSAGE, 0, 0)), List.of()));
+                    run.setFinishedAt(Instant.now());
+                });
+        failed.ifPresent(run -> {
+            finished(run);
+            prunePlans(run.getProjectId());
+        });
+        return failed;
+    }
+
+    /**
+     * Forgets the {@code Idempotency-Key}s remembered before {@code olderThan} (M29.2.4, the {@code memory-eviction}
+     * job). A re-submission with a forgotten key starts a new run.
+     *
+     * @return how many keys were forgotten
+     */
+    public int evictIdempotencyKeys(Instant olderThan) {
+        int before = idempotencyKeys.size();
+        idempotencyKeys.values().removeIf(start -> start.at().isBefore(olderThan));
+        return Math.max(0, before - idempotencyKeys.size());
+    }
+
+    /** How many {@code Idempotency-Key}s are remembered now. */
+    public int idempotencyKeyCount() {
+        return idempotencyKeys.size();
+    }
+
+    /** {@code sf.generate.idempotency-ttl}: how long a key is remembered. */
+    public Duration idempotencyTtl() {
+        return properties.getIdempotencyTtl();
     }
 
     private ObjectNode startDetail(GenerationRun run, GenerationRequest request, Long scheduledActionId) {
@@ -463,16 +571,33 @@ public class GenerationService {
     }
 
     private void executeRun(String projectKey, long runId, GenerationRequest request) {
+        try {
+            executeHeld(projectKey, runId, request);
+        } finally {
+            control.release(runId);
+        }
+    }
+
+    /**
+     * Runs a held run to its end. Between stages (and before each page) the run stops when it is no longer running
+     * ({@link RunAbortedException}); every write of the run happens on its locked row while it is still
+     * {@code RUNNING}, and the final one publishes inside that lock, so a cancel or recovery that committed first is
+     * never overwritten and the build is then never published (M29.2.1).
+     */
+    private void executeHeld(String projectKey, long runId, GenerationRequest request) {
         GenerationRun run = runs.findById(runId).orElse(null);
         if (run == null) {
+            return;
+        }
+        if (!control.markRunning(runId)) {
+            // Cancelled or recovered while queued: whoever did it wrote the status and told the listeners.
+            completeRun(runId);
             return;
         }
         Timer generationTimer = meterRegistry.timer("sf.generation.duration", "mode", run.getMode().name());
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            run.setStatus(RunStatus.RUNNING);
-            run.setStartedAt(Instant.now());
-            runs.save(run);
+            control.stage(runId, STAGE_SNAPSHOT);
             emit(runId, STAGE_SNAPSHOT, "Snapshotting assets", 0, 0, 0, null);
 
             GenerationRequest planned = runRequest(run, request);
@@ -481,27 +606,35 @@ public class GenerationService {
             BuildPlan plan = build.plan();
             // The plan is stored before anything renders: a run that fails later is still explainable.
             List<PlanEntryRecord> planEntries = PlanInsight.entries(build);
-            run.setRevisionId(snapshot.revision());
-            run.setTargetId(build.target().getId());
-            run.setPlanSummary(PlanInsight.summary(mapper, build, planned, planEntries));
-            run = runs.save(run);
+            JsonNode planSummary = PlanInsight.summary(mapper, build, planned, planEntries);
+            run = control.whileRunning(runId, active -> {
+                        active.setRevisionId(snapshot.revision());
+                        active.setTargetId(build.target().getId());
+                        active.setPlanSummary(planSummary);
+                    })
+                    .orElseThrow(() -> new RunAbortedException(runId));
             runPlanStore.save(runId, planEntries);
+            control.stage(runId, STAGE_PLAN);
             emit(runId, STAGE_PLAN, "Planning build", 0, 0, 0, null);
 
+            control.stage(runId, STAGE_VALIDATE);
             emit(runId, STAGE_VALIDATE, "Validating templates", 0, 0, 0, null);
             List<Diagnostic> validateErrors = renderPipeline.validate(snapshot, plan);
             if (!validateErrors.isEmpty()) {
-                fail(run, sample, generationTimer, validateErrors, List.of(), null);
+                fail(runId, sample, generationTimer, validateErrors, List.of(), null);
                 return;
             }
 
+            control.stage(runId, STAGE_RENDER);
             emit(runId, STAGE_RENDER, "Rendering pages", 0, 0, 0, null);
-            RenderOutcome outcome = renderPipeline.execute(snapshot, plan, build.paths(), run.getStartedBy());
+            RenderOutcome outcome = renderPipeline.execute(snapshot, plan, build.paths(), run.getStartedBy(),
+                    () -> control.checkpoint(runId, GenerationRunProbe.RENDER_PAGE));
             if (!outcome.errors().isEmpty()) {
-                fail(run, sample, generationTimer, outcome.errors(), outcome.warnings(), null);
+                fail(runId, sample, generationTimer, outcome.errors(), outcome.warnings(), null);
                 return;
             }
 
+            control.stage(runId, STAGE_ASSETS);
             emit(runId, STAGE_ASSETS, "Copying media", 0, 0, 0, null);
             com.acme.staticforge.project.LocaleConfig locales =
                     projectLocales.forProject(build.project().getId());
@@ -529,6 +662,7 @@ public class GenerationService {
             }
             allFiles.addAll(assets.files());
 
+            control.stage(runId, STAGE_POST);
             emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
             TargetWriter writer = build.writer();
             CarryForward carry = new CarryForward(
@@ -545,40 +679,46 @@ public class GenerationService {
                     build.project().getId(), projectKey, baseUrl(build.target()), channels, carry.sitePages(),
                     false, java.util.List.of(), java.util.List.of(), carry.carriedText(),
                     locales.isLocalized() ? locales.defaultLocale() : null);
-            allFiles = postProcessStage.apply(ctx, allFiles);
+            List<OutputFile> processed = postProcessStage.apply(ctx, allFiles);
 
-            emit(runId, STAGE_WRITE, "Writing output", allFiles.size(), 0, warnings.size(), null);
-            CarryForward.Publication publication = carry.publication(runId, allFiles, outcome.files(), assets);
+            control.stage(runId, STAGE_WRITE);
+            emit(runId, STAGE_WRITE, "Writing output", processed.size(), 0, warnings.size(), null);
+            CarryForward.Publication publication = carry.publication(runId, processed, outcome.files(), assets);
             if (build.carries()) {
                 writer.stage(runId, build.baseRunId(), publication.files(), publication.removedPaths());
             } else {
                 writer.stage(runId, publication.files());
             }
-            writer.writeManifest(runId, publication.manifest());
-            writer.publish(runId);
 
-            long bytes = allFiles.stream().mapToLong(f -> f.bytes().length).sum();
+            control.stage(runId, GenerationRunProbe.PUBLISH);
+            long bytes = processed.stream().mapToLong(f -> f.bytes().length).sum();
             // A page or processed media file held back makes the run PARTIAL; the rest is published.
             boolean partial = !warnings.isEmpty() || !fileErrors.isEmpty();
-            run.setStatus(partial ? RunStatus.PARTIAL : RunStatus.SUCCESS);
-            run.setFilesWritten(allFiles.size());
-            run.setFilesSkipped(assets.filesSkipped());
-            run.setBytesWritten(bytes);
-            run.setErrorCount(fileErrors.size());
-            run.setWarningCount(warnings.size());
-            run.setDiagnostics(diagnosticsJson(fileErrors, warnings));
-            run.setFinishedAt(Instant.now());
-            runs.save(run);
+            JsonNode diagnostics = diagnosticsJson(fileErrors, warnings);
+            // The manifest marks a published build (M29.2.2): it is written right before the flip, and both happen
+            // only while the run is still RUNNING, on its locked row — a cancel that committed first wins.
+            GenerationRun done = control.whileRunning(runId, active -> {
+                        writer.writeManifest(runId, publication.manifest());
+                        writer.publish(runId);
+                        active.setStatus(partial ? RunStatus.PARTIAL : RunStatus.SUCCESS);
+                        active.setFilesWritten(processed.size());
+                        active.setFilesSkipped(assets.filesSkipped());
+                        active.setBytesWritten(bytes);
+                        active.setErrorCount(fileErrors.size());
+                        active.setWarningCount(warnings.size());
+                        active.setDiagnostics(diagnostics);
+                        active.setFinishedAt(Instant.now());
+                    })
+                    .orElseThrow(() -> new RunAbortedException(runId));
 
-            emit(runId, STAGE_REPORT, run.getStatus().name(), allFiles.size(), run.getErrorCount(), run.getWarningCount(),
-                    run.getDiagnostics());
-
-            completeRun(runId);
-            prunePlans(run.getProjectId());
+            finished(done);
+            prunePlans(done.getProjectId());
             sample.stop(generationTimer);
-            meterRegistry.counter("sf.generation.files", "mode", run.getMode().name()).increment(allFiles.size());
+            meterRegistry.counter("sf.generation.files", "mode", done.getMode().name()).increment(processed.size());
+        } catch (RunAbortedException e) {
+            stopped(runId, run.getProjectId());
         } catch (Exception e) {
-            fail(run, sample, generationTimer, List.of(), List.of(), e);
+            fail(runId, sample, generationTimer, List.of(), List.of(), e);
         }
     }
 
@@ -600,8 +740,11 @@ public class GenerationService {
         return request.assetUuids() == null || request.assetUuids().isEmpty() ? null : Set.copyOf(request.assetUuids());
     }
 
-    /** Marks a run FAILED with the given findings (or an unexpected exception) and closes emitters. */
-    private void fail(GenerationRun run, Timer.Sample sample, Timer timer, List<Diagnostic> errors,
+    /**
+     * Marks a running run FAILED with the given findings (or an unexpected exception) and closes emitters. A run that
+     * is no longer running (cancelled or recovered meanwhile) keeps its status.
+     */
+    private void fail(long runId, Timer.Sample sample, Timer timer, List<Diagnostic> errors,
             List<Diagnostic> warnings, Exception unexpected) {
         sample.stop(timer);
         List<Diagnostic> effectiveErrors = new ArrayList<>(errors);
@@ -616,22 +759,56 @@ public class GenerationService {
                     : unexpected.getMessage();
             effectiveErrors.add(Diagnostic.error(UNEXPECTED_CODE, message, 0, 0));
         }
-        run.setStatus(RunStatus.FAILED);
-        run.setErrorCount(effectiveErrors.size());
-        run.setWarningCount(warnings.size());
-        run.setDiagnostics(diagnosticsJson(effectiveErrors, warnings));
-        run.setFinishedAt(Instant.now());
-        runs.save(run);
-        emit(
-                run.getId(),
-                STAGE_REPORT,
-                run.getStatus().name(),
-                run.getFilesWritten(),
-                run.getErrorCount(),
-                run.getWarningCount(),
-                run.getDiagnostics());
+        JsonNode diagnostics = diagnosticsJson(effectiveErrors, warnings);
+        Optional<GenerationRun> failed;
+        try {
+            failed = control.whileRunning(runId, run -> {
+                run.setStatus(RunStatus.FAILED);
+                run.setErrorCount(effectiveErrors.size());
+                run.setWarningCount(warnings.size());
+                run.setDiagnostics(diagnostics);
+                run.setFinishedAt(Instant.now());
+            });
+        } catch (RuntimeException e) {
+            // The database is unreachable: the run stays RUNNING, its heartbeat stops, and recovery fails it later.
+            log.error("Could not record the failure of generation run {}", runId, e);
+            completeRun(runId);
+            return;
+        }
+        if (failed.isEmpty()) {
+            runs.findById(runId).ifPresent(run -> stopped(runId, run.getProjectId()));
+            return;
+        }
+        finished(failed.get());
+        prunePlans(failed.get().getProjectId());
+    }
+
+    /** The executor lets go of a run someone else ended (cancel or recovery): no status write, no publish. */
+    private void stopped(long runId, long projectId) {
+        log.info("Generation run {} stopped: it is no longer running (cancelled or interrupted)", runId);
+        completeRun(runId);
+        prunePlans(projectId);
+    }
+
+    /** Sends a finished run's final {@code REPORT} event and closes its event streams. */
+    private void finished(GenerationRun run) {
+        emit(run.getId(), STAGE_REPORT, run.getStatus().name(), run.getFilesWritten(), run.getErrorCount(),
+                run.getWarningCount(), run.getDiagnostics());
         completeRun(run.getId());
-        prunePlans(run.getProjectId());
+    }
+
+    /** Runs {@code action} once the current transaction committed (now, without one). */
+    private static void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 
     /** Applies plan retention (M22.1.2) after a run; a failure to prune never fails the run. */

@@ -349,6 +349,59 @@ export class ApiClient {
     return this.http.get<string[]>(`${BASE}/admin/audit/actions`, { withCredentials: true });
   }
 
+  // ── System jobs (instance admins, M29) ────────────────────────────────────
+
+  /** Every system job, orphaned ones (row without code) included. */
+  adminJobs(): Observable<S['AdminJobView'][]> {
+    return this.http.get<S['AdminJobView'][]>(`${BASE}/admin/jobs`, { withCredentials: true });
+  }
+
+  adminJob(key: string): Observable<S['AdminJobView']> {
+    return this.http.get<S['AdminJobView']>(`${BASE}/admin/jobs/${encodeURIComponent(key)}`, { withCredentials: true });
+  }
+
+  /** The job's runs, newest first, each with its report sample. */
+  adminJobRuns(key: string, page = 0, size = 20): Observable<S['AdminJobRunPage']> {
+    return this.http.get<S['AdminJobRunPage']>(`${BASE}/admin/jobs/${encodeURIComponent(key)}/runs`, {
+      withCredentials: true,
+      params: this.params({ page, size }),
+    });
+  }
+
+  /** One run with its full report; polled until `finishedAt` is set. */
+  adminJobRun(key: string, runId: number): Observable<S['AdminJobRunView']> {
+    return this.http.get<S['AdminJobRunView']>(`${BASE}/admin/jobs/${encodeURIComponent(key)}/runs/${runId}`, {
+      withCredentials: true,
+    });
+  }
+
+  /**
+   * Changes schedule and settings (merged) of the job read at `version` (`If-Match: "v{version}"`). `422 SF-DOM-0180`
+   * lists every problem under `errors` and `409 SF-API-0409` means stale; both are shown by the form.
+   */
+  adminUpdateJob(key: string, version: number, body: S['UpdateJobRequest']): Observable<S['AdminJobView']> {
+    return this.http.patch<S['AdminJobView']>(`${BASE}/admin/jobs/${encodeURIComponent(key)}`, body, {
+      withCredentials: true,
+      headers: { 'If-Match': `"v${version}"` },
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** Back to the property defaults and the instance's job zone. */
+  adminResetJob(key: string): Observable<S['AdminJobView']> {
+    return this.http.post<S['AdminJobView']>(`${BASE}/admin/jobs/${encodeURIComponent(key)}/reset`, null, {
+      withCredentials: true,
+    });
+  }
+
+  /** Starts a run (`202`, the run as it started); `409 SF-DOM-0181` while the job is running. */
+  adminRunJob(key: string, dryRun: boolean): Observable<S['AdminJobRunView']> {
+    return this.http.post<S['AdminJobRunView']>(`${BASE}/admin/jobs/${encodeURIComponent(key)}/run`, null, {
+      withCredentials: true,
+      params: this.params({ dryRun }),
+    });
+  }
+
   // ── Folders ─────────────────────────────────────────────────────────────
 
   listFolders(projectKey: string, scope: 'PAGES' | 'MEDIA' | 'NAVIGATION', depth?: number): Observable<S['FolderView'][]> {
@@ -1110,6 +1163,38 @@ export class ApiClient {
   publishPolicyImpact(projectKey: string, body: S['PublishPolicyView']): Observable<S['PublishPolicyImpactView']> {
     return this.http.post<S['PublishPolicyImpactView']>(`${BASE}/projects/${projectKey}/publish-policy/impact`, body, {
       withCredentials: true,
+    });
+  }
+
+  // ── Revision compaction (M29.4) ──────────────────────────────────────────
+
+  /** The project's compaction policy, how far it has compacted and the last run on it (`PROJECT_ADMIN`). */
+  compactionPolicy(projectKey: string): Observable<S['CompactionPolicyView']> {
+    return this.http.get<S['CompactionPolicyView']>(`${BASE}/projects/${projectKey}/compaction`, { withCredentials: true });
+  }
+
+  /**
+   * Sets the policy (`PROJECT_ADMIN`). Enabling or lowering `olderThanDays` needs `confirm` = the project key
+   * (`422 SF-DOM-0182`); `olderThanDays` below 30 is `422 SF-DOM-0183`. Errors are shown by the card itself.
+   */
+  updateCompactionPolicy(
+    projectKey: string,
+    body: S['CompactionPolicyRequest'],
+    confirm?: string,
+  ): Observable<S['CompactionPolicyView']> {
+    return this.http.put<S['CompactionPolicyView']>(`${BASE}/projects/${projectKey}/compaction`, body, {
+      withCredentials: true,
+      params: this.params({ confirm }),
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** What compacting now with `olderThanDays` would remove: a dry run that changes nothing (`PROJECT_ADMIN`). */
+  compactionEstimate(projectKey: string, olderThanDays: number): Observable<S['CompactionEstimateView']> {
+    return this.http.get<S['CompactionEstimateView']>(`${BASE}/projects/${projectKey}/compaction/estimate`, {
+      withCredentials: true,
+      params: this.params({ olderThanDays }),
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
     });
   }
 

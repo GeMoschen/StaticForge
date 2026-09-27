@@ -13,8 +13,10 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { revisionSummaryLabel } from '../../shared/revision-summary.util';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { COMPACTED_REVISION_HINT } from './compaction.util';
 import { RevisionsService } from './revisions.service';
 
 type RevisionView = components['schemas']['RevisionView'];
@@ -26,7 +28,7 @@ const OVERSCAN = 8;
 @Component({
   selector: 'sf-revisions-list',
   standalone: true,
-  imports: [RouterLink, SfRelativeTimePipe, SfEmptyStateComponent, SfSpinnerComponent],
+  imports: [RouterLink, SfRelativeTimePipe, SfEmptyStateComponent, SfSpinnerComponent, SfIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './revisions-list.component.html',
   styleUrl: './revisions-list.component.scss',
@@ -39,6 +41,7 @@ export class RevisionsListComponent {
   readonly projectKey = input.required<string>();
 
   protected readonly ITEM_HEIGHT = ITEM_HEIGHT;
+  protected readonly compactedHint = COMPACTED_REVISION_HINT;
 
   protected readonly revisions = this.service.revisions;
   protected readonly loading = this.service.loading;

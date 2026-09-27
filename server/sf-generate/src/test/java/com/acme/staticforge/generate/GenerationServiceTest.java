@@ -27,6 +27,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +48,7 @@ class GenerationServiceTest {
     private AssetCopyStage assetsStage;
     private PostProcessStage postStage;
     private TargetWriterSelector writers;
+    private GenerationRunControl control;
 
     private GenerationService service;
 
@@ -60,10 +63,12 @@ class GenerationServiceTest {
         assetsStage = mock(AssetCopyStage.class);
         postStage = mock(PostProcessStage.class);
         writers = mock(TargetWriterSelector.class);
+        control = mock(GenerationRunControl.class);
         service = new GenerationService(runs, targets, projects, mock(ChannelService.class), snapshots, planner, renderer, assetsStage,
                 mock(MediaRenderStage.class), postStage,
                 writers, mock(RunPlanStore.class), new GenerationProperties(), new ObjectMapper(), new SimpleMeterRegistry(),
-                mock(com.acme.staticforge.project.ProjectLocales.class), mock(com.acme.staticforge.audit.AuditService.class));
+                mock(com.acme.staticforge.project.ProjectLocales.class), mock(com.acme.staticforge.audit.AuditService.class),
+                control);
 
         Project project = project(1L);
         lenient().when(projects.requireByKey("p")).thenReturn(project);
@@ -101,31 +106,51 @@ class GenerationServiceTest {
     }
 
     @Test
-    void cancelMarksRunningRunCancelled() {
+    @SuppressWarnings("unchecked")
+    void cancelMarksRunningRunCancelledOnTheLockedRow() {
         GenerationRun run = run(5L, RunStatus.RUNNING);
         when(runs.findById(5L)).thenReturn(Optional.of(run));
-        when(runs.save(run)).thenReturn(run);
+        when(control.whileActive(anyLong(), any(Predicate.class), any(Consumer.class))).thenAnswer(call -> {
+            ((Consumer<GenerationRun>) call.getArgument(2)).accept(run);
+            return Optional.of(run);
+        });
 
         GenerationRun result = service.cancel("p", 5L, 7L);
 
         verify(run).setStatus(RunStatus.CANCELLED);
         verify(run).setFinishedAt(any());
-        verify(runs).save(run);
+        verify(control).abort(5L);
         assertThat(result).isSameAs(run);
     }
 
     @Test
     void promoteDelegatesToTheTargetWriter() {
         GenerationRun run = run(5L, RunStatus.SUCCESS);
+        lenient().when(run.getTargetId()).thenReturn(9L);
         GenerationTarget target = target(9L);
         TargetWriter writer = mock(TargetWriter.class);
         when(runs.findById(5L)).thenReturn(Optional.of(run));
-        when(targets.findByProjectIdAndDefaultTargetTrue(anyLong())).thenReturn(Optional.of(target));
+        when(targets.findById(9L)).thenReturn(Optional.of(target));
         when(writers.forTarget("p", target)).thenReturn(writer);
 
         service.promote("p", 5L, 7L);
 
         verify(writer).promote(5L);
+    }
+
+    @Test
+    void promoteRefusesARunThatWasNeverPublished() {
+        GenerationRun run = run(5L, RunStatus.FAILED);
+        lenient().when(run.getTargetId()).thenReturn(9L);
+        when(runs.findById(5L)).thenReturn(Optional.of(run));
+
+        assertThatThrownBy(() -> service.promote("p", 5L, 7L))
+                .isInstanceOf(SfException.class)
+                .satisfies(e -> {
+                    assertThat(((SfException) e).getStatus()).isEqualTo(409);
+                    assertThat(((SfException) e).getProblem().getExtensions()).containsEntry("code", "SF-GEN-0505");
+                });
+        verify(writers, never()).forTarget(any(), any());
     }
 
     private static GenerationRequest request(Long targetId, String idempotencyKey) {

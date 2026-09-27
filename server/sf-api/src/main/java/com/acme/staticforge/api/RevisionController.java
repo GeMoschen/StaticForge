@@ -94,6 +94,7 @@ public class RevisionController {
                 r.getCreatedBy(),
                 r.getChangeType().name(),
                 r.getComment(),
-                r.getSummary());
+                r.getSummary(),
+                r.isCompacted());
     }
 }

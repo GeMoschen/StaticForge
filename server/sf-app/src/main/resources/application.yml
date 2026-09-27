@@ -41,6 +41,10 @@ management:
         enabled: true
 
 sf:
+  # This node's name (M29.2.1): recorded on the generation runs it executes and, unless sf.scheduler.node-id overrides
+  # it, the lease owner of the scheduler and the system jobs. Defaults to <hostname>-<pid>; set a stable name per node
+  # so a restarted node recovers its interrupted runs at once. Must differ between nodes.
+  node-id: "${SF_NODE_ID:}"
   security:
     jwt:
       algorithm: HS256
@@ -63,6 +67,10 @@ sf:
     max-file-size: 32MB
     render-timeout: 5s
     cleanup-legacy-output: true
+    # How often a running build refreshes its heartbeat (M29.2.1); at most 30s, well below the recovery job's staleAfter.
+    heartbeat-interval: 15s
+    # How long an Idempotency-Key of POST /generations is remembered (M29.2.4, evicted by the memory-eviction job).
+    idempotency-ttl: 24h
   search:
     # Embedded Lucene index per project (M23). Derived from the database: deleting it is safe, it is rebuilt on start.
     # One application instance per index root (Lucene write lock), see infra/docs/deploy-runbook.md.
@@ -76,14 +84,84 @@ sf:
     live-indexing: true
   scheduler:
     # Scheduled releases and builds (M27.4). Every node that polls may execute due actions; a conditional-update
-    # lease makes each one run once. node-id defaults to hostname:pid and must differ between nodes.
+    # lease makes each one run once. node-id defaults to sf.node-id; set it only to override that for the scheduler.
     enabled: true
     poll-interval: 15s
     batch-size: 20
     lease: 2m
     # node-id: cms-1
-  revision:
-    retention-days: unlimited
+  housekeeping:
+    # System jobs (M29): instance-level background work on the scheduler's poll, at most once at a time on any node.
+    # These values seed each job's row on the first start (and "Reset to defaults"); after that the admin's settings
+    # in the Jobs page win. Each job adds its own block here: sf.housekeeping.<job-key>.enabled / .cron / its keys.
+    enabled: true
+    zone: UTC
+    history-per-job: 200
+    generation-run-recovery:
+      # Fails queued/running builds nothing executes any more (M29.2.1): at startup and every 5 minutes.
+      enabled: true
+      cron: "*/5 * * * *"
+      stale-after: 5m
+    build-output-cleanup:
+      # Staged output of failed/cancelled/deleted runs, stale .current-* links, folders of deleted targets (M29.2.2).
+      enabled: true
+      cron: "10 3 * * *"
+      min-age: 1h
+    generation-run-retention:
+      # Deletes runs older than keep-days beyond the newest keep-per-project, unless protected (M29.3.1).
+      enabled: true
+      cron: "15 4 * * *"
+      keep-days: 90
+      keep-per-project: 50
+    memory-eviction:
+      # Drops idle login-limiter buckets and expired generation idempotency keys (M29.2.4).
+      enabled: true
+      cron: "*/10 * * * *"
+    revision-compaction:
+      # Weekly revision compaction (M29.4, spec §7.7). Acts only on projects that opted in (project settings,
+      # PUT /projects/{key}/compaction with their own olderThanDays >= 30); history there collapses to the last version
+      # of each UTC day, keeping every released, retained-build and pinned version. batch-assets: assets per short
+      # transaction holding the project's revision lock.
+      enabled: true
+      cron: "0 3 * * 0"
+      batch-assets: 200
+    blob-sweep:
+      enabled: true
+      cron: "30 3 * * *"
+      # Mark and sweep of the blob store (spec §11.2): blobs no version of any revision, media_variant row or run
+      # references are deleted once they were neither created nor referenced within grace-hours; store bytes without
+      # a row once their modification time is that old.
+      # media_variant rows whose source no version references any more (e.g. after revision compaction) and that are
+      # older than grace-hours are deleted with their bytes. Restore drills: the blob store snapshot must be at least as
+      # old as grace-hours plus the backup interval, or run them with this job disabled (§26.5).
+      grace-hours: 24
+      batch-size: 1000
+    audit-purge:
+      enabled: true
+      cron: "0 4 * * *"
+      # Audit entries older than this are deleted (spec §26.3), in batches of batch-size. At least 30.
+      retention-days: 365
+      batch-size: 5000
+    refresh-token-cleanup:
+      enabled: true
+      cron: "15 * * * *"
+      # A family whose every token is revoked or expired is kept this long after its newest token expired, so a
+      # stolen token presented shortly after expiry is still detected as reuse. Families past their absolute expiry go.
+      reuse-window: 7d
+    media-variant-backfill:
+      enabled: true
+      cron: "0 2 * * *"
+      # Creates variants of the current sf.media.variants policy that media files lack (added definitions, failed
+      # encodes) in the media_variant table only: no revision, no draft. At most max-per-run attempts per run.
+      max-per-run: 500
+      # Also closed (historical) versions, so rebuilding old revisions gets the variants.
+      include-historical: false
+    search-maintenance:
+      enabled: true
+      cron: "0 5 * * *"
+      # Per non-archived project: sync (catches up lost indexing events), compare the document count with the
+      # indexable current versions (rebuild on a mismatch), and merge away deleted documents above this percentage.
+      merge-deletes-pct: 20
   cache:
     # Compiled CDL + OCTL reused across preview requests (spec §21.5); generation memoizes per build.
     compiled-templates:

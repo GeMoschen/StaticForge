@@ -308,6 +308,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/compaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_2"];
+        put: operations["update_9"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/channels/{key}": {
         parameters: {
             query?: never;
@@ -316,7 +332,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_9"];
+        put: operations["update_10"];
         post?: never;
         delete: operations["delete_7"];
         options?: never;
@@ -332,7 +348,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["detail_10"];
-        put: operations["update_10"];
+        put: operations["update_11"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1412,6 +1428,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/jobs/{key}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["runNow_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{key}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reset_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/url-registry/{id}": {
         parameters: {
             query?: never;
@@ -1537,7 +1585,23 @@ export interface paths {
         delete: operations["delete_9"];
         options?: never;
         head?: never;
-        patch: operations["update_11"];
+        patch: operations["update_12"];
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_12"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_13"];
         trace?: never;
     };
     "/api/v1/users/lookup": {
@@ -1956,6 +2020,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/compaction/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["estimate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/channels/{key}/delete-preview": {
         parameters: {
             query?: never;
@@ -2180,7 +2260,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/audit": {
+    "/api/v1/admin/jobs": {
         parameters: {
             query?: never;
             header?: never;
@@ -2188,6 +2268,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_20"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{key}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{key}/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_21"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2737,6 +2865,46 @@ export interface components {
             revision?: number;
             deleted?: boolean;
         };
+        CompactionPolicyRequest: {
+            enabled?: boolean;
+            /** Format: int32 */
+            olderThanDays?: number;
+        };
+        CompactionPolicyView: {
+            enabled?: boolean;
+            /** Format: int32 */
+            olderThanDays?: number;
+            /** Format: date-time */
+            enabledAt?: string;
+            /** Format: int64 */
+            enabledBy?: number;
+            /** Format: int64 */
+            compactedThrough?: number;
+            lastRun?: components["schemas"]["LastRun"];
+        };
+        LastRun: {
+            /** Format: int64 */
+            runId?: number;
+            /** Format: date-time */
+            finishedAt?: string;
+            dryRun?: boolean;
+            outcome?: string;
+            /** Format: date-time */
+            cutoff?: string;
+            error?: string;
+            /** Format: int64 */
+            versionsInWindow?: number;
+            /** Format: int64 */
+            assetsTouched?: number;
+            /** Format: int64 */
+            versionsRemoved?: number;
+            /** Format: int64 */
+            referencesRewritten?: number;
+            /** Format: int64 */
+            revisionsMarked?: number;
+            /** Format: int64 */
+            bytesFreed?: number;
+        };
         ChannelUpdateRequest: {
             name?: string;
             fileExtension?: string;
@@ -2776,6 +2944,8 @@ export interface components {
             allowedMimeTypes?: string[];
             publishPolicy?: components["schemas"]["PublishPolicyView"];
             permissions?: string[];
+            /** Format: int64 */
+            compactedThrough?: number;
         };
         SetMemberRoleRequest: {
             role: string;
@@ -2926,6 +3096,7 @@ export interface components {
             changeType?: string;
             comment?: string;
             summary?: components["schemas"]["JsonNode"];
+            compacted?: boolean;
         };
         Item: {
             /** Format: uuid */
@@ -3364,6 +3535,7 @@ export interface components {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
             scheduled?: components["schemas"]["ScheduledRefView"][];
+            compacted?: boolean;
         };
         LoginResponse: {
             accessToken?: string;
@@ -3397,6 +3569,88 @@ export interface components {
             password?: string;
             generatePassword?: boolean;
             mustChangePassword?: boolean;
+        };
+        Actor: {
+            /** Format: int64 */
+            id?: number;
+            username?: string;
+        };
+        AdminJobRunView: {
+            /** Format: int64 */
+            id?: number;
+            jobKey?: string;
+            trigger?: string;
+            dryRun?: boolean;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: int64 */
+            durationMs?: number;
+            outcome?: string;
+            /** Format: int64 */
+            itemsExamined?: number;
+            /** Format: int64 */
+            itemsAffected?: number;
+            /** Format: int64 */
+            bytesFreed?: number;
+            message?: string;
+            startedBy?: components["schemas"]["Actor"];
+            sample?: components["schemas"]["JsonNode"];
+            /** Format: int64 */
+            sampleTotal?: number;
+            report?: components["schemas"]["JsonNode"];
+        };
+        AdminJobView: {
+            key?: string;
+            name?: string;
+            description?: string;
+            enabled?: boolean;
+            cron?: string;
+            zone?: string;
+            settings?: components["schemas"]["JsonNode"];
+            defaults?: components["schemas"]["JobDefaults"];
+            /** Format: date-time */
+            nextRunAt?: string;
+            running?: boolean;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: int64 */
+            currentRunId?: number;
+            progress?: string;
+            supportsDryRun?: boolean;
+            orphaned?: boolean;
+            /** Format: int64 */
+            version?: number;
+            /** Format: date-time */
+            updatedAt?: string;
+            lastRun?: components["schemas"]["JobRunSummary"];
+        };
+        JobDefaults: {
+            enabled?: boolean;
+            cron?: string;
+            zone?: string;
+            settings?: components["schemas"]["JsonNode"];
+        };
+        JobRunSummary: {
+            /** Format: int64 */
+            id?: number;
+            outcome?: string;
+            trigger?: string;
+            dryRun?: boolean;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: int64 */
+            durationMs?: number;
+            /** Format: int64 */
+            itemsExamined?: number;
+            /** Format: int64 */
+            itemsAffected?: number;
+            /** Format: int64 */
+            bytesFreed?: number;
+            message?: string;
         };
         UrlRegistryOverrideRequest: {
             url?: string;
@@ -3486,6 +3740,12 @@ export interface components {
             email?: string;
             displayName?: string;
         };
+        UpdateJobRequest: {
+            enabled?: boolean;
+            cron?: string;
+            zone?: string;
+            settings?: components["schemas"]["JsonNode"];
+        };
         UserLookupHit: {
             /** Format: int64 */
             id?: number;
@@ -3501,21 +3761,21 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
@@ -3523,11 +3783,11 @@ export interface components {
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
             paged?: boolean;
-            /** Format: int32 */
-            pageNumber?: number;
+            unpaged?: boolean;
             /** Format: int32 */
             pageSize?: number;
-            unpaged?: boolean;
+            /** Format: int32 */
+            pageNumber?: number;
         };
         SortObject: {
             direction?: string;
@@ -3550,21 +3810,21 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -3662,6 +3922,7 @@ export interface components {
             type?: string;
             action?: string;
             changes?: components["schemas"]["FieldChange"][];
+            compacted?: boolean;
         };
         BlockChange: {
             /** Format: int32 */
@@ -3675,8 +3936,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            add?: boolean;
             remove?: boolean;
+            add?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -3684,6 +3945,8 @@ export interface components {
             /** Format: int64 */
             revisionId?: number;
             assets?: components["schemas"]["AssetDiff"][];
+            compacted?: boolean;
+            message?: string;
         };
         RecordSetSummaryView: {
             /** Format: uuid */
@@ -3793,21 +4056,21 @@ export interface components {
             scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageMediaSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -3848,6 +4111,24 @@ export interface components {
             recordCount?: number;
             /** Format: int64 */
             revision?: number;
+        };
+        CompactionEstimateView: {
+            /** Format: int32 */
+            olderThanDays?: number;
+            /** Format: date-time */
+            cutoff?: string;
+            /** Format: int64 */
+            versionsInWindow?: number;
+            /** Format: int64 */
+            versionsRemoved?: number;
+            /** Format: int64 */
+            assetsTouched?: number;
+            /** Format: int64 */
+            referencesRewritten?: number;
+            /** Format: int64 */
+            revisionsMarked?: number;
+            /** Format: int64 */
+            bytesFreed?: number;
         };
         ChannelDeletePreview: {
             affectedTemplates?: components["schemas"]["ChannelTemplateRef"][];
@@ -3910,21 +4191,21 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int64 */
-            totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            /** Format: int64 */
+            totalElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -3997,10 +4278,9 @@ export interface components {
             /** Format: date-time */
             lastChangeAt?: string;
         };
-        Actor: {
-            /** Format: int64 */
-            id?: number;
-            username?: string;
+        AdminJobRunPage: {
+            content?: components["schemas"]["AdminJobRunView"][];
+            page?: components["schemas"]["PageMeta"];
         };
         AdminAuditEntry: {
             /** Format: int64 */
@@ -5007,7 +5287,57 @@ export interface operations {
             };
         };
     };
+    get_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompactionPolicyView"];
+                };
+            };
+        };
+    };
     update_9: {
+        parameters: {
+            query?: {
+                confirm?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompactionPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompactionPolicyView"];
+                };
+            };
+        };
+    };
+    update_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -5077,7 +5407,7 @@ export interface operations {
             };
         };
     };
-    update_10: {
+    update_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -7257,6 +7587,52 @@ export interface operations {
             };
         };
     };
+    runNow_1: {
+        parameters: {
+            query?: {
+                dryRun?: boolean;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobRunView"];
+                };
+            };
+        };
+    };
+    reset_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobView"];
+                };
+            };
+        };
+    };
     override: {
         parameters: {
             query?: never;
@@ -7540,7 +7916,7 @@ export interface operations {
             };
         };
     };
-    update_11: {
+    update_12: {
         parameters: {
             query?: never;
             header?: never;
@@ -7562,6 +7938,56 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AdminUserDetail"];
+                };
+            };
+        };
+    };
+    detail_12: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobView"];
+                };
+            };
+        };
+    };
+    update_13: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateJobRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobView"];
                 };
             };
         };
@@ -8249,6 +8675,30 @@ export interface operations {
             };
         };
     };
+    estimate: {
+        parameters: {
+            query: {
+                olderThanDays: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompactionEstimateView"];
+                };
+            };
+        };
+    };
     deletePreview: {
         parameters: {
             query?: never;
@@ -8617,6 +9067,78 @@ export interface operations {
         };
     };
     list_20: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobView"][];
+                };
+            };
+        };
+    };
+    runs: {
+        parameters: {
+            query?: {
+                /** @description Zero-based page index (0..N) */
+                page?: number;
+                /** @description The size of the page to be returned */
+                size?: number;
+                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
+                sort?: string[];
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobRunPage"];
+                };
+            };
+        };
+    };
+    run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                runId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminJobRunView"];
+                };
+            };
+        };
+    };
+    list_21: {
         parameters: {
             query?: {
                 action?: string[];

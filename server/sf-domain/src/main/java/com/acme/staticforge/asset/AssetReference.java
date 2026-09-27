@@ -25,7 +25,8 @@ public class AssetReference {
     @Column(name = "from_asset_id", nullable = false)
     private Long fromAssetId;
 
-    @Column(name = "valid_from_revision", nullable = false)
+    /** Inclusive start; like {@code AssetVersion}'s, only revision compaction (JDBC) ever moves it (M29.4.2). */
+    @Column(name = "valid_from_revision", nullable = false, updatable = false)
     private Long validFromRevision;
 
     @Column(name = "valid_to_revision")

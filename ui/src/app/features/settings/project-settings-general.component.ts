@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -36,10 +37,23 @@ export class ProjectSettingsGeneralComponent implements OnInit {
     description: [''],
   });
 
+  /** The values the server holds, as last loaded or saved. */
+  private readonly saved = signal({ name: '', description: '' });
+  private readonly value = toSignal(this.form.valueChanges, { initialValue: this.form.getRawValue() });
+
+  /** Save is offered only for a real change (lessons: gate on dirty as well as valid). */
+  protected readonly changed = computed(() => {
+    const value = this.value();
+    const saved = this.saved();
+    return (value.name ?? '').trim() !== saved.name || (value.description ?? '').trim() !== saved.description;
+  });
+
   ngOnInit(): void {
     this.api.getProject(this.projectKey()).subscribe({
       next: (project) => {
-        this.form.reset({ name: project.name ?? '', description: project.description ?? '' });
+        const loaded = { name: project.name ?? '', description: project.description ?? '' };
+        this.saved.set({ name: loaded.name.trim(), description: loaded.description.trim() });
+        this.form.reset(loaded);
         this.loading.set(false);
       },
       error: () => {
@@ -50,7 +64,7 @@ export class ProjectSettingsGeneralComponent implements OnInit {
   }
 
   protected save(): void {
-    if (this.form.invalid || this.saving() || this.readOnly()) {
+    if (this.form.invalid || !this.changed() || this.saving() || this.readOnly()) {
       return;
     }
     const key = this.projectKey();
@@ -66,6 +80,7 @@ export class ProjectSettingsGeneralComponent implements OnInit {
       .subscribe({
         next: () => {
           this.saving.set(false);
+          this.saved.set({ name: value.name.trim(), description: value.description.trim() });
           this.toast.show('Project settings saved', 'success');
           this.store.loadFor(key, true).subscribe();
         },

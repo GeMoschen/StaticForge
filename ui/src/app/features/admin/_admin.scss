@@ -44,6 +44,12 @@
   @include table.sf-table-base;
 }
 
+// The scroll container is the containing block of the table's absolutely positioned content (the `.sf-sr-only`
+// column headings), so a wide table scrolls inside it instead of widening the whole page on a phone.
+.table.sf-table-wrap {
+  position: relative;
+}
+
 .row--link {
   cursor: pointer;
 }

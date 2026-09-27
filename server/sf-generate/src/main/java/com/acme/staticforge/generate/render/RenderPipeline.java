@@ -13,6 +13,8 @@ import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.GenerationProperties;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
+import com.acme.staticforge.generate.pipeline.RunAbortedException;
+import com.acme.staticforge.generate.pipeline.RunCheckpoint;
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
@@ -217,6 +219,16 @@ public class RenderPipeline {
      * registry with) — {@code null} for a run with no attributable user.
      */
     public RenderOutcome execute(Snapshot snapshot, BuildPlan plan, OutputPathResolver paths, Long userId) {
+        return execute(snapshot, plan, paths, userId, RunCheckpoint.NONE);
+    }
+
+    /**
+     * Same as {@link #execute(Snapshot, BuildPlan, OutputPathResolver, Long)}, calling {@code checkpoint} on the render
+     * thread before each page renders (M29.2.1): a {@link RunAbortedException} it throws cancels the pages still pending
+     * and propagates, so a cancelled run stops within one page per render thread.
+     */
+    public RenderOutcome execute(
+            Snapshot snapshot, BuildPlan plan, OutputPathResolver paths, Long userId, RunCheckpoint checkpoint) {
         List<Diagnostic> errors = validate(snapshot, plan);
         if (!errors.isEmpty()) {
             return new RenderOutcome(List.of(), errors, List.of());
@@ -239,7 +251,7 @@ public class RenderPipeline {
         BuildPlan publishable = incomplete.isEmpty()
                 ? plan
                 : plan.withEntries(plan.entries().stream().filter(e -> !incomplete.containsKey(PageLocale.of(e))).toList());
-        RenderBatch batch = renderParallel(renderers, publishable, snapshot);
+        RenderBatch batch = renderParallel(renderers, publishable, snapshot, checkpoint);
 
         List<RenderedFile> files = new ArrayList<>(batch.files);
         files.sort(Comparator.comparing(RenderedFile::outputPath));
@@ -325,7 +337,7 @@ public class RenderPipeline {
     // Parallel render
     // ------------------------------------------------------------------
 
-    private RenderBatch renderParallel(Renderers renderers, BuildPlan plan, Snapshot snapshot) {
+    private RenderBatch renderParallel(Renderers renderers, BuildPlan plan, Snapshot snapshot, RunCheckpoint checkpoint) {
         int parallelism = Math.max(1, properties.getParallelism());
         Duration timeout = properties.renderTimeoutDuration();
         List<PlanEntry> entries = plan.entries();
@@ -342,6 +354,7 @@ public class RenderPipeline {
                 futures.add(executor.submit(() -> {
                     semaphore.acquire();
                     try {
+                        checkpoint.check();
                         return renderEntry(renderers.of(entry.locale()), snapshot.in(entry.locale()), entry);
                     } finally {
                         semaphore.release();
@@ -369,6 +382,10 @@ public class RenderPipeline {
                             "SF-GEN-0206", "Render interrupted for page '" + entry.pageUuid() + "'.", 0, 0));
                     continue;
                 } catch (ExecutionException e) {
+                    if (e.getCause() instanceof RunAbortedException aborted) {
+                        futures.forEach(future -> future.cancel(true));
+                        throw aborted;
+                    }
                     errors.add(Diagnostic.error(
                             "SF-GEN-0206",
                             "Render failed for page '" + entry.pageUuid() + "': "

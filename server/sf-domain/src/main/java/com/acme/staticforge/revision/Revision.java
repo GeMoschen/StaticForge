@@ -46,6 +46,14 @@ public class Revision {
     @Column(name = "summary", nullable = false)
     private JsonNode summary;
 
+    /**
+     * The revision's own changes were absorbed by revision compaction (M29.4.1, spec §7.7): some removed version
+     * started at it. Written only by {@code RevisionCompactor} (JDBC); read-only here, a new row gets the column's
+     * default {@code false}.
+     */
+    @Column(name = "compacted", nullable = false, insertable = false, updatable = false)
+    private boolean compacted;
+
     protected Revision() {}
 
     public Revision(Long projectId, Long revisionId, Instant createdAt, Long createdBy, ChangeType changeType,
@@ -89,6 +97,10 @@ public class Revision {
 
     public void setSummary(JsonNode summary) {
         this.summary = summary;
+    }
+
+    public boolean isCompacted() {
+        return compacted;
     }
 
     public static class RevisionId implements Serializable {

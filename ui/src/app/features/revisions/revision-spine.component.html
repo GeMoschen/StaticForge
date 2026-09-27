@@ -8,12 +8,19 @@
           class="spine__dot"
           [class.spine__dot--own]="isOwn(rev)"
           [class.spine__dot--pulse]="pulseRevision() === rev.revisionId"
+          [class.spine__dot--compacted]="rev.compacted"
           (click)="onTick(rev)"
         >
           <span class="spine__badge" aria-hidden="true">{{ rev.revisionId }}</span>
+          @if (rev.compacted) {
+            <sf-icon class="spine__compacted" name="compress" data-testid="spine-compacted" />
+          }
           <span class="spine__label">
             Revision {{ rev.revisionId }} · {{ nameFor(rev) }} · {{ summaryFor(rev) }} ·
             {{ rev.createdAt | sfRelativeTime }}
+            @if (rev.compacted) {
+              · {{ compactedHint }}
+            }
           </span>
         </button>
       </li>

@@ -17,10 +17,10 @@
 
 ## Feature exit criteria
 
-- [ ] `/admin/jobs` lists jobs, and a detail view shows history, edits the schedule and settings (validated), runs now
+- [x] `/admin/jobs` lists jobs, and a detail view shows history, edits the schedule and settings (validated), runs now
       or as a dry run and shows the report. It is keyboard-complete and passes axe.
-- [ ] Project settings → General (or History) has the compaction card with the estimate and a type-the-key confirmation.
-- [ ] The revision spine, list, diff and time-travel banner show "compacted" where the API says so.
+- [x] Project settings → General (or History) has the compaction card with the estimate and a type-the-key confirmation.
+- [x] The revision spine, list, diff and time-travel banner show "compacted" where the API says so.
 
 ## Dependencies
 

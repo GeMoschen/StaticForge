@@ -42,6 +42,12 @@ public class S3BlobStore implements BlobStore {
         throw notImplemented();
     }
 
+    /** To be implemented with {@code ListObjectsV2} over the configured prefix, like every other operation. */
+    @Override
+    public void forEachObject(java.util.function.Consumer<StoredObject> consumer) {
+        throw notImplemented();
+    }
+
     private static SfException notImplemented() {
         return new SfException(ProblemFactory.other(
                 501, "SF-MEDIA-0501", "Not Implemented", "S3 media storage is not implemented in v1."));

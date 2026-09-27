@@ -52,7 +52,8 @@ public class TemplateHierarchies {
                 asset.getUuid(),
                 asset.getUid(),
                 version.getPayload(),
-                compiledTemplates.definition(projectId, asset.getUuid(), version.getValidFromRevision(), cdl),
-                version.getValidFromRevision());
+                compiledTemplates.definition(projectId, asset.getUuid(), version.getOwnRevision(), cdl),
+                // The version's own revision, not validFromRevision: compaction may move that onto a removed version's.
+                version.getOwnRevision());
     }
 }

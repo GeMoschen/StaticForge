@@ -402,6 +402,7 @@ revision
                             | RELEASE | UNPUBLISH | DISCARD   -- M27
   comment         varchar(500) nullable
   summary         json      denormalized list of touched assets
+  compacted       boolean   NOT NULL DEFAULT false -- its exact changes were absorbed by compaction (§7.7, M29)
   PRIMARY KEY (project_id, revision_id)
 ```
 
@@ -451,6 +452,7 @@ asset_version
   valid_from_revision   bigint NOT NULL     -- inclusive
   valid_to_revision     bigint NULL         -- exclusive; NULL = current
   deleted               boolean NOT NULL
+  original_valid_from   bigint NULL         -- set by compaction when it moves valid_from_revision back (§7.7, M29)
   …state columns + payload…
 ```
 
@@ -473,7 +475,7 @@ Writing a change at revision `R`:
 1. `UPDATE asset_version SET valid_to_revision = :R WHERE asset_id = :a AND valid_to_revision IS NULL`
 2. `INSERT INTO asset_version (…, valid_from_revision = :R, valid_to_revision = NULL, …)`
 
-Deletion is a version row with `deleted = true` — nothing is physically removed, so restore is a normal write.
+Deletion is a version row with `deleted = true` — nothing is physically removed, so restore is a normal write. The only code path that ever removes versions or moves `valid_from_revision` is revision compaction (§7.7), which a project must opt in to.
 
 ### 7.5 Optimistic concurrency
 
@@ -495,7 +497,40 @@ If the asset's current version has a different `valid_from_revision`, the server
 
 ### 7.7 Retention
 
-Full history is retained by default. An optional per-project **compaction policy** may collapse versions older than *N* days that are not referenced by any published generation run, keeping the first version of each day. Compaction is off in v1 and specified here only to reserve the design space; the `revision.compacted` flag exists from day one.
+Full history is retained by default. A project may opt in to **revision compaction** (M29): old versions collapse to the last version of each day, and nothing a release, a retained build or a pending schedule depends on is ever removed. Compaction deletes versions for good; it is the only exception to "nothing is physically removed" (§7.4).
+
+**Policy.** `project.compaction_policy` json `{enabled, olderThanDays, enabledAt, enabledBy}`; `null` means off, and every project starts off (an imported one too: the policy is an operational setting of the instance and not part of project exports).
+
+- `GET`/`PUT /projects/{key}/compaction` (`PROJECT_ADMIN`). `olderThanDays` is at least 30 (`422 SF-DOM-0183`); omitted, it keeps the current value (90 for a project that never set one).
+- Enabling, or lowering `olderThanDays` while enabled, requires `?confirm=<projectKey>` (`422 SF-DOM-0182`); disabling or raising needs no confirmation. The UI asks for the typed project key and shows the estimate first.
+- A change is audited `COMPACTION_POLICY_SET` (before/after) and records no revision: it doesn't change any output. An unchanged policy records nothing. Archived projects refuse it (`409 SF-DOM-0141`).
+- `GET /projects/{key}/compaction/estimate?olderThanDays=N` is a dry run of the compaction with the cutoff "now − N days": versions in the window, versions that would be removed, assets touched, references rewritten, revisions marked and payload bytes freed. It changes nothing and is allowed on archived projects.
+
+**Execution.** The `revision-compaction` system job (weekly, Sunday 03:00 UTC by default, §26.6) compacts every non-archived project with an enabled policy, with the cutoff "now − `olderThanDays`", and audits `REVISIONS_COMPACTED` (counts in the detail, actor: system) for each project that lost versions. It supports a dry run and writes no revision. It works in short batches of assets (`batchAssets`, default 200); each batch holds the project's `project_revision_counter` row lock (§7.3), so no revision is allocated while an asset is rewritten and saves wait milliseconds, not minutes.
+
+**What compaction may remove.** A version is *in the window* when it is **closed** (`valid_to_revision` set) and the `created_at` of its `valid_from_revision` is older than the cutoff. Its *day* is the **UTC** date of that `created_at` (UTC is fixed: there is no project time zone, and schedules follow the viewer's zone). These versions are **protected** and never removed:
+
+- (a) every version referenced by any `asset_release` row (§5.5), open or closed, in any locale, so "what was live on date X" stays exact;
+- (b) every version valid at the revision or the consistent revision of a build still on disk in any target (§18.4), and at the revision of a `QUEUED`/`RUNNING` run, so rollback builds and incremental baselines stay exact;
+- (c) every version pinned by a `PENDING`/`RUNNING` scheduled action (§18.7);
+- (d) the last version of each asset's day.
+
+An unprotected version in the window is removed, and its interval is **absorbed by the next surviving version of the same day**, whose `valid_from_revision` moves back (its original value is kept in `asset_version.original_valid_from`). A version is removed only when that survivor is itself in the window: the open version, and versions newer than the cutoff, are never moved, so their predecessors stay until a later save closes them. Tombstones (`deleted = true`) take part like any version. The job re-examines the whole window on every run, because protection can end (a pruned build, a finished schedule); running it twice with the same cutoff removes nothing new.
+
+**Guarantees.**
+
+- Exactly one version is valid per (asset, revision) for every revision, before and after compaction.
+- Reads outside absorbed intervals, and reads of protected versions, are byte-identical to before. A read at a revision inside an absorbed interval returns the state at the end of that group; for a whole day, the project snapshot equals the exact snapshot at the day's last revision (or at the next protected point). A build at a released or retained-build revision produces the same output as before.
+- `asset_reference` rows are rewritten with the versions: the edges valid at any revision R equal the edges materialized from the version valid at R (§5.4).
+- Revision rows, summaries, authors and comments stay. `revision.compacted = true` marks each revision whose own changes were absorbed; `project.compacted_through` records the newest revision before the cutoff that compaction has processed.
+- Media bytes referenced only by removed versions are collected by the next `blob-sweep` (§11.2) after its grace period.
+
+**Reads of compacted history.**
+
+- Revision views (list, detail, spine) carry `compacted`; the project view carries `compactedThrough`.
+- A point-in-time read of an asset at R (`GET /assets/{uuid}/versions/{r}`) carries `compacted: true` when R lies in an interval the served version absorbed (R < its `original_valid_from`): the state shown is later than the exact state at R. The typed time-travel reads (`?revision=` on media, property sets, datasets, records, record sets and the record-set grid), the draft preview at a revision (checked for the page itself; a published preview renders released versions, which compaction never removes) and `POST /projects/{key}/restore` say the same with the response header `X-SF-Compacted: true`. The check short-circuits when `compacted_through` is null or older than R, so projects without compaction pay nothing.
+- The diff of a compacted revision (§7.6) lists the summary's assets; an asset whose version at R absorbed R, or whose version at R − 1 absorbed R − 1, comes with `compacted: true`, its summary `action` and no field changes, and the diff carries `compacted: true` and the message "Exact changes of this revision were compacted; the state at the end of the day is kept". Assets whose versions survived diff normally.
+- A restore from a compacted revision restores the surviving version (`compacted: true` on the asset response, the header on a project restore), i.e. the end-of-day state.
 
 ---
 
@@ -512,6 +547,8 @@ project
   default_channel_id bigint FK output_channel
   created_at, created_by, archived
   publish_policy json                   -- {"editor": [...]}, what editors may publish (M28, §8.3)
+  compaction_policy json                -- {enabled, olderThanDays, enabledAt, enabledBy}; null = off (M29, §7.7)
+  compacted_through bigint              -- newest revision compaction has processed (M29, §7.7)
 ```
 
 Projects are hard isolation boundaries. Every asset query is filtered by `project_id` at the repository level via a mandatory parameter — there is no repository method that can read across projects except instance-admin reports.
@@ -519,7 +556,7 @@ Projects are hard isolation boundaries. Every asset query is filtered by `projec
 **Archived projects (M26).** `POST /projects/{key}/archive` (instance admin) makes a project read-only and hides it from its members; `POST /projects/{key}/unarchive` reverses it. Both record a revision, audit `PROJECT_ARCHIVED` / `PROJECT_UNARCHIVED` and bump the token epoch of every member (§9.2), so the change applies on each member's next request. While a project is archived:
 
 - **Members** get `404` for every endpoint of the project, as for a non-member (it is left out of the token's `projects` claim); it is missing from their `GET /projects` and from the memberships of `/auth/me`. Their memberships stay and come back with unarchive.
-- **Instance admins** see it (`archived: true`) and can read everything, but every write answers `409 SF-DOM-0141` "Project is archived" — theirs too. The guard is central (every revision allocation) plus explicit checks on the writes that allocate no revision (generation start and promote, share-link creation, search reindex, URL-registry overrides, generation targets). The API admits only: unarchive, archive (a no-op), requests that change nothing (`/generations/plan`, `/cdl/validate`, `/octl/validate`, text-media validation, section preview, record-set `preview-query`, `export/selection`, `import/analyze`, `releases/plan` and `schedules/preview-times`, M27; `publish-policy/impact`, M28) and cancelling a run started before archiving, which may also finish. Schedules of an archived project don't execute (§18.7).
+- **Instance admins** see it (`archived: true`) and can read everything, but every write answers `409 SF-DOM-0141` "Project is archived" — theirs too. The guard is central (every revision allocation) plus explicit checks on the writes that allocate no revision (generation start and promote, share-link creation, search reindex, URL-registry overrides, generation targets). The API admits only: unarchive, archive (a no-op), requests that change nothing (`/generations/plan`, `/cdl/validate`, `/octl/validate`, text-media validation, section preview, record-set `preview-query`, `export/selection`, `import/analyze`, `releases/plan` and `schedules/preview-times`, M27; `publish-policy/impact`, M28; `compaction/estimate`, M29) and cancelling a run started before archiving, which may also finish. Schedules of an archived project don't execute (§18.7).
 - Share links issued earlier answer `404`; the search index is closed and catches up on unarchive; published output is left as it is.
 - Deleting an account (§8.2) still removes its memberships of archived projects.
 
@@ -799,11 +836,14 @@ blob
   size_bytes    bigint
   mime_type     varchar(150)
   storage_key   varchar(500)     -- fs path or S3 key
-  ref_count     bigint
+  ref_count     bigint           -- derived, informational (recomputed by the sweep)
   created_at
+  last_referenced_at             -- last write that created or reused it (M29.2.3)
 ```
 
-`asset_version.payload.blobSha256` links a media version to its bytes. A blob is deletable only when `ref_count = 0` **and** no retained revision references it; a nightly job performs the sweep.
+`asset_version.payload.blobSha256` (and `variants[].blobSha256`, also inside each `localeFiles` entry) links a media version to its bytes. The nightly `blob-sweep` system job (M29.2.3) collects blobs by **mark and sweep**: it marks every blob referenced by any `asset_version` row of any revision (closed and deleted versions included), by `media_variant` rows whose source blob is still referenced by a version or that are younger than the grace period (§11.4; older rows of an unreferenced source mark nothing and are deleted, so compacted images free their variants too) and by `generation_run.log_blob_sha`; it deletes unmarked rows whose `COALESCE(last_referenced_at, created_at)` is older than the grace period (default 24 h) and store objects without a row older than the grace period (orphan bytes of failed commits and imports). Each deletion re-checks under the blob row's lock, the same lock every blob write takes to reuse a row, so a concurrent upload of the same bytes is never lost. `ref_count` is derived and informational: the sweep recomputes it, and no code path deletes by it. Deleting or replacing media frees no space while history references the old bytes; revision compaction (§7.7) removes such versions and the next sweep collects their blobs.
+
+Every blob write (upload, text write, variant, import) goes through one write path that inserts a new row before writing the bytes, or locks an existing row `FOR UPDATE`, increments `ref_count`, sets `last_referenced_at` and rewrites missing bytes. The sweep deletes the store object first and then the row, in one transaction under that lock, so a crash leaves at most a row without bytes (deleted by the next sweep while still unreferenced, or repaired by the next write that reuses it). An orphan object is claimed with a placeholder row before it is deleted, so a concurrent write of the same bytes either waits and writes them again or makes the claim fail. The sweep supports a dry run (same counts, nothing deleted), reports blobs examined, marked and deleted, orphan objects deleted, bytes freed and a sample, and publishes its last outcome as `lastSweep` in the blob-store health details. A restore drill that restores the database to an earlier point may reference blobs swept after that point: see §26.5. `S3BlobStore` is still a stub; listing its objects for the orphan sweep (`ListObjectsV2`) follows when it becomes real.
 
 Backends behind a `BlobStore` interface: `FilesystemBlobStore` (default, `sf.media.root`), `S3BlobStore` (optional). Path layout `{root}/{sha[0:2]}/{sha[2:4]}/{sha}`.
 
@@ -841,7 +881,7 @@ and per preview request and never written back to blob storage.
 1. `POST /projects/{p}/media` — `multipart/form-data`, or `POST …/media/bulk` for multi-file drops.
 2. Server streams to a temp file, computes SHA-256, sniffs the MIME type with Apache Tika (**never trusting the client-supplied type**), enforces the allow-list and size limit.
 3. Metadata extraction: image dimensions and EXIF orientation (metadata-extractor); EXIF GPS is stripped by default (`sf.media.strip-exif=true`).
-4. Variants generated asynchronously per the project's **variant policy** (declarative, per project):
+4. Variants generated per the **variant policy** (declarative; see *Implemented variant policy* below for how M29 deviates from this sketch):
 
 ```yaml
 variants:
@@ -858,6 +898,20 @@ variants:
 ```
 
 5. Blob `ref_count` incremented; asset version written; revision created.
+
+**Implemented variant policy (M29).** The policy is still **instance-wide** (`sf.media.variants`, `name`, `width`, `format`, `quality`), not per project as sketched above, and there is no `appliesTo`: a definition applies to raster images (`image/*` except SVG) with a positive width. Uploads generate the variants synchronously and keep writing them into the version payload (`variants[]`). A definition whose format has no encoder (`webp` today) is skipped.
+
+**Derived variants (M29).** Variants are a pure function of the source bytes and the definition, so they are also kept as derived data outside the revision history:
+
+```
+media_variant
+  id, source_sha, name, width, format,
+  quality        -- effective encoder quality (JPEG: the definition's or 82; 0 for formats without one)
+  blob_sha, created_at
+  UNIQUE (source_sha, name, width, format, quality)
+```
+
+Rows are project-independent (like blobs). Uploads record the variants they create here too. Every reader — binary serving and preview (`?variant=`), the media view, export, and generation (through the build snapshot) — sees the payload's variants merged with the rows for the current policy; the payload wins on the same name. The stored versions are never changed, so point-in-time reads stay byte-identical. The `media-variant-backfill` system job (§26.6) creates the variants of the current policy that media files lack (a definition added later, a failed encode) **in this table only**: no revision, no draft, no change of release state. It works on current versions (and, with `includeHistorical`, closed ones), at most `maxPerRun` attempts per run; failures are reported per MIME type, definition and reason and retried on the next run, and a definition without an encoder is reported once as unsupported. A backfilled variant is not a content change: an incremental build doesn't re-render for it, the next full build (or a change of the referencing page or media) publishes it. Rows of a definition removed from the policy are ignored by readers but not deleted, and their blobs stay marked by the sweep (§11.2) while the rows exist.
 
 **Editing text media (M18).** `GET /media/{uuid}/text` returns a text file's content (decoded as
 UTF-8, with a flag when the bytes aren't valid UTF-8); `PUT /media/{uuid}/text` stores new content as
@@ -1713,7 +1767,9 @@ Filesystem publish is atomic via staged directories:
 {root}/current             ← symlink flipped after a successful run
 ```
 
-Failed runs leave `current` untouched. The last *N* builds (default 5) are retained for instant rollback (`POST /generations/{runId}/promote`).
+Failed runs leave `current` untouched. The last *N* **published** builds (`sf.generate.keep-builds`, default 5) plus `current` are retained for instant rollback (`POST /generations/{runId}/promote`).
+
+**Published builds and cleanup (M29).** The writer tells a published build without database access: a filesystem build with its manifest (written inside the run's final locked write, right before the flip), a finished `{runId}.zip` (only publish renames `{runId}.zip.tmp`), an S3 mirror with its key manifest. Only these count toward `keep-builds`, so failed builds never displace rollback points; unpublished staging is never pruned by a publish but removed by the `build-output-cleanup` system job (§26.6). Builds from before M22 (no manifest) are neither counted nor pruned. **Promote** refuses a run that isn't `SUCCESS`/`PARTIAL`, has no target, or whose build is no longer on disk: `409 SF-GEN-0505`, and `current` stays. `build-output-cleanup` removes, per project and target: staged output (`builds/{id}`, `{id}.zip.tmp`, manifests without a build) of `FAILED`/`CANCELLED` runs at any age and of runs without a row after `minAge` (default 1 h); `.current-*.link` temporary links older than `minAge`; and folders under `{output-root}/{projectKey}/` that look like target output and that no existing target owns (deleted targets). It never touches `current`, the build `current` points at, or a run this node still executes; every deletion is asserted to stay under the target root and deletes links as links. S3 targets are not cleaned while `S3TargetWriter` is a local-mirror stub.
 
 **Build manifests and carried builds (M22).** Every published build has a manifest next to it (`{root}/builds/{runId}.manifest.json`, outside the served directory, pruned with the build): each file with the page (and channel, page number) or media asset that produced it and the media it depends on, plus the build's consistent revision and complete channels. An incremental or scoped run stages its build as the base build's files minus removed paths, overlaid with its own files (`TargetWriter.stage(runId, baseRunId, files, removedPaths)`), into its own staging area, and publishes with the same single flip. Filesystem builds hard-link unchanged files (copying where links aren't supported) and never write into a linked file; ZIP builds rewrite the archive from the base entries; the S3 mirror carries the base keys and fingerprints, so the invalidation set holds only what changed. A base output is kept when the run is responsible for it (page in scope, channel requested) and it still exists at the same path unplanned; outside the run's scope or channels it is kept only by a scoped run. Media is kept while a kept or re-rendered file still needs it. Site files (sitemap, robots, search index, redirects) are always written again from the full list of site outputs; the search index text of a carried page comes from the base build's index.
 
@@ -1731,6 +1787,8 @@ generation_run
   plan_summary json                         -- M22
   comment (≤ 500)                           -- the note the run was started with; scheduled runs
                                             --   "Scheduled generation #n: …" / "After scheduled release #n"
+  executor_node varchar(100)                -- sf.node-id of the node that queued and executes it (M29)
+  heartbeat_at                              -- refreshed while RUNNING (M29)
 
 generation_run_plan_entry                   -- one row per planned output
   run_id, asset_uuid, asset_type, uid, display_name, channel,
@@ -1742,9 +1800,16 @@ generation_run_plan_node                    -- one row per asset on a stored cha
 
 The plan is stored right after PLAN, so a run failing later is still explainable. `plan_summary` holds the requested mode, `incremental`, `fallbackCause`, `baselineRevision`, `baseRunId`, `coverage {scoped, channels}`, the changed assets (up to 200, with `changedAssetCount`), `entryCount`/`pageCount`/`processedMediaCount`, counts `byRootKind`/`byFirstEdge`/`byChannel`, the largest `via` groups and `planAvailable`. Chains are normalized: nodes are the parent-pointer tree of the walk, so entries sharing a chain suffix store it once. Plans of the newest `sf.generate.plan-retention-runs` (default 50) runs per project are kept; older runs keep their summary with `planAvailable: false`.
 
-Runs are queued per project (one active run per project; a second request returns `409` with the running run's id). Progress is streamed to the UI via Server-Sent Events on `GET /generations/{id}/events`.
+Runs are queued per project (one active run per project; a second request returns `409 SF-GEN-0500` with the running run's id; a run left active by a crash is failed by recovery, below). Progress is streamed to the UI via Server-Sent Events on `GET /generations/{id}/events`.
 
-**Attribution (M28).** `started_by` is the caller — for a scheduled run the schedule's owner. The request's `comment` is stored trimmed; a blank one is none, a longer one is cut to 500 characters ending in "…". The run view carries `comment` and `startedBy {id, displayName}` — "Deleted user" for a deleted account, `null` when unknown (a system start). Start, cancel and promote are audited (§26.3). An `Idempotency-Key` is scoped by project and user: another user reusing a key starts their own run instead of receiving someone else's.
+**Attribution (M28).** `started_by` is the caller — for a scheduled run the schedule's owner. The request's `comment` is stored trimmed; a blank one is none, a longer one is cut to 500 characters ending in "…". The run view carries `comment` and `startedBy {id, displayName}` — "Deleted user" for a deleted account, `null` when unknown (a system start). Start, cancel and promote are audited (§26.3). An `Idempotency-Key` is scoped by project and user: another user reusing a key starts their own run instead of receiving someone else's. Keys are remembered for `sf.generate.idempotency-ttl` (default 24 h, evicted by the `memory-eviction` job); a re-submission after that starts a new run.
+
+**Interrupted runs and real cancel (M29).**
+
+- **Heartbeat.** A run records its node (`executor_node`, the node's `sf.node-id`) when it is queued and refreshes `heartbeat_at` at every stage and at least every `sf.generate.heartbeat-interval` (default 15 s) while `RUNNING`.
+- **Recovery.** The `generation-run-recovery` system job runs at startup and every 5 minutes. A `QUEUED`/`RUNNING` run that this node's executor doesn't hold is **interrupted** when it has no node (rows from before M29), its node is this node, its node is a dead earlier process of this host (the default node id changes with every restart), or its heartbeat (for a queued run, its queue time) is older than `staleAfter` (default 5 min, minimum 1 min). Interrupted means `FAILED` with the diagnostic `SF-GEN-0504` "Run interrupted (node restart or lost heartbeat)", `finished_at` set, local SSE emitters completed; the staged output is left to `build-output-cleanup`. The project can build again at once, and a scheduled generation waiting for the stuck run (§18.7) proceeds.
+- **Cancel is real.** The executor checks for a stop at every stage, before each page renders and before publishing. The final status is written under a row lock (`SELECT … FOR UPDATE`) together with the state check, and publishing (manifest, flip) happens inside that locked write, so whichever of cancel and the final write commits first wins: a run is never published, and never `SUCCESS`/`PARTIAL`, after `CANCELLED` was committed. A stopped run writes and publishes nothing; its emitters get a final `REPORT` event with the terminal status.
+- **Retention.** The `generation-run-retention` system job deletes runs older than `keepDays` (default 90) **and** outside the newest `keepPerProject` (default 50) of their project, with their plan rows. A run's age is its `finished_at` (else `started_at`). Protected, never deleted: runs with a build on disk in any target (`TargetWriter.retainedRunIds()`), the `current` run of every target, `QUEUED`/`RUNNING` runs, the base runs (`planSummary.baseRunId`) of builds on disk, and runs referenced by schedule executions younger than `keepDays`. A schedule execution whose run was deleted keeps the id in `detail.deletedGenerationRunId` and answers `generationRunId: null`; `GET /generations/{id}/plan` of a deleted run is `404`. Run ids may have gaps.
 
 ### 18.6 Performance targets
 
@@ -1857,6 +1922,9 @@ Releases, unpublishing and builds can be scheduled. Tables (`v1.0/022-scheduler.
 | `GET` | `/projects/{key}/publish-policy` | VIEWER | `{editor: [...]}`, in declaration order (M28, §8.3) |
 | `PUT` | `/projects/{key}/publish-policy` | PROJECT_ADMIN | Body `{editor}`; `400 SF-API-0400` with `errors` (unknown name, broken implication); an identical policy is `200` with no revision and no audit; otherwise one revision + `PUBLISH_POLICY_SET` |
 | `POST` | `/projects/{key}/publish-policy/impact` | PROJECT_ADMIN | Body = a proposed policy → `{failingSchedules: [{id, type, runAt, ownerUserId, ownerName, missingPermission}]}`: the pending schedules whose owner satisfies them now but wouldn't under the proposal (`runAt` = next run); read-only, allowed on archived projects |
+| `GET` | `/projects/{key}/compaction` | PROJECT_ADMIN | Revision compaction (M29, §7.7): `{enabled, olderThanDays, enabledAt, enabledBy, compactedThrough, lastRun}`; `lastRun` = this project's entry of the newest `revision-compaction` run that reported on it, or `null` |
+| `PUT` | `/projects/{key}/compaction?confirm=<key>` | PROJECT_ADMIN | Body `{enabled, olderThanDays?}`; enabling or lowering needs `confirm` = the project key (`422 SF-DOM-0182`), `olderThanDays` < 30 is `422 SF-DOM-0183`; audited `COMPACTION_POLICY_SET`, no revision |
+| `GET` | `/projects/{key}/compaction/estimate?olderThanDays=N` | PROJECT_ADMIN | Dry run → `{olderThanDays, cutoff, versionsInWindow, versionsRemoved, assetsTouched, referencesRewritten, revisionsMarked, bytesFreed}`; allowed on archived projects |
 
 **Users and administration (M26)** — `/admin/**` is instance admin only (`403` otherwise).
 
@@ -1875,6 +1943,13 @@ Releases, unpublishing and builds can be scheduled. Tables (`v1.0/022-scheduler.
 | `GET` | `/admin/projects?q=&includeArchived=true` | INSTANCE_ADMIN | Every project by key: `{key, name, description, archived, createdAt, memberCount, headRevision, lastChangeAt}` |
 | `GET` | `/admin/audit?action=&userId=&project=&from=&to=&page=&size=` | INSTANCE_ADMIN | Every audit entry, newest first; `action` repeatable, `project` a key or `_instance`, `from` inclusive / `to` exclusive ISO instants; row `{id, timestamp, action, actor{id, username}, projectKey, target, detail}` (`Deleted user` for a deleted actor) |
 | `GET` | `/admin/audit/actions` | INSTANCE_ADMIN | Distinct action names |
+| `GET` | `/admin/jobs` | INSTANCE_ADMIN | System jobs (M29, §26.6), a plain array by key: `{key, name, description, enabled, cron, zone, settings, defaults, nextRunAt, running, startedAt, currentRunId, progress, supportsDryRun, orphaned, version, updatedAt, lastRun {id, outcome, trigger, dryRun, startedAt, finishedAt, durationMs, itemsExamined, itemsAffected, bytesFreed, message}}`; `defaults` = what *Reset* restores `{enabled, cron, zone, settings}` |
+| `GET` | `/admin/jobs/{key}` | INSTANCE_ADMIN | One job, `ETag: "v{version}"`; unknown key `404 SF-DOM-0184` |
+| `GET` | `/admin/jobs/{key}/runs?page=&size=` | INSTANCE_ADMIN | Run history, newest first (`size` ≤ 200, default 20), `{content, page}`; run `{id, jobKey, trigger (SCHEDULE\|MANUAL\|STARTUP), dryRun, startedAt, finishedAt, durationMs, outcome (SUCCEEDED\|FAILED\|PARTIAL\|SKIPPED), itemsExamined, itemsAffected, bytesFreed, message, startedBy {id, username}, sample, sampleTotal}` |
+| `GET` | `/admin/jobs/{key}/runs/{runId}` | INSTANCE_ADMIN | One run with its full `report` |
+| `PATCH` | `/admin/jobs/{key}` | INSTANCE_ADMIN | `{enabled?, cron?, zone?, settings?}` (settings merged), `If-Match: "v{n}"` (`412 SF-API-0412` missing, `409 SF-API-0409` stale); invalid cron, zone or settings `422 SF-DOM-0180` with `errors`; recomputes `nextRunAt`; audited `JOB_SETTINGS_SET` unless nothing changed |
+| `POST` | `/admin/jobs/{key}/reset` | INSTANCE_ADMIN | Back to the `sf.housekeeping.*` defaults; audited `JOB_SETTINGS_SET` |
+| `POST` | `/admin/jobs/{key}/run?dryRun=` | INSTANCE_ADMIN | `202` with the run and its `Location`; poll until `finishedAt` is set. `409 SF-DOM-0181` while running on any node, `422 SF-DOM-0180` for a dry run of a job without one; audited `JOB_RUN` |
 
 Guard rails on disable, delete and system role: `409 SF-DOM-0131` (last active instance admin), `409 SF-DOM-0132` (yourself); any action on a deleted account is `409`.
 
@@ -1970,8 +2045,8 @@ Move, rename, uid change, history, usages, generic delete and restore of dataset
 | `POST` | `/projects/{p}/generations` | Start run (§18.1): EDITOR at the annotation, then the body decides — `INCREMENTAL_BUILD`, `FULL_BUILD` or `DEVELOPER` (M28) |
 | `GET` | `/projects/{p}/generations/{id}` | Status + diagnostics |
 | `GET` | `/projects/{p}/generations/{id}/events` | SSE progress |
-| `POST` | `/projects/{p}/generations/{id}/cancel` | DEVELOPER any run; an EDITOR holding `INCREMENTAL_BUILD` a run they started (M28) |
-| `POST` | `/projects/{p}/generations/{id}/promote` | Rollback to a previous build (DEVELOPER) |
+| `POST` | `/projects/{p}/generations/{id}/cancel` | DEVELOPER any run; an EDITOR holding `INCREMENTAL_BUILD` a run they started (M28). The run stops before its next page or stage and never publishes (M29, §18.5) |
+| `POST` | `/projects/{p}/generations/{id}/promote` | Rollback to a previous build (DEVELOPER); a run that isn't `SUCCESS`/`PARTIAL`, has no target or whose build is gone is `409 SF-GEN-0505` (M29) |
 | `POST` | `/projects/{p}/generations/plan` | Dry run: the plan and reasons a run started now would have (M22); authorized exactly like a start (M28) |
 | `GET` | `/projects/{p}/generations/{id}/plan` | A run's stored plan and reasons (M22) |
 | `GET` | `/projects/{p}/assets/{uuid}/impact` | What would rebuild if the asset changed (M22) |
@@ -2021,6 +2096,8 @@ Every releasable asset view (pages, records, record sets, global sets, media, pa
 | `GET` | `/projects/{p}/revisions/{r}` |
 | `GET` | `/projects/{p}/revisions/{r}/diff` |
 | `POST` | `/projects/{p}/restore` (`{toRevision}`, PROJECT_ADMIN) |
+
+Revision views carry `compacted`, diffs `compacted` and `message` (per asset `compacted`), point-in-time asset reads and asset restores `compacted`; typed time-travel reads, the draft preview at a revision and project restore send `X-SF-Compacted: true` instead (M29, §7.7).
 
 **Preview** — see §19.1.
 
@@ -2142,7 +2219,7 @@ public interface Renderer {
 - One HTTP mutation = one transaction = one revision. No cross-request "sessions".
 - Reference materialization (`ReferenceMaterializer`, §5.4) runs inside that transaction with the revision just allocated; a rolled-back write leaves no edge rows behind.
 - Isolation `READ_COMMITTED`; the revision counter row lock provides the serialization that matters.
-- Media bytes are written to the blob store **before** the transaction commits, and orphaned blobs (commit failed) are collected by the nightly sweep — never the reverse order, so a committed asset version always has its bytes.
+- Media bytes are written to the blob store **before** the transaction commits, and orphaned blobs (commit failed) are collected by the nightly `blob-sweep` job (§11.2) — never the reverse order, so a committed asset version always has its bytes.
 - Generation runs outside the request transaction: the snapshot is loaded read-only at a pinned revision, so a long build never holds locks.
 
 ### 21.5 Caching
@@ -2157,7 +2234,7 @@ Template compilation is cached in two tiers by `CompiledTemplateCache` (`sf-doma
 | Cross-request, CDL | preview | `(projectId, templateUuid, validFromRevision)` | same |
 
 - **Per build.** One memo per generation snapshot (held in a weak-keyed cache), shared by every stage and render thread of the run, so each (template, channel) compiles at most once per build. The key needs no revision because the snapshot pins every template source and every `assetType:uid → UUID` mapping for the build.
-- **Across requests.** The template version (`validFromRevision`) in the key means a template edit or a time-travel preview never hits another version's entry. OCTL resolution also depends on *other* assets, so each entry records every `assetType:uid` lookup the compile made, including failed ones. On a hit those lookups are re-resolved against the current project resolver; if any answer differs (a renamed, deleted or newly created target), the entry is recompiled and replaced. A stale mapping is never served. Two concurrent misses may both compile; the last write wins.
+- **Across requests.** The template version (its own revision: `original_valid_from` when compaction moved it, else `validFromRevision`, M29) and the compiled sources in the key mean a template edit, a time-travel preview or a compacted history never hits another version's entry. OCTL resolution also depends on *other* assets, so each entry records every `assetType:uid` lookup the compile made, including failed ones. On a hit those lookups are re-resolved against the current project resolver; if any answer differs (a renamed, deleted or newly created target), the entry is recompiled and replaced. A stale mapping is never served. Two concurrent misses may both compile; the last write wins.
 - Every real compile increments the Micrometer counter `sf.template.compiles{kind=cdl|octl}`.
 - Save-time content validation (§10.5) compiles CDL uncached per validation.
 
@@ -2192,9 +2269,14 @@ sf:
     poll-interval: 15s
     batch-size: 20
     lease: 2m                 # also the fail-over delay after a node dies
-    # node-id: cms-1          # default hostname:pid; must differ between nodes
-  revision:
-    retention-days: unlimited
+    # node-id: cms-1          # default sf.node-id; must differ between nodes
+  node-id: cms-1               # M29: this node's name on generation runs and leases; default <hostname>-<pid>
+  housekeeping:                # M29, §26.6: seeds the system jobs' rows; the Jobs page settings win afterwards
+    enabled: true              # scheduled and startup runs on this node (false in the test profile)
+    zone: UTC
+    history-per-job: 200
+    blob-sweep: { enabled: true, cron: "30 3 * * *", grace-hours: 24, batch-size: 1000 }
+    # … one block per job: sf.housekeeping.<job-key>.enabled / .cron / its settings
 
 spring:
   datasource:
@@ -2580,6 +2662,7 @@ A 44 px vertical rail is fixed to the left edge of every project workspace.
 - Your own changes are filled; others' are hollow. A revision by another user arriving while you edit pulses the rail once (no toast, no modal — the interface does not interrupt to say "someone else exists").
 - Click a tick → the workspace enters **time-travel mode**: a thin amber frame surrounds the content area, all inputs go read-only, and the header reads `Viewing revision 1840 · Back to now`. This is the single, consistent mechanism for history, diff and restore; there is no second history UI to learn.
 - The rail collapses to a 6 px strip on viewports below 1100 px and becomes a header control.
+- **Compacted history (M29, §7.7).** The spine and the revision list mark compacted revisions with an icon and the tooltip "Exact changes compacted — end-of-day state kept". When a time-travel read carries `compacted`, the banner adds "Compacted history: you see the state at the end of that day"; the diff shows the per-asset compacted message instead of an empty diff; restoring from a compacted revision says in its confirmation that the end-of-day state will be restored.
 
 Everything else in the interface stays quiet so this one element carries the weight.
 
@@ -2664,7 +2747,7 @@ Breakpoints: 1600 / 1280 / 1100 / 840 / 600. Below 840 px the app is **review-or
 8. **Channels.** Small table + form. Deleting shows the exact list of templates that will lose a channel body.
 9. **Revisions.** Full-page timeline (the spine, expanded) with filters by user, asset and type; side-by-side diff; restore.
 10. **Generate.** Dialog (mode, channels, target, scope, comment) → live log with per-stage progress, error/warning grouping by code, and a file-count summary. Errors link straight to the offending template line. **M28:** *New generation* only with `INCREMENTAL_BUILD`; without `FULL_BUILD` the dialog fixes mode *Incremental* and the default target (shown, not selectable). The **Scope** fieldset — *Limit to folder* (a pages folder) and *Only these pages* — sends `folderPath`/`assetUuids`, and the plan preview reflects it. *Cancel* shows on an editor's own runs (developers: every run), *Promote* for developers only; runs show *Started by* and their comment. A user who can't build sees "Builds are started by developers in this project." instead of a dead button.
-11. **Admin** (`/admin`, instance admins). *Users*: server-paged list with search and status/role filters; create (generated password shown once, or typed with the policy as live checks; "must change password"; first project memberships); a user page with profile, account state, actions (disable/enable, unlock, reset password, sign out everywhere, grant/revoke instance admin, delete by typing the username) whose guard rails show as disabled buttons with the reason, and memberships. *Projects*: every project with members and last change; archive and unarchive. *Audit*: every entry, filterable by action, user, project (or instance only) and day range, the filters kept in the URL.
+11. **Admin** (`/admin`, instance admins). *Users*: server-paged list with search and status/role filters; create (generated password shown once, or typed with the policy as live checks; "must change password"; first project memberships); a user page with profile, account state, actions (disable/enable, unlock, reset password, sign out everywhere, grant/revoke instance admin, delete by typing the username) whose guard rails show as disabled buttons with the reason, and memberships. *Projects*: every project with members and last change; archive and unarchive. *Audit*: every entry, filterable by action, user, project (or instance only) and day range, the filters kept in the URL. *Jobs* (M29, `/admin/jobs`, §26.6): every system job with schedule, next and last run and a running indicator; a job page with schedule and settings, *Reset to defaults*, *Run now* / *Dry run* with the finished report, and the run history.
 12. **Account.** A user menu in the dashboard header and at the foot of the project rail (initials only when collapsed): *My account*, *Administration* for instance admins, *Sign out*. *My account* holds the profile (username and email ask for the current password), the password with live policy checks, the user's projects, and *Sign out everywhere*.
 13. **Members** (project settings tab). Everyone in the project sees the members; project admins add existing accounts through a lookup, change roles and remove members (removing yourself warns and leaves the project). Disabled members show greyed; emails only for project admins.
 14. **Release bar and badges (M27).** Every releasable editor (page, record, record set, global set, media drawer, navigation folder and reference, editorial folders) opens with a bar: the status in the editing language, a compact per-language list, the pending schedules ("Release scheduled for Tue 29 Sep, 09:00 by Ana", linking to the schedule) and — not in time travel or archived — *Release…*, *Unpublish…*, *Discard changes…* for users holding `RELEASE` and *Schedule…* for `SCHEDULE_RELEASE` (M28; before M28 `DEVELOPER`+). After a successful release (here or in Changes) a toast offers **Build now** — an incremental run to the default target — to users holding `INCREMENTAL_BUILD`, then *Show progress*; it is a separate, explicit action. Trees, lists and cards show a status badge per row: icon and text (icon only in trees, text for screen readers and in the tooltip, which lists every language), a clock when a schedule touches it. Deleting a published item says it stays online until the deletion is released.
@@ -2851,6 +2934,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 - 200 projects, 50,000 assets per project, 500 concurrent editors per instance.
 - Backend is stateless apart from the blob store → horizontal scaling behind a load balancer; sticky sessions unnecessary (JWT), SSE endpoints need connection affinity or a shared broker (Redis pub/sub in the multi-node profile).
 - Generation start is single-node: a JVM lock serializes starts, a second active run of a project is refused (`409 SF-GEN-0500`), and idempotency keys live in memory. Several application nodes would need a shared claim for runs as well — not in scope.
+- **System jobs are multi-node safe (M29).** They share the scheduler's poll and lease (§26.6): a job never runs twice at the same time on any node. Interrupted-run recovery works across nodes through the run heartbeat (§18.5); generation itself stays single-node.
 - **The scheduler is multi-node safe (M27).** Every node may poll; the conditional-update lease of §18.7 makes each due action execute once, and a crashed node's action is resumed by another after its lease expired. A scheduled build still goes through the single-node generation start above.
 - PostgreSQL: expected 30–80 GB at the top of the range; partitioning of `asset_version` by `project_id` is the documented escape hatch (not needed at v1 scale).
 - **Search is the exception to statelessness (M23).** Each project's search index is an embedded Lucene directory on the
@@ -2874,7 +2958,7 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 | SSRF | No server-side fetch of user-supplied URLs in v1 |
 | Path traversal | Output paths normalized and asserted to stay under the target root; `..` rejected at validation |
 | Secrets | Env/secret-manager only; never in the DB or logs |
-| Audit | Revisions cover content; a separate `audit_log` covers auth (`AUTH_LOGIN`, `AUTH_LOGIN_FAILED`), accounts (`USER_CREATED`, `USER_UPDATED`, `USER_RENAMED`, `USER_DISABLED`, `USER_ENABLED`, `USER_UNLOCKED`, `USER_PASSWORD_RESET`, `USER_PASSWORD_CHANGED`, `USER_SYSTEM_ROLE_SET`, `USER_SESSIONS_REVOKED`, `USER_DELETED` — instance-level, no project), membership (`MEMBER_ROLE_SET`, `MEMBER_REMOVED`), `PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`, channel and target changes, schedules (`SCHEDULE_CREATED`, `_UPDATED`, `_CANCELLED`, `_TAKEN_OVER`, `_RUN_NOW`, `_IMPORTED` (M27.8), and per execution `SCHEDULE_EXECUTED`/`_FAILED`/`_SKIPPED`, M27), the publish policy (`PUBLISH_POLICY_SET`, target `project:<key>`, detail `{before, after}`, M28) and generation runs (M28: `GENERATION_STARTED`, target `generation:<runId>`, detail `{runId, targetId, mode, channels, scoped, revision, scheduledActionId?}` — as the schedule's owner for a scheduled start; `GENERATION_CANCELLED` and `GENERATION_PROMOTED`, detail `{runId, targetId}`). Release actions are revisions, not audit entries. Instance admins read all of it (`/admin/audit`), project admins their project's. Intended retention 1 year — no purge job exists yet |
+| Audit | Revisions cover content; a separate `audit_log` covers auth (`AUTH_LOGIN`, `AUTH_LOGIN_FAILED`), accounts (`USER_CREATED`, `USER_UPDATED`, `USER_RENAMED`, `USER_DISABLED`, `USER_ENABLED`, `USER_UNLOCKED`, `USER_PASSWORD_RESET`, `USER_PASSWORD_CHANGED`, `USER_SYSTEM_ROLE_SET`, `USER_SESSIONS_REVOKED`, `USER_DELETED` — instance-level, no project), membership (`MEMBER_ROLE_SET`, `MEMBER_REMOVED`), `PROJECT_ARCHIVED`/`PROJECT_UNARCHIVED`, channel and target changes, schedules (`SCHEDULE_CREATED`, `_UPDATED`, `_CANCELLED`, `_TAKEN_OVER`, `_RUN_NOW`, `_IMPORTED` (M27.8), and per execution `SCHEDULE_EXECUTED`/`_FAILED`/`_SKIPPED`, M27), the publish policy (`PUBLISH_POLICY_SET`, target `project:<key>`, detail `{before, after}`, M28) and generation runs (M28: `GENERATION_STARTED`, target `generation:<runId>`, detail `{runId, targetId, mode, channels, scoped, revision, scheduledActionId?}` — as the schedule's owner for a scheduled start; `GENERATION_CANCELLED` and `GENERATION_PROMOTED`, detail `{runId, targetId}`). Release actions are revisions, not audit entries. System jobs (M29): `JOB_SETTINGS_SET` (a changed schedule or settings, or a reset; target `job:<key>`, detail before/after) and `JOB_RUN` (a manual *Run now*, detail `dryRun`) are instance-level; scheduled runs are recorded only in the job's run history. Revision compaction: `COMPACTION_POLICY_SET` (target `project:<key>`, detail before/after) and `REVISIONS_COMPACTED` (actor: system, detail the counts, `cutoff`, `jobRunId`). Instance admins read all of it (`/admin/audit`), project admins their project's. **Retention is enforced (M29):** the `audit-purge` job deletes entries older than `retentionDays` (default 365, minimum 30), instance and project entries alike; lowering it is itself audited as `JOB_SETTINGS_SET` |
 | Rate limits | Login, preview render, generation start |
 | Headers | CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` |
 
@@ -2883,14 +2967,16 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 - Structured JSON logs with `traceId`, `projectKey`, `revision`, `userId`.
 - Micrometer metrics: `sf.search.index.lag{project}`, `sf.search.index.duration`, `sf.search.index.failures`, `sf.search.index.events` (M23), `sf.revision.allocate`, `sf.render.duration{template,channel}`, `sf.generation.duration{mode}`, `sf.generation.files`, `sf.media.upload.bytes`, `sf.scheduler.claims`, `sf.scheduler.lag` (how late actions started), `sf.scheduler.executions{type,outcome}` (M27), cache hit ratios, HTTP histograms.
 - OpenTelemetry tracing across request → service → render.
-- Health: `/actuator/health` with DB, blob store and Liquibase checks; `/actuator/info` exposes schema version.
-- Alerts: generation failure rate, p95 save latency, refresh-token reuse detections, disk headroom on the blob store.
+- System jobs (M29): `sf.job.duration{job,outcome}` (every run, dry runs included), `sf.job.items{job,kind=examined|affected}` and `sf.job.bytes.freed{job}` (real runs only), and the gauge `sf.job.last.success.age{job}`: seconds since the job's newest successful non-dry run, `NaN` before the first.
+- Health: `/actuator/health` with DB, blob store and Liquibase checks (the blob store details carry `lastSweep {outcome, finishedAt, dryRun}`, M29); `/actuator/info` exposes schema version.
+- Alerts: generation failure rate, p95 save latency, refresh-token reuse detections, disk headroom on the blob store, and **housekeeping stale** (M29): `sf.job.last.success.age{job}` above twice the job's schedule interval (e.g. more than 2 days for a daily job, more than 10 minutes for `generation-run-recovery`) for an enabled job.
 
 ### 26.5 Backup & recovery
 
 - PostgreSQL: nightly base backup + WAL archiving; PITR target RPO 5 min, RTO 1 h.
 - Blob store: replicated/versioned bucket or nightly rsync snapshot; blobs are immutable and content-addressed, so incremental backup is cheap.
-- Consistency: because blobs are written before commit, a DB restore to an earlier point never references a missing blob.
+- Consistency: because blobs are written before commit, a DB restore to an earlier point never references a missing blob — unless the `blob-sweep` job (§11.2) deleted it since. A blob that was unreferenced (or only referenced by versions compaction removed) after the backup was taken can be swept once its grace period has passed, while the older database backup still references it. Keep blob-store snapshots from at least *grace period + backup interval* before the database backup you may restore, or run restore drills with `blob-sweep` disabled, and never let the sweep run against a restored database until the blob store is confirmed complete. The operator procedure is in `infra/docs/backup-recovery-runbook.md`.
+- Revision compaction (§7.7) and the other destructive jobs delete data for good: a database backup older than a compaction run is the only way back to the removed versions. The export archive doesn't carry the compaction policy.
 - Quarterly restore drill, documented in the runbook.
 - Project export/import (`ZIP`: assets JSON + blobs + manifest) as a portability and migration path.
 - **Export protocol 7 (M25).** Archives carry record sets; a record's archive parent is its set. Exporting a record pulls in its set and dataset implicitly, and a picked set brings its records. Import creates datasets, then sets, then records. Older archives (protocol ≤ 6) are still read, but a record whose parent is a Content folder or the store root is reported as the conflict `RECORD_OUTSIDE_RECORD_SET` and **not imported** — records are never grouped into sets automatically — while every other asset imports. `RECORD_SET_MISSING`, `RECORD_SET_DATASET_MISMATCH` and `RECORD_SET_DATASET_MISSING` block the import; a set query that doesn't validate against the target schema imports flagged (`RECORD_SET_QUERY_INVALID`, warning).
@@ -2905,6 +2991,10 @@ Implemented with jqwik generators + a concurrency harness using 16 virtual threa
 - Startup order: Liquibase migration runs on the backend before the app is `READY`; a failed migration keeps the container unhealthy rather than starting a degraded app.
 - Zero-downtime deploys require backward-compatible changesets (expand → migrate → contract over two releases for destructive changes).
 - Configuration via environment variables; profiles `dev`, `test`, `demo`, `prod`.
+- **System jobs (M29).** Instance-level background work runs as *system jobs* on the scheduler's poll (§18.7) with the same lease: `system_job` holds each job's `enabled`, `cron`, `zone_id`, `settings`, `next_run_at` and lease, `system_job_run` its history (`trigger` `SCHEDULE`/`MANUAL`/`STARTUP`, `dry_run`, `outcome` `SUCCEEDED`/`FAILED`/`PARTIAL`/`SKIPPED`, counts, bytes freed, message, a report with a sample of at most 50 items, `started_by`), capped at `sf.housekeeping.history-per-job` (200) runs per job. The first start seeds each row from `sf.housekeeping.<job-key>.*`; afterwards the persisted row wins, and *Reset to defaults* copies the properties again. A missed slot runs once; manual and startup runs keep the schedule. A failing job is recorded `FAILED` and never stops the poll. `sf.housekeeping.enabled=false` stops scheduled and startup runs on a node (the API still works). A row whose job no longer exists is listed as *orphaned* and never runs.
+  - Jobs and defaults (cron in `sf.housekeeping.zone`, default UTC; all enabled): `generation-run-recovery` (startup + `*/5 * * * *`, §18.5), `build-output-cleanup` (`10 3 * * *`, §18.4), `blob-sweep` (`30 3 * * *`, §11.2), `audit-purge` (`0 4 * * *`, §26.3), `refresh-token-cleanup` (`15 * * * *`: whole families past their absolute expiry, or whose every token is revoked or expired for longer than `reuseWindow`, default 7 days; revoked tokens of live families stay, reuse detection needs them), `memory-eviction` (`*/10 * * * *`: idle login-limiter buckets, expired idempotency keys), `generation-run-retention` (`15 4 * * *`, §18.5), `media-variant-backfill` (`0 2 * * *`, §11.4), `search-maintenance` (`0 5 * * *`: per non-archived project, sync, compare the document count with the indexable current versions and rebuild on a mismatch, and merge away deleted documents above `mergeDeletesPct`, 20 %; a project with a rebuild running is skipped, an unavailable index makes the run `PARTIAL`) and `revision-compaction` (`0 3 * * 0`, §7.7, acts only on projects that opted in).
+  - Dry run (report only, nothing deleted) for `blob-sweep`, `audit-purge`, `build-output-cleanup`, `generation-run-retention` and `revision-compaction`. There is no "dry run first" gate.
+  - The **Jobs** page (Administration → Jobs, `/admin/jobs`, instance admins) lists every job with its schedule in words and zone, next run, last run (outcome, time, duration, affected, bytes freed) and a running indicator, with an enabled switch per row. A job's page edits enabled, cron, zone and the job's settings (validated by the server, `SF-DOM-0180`), resets to defaults, starts *Run now* or *Dry run* and shows the report when the run finishes, and pages the run history (trigger, dry run, started by, report per row).
 
 ---
 
@@ -3085,6 +3175,11 @@ Same content. Two channels. No duplication.
 | `SF-DOM-0166` | 422 | Timing doesn't fit the type: a cron on a one-off type, a run time on a recurring one, or neither (M27) |
 | `SF-DOM-0167` | 409 | The schedule is executing (or its execution waits for a busy project) and can't be changed now (M27) |
 | `SF-DOM-0168` | 422 | Re-pin of anything but a pending pinned release (M27) |
+| `SF-DOM-0180` | 422 | Invalid system-job cron, zone or settings, or a dry run of a job without one; `errors` lists every problem (M29) |
+| `SF-DOM-0181` | 409 | The system job is already running, on any node (M29) |
+| `SF-DOM-0182` | 422 | Enabling revision compaction, or lowering `olderThanDays`, without `confirm` equal to the project key (M29, §7.7) |
+| `SF-DOM-0183` | 422 | Compaction `olderThanDays` below 30 (M29, §7.7) |
+| `SF-DOM-0184` | 404 | Unknown system job; for edits and runs also a job whose code is gone (orphaned) (M29) |
 | `SF-MEDIA-0505` | 409 | Un-localizing would discard other languages' files; `files[]` lists them; repeat with `confirmDiscard` (M27) |
 | `SF-MEDIA-0506` | 422 | Per-language file operation on media that isn't localized (M27) |
 | `SF-MEDIA-0507` | 422 | A language the project doesn't declare (M27) |
@@ -3103,6 +3198,11 @@ Same content. Two channels. No duplication.
 | `SF-GEN-0301` | — | `raw` filter on a plain-text editor (warning) |
 | `SF-GEN-0410` | — | Navigation cycle truncated (warning) |
 | `SF-GEN-0500` | 409 | A generation run is already active for this project |
+| `SF-GEN-0501` | — | Unexpected failure of a run (run diagnostic, run `FAILED`) |
+| `SF-GEN-0502` | 422 | Generation target not found, or no target configured |
+| `SF-GEN-0503` | 500 | A stored run's channels can't be decoded |
+| `SF-GEN-0504` | — | Run interrupted (node restart or lost heartbeat): recovery failed a run nothing executes any more (run diagnostic, §18.5, M29) |
+| `SF-GEN-0505` | 409 | Promote of a run that isn't `SUCCESS`/`PARTIAL`, has no target, or whose build is no longer on disk; `current` is unchanged (M29, §18.4) |
 | `SF-SEARCH-0400` | 400 | Invalid search parameters: `q` missing, blank or over 200 characters, unknown `type`, `size` outside 1–100, `sort` other than `relevance`, page beyond 10,000 hits (M23) |
 | `SF-SEARCH-0409` | 409 | A search index rebuild is already running for this project (M23) |
 | `SF-SEARCH-0503` | 503 | The project's search index can't be opened by this instance, e.g. another instance holds its write lock (M23) |
@@ -3116,7 +3216,7 @@ Same content. Two channels. No duplication.
 | Q1 | Should section instances be reusable across pages (shared sections) or always page-owned? Affects the content model and the reference table. | Product | M2 | **Resolved** | Page-owned. Section instances live inside a page's `bodies` (`SectionInstance` model, `BodyService`/`AddSectionRequest`); the `asset_reference` `OCTL_INCLUDE` edge covers *template* reuse, not instance sharing. |
 | Q2 | Multi-language: separate projects, folder convention, or a first-class content dimension in v2? | Product | v2 planning | **Deferred to v2** | Explicit v2 (spec §2.2: no multi-language dimension in v1). |
 | Q3 | Do we need a JSON/headless channel at v1 for a client-side search index, or is a post-processor sufficient? | Tech lead | M5 | **Resolved** | Post-processor sufficient. `SearchIndexPostProcessor` emits the search-index JSON from generation; the `structure` `list` kind covers listings. No first-class JSON channel in v1. |
-| Q4 | Retention policy for revisions on large projects — is unlimited history acceptable at 50,000 assets? | Ops | M7 | **Deferred** | Unlimited in v1; compaction is a documented escape hatch reserved by §7.7 (`revision.compacted` flag reserved). Revisit before 50,000-asset scale. |
+| Q4 | Retention policy for revisions on large projects — is unlimited history acceptable at 50,000 assets? | Ops | M7 | **Resolved (M29)** | Unlimited by default; a project opts in to revision compaction (§7.7), which collapses history older than N ≥ 30 days to the last version of each UTC day and keeps released, retained-build and pinned versions. |
 | Q5 | Should `PROJECT_ADMIN` be able to add members who are not yet instance users (invite flow with email)? | Product | M6 | **Resolved** | No invite flow in v1. Membership is restricted to existing instance users: `PUT/DELETE /projects/{key}/members/{userId}` operate by `userId`, not email. |
 | Q6 | Preferred publish target for the pilot customer: filesystem+Nginx, or S3+CDN? Affects M4 priorities. | Ops | M4 | **Resolved** | Filesystem + Nginx first. `FilesystemBlobStore` is the default backend, `FilesystemTargetWriter` the default target, and `infra/nginx/default.conf` + `infra/docker/docker-compose.yml` deliver the site. S3 (`S3BlobStore`, `S3TargetWriter`) ships as an optional backend for later. |
 | Q7 | Does any pilot template need loops over *pages* (a listing section) beyond what `structure` provides? If yes, `$CMS_FOR(page : query(...))$` needs a scoped query grammar. | Tech lead | M5 | **Resolved in M19** | For pages, no: the `structure` asset's `list`/`navigation`/`breadcrumb` kinds (§17.3) cover v1 listing needs. Lists of structured entries that are not pages are **datasets** (M19): `$CMS_FOR(x : dataset:uid, where=…, sort=…, limit=…, offset=…, folder=…)$` with the scoped query grammar (the OCTL expression grammar plus sort/paging/folder arguments), shared by templates and the REST record listing. A page-query loop remains a post-v1 candidate. Listing slices over many output files are **pagination** (M21): a `pagination` editor picks a Navigation folder or a dataset, and `CMS_PAGINATION` exposes the current page; the scoped query grammar stays M19's. |

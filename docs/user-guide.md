@@ -339,6 +339,9 @@ content it was pinned to; a schedule whose time has passed, whose target is miss
 they are a developer of the project here; otherwise whoever imports owns it. Importing the same archive again replaces
 the pending schedules it brought the first time instead of adding copies.
 
+**Compaction and exports.** Whether a project compacts its old history ([revision compaction](#compacting-old-history-project-admins-m29), M29) is an operational
+setting of this instance, not content: an export doesn't carry it, and an imported project starts with compaction off.
+
 ### Publishing as an editor (M28)
 
 Whether you, as an editor, can put your changes online yourself is decided **per project** by its project admins, under
@@ -401,9 +404,15 @@ A build publishes what is **released** (see [Publishing](#publishing-draft-relea
    some pages) and a comment — then start. Editors see only what their project allows (see
    [Publishing as an editor](#publishing-as-an-editor-m28)).
 2. A live log shows per-stage progress, error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5).
-3. Roll back to a previous build with **Promote** on a past run (the last few builds are retained; developers only).
+3. Roll back to a previous build with **Promote** on a past run (the last few published builds are retained;
+   developers only). Failed or cancelled runs can't be promoted, and don't push published builds out of the list.
 
 Every run shows who started it (**Started by**; a scheduled run shows the schedule's owner) and its comment.
+
+**Cancel** stops a running build before its next page: a cancelled build never goes online. If the server restarts
+during a build, the build shows **Failed** with "Run interrupted (node restart or lost heartbeat)" within a few
+minutes, and you can simply start it again; the site online is unchanged (M29). Very old runs disappear from the
+history after a while (by default after 90 days, keeping the newest 50 and every build that can still be promoted).
 
 An incremental run renders only what changed and publishes the complete site: the pages it didn't touch are carried over from the build the target currently serves, pages you deleted or moved disappear from their old place, and the sitemap and search index always list every page. A run limited to some pages (a folder or a selection) works the same way: the rest of the site stays online as it was.
 
@@ -420,6 +429,43 @@ An incremental run renders only what changed and publishes the complete site: th
 - Click a tick to enter **time-travel mode**: a thin amber frame surrounds the content area, inputs go read-only, and the header reads `Viewing revision 1840 · Back to now`.
 - From the Revisions screen you can filter by user, asset, and type; view a side-by-side diff; and restore.
 - **Restore** always writes a *new* revision — history is append-only, nothing is ever overwritten.
+
+#### Compacted history (M29)
+
+A project admin can let a project **compact** its old history (below). Then, for changes older than the chosen number
+of days, StaticForge keeps only the **last state of each day** of every page, media file or other item — plus every
+state that was ever released, that a build still on disk was made from, or that a pending schedule is pinned to. The
+revisions themselves stay in the list with their author, time and comment; only the exact in-between states of those
+days are gone.
+
+- **Spine and Revisions list.** A compacted revision shows a small icon; its tooltip reads "Exact changes compacted —
+  end-of-day state kept".
+- **Time travel.** You can still open a compacted revision. When what you see is later than the exact state of that
+  revision, the banner adds "Compacted history: you see the state at the end of that day".
+- **Diff.** For a page or file whose change was compacted, the diff shows "Exact changes of this revision were
+  compacted; the state at the end of the day is kept" instead of field changes. Other items of the same revision diff
+  as usual.
+- **Restore.** Restoring from a compacted revision restores that day's end state; the confirmation says so.
+
+Days are counted in **UTC**, so "the end of the day" is midnight UTC, which may be early morning or late evening where
+you are.
+
+#### Compacting old history (project admins, M29)
+
+**Settings → General → Revision compaction.** Every member sees the card; only project admins can change it, and it is
+read-only in archived projects and in time travel.
+
+- The card explains what is kept (releases, builds still on disk, pinned schedules, the end of each day) and what is
+  lost: the exact intermediate states **older than** the number of days you choose (at least 30; 90 by default).
+- **Enable** opens a dialog with an **estimate** — how many versions would be removed and roughly how much space it
+  frees — and asks you to **type the project key** to confirm. Compaction can't be undone; only a database backup from
+  before it brings the removed states back. Lowering the number of days later asks for the key again.
+- **Disable** needs one click. Raising the number of days needs no confirmation.
+- The card shows how far history has been compacted and the result of the last run. Compaction runs weekly (Sundays,
+  03:00 UTC by default, set by an instance administrator on the Jobs page); the setting itself changes nothing until
+  then and doesn't appear in the revision history (it is in the audit trail).
+- Media files that only removed versions used are freed from storage by the next nightly clean-up. Without compaction,
+  deleting or replacing a file frees no space, because old revisions still show it.
 
 ### Conflict resolution
 

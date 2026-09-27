@@ -27,7 +27,8 @@
 }
 
 .filter--actions {
-  width: 16rem;
+  // Wide enough for the "CODE — label" options (the M29 labels are the longest), never wider than the page.
+  width: min(28rem, 100%);
 
   .select {
     width: 100%;
@@ -102,4 +103,10 @@
   font-size: var(--sf-text-xs);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.action-label {
+  display: block;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
 }

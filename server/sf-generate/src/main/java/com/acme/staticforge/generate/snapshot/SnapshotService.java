@@ -2,7 +2,10 @@ package com.acme.staticforge.generate.snapshot;
 
 import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetVersion;
+import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionRepository;
+import com.acme.staticforge.asset.media.MediaVariantRepository;
+import com.acme.staticforge.asset.media.MediaVariantResolver;
 import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.ProjectLocales;
 import com.acme.staticforge.release.AssetRelease;
@@ -11,9 +14,12 @@ import com.acme.staticforge.release.ReleaseLocales;
 import com.acme.staticforge.release.ReleaseState;
 import com.acme.staticforge.release.ReleaseStates;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +44,12 @@ import org.springframework.stereotype.Service;
  * on top of the draft load: the pointers valid at the revision, and the released versions that aren't the ones
  * already loaded (usually few: a pointer at an unchanged asset names its version valid at the revision). A version
  * shared by several locales becomes one {@link SnapshotAsset}.
+ *
+ * <p><b>Media variants (M29.3.2).</b> A media asset's payload carries its merged variants
+ * ({@link MediaVariantResolver#withVariants}): the payload's own and the derived ones of {@code media_variant} for the
+ * current policy, read with one query per snapshot. So the renderer's {@code $CMS_REF(media:…, variant=…)}, the ASSETS
+ * stage and everything else that reads a snapshot's media see backfilled variants. The payload is a copy; the stored
+ * version is never changed.
  */
 @Service
 public class SnapshotService {
@@ -46,16 +58,19 @@ public class SnapshotService {
     private final RevisionRepository revisions;
     private final ReleaseStates releaseStates;
     private final ProjectLocales projectLocales;
+    private final MediaVariantResolver variantResolver;
 
     public SnapshotService(
             AssetVersionRepository versions,
             RevisionRepository revisions,
             ReleaseStates releaseStates,
-            ProjectLocales projectLocales) {
+            ProjectLocales projectLocales,
+            MediaVariantResolver variantResolver) {
         this.versions = versions;
         this.revisions = revisions;
         this.releaseStates = releaseStates;
         this.projectLocales = projectLocales;
+        this.variantResolver = variantResolver;
     }
 
     /**
@@ -73,8 +88,13 @@ public class SnapshotService {
     public Snapshot snapshot(long projectId, Long revision, SnapshotView view, Set<UUID> asDrafts) {
         long pinnedRevision = revision != null ? revision : revisions.findHeadRevisionId(projectId).orElse(0L);
         List<AssetVersion> loaded = versions.findSnapshot(projectId, pinnedRevision);
+        Set<Long> mediaAssetIds = loaded.stream()
+                .filter(v -> v.getAsset().getAssetType() == AssetType.MEDIA)
+                .map(AssetVersion::getAssetId)
+                .collect(Collectors.toSet());
+        Map<String, List<MediaVariantRepository.Row>> variants = new HashMap<>(variantRows(loaded, mediaAssetIds));
         Map<AssetVersion, SnapshotAsset> drafts = new LinkedHashMap<>();
-        loaded.forEach(v -> drafts.put(v, toAsset(v, v.getAsset(), v.getAsset().getUid())));
+        loaded.forEach(v -> drafts.put(v, toAsset(v, v.getAsset(), v.getAsset().getUid(), variants)));
 
         Map<String, Snapshot.Layer> layers = new LinkedHashMap<>();
         if (view == SnapshotView.DRAFT) {
@@ -85,6 +105,7 @@ public class SnapshotService {
         LocaleConfig config = LocaleConfig.orEmpty(projectLocales.forProject(projectId));
         ReleaseState state = releaseStates.at(projectId, pinnedRevision);
         Map<Long, AssetVersion> byId = new HashMap<>(releaseStates.releasedVersions(state, ids(loaded)));
+        variants.putAll(variantRows(byId.values(), mediaAssetIds));
         loaded.forEach(v -> byId.put(v.getId(), v));
 
         Map<ReleasedAsset, SnapshotAsset> released = new HashMap<>();
@@ -107,7 +128,7 @@ public class SnapshotService {
                             new ReleasedAsset(version.getId(), pointer.getReleasedUid()),
                             k -> k.versionId() == draftVersion.getId() && k.uid().equals(draft.uid())
                                     ? draft
-                                    : toAsset(version, asset, k.uid())));
+                                    : toAsset(version, asset, k.uid(), variants)));
                 } else if (draftVersion.isDeleted()) {
                     assets.add(draft); // a tombstone released nowhere is simply gone
                 } else {
@@ -128,7 +149,23 @@ public class SnapshotService {
     /** One released (version, uid) pair — what several locales can share. */
     private record ReleasedAsset(long versionId, String uid) {}
 
-    private static SnapshotAsset toAsset(AssetVersion v, Asset asset, String uid) {
+    /** The {@code media_variant} rows of the source blobs of every media version in {@code loaded} (one query). */
+    private Map<String, List<MediaVariantRepository.Row>> variantRows(
+            Collection<AssetVersion> loaded, Set<Long> mediaAssetIds) {
+        Set<String> shas = new HashSet<>();
+        for (AssetVersion v : loaded) {
+            if (mediaAssetIds.contains(v.getAssetId())) {
+                shas.addAll(MediaVariantResolver.sourceShas(v.getPayload()));
+            }
+        }
+        return shas.isEmpty() ? Map.of() : variantResolver.rowsFor(shas);
+    }
+
+    private SnapshotAsset toAsset(
+            AssetVersion v, Asset asset, String uid, Map<String, List<MediaVariantRepository.Row>> variants) {
+        JsonNode payload = asset.getAssetType() == AssetType.MEDIA
+                ? variantResolver.withVariants(v.getPayload(), variants)
+                : v.getPayload();
         return new SnapshotAsset(
                 asset.getUuid(),
                 v.getAssetId(),
@@ -136,7 +173,7 @@ public class SnapshotService {
                 uid,
                 v.getDisplayName(),
                 v.getFolderPath(),
-                v.getPayload(),
+                payload,
                 v.isDeleted(),
                 v.getChangedAt(),
                 v.getFolderId());

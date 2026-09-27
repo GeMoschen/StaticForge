@@ -16,6 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
  * Server-side refresh-token rotation (spec §9.1, §9.4). Tokens belong to a family; a
  * consumed (revoked) token presented again signals theft and revokes the entire family.
  * Sliding {@code expiresAt} (8h) with an absolute ceiling (30d), both from config.
+ *
+ * <p>Rows are deleted per family here (reuse, expiry on presentation, logout) or per user. Families nobody presents
+ * again are removed by the {@code refresh-token-cleanup} system job (M29.2.4,
+ * {@link com.acme.staticforge.housekeeping.tokens.RefreshTokenCleanupJob}), always whole: a family past its absolute
+ * expiry, or one whose every row is revoked or expired and whose newest row expired longer than the job's
+ * {@code reuseWindow} (default 7 days) ago. Revoked rows of a live family are kept, because presenting one is how reuse
+ * is detected.
  */
 @Service
 public class RefreshTokenService {
@@ -51,8 +58,11 @@ public class RefreshTokenService {
      * Rotates a presented refresh token. An active token is revoked and replaced by a new
      * token in the same family (sliding expiry, capped at the family's absolute ceiling). A
      * revoked token indicates theft and revokes the whole family.
+     *
+     * <p>The {@code 401} of a reused or expired token must not roll back the family's deletion, hence
+     * {@code noRollbackFor}: before M29.2.4 the deletion was silently undone, so a reused family stayed alive.
      */
-    @Transactional
+    @Transactional(noRollbackFor = SfException.class)
     public RefreshToken rotate(String presentedToken) {
         RefreshToken presented = repository
                 .findByToken(presentedToken)
