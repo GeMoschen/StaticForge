@@ -8,14 +8,6 @@
       <sf-button variant="secondary" (click)="choose()">Choose</sf-button>
     }
 
-    @if (results().length > 0) {
-      <div class="sf-media__results">
-        @for (item of results(); track item.uuid) {
-          <button type="button" (click)="select(item.uuid)">{{ item.label }}</button>
-        }
-      </div>
-    }
-
     <input
       type="text"
       placeholder="Media UUID"
@@ -30,3 +22,13 @@
     />
   </div>
 </sf-field>
+
+@if (pickerOpen() && projectKey()) {
+  <sf-asset-picker-dialog
+    [projectKey]="projectKey()!"
+    initialType="MEDIA"
+    [allowedTypes]="['MEDIA']"
+    (picked)="onPicked($event)"
+    (closed)="pickerOpen.set(false)"
+  />
+}
