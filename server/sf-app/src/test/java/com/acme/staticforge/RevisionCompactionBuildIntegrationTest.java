@@ -19,6 +19,7 @@ import com.acme.staticforge.asset.template.TemplateView;
 import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
+import com.acme.staticforge.generate.GenerationRunRepository;
 import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
@@ -26,6 +27,12 @@ import com.acme.staticforge.generate.RunStatus;
 import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.generate.insight.PlanEntryRecord;
+import com.acme.staticforge.generate.retention.GenerationRunRetentionJob;
+import com.acme.staticforge.housekeeping.JobOutcome;
+import com.acme.staticforge.housekeeping.JobTrigger;
+import com.acme.staticforge.housekeeping.SystemJob;
+import com.acme.staticforge.housekeeping.SystemJobFixtures;
+import com.acme.staticforge.housekeeping.SystemJobRunner;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
@@ -45,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -92,6 +100,9 @@ class RevisionCompactionBuildIntegrationTest {
     @Autowired ReleaseFixtures releaseFixtures;
     @Autowired RevisionCompactor compactor;
     @Autowired CompactionFixtures history;
+    @Autowired GenerationRunRepository runs;
+    @Autowired SystemJobRunner jobs;
+    @Autowired SystemJobFixtures jobFixtures;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -154,6 +165,57 @@ class RevisionCompactionBuildIntegrationTest {
         assertSameFiles(files(fx, build(fx, GenerationMode.FULL, released)), goldenRelease, "build at the released revision");
         assertSameFiles(files(fx, build(fx, GenerationMode.FULL, head)), goldenRetained, "build at the retained revision");
         assertThat(incrementalPlan(fx)).isEqualTo(planBefore);
+    }
+
+    @Test
+    @DisplayName("after generation-run-retention ran, compaction keeps the retained build's revision exact and incremental builds keep their baseline")
+    void retentionThenCompaction() throws Exception {
+        Fx fx = fixture("cmpret");
+        TemplateView template = templates.create(new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", PAGE_CDL,
+                Map.of("html", PAGE_HTML), null, false, Map.of("html", "{folder}{uid}.{ext}")), fx.ctx());
+        UUID about = page(fx, template, "about", "About 1");
+        reference(fx, "About", about);
+        title(fx, about, "About 2");
+        title(fx, about, "About 3");
+        releaseFixtures.releaseAll(fx.id());
+        title(fx, about, "About 4");
+        title(fx, about, "About 5");
+        long dayEnd = history.head(fx.id());
+        title(fx, about, "About 6");
+        releaseFixtures.releaseAll(fx.id());
+        long head = history.head(fx.id());
+        history.backdate(fx.id(), 1, dayEnd, DAY_1);
+        history.backdate(fx.id(), dayEnd + 1, head, DAY_2);
+
+        GenerationRun retained = build(fx, GenerationMode.FULL, null);
+        Map<String, byte[]> golden = files(fx, retained);
+        GenerationRun unprotected = runs.saveAndFlush(new GenerationRun(fx.id(), 1L, GenerationMode.FULL, "[\"html\"]",
+                fx.target().getId(), RunStatus.FAILED, Instant.now(), Instant.now(), fx.user().getId(), 0, 0, 0, 1, 0, null, null));
+
+        // Retention with no age and no per-project floor: only protected runs (builds on disk) stay.
+        SystemJob row = jobFixtures.row(GenerationRunRetentionJob.KEY);
+        row.setSettings(mapper.createObjectNode().put("keepDays", 0).put("keepPerProject", 0));
+        jobFixtures.save(row);
+        SystemJobRunner.Started started = jobs.start(GenerationRunRetentionJob.KEY, JobTrigger.MANUAL, false, null).orElseThrow();
+        started.done().orTimeout(60, TimeUnit.SECONDS).join();
+        assertThat(jobFixtures.run(started.run().getId()).getOutcome()).isEqualTo(JobOutcome.SUCCEEDED);
+        assertThat(runs.findById(unprotected.getId())).as("unprotected run").isEmpty();
+        assertThat(runs.findById(retained.getId())).as("run with a build on disk").isPresent();
+
+        CompactionResult result = compactor.compact(fx.id(), CUTOFF, false, null);
+        assertThat(result.versionsRemoved()).as("compaction removed something").isPositive();
+        GenerationRun rebuilt = build(fx, GenerationMode.FULL, head);
+        assertSameFiles(files(fx, rebuilt), golden, "build at the retained revision");
+
+        title(fx, about, "About 7");
+        releaseFixtures.releaseAll(fx.id());
+        GenerationRun incremental = build(fx, GenerationMode.INCREMENTAL, null);
+        assertThat(incremental.getPlanSummary().path("fallbackCause").isMissingNode()
+                || incremental.getPlanSummary().path("fallbackCause").isNull())
+                .as("plan summary %s", incremental.getPlanSummary()).isTrue();
+        assertThat(incremental.getPlanSummary().path("baseRunId").asLong()).isIn(retained.getId(), rebuilt.getId());
+        assertThat(new String(files(fx, incremental).get("about.html"), java.nio.charset.StandardCharsets.UTF_8))
+                .contains("About 7");
     }
 
     private List<PlanEntryRecord> incrementalPlan(Fx fx) {

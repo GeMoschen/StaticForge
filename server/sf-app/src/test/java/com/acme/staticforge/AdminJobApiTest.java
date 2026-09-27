@@ -240,6 +240,42 @@ class AdminJobApiTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    @DisplayName("every system job of epic decision 7 is installed with its default schedule; the destructive ones offer a dry run")
+    void productionJobsMatchTheDecisionTable() throws Exception {
+        // key -> {default cron, dry run (decision 4)}; all enabled by default (decision 7).
+        Map<String, List<Object>> expected = new LinkedHashMap<>();
+        expected.put("generation-run-recovery", List.of("*/5 * * * *", false));
+        expected.put("build-output-cleanup", List.of("10 3 * * *", true));
+        expected.put("blob-sweep", List.of("30 3 * * *", true));
+        expected.put("audit-purge", List.of("0 4 * * *", true));
+        expected.put("refresh-token-cleanup", List.of("15 * * * *", false));
+        expected.put("memory-eviction", List.of("*/10 * * * *", false));
+        expected.put("generation-run-retention", List.of("15 4 * * *", true));
+        expected.put("media-variant-backfill", List.of("0 2 * * *", false));
+        expected.put("search-maintenance", List.of("0 5 * * *", false));
+        expected.put("revision-compaction", List.of("0 3 * * 0", true));
+
+        JsonNode list = json(perform(get(BASE), admin).andExpect(status().isOk()));
+        Map<String, JsonNode> installed = new LinkedHashMap<>();
+        for (JsonNode job : list) {
+            String key = job.get("key").asText();
+            if (!job.get("orphaned").asBoolean() && !key.startsWith("test-") && !key.matches("t\\d+-.*")) {
+                installed.put(key, job);
+            }
+        }
+        assertThat(installed.keySet()).containsExactlyInAnyOrderElementsOf(expected.keySet());
+        expected.forEach((key, values) -> {
+            JsonNode job = installed.get(key);
+            assertThat(job.at("/defaults/cron").asText()).as("%s default cron", key).isEqualTo(values.get(0));
+            assertThat(job.at("/defaults/enabled").asBoolean()).as("%s enabled by default", key).isTrue();
+            assertThat(job.at("/defaults/zone").asText()).as("%s zone", key).isEqualTo("UTC");
+            assertThat(job.get("cron").asText()).as("%s seeded cron", key).isEqualTo(values.get(0));
+            assertThat(job.get("supportsDryRun").asBoolean()).as("%s dry run", key).isEqualTo(values.get(1));
+            assertThat(job.get("name").asText()).as("%s name", key).isNotBlank();
+        });
+    }
+
     // ---------------------------------------------------------------- edit + reset
 
     @Test

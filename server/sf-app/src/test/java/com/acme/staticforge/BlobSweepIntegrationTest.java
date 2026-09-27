@@ -7,6 +7,7 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.media.BlobRepository;
 import com.acme.staticforge.asset.media.BlobStore;
 import com.acme.staticforge.asset.media.BlobWriter;
+import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.asset.media.MediaService;
 import com.acme.staticforge.asset.media.MediaVariantRepository;
 import com.acme.staticforge.asset.media.MediaVariantSpec;
@@ -22,7 +23,11 @@ import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.release.ReleaseItem;
+import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.revision.compaction.CompactionResult;
+import com.acme.staticforge.revision.compaction.RevisionCompactor;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -40,9 +45,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -94,6 +102,9 @@ class BlobSweepIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired BlobStoreHealthIndicator health;
+    @Autowired RevisionCompactor compactor;
+    @Autowired CompactionFixtures history;
+    @Autowired ReleaseService releases;
 
     @AfterEach
     void clearHooks() {
@@ -290,6 +301,75 @@ class BlobSweepIntegrationTest {
                         + " WHERE a.asset_type <> 'MEDIA' AND CAST(v.payload AS VARCHAR(1000000)) LIKE '%blobSha256%'",
                 Integer.class);
         assertThat(nonMedia).as("non-media payloads with blob references").isZero();
+    }
+
+    @Test
+    @DisplayName("compaction hand-off: bytes only removed versions referenced (with their variants and media_variant rows) go; released and surviving versions' bytes stay")
+    void collectsWhatCompactionRemoved() throws Exception {
+        Fixture fx = newFixture(false);
+        // One image, five files: v1 (with a backfilled media_variant row), v2 released, v3, v4 the last of DAY_1, v5 the
+        // next day (open). Compaction removes v1 and v3 (absorbed into v2 and v4).
+        AssetVersionView v1 = mediaService.upload(fx.id(), null, "hero.png", null, png(), fx.ctx());
+        UUID image = v1.uuid();
+        String derived = storeWithoutVersion(bytes("backfilled variant " + unique()));
+        String v1Source = sha(v1.payload());
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> variantRows.insertIfAbsent(
+                v1Source, new MediaVariantSpec("extra", 4, "png", 0), derived, Instant.now().minus(Duration.ofHours(25))));
+        JsonNode v2 = mediaService.replace(image, "hero.png", null, png(), fx.ctx()).media().payload();
+        releases.release(List.of(ReleaseItem.of(image)), fx.ctx());
+        JsonNode v3 = mediaService.replace(image, "hero.png", null, png(), fx.ctx()).media().payload();
+        JsonNode v4 = mediaService.replace(image, "hero.png", null, png(), fx.ctx()).media().payload();
+        long dayEnd = history.head(fx.id());
+        JsonNode v5 = mediaService.replace(image, "hero.png", null, png(), fx.ctx()).media().payload();
+        long head = history.head(fx.id());
+        history.backdate(fx.id(), 1, dayEnd, CompactionFixtures.DAY_1);
+        history.backdate(fx.id(), dayEnd + 1, head, CompactionFixtures.DAY_1.plus(Duration.ofDays(1)));
+
+        Set<String> removed = new HashSet<>(MediaFiles.blobShas(v1.payload()));
+        removed.addAll(MediaFiles.blobShas(v3));
+        removed.add(derived);
+        Set<String> kept = new HashSet<>();
+        for (JsonNode payload : List.of(v2, v4, v5)) {
+            kept.addAll(MediaFiles.blobShas(payload));
+        }
+        assertThat(removed).hasSizeGreaterThanOrEqualTo(5).doesNotContainAnyElementsOf(kept);
+        for (String sha : removed) {
+            age(sha);
+        }
+        for (String sha : kept) {
+            age(sha);
+        }
+        CompactionResult compaction = compactor.compact(fx.id(), CompactionFixtures.DAY_1.plus(Duration.ofDays(60)), false, null);
+        assertThat(compaction.versionsRemoved()).isEqualTo(2);
+        for (String sha : removed) {
+            assertThat(blobs.findById(sha)).as("compaction itself deletes no blob: %s", sha).isPresent();
+        }
+        // A media_variant row within the grace period still marks its source and variant (a backfill racing a compaction).
+        assertThat(sampled(run(true))).doesNotContain(sha(v3));
+        // Uploads record their variants in media_variant too; after a compaction window those rows are old.
+        OffsetDateTime old = OffsetDateTime.ofInstant(Instant.now().minus(Duration.ofHours(25)), ZoneOffset.UTC);
+        for (JsonNode payload : List.of(v1.payload(), v2, v3, v4, v5)) {
+            jdbc.update("UPDATE media_variant SET created_at = ? WHERE source_sha = ?", old, sha(payload));
+        }
+
+        SystemJobRun dry = run(true);
+        assertThat(sampled(dry)).containsAll(removed).doesNotContainAnyElementsOf(kept);
+        assertThat(dry.getReport().path("orphanVariantRowsDeleted").asLong()).isGreaterThanOrEqualTo(1);
+        assertThat(variantRows.exists(v1Source, new MediaVariantSpec("extra", 4, "png", 0))).as("dry run").isTrue();
+        SystemJobRun real = run(false);
+
+        assertThat(sampled(real)).containsAll(removed).doesNotContainAnyElementsOf(kept);
+        for (String sha : removed) {
+            assertThat(blobs.findById(sha)).as("row of removed %s", sha).isEmpty();
+            assertThat(blobStore.exists(sha)).as("bytes of removed %s", sha).isFalse();
+        }
+        for (String sha : kept) {
+            assertThat(blobs.findById(sha)).as("row of kept %s", sha).isPresent();
+            assertThat(blobStore.exists(sha)).as("bytes of kept %s", sha).isTrue();
+        }
+        assertThat(variantRows.exists(v1Source, new MediaVariantSpec("extra", 4, "png", 0)))
+                .as("the orphaned media_variant row").isFalse();
+        assertThat(history.versions(history.assetId(fx.id(), image))).hasSize(3);
     }
 
     // ------------------------------------------------------------------

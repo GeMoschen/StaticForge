@@ -10,19 +10,19 @@ back), phase C UI, phase D docs + journey + full verification.
 
 - [x] A — M29.1.1 system job model, SPI, runner on the engine tick, metrics
 - [x] A — M29.1.2 admin jobs API (+ OpenAPI / schema.d.ts)
-- [ ] B1 — M29.2.1 heartbeat, interrupted-run recovery, real cancel
-- [ ] B1 — M29.2.2 build output cleanup, published-only rollback slots, promote refusal, `retainedRunIds()`
-- [ ] B1 — M29.3.1 generation-run retention
-- [ ] B2 — M29.2.4 audit purge, refresh-token cleanup, memory eviction
-- [ ] B2 — M29.3.2 `media_variant`, resolver, variant backfill
-- [ ] B2 — M29.2.3 blob sweep (marks variants, localized files, `media_variant`)
-- [ ] B2 — M29.3.3 search maintenance
-- [ ] B3 — M29.4.1 compaction policy + schema + API
-- [ ] B3 — M29.4.2 compactor + job + estimate
-- [ ] B3 — M29.4.3 compacted reads (revisions, time travel, diff, restore, preview header)
-- [ ] C — M29.5.1 admin Jobs page
-- [ ] C — M29.5.2 compaction card + compacted notices
-- [ ] D — M29.6.1 spec + docs
+- [x] B1 — M29.2.1 heartbeat, interrupted-run recovery, real cancel
+- [x] B1 — M29.2.2 build output cleanup, published-only rollback slots, promote refusal, `retainedRunIds()`
+- [x] B1 — M29.3.1 generation-run retention
+- [x] B2 — M29.2.4 audit purge, refresh-token cleanup, memory eviction
+- [x] B2 — M29.3.2 `media_variant`, resolver, variant backfill
+- [x] B2 — M29.2.3 blob sweep (marks variants, localized files, `media_variant`)
+- [x] B2 — M29.3.3 search maintenance
+- [x] B3 — M29.4.1 compaction policy + schema + API
+- [x] B3 — M29.4.2 compactor + job + estimate
+- [x] B3 — M29.4.3 compacted reads (revisions, time travel, diff, restore, preview header)
+- [x] C — M29.5.1 admin Jobs page
+- [x] C — M29.5.2 compaction card + compacted notices
+- [x] D — M29.6.1 spec + docs
 - [ ] D — M29.6.2 `ui/e2e/m29-journeys.spec.ts` green twice
 - [ ] `./gradlew test --rerun`, `ng build`, `npx vitest run`
 

@@ -25,6 +25,7 @@ import com.acme.staticforge.generate.RunStatus;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.generate.cleanup.BuildOutputCleanupJob;
 import com.acme.staticforge.generate.pipeline.OutputFile;
+import com.acme.staticforge.generate.target.BuildManifest;
 import com.acme.staticforge.generate.target.TargetWriter;
 import com.acme.staticforge.generate.target.TargetWriterSelector;
 import com.acme.staticforge.housekeeping.JobTrigger;
@@ -32,6 +33,7 @@ import com.acme.staticforge.housekeeping.SystemJobFixtures;
 import com.acme.staticforge.housekeeping.SystemJobRun;
 import com.acme.staticforge.housekeeping.SystemJobRunner;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.revision.compaction.RetainedBuildRevisions;
 import com.acme.staticforge.security.JwtService;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,6 +46,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
@@ -96,6 +99,7 @@ class BuildOutputCleanupIntegrationTest {
     @Autowired RunLatches latches;
     @Autowired JwtService jwt;
     @Autowired MockMvc mvc;
+    @Autowired RetainedBuildRevisions retainedRevisions;
 
     private BuildInsightFixtures fixtures;
     private final List<Long> created = new ArrayList<>();
@@ -238,6 +242,33 @@ class BuildOutputCleanupIntegrationTest {
         mvc.perform(post("/api/v1/projects/{key}/generations/{id}/promote", fx.project().getKey(), published.getId())
                         .header("Authorization", "Bearer " + jwt.issueAccessToken(fx.user())))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("compaction's retained builds: a failed run's leftover build protects its revisions until the cleanup removes it; a published build keeps protecting")
+    void cleanedBuildsStopProtectingRevisions() throws Exception {
+        Fixture fx = site("clean-cmp");
+        GenerationTarget target = target(fx, "fs", TargetType.FILESYSTEM, null);
+        GenerationRun published = fixtures.succeeded(fixtures.generate(fx, target, GenerationMode.FULL));
+        TargetWriter writer = writers.forTarget(fx.project().getKey(), target);
+        BuildManifest manifest = writer.readManifest(published.getId()).orElseThrow();
+        long failedRevision = 1;
+        assertThat(List.of(manifest.revision(), manifest.consistentRevision())).doesNotContain(failedRevision);
+        // A publish that failed after writing its manifest leaves a build that looks published.
+        long failed = failedRun(fx, target);
+        writer.stage(failed, List.of(file("index.html", "failed")));
+        writer.writeManifest(failed, new BuildManifest(BuildManifest.VERSION, failed, failedRevision, failedRevision,
+                Set.of("html"), List.of()));
+        assertThat(writer.retainedRunIds()).contains(failed, published.getId());
+        assertThat(retainedRevisions.revisionsFor(fx.projectId()))
+                .contains(failedRevision, manifest.revision(), manifest.consistentRevision());
+
+        runCleanup(false);
+
+        assertThat(writer.retainedRunIds()).doesNotContain(failed).contains(published.getId());
+        assertThat(retainedRevisions.revisionsFor(fx.projectId()))
+                .doesNotContain(failedRevision)
+                .contains(manifest.revision(), manifest.consistentRevision());
     }
 
     // ------------------------------------------------------------------

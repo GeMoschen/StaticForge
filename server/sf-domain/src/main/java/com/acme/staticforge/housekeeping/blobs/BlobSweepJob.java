@@ -35,7 +35,9 @@ import org.springframework.stereotype.Component;
  * <ol>
  *   <li><b>Mark.</b> Every blob referenced by any {@code asset_version} row — every revision, closed and deleted
  *       versions included — through the media payload ({@link MediaFiles#blobShas}: each file's blob and variants, and
- *       those of every per-locale file), by {@code media_variant} ({@code blob_sha} and {@code source_sha}) and by
+ *       those of every per-locale file), by {@code media_variant} ({@code blob_sha} and {@code source_sha}; a row
+ *       whose source no version references any more and that is older than the grace period is orphaned derived data:
+ *       it marks nothing and is deleted, so compaction's leftovers are collected with their variants) and by
  *       {@code generation_run.log_blob_sha}. Only {@code MEDIA} payloads reference blobs; a test pins the asset types
  *       so a new referencing type fails loudly.
  *   <li><b>Sweep rows.</b> A {@code blob} row that is unmarked and was neither created nor referenced by a write
@@ -151,6 +153,7 @@ public class BlobSweepJob implements HousekeepingJob {
         long keptYoung;
         long skipped;
         long refCountsUpdated;
+        long variantRowsDeleted;
     }
 
     @Override
@@ -161,7 +164,7 @@ public class BlobSweepJob implements HousekeepingJob {
         Tally tally = new Tally();
 
         ctx.progress("Marking referenced blobs");
-        Map<String, Integer> refs = mark(ctx, batchSize, tally);
+        Map<String, Integer> refs = mark(ctx, batchSize, cutoff, tally);
         hooks.afterMark();
 
         ctx.progress("Sweeping blob rows");
@@ -181,13 +184,14 @@ public class BlobSweepJob implements HousekeepingJob {
         report.put("keptWithinGrace", tally.keptYoung);
         report.put("skippedChanged", tally.skipped);
         report.put("refCountsUpdated", tally.refCountsUpdated);
+        report.put("orphanVariantRowsDeleted", tally.variantRowsDeleted);
         String verb = ctx.dryRun() ? "Would delete " : "Deleted ";
         return JobResult.succeeded(verb + tally.rowsDeleted + " unreferenced blobs and " + tally.objectsDeleted
                 + " orphan objects (" + ctx.bytesFreedCount() + " bytes); " + refs.size() + " blobs referenced.");
     }
 
     /** The referenced hashes, each with its number of references. */
-    private Map<String, Integer> mark(JobContext ctx, int batchSize, Tally tally) {
+    private Map<String, Integer> mark(JobContext ctx, int batchSize, Instant cutoff, Tally tally) {
         Map<String, Integer> refs = new HashMap<>();
         long afterId = 0;
         while (true) {
@@ -204,10 +208,33 @@ public class BlobSweepJob implements HousekeepingJob {
             tally.versions += page.size();
             afterId = page.get(page.size() - 1).getId();
         }
-        jdbc.query("SELECT blob_sha, source_sha FROM media_variant", rs -> {
-            refs.merge(rs.getString(1).trim(), 1, Integer::sum);
-            refs.putIfAbsent(rs.getString(2).trim(), 0); // a source is marked, but not counted as a reference
+        // A media_variant row whose source no version references any more (revision compaction removed the last
+        // one) can never be resolved again: it is orphaned derived data and marks nothing, so its source and variant
+        // bytes are collected too. Rows within the grace period still mark (a backfill racing a compaction).
+        Set<String> versionShas = new HashSet<>(refs.keySet());
+        List<Long> orphanVariants = new ArrayList<>();
+        jdbc.query("SELECT id, blob_sha, source_sha, created_at FROM media_variant", (RowCallbackHandler) rs -> {
+            String source = rs.getString("source_sha").trim();
+            Instant created = rs.getObject("created_at", OffsetDateTime.class).toInstant();
+            if (!versionShas.contains(source) && created.isBefore(cutoff)) {
+                orphanVariants.add(rs.getLong("id"));
+                return;
+            }
+            refs.merge(rs.getString("blob_sha").trim(), 1, Integer::sum);
+            refs.putIfAbsent(source, 0); // a source is marked, but not counted as a reference
         });
+        tally.variantRowsDeleted = orphanVariants.size();
+        if (!ctx.dryRun() && !orphanVariants.isEmpty()) {
+            for (int from = 0; from < orphanVariants.size(); from += batchSize) {
+                List<Object[]> ids = orphanVariants.subList(from, Math.min(from + batchSize, orphanVariants.size()))
+                        .stream()
+                        .map(id -> new Object[] {id})
+                        .toList();
+                ctx.inTransaction(() -> {
+                    jdbc.batchUpdate("DELETE FROM media_variant WHERE id = ?", ids);
+                });
+            }
+        }
         jdbc.query("SELECT log_blob_sha FROM generation_run WHERE log_blob_sha IS NOT NULL",
                 (RowCallbackHandler) rs -> refs.merge(rs.getString(1).trim(), 1, Integer::sum));
         return refs;
