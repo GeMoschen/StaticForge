@@ -180,13 +180,18 @@ class RedirectFormatsGoldenTest {
 
     @Test
     void anAnchoredRuleNeverMatchesThePagesBelowItsDirectory() {
-        String regex = HtaccessPostProcessor.pattern("/about/");
+        String regex = HtaccessPostProcessor.pattern("/about/", "index.html");
 
-        assertThat(regex).isEqualTo("^/about/$");
+        assertThat(regex).isEqualTo("^/about/(?:index\\.html)?$");
         assertThat(matches(regex, "/about/")).isTrue();
+        // The old site served the page under its index file's URL too.
+        assertThat(matches(regex, "/about/index.html")).isTrue();
         assertThat(matches(regex, "/about/team/")).isFalse();
-        assertThat(matches(regex, "/about/index.html")).isFalse();
+        assertThat(matches(regex, "/about/team/index.html")).isFalse();
+        assertThat(matches(regex, "/about/indexxhtml")).isFalse();
         assertThat(matches(regex, "/x/about/")).isFalse();
+        // A file source matches only itself.
+        assertThat(HtaccessPostProcessor.pattern("/about.html", "index.html")).isEqualTo("^/about\\.html$");
     }
 
     @Test

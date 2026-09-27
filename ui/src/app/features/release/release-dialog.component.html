@@ -79,6 +79,15 @@
         </section>
       }
 
+      @if (offersRedirect()) {
+        <sf-redirect-option
+          [projectKey]="projectKey()"
+          [sources]="redirectSources()"
+          [(intent)]="redirectIntent"
+          (pickRequested)="pickingRedirect.set(true)"
+        />
+      }
+
       <label class="release__comment">
         <span class="release__legend">Comment</span>
         <textarea
@@ -111,3 +120,13 @@
     }
   </div>
 </div>
+
+@if (pickingRedirect()) {
+  <sf-asset-picker-dialog
+    [projectKey]="projectKey()"
+    [allowedTypes]="['PAGE']"
+    initialType="PAGE"
+    (picked)="onRedirectPicked($event)"
+    (closed)="pickingRedirect.set(false)"
+  />
+}

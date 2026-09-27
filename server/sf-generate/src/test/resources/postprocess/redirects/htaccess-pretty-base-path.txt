@@ -1,5 +1,5 @@
 # BEGIN StaticForge redirects
-RedirectMatch 301 "^/site/about/$" "/site/company/about/"
+RedirectMatch 301 "^/site/about/(?:index\.html)?$" "/site/company/about/"
 RedirectMatch 301 "^/site/legacy\.html$" "https://example.org/x?a=1\&b=2"
 RedirectMatch 301 "^/site/old page\.html$" "/site/new%20page.html"
 RedirectMatch 301 "^/site/say \"hi\"\.html$" "/site/hello.html"

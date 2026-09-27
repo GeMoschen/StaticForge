@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Links with accessible text</title>
+  <meta name="description" content="A fixture page for the accessibility checks: Links with accessible text.">
+</head>
+<body>
+  <main id="content">
+    <h1>Links with accessible text</h1>
+    <p><a href="index.html"><img src="assets/media/logo.png" alt="Home"></a></p>
+    <p><a href="about.html">About <img src="assets/media/arrow.png" alt=""></a></p>
+    <p><a href="about.html" aria-label="About us"><span class="icon"></span></a></p>
+    <p><span id="team-label">Our team</span> <a href="about.html#team" aria-labelledby="missing team-label"></a></p>
+    <p><a href="contact.html" title="Contact"><span class="icon"></span></a></p>
+    <p><a href="contact.html"><svg aria-label="Contact" viewBox="0 0 1 1"></svg></a></p>
+    <p><a href="about.html" aria-hidden="true" tabindex="-1"><img src="assets/media/team.png" alt=""></a></p>
+    <p><a name="plain-anchor"></a></p>
+  </main>
+</body>
+</html>

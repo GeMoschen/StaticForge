@@ -27,6 +27,10 @@ export interface ReleaseChoice {
   label: string;
   status: ReleaseStatus | null;
   checked: boolean;
+  /** The asset's type, name and folder: a page's old URLs can be redirected when it goes offline (M30.6.3). */
+  assetType?: string;
+  assetName?: string;
+  folderPath?: string;
 }
 
 /** The asset an editor's release bar acts on. */
@@ -75,6 +79,9 @@ export function choicesFor(
       label: `${entry.key ? `${labelOf(entry.key)} (${localeTag(entry.key)})` : 'All languages'} — ${statusLabel(entry.status)}`,
       status: entry.status,
       checked: entry.key === editingKey,
+      assetType: subject.type,
+      assetName: assetName(subject),
+      folderPath: subject.folderPath,
     }));
   if (choices.length === 1) {
     choices[0].checked = true;

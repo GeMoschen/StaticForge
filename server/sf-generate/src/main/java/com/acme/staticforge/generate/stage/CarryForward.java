@@ -1,5 +1,6 @@
 package com.acme.staticforge.generate.stage;
 
+import com.acme.staticforge.asset.page.PageNav;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.BuildPlan;
@@ -186,14 +187,16 @@ public final class CarryForward {
             if (withheld.contains(entry.outputPath())) {
                 continue;
             }
-            // Listed as the language's released version names it (M27.2.1).
+            // Listed as the language's released version names it (M27.2.1), with its nav.noIndex (M30).
             SnapshotAsset page = snapshot.asset(entry.pageUuid(), entry.locale());
             if (page != null) {
+                boolean noIndex = PageNav.noIndex(page.payload());
                 pages.add(entry.pagination() == null
                         ? new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
-                                null, null, entry.locale())
+                                null, null, entry.locale(), noIndex)
                         : new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
-                                entry.pagination().pageNumber(), entry.pagination().totalPages()));
+                                entry.pagination().pageNumber(), entry.pagination().totalPages(), entry.locale(),
+                                noIndex));
             }
         }
         for (BuildManifest.Output output : carriedPages) {
@@ -213,7 +216,11 @@ public final class CarryForward {
         String title = entry != null
                 ? baseTitle(entry, output.pageNumber())
                 : page == null ? "" : page.displayName();
-        return new SitePage(uid, output.path(), output.channel(), title, output.pageNumber(), null, output.locale());
+        // The page's current nav.noIndex (a tombstone's or unreleased draft's is never read): the base build doesn't
+        // record it, and the sitemap is written anew each run.
+        boolean noIndex = page != null && !page.deleted() && PageNav.noIndex(page.payload());
+        return new SitePage(
+                uid, output.path(), output.channel(), title, output.pageNumber(), null, output.locale(), noIndex);
     }
 
     /** The base entry's title without the {@code " – page n"} suffix the search index adds again. */

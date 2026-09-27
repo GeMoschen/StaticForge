@@ -25,7 +25,9 @@ import org.springframework.stereotype.Service;
  * one line per source URL path, sorted. Each rule is an anchored {@code RedirectMatch}, so it matches its source path
  * exactly — never the URLs below a directory source, as {@code Redirect}'s prefix match would. Paths are the URL paths
  * visitors request: {@code /} + the output path, below the path of the target's {@code baseUrl} when it has one, and a
- * directory ({@code /about/}) for an index file when the channel uses pretty URLs with a trailing slash.
+ * directory ({@code /about/}) for an index file when the channel uses pretty URLs with a trailing slash. A directory
+ * source also matches its index file ({@code ^/about/(?:index\.html)?$}): the old site served the page under both
+ * URLs, and a visitor may have either.
  *
  * <p><b>Escaping.</b> The source is the <em>decoded</em> path (mod_alias matches the %-decoded request path) with every
  * regex metacharacter escaped by a backslash. The target is percent-encoded (it is sent as the {@code Location}), an
@@ -92,7 +94,8 @@ public final class HtaccessPostProcessor implements PostProcessor {
                     : RedirectLinks.urlPath(ctx.baseUrl(), RedirectPaths.pathOf(redirect.to()), settings, true)
                             + RedirectLinks.suffix(redirect.to());
             // The first redirect of a source path wins, as Apache's first matching directive would.
-            lines.putIfAbsent(from, "RedirectMatch " + RedirectLinks.STATUS + " " + quoted(pattern(from)) + " "
+            lines.putIfAbsent(from, "RedirectMatch " + RedirectLinks.STATUS + " "
+                    + quoted(pattern(from, settings.indexFileName())) + " "
                     + quoted(substitution(to)));
         }
         StringBuilder block = new StringBuilder(BEGIN).append('\n');
@@ -100,17 +103,28 @@ public final class HtaccessPostProcessor implements PostProcessor {
         return block.append(END).append('\n').toString();
     }
 
-    /** The anchored regex matching exactly {@code path}: {@code ^} + the path with its metacharacters escaped + {@code $}. */
-    static String pattern(String path) {
-        StringBuilder regex = new StringBuilder(path.length() + 8).append('^');
-        for (int i = 0; i < path.length(); i++) {
-            char c = path.charAt(i);
-            if (REGEX_META.indexOf(c) >= 0) {
-                regex.append('\\');
-            }
-            regex.append(c);
+    /**
+     * The anchored regex matching exactly {@code path}: {@code ^} + the path with its metacharacters escaped + {@code $}.
+     * A directory path ({@code /about/}) also matches its index file {@code indexFileName} ({@code /about/index.html}).
+     */
+    static String pattern(String path, String indexFileName) {
+        StringBuilder regex = new StringBuilder(path.length() + 8).append('^').append(escaped(path));
+        if (path.endsWith("/") && indexFileName != null && !indexFileName.isBlank()) {
+            regex.append("(?:").append(escaped(indexFileName)).append(")?");
         }
         return regex.append('$').toString();
+    }
+
+    private static String escaped(String literal) {
+        StringBuilder out = new StringBuilder(literal.length() + 4);
+        for (int i = 0; i < literal.length(); i++) {
+            char c = literal.charAt(i);
+            if (REGEX_META.indexOf(c) >= 0) {
+                out.append('\\');
+            }
+            out.append(c);
+        }
+        return out.toString();
     }
 
     /** {@code target} as a literal mod_alias substitution: {@code $}, {@code &} and {@code \} backslash-escaped. */

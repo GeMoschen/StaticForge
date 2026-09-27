@@ -87,11 +87,19 @@ class QualityCheckStageIntegrationTest {
         q = new QualityBuildFixtures(build, configService, findingStore, outputRoot);
     }
 
+    /** A project that runs only the test rules: the production rules have their own tests. */
+    private Fixture project(String prefix) {
+        Fixture fx = q.project(prefix);
+        q.only(fx, List.of(QualityTestRules.FLAG, QualityTestRules.MISSING, QualityTestRules.TO_HELD_BACK,
+                QualityTestRules.EVENTS, QualityCodes.OUTPUT_NOT_CHECKED));
+        return fx;
+    }
+
     /** Home links a flagged page, a page that doesn't exist and a clean one. */
     private record Site(Fixture fx, AssetVersionView home, AssetVersionView flagged, AssetVersionView clean) {}
 
     private Site site(String prefix) {
-        Fixture fx = q.project(prefix);
+        Fixture fx = project(prefix);
         AssetVersionView home = q.htmlPage(fx, "Home", document("Home",
                 "<nav><a href=\"flagged.html\">flagged</a> <a href=\"gone.html\">gone</a> <a href=\"clean.html\">clean</a></nav>"));
         AssetVersionView flagged = q.htmlPage(fx, "Flagged", document("Flagged",
@@ -181,7 +189,7 @@ class QualityCheckStageIntegrationTest {
 
     @Test
     void aLinkToAPageMissingFromTheSnapshotNoLongerFailsTheRun() {
-        Fixture fx = q.project("qcmissing");
+        Fixture fx = project("qcmissing");
         UUID nowhere = UUID.randomUUID();
         TemplateView template = q.build.pageTemplate(fx, "Linking", "content { editor link cta }",
                 "<!doctype html><html lang=\"en\"><head><title>Linking</title></head><body>"

@@ -1,0 +1,41 @@
+<div class="scrim" (click)="close()"></div>
+<div class="dialog" role="dialog" aria-modal="true" [attr.aria-label]="'Delete ' + name()">
+  <header class="dialog__header">
+    <h2 class="dialog__title">Delete “{{ name() }}”</h2>
+    <button type="button" class="dialog__close" aria-label="Close" (click)="close()">×</button>
+  </header>
+
+  <div class="dialog__body">
+    <p class="delete__question">{{ question() }}</p>
+
+    @if (offersRedirect()) {
+      <sf-redirect-option
+        [projectKey]="projectKey()"
+        [sources]="redirectSources()"
+        [(intent)]="redirectIntent"
+        (pickRequested)="pickingRedirect.set(true)"
+      />
+    }
+
+    <div class="dialog__actions">
+      <sf-button variant="ghost" [disabled]="submitting()" (click)="close()">Cancel</sf-button>
+      <sf-button variant="danger" [disabled]="!canSubmit()" (click)="submit()">
+        @if (submitting()) {
+          <sf-spinner label="Deleting…" />
+        } @else {
+          Delete
+        }
+      </sf-button>
+    </div>
+  </div>
+</div>
+
+@if (pickingRedirect()) {
+  <sf-asset-picker-dialog
+    [projectKey]="projectKey()"
+    [allowedTypes]="['PAGE']"
+    initialType="PAGE"
+    (picked)="onRedirectPicked($event)"
+    (closed)="pickingRedirect.set(false)"
+  />
+}

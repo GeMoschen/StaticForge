@@ -1,5 +1,9 @@
 package com.acme.staticforge;
 
+import com.acme.staticforge.generate.quality.QualitySeverity;
+
+import com.acme.staticforge.generate.quality.rules.links.RedirectedTargetRule;
+import com.acme.staticforge.generate.quality.rules.links.MissingLinkTargetRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
@@ -290,6 +294,30 @@ class RedirectOutputIntegrationTest {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("SF-CHK-0109: a link to an emitted redirect stub is a hop, not a broken link; without a stub it is 0101")
+    void theLinkRuleReportsALinkToARedirectStub() {
+        Site site = site("ro0109");
+        GenerationTarget target = target(site.fx(), "site", "https://example.com", null);
+        GenerationTarget silent = target(site.fx(), "silent", "", List.of());
+        build.succeeded(build.generate(site.fx(), target, GenerationMode.FULL));
+        build.succeeded(build.generate(site.fx(), silent, GenerationMode.FULL));
+        move(site);
+
+        GenerationRun run = build.succeeded(build.generate(site.fx(), target, GenerationMode.INCREMENTAL));
+        GenerationRun silentRun = build.succeeded(build.generate(site.fx(), silent, GenerationMode.INCREMENTAL));
+
+        assertThat(quality.findings(site.fx(), run, RedirectedTargetRule.CODE))
+                .extracting(StoredFinding::outputPath, StoredFinding::severity)
+                .containsExactly(tuple("home.html", QualitySeverity.WARNING));
+        assertThat(quality.findings(site.fx(), run, MissingLinkTargetRule.CODE)).isEmpty();
+        // No redirect output on this target: the old path is simply gone.
+        assertThat(quality.findings(site.fx(), silentRun, RedirectedTargetRule.CODE)).isEmpty();
+        assertThat(quality.findings(site.fx(), silentRun, MissingLinkTargetRule.CODE))
+                .extracting(StoredFinding::outputPath)
+                .containsExactly("home.html");
+    }
 
     private TemplateView template(Fixture fx, String name, String html, String outputPath) {
         return templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,

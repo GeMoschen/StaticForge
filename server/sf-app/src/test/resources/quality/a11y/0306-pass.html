@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Labelled form controls</title>
+  <meta name="description" content="A fixture page for the accessibility checks: Labelled form controls.">
+</head>
+<body>
+  <main id="content">
+    <h1>Labelled form controls</h1>
+    <form action="search.html">
+      <label for="q">Search</label> <input id="q" type="search" name="q">
+      <label>Sort <select name="sort"><option>Newest</option></select></label>
+      <textarea name="note" aria-label="Note"></textarea>
+      <span id="mail-label">Mail</span> <input type="email" name="mail" aria-labelledby="mail-label">
+      <input type="text" name="zip" title="Postcode">
+      <input type="checkbox" name="hide" hidden>
+      <input type="hidden" name="token" value="1">
+      <input type="submit" value="Go"> <input type="reset"> <input type="button" value="Clear">
+      <input type="image" src="assets/media/go.png" alt="Go">
+    </form>
+  </main>
+</body>
+</html>

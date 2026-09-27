@@ -12,7 +12,7 @@ import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-
 import type { BodiesMap, SectionInstance } from './types';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseBadgeComponent } from '../release/release-badge.component';
-import { deleteQuestion, isOnline } from '../release/release-status.util';
+import { PageDeleteDialogComponent } from './page-delete-dialog.component';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type PageView = components['schemas']['PageView'];
@@ -29,7 +29,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
 @Component({
   selector: 'sf-page-nav-node',
   standalone: true,
-  imports: [SfIconComponent, SfRenameAssetDialogComponent, ReleaseBadgeComponent],
+  imports: [SfIconComponent, SfRenameAssetDialogComponent, ReleaseBadgeComponent, PageDeleteDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './page-nav-node.component.html',
   styleUrl: './page-nav-node.component.scss',
@@ -58,6 +58,7 @@ export class PageNavNodeComponent {
   protected readonly error = signal<string | null>(null);
 
   protected readonly renameOpen = signal(false);
+  protected readonly deleteOpen = signal(false);
   protected readonly renamingName = signal(false);
 
   private readonly contentDefinition = signal<ContentDefinition>(EMPTY_DEF);
@@ -346,23 +347,12 @@ export class PageNavNodeComponent {
     this.changed.emit();
   }
 
+  /** The delete dialog (M30.6.3) confirms, deletes and offers "Redirect old URL to…" for a published page. */
   private delete(): void {
-    const uuid = this.summary().uuid;
-    if (!uuid || this.readOnly()) {
+    if (!this.summary().uuid || this.readOnly()) {
       return;
     }
-    const name = this.summary().displayName ?? this.summary().uid ?? 'this page';
-    const online = isOnline(this.summary().release);
-    if (!window.confirm(deleteQuestion(`Delete "${name}"? This cannot be undone.`, this.summary().release))) {
-      return;
-    }
-    this.api.deleteAsset(this.projectKey(), uuid).subscribe({
-      next: () => {
-        this.toast.show(online ? 'Page deleted — it stays online until you release the deletion' : 'Page deleted', 'success');
-        this.changed.emit();
-      },
-      error: () => this.toast.show('Could not delete page — try again in a moment.', 'error'),
-    });
+    this.deleteOpen.set(true);
   }
 
   protected openPage(): void {

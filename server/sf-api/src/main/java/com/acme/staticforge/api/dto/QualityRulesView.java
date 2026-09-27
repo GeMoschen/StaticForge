@@ -18,6 +18,8 @@ public record QualityRulesView(List<QualityRuleItem> rules) {
      * @param severity the configured severity ({@code OFF}, {@code WARNING}, {@code ERROR})
      * @param maxSeverity the highest severity findings get whatever is configured: {@code WARNING} for rules that never
      *     hold a page back
+     * @param fixHint where findings are usually fixed: {@code CONTENT}, {@code TEMPLATE} or {@code CONTENT_OR_TEMPLATE}
+     *     (the description says how to tell)
      * @param channels which outputs the rule checks
      */
     public record QualityRuleItem(
@@ -26,6 +28,7 @@ public record QualityRulesView(List<QualityRuleItem> rules) {
             String category,
             String kind,
             String description,
+            String fixHint,
             String defaultSeverity,
             String severity,
             String maxSeverity,

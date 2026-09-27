@@ -1,5 +1,6 @@
 package com.acme.staticforge.generate.quality;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -37,14 +38,24 @@ public record QualitySidecar(int version, String configFingerprint, Map<String, 
     }
 
     /**
-     * One output's facts and page-local findings.
+     * One output's facts, page-local findings and the references the renderer could not resolve in it.
      *
      * @param facts {@code null} when the output couldn't be parsed
+     * @param references the renderer's reference events of the output (M30.2.1): a carried output still reports its
+     *     links to unreleased, deleted and missing assets, which its bytes no longer show
      */
-    public record Entry(HtmlFacts facts, List<PageFinding> findings) {
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public record Entry(HtmlFacts facts, List<PageFinding> findings, List<ReferenceEvent> references) {
 
+        @JsonCreator
         public Entry {
             findings = findings == null ? List.of() : List.copyOf(findings);
+            references = references == null ? List.of() : List.copyOf(references);
+        }
+
+        /** An entry of an output without unresolved references. */
+        public Entry(HtmlFacts facts, List<PageFinding> findings) {
+            this(facts, findings, List.of());
         }
     }
 

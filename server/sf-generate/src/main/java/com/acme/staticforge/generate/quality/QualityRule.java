@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate.quality;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * A build-time check over rendered HTML (M30, epic decision 3). Every rule is a Spring bean collected by
@@ -31,6 +32,15 @@ public interface QualityRule {
      */
     String description();
 
+    /**
+     * Where the rule's findings are usually fixed, for the UI's "fix in content" / "fix in template" hint; the
+     * {@link #description()} says the same in words. {@code TEMPLATE} unless the rule says otherwise: the templates own
+     * the markup the rules check.
+     */
+    default QualityFixHint fixHint() {
+        return QualityFixHint.TEMPLATE;
+    }
+
     /** The severity when the project configures none. */
     default QualitySeverity defaultSeverity() {
         return QualitySeverity.WARNING;
@@ -47,5 +57,15 @@ public interface QualityRule {
     /** The rule's parameters with their defaults and bounds; empty for most rules. */
     default List<RuleParam> params() {
         return List.of();
+    }
+
+    /**
+     * Why the parameter values {@code params} don't fit together (a length range whose {@code min} exceeds its
+     * {@code max}), as a message fragment; {@code null} when they do. Each value is already within its own bounds.
+     *
+     * @param params every parameter's effective value, by name
+     */
+    default String paramsProblem(Map<String, Object> params) {
+        return null;
     }
 }

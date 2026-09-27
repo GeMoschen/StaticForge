@@ -48,6 +48,10 @@
                 (uidChanged)="onUidChanged($event)"
               />
             </section>
+            <section class="page-editor__meta-section">
+              <h3 class="page-editor__meta-title">Navigation and search</h3>
+              <sf-page-nav-settings [nav]="navOf(p)" [disabled]="readOnly()" (navChange)="onNavChange($event)" />
+            </section>
             <div class="page-editor__meta-footer">
               <sf-button variant="ghost" (click)="closeMeta()">Close</sf-button>
             </div>

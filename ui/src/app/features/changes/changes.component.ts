@@ -374,6 +374,9 @@ export class ChangesComponent implements OnDestroy {
       label: `${assetName(row)}${row.locale ? ` · ${localeTag(row.locale)}` : ''} — ${statusLabel(row.status)}`,
       status: (row.status as ReleaseStatus) ?? null,
       checked: true,
+      assetType: row.type,
+      assetName: assetName(row),
+      folderPath: row.folderPath,
     }));
   }
 

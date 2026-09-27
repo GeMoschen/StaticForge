@@ -693,6 +693,10 @@ public final class OctlRenderer implements Renderer {
         if (OctlCompiler.LOCALES_ROOT.equals(first)) {
             return resolveSub(s.context.locales(), path, 1, s);
         }
+        if (OctlCompiler.META_ROOT.equals(first)) {
+            JsonNode meta = path.size() < 2 ? null : s.context.meta().get(path.get(1));
+            return meta == null ? MissingNode.getInstance() : resolveSub(meta, path, 2, s);
+        }
         LoopFrame loop = s.findLoop(first);
         if (loop != null) {
             if (path.size() == 1) {

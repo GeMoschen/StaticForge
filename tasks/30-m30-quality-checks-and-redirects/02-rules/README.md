@@ -55,6 +55,11 @@ in parallel; they share the golden fixture project — agree on its folder first
 | `SF-CHK-0307` | `iframe` without `title` | page | — |
 | `SF-CHK-0308` | `<html>` without `lang` | page | — |
 
+Every rule also declares where its findings are usually fixed, `QualityRule.fixHint()` (`fixHint` in
+`GET /quality-rules`): `CONTENT`, `TEMPLATE` (the default) or `CONTENT_OR_TEMPLATE`, and says the same in its
+`description`. Accessibility: `0301`, `0302`, `0304` `CONTENT_OR_TEMPLATE`; `0303`, `0305`–`0308` `TEMPLATE`.
+`SF-CHK-0001` `TEMPLATE`.
+
 ## Feature exit criteria
 
 - [ ] Every rule has a positive and a negative fixture and appears in `GET /quality-rules`.
