@@ -30,6 +30,7 @@ import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.PlanInsight;
+import com.acme.staticforge.generate.RedirectFormat;
 import com.acme.staticforge.generate.RunStatus;
 import com.acme.staticforge.generate.target.BuildManifest;
 import com.acme.staticforge.project.LocaleConfig;
@@ -132,8 +133,7 @@ class RedirectDetectionIntegrationTest {
         UUID docs = folderService.create(null, "docs", FolderScope.PAGES, fx.ctx()).uuid();
         UUID home = pageService.create(new CreatePageCommand("home", null, template.uuid()), fx.ctx()).uuid();
         UUID about = pageService.create(new CreatePageCommand("about", docs, template.uuid()), fx.ctx()).uuid();
-        return new Site(fx, build.target(fx, "site", com.acme.staticforge.generate.TargetType.FILESYSTEM), template, docs,
-                home, about);
+        return new Site(fx, target(fx), template, docs, home, about);
     }
 
     // ------------------------------------------------------------------
@@ -374,7 +374,7 @@ class RedirectDetectionIntegrationTest {
     @DisplayName("a moved paginated page adds one redirect per page number")
     void aMovedPaginatedPage() {
         Fixture fx = build.project("rdpage" + SEQ.incrementAndGet());
-        GenerationTarget target = build.target(fx, "site", com.acme.staticforge.generate.TargetType.FILESYSTEM);
+        GenerationTarget target = target(fx);
         TemplateView post = template(fx, "Post", "<p>post</p>", DEFAULT_PATH);
         UUID nav = folderService.create(null, "Blog Nav " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx()).uuid();
         for (int i = 1; i <= 3; i++) {
@@ -438,6 +438,15 @@ class RedirectDetectionIntegrationTest {
         return templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,
                 name + " " + SEQ.incrementAndGet(), "", Map.of("html", html), null, false, Map.of("html", outputPath)),
                 fx.ctx());
+    }
+
+    /** A filesystem target writing HTML stubs and {@code redirects.json}, which these tests read the redirects from. */
+    private GenerationTarget target(Fixture fx) {
+        GenerationTarget target = build.target(fx, "site", com.acme.staticforge.generate.TargetType.FILESYSTEM);
+        ObjectNode config = mapper.createObjectNode().put("baseUrl", "https://example.com");
+        config.putArray(RedirectFormat.CONFIG_KEY).add(RedirectFormat.HTML_STUB.name()).add(RedirectFormat.JSON.name());
+        target.setConfig(config);
+        return targetRepository.save(target);
     }
 
     private void prettyUrls(Fixture fx) {

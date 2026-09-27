@@ -76,6 +76,7 @@ public class QualityCheckStage {
      * @param siteFiles the site files post-processing will write ({@code sitemap.xml}, …)
      * @param baseSidecar the base build's sidecar; {@code null} without a base build or when it has none
      * @param checkpoint called before each output is checked: a cancelled run stops here
+     * @param redirectSources where the build serves redirects, per output set (M30.5.1)
      */
     public record CheckInput(
             EffectiveQualityConfig config,
@@ -90,7 +91,32 @@ public class QualityCheckStage {
             Map<String, MediaOutputs.Key> media,
             Set<String> siteFiles,
             QualitySidecar baseSidecar,
-            RunCheckpoint checkpoint) {}
+            RunCheckpoint checkpoint,
+            RedirectSources redirectSources) {
+
+        public CheckInput {
+            redirectSources = redirectSources == null ? RedirectSources.NONE : redirectSources;
+        }
+
+        /** A build that serves no redirect. */
+        public CheckInput(
+                EffectiveQualityConfig config,
+                String baseUrl,
+                LocaleConfig locales,
+                Function<String, ChannelOutputSettings> channels,
+                Snapshot snapshot,
+                List<PlanEntry> entries,
+                List<RenderedFile> rendered,
+                Set<String> notRendered,
+                List<BuildManifest.Output> carriedPages,
+                Map<String, MediaOutputs.Key> media,
+                Set<String> siteFiles,
+                QualitySidecar baseSidecar,
+                RunCheckpoint checkpoint) {
+            this(config, baseUrl, locales, channels, snapshot, entries, rendered, notRendered, carriedPages, media,
+                    siteFiles, baseSidecar, checkpoint, RedirectSources.NONE);
+        }
+    }
 
     /**
      * What the stage found and decided.
@@ -187,7 +213,8 @@ public class QualityCheckStage {
 
         List<Finding> findings = new ArrayList<>();
         pageFindings.values().forEach(findings::addAll);
-        SiteIndex site = new SiteIndex(environment, facts, input.notRendered(), events, Set.of());
+        SiteIndex site = new SiteIndex(environment, facts, input.notRendered(), events,
+                input.redirectSources().of(outputs.values()));
         findings.addAll(siteRules.run(site, config, false));
 
         // Hold-back: an ERROR on an output this run rendered holds back every output of its page, channel and language.
@@ -216,7 +243,10 @@ public class QualityCheckStage {
         CheckEnvironment afterHoldBack = new CheckEnvironment(
                 input.baseUrl(), input.locales(), published, input.channels(), labels(input.snapshot()));
         findings.addAll(siteRules.run(
-                new SiteIndex(afterHoldBack, publishedFacts, heldBack, events, Set.of()), config, true));
+                new SiteIndex(afterHoldBack, publishedFacts, heldBack, events,
+                        input.redirectSources().of(published.values())),
+                config,
+                true));
 
         QualitySidecar sidecar = sidecar(config, publishedFacts, pageFindings, held);
         sample.stop(meterRegistry.timer("sf.quality.check.duration"));

@@ -101,8 +101,11 @@ class BuildRedirectsTest {
         dangling.targetAsset(UUID.randomUUID(), 1);
         RedirectEntry mediaShadowed = entry(RedirectKind.MANUAL, "logo.png", "");
         mediaShadowed.targetPath("about.html");
+        RedirectEntry siteFileShadowed = entry(RedirectKind.MANUAL, "sitemap.xml", "");
+        siteFileShadowed.targetPath("about.html");
 
-        BuildRedirects.Result result = BuildRedirects.of(null, List.of(shadowed, dangling, mediaShadowed), false)
+        BuildRedirects.Result result = BuildRedirects.of(
+                        null, List.of(shadowed, dangling, mediaShadowed, siteFileShadowed), false)
                 .forOutputs(List.of(
                         rendered("about.html", PAGE, null, null),
                         rendered("home.html", OTHER, null, null),
@@ -112,6 +115,7 @@ class BuildRedirectsTest {
         assertThat(result.resolved()).extracting(r -> r.rule().fromPath(), ResolvedRedirect::state).containsExactlyInAnyOrder(
                 tuple("home.html", RedirectState.SHADOWED),
                 tuple("logo.png", RedirectState.SHADOWED),
+                tuple("sitemap.xml", RedirectState.SHADOWED),
                 tuple("x.html", RedirectState.DANGLING));
         assertThat(result.redirects()).isEmpty();
     }

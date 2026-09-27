@@ -1,0 +1,5 @@
+Options -Indexes
+ErrorDocument 404 /404.html
+# BEGIN StaticForge redirects
+Redirect 301 "/a.html" "/b.html"
+# END StaticForge redirects

@@ -112,7 +112,8 @@ public final class BuildRedirects {
 
     /**
      * The redirects of a build with {@code outputs} — every output it publishes (pages rendered and carried, media and
-     * site files); only page outputs the run rendered ({@link IndexedOutput#carried()} false) are compared.
+     * the site files post-processing writes, which a redirect never replaces); only page outputs the run rendered
+     * ({@link IndexedOutput#carried()} false) are compared.
      */
     public Result forOutputs(Collection<IndexedOutput> outputs) {
         List<AutoCandidate> candidates = new ArrayList<>();
@@ -130,10 +131,9 @@ public final class BuildRedirects {
                         candidate(key).ifPresent(candidates::add);
                     }
                 }
-                case MEDIA -> live.file(key.path());
-                case SITE -> {
-                    // not a live path (see RedirectOutputs)
-                }
+                // The build's own site files (sitemap, search index, the redirect files) are never written over; a
+                // published build's site files, stubs among them, are not live (RedirectOutputs) — none are here.
+                case MEDIA, SITE -> live.file(key.path());
             }
         }
         candidates.sort(CANDIDATE_ORDER);

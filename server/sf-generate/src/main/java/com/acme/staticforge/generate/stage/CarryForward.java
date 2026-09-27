@@ -41,7 +41,8 @@ import java.util.UUID;
  *   <li><b>a media file</b>: some kept or rendered page, or a kept or rendered processed media file, still needs it, and
  *       the run didn't copy it again. A reference from a locale needs the output it resolves to in that locale
  *       ({@link MediaOutputs}, M27.3.2): a localized media's outputs are carried per locale they are written for;</li>
- *   <li><b>a site file</b> (sitemap, search index…): never; post-processing writes them again for the whole site.</li>
+ *   <li><b>a site file</b> (sitemap, search index, redirect stubs…): never; post-processing writes them again for the
+ *       whole site.</li>
  * </ul>
  *
  * <p>Each file of the new build is described in its {@link BuildManifest}; kept outputs keep their base entries.
@@ -260,7 +261,11 @@ public final class CarryForward {
         kept.forEach(output -> outputs.put(output.path(), output));
 
         for (OutputFile file : files) {
-            outputs.put(file.path(), describe(file, entriesByPath, renderedByPath, assets));
+            BuildManifest.Output described = describe(file, entriesByPath, renderedByPath, assets);
+            BuildManifest.Output keptHere = outputs.get(file.path());
+            // Post-processing may rewrite a kept output (a carried .htaccess page gets the redirect block, M30.5.1):
+            // it stays what it was, not a site file.
+            outputs.put(file.path(), described.kind() == BuildManifest.Kind.SITE && keptHere != null ? keptHere : described);
         }
 
         Set<String> removed = new HashSet<>();

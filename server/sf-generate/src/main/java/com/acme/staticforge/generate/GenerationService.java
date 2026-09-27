@@ -16,11 +16,14 @@ import com.acme.staticforge.generate.quality.EffectiveQualityConfig;
 import com.acme.staticforge.generate.quality.OutputKey;
 import com.acme.staticforge.generate.quality.QualityCheckStage;
 import com.acme.staticforge.generate.quality.QualityRuleConfigService;
+import com.acme.staticforge.generate.quality.RedirectSources;
 import com.acme.staticforge.generate.quality.QualitySidecar;
 import com.acme.staticforge.generate.quality.RunFindingStore;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.pipeline.RunAbortedException;
+import com.acme.staticforge.generate.postprocess.HtaccessPostProcessor;
+import com.acme.staticforge.generate.postprocess.RedirectPostProcessor;
 import com.acme.staticforge.generate.redirect.BuildRedirects;
 import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.OutputPathResolver;
@@ -773,6 +776,13 @@ public class GenerationService {
             emit(runId, STAGE_CHECK, "Checking output", 0, fileErrors.size(), warnings.size(), null);
             String baseUrl = baseUrl(build.target());
             Set<String> notRendered = notRendered(plan, outcome);
+            // Redirects (M30.4.2, M30.5.1): what moved since the build the target serves, and where this build serves
+            // redirects — which the link checks need (SF-CHK-0109), before and after the hold-back.
+            Set<RedirectFormat> redirectFormats = RedirectFormat.of(build.target().getConfig());
+            BuildRedirects buildRedirects = buildRedirects(build);
+            RedirectSources redirectSources = redirectFormats.isEmpty()
+                    ? RedirectSources.NONE
+                    : outputs -> buildRedirects.forOutputs(outputs).sources();
             QualityCheckStage.CheckResult check = qualityCheckStage.check(new QualityCheckStage.CheckInput(
                     build.quality(),
                     baseUrl,
@@ -784,9 +794,10 @@ public class GenerationService {
                     notRendered,
                     carry.carriedPages(),
                     mediaOutputsOf(assets, carry.carriedMedia(outcome.files(), assets)),
-                    siteFiles(baseUrl),
+                    siteFiles(baseUrl, redirectFormats),
                     build.baseQuality(),
-                    () -> control.checkpoint(runId, GenerationRunProbe.CHECK_OUTPUT)));
+                    () -> control.checkpoint(runId, GenerationRunProbe.CHECK_OUTPUT),
+                    redirectSources));
             Set<String> withheld = new LinkedHashSet<>(notRendered);
             withheld.addAll(check.heldBack());
             carry.withhold(withheld);
@@ -794,23 +805,26 @@ public class GenerationService {
             List<RenderedFile> published = check.published(outcome.files());
             emit(runId, STAGE_CHECK, checkedMessage(check), 0, fileErrors.size(), warnings.size(), null);
 
-            // Redirects (M30.4.2): what moved since the build the target serves, and the redirects this build emits —
-            // against what it publishes after the hold-back. Stored only with the published run, below.
-            BuildRedirects.Result redirects = buildRedirects(build).forOutputs(check.finalOutputs().values());
+            // The redirects this build emits, against what it publishes after the hold-back; the detected ones are
+            // stored only with the published run, below.
+            BuildRedirects.Result redirects = buildRedirects.forOutputs(check.finalOutputs().values());
 
             List<OutputFile> allFiles = new ArrayList<>();
             for (RenderedFile file : published) {
                 allFiles.add(file.toOutputFile());
             }
             allFiles.addAll(assets.files());
+            carriedHtaccess(carry, writer, build.baseRunId()).ifPresent(allFiles::add);
 
             control.stage(runId, STAGE_POST);
             emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
             List<String> channels = request.channels() == null ? parseChannels(run.getChannels()) : request.channels();
+            Map<String, com.acme.staticforge.channel.ChannelOutputSettings> redirectChannels = new HashMap<>();
+            redirects.redirects().forEach(r -> redirectChannels.computeIfAbsent(r.channel(), build.paths()::settingsFor));
             PostProcessContext ctx = new PostProcessContext(
                     build.project().getId(), projectKey, baseUrl, channels, carry.sitePages(),
                     false, redirects.redirects(), java.util.List.of(), carry.carriedText(),
-                    locales.isLocalized() ? locales.defaultLocale() : null);
+                    locales.isLocalized() ? locales.defaultLocale() : null, redirectFormats, redirectChannels);
             List<OutputFile> processed = postProcessStage.apply(ctx, allFiles);
 
             control.stage(runId, STAGE_WRITE);
@@ -833,7 +847,7 @@ public class GenerationService {
             // only while the run is still RUNNING, on its locked row — a cancel that committed first wins. The
             // findings are stored in the same transaction: a run that isn't recorded stores none. So are the detected
             // redirects (M30.4.2): written before the publish, so a failed publish rolls them back with the run.
-            int activeRedirects = redirects.active().size();
+            int activeRedirects = redirectFormats.isEmpty() ? 0 : redirects.active().size();
             GenerationRun done = control.whileRunning(runId, active -> {
                         findingStore.save(runId, check.findings()).applyTo(active);
                         RedirectService.AutoResult stored =
@@ -888,11 +902,38 @@ public class GenerationService {
         return media;
     }
 
-    /** The site files post-processing writes for a target with {@code baseUrl} (a link to them is no broken link). */
-    private static Set<String> siteFiles(String baseUrl) {
-        return baseUrl.isBlank()
-                ? Set.of(SEARCH_INDEX_PATH)
-                : Set.of(SEARCH_INDEX_PATH, "sitemap.xml", "robots.txt");
+    /**
+     * The site files post-processing writes for a target with {@code baseUrl} and {@code redirectFormats} (a link to
+     * them is no broken link, and no redirect replaces them). The HTML stubs are not among them: they are where the
+     * build serves its redirects.
+     */
+    private static Set<String> siteFiles(String baseUrl, Set<RedirectFormat> redirectFormats) {
+        Set<String> files = new LinkedHashSet<>();
+        files.add(SEARCH_INDEX_PATH);
+        if (!baseUrl.isBlank()) {
+            files.add("sitemap.xml");
+            files.add("robots.txt");
+        }
+        if (redirectFormats.contains(RedirectFormat.JSON)) {
+            files.add(RedirectPostProcessor.PATH);
+        }
+        if (redirectFormats.contains(RedirectFormat.HTACCESS)) {
+            files.add(HtaccessPostProcessor.PATH);
+        }
+        return files;
+    }
+
+    /**
+     * The base build's {@code .htaccess} when the run keeps it as a page output (M30.5.1): its bytes go through
+     * post-processing again, so the redirect block a previous build appended is replaced rather than kept stale.
+     */
+    private static Optional<OutputFile> carriedHtaccess(CarryForward carry, TargetWriter writer, long baseRunId) {
+        if (!carry.carries()
+                || carry.carriedPages().stream().noneMatch(output -> output.path().equals(HtaccessPostProcessor.PATH))) {
+            return Optional.empty();
+        }
+        return writer.readFile(baseRunId, HtaccessPostProcessor.PATH)
+                .map(bytes -> new OutputFile(HtaccessPostProcessor.PATH, bytes));
     }
 
     /** The {@code CHECK} stage's closing progress line: how much was checked and found. */

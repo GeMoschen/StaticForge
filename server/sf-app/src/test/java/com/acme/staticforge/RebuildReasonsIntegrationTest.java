@@ -272,7 +272,10 @@ class RebuildReasonsIntegrationTest {
         assertThat(plan.reasonFor(linker.uuid()).steps()).extracting(RebuildStep::assetUuid)
                 .containsExactly(linker.uuid(), linking.uuid(), moved.uuid());
         GenerationRun run = fixtures.succeeded(fixtures.generate(fx, site, GenerationMode.INCREMENTAL));
-        assertThat(fixtures.files(fx, site, run)).containsKey("sub/moved.html").doesNotContainKey("moved.html");
+        assertThat(fixtures.files(fx, site, run)).containsKey("sub/moved.html");
+        // The old path is a redirect stub now (M30.4.2, M30.5.1), no longer the page.
+        assertThat(fixtures.files(fx, site, run).get("moved.html"))
+                .contains("<meta http-equiv=\"refresh\" content=\"0; url=sub/moved.html\">");
         assertThat(fixtures.files(fx, site, run).get("linker.html")).contains("href=\"sub/moved.html\"");
 
         // A uid change writes no asset version, but moves the default output path: it is a change.

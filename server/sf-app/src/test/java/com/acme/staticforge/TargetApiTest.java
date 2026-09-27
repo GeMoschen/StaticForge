@@ -19,6 +19,7 @@ import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -100,6 +101,52 @@ class TargetApiTest {
         mvc.perform(get(base(fx)).header("Authorization", "Bearer " + fx.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    /** {@code config.redirectFormats} (M30.5.1): validated on create and update, exposed with its default. */
+    @Test
+    void redirectFormatsAreValidatedAndExposed() throws Exception {
+        Fixture fx = newFixture("tgt_rdr");
+
+        create(fx, "Default", "default", false)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.redirectFormats.length()").value(1))
+                .andExpect(jsonPath("$.redirectFormats[0]").value("HTML_STUB"));
+        long id = body(createWithFormats(fx, "Apache", "apache", "[\"JSON\",\"HTACCESS\"]")
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.redirectFormats[0]").value("HTACCESS"))
+                        .andExpect(jsonPath("$.redirectFormats[1]").value("JSON")))
+                .get("id").asLong();
+        createWithFormats(fx, "None", "none", "[]")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.redirectFormats.length()").value(0));
+
+        for (String invalid : List.of("\"HTML_STUB\"", "[\"NGINX\"]", "[\"JSON\",\"JSON\"]", "[1]")) {
+            createWithFormats(fx, "Bad", "bad", invalid)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.field").value("config.redirectFormats"));
+        }
+        mvc.perform(put(base(fx) + "/" + id)
+                        .header("Authorization", "Bearer " + fx.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(formatsRequest("Apache", "apache", "[\"HTACCES\"]")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.field").value("config.redirectFormats"));
+        assertThat(targets.findById(id)).get().extracting(target -> target.getConfig().path("redirectFormats").size())
+                .isEqualTo(2);
+    }
+
+    private ResultActions createWithFormats(Fixture fx, String name, String path, String formats) throws Exception {
+        return mvc.perform(post(base(fx))
+                .header("Authorization", "Bearer " + fx.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(formatsRequest(name, path, formats)));
+    }
+
+    private static String formatsRequest(String name, String path, String formats) throws Exception {
+        ObjectNode body = (ObjectNode) MAPPER.readTree(request(name, path, false));
+        body.withObject("/config").set("redirectFormats", MAPPER.readTree(formats));
+        return body.toString();
     }
 
     private ResultActions create(Fixture fx, String name, String path, boolean isDefault) throws Exception {

@@ -1,6 +1,6 @@
 ---
 id: M30.5.1
-status: todo
+status: done
 depends: [M30.4.2]
 epic: m30-quality-checks-and-redirects
 feature: redirect-output
@@ -45,13 +45,13 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] Golden files for a stub (relative link from a nested path, canonical with and without `baseUrl`, a `from_path`
+- [x] Golden files for a stub (relative link from a nested path, canonical with and without `baseUrl`, a `from_path`
       with spaces and `&`), for `.htaccess` (pretty URLs, `baseUrl` with a path prefix, append to an existing
       `.htaccess`) and for `redirects.json`.
-- [ ] Per-target formats: two targets of one project with different `redirectFormats` get different site files.
-- [ ] Stub removed from the published build after its redirect is deleted (incremental and full).
-- [ ] Sitemap and `search-index.json` contain no stub; `SF-CHK-0109` reports a link to a stub.
-- [ ] `./gradlew build` green.
+- [x] Per-target formats: two targets of one project with different `redirectFormats` get different site files.
+- [x] Stub removed from the published build after its redirect is deleted (incremental and full).
+- [x] Sitemap and `search-index.json` contain no stub; `SF-CHK-0109` reports a link to a stub (seam proven by a build-level test; the 0109 end-to-end fixture is added at merge — see Notes).
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -63,3 +63,29 @@ area: backend
 - The shipped `infra/nginx` setup serves stubs fine (they're HTML files); `.htaccess` is ignored by nginx — the target
   form should say "Apache only" next to the option.
 - HTML stubs are the only format that works for ZIP targets opened locally; keep them the default.
+- Implemented: `generate.RedirectFormat` (sf-domain; lenient `of`, strict `validate` → `400` with
+  `field: config.redirectFormats`), `GenerationTargetView.redirectFormats` (effective list), post-processors
+  `RedirectPostProcessor` (JSON), `HtaccessPostProcessor`, `HtmlStubPostProcessor` + `RedirectLinks` (URL forms);
+  `PostProcessStage` order html → sitemap → robots → search index → JSON → .htaccess → stubs (`processors()`, tested).
+  The relative-link algorithm moved from `GenerationRenderer` to `render.SiteLinks` (shared, unchanged).
+- `SiteIndex.redirectSources` is filled through `CheckInput.redirectSources` (`RedirectSources`, asked per output set:
+  before and after the hold-back) when the target writes any redirect format. The `SF-CHK-0109` rule is written by
+  the links lane in parallel, so its end-to-end fixture is added by the orchestrator at merge; this task proves the
+  seam with a build-level test (`RedirectOutputIntegrationTest.redirectSourcesAreTheEmittedStubPaths`: a test site rule
+  sees exactly the emitted stub path, in both phases; a target without formats sees none).
+- The build's own site files (sitemap, robots, search index, `redirects.json`, `.htaccess`) count as live for the
+  build's redirects (a manual redirect from `sitemap.xml` is shadowed); a published manifest's SITE files (stubs) still
+  don't. Of two redirects with one source path (different channels) the first in channel/locale order is written.
+- A carried `.htaccess` *page* output is re-read from the base build and post-processed again, and keeps its PAGE
+  manifest entry (`CarryForward.publication`: a processed file over a kept output keeps its description), so the block
+  is replaced, never duplicated.
+- Deviation: in `.htaccess` the *source* URL path is written decoded (quoted, `\"` escaped), not percent-encoded:
+  Apache's `Redirect` matches the %-decoded request path (mod_alias docs), so an encoded source with a space would
+  never match. The target is percent-encoded. Backslashes can't occur (the registry refuses them).
+- Risk (needs a user decision, epic decision 18 is binding): Apache `Redirect` matches by path *prefix*; a directory
+  source (`/about/` with pretty URLs) also redirects URLs below it, e.g. a live `/about/team/`. An anchored
+  `RedirectMatch 301 "^/about/$" …` would avoid it. Documented in `HtaccessPostProcessor`.
+- Deviation: `redirects.json` and `.htaccess` are written whenever their format is configured (an empty list / empty
+  block when nothing redirects), so a host reading them always finds them; stubs only exist per redirect.
+- Stubs checked in a real browser (Chromium via Playwright, `file://`): the nested and the spaces-and-`&` golden stubs
+  land on their targets, the fragment kept.

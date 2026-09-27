@@ -118,7 +118,10 @@ class IncrementalPublishIntegrationTest {
         Map<String, String> published = fixtures.files(fx, incremental, run);
         assertThat(published).isEqualTo(fixtures.files(fx, fresh, full));
         assertThat(published).containsKeys("home.html", "legal.html", "news-room.html", "about.html", "assets/media/logo_txt.txt")
-                .doesNotContainKeys("news.html", "old.html");
+                .doesNotContainKey("old.html");
+        // The renamed page's old path redirects (M30.4.2, M30.5.1) — in the fresh target's build too: the registry is the
+        // project's.
+        assertThat(published.get("news.html")).contains("<meta http-equiv=\"refresh\" content=\"0; url=news-room.html\">");
         assertThat(published.get("about.html")).isEqualTo("<p>about v2</p>");
         assertThat(published.get("sitemap.xml")).contains("home.html", "legal.html", "news-room.html", "about.html")
                 .doesNotContain("old.html");

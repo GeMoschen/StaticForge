@@ -1,0 +1,6 @@
+# BEGIN StaticForge redirects
+Redirect 301 "/site/about/" "/site/company/about/"
+Redirect 301 "/site/legacy.html" "https://example.org/x?a=1&b=2"
+Redirect 301 "/site/old page.html" "/site/new%20page.html"
+Redirect 301 "/site/say \"hi\".html" "/site/hello.html"
+# END StaticForge redirects

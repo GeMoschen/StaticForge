@@ -2457,6 +2457,7 @@ export interface components {
             config?: components["schemas"]["JsonNode"];
             isDefault?: boolean;
             outputPath?: string;
+            redirectFormats?: string[];
         };
         UpdateTemplateRequest: {
             displayName?: string;
@@ -3959,29 +3960,29 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
             empty?: boolean;
         };
         PageableObject: {
-            unpaged?: boolean;
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
             paged?: boolean;
             /** Format: int32 */
-            pageNumber?: number;
-            /** Format: int32 */
             pageSize?: number;
+            /** Format: int32 */
+            pageNumber?: number;
+            unpaged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -4008,14 +4009,14 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -4130,8 +4131,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            add?: boolean;
             remove?: boolean;
+            add?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -4267,14 +4268,14 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
@@ -4429,14 +4430,14 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];

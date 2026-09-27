@@ -20,7 +20,8 @@ import java.util.Set;
  * @param heldBack paths of page outputs the build planned but doesn't publish: held back for incomplete content
  *     ({@code SF-GEN-0120}), a render limit or a quality {@code ERROR} ({@code SF-GEN-0125})
  * @param referenceEvents the references the renderer could not resolve, by the path of the output that rendered them
- * @param redirectSources paths served by a redirect of this build (a stub, M30.5.1); empty until redirects are emitted
+ * @param redirectSources paths the build serves a redirect at (M30.5.1): the sources of the redirects it emits for these
+ *     outputs, when its target writes a redirect format; never an output path of the build
  */
 public record SiteIndex(
         CheckEnvironment environment,
