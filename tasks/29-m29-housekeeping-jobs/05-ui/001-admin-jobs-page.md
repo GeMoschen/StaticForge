@@ -49,10 +49,16 @@ area: frontend
   - [x] server validation errors mapped to fields;
   - [x] run-now polling to the finished report;
   - [x] dry-run button hidden for jobs without support.
-- [ ] Manual check in the running app: edit the blob-sweep grace, dry run, run now, history entry appears; a
-      non-admin can't reach `/admin/jobs` (guard). *Not done yet: the backend in the tree was being changed by
-      another task at the time; left to the milestone's manual check. The guard is covered by specs
-      (`instanceAdminGuard` in `auth.store.spec.ts`, `admin.routes.spec.ts` asserts the admin chunk is behind it).*
+- [x] Manual check in the running app: edit the blob-sweep grace, dry run, run now, history entry appears; a
+      non-admin can't reach `/admin/jobs` (guard). *Done in M29.6.2 (2026-09-27, clean dev stack, scripted Playwright
+      screenshots): grace 24 → 1 saved ("Saved. Next run: …" toast, history unchanged), dry run and run now show the
+      report (counts, "Report details") and both land on top of the history; a developer (non-admin) pushing
+      `/admin/jobs` or `/admin/jobs/blob-sweep` lands on `/`, and the account menu has no Administration. Tab order on
+      the list is complete (tabs, then each job's link and switch). Found and fixed on the way: at phone width
+      (390 px) the job detail and the audit page scrolled sideways (the `.sf-sr-only` column heading of a wide table
+      escaped its scroll frame; `.table.sf-table-wrap` is now `position: relative` in `_admin.scss`), the detail's
+      columns overflowed (`minmax(min(22rem, 100%), 1fr)`), and the audit Actions options ("CODE — label") were cut
+      off (`.filter--actions` `min(28rem, 100%)`). The M29 journey asserts all three.*
 - [ ] Keyboard-complete, axe clean on list and detail. *Keyboard-complete by construction (native links, buttons,
       inputs, selects and switches, every control labelled, field errors tied with `aria-describedby`); axe is not
       installed here (offline), so "axe clean" is unproven.*

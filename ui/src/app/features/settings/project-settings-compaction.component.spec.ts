@@ -65,12 +65,13 @@ interface Options {
   readOnly?: boolean;
   policy?: CompactionPolicyView;
   compactedThrough?: number;
+  estimate?: CompactionEstimateView;
 }
 
 async function setup(options: Options = {}) {
   const api = {
     compactionPolicy: vi.fn().mockReturnValue(of(options.policy ?? OFF)),
-    compactionEstimate: vi.fn().mockReturnValue(of(ESTIMATE)),
+    compactionEstimate: vi.fn().mockReturnValue(of(options.estimate ?? ESTIMATE)),
     updateCompactionPolicy: vi.fn((_key: string, body: { enabled?: boolean; olderThanDays?: number }) =>
       of<CompactionPolicyView>({ ...(options.policy ?? OFF), enabled: body.enabled, olderThanDays: body.olderThanDays ?? 90 }),
     ),
@@ -153,9 +154,22 @@ describe('ProjectSettingsCompactionComponent', () => {
 
     expect(await screen.findByText(/revision 412/)).toBeTruthy();
     const lastRun = screen.getByTestId('compaction-last-run').textContent ?? '';
-    expect(lastRun).toContain('SUCCEEDED');
+    // The outcome in words, as on the Jobs page, not the API's enum.
+    expect(lastRun).toContain('Succeeded');
+    expect(lastRun).not.toContain('SUCCEEDED');
     expect(lastRun).toContain('314 versions removed');
     expect(lastRun).toContain('2 MB freed');
+  });
+
+  it('says "1 version" and "1 asset" for single counts', async () => {
+    const one = { ...ON.lastRun!, versionsRemoved: 1 };
+    await setup({ policy: { ...OFF, lastRun: one }, estimate: { ...ESTIMATE, versionsRemoved: 1, assetsTouched: 1 } });
+
+    expect(screen.getByTestId('compaction-last-run').textContent).toContain('1 version removed,');
+    await openEnableDialog();
+    const estimate = (await screen.findByTestId('compaction-estimate')).textContent ?? '';
+    expect(estimate).toContain('1 version removed');
+    expect(estimate).toMatch(/in 1 asset\s+—/);
   });
 
   describe('older than', () => {

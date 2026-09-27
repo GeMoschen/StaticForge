@@ -260,34 +260,34 @@ This milestone delivers:
 
 ## Exit criteria (epic is done when)
 
-- [ ] Killing the backend during a build and restarting it leaves the run `FAILED` (`SF-GEN-0504`) within one tick,
+- [x] Killing the backend during a build and restarting it leaves the run `FAILED` (`SF-GEN-0504`) within one tick,
       and a new build of that project starts without manual cancel. Cancelling a running build really stops it (it
       never publishes).
-- [ ] A dry run of every destructive job reports counts, bytes and samples and deletes nothing. A real run deletes
+- [x] A dry run of every destructive job reports counts, bytes and samples and deletes nothing. A real run deletes
       exactly what the dry run reported, when nothing changed in between.
-- [ ] Blob sweep:
-  - [ ] removes blobs only reachable from nothing, including orphan bytes of a failed upload and of a rolled-back
+- [x] Blob sweep:
+  - [x] removes blobs only reachable from nothing, including orphan bytes of a failed upload and of a rolled-back
         import;
-  - [ ] never removes a blob referenced by any version of any revision, by a variant or localized file, or created
+  - [x] never removes a blob referenced by any version of any revision, by a variant or localized file, or created
         within the grace period (tests on filesystem and S3 stores).
-- [ ] Audit entries older than the retention and dead refresh-token families are purged. Refresh-token reuse
+- [x] Audit entries older than the retention and dead refresh-token families are purged. Refresh-token reuse
       detection still works for live families.
-- [ ] Failed runs' staged output, stale `.current-*` links and deleted targets' directories are removed. Rollback
+- [x] Failed runs' staged output, stale `.current-*` links and deleted targets' directories are removed. Rollback
       points (`keep-builds`) count only published builds.
-- [ ] Generation runs are retained per decision 11. Promote and incremental baselines still work after retention ran.
-- [ ] A failed or missing variant is created by the backfill without a revision, and generation uses it.
-- [ ] Search maintenance repairs an index with a missing document (count mismatch → rebuild) and a lost after-commit
+- [x] Generation runs are retained per decision 11. Promote and incremental baselines still work after retention ran.
+- [x] A failed or missing variant is created by the backfill without a revision, and generation uses it.
+- [x] Search maintenance repairs an index with a missing document (count mismatch → rebuild) and a lost after-commit
       event (lag → sync).
-- [ ] Revision compaction, opted in on a fixture project with 30+ days of history:
-  - [ ] removes versions per decision 13 and keeps every protected version;
-  - [ ] extended `RevisionInvariantsTest` holds: one valid version per (asset, revision); exact reads outside
+- [x] Revision compaction, opted in on a fixture project with 30+ days of history:
+  - [x] removes versions per decision 13 and keeps every protected version;
+  - [x] extended `RevisionInvariantsTest` holds: one valid version per (asset, revision); exact reads outside
         compacted groups and at protected versions; end-of-group state inside;
-  - [ ] a rebuild at a released revision is byte-identical before and after compaction;
-  - [ ] time travel and diff show the compacted notice.
-- [ ] The admin **Jobs** page lists every job with schedule, last/next run, outcome and history, and supports edit,
+  - [x] a rebuild at a released revision is byte-identical before and after compaction;
+  - [x] time travel and diff show the compacted notice.
+- [x] The admin **Jobs** page lists every job with schedule, last/next run, outcome and history, and supports edit,
       *Run now*, dry run and *Reset to defaults*. Project settings offer compaction with a typed confirmation.
-- [ ] Metrics `sf.job.*` are exposed, and the stale-housekeeping alert is documented.
-- [ ] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey is
+- [x] Metrics `sf.job.*` are exposed, and the stale-housekeeping alert is documented.
+- [x] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey is
       green.
 
 ## Features (dependency order)

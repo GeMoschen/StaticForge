@@ -8,6 +8,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
+import { outcomeLabel } from '../admin/admin-jobs.util';
 import { formatInstant } from '../schedules/zoned-time.util';
 
 type CompactionPolicyView = components['schemas']['CompactionPolicyView'];
@@ -48,6 +49,14 @@ export class ProjectSettingsCompactionComponent {
 
   protected readonly minDays = MIN_OLDER_THAN_DAYS;
   protected readonly formatInstant = formatInstant;
+  /** The job run outcome in words, as on the Jobs page ("Succeeded", not the enum). */
+  protected readonly outcomeLabel = outcomeLabel;
+
+  /** "1 version", "3 versions"; a missing count is 0. */
+  protected plural(count: number | null | undefined, noun: string): string {
+    const n = count ?? 0;
+    return `${n} ${noun}${n === 1 ? '' : 's'}`;
+  }
 
   /** Project admins read the policy (also in an archived project); only a writable project lets them change it. */
   protected readonly canRead = this.permissions.readsAsProjectAdmin;

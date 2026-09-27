@@ -44,8 +44,18 @@ area: frontend
   - [x] confirm dialog enables Save only with the exact key;
   - [x] estimate shown;
   - [x] spine/list/diff/banner render the compacted states from fixtures shaped like the API.
-- [ ] Manual check in the running app with a compacted fixture project (seed via the job with a 30-day cutoff on
-      back-dated revisions, per the journey setup).
+- [x] Manual check in the running app with a compacted fixture project (seed via the job with a 30-day cutoff on
+      back-dated revisions, per the journey setup). *Done in M29.6.2 (2026-09-27): project with three edits back-dated
+      40 days (dev fixture endpoint) and one today; the card refuses 29 days, the Enable dialog shows "3 versions
+      removed of 4 … in 1 asset" and enables only with the exact key; after the job, "Compacted through revision 6"
+      and the last run. Spine and Revisions list mark revisions 3–5 with the icon and tooltip; time travel to 3
+      shows the banner notice and the page's end-of-day headline, while 6 (the survivor's own, exact revision) shows
+      none; the diff shows the message at the top and per asset; "Restore this asset" and "Roll back project" say that
+      the end-of-day state is restored. Found and fixed: the card's last run showed the raw enum ("SUCCEEDED") and
+      "1 versions"/"1 assets" — now "Succeeded" (`outcomeLabel`, as on the Jobs page) and singular counts (spec
+      added). Noticed, not changed: a Revisions-list row opens the diff without entering time travel (only spine ticks
+      do, and the spine shows the newest 40), so in a busy project time travel to an old compacted revision is only
+      reachable through a record's History panel; pre-existing design.*
 - [x] `ui` `npm run build` and `npx vitest run` green (`npx ng build`; vitest 104 files / 707 tests).
 
 ## Out of scope

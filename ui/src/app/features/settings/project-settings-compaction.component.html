@@ -40,8 +40,8 @@
       <dt>Last compaction</dt>
       <dd data-testid="compaction-last-run">
         @if (lastRun(); as run) {
-          {{ formatInstant(run.finishedAt) }} — {{ run.outcome }}{{ run.dryRun ? ' (dry run)' : '' }}:
-          {{ run.versionsRemoved ?? 0 }} versions removed, {{ run.bytesFreed ?? 0 | sfFileSize }} freed
+          {{ formatInstant(run.finishedAt) }} — {{ outcomeLabel(run.outcome) }}{{ run.dryRun ? ' (dry run)' : '' }}:
+          {{ plural(run.versionsRemoved, 'version') }} removed, {{ run.bytesFreed ?? 0 | sfFileSize }} freed
           @if (run.error) {
             <span class="compaction__error-inline">{{ run.error }}</span>
           }
@@ -114,8 +114,8 @@
     </p>
     <div class="dialog__estimate" data-testid="compaction-estimate" aria-live="polite">
       @if (estimate(); as e) {
-        If it ran now: <strong>{{ e.versionsRemoved ?? 0 }} versions removed</strong> of {{ e.versionsInWindow ?? 0 }}
-        older than {{ pending.days }} days, in {{ e.assetsTouched ?? 0 }} assets —
+        If it ran now: <strong>{{ plural(e.versionsRemoved, 'version') }} removed</strong> of {{ e.versionsInWindow ?? 0 }}
+        older than {{ pending.days }} days, in {{ plural(e.assetsTouched, 'asset') }} —
         <strong>{{ e.bytesFreed ?? 0 | sfFileSize }}</strong> freed.
       } @else if (!estimateError()) {
         Estimating…

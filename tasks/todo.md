@@ -23,8 +23,34 @@ back), phase C UI, phase D docs + journey + full verification.
 - [x] C — M29.5.1 admin Jobs page
 - [x] C — M29.5.2 compaction card + compacted notices
 - [x] D — M29.6.1 spec + docs
-- [ ] D — M29.6.2 `ui/e2e/m29-journeys.spec.ts` green twice
-- [ ] `./gradlew test --rerun`, `ng build`, `npx vitest run`
+- [x] D — M29.6.2 `ui/e2e/m29-journeys.spec.ts` green twice
+- [x] `./gradlew spotlessCheck test --rerun` (1475 tests, 0 failures, 6 skipped benchmarks), `ng build`, `npx vitest run`
+      (105 files, 709 tests), `m29-journeys.spec.ts` green twice
+
+
+## Review
+
+- **Framework (M29.1).** `system_job`/`system_job_run` (changelog 026), `HousekeepingJob` SPI with `JobContext`
+  (dry run, counters, bounded sample, short transactions), `SettingsSpec` validation, per-job
+  `sf.housekeeping.<key>.*` defaults seeded once; the runner joins the scheduler's poll as a
+  `SchedulerTickParticipant` and claims with the generalized `LeaseClaimer`. `/api/v1/admin/jobs/**`, audit
+  `JOB_SETTINGS_SET`/`JOB_RUN`, `sf.job.*` metrics.
+- **Jobs (M29.2–M29.3).** All ten jobs of decision 7. Real cancel (checkpoints + locked final write before publish),
+  heartbeat + `sf.node-id`, `SF-GEN-0504` recovery; `keep-builds` counts published builds, promote refuses
+  unpublished runs (`SF-GEN-0505`), `TargetWriter.retainedRunIds()`; mark-and-sweep with `blob.last_referenced_at`
+  and one locked blob write path; `media_variant` + `MediaVariantResolver`; search maintenance API on the indexer.
+- **Compaction (M29.4).** Opt-in policy (changelog 027), `CompactionPlanner` + `RevisionCompactor` under the revision
+  counter lock, protected releases/retained builds/pins/active builds, `original_valid_from` for exact read flags,
+  compacted flags in revisions, reads, diff, restore and the `X-SF-Compacted` header.
+- **UI (M29.5).** Admin Jobs list/detail (settings form, run now/dry run with polled report, history); compaction card
+  with estimate and type-the-key dialog; compacted notices in spine, list, banner, diff and restore confirmation.
+- **Found on the way:** refresh-token reuse detection rolled back its own family deletion; test contexts shared
+  `build/out` (reruns failed); the template cache keyed versions by `(uuid, validFrom)`, which compaction makes
+  ambiguous; `media_variant` rows kept compacted images' bytes forever (integration pass); phone-width overflow on
+  admin tables; General settings Save enabled with nothing changed. Each with a test.
+- **Deviations** are recorded in each task file (changelogs 026/027, per-job property classes,
+  `sf.housekeeping.enabled`, variants merged in `SnapshotService`, no real S3 listing, dev-only
+  `DevFixtureController` for back-dated journeys).
 
 ---
 

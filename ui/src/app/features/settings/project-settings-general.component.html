@@ -13,7 +13,7 @@
         <textarea class="textarea" formControlName="description" rows="4"></textarea>
       </sf-field>
       <div class="form__actions">
-        <sf-button type="submit" variant="primary" [disabled]="form.invalid || saving() || readOnly()">
+        <sf-button type="submit" variant="primary" [disabled]="form.invalid || !changed() || saving() || readOnly()">
           {{ saving() ? 'Saving…' : 'Save changes' }}
         </sf-button>
       </div>
