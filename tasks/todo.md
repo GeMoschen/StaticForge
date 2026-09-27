@@ -9,9 +9,9 @@ Execution: phase A two lanes (A1 check framework in the main tree; A2 redirect r
 parallel streams (rules ×3, redirect detection + output), phase C editor issues + UI, phase D docs + journey + full
 verification.
 
-- [ ] A1 — M30.1.1 rule SPI, jsoup, `HtmlFacts`, `LinkResolver`, registry, selectors, section markers
-- [ ] A1 — M30.1.2 rule config per project, findings table + API, run view counts
-- [ ] A1 — M30.1.3 `CHECK` stage, hold-back `SF-GEN-0125`, reference events, sidecar, fallback causes, metrics
+- [x] A1 — M30.1.1 rule SPI, jsoup, `HtmlFacts`, `LinkResolver`, registry, selectors, section markers
+- [x] A1 — M30.1.2 rule config per project, findings table + API, run view counts
+- [x] A1 — M30.1.3 `CHECK` stage, hold-back `SF-GEN-0125`, reference events, sidecar, fallback causes, metrics
 - [x] A2 — M30.4.1 redirect registry model, manual API, for-asset, export/import (protocol 10)
 - [ ] B — M30.2.1 link rules
 - [ ] B — M30.2.2 SEO rules + `nav.noIndex`
