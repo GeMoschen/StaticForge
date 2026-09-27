@@ -14,7 +14,7 @@ import java.util.Set;
 public enum RedirectFormat {
     /** A small HTML page at each old path: meta refresh, canonical link, script fallback and a visible link. */
     HTML_STUB,
-    /** A marked block of {@code Redirect 301} lines in the site's {@code .htaccess} (Apache only). */
+    /** A marked block of anchored {@code RedirectMatch 301} lines in the site's {@code .htaccess} (Apache only). */
     HTACCESS,
     /** {@code redirects.json}: the machine-readable list, for a host or proxy that reads it. */
     JSON;
