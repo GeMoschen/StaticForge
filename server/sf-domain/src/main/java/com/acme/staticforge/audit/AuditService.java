@@ -12,8 +12,9 @@ import org.springframework.data.domain.Pageable;
  * content: authentication, membership changes, and channel/target administration. The {@code
  * projectId} is nullable for instance-level events (e.g. login) that have no project scope.
  *
- * <p>There is no purge job: the one-year retention of §26 is not enforced yet, so entries stay until an operator
- * removes them.
+ * <p>Retention (§26.3) is enforced by the {@code audit-purge} system job (M29.2.4,
+ * {@link com.acme.staticforge.housekeeping.audit.AuditPurgeJob}): entries older than its {@code retentionDays}
+ * (default 365) are deleted, instance and project entries alike. Purged actions drop out of {@link #actions()}.
  */
 public interface AuditService {
 

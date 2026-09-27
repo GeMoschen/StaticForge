@@ -89,6 +89,18 @@ sf:
     enabled: true
     zone: UTC
     history-per-job: 200
+    audit-purge:
+      enabled: true
+      cron: "0 4 * * *"
+      # Audit entries older than this are deleted (spec §26.3), in batches of batch-size. At least 30.
+      retention-days: 365
+      batch-size: 5000
+    refresh-token-cleanup:
+      enabled: true
+      cron: "15 * * * *"
+      # A family whose every token is revoked or expired is kept this long after its newest token expired, so a
+      # stolen token presented shortly after expiry is still detected as reuse. Families past their absolute expiry go.
+      reuse-window: 7d
   revision:
     retention-days: unlimited
   cache:
