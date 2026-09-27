@@ -66,12 +66,16 @@ public class RecordController {
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
 
+    private final CompactedReads compactedReads;
+
     public RecordController(
             ProjectService projectService,
             RecordService recordService,
             RecordSetService recordSetService,
             SecuritySupport securitySupport,
-            ReleaseBlocks releaseBlocks) {
+            ReleaseBlocks releaseBlocks,
+            CompactedReads compactedReads) {
+        this.compactedReads = compactedReads;
         this.releaseBlocks = releaseBlocks;
         this.projectService = projectService;
         this.recordService = recordService;
@@ -135,11 +139,16 @@ public class RecordController {
             @PathVariable String projectKey,
             @PathVariable UUID uuid,
             @RequestParam(value = "revision", required = false) Long revision) {
-        RecordDetail record = recordService.find(projectId(projectKey), uuid, revision)
+        long projectId = projectId(projectKey);
+        RecordDetail record = recordService.find(projectId, uuid, revision)
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record not found.")));
-        return ResponseEntity.ok()
-                .header(HttpHeaders.ETAG, RevisionHeaders.etag(record.revision()))
-                .body(toDetail(projectKey, record, List.of()));
+        return compactedReads.mark(
+                ResponseEntity.ok()
+                        .header(HttpHeaders.ETAG, RevisionHeaders.etag(record.revision()))
+                        .body(toDetail(projectKey, record, List.of())),
+                projectId,
+                uuid,
+                revision);
     }
 
     @PutMapping("/records/{uuid}")

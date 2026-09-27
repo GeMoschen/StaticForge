@@ -52,6 +52,21 @@ public class Project {
     @Column(name = "publish_policy", nullable = false)
     private JsonNode publishPolicy = com.acme.staticforge.project.publish.PublishPolicy.EMPTY.toJson();
 
+    /**
+     * Revision compaction (M29.4.1, spec §7.7): {@code {"enabled", "olderThanDays", "enabledAt", "enabledBy"}}, read
+     * through {@link com.acme.staticforge.revision.compaction.CompactionPolicy#fromJson}; {@code null} = off.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "compaction_policy")
+    private JsonNode compactionPolicy;
+
+    /**
+     * The newest revision the revision-compaction job has processed (M29.4.1), {@code null} when it never ran. Written
+     * only by {@code RevisionCompactor} (JDBC), so this mapping is read-only: a project save never overwrites it.
+     */
+    @Column(name = "compacted_through", insertable = false, updatable = false)
+    private Long compactedThrough;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -137,6 +152,18 @@ public class Project {
 
     public void setPublishPolicy(JsonNode publishPolicy) {
         this.publishPolicy = publishPolicy;
+    }
+
+    public JsonNode getCompactionPolicy() {
+        return compactionPolicy;
+    }
+
+    public void setCompactionPolicy(JsonNode compactionPolicy) {
+        this.compactionPolicy = compactionPolicy;
+    }
+
+    public Long getCompactedThrough() {
+        return compactedThrough;
     }
 
     public boolean isReleaseStateInitialized() {

@@ -43,6 +43,10 @@ import org.springframework.stereotype.Component;
  *       part of every key: UUIDs are only unique per project, and resolution is project-scoped.
  * </ul>
  *
+ * <p>The keys also hold the sources compiled. {@code (templateUuid, validFromRevision)} alone stops identifying a
+ * version once revision compaction (M29.4.2) moves a surviving version's {@code validFromRevision} back onto a removed
+ * version's: with the sources in the key, an entry compiled from other sources is never served.
+ *
  * <p>A page template that extends (M20) also depends on its ancestors' versions. Its entry records every page
  * template the chain compile looked up in the caller's {@link TemplateHierarchy} with the version it found; a hit
  * re-checks them the way it re-checks references, so a parent edit or a time-travel request for an older parent
@@ -87,7 +91,8 @@ public class CompiledTemplateCache {
     /** The compiled CDL of one template version, cached by {@code (projectId, templateUuid, validFromRevision)}. */
     public ContentDefinition definition(long projectId, UUID templateUuid, long templateValidFromRevision, String cdlSource) {
         return definitions.get(
-                new DefinitionKey(projectId, templateUuid, templateValidFromRevision), key -> compiler.definition(cdlSource));
+                new DefinitionKey(projectId, templateUuid, templateValidFromRevision, cdlSource),
+                key -> compiler.definition(cdlSource));
     }
 
     /** A section template's channel: no inheritance chain (see the full overload). */
@@ -124,7 +129,7 @@ public class CompiledTemplateCache {
             TemplateHierarchy hierarchy,
             TemplateHierarchy.TemplateVersion template) {
         ContentDefinition definition = definition(projectId, templateUuid, templateValidFromRevision, cdlSource);
-        ChannelKey key = new ChannelKey(projectId, templateUuid, templateValidFromRevision, channel);
+        ChannelKey key = new ChannelKey(projectId, templateUuid, templateValidFromRevision, channel, cdlSource, octlSource);
         if (hierarchy == null || template == null) {
             return cached(channels, key, resolver, null, (recording, lookups) ->
                     new CompiledChannel(compiler.channel(octlSource, channel, recording, definition), definition));
@@ -156,7 +161,7 @@ public class CompiledTemplateCache {
         ContentDefinition definition = definition(projectId, datasetUuid, datasetValidFromRevision, cdlSource);
         return cached(
                 channels,
-                new ChannelKey(projectId, datasetUuid, datasetValidFromRevision, channel),
+                new ChannelKey(projectId, datasetUuid, datasetValidFromRevision, channel, cdlSource, octlSource),
                 resolver,
                 null,
                 (recording, lookups) ->
@@ -203,9 +208,10 @@ public class CompiledTemplateCache {
         return fresh.compiled;
     }
 
-    private record DefinitionKey(long projectId, UUID templateUuid, long validFromRevision) {}
+    private record DefinitionKey(long projectId, UUID templateUuid, long validFromRevision, String cdlSource) {}
 
-    private record ChannelKey(long projectId, UUID assetUuid, long validFromRevision, String channel) {}
+    private record ChannelKey(
+            long projectId, UUID assetUuid, long validFromRevision, String channel, String cdlSource, String octlSource) {}
 
     private record TextMediaKey(long projectId, UUID mediaUuid, String blobSha256, String channel) {}
 

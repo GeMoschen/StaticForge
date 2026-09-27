@@ -117,8 +117,14 @@ sf:
       # Drops idle login-limiter buckets and expired generation idempotency keys (M29.2.4).
       enabled: true
       cron: "*/10 * * * *"
-  revision:
-    retention-days: unlimited
+    revision-compaction:
+      # Weekly revision compaction (M29.4, spec §7.7). Acts only on projects that opted in (project settings,
+      # PUT /projects/{key}/compaction with their own olderThanDays >= 30); history there collapses to the last version
+      # of each UTC day, keeping every released, retained-build and pinned version. batch-assets: assets per short
+      # transaction holding the project's revision lock.
+      enabled: true
+      cron: "0 3 * * 0"
+      batch-assets: 200
   cache:
     # Compiled CDL + OCTL reused across preview requests (spec §21.5); generation memoizes per build.
     compiled-templates:
