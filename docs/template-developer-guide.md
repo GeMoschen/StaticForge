@@ -46,7 +46,7 @@ OCTL renders content into a channel. One template per (template asset, channel).
 | `$CMS_VALUE(recordset:uid)$` | render a record set: each selected record through its dataset's record template (§2.9, M25); a `reference` editor holding a set renders the same way |
 | `$CMS_FOR(item : recordset:uid, where=…, sort=…, limit=…, offset=…)$` | iteration over a record set's selected records, narrowed by the arguments (§2.9, M25); also `$CMS_FOR(item : refEditor, …)$` |
 | `$CMS_SET(name = expr)$` | local variable |
-| `$CMS_META(key)$` | `uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey`; `pageNumber`, `totalPages` on a paginated page (§2.11) |
+| `$CMS_META(key)$` | `uid`, `uuid`, `displayName`, `path`, `revision`, `channel`, `now`, `projectKey`; `pageNumber`, `totalPages` on a paginated page (§2.11); `locale`, `language` (§2.12); `noIndex` — the page's "Hide from search engines" setting, `true`/`false` (M30, §2.14). `CMS_META` is also a read-only expression root: `$CMS_IF(CMS_META.noIndex)$` (M30; a `$CMS_SET` or loop variable of that name is `SF-TPL-0163`) |
 | `$CMS_COMMENT$ … $CMS_END_COMMENT$` | not emitted |
 | `$CMS_EXTENDS(page_template:uid)$` | this template extends a layout (page templates, first instruction; see §2.10) |
 | `$CMS_BLOCK(name)$ … $CMS_END_BLOCK$` | a named, overridable region (§2.10) |
@@ -1132,6 +1132,92 @@ falling back to the root German file gets `../assets/media/hero.png`). Variants 
 (`en/assets/media/hero-w800.webp`). A processed text file (§2.8) is rendered once per language that writes it, with
 that language's source and values.
 
+### 2.14 Passing the quality checks (M30)
+
+Every build checks the HTML it wrote (spec §18.8): internal links, the SEO basics and the accessibility checks that
+static HTML can answer. The rules read your **rendered markup** — most of what they look for is written by page and
+section templates, so most findings are fixed in a template, once for every page. Each rule says whether its findings
+are usually fixed in content, in the template, or either (its *fix hint*, served by `GET /quality-rules`).
+<!-- M30-VERIFY: M30.6.1 Quality tab and M30.3.2 Issues panel show the fix hint --> *Settings → Quality* and the page
+editor's Issues panel show it. The checks run on outputs of channels whose file extension is `html` or `htm`; a Markdown channel is
+never checked. They only read: switching rules off never changes a byte of output.
+
+A developer sets each rule *Off*, *Warning* (the default) or *Error* per project (`PUT /quality-rules`; <!-- M30-VERIFY: M30.6.1 Quality tab --> in
+*Settings → Quality*). Warnings are reported with the run <!-- M30-VERIFY: M30.6.2 run details Findings section --> (*Findings* in the run
+details) and leave a clean run `SUCCESS`. An *Error* holds the page back —
+not published, `SF-GEN-0125` "Quality check failed", run `PARTIAL` — like a page with incomplete content. A page that
+links a held-back page is never held back for that link (`SF-CHK-0103` is capped at warning).
+
+**What a page template should write.**
+
+```html
+<!doctype html>
+<html lang="$CMS_META(language)$">                       <!-- 0308, 0209 -->
+<head>
+  <meta charset="utf-8">
+  <title>$CMS_VALUE(title)$ – $CMS_VALUE(CMS_GLOBAL.site.title)$</title>          <!-- 0201, 0202, 0205 -->
+  <meta name="description" content="$CMS_VALUE(teaser | attr)$">                <!-- 0203, 0204, 0206 -->
+  $CMS_IF(CMS_META.noIndex)$<meta name="robots" content="noindex">$CMS_END_IF$   <!-- 0212 -->
+  $CMS_FOR(l : CMS_LOCALES)$$CMS_IF(l.href)$
+  <link rel="alternate" hreflang="$CMS_VALUE(l.code)$" href="$CMS_VALUE(l.href)$">   <!-- 0210 -->
+  $CMS_END_IF$$CMS_END_FOR$
+</head>
+<body>
+  <h1>$CMS_VALUE(title)$</h1>                                <!-- 0207, 0208: exactly one h1 -->
+  $CMS_BODY(main)$
+</body>
+</html>
+```
+
+- **`<title>` and meta description** (`0201`–`0206`). Write both from page fields, not fixed text: a fixed text makes
+  every page a duplicate (`0205`/`0206` compare the pages of one channel and language). The length rules count
+  characters of the whitespace-normalized text (defaults: title 10–60, description 50–160, adjustable per project). On
+  a paginated page, add the page number to the title (`$CMS_META(pageNumber)$`) so pages 2..N aren't duplicates.
+- **One `h1`** (`0207`, `0208`). The page template writes the headline as `h1`; section templates start at `h2`. A
+  section that renders its title as `h1` gives every page with two such sections a second `h1`.
+- **Heading levels** (`0304`). Don't skip a level: a section title as `h4` directly under the page's `h2` is reported.
+  Headings typed into rich-text fields count too — those are fixed in content.
+- **`lang`** (`0308`, `0209`). Write `lang` on `<html>`; in a project with languages, `lang="$CMS_META(language)$"` —
+  a fixed `lang="en"` fails `0209` on every German page (the primary subtag is compared: `de-CH` with `lang="de"`
+  passes).
+- **`noIndex`** (`0212`). The page editor's "Hide from search engines" (`nav.noIndex`) leaves the page out of
+  `sitemap.xml` by itself; the robots meta has to come from the template, as above. `$CMS_META(noIndex)$` renders
+  `true`/`false`; the `CMS_META.noIndex` root is what makes it usable in `$CMS_IF`.
+- **Canonical** (`0211`). Optional unless a developer sets the rule's `required` parameter. When you write one it must
+  point at an output of the build — on a paginated page at page 1 or the page itself (`CMS_PAGINATION.canonicalHref`
+  does this) — and it must be absolute when the target has a base URL (`canonicalHref` is relative; prefix the base
+  URL from a global value when you use one).
+- **Language alternates** (`0210`, projects with languages). Name every language the page is published in, and only
+  those: build them from `CMS_LOCALES` and skip items whose `href` is empty (a language the page isn't released in).
+  Alternates must answer each other.
+- **Images** (`0301`). Every `img` needs an `alt` **attribute**. Write it from the media's alt text:
+  `alt="$CMS_VALUE(heroImage.altText | attr)$"`. When the media has none this writes `alt=""`, which passes `0301` (an
+  empty alt marks a decorative image) — but a link whose only content is that image then has no accessible name
+  (`0302`). When the finding names a media asset, the fix is alt text on the media; when the image is hard-coded in the
+  template, fix the template.
+- **Links and buttons** (`0302`, `0303`). Icon-only links and buttons need an `aria-label` or visually hidden text.
+  Hidden elements (`hidden`, `aria-hidden="true"`) are not checked.
+- **Ids** (`0305`). A section rendered twice on a page writes its fixed ids twice; derive them from the instance:
+  `id="sec-$CMS_META(instanceId)$"`.
+- **Forms and frames** (`0306`, `0307`). Every `input`, `select` and `textarea` needs a `label` (`for` or wrapping),
+  `aria-label`, `aria-labelledby` or `title` — a placeholder is not a label. Every `iframe` needs a `title`.
+- **Links** (`0101`–`0109`). Link pages and media with `$CMS_REF(…)$`: those links follow moves and releases by
+  themselves. Hard-coded paths are what breaks — a missing page or file (`0101`), a missing image, script or stylesheet
+  (`0102`), a `#fragment` the target doesn't have (`0107`), an empty `href` or `href="#"` (`0108`; use a `<button>`
+  for an action). A link to a page's **old** URL still works through its redirect but is reported (`0109`): link the
+  current URL. A link rendered empty because its target is unreleased (`0104`), deleted (`0105`) or missing (`0101`)
+  names the target and, when it comes from a field, the field — fix the content or release the target. External
+  links, `mailto:` and `tel:` are never checked (no network access); absolute links under the target's base URL are
+  checked like relative ones.
+
+**Why redirect stubs exist.** When a page moves (another folder, a new UID, a template `outputPath` change, a channel
+URL setting), the next build records a redirect from its old path and — by default — writes a small HTML page there
+that sends visitors on at once (spec §18.9). These *stubs* are site files like `sitemap.xml`: they don't come from a
+template, never appear in the sitemap or the search index, carry `<meta name="robots" content="noindex">`, and are
+never written over a real page — a page you publish at an old path wins. A target can write Apache `.htaccess` rules or
+`redirects.json` instead of or in addition to stubs. If a template itself writes a `.htaccess` page, the build appends
+its redirect block to it rather than replacing it.
+
 ## Part 3 — Diagnostics
 
 ### 3.1 OCTL (`SF-TPL-*`) — `template.diagnostic.DiagnosticCodes`
@@ -1206,6 +1292,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 |---|---|---|
 | `SF-GEN-0110` | error | output path collision |
 | `SF-GEN-0120` | error (per page) | content incomplete: the page has `ERROR` completeness findings (an empty required editor, a count or length out of bounds) and is not published; the message lists `path (message)`, other pages are written and the run ends `PARTIAL` |
+| `SF-GEN-0125` | error (per page) | quality check failed: a quality rule configured *Error* found something on the page (M30, §2.14); all its outputs in that channel and language are held back, the message lists the rule codes, other pages are written and the run ends `PARTIAL` |
 | `SF-GEN-0210` | warning | no channel template for an enabled channel |
 | `SF-GEN-0220` | warning | reference to a deleted asset: a `$CMS_REF`, `$CMS_INCLUDE` or body section target is soft-deleted and renders empty |
 | `SF-GEN-0221` | warning | reference to an unreleased asset: a link (`$CMS_REF`, a `media`/`link` value) to an asset not released in the render language renders empty; one per target, page and language (M27, §2.13) |
@@ -1220,6 +1307,14 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 ### 3.4 Errors carry the fix
 
 The UI copies this philosophy (§24.6): a diagnostic includes "did you mean?" suggestions and click-to-insert links. When you change a UID, the UID-change response (`UidChangeResult`) lists affected templates, and processed text media files (channel key `source`), whose source still references the old UID literally (§6.4).
+
+### 3.5 Quality checks (`SF-CHK-*`, M30)
+
+Findings of the build-time checks (§2.14), one code per rule: `SF-CHK-0001` output could not be checked; links
+`SF-CHK-0101`–`0109`; SEO `SF-CHK-0201`–`0212`; accessibility `SF-CHK-0301`–`0308`. The full catalogue with names, kinds,
+fix hints and parameters is spec §18.8. They are not template diagnostics: a template with findings compiles and
+renders; the findings are stored with the build run. <!-- M30-VERIFY: M30.3.1/M30.3.2 draft checks in the Issues panel --> While a page is
+edited, the page editor's Issues panel shows the findings of its draft.
 
 ## Part 4 — Worked end-to-end
 

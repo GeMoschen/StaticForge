@@ -243,7 +243,10 @@ ones), account changes, membership changes, archiving, channel and generation-ta
 (`PUBLISH_POLICY_SET`), generation runs started, cancelled and promoted (`GENERATION_STARTED` — as the schedule's owner
 for a scheduled build —, `GENERATION_CANCELLED`, `GENERATION_PROMOTED`), and schedules — created, changed, cancelled,
 taken over, run now, and each execution (as its owner), housekeeping job changes and manual runs (`JOB_SETTINGS_SET`,
-`JOB_RUN`) and revision compaction (`COMPACTION_POLICY_SET`, `REVISIONS_COMPACTED`). Releases are not audit entries: each is a
+`JOB_RUN`), revision compaction (`COMPACTION_POLICY_SET`, `REVISIONS_COMPACTED`), quality rule changes
+(`QUALITY_RULES_UPDATED`, with the changed rule codes) and manual redirect changes (`REDIRECT_CREATED`, `REDIRECT_UPDATED`,
+`REDIRECT_DELETED` — also the ones "Redirect old URL to…" adds; the automatic redirects builds add are not audited,
+the Redirects tab shows the run that added them) (M30). Releases are not audit entries: each is a
 revision, listed in the project's revision history. Filter by action, user,
 project (or *Instance only* for account events) and date range; the filters are part of the address, so a filtered
 view can be bookmarked or shared with another admin. (A project admin can read their own project's entries through

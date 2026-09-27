@@ -1,6 +1,6 @@
 # StaticForge CMS — API reference
 
-Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (139 paths as of M28), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
+Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (139 paths as of M28; M30 adds `quality-rules`, `generations/{runId}/findings`, `redirects` and <!-- M30-VERIFY: M30.3.1 draft-check endpoint merged --> the draft-check endpoint), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
 
 ## 1. Conventions
 
@@ -40,6 +40,7 @@ refresh returns a token with the current roles.
 | `GET` | `/projects/{key}/audit` | PROJECT_ADMIN — the project's audit entries, newest first |
 | `GET`/`PUT` | `/projects/{key}/publish-policy` | VIEWER / PROJECT_ADMIN — what editors may publish (M28, §3.3) |
 | `POST` | `/projects/{key}/publish-policy/impact` | PROJECT_ADMIN — the schedules a proposed policy would make fail (M28, §3.3) |
+| `GET`/`PUT` | `/projects/{key}/quality-rules` | VIEWER / DEVELOPER — the build-time quality rules and the project's configuration (M30, §3.5) |
 | `GET` | `/users/lookup?projectKey=&q=` | PROJECT_ADMIN of `projectKey` — up to 20 active/locked accounts `{id, username, displayName, member}`, no emails (M26) |
 | `GET` | `/projects/{key}/locales` | VIEWER |
 | `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |
@@ -69,6 +70,15 @@ imported) and, with `importSchedules=true`, the warnings `DUPLICATE_SCHEDULE` (r
 `elementUuid`. None blocks the import. The import result adds `importedScheduleCount`, `updatedScheduleCount` and
 `scheduleWarnings` (what happened at commit time, in the conflict shape). Schedules and generation targets expose their
 `uuid`.
+
+**Quality rules and redirects (M30, protocol 10).** A full export carries the project's quality rule configuration
+with the project settings and the redirect registry (`redirects.json`: `AUTO` and `MANUAL` entries, page targets as
+asset uuids). Import takes the rule configuration only when the target project has none of its own; unknown rule codes
+are dropped with the warning `UNKNOWN_QUALITY_RULE`. A redirect whose channel, language and source path already
+redirect in the target is skipped with `REDIRECT_SOURCE_EXISTS`, one that doesn't fit the project (unknown channel or
+language, a malformed path) with `REDIRECT_INVALID`; none blocks the import. The analysis answers `redirectCount`, the
+import result `importedRedirectCount` and `redirectWarnings`. Selective exports carry no redirects; archives of
+protocol ≤ 9 import without rule configuration and redirects.
 
 ### 3.1 Content languages (M24)
 
@@ -221,6 +231,53 @@ Opt-in per project, `PROJECT_ADMIN` for all three (spec §7.7). Compaction remov
   `blob-sweep`). `N` below 30 is `422 SF-DOM-0183`.
 - The policy is not part of project exports; an imported project starts with compaction off.
 
+### 3.5 Quality rules (M30)
+
+The build checks every HTML output against a fixed rule catalogue (spec §18.8): links, SEO and accessibility, codes
+`SF-CHK-0101`…`0308` plus `SF-CHK-0001`. A project configures each rule `OFF`, `WARNING` (the default) or `ERROR` and
+its parameters; it can't add rules. `GET /projects/{key}/quality-rules` (`VIEWER`) returns every rule in code order:
+
+```json
+{ "rules": [ {
+    "code": "SF-CHK-0202", "name": "Title length", "category": "SEO", "kind": "PAGE",
+    "description": "The <title> is shorter or longer than the configured range (10 to 60 characters by default). …",
+    "fixHint": "CONTENT_OR_TEMPLATE", "defaultSeverity": "WARNING", "severity": "ERROR", "maxSeverity": "ERROR",
+    "params": [ {"name": "min", "type": "INTEGER", "value": 20, "defaultValue": 10, "min": 0, "max": 1000,
+                 "description": "The fewest characters, inclusive."},
+               {"name": "max", "type": "INTEGER", "value": 60, "defaultValue": 60, "min": 1, "max": 1000,
+                 "description": "The most characters, inclusive."} ],
+    "channels": "HTML channels only" }, "…" ] }
+```
+
+`kind` is `PAGE` (one output at a time) or `SITE` (the whole build). `fixHint` says where findings are usually fixed:
+`CONTENT`, `TEMPLATE` or `CONTENT_OR_TEMPLATE`. `maxSeverity` is `WARNING` for rules that never hold a page back
+(`SF-CHK-0001`, `0103`, `0210`): a configured `ERROR` is kept and shown in `severity`, but builds apply `WARNING`.
+Parameter values are integers or booleans per `type`; `min`/`max` bound an integer.
+
+`PUT` (`DEVELOPER`) replaces the whole configuration — a rule missing from the body is at its default — and answers the
+`GET` shape:
+
+```json
+{ "rules": { "SF-CHK-0202": {"severity": "ERROR", "params": {"min": 20}},
+             "SF-CHK-0301": {"severity": "ERROR"},
+             "SF-CHK-0106": {"severity": "OFF"} } }
+```
+
+`severity: null` (or no `severity`) means the rule's default; a parameter left out keeps its default. Only what differs
+from the defaults is stored. An invalid body is `400 SF-API-0400` with one message per problem under `errors`, and
+nothing is stored:
+
+```json
+{ "code": "SF-API-0400", "detail": "The quality rule configuration is invalid.",
+  "errors": [ "SF-CHK-9999: unknown rule.", "SF-CHK-0202: severity must be one of OFF, WARNING, ERROR.",
+              "SF-CHK-0204: max must be at most 1000.", "SF-CHK-0202: unknown parameter 'colour'." ] }
+```
+
+A length rule also refuses `min` above `max`. A change records one revision (a `PROJECT` summary entry `qualityRules`)
+and the audit entry `QUALITY_RULES_UPDATED` with the changed codes; a body that changes nothing records neither. The
+next incremental build after a change is planned full (`fallbackCause: QUALITY_RULES_CHANGED`). `EDITOR` → `403`;
+archived project → `409 SF-DOM-0141`.
+
 ## 4. Assets (generic)
 
 | Method | Path |
@@ -254,6 +311,10 @@ until the deletion is released.
 | `PUT` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/order` |
 | `DELETE` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/sections/{instanceId}` |
 | `POST` | `/projects/{projectKey}/pages/{uuid}/duplicate` |
+
+`nav.noIndex` (M30): a boolean in the page payload (`nav: {visible, position, label, noIndex}`), default `false`;
+a non-boolean value is `422`. A `noIndex` page leaves `sitemap.xml` and is `$CMS_META(noIndex)$` to its templates
+(spec §10.3).
 
 ## 6. Folders
 
@@ -428,6 +489,16 @@ ahead. `PUT /globals/{uuid}/schema` and `PUT /datasets/{uuid}` take the same fla
 | `GET`/`POST` | `/projects/{projectKey}/targets` (read VIEWER, create DEVELOPER) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/targets/{id}` (PROJECT_ADMIN) |
 
+**Redirect output per target (M30).** A target's `config.redirectFormats` is an array of distinct values of
+`HTML_STUB`, `HTACCESS` and `JSON` (spec §18.9). Absent or `null` means `["HTML_STUB"]`; `[]` writes no redirect
+output. Create and update reject anything else with `400 SF-API-0400` and `field: config.redirectFormats`. The target
+view carries the effective, sorted list as `redirectFormats`:
+
+```json
+{ "name": "Apache", "type": "FILESYSTEM", "isDefault": true,
+  "config": { "path": "apache", "baseUrl": "https://example.com", "redirectFormats": ["HTML_STUB", "HTACCESS"] } }
+```
+
 ## 10. Generation
 
 | Method | Path |
@@ -439,9 +510,10 @@ ahead. `PUT /globals/{uuid}/schema` and `PUT /datasets/{uuid}` take the same fla
 | `POST` | `/projects/{projectKey}/generations/{runId}/promote` (`DEVELOPER`) |
 | `POST` | `/projects/{projectKey}/generations/plan` (authorized like a start; `?page=&size=&rootKind=&channel=&q=&validate=`) |
 | `GET` | `/projects/{projectKey}/generations/{runId}/plan` (`VIEWER`; `?page=&size=&rootKind=&channel=&q=`) |
+| `GET` | `/projects/{projectKey}/generations/{runId}/findings` (`VIEWER`; `?page=&size=&severity=&category=&code=&assetUuid=&channel=&locale=&pathPrefix=` — M30, §10.2) |
 | `GET` | `/projects/{projectKey}/assets/{uuid}/impact` (`VIEWER`; `?channel=&page=&size=&q=`) |
 
-A run view carries `comment` — the note it was started with (`POST /generations` `comment`, trimmed; a longer one is cut to 500 characters ending in "…"; a scheduled run's is `Scheduled generation #n: …` or `After scheduled release|unpublish #n`), `null` for none —, `startedBy` — `{id, displayName}` of who started it (the schedule's owner for a scheduled run; `displayName` "Deleted user" once that account was deleted), `null` when unknown (M28) — and `planSummary` (`null` for a run that never got past PLAN): `{mode, incremental, revision, fallbackCause, baselineRevision, baseRunId, scoped, channels, changedAssetCount, entryCount, pageCount, processedMediaCount, byRootKind, byFirstEdge, byChannel, via: [{edge, assetUuid, assetType, uid, count}], planAvailable}`.
+A run view carries `comment` — the note it was started with (`POST /generations` `comment`, trimmed; a longer one is cut to 500 characters ending in "…"; a scheduled run's is `Scheduled generation #n: …` or `After scheduled release|unpublish #n`), `null` for none —, `startedBy` — `{id, displayName}` of who started it (the schedule's owner for a scheduled run; `displayName` "Deleted user" once that account was deleted), `null` when unknown (M28) — and `planSummary` (`null` for a run that never got past PLAN): `{mode, incremental, revision, fallbackCause, baselineRevision, baseRunId, scoped, channels, changedAssetCount, entryCount, pageCount, processedMediaCount, byRootKind, byFirstEdge, byChannel, via: [{edge, assetUuid, assetType, uid, count}], planAvailable, redirectsAdded, redirectsActive}` — `redirectsAdded`/`redirectsActive` since M30 (§10.3). Since M30 a run view also carries `findingCounts` (§10.2). `fallbackCause` gained `BASE_BUILD_WITHOUT_QUALITY_FACTS` (the base build predates M30 and has no quality facts) and `QUALITY_RULES_CHANGED` (the rule configuration, or the rule set, changed since the base build); SSE progress gained the stage `CHECK` ("Checking output", then "Checked N outputs: e errors, w warnings[; k held back]") between `ASSETS` and `POST`.
 
 **Who may start what (M28).** Start and dry run check the body against the caller's publish permissions (§3.3):
 `INCREMENTAL_BUILD` for an explicit incremental run to the default target, `FULL_BUILD` otherwise, `DEVELOPER` for a
@@ -485,6 +557,101 @@ run.
 `steps` run from the planned asset towards the root and exclude it; each step says how its asset depends on the next (`PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE`, `REFERENCE` with `referenceKind`, `NAVIGATION`, `DATASET_MEMBERSHIP`, `PAGINATION_SOURCE`, and for record sets `RECORD_SET_MEMBERSHIP` — the reader's set may select the changed record, `sourcePath` is the set's uid —, `RECORD_SET_QUERY` — the set's stored query changed — and `RECORD_TEMPLATE` — the reader renders a set's records through the dataset's record template, `sourcePath` is the set's uid). Root kinds are `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL`, `EXPLICIT_SCOPE`, `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD`; clients must tolerate names added later. `validate=true` adds `diagnostics` (the VALIDATE findings grouped by code, like a run's). A pruned stored plan has `summary.planAvailable: false` and `entries: null`. Entries of processed media re-rendered by an incremental plan have `channel: null`. `size` is 1–500 (`400` otherwise).
 
 `GET /assets/{uuid}/impact` answers what would rebuild if the asset changed, with the planner's own walk over the current state: `{asset: {uuid, type, uid}, revision, entryCount, pageCount, byFirstEdge, entries}` (entries as above, root = the asset, `rootRevision` null). It is an upper bound — every loop over a record's dataset, a page change counted as navigation-affecting — so a real edit rebuilds the same entries or fewer. `404` for an unknown or deleted asset.
+
+### 10.2 Quality findings (M30)
+
+Every build checks its HTML outputs (spec §18.8) and stores the findings with the run. `WARNING` findings never change
+the status or `warningCount`; an `ERROR` finding on an output the run rendered holds its page back with the file
+error `SF-GEN-0125` (run `PARTIAL`). The run view's `findingCounts` counts every finding, stored or not:
+
+```json
+"findingCounts": { "errors": 2, "warnings": 41, "byCategory": {"links": 5, "seo": 30, "accessibility": 8}, "truncated": 0 }
+```
+
+`null` for a run that stored none (before M30, or not finished). `GET /generations/{runId}/findings` pages them, sorted
+by output path, then code; `size` 1–200 (default 50); filters combine: `severity` (`WARNING`/`ERROR`), `category`
+(`LINKS`/`SEO`/`ACCESSIBILITY`), `code` (repeatable), `assetUuid`, `channel`, `locale`, `pathPrefix`. An invalid filter
+or page is `400`, a run of another project `404`.
+
+```json
+{ "content": [ {
+    "id": 812, "code": "SF-CHK-0301", "category": "ACCESSIBILITY", "severity": "ERROR",
+    "message": "…", "selector": "main > section:nth-of-type(2) > img",
+    "sectionInstanceId": null, "carried": false,
+    "outputPath": "de/about.html", "channel": "html", "locale": "de", "pageNumber": null,
+    "page": {"uuid": "…", "uid": "about", "displayName": "About"} } ],
+  "page": {"size": 50, "number": 0, "totalElements": 1, "totalPages": 1} }
+```
+
+`page` is the output's asset as it is **now** (`uid`/`displayName` `null` once it was deleted; `page` itself `null` for
+a site file). `carried: true` marks a page-local finding taken over from the base build's sidecar for an output an
+incremental or scoped run carried forward. Storage is capped per rule and output (`sf.quality.max-findings-per-output`,
+50) and per run (`sf.quality.max-findings-per-run`, 100,000), errors first; `truncated` counts the rest. Findings are
+deleted with their run. The dry run doesn't check.
+
+### 10.3 Redirects (M30)
+
+Old URLs keep working (spec §18.9): every published build adds an `AUTO` redirect old path → page for each page output
+whose path changed against the build the target served; people manage `MANUAL` ones. Paths are output paths without a
+leading `/` (`products/hammer.html`; a directory such as `old/` means its index file); `locale` is `""` in a project
+without languages.
+
+| Method | Path | Role |
+|---|---|---|
+| `GET` | `/projects/{projectKey}/redirects` (`?channel=&locale=&kind=&state=&q=&page=&size=`) | `VIEWER` |
+| `GET` | `/projects/{projectKey}/redirects/{id}` (`ETag: "v{version}"`) | `VIEWER` |
+| `POST` | `/projects/{projectKey}/redirects` | `DEVELOPER` |
+| `PUT` | `/projects/{projectKey}/redirects/{id}` (`If-Match: "v{version}"` required) | `DEVELOPER` |
+| `DELETE` | `/projects/{projectKey}/redirects/{id}` (`If-Match` optional) | `DEVELOPER` |
+| `POST` | `/projects/{projectKey}/redirects/for-asset` | `RELEASE` (M28: developers and admins always, editors per the policy) |
+
+`GET` filters combine: `kind` `AUTO`/`MANUAL`, `state` `ACTIVE`/`SHADOWED`/`DANGLING`/`LOOP` (nothing matches while the
+default target has no build), `q` a part of the source or fixed target path; `size` 1–200 (default 50); sorted by
+channel, locale and source path. An unknown `kind` or `state` is `400`.
+
+```json
+{ "rows": [ {
+    "id": 17, "channel": "html", "locale": "", "fromPath": "products/hammer.html",
+    "toAssetUuid": "…", "toPageNumber": 1, "toAssetName": "Hammer", "toPath": null,
+    "kind": "AUTO", "state": "ACTIVE", "resolvedTarget": "tools/hammer.html",
+    "createdAt": "2026-09-27T09:12:00Z", "createdBy": null, "sourceRunId": 88,
+    "updatedAt": null, "updatedBy": null, "version": 0 } ],
+  "page": 0, "size": 50, "totalElements": 1, "totalPages": 1, "basisRunId": 88 }
+```
+
+`state` and `resolvedTarget` (where the redirect leads) are computed against the **default target's** current build,
+named by `basisRunId`; both are `null` while it has none. `ACTIVE`: written by builds. `SHADOWED`: a page or media file
+lives at the source path (site files never count). `DANGLING`: the target page has no output in that channel and
+language. `LOOP`: it leads back to its own source. `toAssetName` is the target page's current display name (`null`
+once deleted). `createdBy` is `null` for `AUTO` entries; `sourceRunId` names the build that detected them.
+
+Create/replace body — exactly one target: a page (`toAssetUuid`, `toPageNumber` default 1) or `toPath` (an output path,
+optionally with `?query`/`#fragment`, or an absolute `http(s)` URL):
+
+```json
+{ "channel": "html", "locale": "", "fromPath": "/old/offers/", "toPath": "https://shop.example.com/offers" }
+```
+
+`fromPath` `/old/offers/` is stored as `old/offers/index.html` (the channel's index file). Errors: `409 SF-DOM-0191`
+(the channel and locale already redirect that path), `422 SF-DOM-0192` (a loop — the target is the source, or the entry
+closes a cycle of fixed-path redirects), `422 SF-DOM-0193` (unknown channel or locale; `..`, `//host`, another scheme,
+backslashes, control characters or a query on the source; both or neither target; an unknown or deleted target page
+— `field` names the member), `404 SF-DOM-0190` (unknown id), `409 SF-API-0409` (stale `If-Match`), `412` (`PUT`
+without `If-Match`). `PUT` of an `AUTO` entry turns it `MANUAL`: detection never overwrites it again. Deleting an `AUTO`
+entry is allowed (it comes back only if the path changes again). Manual changes are audited `REDIRECT_CREATED`,
+`REDIRECT_UPDATED`, `REDIRECT_DELETED`; writes on an archived project are `409 SF-DOM-0141`.
+
+`POST /redirects/for-asset` `{assetUuid, toAssetUuid | toPath}` — "Redirect old URL to…" of the unpublish and delete
+dialogs — writes one `MANUAL` redirect per current page output of `assetUuid` in the default target's current build
+(every channel, language and page number, each to page 1 of `toAssetUuid` or to `toPath`), replacing redirects of those
+source paths, and returns them (`RedirectView[]`). `422 SF-DOM-0194` when the asset has no output there; a page
+redirected to itself is `422 SF-DOM-0192`. Until a build no longer contains the page, its entries are `SHADOWED`.
+
+**In a run.** `planSummary.redirectsAdded` counts the `AUTO` entries a published run added or re-pointed,
+`redirectsActive` the redirects it emitted (`0` for a target without redirect formats, `null` when the run didn't
+publish). The dry run (`POST /generations/plan`) returns `redirectCandidates: [{channel, locale, fromPath,
+toAssetUuid, toPageNumber, toPath}]` — the entries a run started now would add, `toPath` being the planned new path —
+and `summary.redirectsAdded`; its `redirectsActive` is `null`.
 
 ### 10.1 Schedules (M27)
 
@@ -659,6 +826,7 @@ projection (`path` like `payload.content.headline`).
 | `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`, `?page=`, `?locale=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data. `page` (M21) renders that page of a paginated page, clamped to its page count; the response carries `X-SF-Total-Pages` and `X-SF-Page`. `locale` (M24) renders one content language; without it, the project's default. `view=draft` (default) or `published` (M27): the draft renders the page's draft and the drafts of everything it reads, `published` what the next build publishes; `X-SF-View` names the view, a draft preview carries `X-SF-Release-Status` (the page's status in the language), a page not released in the language is `404 SF-DOM-0155` in the published view, anything but `draft`/`published` is `400` |
 | `POST` | `/projects/{projectKey}/preview/section` |
 | `GET` | `/projects/{projectKey}/preview/pages/{uuid}/share` (`?locale=`, `?view=`, issue a share link; the language and the view are bound into the token) |
+| `POST` | `/projects/{projectKey}/preview/pages/{uuid}/checks` (`?channel=`, `?locale=`, `?page=`) — M30 draft checks: renders the page's draft (link rewriting off, section markers on) and runs the page rules and the link rules against the draft's planned output paths → `{completeness, findings: [{code, category, severity, message, selector, sectionInstanceId, editorPath}], checkedChannel, checkedLocale, skippedRules}`; `VIEWER`, read-only, allowed on archived projects; skips `SF-CHK-0103`, cross-page `0107`, `0109`, `0205`, `0206`, `0210`; a non-HTML channel answers `findings: []` (spec §19.4) <!-- M30-VERIFY: M30.3.1 draft-check endpoint (path, params, role, archived allowance, response fields, skipped rules, non-HTML channel) --> |
 | `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token; `?page=` as above, not part of the token — the language is) |
 | `GET` | `/projects/{projectKey}/pagination/count` (`?kind=NAV\|DATASET&source=uuid`) — M21: `{itemCount, skipped}` of a pagination source now, counted like generation does; `404` when the source isn't a live Navigation folder or dataset, `422` for another `kind` |
 
@@ -854,6 +1022,11 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0182` | 422 | enabling compaction, or lowering `olderThanDays`, without `confirm` = the project key (M29) — `CompactionPolicyService` |
 | `SF-DOM-0183` | 422 | compaction `olderThanDays` below 30 (policy and estimate) (M29) — `CompactionPolicyService` |
 | `SF-DOM-0184` | 404 | unknown system job, or an orphaned one on edit, reset or run (M29) — `SystemJobService` |
+| `SF-DOM-0190` | 404 | redirect not found (M30) — `RedirectProblems.notFound` |
+| `SF-DOM-0191` | 409 | the channel and locale already redirect this source path; `field: fromPath` (M30) — `RedirectService` |
+| `SF-DOM-0192` | 422 | redirect loop: target = source, a cycle of fixed-path redirects, or a page redirected to itself by `for-asset` (M30) — `RedirectService` |
+| `SF-DOM-0193` | 422 | invalid redirect: channel, locale, source or target path/URL, target page; `field` names it (M30) — `RedirectPaths`, `RedirectService` |
+| `SF-DOM-0194` | 422 | `for-asset`: the asset has no page output in the default target's current build (M30) — `RedirectService.createForAsset` |
 
 ### Media (`SF-MEDIA-*`, localized media)
 
@@ -872,6 +1045,13 @@ Defined in `template.diagnostic.DiagnosticCodes` (see [template-developer guide]
 - OCTL (`SF-TPL-01xx` / `02xx` / `03xx`) — compile errors and warnings per §16.11.
 - CDL (`SF-CDL-01xx` / `02xx`) — CDL compile/validation errors; these are not enumerated in the spec but are stable, machine-readable codes.
 
+### Quality checks (`SF-CHK-*`, M30)
+
+Findings of the build-time quality checks, one code per rule (spec §18.8 has the catalogue with names, kinds, fix
+hints and parameters; `GET /projects/{key}/quality-rules` serves it). They are not HTTP errors: builds store them per run
+(§10.2), draft checks return them (§12). `SF-CHK-0001` "Output could not be checked" is the framework's own (a parse or
+rule failure, capped at warning); links `SF-CHK-0101`–`0109`, SEO `0201`–`0212`, accessibility `0301`–`0308`.
+
 ### Search (`SF-SEARCH-*`)
 
 | Code | HTTP | Raised by |
@@ -889,6 +1069,7 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | `SF-GEN-0110` | error | output path collision | `RenderPipeline` (`COLLISION_CODE`) |
 | `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several content languages, so two languages would write the same file (M24) | `RenderPipeline` (`NOT_LOCALE_DISTINCT_CODE`) |
 | `SF-GEN-0120` | error (per page) | content incomplete; page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.incompletePages`) |
+| `SF-GEN-0125` | error (per page) | quality check failed: a rule configured `ERROR` found something on the page; all its outputs in that channel and language held back, run `PARTIAL`; the message lists the codes (M30) | `QualityCodes.GEN_QUALITY_CHECK_FAILED` (`QualityCheckStage`) |
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
 | `SF-GEN-0220` | warning | reference to a deleted asset (`$CMS_REF`, `$CMS_INCLUDE`, body section); renders empty | `GenerationRenderer` |
 | `SF-GEN-0221` | warning | link (`$CMS_REF`, `media`/`link` value) to an asset not released in the render language; renders empty (M27; a cross-asset value of it is `SF-TPL-0112`) | `GenerationRenderer` (`GEN_UNRELEASED_REFERENCE`) |
