@@ -550,6 +550,68 @@ describe('ProjectSettingsImportComponent', () => {
     });
   });
 
+  describe('redirects (M30.4.1)', () => {
+    // Shapes of the real responses: a redirect conflict has no element uuid (the server sends null) and no provenance.
+    const sourceExists = {
+      severity: 'WARNING',
+      type: 'REDIRECT_SOURCE_EXISTS',
+      elementUuid: null as unknown as string,
+      elementLabel: 'html: old/about.html',
+      detail: "Not imported: this project already redirects 'old/about.html'; its redirect is kept.",
+      explicit: true,
+      blocksImport: false,
+    };
+    const invalid = {
+      ...sourceExists,
+      type: 'REDIRECT_INVALID',
+      elementLabel: 'md (de): alt/seite.md',
+      detail: "Not imported: channel 'md' doesn't exist in this project.",
+    };
+
+    it('lists redirect conflicts without a provenance badge, then shows what the import did with the redirects', async () => {
+      const report: ConflictReportView = {
+        conflicts: [sourceExists, invalid],
+        hasBlocking: false,
+        blocksImport: false,
+        releaseState: true,
+        releaseMode: 'KEEP',
+        scheduleCount: 0,
+        redirectCount: 5,
+      };
+      const result: ImportResultView = {
+        ...importResult,
+        releasedCount: 0,
+        importedScheduleCount: 0,
+        updatedScheduleCount: 0,
+        scheduleWarnings: [],
+        importedRedirectCount: 3,
+        redirectWarnings: [sourceExists, invalid],
+      };
+      const api = makeApiStub({
+        analyzeImport: vi.fn().mockReturnValue(of(report)),
+        commitImport: vi.fn().mockReturnValue(of(result)),
+      });
+      await render(ProjectSettingsImportComponent, {
+        componentInputs: { projectKey: 'proj' },
+        providers: [provideHttpClient(), provideHttpClientTesting(), { provide: ImportExportService, useValue: api }],
+      });
+      selectFile(document.querySelector('input[type="file"]') as HTMLInputElement, zipFile());
+
+      const warning = (await screen.findByText(sourceExists.elementLabel)).closest('li')!;
+      expect(warning.querySelector('sf-icon')!.textContent!.trim()).toBe('alt_route');
+      expect(warning.textContent).not.toContain('explicit');
+      expect(screen.getByText(invalid.elementLabel).closest('li')!.querySelector('sf-icon')!.textContent!.trim())
+        .toBe('link_off');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+      await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Imported 3 redirect(s).'));
+      const skipped = screen.getByText(invalid.elementLabel).closest('li')!;
+      expect(skipped.closest('section')!.textContent).toContain('Redirects');
+      expect(skipped.textContent).toContain("channel 'md' doesn't exist");
+      expect(screen.getByRole('status').textContent).not.toContain('schedule');
+    });
+  });
+
   it('gives each record-set conflict (M25) its own icon', async () => {
     const types = [
       'RECORD_SET_DATASET_MISSING',

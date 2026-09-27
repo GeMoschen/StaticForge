@@ -36,11 +36,18 @@ public interface ProjectExportImportService {
      * <p>Bumped to {@code 9} by M27.8: an archive carries the project's open schedules ({@link ExportedSchedule},
      * {@code schedules/<uuid>.json}) and each generation target's uuid, which the schedules name. An older server
      * would drop the schedules silently; an archive of protocol {@code <= 8} has none.
+     *
+     * <p>Bumped to {@code 10} by M30 ({@link #QUALITY_AND_REDIRECTS_PROTOCOL}): a full-project archive carries the
+     * redirect registry ({@link ExportedRedirect}, {@code redirects.json}) and the quality rule configuration. An archive
+     * of protocol {@code <= 9} imports without either.
      */
-    int PROTOCOL_VERSION = 9;
+    int PROTOCOL_VERSION = 10;
 
     /** The first protocol whose archives carry release state (M27.5.1). */
     int RELEASE_STATE_PROTOCOL = 8;
+
+    /** The first protocol whose archives carry the redirect registry and the quality rule configuration (M30). */
+    int QUALITY_AND_REDIRECTS_PROTOCOL = 10;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP

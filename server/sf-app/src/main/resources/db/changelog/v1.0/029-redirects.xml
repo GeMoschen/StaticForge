@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M30.4.1 (epic decisions 14, 16, 17): the per-project redirect registry. One row redirects one output path
+         (from_path, as the build manifest stores it: no leading slash, e.g. de/about/index.html) of one channel and
+         locale (locale_key '' in a project without locales) either to a page (to_asset_uuid + to_page_number, resolved
+         at build time to the page's current output path in the same channel and locale) or to a fixed target (to_path:
+         an output path or an absolute http(s) URL); exactly one of the two is set. kind is AUTO (detected by a build,
+         M30.4.2; created_by null, source_run_id names the run) or MANUAL. Not revisioned, like url_registry_entry.
+         to_asset_uuid is a value reference (never a FK on asset(uuid)); source_run_id has no FK because run retention
+         (M29) deletes runs the entry outlives. version is the optimistic-locking token behind If-Match. -->
+    <changeSet id="029-redirect" author="sf">
+        <comment>Redirect registry (M30.4.1).</comment>
+        <createTable tableName="redirect">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="project_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_redirect_project" references="project(id)"/>
+            </column>
+            <column name="channel_key" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="locale_key" type="VARCHAR(40)" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+            <column name="from_path" type="VARCHAR(1000)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="to_asset_uuid" type="UUID"/>
+            <column name="to_page_number" type="INT"/>
+            <column name="to_path" type="VARCHAR(2000)"/>
+            <column name="kind" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints foreignKeyName="fk_redirect_created_by" references="app_user(id)"/>
+            </column>
+            <column name="source_run_id" type="BIGINT"/>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="BIGINT">
+                <constraints foreignKeyName="fk_redirect_updated_by" references="app_user(id)"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="redirect" constraintName="uq_redirect_source"
+                             columnNames="project_id, channel_key, locale_key, from_path"/>
+        <createIndex tableName="redirect" indexName="idx_redirect_target_asset">
+            <column name="project_id"/>
+            <column name="to_asset_uuid"/>
+        </createIndex>
+        <sql>
+            ALTER TABLE redirect ADD CONSTRAINT ck_redirect_one_target CHECK (
+                (to_asset_uuid IS NOT NULL AND to_page_number IS NOT NULL AND to_path IS NULL)
+                OR (to_asset_uuid IS NULL AND to_page_number IS NULL AND to_path IS NOT NULL))
+        </sql>
+        <sql>
+            ALTER TABLE redirect ADD CONSTRAINT ck_redirect_kind CHECK (kind IN ('AUTO', 'MANUAL'))
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -13,7 +13,10 @@ import java.util.List;
  * ARCHIVE_WITHOUT_RELEASE_STATE}.
  *
  * <p>{@code scheduleCount} (M27.8.1): the schedules the archive carries, whether or not the import brings them.
+ *
+ * <p>{@code redirectCount} (M30.4.1): the redirects the import reads from the archive (protocol {@code >= 10}; 0 for
+ * an older one), whether or not they are imported.
  */
 public record ConflictReportView(
         List<ImportConflictView> conflicts, boolean hasBlocking, boolean blocksImport, boolean releaseState,
-        String releaseMode, int scheduleCount) {}
+        String releaseMode, int scheduleCount, int redirectCount) {}
