@@ -118,6 +118,12 @@ sf:
       max-per-run: 500
       # Also closed (historical) versions, so rebuilding old revisions gets the variants.
       include-historical: false
+    search-maintenance:
+      enabled: true
+      cron: "0 5 * * *"
+      # Per non-archived project: sync (catches up lost indexing events), compare the document count with the
+      # indexable current versions (rebuild on a mismatch), and merge away deleted documents above this percentage.
+      merge-deletes-pct: 20
   revision:
     retention-days: unlimited
   cache:

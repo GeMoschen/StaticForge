@@ -28,6 +28,7 @@ import org.apache.lucene.index.IndexFormatTooNewException;
 import org.apache.lucene.index.IndexFormatTooOldException;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
@@ -133,6 +134,29 @@ public class SearchIndexServiceImpl implements SearchIndexService, DisposableBea
     public void commit(long projectId, long indexedRevision, String owner) {
         withIndex(projectId, index -> {
             commitWithStamp(index.writer, indexedRevision, owner);
+            index.searchers.maybeRefreshBlocking();
+            return null;
+        });
+    }
+
+    @Override
+    public IndexStats stats(long projectId) {
+        return withWriter(projectId, writer -> {
+            IndexWriter.DocStats stats = writer.getDocStats();
+            return new IndexStats(stats.numDocs, stats.maxDoc);
+        });
+    }
+
+    @Override
+    public void forceMergeDeletes(long projectId) {
+        withIndex(projectId, index -> {
+            IndexCheck check = readCheck(index.directory);
+            index.writer.forceMergeDeletes(true);
+            if (check.indexedRevision().isPresent() && check.owner().isPresent()) {
+                commitWithStamp(index.writer, check.indexedRevision().getAsLong(), check.owner().get());
+            } else {
+                index.writer.commit();
+            }
             index.searchers.maybeRefreshBlocking();
             return null;
         });
@@ -367,7 +391,12 @@ public class SearchIndexServiceImpl implements SearchIndexService, DisposableBea
     }
 
     private IndexWriterConfig writerConfig() {
+        // forceMergeDeletes runs only when search maintenance decided the index holds too many deletes (M29.3.3,
+        // mergeDeletesPct); it then expunges every segment's deletes instead of Lucene's own 10 % per-segment floor.
+        TieredMergePolicy mergePolicy = new TieredMergePolicy();
+        mergePolicy.setForceMergeDeletesPctAllowed(0);
         return new IndexWriterConfig(analyzer)
+                .setMergePolicy(mergePolicy)
                 .setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND)
                 .setRAMBufferSizeMB(properties.ramBufferMb())
                 .setCommitOnClose(false);
