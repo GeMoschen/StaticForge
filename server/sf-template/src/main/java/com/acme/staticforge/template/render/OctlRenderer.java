@@ -794,8 +794,12 @@ public final class OctlRenderer implements Renderer {
      * {@code author.uuid} keeps meaning the stored value. Each dereference consumes a path segment, so
      * reference cycles between records cannot recurse. The target becomes a render dependency.
      *
-     * @return the field of the referenced record or set, or {@code null} when {@code node} is not a
-     *     record or record set reference or the target is missing
+     * <p>A {@code media} editor value ({@code MEDIA_REF}) continues in the media asset's root value object the same
+     * way: {@code $CMS_VALUE(heroImage.altText)$}, {@code heroImage.width} read the picked media's alt text (in the
+     * render language) and size, as the editor reference documents; {@code heroImage.variant} stays the stored value.
+     *
+     * @return the field of the referenced record, record set or media, or {@code null} when {@code node} is not such
+     *     a reference or the target is missing
      */
     private JsonNode dereference(JsonNode node, String segment, State s) {
         UUID set = recordSetReference(node);
@@ -803,8 +807,13 @@ public final class OctlRenderer implements Renderer {
             SetSelection selection = selectRecordSet(set, recordSetKey(set), s);
             return selection == null ? null : selection.value().get(segment);
         }
-        if (!"ASSET_REF".equals(node.path("type").asText(null))
-                || !"RECORD".equalsIgnoreCase(node.path("assetType").asText(""))) {
+        String type = node.path("type").asText("");
+        String kind;
+        if ("MEDIA_REF".equals(type)) {
+            kind = "media";
+        } else if ("ASSET_REF".equals(type) && "RECORD".equalsIgnoreCase(node.path("assetType").asText(""))) {
+            kind = "record";
+        } else {
             return null;
         }
         AssetValueResolver resolver = s.context.assetValueResolver();
@@ -813,8 +822,8 @@ public final class OctlRenderer implements Renderer {
             return null;
         }
         s.deps.add(uuid);
-        JsonNode record = resolver.valueOf("record", uuid);
-        return record == null || record.isMissingNode() ? null : record.get(segment);
+        JsonNode target = resolver.valueOf(kind, uuid);
+        return target == null || target.isMissingNode() ? null : target.get(segment);
     }
 
     // ------------------------------------------------------------------
