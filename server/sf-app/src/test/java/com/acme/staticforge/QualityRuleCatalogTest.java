@@ -95,6 +95,23 @@ class QualityRuleCatalogTest {
         });
     }
 
+    /**
+     * The rules that can never hold a page back, which the Quality tab shows with their Error option disabled
+     * ({@code maxSeverity} in {@code GET /quality-rules}): the checker's own problem and the two rules that run after
+     * the hold-back (epic decision 6). Every other rule can be an error.
+     */
+    @Test
+    void onlyTheCheckerAndTheRulesAfterTheHoldBackAreCappedAtWarning() {
+        Map<String, QualitySeverity> capped = registry.all().stream()
+                .filter(rule -> rule.maxSeverity() != QualitySeverity.ERROR)
+                .collect(Collectors.toMap(QualityRule::code, QualityRule::maxSeverity));
+
+        assertThat(capped).containsOnly(
+                Map.entry("SF-CHK-0001", QualitySeverity.WARNING),
+                Map.entry("SF-CHK-0103", QualitySeverity.WARNING),
+                Map.entry("SF-CHK-0210", QualitySeverity.WARNING));
+    }
+
     private static Entry entry(QualityRule rule) {
         Kind kind = rule instanceof SiteRule ? Kind.SITE : rule instanceof PageRule ? Kind.PAGE : null;
         return new Entry(kind, rule.fixHint());
