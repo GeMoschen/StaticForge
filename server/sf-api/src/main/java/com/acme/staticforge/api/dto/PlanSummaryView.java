@@ -9,7 +9,8 @@ import java.util.Map;
  * @param mode the requested mode
  * @param incremental whether the plan is incremental ({@code false} when INCREMENTAL fell back to a full build)
  * @param fallbackCause why INCREMENTAL was planned as a full build: {@code NO_COMPLETE_BUILD_FOR_TARGET},
- *     {@code BASE_BUILD_MISSING}, {@code CHANNEL_SETTINGS_CHANGED}, {@code REVISION_BEFORE_BASELINE}
+ *     {@code BASE_BUILD_MISSING}, {@code CHANNEL_SETTINGS_CHANGED}, {@code REVISION_BEFORE_BASELINE},
+ *     {@code BASE_BUILD_WITHOUT_QUALITY_FACTS}, {@code QUALITY_RULES_CHANGED}
  * @param baselineRevision the revision an incremental plan counts changes from
  * @param baseRunId the build the run publishes on top of (incremental and scoped runs)
  * @param scoped whether the request limited the pages ({@code folderPath}/{@code assetUuids})

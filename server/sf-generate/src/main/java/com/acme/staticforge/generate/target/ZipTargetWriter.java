@@ -121,6 +121,19 @@ public final class ZipTargetWriter implements TargetWriter {
     }
 
     @Override
+    public void writeSidecar(long runId, String name, byte[] bytes) {
+        TargetIo.write(TargetIo.sidecarFile(buildsDir(), runId, name), bytes);
+    }
+
+    @Override
+    public Optional<byte[]> readSidecar(long runId, String name) {
+        if (runId < 0 || !Files.isRegularFile(zipFile(runId))) {
+            return Optional.empty();
+        }
+        return TargetIo.readIfExists(TargetIo.sidecarFile(buildsDir(), runId, name));
+    }
+
+    @Override
     public Optional<BuildManifest> readManifest(long runId) {
         if (runId < 0 || !Files.isRegularFile(zipFile(runId))) {
             return Optional.empty();
@@ -207,12 +220,15 @@ public final class ZipTargetWriter implements TargetWriter {
                 long zip = TargetIo.leadingRunId(name, ".zip");
                 long staged = TargetIo.leadingRunId(name, ".zip.tmp");
                 long manifest = TargetIo.leadingRunId(name, ".manifest.json");
+                long sidecar = TargetIo.sidecarRunId(name);
                 if (zip >= 0) {
                     items.add(new StoredItem(StoredItem.Kind.BUILD, zip, p, TargetIo.modified(p)));
                 } else if (staged >= 0) {
                     items.add(new StoredItem(StoredItem.Kind.STAGED, staged, p, TargetIo.modified(p)));
                 } else if (manifest >= 0) {
                     items.add(new StoredItem(StoredItem.Kind.MANIFEST, manifest, p, TargetIo.modified(p)));
+                } else if (sidecar >= 0) {
+                    items.add(new StoredItem(StoredItem.Kind.SIDECAR, sidecar, p, TargetIo.modified(p)));
                 }
             });
         } catch (IOException e) {
@@ -267,6 +283,7 @@ public final class ZipTargetWriter implements TargetWriter {
             try {
                 Files.deleteIfExists(zipFile(id));
                 Files.deleteIfExists(manifestFile(id));
+                TargetIo.deleteSidecars(buildsDir(), id);
             } catch (IOException ignored) {
                 // best-effort cleanup
             }

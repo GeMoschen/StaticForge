@@ -100,6 +100,19 @@ public final class S3TargetWriter implements TargetWriter {
     }
 
     @Override
+    public void writeSidecar(long runId, String name, byte[] bytes) {
+        TargetIo.write(TargetIo.sidecarFile(targetRoot, runId, name), bytes);
+    }
+
+    @Override
+    public Optional<byte[]> readSidecar(long runId, String name) {
+        if (runId < 0 || !Files.isDirectory(runDir(runId))) {
+            return Optional.empty();
+        }
+        return TargetIo.readIfExists(TargetIo.sidecarFile(targetRoot, runId, name));
+    }
+
+    @Override
     public Optional<BuildManifest> readManifest(long runId) {
         if (runId < 0 || !Files.isDirectory(runDir(runId))) {
             return Optional.empty();

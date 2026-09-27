@@ -229,6 +229,7 @@ public class BuildOutputCleanupJob implements HousekeepingJob {
             case SUCCESS, PARTIAL -> switch (item.kind()) {
                 case STAGED -> old ? "never published" : null;
                 case MANIFEST -> builds.contains(runId) ? null : "manifest without build";
+                case SIDECAR -> builds.contains(runId) ? null : "sidecar without build";
                 default -> null;
             };
         };

@@ -38,6 +38,8 @@ const FALLBACK_LABELS: Record<string, string> = {
   BASE_BUILD_MISSING: 'the previous build of {target} is no longer available',
   CHANNEL_SETTINGS_CHANGED: 'channel output settings changed since the previous build',
   REVISION_BEFORE_BASELINE: 'the requested revision is older than the previous build',
+  BASE_BUILD_WITHOUT_QUALITY_FACTS: 'the previous build of {target} has no quality check results',
+  QUALITY_RULES_CHANGED: 'the quality rules changed since the previous build',
 };
 
 /**

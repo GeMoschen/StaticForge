@@ -22,6 +22,7 @@ import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.PaginatedPage;
 import com.acme.staticforge.generate.plan.PlanEntry;
+import com.acme.staticforge.generate.quality.ReferenceEvent;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.pagination.PaginationItem;
@@ -199,14 +200,15 @@ final class GenerationRenderer {
 
         Set<UUID> deps = new LinkedHashSet<>();
         List<Diagnostic> warnings = new ArrayList<>();
+        List<ReferenceEvent> events = new ArrayList<>();
 
         // One budget for the page and every section/include/catalog card rendered inside it.
         RenderBudget budget = new RenderBudget();
-        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath(), warnings, entry.locale());
+        UrlResolver urlResolver = urlResolver(entry.channel(), entry.outputPath(), warnings, events, entry.locale());
         JsonNode pagination = paginationScope(entry, deps, warnings);
         BlockResolver blocks = blockResolver(
                 content, bodies, entry.channel(), entry.pageUuid(), entry.outputPath(), pagination, deps, warnings,
-                budget, entry.locale());
+                events, budget, entry.locale());
 
         RenderContext.Builder builder = RenderContext.builder()
                 .channel(entry.channel())
@@ -239,7 +241,7 @@ final class GenerationRenderer {
         warnings.addAll(result.warnings());
 
         return new RenderedFile(
-                entry.outputPath(), result.output().getBytes(StandardCharsets.UTF_8), deps, warnings);
+                entry.outputPath(), result.output().getBytes(StandardCharsets.UTF_8), deps, warnings, events);
     }
 
     /**
@@ -311,12 +313,13 @@ final class GenerationRenderer {
 
         Set<UUID> deps = new LinkedHashSet<>();
         List<Diagnostic> warnings = new ArrayList<>();
+        List<ReferenceEvent> events = new ArrayList<>();
         TextMediaRenderer.Target target = new TextMediaRenderer.Target(
                 media.uuid(), uid, media.displayName(), mimeType, outputPath, snapshot.revision(), channel, projectKey);
         RenderResult result = textMediaRenderer.render(
                 compiled.template(),
                 target,
-                urlResolver(channel, outputPath, warnings, locale),
+                urlResolver(channel, outputPath, warnings, events, locale),
                 assetValues,
                 (navFolderUuid, args) -> {
                     JsonNode json = navigationTreeJson(navFolderUuid, args, channel, null, outputPath, deps, warnings);
@@ -324,7 +327,7 @@ final class GenerationRenderer {
                 });
         deps.addAll(result.dependencies());
         warnings.addAll(result.warnings());
-        return new RenderedFile(outputPath, result.output().getBytes(StandardCharsets.UTF_8), deps, warnings);
+        return new RenderedFile(outputPath, result.output().getBytes(StandardCharsets.UTF_8), deps, warnings, events);
     }
 
     /** Compiles the template's channel and returns ERROR-severity diagnostics (empty when clean). */
@@ -432,29 +435,37 @@ final class GenerationRenderer {
         return asset != null && !asset.deleted() && FolderScope.fromPayload(asset.payload()) == FolderScope.NAVIGATION;
     }
 
-    /** @param pagePath output path of the page being rendered; generated links are relative to it */
-    private UrlResolver urlResolver(String channel, String pagePath, List<Diagnostic> warnings) {
-        return urlResolver(channel, pagePath, warnings, null);
-    }
-
     /**
+     * @param pagePath output path of the page being rendered; generated links are relative to it
+     * @param events collects every reference that renders empty because its target is deleted, unreleased or missing
+     *     (M30.1.3): the quality checks report them on this output
      * @param renderLocale the language links resolve in, so a German page links to German pages
      *     (M24.3.2). {@code $CMS_REF(page:x, locale="en")} overrides it for one reference.
      */
-    private UrlResolver urlResolver(String channel, String pagePath, List<Diagnostic> warnings, String renderLocale) {
+    private UrlResolver urlResolver(
+            String channel, String pagePath, List<Diagnostic> warnings, List<ReferenceEvent> events, String renderLocale) {
         return (kind, uid, uuid, args) -> {
             if (uuid == null) {
                 return "";
             }
             String locale = args != null && args.get("locale") != null ? args.get("locale") : renderLocale;
+            String eventLocale = "page".equals(kind) ? locale : renderLocale;
             // A page link resolves in the language it links to; media and folders in the render language's view.
             SnapshotAsset target = ("page".equals(kind) ? snapshot.in(locale) : snapshot).assetByUuid(uuid);
             if (target != null && target.unreleased()) {
-                warnUnreleasedReference(warnings, kind, uid, pagePath, "page".equals(kind) ? locale : renderLocale);
+                warnUnreleasedReference(warnings, kind, uid, pagePath, eventLocale);
+                record(events, ReferenceEvent.Kind.UNRELEASED, kind, uuid, target.uid(), eventLocale);
                 return "";
             }
             if (target != null && target.deleted()) {
                 warnDeletedReference(warnings, kind, uid);
+                record(events, ReferenceEvent.Kind.DELETED, kind, uuid, target.uid(), eventLocale);
+                return "";
+            }
+            if (target == null && ("page".equals(kind) || "media".equals(kind) || "folder".equals(kind))) {
+                // Not in the snapshot at all (a foreign or hard-deleted uuid): it renders empty instead of failing
+                // the run (M30.1.3), and the linking output gets the finding.
+                record(events, ReferenceEvent.Kind.MISSING, kind, uuid, null, eventLocale);
                 return "";
             }
             return switch (kind) {
@@ -588,6 +599,7 @@ final class GenerationRenderer {
             JsonNode pagination,
             Set<UUID> deps,
             List<Diagnostic> warnings,
+            List<ReferenceEvent> events,
             RenderBudget budget,
             String locale) {
         return new BlockResolver() {
@@ -600,8 +612,8 @@ final class GenerationRenderer {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode section : sections) {
                     out.append(renderSectionInstance(
-                            pageContent, section, channel, activePageUuid, pagePath, pagination, deps, warnings, budget,
-                            locale));
+                            pageContent, section, channel, activePageUuid, pagePath, pagination, deps, warnings, events,
+                            budget, locale));
                 }
                 return out.toString();
             }
@@ -614,8 +626,8 @@ final class GenerationRenderer {
                 StringBuilder out = new StringBuilder();
                 for (JsonNode card : cards) {
                     out.append(renderSectionInstance(
-                            pageContent, card, channel, activePageUuid, pagePath, pagination, deps, warnings, budget,
-                            locale));
+                            pageContent, card, channel, activePageUuid, pagePath, pagination, deps, warnings, events,
+                            budget, locale));
                 }
                 return out.toString();
             }
@@ -628,7 +640,7 @@ final class GenerationRenderer {
                 }
                 return renderSection(
                         uuid, mapper.createObjectNode(), pageContent, channel, activePageUuid, pagePath, null, pagination, deps,
-                        warnings, budget, locale);
+                        warnings, events, budget, locale);
             }
 
             @Override
@@ -800,6 +812,7 @@ final class GenerationRenderer {
             JsonNode pagination,
             Set<UUID> deps,
             List<Diagnostic> warnings,
+            List<ReferenceEvent> events,
             RenderBudget budget,
             String locale) {
         String templateRef = section.path("templateRef").asText();
@@ -815,8 +828,8 @@ final class GenerationRenderer {
         JsonNode values = section.path("content");
         String instanceId = section.path("instanceId").asText();
         return renderSection(
-                sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, pagination, deps, warnings, budget,
-                locale);
+                sectionUuid, values, pageContent, channel, activePageUuid, pagePath, instanceId, pagination, deps, warnings,
+                events, budget, locale);
     }
 
     private String renderSection(
@@ -830,6 +843,7 @@ final class GenerationRenderer {
             JsonNode pagination,
             Set<UUID> deps,
             List<Diagnostic> warnings,
+            List<ReferenceEvent> events,
             RenderBudget budget,
             String locale) {
         SnapshotAsset template = snapshot.assetByUuid(sectionUuid);
@@ -838,6 +852,7 @@ final class GenerationRenderer {
         }
         if (template.deleted()) {
             warnDeletedReference(warnings, "section_template", template.uid());
+            record(events, ReferenceEvent.Kind.DELETED, "section_template", sectionUuid, template.uid(), locale);
             return "";
         }
         CompiledTemplate compiled = compileChannel(template, channel);
@@ -853,9 +868,10 @@ final class GenerationRenderer {
                 .meta("uid", TextNode.valueOf(emptyIfNull(template.uid())))
                 .meta("uuid", TextNode.valueOf(sectionUuid.toString()))
                 .pagination(pagination)
-                .urlResolver(urlResolver(channel, pagePath, warnings, locale))
+                .urlResolver(urlResolver(channel, pagePath, warnings, events, locale))
                 .blockResolver(blockResolver(
-                        pageValues, null, channel, activePageUuid, pagePath, pagination, deps, warnings, budget, locale))
+                        pageValues, null, channel, activePageUuid, pagePath, pagination, deps, warnings, events, budget,
+                        locale))
                 .assetValueResolver(assetValues)
                 .budget(budget);
         if (instanceId != null && !instanceId.isBlank()) {
@@ -932,6 +948,15 @@ final class GenerationRenderer {
                 0);
         if (!warnings.contains(warning)) {
             warnings.add(warning);
+        }
+    }
+
+    /** Records one unresolved reference per target, kind and language (the same reference may render many times). */
+    private static void record(
+            List<ReferenceEvent> events, ReferenceEvent.Kind kind, String targetKind, UUID target, String uid, String locale) {
+        ReferenceEvent event = new ReferenceEvent(kind, targetKind, target, uid, locale);
+        if (!events.contains(event)) {
+            events.add(event);
         }
     }
 

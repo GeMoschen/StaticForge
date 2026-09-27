@@ -45,6 +45,10 @@ import java.util.UUID;
  * </ul>
  *
  * <p>Each file of the new build is described in its {@link BuildManifest}; kept outputs keep their base entries.
+ *
+ * <p><b>Withheld outputs (M30.1.3).</b> A page output the run planned but doesn't publish — held back for incomplete
+ * content, a render limit or a failed quality check — is {@linkplain #withhold withheld}: it is no site page (not in the
+ * sitemap or the search index), and a base output at its path is not kept.
  */
 public final class CarryForward {
 
@@ -61,6 +65,7 @@ public final class CarryForward {
     private final Map<String, JsonNode> baseIndex;
 
     private final List<BuildManifest.Output> carriedPages = new ArrayList<>();
+    private final Set<String> withheld = new HashSet<>();
 
     /**
      * @param channels the channels the run planned
@@ -89,6 +94,34 @@ public final class CarryForward {
         if (base != null) {
             selectCarriedPages();
         }
+    }
+
+    /**
+     * Withholds the page outputs at {@code paths} (M30.1.3): outputs the run planned but doesn't publish, and kept base
+     * outputs of a page the quality checks held back. Call before {@link #sitePages()} and {@link #publication}.
+     */
+    public void withhold(Set<String> paths) {
+        withheld.addAll(paths);
+        carriedPages.removeIf(output -> withheld.contains(output.path()));
+    }
+
+    /** The base build's page outputs the run keeps. */
+    public List<BuildManifest.Output> carriedPages() {
+        return List.copyOf(carriedPages);
+    }
+
+    /**
+     * The base build's media outputs the run keeps: those the kept pages, the rendered files and the written media still
+     * need and the run didn't write again.
+     */
+    public List<BuildManifest.Output> carriedMedia(List<RenderedFile> rendered, AssetCopyResult assets) {
+        return carriedMedia(entriesByPath(), rendered, assets);
+    }
+
+    private Map<String, PlanEntry> entriesByPath() {
+        Map<String, PlanEntry> entriesByPath = new HashMap<>();
+        plan.entries().forEach(entry -> entriesByPath.put(entry.outputPath(), entry));
+        return entriesByPath;
     }
 
     /** Whether the run builds on a base build. */
@@ -149,6 +182,9 @@ public final class CarryForward {
     public List<SitePage> sitePages() {
         List<SitePage> pages = new ArrayList<>();
         for (PlanEntry entry : plan.siteOutputs()) {
+            if (withheld.contains(entry.outputPath())) {
+                continue;
+            }
             // Listed as the language's released version names it (M27.2.1).
             SnapshotAsset page = snapshot.asset(entry.pageUuid(), entry.locale());
             if (page != null) {
@@ -214,8 +250,7 @@ public final class CarryForward {
      */
     public Publication publication(
             long runId, List<OutputFile> files, List<RenderedFile> rendered, AssetCopyResult assets) {
-        Map<String, PlanEntry> entriesByPath = new HashMap<>();
-        plan.entries().forEach(entry -> entriesByPath.put(entry.outputPath(), entry));
+        Map<String, PlanEntry> entriesByPath = entriesByPath();
         Map<String, RenderedFile> renderedByPath = new HashMap<>();
         rendered.forEach(file -> renderedByPath.put(file.outputPath(), file));
 

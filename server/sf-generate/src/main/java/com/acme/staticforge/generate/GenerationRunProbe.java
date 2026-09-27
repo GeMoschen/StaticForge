@@ -11,13 +11,16 @@ public interface GenerationRunProbe {
     /** Reached once per page, inside the render loop, before the page renders. */
     String RENDER_PAGE = "RENDER_PAGE";
 
+    /** Reached once per output in the quality check stage (M30.1.3), before the output is checked. */
+    String CHECK_OUTPUT = "CHECK_OUTPUT";
+
     /** Reached after the build is staged, right before the final status write and the publish. */
     String PUBLISH = "PUBLISH";
 
     /**
      * Run {@code runId} of project {@code projectId} reached {@code point}: a stage name ({@code SNAPSHOT},
-     * {@code PLAN}, {@code VALIDATE}, {@code RENDER}, {@code ASSETS}, {@code POST}, {@code WRITE}),
-     * {@link #RENDER_PAGE} or {@link #PUBLISH}.
+     * {@code PLAN}, {@code VALIDATE}, {@code RENDER}, {@code ASSETS}, {@code CHECK}, {@code POST},
+     * {@code WRITE}), {@link #RENDER_PAGE}, {@link #CHECK_OUTPUT} or {@link #PUBLISH}.
      */
     void reached(long projectId, long runId, String point);
 }

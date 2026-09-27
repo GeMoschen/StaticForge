@@ -18,10 +18,10 @@ over the whole site, store the findings per run, and hold back pages with error-
 
 ## Feature exit criteria
 
-- [ ] A test rule set runs over a fixture build; findings are stored per run and served paged and filtered.
-- [ ] `ERROR` holds the page back (`SF-GEN-0125`, run `PARTIAL`); `WARNING` leaves the run `SUCCESS`.
-- [ ] Incremental runs reuse carried facts/findings from the base sidecar; missing sidecar or changed rules → FULL.
-- [ ] `./gradlew build` green.
+- [x] A test rule set runs over a fixture build; findings are stored per run and served paged and filtered.
+- [x] `ERROR` holds the page back (`SF-GEN-0125`, run `PARTIAL`); `WARNING` leaves the run `SUCCESS`.
+- [x] Incremental runs reuse carried facts/findings from the base sidecar; missing sidecar or changed rules → FULL.
+- [x] `./gradlew build` green.
 
 ## Dependencies
 

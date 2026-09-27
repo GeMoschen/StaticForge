@@ -35,6 +35,9 @@ public class QualityTestRules {
     /** The rule after the hold-back: every internal link to a held-back page output. */
     public static final String TO_HELD_BACK = "SF-CHK-0191";
 
+    /** The site rule over the renderer's reference events: one finding per unresolved reference. */
+    public static final String EVENTS = "SF-CHK-0192";
+
     @Bean
     FlagRule qualityTestFlagRule() {
         return new FlagRule();
@@ -48,6 +51,44 @@ public class QualityTestRules {
     @Bean
     HeldBackTargetRule qualityTestHeldBackTargetRule() {
         return new HeldBackTargetRule();
+    }
+
+    @Bean
+    ReferenceEventRule qualityTestReferenceEventRule() {
+        return new ReferenceEventRule();
+    }
+
+    /** Reports every reference the renderer could not resolve: {@code "<KIND> <targetKind> <uuid>"}. */
+    public static final class ReferenceEventRule implements SiteRule {
+
+        @Override
+        public String code() {
+            return EVENTS;
+        }
+
+        @Override
+        public QualityCategory category() {
+            return QualityCategory.LINKS;
+        }
+
+        @Override
+        public String name() {
+            return "Test: unresolved reference";
+        }
+
+        @Override
+        public String description() {
+            return "Reports the renderer's reference events (test rule).";
+        }
+
+        @Override
+        public List<Finding> check(SiteIndex site, RuleContext context) {
+            List<Finding> findings = new ArrayList<>();
+            site.referenceEvents().forEach((path, events) -> site.output(path).ifPresent(output -> events.forEach(event ->
+                    findings.add(context.finding(output.key(), null,
+                            event.kind() + " " + event.targetKind() + " " + event.target())))));
+            return findings;
+        }
     }
 
     /**

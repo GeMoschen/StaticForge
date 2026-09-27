@@ -139,6 +139,12 @@ describe('build insight summaries', () => {
     expect(fallbackWarning('NO_COMPLETE_BUILD_FOR_TARGET', 'Site')).toBe(
       'Incremental requested — no previous complete build for target Site; this will be a full build.',
     );
+    expect(fallbackWarning('BASE_BUILD_WITHOUT_QUALITY_FACTS', 'Site')).toBe(
+      'Incremental requested — the previous build of target Site has no quality check results; this will be a full build.',
+    );
+    expect(fallbackWarning('QUALITY_RULES_CHANGED', undefined)).toBe(
+      'Incremental requested — the quality rules changed since the previous build; this will be a full build.',
+    );
   });
 
   it('heads the impact panel', () => {

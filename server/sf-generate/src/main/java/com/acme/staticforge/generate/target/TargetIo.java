@@ -132,6 +132,38 @@ final class TargetIo {
         return Long.parseLong(digits);
     }
 
+    private static final java.util.regex.Pattern SIDECAR_NAME = java.util.regex.Pattern.compile("[a-z]{1,30}");
+    private static final java.util.regex.Pattern SIDECAR_FILE =
+            java.util.regex.Pattern.compile("(\\d{1,18})\\.([a-z]{1,30})\\.json");
+
+    /** The file of sidecar {@code name} of build {@code runId} in {@code dir}: {@code {runId}.{name}.json}. */
+    static Path sidecarFile(Path dir, long runId, String name) {
+        if (name == null || !SIDECAR_NAME.matcher(name).matches() || name.equals("manifest")) {
+            throw new IllegalArgumentException("Invalid sidecar name: " + name);
+        }
+        return dir.resolve(runId + "." + name + ".json");
+    }
+
+    /** The run id of a sidecar file name ({@code 17.quality.json}); -1 for any other name, the manifest included. */
+    static long sidecarRunId(String fileName) {
+        java.util.regex.Matcher matcher = SIDECAR_FILE.matcher(fileName);
+        if (!matcher.matches() || matcher.group(2).equals("manifest")) {
+            return -1;
+        }
+        return Long.parseLong(matcher.group(1));
+    }
+
+    /** Deletes every sidecar of build {@code runId} in {@code dir}; best effort. */
+    static void deleteSidecars(Path dir, long runId) {
+        try (var stream = Files.list(dir)) {
+            for (Path p : stream.filter(p -> sidecarRunId(p.getFileName().toString()) == runId).toList()) {
+                Files.deleteIfExists(p);
+            }
+        } catch (IOException ignored) {
+            // best-effort cleanup, like the manifest's
+        }
+    }
+
     /** SHA-256 hex digest of {@code bytes}, used as a cheap content fingerprint for S3 diffing. */
     static String sha256(byte[] bytes) {
         try {

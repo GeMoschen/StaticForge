@@ -12,6 +12,11 @@ import com.acme.staticforge.generate.plan.Baseline;
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanRequest;
+import com.acme.staticforge.generate.quality.EffectiveQualityConfig;
+import com.acme.staticforge.generate.quality.QualityCheckStage;
+import com.acme.staticforge.generate.quality.QualityRuleConfigService;
+import com.acme.staticforge.generate.quality.QualitySidecar;
+import com.acme.staticforge.generate.quality.RunFindingStore;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.pipeline.RunAbortedException;
@@ -97,6 +102,8 @@ public class GenerationService {
     static final String STAGE_VALIDATE = "VALIDATE";
     static final String STAGE_RENDER = "RENDER";
     static final String STAGE_ASSETS = "ASSETS";
+    /** The quality checks over the rendered output (M30.1.3), between ASSETS and POST. */
+    static final String STAGE_CHECK = "CHECK";
     static final String STAGE_POST = "POST";
     static final String STAGE_WRITE = "WRITE";
     static final String STAGE_REPORT = "REPORT";
@@ -136,6 +143,9 @@ public class GenerationService {
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
     private final AuditService audit;
     private final GenerationRunControl control;
+    private final QualityCheckStage qualityCheckStage;
+    private final QualityRuleConfigService qualityConfig;
+    private final RunFindingStore findingStore;
 
     /** A remembered {@code Idempotency-Key}: the run it started and when (M29.2.4). */
     private record IdempotentStart(long runId, Instant at) {}
@@ -158,7 +168,10 @@ public class GenerationService {
             MeterRegistry meterRegistry,
             com.acme.staticforge.project.ProjectLocales projectLocales,
             AuditService audit,
-            GenerationRunControl control) {
+            GenerationRunControl control,
+            QualityCheckStage qualityCheckStage,
+            QualityRuleConfigService qualityConfig,
+            RunFindingStore findingStore) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
@@ -177,6 +190,9 @@ public class GenerationService {
         this.projectLocales = projectLocales;
         this.audit = audit;
         this.control = control;
+        this.qualityCheckStage = qualityCheckStage;
+        this.qualityConfig = qualityConfig;
+        this.findingStore = findingStore;
     }
 
     /**
@@ -455,18 +471,21 @@ public class GenerationService {
         Set<String> channels = BuildPlanner.effectiveChannels(request.channels());
         Set<UUID> scopeAssets = scopeAssets(request);
         GenerationMode mode = request.mode() == null ? GenerationMode.FULL : request.mode();
+        EffectiveQualityConfig quality = qualityConfig.effective(projectId);
 
         long baseRunId = -1;
         BuildManifest base = null;
         Baseline baseline = null;
         FallbackCause fallback = null;
+        QualitySidecar baseQuality = null;
         if (mode == GenerationMode.INCREMENTAL) {
-            BaselineChoice choice = baselineFor(projectId, writer, channels, snapshot);
+            BaselineChoice choice = baselineFor(projectId, writer, channels, snapshot, quality);
             baseline = choice.baseline();
             fallback = choice.fallbackCause();
             if (baseline != null) {
                 baseRunId = choice.runId();
                 base = baseline.manifest();
+                baseQuality = choice.quality();
             }
         }
         PlanRequest planRequest = new PlanRequest(mode, baseline, fallback, channels, request.folderPath(), scopeAssets);
@@ -477,10 +496,13 @@ public class GenerationService {
             if (manifest.isPresent()) {
                 baseRunId = current;
                 base = manifest.get();
+                // A scoped run keeps what the target serves; outputs of a build without facts are simply not checked.
+                baseQuality = writer.readSidecar(current, QualitySidecar.NAME).flatMap(QualitySidecar::parse).orElse(null);
             }
         }
         BuildPlan plan = buildPlanner.plan(snapshot, planRequest, paths);
-        return new PlannedBuild(project, target, writer, snapshot, paths, channels, baseRunId, base, plan);
+        return new PlannedBuild(
+                project, target, writer, snapshot, paths, channels, baseRunId, base, plan, quality, baseQuality);
     }
 
     /**
@@ -532,10 +554,10 @@ public class GenerationService {
     }
 
     /** The baseline an incremental build of a target uses, or why it has none. */
-    record BaselineChoice(long runId, Baseline baseline, FallbackCause fallbackCause) {
+    record BaselineChoice(long runId, Baseline baseline, FallbackCause fallbackCause, QualitySidecar quality) {
 
         static BaselineChoice none(FallbackCause cause) {
-            return new BaselineChoice(-1, null, cause);
+            return new BaselineChoice(-1, null, cause, null);
         }
     }
 
@@ -545,8 +567,14 @@ public class GenerationService {
      * from its consistent revision, so a scoped build (which keeps its base's consistent revision) never advances the
      * baseline, and a build of another target never counts. Without such a build the request plans FULL, with the
      * reason.
+     *
+     * <p>The baseline also carries the quality check facts of its outputs (M30.1.3): a build without its
+     * {@code quality.json} sidecar (published before M30), or one checked under another rule configuration — changed
+     * since the baseline, or a rule set that changed with the application — can't vouch for its carried outputs, so the
+     * request plans FULL.
      */
-    BaselineChoice baselineFor(long projectId, TargetWriter writer, Set<String> channels, Snapshot snapshot) {
+    BaselineChoice baselineFor(
+            long projectId, TargetWriter writer, Set<String> channels, Snapshot snapshot, EffectiveQualityConfig quality) {
         long current = writer.currentRunId();
         if (current < 0) {
             return BaselineChoice.none(FallbackCause.NO_COMPLETE_BUILD_FOR_TARGET);
@@ -567,7 +595,15 @@ public class GenerationService {
         if (channelService.outputSettingsChangedSince(projectId, revision)) {
             return BaselineChoice.none(FallbackCause.CHANNEL_SETTINGS_CHANGED);
         }
-        return new BaselineChoice(current, new Baseline(revision, manifest.get()), null);
+        Optional<QualitySidecar> facts = writer.readSidecar(current, QualitySidecar.NAME).flatMap(QualitySidecar::parse);
+        if (facts.isEmpty()) {
+            return BaselineChoice.none(FallbackCause.BASE_BUILD_WITHOUT_QUALITY_FACTS);
+        }
+        if (qualityConfig.qualityRulesChangedSince(projectId, revision)
+                || !quality.fingerprint().equals(facts.get().configFingerprint())) {
+            return BaselineChoice.none(FallbackCause.QUALITY_RULES_CHANGED);
+        }
+        return new BaselineChoice(current, new Baseline(revision, manifest.get()), null, facts.get());
     }
 
     private void executeRun(String projectKey, long runId, GenerationRequest request) {
@@ -656,14 +692,6 @@ public class GenerationService {
             List<Diagnostic> fileErrors = new ArrayList<>(outcome.pageErrors());
             fileErrors.addAll(assets.fileErrors());
 
-            List<OutputFile> allFiles = new ArrayList<>();
-            for (RenderedFile file : outcome.files()) {
-                allFiles.add(file.toOutputFile());
-            }
-            allFiles.addAll(assets.files());
-
-            control.stage(runId, STAGE_POST);
-            emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
             TargetWriter writer = build.writer();
             CarryForward carry = new CarryForward(
                     snapshot,
@@ -674,16 +702,52 @@ public class GenerationService {
                     scopeAssets(request),
                     build.base(),
                     build.carries() ? writer.readFile(build.baseRunId(), SEARCH_INDEX_PATH) : Optional.empty());
+
+            // CHECK (M30.1.3): quality checks over what the run rendered and what it carries; an ERROR holds a page
+            // back, and every output planned but not published is withheld from the site pages.
+            control.stage(runId, STAGE_CHECK);
+            emit(runId, STAGE_CHECK, "Checking output", 0, fileErrors.size(), warnings.size(), null);
+            String baseUrl = baseUrl(build.target());
+            Set<String> notRendered = notRendered(plan, outcome);
+            QualityCheckStage.CheckResult check = qualityCheckStage.check(new QualityCheckStage.CheckInput(
+                    build.quality(),
+                    baseUrl,
+                    locales,
+                    build.paths()::settingsFor,
+                    snapshot,
+                    plan.entries(),
+                    outcome.files(),
+                    notRendered,
+                    carry.carriedPages(),
+                    mediaOutputsOf(assets, carry.carriedMedia(outcome.files(), assets)),
+                    siteFiles(baseUrl),
+                    build.baseQuality(),
+                    () -> control.checkpoint(runId, GenerationRunProbe.CHECK_OUTPUT)));
+            Set<String> withheld = new LinkedHashSet<>(notRendered);
+            withheld.addAll(check.heldBack());
+            carry.withhold(withheld);
+            fileErrors.addAll(check.pageErrors());
+            List<RenderedFile> published = check.published(outcome.files());
+            emit(runId, STAGE_CHECK, checkedMessage(check), 0, fileErrors.size(), warnings.size(), null);
+
+            List<OutputFile> allFiles = new ArrayList<>();
+            for (RenderedFile file : published) {
+                allFiles.add(file.toOutputFile());
+            }
+            allFiles.addAll(assets.files());
+
+            control.stage(runId, STAGE_POST);
+            emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
             List<String> channels = request.channels() == null ? parseChannels(run.getChannels()) : request.channels();
             PostProcessContext ctx = new PostProcessContext(
-                    build.project().getId(), projectKey, baseUrl(build.target()), channels, carry.sitePages(),
+                    build.project().getId(), projectKey, baseUrl, channels, carry.sitePages(),
                     false, java.util.List.of(), java.util.List.of(), carry.carriedText(),
                     locales.isLocalized() ? locales.defaultLocale() : null);
             List<OutputFile> processed = postProcessStage.apply(ctx, allFiles);
 
             control.stage(runId, STAGE_WRITE);
             emit(runId, STAGE_WRITE, "Writing output", processed.size(), 0, warnings.size(), null);
-            CarryForward.Publication publication = carry.publication(runId, processed, outcome.files(), assets);
+            CarryForward.Publication publication = carry.publication(runId, processed, published, assets);
             if (build.carries()) {
                 writer.stage(runId, build.baseRunId(), publication.files(), publication.removedPaths());
             } else {
@@ -692,12 +756,17 @@ public class GenerationService {
 
             control.stage(runId, GenerationRunProbe.PUBLISH);
             long bytes = processed.stream().mapToLong(f -> f.bytes().length).sum();
-            // A page or processed media file held back makes the run PARTIAL; the rest is published.
+            // A page or processed media file held back makes the run PARTIAL; the rest is published. Quality findings
+            // don't: they are stored apart from the diagnostics (a warning alone leaves the run SUCCESS).
             boolean partial = !warnings.isEmpty() || !fileErrors.isEmpty();
             JsonNode diagnostics = diagnosticsJson(fileErrors, warnings);
+            byte[] qualityFacts = check.sidecar().toJson();
             // The manifest marks a published build (M29.2.2): it is written right before the flip, and both happen
-            // only while the run is still RUNNING, on its locked row — a cancel that committed first wins.
+            // only while the run is still RUNNING, on its locked row — a cancel that committed first wins. The
+            // findings are stored in the same transaction: a run that isn't recorded stores none.
             GenerationRun done = control.whileRunning(runId, active -> {
+                        findingStore.save(runId, check.findings()).applyTo(active);
+                        writer.writeSidecar(runId, QualitySidecar.NAME, qualityFacts);
                         writer.writeManifest(runId, publication.manifest());
                         writer.publish(runId);
                         active.setStatus(partial ? RunStatus.PARTIAL : RunStatus.SUCCESS);
@@ -720,6 +789,44 @@ public class GenerationService {
         } catch (Exception e) {
             fail(runId, sample, generationTimer, List.of(), List.of(), e);
         }
+    }
+
+    /** The page outputs the run planned but didn't render: held back before the checks, or with no channel source. */
+    private static Set<String> notRendered(BuildPlan plan, RenderOutcome outcome) {
+        Set<String> rendered = new java.util.HashSet<>();
+        outcome.files().forEach(file -> rendered.add(file.outputPath()));
+        Set<String> missing = new LinkedHashSet<>();
+        for (com.acme.staticforge.generate.plan.PlanEntry entry : plan.entries()) {
+            if (!rendered.contains(entry.outputPath())) {
+                missing.add(entry.outputPath());
+            }
+        }
+        return missing;
+    }
+
+    /** Every media output of the build: written by the run, and carried from the base build. */
+    private static Map<String, MediaOutputs.Key> mediaOutputsOf(
+            AssetCopyResult assets, List<BuildManifest.Output> carriedMedia) {
+        Map<String, MediaOutputs.Key> media = new LinkedHashMap<>(assets.owners());
+        for (BuildManifest.Output output : carriedMedia) {
+            media.putIfAbsent(output.path(), new MediaOutputs.Key(output.asset(), output.locale()));
+        }
+        return media;
+    }
+
+    /** The site files post-processing writes for a target with {@code baseUrl} (a link to them is no broken link). */
+    private static Set<String> siteFiles(String baseUrl) {
+        return baseUrl.isBlank()
+                ? Set.of(SEARCH_INDEX_PATH)
+                : Set.of(SEARCH_INDEX_PATH, "sitemap.xml", "robots.txt");
+    }
+
+    /** The {@code CHECK} stage's closing progress line: how much was checked and found. */
+    private static String checkedMessage(QualityCheckStage.CheckResult check) {
+        return "Checked " + check.checkedOutputs() + (check.checkedOutputs() == 1 ? " output: " : " outputs: ")
+                + check.errorCount() + (check.errorCount() == 1 ? " error, " : " errors, ")
+                + check.warningCount() + (check.warningCount() == 1 ? " warning" : " warnings")
+                + (check.pageErrors().isEmpty() ? "" : "; " + check.pageErrors().size() + " held back");
     }
 
     /** The request as the queued run recorded it: its revision, mode, target and channels. */
