@@ -38,6 +38,8 @@ interface ExecutionRow {
   execution: ScheduleExecutionView;
   items: { name: string; locale: string; result: string; reason: string }[];
   waitingForRun: number | null;
+  /** The run this execution started, deleted since by run retention (M29.3.1, `detail.deletedGenerationRunId`). */
+  deletedRun: number | null;
 }
 
 const RESULTS: Record<string, string> = { APPLIED: 'Done', UNCHANGED: 'Nothing to do', SKIPPED: 'Skipped' };
@@ -71,7 +73,11 @@ export class ScheduleHistoryComponent {
   protected readonly rows = computed<ExecutionRow[]>(() => {
     const names = new Map((this.schedule()?.items ?? []).map((item) => [item.assetUuid, item.displayName || item.uid || '']));
     return this.executions().map((execution) => {
-      const detail = (execution.detail ?? {}) as { items?: ItemResult[]; waitingForRun?: number };
+      const detail = (execution.detail ?? {}) as {
+        items?: ItemResult[];
+        waitingForRun?: number;
+        deletedGenerationRunId?: number;
+      };
       return {
         execution,
         items: (detail.items ?? []).map((item) => ({
@@ -81,6 +87,7 @@ export class ScheduleHistoryComponent {
           reason: item.reason ?? '',
         })),
         waitingForRun: typeof detail.waitingForRun === 'number' ? detail.waitingForRun : null,
+        deletedRun: typeof detail.deletedGenerationRunId === 'number' ? detail.deletedGenerationRunId : null,
       };
     });
   });

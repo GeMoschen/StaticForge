@@ -1,7 +1,6 @@
 package com.acme.staticforge.scheduler;
 
-import java.lang.management.ManagementFactory;
-import java.net.InetAddress;
+import com.acme.staticforge.node.NodeIdentity;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -29,7 +28,10 @@ public class SchedulerProperties {
      */
     private Duration lease = Duration.ofMinutes(2);
 
-    /** This node's name in {@code lease_owner}; defaults to {@code hostname:pid}. Must differ between nodes. */
+    /**
+     * This node's name in {@code lease_owner}; defaults to {@code sf.node-id} ({@code <hostname>-<pid>} unless set, see
+     * {@link NodeIdentity}). Must differ between nodes; only set it to override the shared node id.
+     */
     private String nodeId;
 
     public boolean isEnabled() {
@@ -72,17 +74,11 @@ public class SchedulerProperties {
         this.nodeId = nodeId;
     }
 
-    /** {@link #getNodeId()}, or {@code hostname:pid} when unset. */
-    public String effectiveNodeId() {
+    /** {@link #getNodeId()} when set (an override for the scheduler and the system-job runner), else {@code node}'s id ({@code sf.node-id}). */
+    public String effectiveNodeId(NodeIdentity node) {
         if (nodeId != null && !nodeId.isBlank()) {
             return nodeId.trim();
         }
-        String host;
-        try {
-            host = InetAddress.getLocalHost().getHostName();
-        } catch (Exception e) {
-            host = "node";
-        }
-        return host + ":" + ManagementFactory.getRuntimeMXBean().getPid();
+        return node.id();
     }
 }

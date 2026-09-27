@@ -6,12 +6,14 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -25,6 +27,10 @@ import java.util.zip.ZipOutputStream;
  * <p>Each entry is named by the normalized relative path and written as UTF-8 bytes. A carried build (M22.4.1) is a
  * new archive holding the base archive's entries that are neither removed nor overwritten, then the run's files; the
  * manifest is {@code builds/{runId}.manifest.json}.
+ *
+ * <p><b>Published builds (M29.2.2):</b> a run stages {@code {runId}.zip.tmp} and only {@link #publish} renames it to
+ * {@code {runId}.zip}, so every {@code .zip} is a published build: {@code keep-builds} counts those and never an
+ * unpublished {@code .zip.tmp}, which is left to {@code build-output-cleanup}.
  */
 public final class ZipTargetWriter implements TargetWriter {
 
@@ -178,23 +184,76 @@ public final class ZipTargetWriter implements TargetWriter {
         return TargetIo.readRunId(current());
     }
 
-    private void prune() {
+    @Override
+    public Set<Long> retainedRunIds() {
+        Set<Long> ids = new TreeSet<>(publishedRunIds());
+        long currentId = currentRunId();
+        if (currentId >= 0 && Files.isRegularFile(zipFile(currentId))) {
+            ids.add(currentId);
+        }
+        return ids;
+    }
+
+    @Override
+    public List<StoredItem> storedItems() {
+        List<StoredItem> items = new ArrayList<>();
         Path builds = buildsDir();
         if (!Files.isDirectory(builds)) {
-            return;
+            return items;
         }
-        List<Long> ids;
         try (var stream = Files.list(builds)) {
-            ids = stream.filter(p -> p.getFileName().toString().endsWith(".zip"))
-                    .map(p -> p.getFileName().toString())
-                    .map(name -> name.substring(0, name.length() - ".zip".length()))
-                    .filter(s -> s.chars().allMatch(Character::isDigit))
-                    .map(Long::parseLong)
+            stream.sorted().forEach(p -> {
+                String name = p.getFileName().toString();
+                long zip = TargetIo.leadingRunId(name, ".zip");
+                long staged = TargetIo.leadingRunId(name, ".zip.tmp");
+                long manifest = TargetIo.leadingRunId(name, ".manifest.json");
+                if (zip >= 0) {
+                    items.add(new StoredItem(StoredItem.Kind.BUILD, zip, p, TargetIo.modified(p)));
+                } else if (staged >= 0) {
+                    items.add(new StoredItem(StoredItem.Kind.STAGED, staged, p, TargetIo.modified(p)));
+                } else if (manifest >= 0) {
+                    items.add(new StoredItem(StoredItem.Kind.MANIFEST, manifest, p, TargetIo.modified(p)));
+                }
+            });
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException("Failed to list " + builds, e);
+        }
+        return items;
+    }
+
+    @Override
+    public long sizeOf(StoredItem item) {
+        return TargetIo.sizeOf(item.path());
+    }
+
+    @Override
+    public void delete(StoredItem item) {
+        if (item.kind() == StoredItem.Kind.BUILD && item.runId() == currentRunId()) {
+            throw new IllegalArgumentException("Refusing to delete the current build " + item.path());
+        }
+        TargetIo.deleteUnder(outputRoot, item.path());
+    }
+
+    /** The finished archives, newest first. */
+    private List<Long> publishedRunIds() {
+        Path builds = buildsDir();
+        if (!Files.isDirectory(builds)) {
+            return List.of();
+        }
+        try (var stream = Files.list(builds)) {
+            return stream.filter(Files::isRegularFile)
+                    .map(p -> TargetIo.leadingRunId(p.getFileName().toString(), ".zip"))
+                    .filter(id -> id >= 0)
                     .sorted(Comparator.reverseOrder())
                     .toList();
         } catch (IOException e) {
-            return;
+            return List.of();
         }
+    }
+
+    /** Keeps {@code current} and the newest {@code keepBuilds} published archives; staged ones are not counted. */
+    private void prune() {
+        List<Long> ids = publishedRunIds();
         long currentId = currentRunId();
         int kept = 0;
         for (Long id : ids) {

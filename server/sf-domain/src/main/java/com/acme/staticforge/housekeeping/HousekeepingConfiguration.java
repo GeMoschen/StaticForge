@@ -1,5 +1,6 @@
 package com.acme.staticforge.housekeeping;
 
+import com.acme.staticforge.node.NodeIdentity;
 import com.acme.staticforge.scheduler.SchedulerProperties;
 import com.acme.staticforge.scheduler.SchedulerTickParticipant;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -35,6 +36,7 @@ public class HousekeepingConfiguration {
             MeterRegistry meters,
             HousekeepingProperties properties,
             SchedulerProperties scheduler,
+            NodeIdentity node,
             Clock clock) {
         return new SystemJobRunner(
                 jobs.orderedStream().toList(),
@@ -45,7 +47,7 @@ public class HousekeepingConfiguration {
                 meters,
                 properties,
                 scheduler.getLease(),
-                scheduler.effectiveNodeId(),
+                scheduler.effectiveNodeId(node),
                 clock);
     }
 

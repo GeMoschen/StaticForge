@@ -52,9 +52,9 @@ area: backend
   - [ ] a live family with revoked rows is kept, and presenting a revoked row still triggers reuse detection;
   - [ ] a family past its absolute expiry is deleted;
   - [ ] a family fully expired for longer than the reuse window is deleted.
-- [ ] Login limiter: after 10,000 distinct failed keys and one eviction past the window, the map is empty. A blocked key
+- [x] Login limiter: after 10,000 distinct failed keys and one eviction past the window, the map is empty. A blocked key
       survives eviction until its block ends.
-- [ ] Idempotency: a key older than the TTL is evicted, and a re-submission with it starts a new run (documented
+- [x] Idempotency: a key older than the TTL is evicted, and a re-submission with it starts a new run (documented
       behaviour).
 - [ ] `./gradlew build` green.
 
@@ -66,3 +66,4 @@ area: backend
 
 - Delete in batches by id range, not one huge `DELETE`, so PostgreSQL WAL and locks stay small.
 - The audit UI filter list (`actions()`) is derived from the DB, so purged actions disappear from it. That is expected.
+- memory-eviction: done by B1 (`MemoryEvictionJob` in `sf-api`, package `com.acme.staticforge.housekeeping.memory`, no settings; `LoginAttemptService.evictIdle(now)`/`size()`; `GenerationService.evictIdempotencyKeys(olderThan)`, `idempotencyKeyCount()`, keys timestamped, `sf.generate.idempotency-ttl` default 24h; tests `LoginAttemptServiceTest`, `MemoryEvictionIntegrationTest`).

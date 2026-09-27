@@ -43,6 +43,18 @@ public class GenerationProperties {
      */
     private int planRetentionRuns = 50;
 
+    /**
+     * How often a running build refreshes its {@code heartbeat_at} (M29.2.1), besides every stage. At most 30 seconds:
+     * the {@code generation-run-recovery} job fails runs whose heartbeat is older than its {@code staleAfter}.
+     */
+    private Duration heartbeatInterval = Duration.ofSeconds(15);
+
+    /**
+     * How long an {@code Idempotency-Key} of a generation start is remembered (M29.2.4). The {@code memory-eviction}
+     * job forgets older keys; a re-submission with a forgotten key starts a new run.
+     */
+    private Duration idempotencyTtl = Duration.ofHours(24);
+
     public int getParallelism() {
         return parallelism;
     }
@@ -97,6 +109,22 @@ public class GenerationProperties {
 
     public void setPlanRetentionRuns(int planRetentionRuns) {
         this.planRetentionRuns = planRetentionRuns;
+    }
+
+    public Duration getHeartbeatInterval() {
+        return heartbeatInterval;
+    }
+
+    public void setHeartbeatInterval(Duration heartbeatInterval) {
+        this.heartbeatInterval = heartbeatInterval;
+    }
+
+    public Duration getIdempotencyTtl() {
+        return idempotencyTtl;
+    }
+
+    public void setIdempotencyTtl(Duration idempotencyTtl) {
+        this.idempotencyTtl = idempotencyTtl;
     }
 
     /** Parsed render-time budget (default {@code 5s}). */

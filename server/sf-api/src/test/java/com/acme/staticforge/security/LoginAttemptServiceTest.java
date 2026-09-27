@@ -104,4 +104,66 @@ class LoginAttemptServiceTest {
         assertThat(user.getStatus()).isNotEqualTo(UserStatus.LOCKED);
         assertThat(user.getLockedUntil()).isNull();
     }
+
+    @Test
+    void evictionEmptiesTheLimiterOfIdleKeys() {
+        MutableTime time = new MutableTime(Instant.parse("2024-01-01T00:00:00Z"));
+        LoginAttemptService limiter = new LoginAttemptService(appUsers, time);
+        for (int i = 0; i < 10_000; i++) {
+            limiter.recordIpFailure("10.0." + (i / 256) + "." + (i % 256) + ":user" + i);
+        }
+        assertThat(limiter.size()).isEqualTo(10_000);
+
+        // Still inside the window: nothing is idle yet.
+        assertThat(limiter.evictIdle(time.instant().plus(Duration.ofMinutes(4)))).isZero();
+        assertThat(limiter.evictIdle(time.instant().plus(Duration.ofMinutes(5)).plusSeconds(1))).isEqualTo(10_000);
+        assertThat(limiter.size()).isZero();
+    }
+
+    @Test
+    void aBlockedKeySurvivesEvictionUntilItsBlockEnds() {
+        MutableTime time = new MutableTime(Instant.parse("2024-01-01T00:00:00Z"));
+        LoginAttemptService limiter = new LoginAttemptService(appUsers, time);
+        for (int i = 0; i < 15; i++) {
+            limiter.recordIpFailure("1.2.3.4:mallory");
+        }
+        // 15 failures: blocked for 60s << 5 = 32 minutes, far past the 5-minute window.
+        Instant windowPassed = time.instant().plus(Duration.ofMinutes(6));
+        assertThat(limiter.evictIdle(windowPassed)).isZero();
+        time.set(windowPassed);
+        assertThatThrownBy(() -> limiter.checkRateLimit("1.2.3.4:mallory")).isInstanceOf(SfException.class);
+
+        assertThat(limiter.evictIdle(Instant.parse("2024-01-01T00:33:00Z"))).isEqualTo(1);
+        assertThat(limiter.size()).isZero();
+        time.set(Instant.parse("2024-01-01T00:33:00Z"));
+        limiter.checkRateLimit("1.2.3.4:mallory");
+    }
+
+    /** A clock the test moves. */
+    private static final class MutableTime extends Clock {
+        private Instant now;
+
+        MutableTime(Instant now) {
+            this.now = now;
+        }
+
+        void set(Instant instant) {
+            now = instant;
+        }
+
+        @Override
+        public ZoneOffset getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
+    }
 }

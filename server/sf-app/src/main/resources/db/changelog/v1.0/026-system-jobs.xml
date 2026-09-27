@@ -124,4 +124,19 @@
         </addColumn>
     </changeSet>
 
+    <!-- M29.2.1: interrupted-run recovery. executor_node is the node (sf.node-id) whose executor holds the run, set when
+         the run is queued; heartbeat_at is refreshed by the executing thread at every stage and at least every
+         sf.generate.heartbeat-interval while it runs. The generation-run-recovery job fails QUEUED/RUNNING runs of
+         this node that nothing executes (after a restart), rows without a node (queued before M29) and runs whose
+         heartbeat is older than its staleAfter setting. The status index serves that job's scan of active runs. -->
+    <changeSet id="026-generation-run-heartbeat" author="sf">
+        <addColumn tableName="generation_run">
+            <column name="executor_node" type="VARCHAR(100)"/>
+            <column name="heartbeat_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+        <createIndex tableName="generation_run" indexName="idx_generation_run_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
 </databaseChangeLog>

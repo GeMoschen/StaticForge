@@ -1,6 +1,7 @@
 package com.acme.staticforge.scheduler;
 
 import com.acme.staticforge.audit.AuditService;
+import com.acme.staticforge.node.NodeIdentity;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
@@ -34,6 +35,7 @@ public class SchedulerConfiguration {
             PlatformTransactionManager transactionManager,
             MeterRegistry meters,
             SchedulerProperties properties,
+            NodeIdentity node,
             Clock clock) {
         return new SchedulerEngine(
                 actions,
@@ -45,7 +47,7 @@ public class SchedulerConfiguration {
                 transactionManager,
                 meters,
                 properties,
-                properties.effectiveNodeId(),
+                properties.effectiveNodeId(node),
                 clock);
     }
 

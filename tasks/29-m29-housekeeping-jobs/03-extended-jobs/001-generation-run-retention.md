@@ -1,6 +1,6 @@
 ---
 id: M29.3.1
-status: todo
+status: done
 depends: [M29.1.1, M29.2.1, M29.2.2]
 epic: m29-housekeeping-jobs
 feature: extended-jobs
@@ -39,13 +39,13 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] With `keepDays = 0` and `keepPerProject = 2`, every unprotected run beyond the two newest is deleted, and a
+- [x] With `keepDays = 0` and `keepPerProject = 2`, every unprotected run beyond the two newest is deleted, and a
       promotable build older than both is kept.
-- [ ] An incremental build after retention still finds its baseline (no fallback to full because of retention).
-- [ ] Deleting a run removes its plan rows, and `GET /generations/{id}/plan` of a deleted run answers `404`.
-- [ ] Schedule execution history showing a deleted run displays it as "run deleted" (API field null-safe).
-- [ ] A dry run matches the real run.
-- [ ] `./gradlew build` green.
+- [x] An incremental build after retention still finds its baseline (no fallback to full because of retention).
+- [x] Deleting a run removes its plan rows, and `GET /generations/{id}/plan` of a deleted run answers `404`.
+- [x] Schedule execution history showing a deleted run displays it as "run deleted" (API field null-safe).
+- [x] A dry run matches the real run.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -55,3 +55,17 @@ area: backend
 
 - `generation_run` may be referenced by FKs added in M27 (`scheduled_action_execution.generation_run_id`). Make that FK
   `ON DELETE SET NULL`, or null it in the job before deleting. Decide, and test on PostgreSQL semantics with H2 parity.
+
+### Deviations
+
+- **No foreign key to decide on**: `scheduled_action_execution.generation_run_id` has none (022). The job unlinks the
+  executions of the runs it deletes in the same batch transaction and keeps the id as
+  `detail.deletedGenerationRunId`; the API field is simply `null`, and the schedule history UI shows
+  "Generation run #N (run deleted)" (`schedule-history.component`, with a spec).
+- **Base runs**: build manifests don't name a base run, so the protected base is the `planSummary.baseRunId` of every
+  run with a build on disk (the build it was carried from).
+- A run's age is `finished_at` (else `started_at`). Settings: `keepDays` 0–36500, `keepPerProject` 0–1,000,000.
+- Plan rows are deleted explicitly in the batch (the FK cascade of 016 would also remove them).
+- `retainedRunIds()` was added with M29.2.2 (published builds on disk + `current`).
+- UI check: `GenerationComponent` and `insight/` make no "previous run" (id − 1) assumptions; a deleted run simply
+  isn't listed, and `GET /generations/{id}/plan` answers `404`.

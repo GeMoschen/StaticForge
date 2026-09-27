@@ -113,6 +113,39 @@ public class LoginAttemptService {
         appUsers.save(user);
     }
 
+    /**
+     * Drops the buckets that no longer limit anything (M29.2.4, the {@code memory-eviction} job): newest attempt older
+     * than the window and no block in force at {@code now}. A blocked key stays until its block ends. Without this, a
+     * key is only removed by a successful login, so failed attempts from many addresses or names would accumulate.
+     *
+     * @return how many buckets were dropped
+     */
+    public int evictIdle(Instant now) {
+        Instant cutoff = now.minus(WINDOW);
+        int[] evicted = {0};
+        for (String key : buckets.keySet()) {
+            // Checked and removed atomically for the key, under the bucket's lock.
+            buckets.computeIfPresent(key, (k, bucket) -> {
+                synchronized (bucket) {
+                    Instant newest = bucket.attempts.peekLast();
+                    boolean idle = (newest == null || newest.isBefore(cutoff))
+                            && (bucket.blockUntil == null || !bucket.blockUntil.isAfter(now));
+                    if (idle) {
+                        evicted[0]++;
+                        return null;
+                    }
+                    return bucket;
+                }
+            });
+        }
+        return evicted[0];
+    }
+
+    /** How many (IP, username) keys the limiter holds now. */
+    public int size() {
+        return buckets.size();
+    }
+
     void clear() {
         buckets.clear();
     }

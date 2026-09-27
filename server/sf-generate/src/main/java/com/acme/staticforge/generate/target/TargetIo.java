@@ -4,10 +4,13 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.Map;
@@ -51,7 +54,7 @@ final class TargetIo {
     }
 
     static void deleteRecursively(Path path) {
-        if (path == null || !Files.exists(path)) {
+        if (path == null || !Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
             return;
         }
         try (var stream = Files.walk(path)) {
@@ -65,6 +68,68 @@ final class TargetIo {
         } catch (IOException ignored) {
             // best-effort cleanup
         }
+    }
+
+    /**
+     * Deletes {@code path} under {@code root} (M29.2.2): a link as a link, a directory recursively without following
+     * the links inside it (a hard-linked file loses one link; the data stays for the builds that share it).
+     *
+     * @throws IllegalArgumentException when {@code path} is not strictly inside {@code root} (spec §26.3)
+     */
+    static void deleteUnder(Path root, Path path) {
+        Path normalized = path.toAbsolutePath().normalize();
+        if (!normalized.startsWith(root) || normalized.equals(root)) {
+            throw new IllegalArgumentException("Refusing to delete " + path + ": not inside " + root);
+        }
+        if (Files.isSymbolicLink(normalized)) {
+            try {
+                Files.deleteIfExists(normalized);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Failed to delete link " + normalized, e);
+            }
+            return;
+        }
+        deleteRecursively(normalized);
+    }
+
+    /** The bytes of the regular files under {@code path} (or of {@code path}), links not followed and not counted. */
+    static long sizeOf(Path path) {
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(path)) {
+            return 0;
+        }
+        try (var stream = Files.walk(path)) {
+            return stream.mapToLong(p -> {
+                try {
+                    BasicFileAttributes attributes = Files.readAttributes(p, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                    return attributes.isRegularFile() ? attributes.size() : 0;
+                } catch (IOException e) {
+                    return 0;
+                }
+            }).sum();
+        } catch (IOException | UncheckedIOException e) {
+            return 0;
+        }
+    }
+
+    /** The last modification of {@code path} itself (of the link, for a link); the epoch when unreadable. */
+    static Instant modified(Path path) {
+        try {
+            return Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS).toInstant();
+        } catch (IOException e) {
+            return Instant.EPOCH;
+        }
+    }
+
+    /** The run id a build file name starts with ({@code 17}, {@code 17.zip}, {@code 17.manifest.json}), or -1. */
+    static long leadingRunId(String name, String suffix) {
+        if (!name.endsWith(suffix)) {
+            return -1;
+        }
+        String digits = name.substring(0, name.length() - suffix.length());
+        if (digits.isEmpty() || digits.length() > 18 || !digits.chars().allMatch(Character::isDigit)) {
+            return -1;
+        }
+        return Long.parseLong(digits);
     }
 
     /** SHA-256 hex digest of {@code bytes}, used as a cheap content fingerprint for S3 diffing. */

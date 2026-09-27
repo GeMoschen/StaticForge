@@ -3,14 +3,18 @@ package com.acme.staticforge.generate.target;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 /**
  * Filesystem target writer (spec §18.4). Stages a run into {@code {outputRoot}/builds/{runId}} and
@@ -28,8 +32,16 @@ import java.util.Set;
  * (copied where the file store has no links), and the run's own files are written as new files, never into a linked
  * one. The manifest is stored as {@code builds/{runId}.manifest.json}, outside the served directory, and pruned with
  * its build.
+ *
+ * <p><b>Published builds (M29.2.2):</b> the manifest is written right before a build is published, so a build
+ * directory with a manifest is a published build and one without is staged output of a run that never published (or
+ * a build from before M22). {@code keep-builds} counts published builds only: {@link #publish} keeps {@code current}
+ * and the newest {@code keep-builds} published builds and never touches unpublished ones — those are
+ * {@code build-output-cleanup}'s, which knows the runs.
  */
 public final class FilesystemTargetWriter implements TargetWriter {
+
+    private static final Pattern TEMP_LINK = Pattern.compile("\\.current-\\d+\\.link");
 
     private final Path outputRoot;
     private final int keepBuilds;
@@ -174,22 +186,79 @@ public final class FilesystemTargetWriter implements TargetWriter {
         }
     }
 
-    private void prune() {
+    @Override
+    public Set<Long> retainedRunIds() {
+        Set<Long> ids = new TreeSet<>(publishedRunIds());
+        long currentId = currentRunId();
+        if (currentId >= 0 && Files.isDirectory(buildDir(currentId))) {
+            ids.add(currentId);
+        }
+        return ids;
+    }
+
+    @Override
+    public List<StoredItem> storedItems() {
+        List<StoredItem> items = new ArrayList<>();
+        try (var stream = Files.list(outputRoot)) {
+            stream.filter(p -> TEMP_LINK.matcher(p.getFileName().toString()).matches())
+                    .forEach(p -> items.add(new StoredItem(StoredItem.Kind.TEMP_LINK, -1, p, TargetIo.modified(p))));
+        } catch (IOException e) {
+            // no output root yet: nothing stored
+        }
         Path builds = buildsDir();
         if (!Files.isDirectory(builds)) {
-            return;
+            return items;
         }
-        List<Long> ids;
         try (var stream = Files.list(builds)) {
-            ids = stream.filter(Files::isDirectory)
-                    .map(p -> p.getFileName().toString())
-                    .filter(s -> s.chars().allMatch(Character::isDigit))
-                    .map(Long::parseLong)
+            stream.sorted().forEach(p -> {
+                String name = p.getFileName().toString();
+                long build = TargetIo.leadingRunId(name, "");
+                long manifest = TargetIo.leadingRunId(name, ".manifest.json");
+                if (build >= 0 && Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
+                    items.add(new StoredItem(StoredItem.Kind.BUILD, build, p, TargetIo.modified(p)));
+                } else if (manifest >= 0) {
+                    items.add(new StoredItem(StoredItem.Kind.MANIFEST, manifest, p, TargetIo.modified(p)));
+                }
+            });
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException("Failed to list " + builds, e);
+        }
+        return items;
+    }
+
+    @Override
+    public long sizeOf(StoredItem item) {
+        return TargetIo.sizeOf(item.path());
+    }
+
+    @Override
+    public void delete(StoredItem item) {
+        if (item.kind() == StoredItem.Kind.BUILD && item.runId() == currentRunId()) {
+            throw new IllegalArgumentException("Refusing to delete the current build " + item.path());
+        }
+        TargetIo.deleteUnder(outputRoot, item.path());
+    }
+
+    /** The builds with a manifest, newest first. */
+    private List<Long> publishedRunIds() {
+        Path builds = buildsDir();
+        if (!Files.isDirectory(builds)) {
+            return List.of();
+        }
+        try (var stream = Files.list(builds)) {
+            return stream.filter(p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS))
+                    .map(p -> TargetIo.leadingRunId(p.getFileName().toString(), ""))
+                    .filter(id -> id >= 0 && Files.isRegularFile(manifestFile(id)))
                     .sorted(Comparator.reverseOrder())
                     .toList();
         } catch (IOException e) {
-            return;
+            return List.of();
         }
+    }
+
+    /** Keeps {@code current} and the newest {@code keepBuilds} published builds; unpublished builds are not counted. */
+    private void prune() {
+        List<Long> ids = publishedRunIds();
         long currentId = currentRunId();
         int kept = 0;
         for (Long id : ids) {

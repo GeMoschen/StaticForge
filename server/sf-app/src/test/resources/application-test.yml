@@ -18,6 +18,10 @@ sf:
     jwt:
       algorithm: HS256
       secret: test-secret-please-do-not-use-in-production-0123456789
+  # Every context writes generated output to a directory of its own: the default ./build/out outlives the run, and
+  # the next run's projects (same keys, same target ids in a fresh database) would find the old builds there.
+  generate:
+    output-root: ${java.io.tmpdir}/sf-test-out/${random.uuid}
   media:
     store: filesystem
     root: ${java.io.tmpdir}/sf-test-media

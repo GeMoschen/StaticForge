@@ -50,4 +50,29 @@ public interface TargetWriter {
 
     /** A short human-readable description of this target (backend + destination). */
     String describe();
+
+    /**
+     * The runs whose published build this target holds on disk, plus the run {@code current} points at while its build
+     * exists (M29.2.2, M29.3.1): the rollback points {@code keep-builds} keeps, which run retention must never delete.
+     * A published build is one with a manifest (filesystem, S3) or a finished archive (ZIP); a staged build of a run
+     * that never published is not listed.
+     */
+    Set<Long> retainedRunIds();
+
+    /**
+     * Everything this target keeps per run, plus leftover temporary links (M29.2.2), for {@code build-output-cleanup}
+     * to judge against the run rows. Empty for a backend whose cleanup is not supported (the S3 local mirror).
+     */
+    List<StoredItem> storedItems();
+
+    /** The bytes {@code item} takes on disk: a directory walk that doesn't follow links. */
+    long sizeOf(StoredItem item);
+
+    /**
+     * Deletes {@code item} (a directory recursively, a link as a link, never following it) after checking that it lies
+     * under this target's root and is not the build {@code current} points at.
+     *
+     * @throws IllegalArgumentException for an item outside the target root or the current build
+     */
+    void delete(StoredItem item);
 }

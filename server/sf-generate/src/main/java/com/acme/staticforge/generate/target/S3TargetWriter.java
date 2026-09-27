@@ -146,6 +146,40 @@ public final class S3TargetWriter implements TargetWriter {
         return "s3 (local mirror) target at " + targetRoot;
     }
 
+    /** The published mirrors ({@code {runId}/} with a key manifest) and the current one (M29.3.1). */
+    @Override
+    public Set<Long> retainedRunIds() {
+        Set<Long> ids = new java.util.TreeSet<>();
+        try (var stream = Files.list(targetRoot)) {
+            stream.map(p -> TargetIo.leadingRunId(p.getFileName().toString(), ".keys"))
+                    .filter(id -> id >= 0 && Files.isDirectory(runDir(id)))
+                    .forEach(ids::add);
+        } catch (IOException e) {
+            return ids;
+        }
+        long currentId = currentRunId();
+        if (currentId >= 0 && Files.isDirectory(runDir(currentId))) {
+            ids.add(currentId);
+        }
+        return ids;
+    }
+
+    /** Cleanup of the local mirror is not supported (M29.2.2: it follows when this writer uploads to real buckets). */
+    @Override
+    public List<StoredItem> storedItems() {
+        return List.of();
+    }
+
+    @Override
+    public long sizeOf(StoredItem item) {
+        return TargetIo.sizeOf(item.path());
+    }
+
+    @Override
+    public void delete(StoredItem item) {
+        throw new UnsupportedOperationException("The S3 local mirror is not cleaned up");
+    }
+
     /** Returns the NEW/changed keys (invalidation set) computed for {@code runId}, or empty. */
     public Set<String> changedKeys(long runId) {
         return changedKeys.getOrDefault(runId, Set.of());

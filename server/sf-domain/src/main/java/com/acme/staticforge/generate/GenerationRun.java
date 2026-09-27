@@ -85,6 +85,20 @@ public class GenerationRun {
     @Column(name = "plan_summary")
     private JsonNode planSummary;
 
+    /**
+     * The node whose executor holds the run (M29.2.1, {@code sf.node-id}); set when the run is queued. Never written
+     * by an entity update: only on insert and by the targeted updates of the run's executor.
+     */
+    @Column(name = "executor_node", length = 100, updatable = false)
+    private String executorNode;
+
+    /**
+     * When the executing thread last reported progress (M29.2.1); {@code null} until the run is {@code RUNNING}. Written
+     * only by targeted updates, so a merge of a stale entity can't move it back.
+     */
+    @Column(name = "heartbeat_at", insertable = false, updatable = false)
+    private Instant heartbeatAt;
+
     protected GenerationRun() {}
 
     public GenerationRun(long projectId, Long revisionId, GenerationMode mode, String channels, Long targetId,
@@ -251,6 +265,19 @@ public class GenerationRun {
         this.comment = text.isEmpty()
                 ? null
                 : text.length() <= MAX_COMMENT ? text : text.substring(0, MAX_COMMENT - 1) + "…";
+    }
+
+    public String getExecutorNode() {
+        return executorNode;
+    }
+
+    /** Takes effect on insert only (the column is not updatable). */
+    public void setExecutorNode(String executorNode) {
+        this.executorNode = executorNode;
+    }
+
+    public Instant getHeartbeatAt() {
+        return heartbeatAt;
     }
 
     public JsonNode getPlanSummary() {
