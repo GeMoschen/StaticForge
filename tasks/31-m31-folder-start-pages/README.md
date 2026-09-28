@@ -104,15 +104,15 @@ index?" (folder references, preview links, navigation, URL registry, planner, re
 
 ## Exit criteria (epic is done when)
 
-- [ ] A page "Homepage" (template with its own `outputPath`) set as start page of `pages_root` renders as `index.html`
+- [x] A page "Homepage" (template with its own `outputPath`) set as start page of `pages_root` renders as `index.html`
       (pretty: `./`; localized: `de/index.html`; paginated: `index-2.html`); a `pathOverride` still wins.
-- [ ] A stale pointer falls back to the `indexUid` rule with `SF-GEN-0112`; a conflicting `index` page is refused at
+- [x] A stale pointer falls back to the `indexUid` rule with `SF-GEN-0112`; a conflicting `index` page is refused at
       set time (`SF-DOM-0111`) and collides at build time (`SF-GEN-0110`) when it arises later.
-- [ ] Folder references, preview links, navigation and URL-registry hrefs resolve to the start page.
-- [ ] Changing a start page re-renders the old and new start page, the linkers and navigation incrementally; AUTO
+- [x] Folder references, preview links, navigation and URL-registry hrefs resolve to the start page.
+- [x] Changing a start page re-renders the old and new start page, the linkers and navigation incrementally; AUTO
       redirects and shadowing work; export/import protocol 11 round-trips the setting, `pages_root` included.
-- [ ] The UI sets and shows start pages for every PAGES folder including the root; the Navigation root is selectable.
-- [ ] `./gradlew spotlessCheck build` (`test --rerun`), `ui` `npx ng build` and `npx vitest run` green; spec and guides
+- [x] The UI sets and shows start pages for every PAGES folder including the root; the Navigation root is selectable.
+- [x] `./gradlew spotlessCheck build` (`test --rerun`), `ui` `npx ng build` and `npx vitest run` green; spec and guides
       updated.
 
 ## Tasks (dependency order)
