@@ -1,8 +1,12 @@
 package com.acme.staticforge.api;
 
+import com.acme.staticforge.api.dto.FindingCountsView;
+import com.acme.staticforge.api.dto.FindingPageView;
+import com.acme.staticforge.api.dto.FindingView;
 import com.acme.staticforge.api.dto.GenerationPlanView;
 import com.acme.staticforge.api.dto.GenerationRequestDto;
 import com.acme.staticforge.api.dto.GenerationRunView;
+import com.acme.staticforge.api.dto.RecordPageView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.GenerationAuthorization;
@@ -11,6 +15,9 @@ import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
 import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.insight.PlanEntryRecord;
+import com.acme.staticforge.generate.quality.QualityCategory;
+import com.acme.staticforge.generate.quality.QualitySeverity;
+import com.acme.staticforge.generate.quality.RunFindingStore;
 import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.project.publish.PublishPermission;
@@ -26,9 +33,12 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -67,6 +77,7 @@ public class GenerationController {
     private final UserService userService;
     private final SecuritySupport securitySupport;
     private final ObjectMapper mapper;
+    private final RunFindingStore findingStore;
 
     public GenerationController(
             GenerationService generationService,
@@ -75,7 +86,8 @@ public class GenerationController {
             ProjectService projectService,
             UserService userService,
             SecuritySupport securitySupport,
-            ObjectMapper mapper) {
+            ObjectMapper mapper,
+            RunFindingStore findingStore) {
         this.generationService = generationService;
         this.generationAuthorization = generationAuthorization;
         this.projectAuth = projectAuth;
@@ -83,6 +95,7 @@ public class GenerationController {
         this.userService = userService;
         this.securitySupport = securitySupport;
         this.mapper = mapper;
+        this.findingStore = findingStore;
     }
 
     @GetMapping
@@ -132,7 +145,8 @@ public class GenerationController {
                 PlanViews.summary(dryRun.summary()),
                 PlanViews.changedAssets(dryRun.summary()),
                 PlanViews.entries(entries),
-                dryRun.diagnostics());
+                dryRun.diagnostics(),
+                PlanViews.redirectCandidates(dryRun));
     }
 
     /** The stored plan of a past run (M22.2.1); {@code entries} is {@code null} once retention pruned them. */
@@ -156,7 +170,94 @@ public class GenerationController {
                 PlanViews.summary(stored.summary()),
                 PlanViews.changedAssets(stored.summary()),
                 stored.entries() == null ? null : PlanViews.entries(stored.entries()),
+                null,
                 null);
+    }
+
+    /** The largest page of findings. */
+    static final int MAX_FINDINGS_PAGE_SIZE = 200;
+
+    /**
+     * The quality check findings of a run (M30.1.2), paged and sorted by output path, then code. Filters: {@code
+     * severity} ({@code WARNING}/{@code ERROR}), {@code category} ({@code LINKS}/{@code SEO}/{@code ACCESSIBILITY}),
+     * {@code code} (repeatable), {@code assetUuid}, {@code channel}, {@code locale} and {@code pathPrefix}. A run of
+     * another project is {@code 404}; an invalid filter or page is {@code 400}.
+     */
+    @GetMapping("/{runId}/findings")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public FindingPageView findings(
+            @PathVariable String projectKey,
+            @PathVariable long runId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String severity,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) List<String> code,
+            @RequestParam(required = false) UUID assetUuid,
+            @RequestParam(required = false) String channel,
+            @RequestParam(required = false) String locale,
+            @RequestParam(required = false) String pathPrefix) {
+        GenerationRun run = generationService.status(projectKey, runId);
+        if (page < 0 || size < 1 || size > MAX_FINDINGS_PAGE_SIZE) {
+            throw new SfException(ProblemFactory.badRequest(
+                    "page must be >= 0 and size between 1 and " + MAX_FINDINGS_PAGE_SIZE + "."));
+        }
+        QualitySeverity severityFilter = blank(severity) ? null : QualitySeverity.parse(severity);
+        if (!blank(severity) && (severityFilter == null || severityFilter == QualitySeverity.OFF)) {
+            throw new SfException(ProblemFactory.badRequest("severity must be WARNING or ERROR."));
+        }
+        QualityCategory categoryFilter = blank(category) ? null : QualityCategory.parse(category);
+        if (!blank(category) && categoryFilter == null) {
+            throw new SfException(ProblemFactory.badRequest("category must be LINKS, SEO or ACCESSIBILITY."));
+        }
+        RunFindingStore.Filter filter = new RunFindingStore.Filter(
+                severityFilter,
+                categoryFilter,
+                code == null ? null : Set.copyOf(code.stream().filter(c -> !blank(c)).map(String::trim).toList()),
+                assetUuid,
+                blank(channel) ? null : channel.trim(),
+                blank(locale) ? null : locale.trim(),
+                blank(pathPrefix) ? null : pathPrefix);
+        Page<RunFindingStore.StoredFinding> found =
+                findingStore.page(run.getProjectId(), runId, filter, PlanViews.pageable(page, size));
+        return new FindingPageView(
+                found.getContent().stream().map(GenerationController::finding).toList(),
+                new RecordPageView.PageMeta(
+                        found.getSize(), found.getNumber(), found.getTotalElements(), found.getTotalPages()));
+    }
+
+    private static FindingView finding(RunFindingStore.StoredFinding f) {
+        return new FindingView(
+                f.id(),
+                f.code(),
+                f.category() == null ? null : f.category().name(),
+                f.severity() == null ? null : f.severity().name(),
+                f.message(),
+                f.selector(),
+                f.sectionInstanceId(),
+                f.carried(),
+                f.outputPath(),
+                f.channel(),
+                f.locale(),
+                f.pageNumber(),
+                f.assetUuid() == null ? null : new FindingView.FindingAsset(f.assetUuid(), f.uid(), f.displayName()));
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /** The run's finding counts; {@code null} for a run that stored none (before M30, or not finished). */
+    private static FindingCountsView findingCounts(GenerationRun run) {
+        RunFindingStore.Counts counts = RunFindingStore.Counts.of(run);
+        if (counts == null) {
+            return null;
+        }
+        Map<String, Integer> byCategory = new LinkedHashMap<>();
+        for (QualityCategory category : QualityCategory.values()) {
+            byCategory.put(category.key(), counts.byCategory().get(category));
+        }
+        return new FindingCountsView(counts.errors(), counts.warnings(), byCategory, counts.truncated());
     }
 
     @GetMapping("/{runId}")
@@ -280,7 +381,8 @@ public class GenerationController {
                 run.getDiagnostics(),
                 PlanViews.summary(run.getPlanSummary()),
                 run.getComment(),
-                starter == null ? null : new GenerationRunView.StartedBy(starter.getId(), starter.getDisplayName()));
+                starter == null ? null : new GenerationRunView.StartedBy(starter.getId(), starter.getDisplayName()),
+                findingCounts(run));
     }
 
     private List<String> parseChannels(String json) {

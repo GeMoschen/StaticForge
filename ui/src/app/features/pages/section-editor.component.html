@@ -1,5 +1,6 @@
 <div
   class="section-card"
+  [attr.data-sf-section]="section().instanceId"
   [attr.draggable]="readOnly() ? null : 'true'"
   (dragstart)="onDragStart($event)"
   (dragover)="onDragOver($event)"
@@ -59,6 +60,8 @@
         [definition]="contentDefinition()"
         [formGroup]="fieldForm()"
         [projectKey]="projectKey()"
+        [issues]="issues()"
+        [issuePrefix]="issuePrefix()"
         [editingLocale]="editingLocale()"
         [storedValue]="storedContent()"
         [localeLabels]="localeLabels()"

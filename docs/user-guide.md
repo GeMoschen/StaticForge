@@ -28,6 +28,10 @@ Templates are owned by **template developers** (see the [template-developer guid
    - A page often also shows values from **Globals** (below), such as the site title. Those aren't fields of the page — change them in Globals.
 5. Preview updates live as you type (debounced), and the viewport switcher (mobile / tablet / desktop) resizes the preview.
 6. Saving doesn't put anything online: your page is a **draft** until someone releases it (see [Publishing](#publishing-draft-release-unpublish-m27)).
+7. **Navigation and search.** Click the page title to open its properties: besides the display name and UID they hold
+   **Show in navigation** and **Hide from search engines** (M30). A hidden page stays online and linked, but leaves
+   the sitemap, and the template adds a robots "noindex" tag — if it doesn't, the build reports it (`SF-CHK-0212`).
+   Like every other change, it goes online with the next release and build.
 
 #### Listing pages (pagination)
 
@@ -384,7 +388,7 @@ project."
 
 ### Generate & publish
 
-First, in **Settings → Targets**, create at least one target (the first one becomes the default). Each target writes into its own folder, `{projectKey}/{output folder}` under the server's output root (`{projectKey}/target-{id}` when the folder is left empty); two targets of a project may not share or nest folders (an imported target whose folder is invalid or clashes is imported without it and uses its default folder; the import analysis warns about this). Set **Base URL** for correct sitemap and absolute links.
+First, in **Settings → Generation**, create at least one target (the first one becomes the default). Each target writes into its own folder, `{projectKey}/{output folder}` under the server's output root (`{projectKey}/target-{id}` when the folder is left empty); two targets of a project may not share or nest folders (an imported target whose folder is invalid or clashes is imported without it and uses its default folder; the import analysis warns about this). Set **Base URL** for correct sitemap and absolute links.
 
 In **Channels**, each channel's form sets how its output files and links are named:
 
@@ -403,7 +407,7 @@ A build publishes what is **released** (see [Publishing](#publishing-draft-relea
 1. Open **Generate**, pick full or incremental mode, channels, and a target — optionally a **Scope** (a folder or
    some pages) and a comment — then start. Editors see only what their project allows (see
    [Publishing as an editor](#publishing-as-an-editor-m28)).
-2. A live log shows per-stage progress, error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5).
+2. A live log shows per-stage progress (M30: including **Checking output**), error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5). A build also checks what it wrote and adds redirects for moved pages — see [Quality checks and issues](#quality-checks-and-issues-m30) and [Redirects](#redirects-old-urls-keep-working-m30).
 3. Roll back to a previous build with **Promote** on a past run (the last few published builds are retained;
    developers only). Failed or cancelled runs can't be promoted, and don't push published builds out of the list.
 
@@ -422,6 +426,104 @@ An incremental run renders only what changed and publishes the complete site: th
 - **After a run.** In the run history each run shows "Incremental · 37 pages (via 2 changes)" or "Full · 5,000 pages". **Details → Rebuilt pages** lists what the run rebuilt and why, with the same filters. Plans of older runs are removed after a while ("Plan details were pruned").
 - **While editing.** The **Impact** panel in the template editor, the media drawer (below **Referenced by**) and the page editor answers "if I change this, what rebuilds?": "Changing this rebuilds 12 pages (24 files)", by kind of dependency, and a table with each page's chain back to this asset (pages link to their editor). It loads when you open it, always reflects the current state (also while viewing an old revision), and reloads after you save. It counts the most a change could rebuild; a small edit may rebuild less. Navigation matters: renaming a page that a navigation lists, or editing the navigation, rebuilds every page showing that navigation.
 - **Record sets.** Editing a record rebuilds the pages showing its set only if the set's query shows that record (before or after the edit); changing the set's query, name or place rebuilds every page showing the set. The reasons read "reads record set containing", "reads record set with changed query" and, after a developer changes how a dataset's records look, "renders through record template of".
+
+### Quality checks and issues (M30)
+
+Every build checks the pages it wrote: links inside the site (to missing, unreleased, deleted or held-back pages,
+missing images, `#anchors` that don't exist, links that only reach an old URL), the SEO basics (title, description,
+one main heading, language, language alternates, canonical link, hidden pages) and accessibility (images without alt
+text, links and buttons without text, skipped heading levels, duplicate ids, form fields without labels, frames
+without title, a page without language). Only links inside your site are checked; nothing is fetched from the
+internet.
+
+**While you edit.** At the foot of the page editor, below the fields and sections, the **Issues** panel shows a
+count in its header (marked when it includes errors). *Content* lists what the release would refuse or warn about —
+an empty required field, too many items — and the same problems show on their fields. *Output* lists what the checks
+find on the page's **draft** as it would be built (the HTML channel): each with the rule, severity, message and where
+it is usually fixed ("Fix in content", "Fix in template", "Fix in content or template"); errors come first. The panel
+checks again shortly after each save, when you switch language and when you look at an older revision ("checked at
+14:05"); if the checks can't run it says "Checks unavailable", offers *Check again*, and you keep editing. Click an
+issue to see its rule code and element and to jump to its field, or to its section in the form and the preview. The
+checks always cover the draft, also while the preview shows *Published*. Some checks need the whole built site —
+duplicate titles and descriptions, anchors on other pages, language alternates, links to held-back pages or to old
+URLs — and only run in a build; the panel names them below the list.
+
+**Fixing a finding.**
+
+- *Fix in content* — the page (or a media file) holds the problem: give the image alt text in the media library, pick
+  a link target that exists and is released, shorten the title field, add the missing description, fix the headings
+  in a rich-text field.
+- *Fix in template* — the markup comes from the template (a hard-coded icon link, a fixed `lang`, a section that writes
+  its title as `h1`, no `<meta name="description">` at all). Tell the template developer; the fix then reaches every
+  page at the next build.
+- *Fix in content or template* — the message says which: an image the message names as a media asset needs alt
+  text on the media; a hard-coded image needs a template fix.
+
+**After a build.** The run list has a *Findings* column: "3 errors" and "41 warnings" chips (click one to see
+those findings) or "No findings". In a run's details, *Summary* adds the redirect counts and a findings line, and the
+**Findings** tab lists them with filters (severity, category, rule, channel, language, output path) that stay in the
+URL, so you can share a filtered list. Each finding names the page (click it to open the editor in that language),
+the rule, the message and the element; *carried* marks a finding an incremental build took over from the previous
+build for a page it didn't rebuild. Warnings leave a build **Success**. A rule set to *Error* holds its pages back:
+they aren't published, the run is **Partial**, and the log lists them under `SF-GEN-0125` "Quality check failed" with
+the rule codes and a *Show findings* link to that page's findings — the rest of the site is published, and pages
+linking a held-back page are never held back for it. The live log shows the check stage as **Checking output**.
+
+**Choosing the rules (developers).** **Settings → Quality** lists every rule in three groups (Links, SEO,
+Accessibility) with what it checks and where it is usually fixed. Set each one *Off*, *Warning* (the default) or
+*Error*; the title and description length rules take a range, the canonical rule a "required" switch; *Reset to
+default* undoes a rule's change, *Discard* all unsaved changes, and *Save* is enabled once something changed and every
+value is valid. The checks apply to HTML channels only. Everyone in the project can read the tab; only developers
+change it. After saving, the next incremental build runs as a full build, because every page has to be checked against
+the new rules. "Output could not be checked", "Link to a page held back in this build" and "Language alternates
+incomplete or broken" are never errors — their *Error* option is disabled: holding back one page must not hold back
+the pages that link to it.
+
+### Redirects: old URLs keep working (M30)
+
+When a released page moves — to another folder, with a new UID, because a template or a channel's URL setting
+changed — the next build notices that its address changed and adds an **automatic redirect** from the old address to
+the page. Visitors and search engines following an old link land on the page's new address. Moving the page again
+adds another redirect, and both lead straight to the newest address. Unpublishing or deleting a page adds nothing by
+itself — but you can choose where its old address should lead (below). Changing a folder's UID doesn't change any
+address; moving the folder does.
+
+**Settings → Redirects** lists every redirect: old path, channel, language, where it leads (a page with its current
+address, or a URL), *Automatic* or *Manual*, and its state:
+
+| State | Meaning |
+|---|---|
+| **Active** | written to every build: requests for the old path are sent to the target |
+| **Shadowed** | a page or media file is published at the old path, so the redirect isn't written; it is kept and takes effect once nothing lives there any more |
+| **Dangling** | the target page has no output in this channel and language (unpublished, deleted, not in this channel); kept, but not written until the page is published again — point it elsewhere or delete it |
+| **Loop** | it leads back to its own path, directly or through other redirects; builds leave it out |
+| **Not built** | nothing is published on the default target yet |
+
+Automatic redirects show the build that added them ("from run #88"). Filter by channel, language, kind, state or text;
+the filters stay in the URL. Developers can **Add redirect** (type the old path as you know it, `/old/page.html` or
+`/old/page/` — the dialog shows how it will be stored — and pick a page or type a path or `https://` URL), **Edit** and
+**Delete**. Editing an automatic redirect makes it manual: builds never change it again. A deleted automatic redirect
+comes back only if the page moves again. If someone else changed a redirect while you edited it, you're asked to
+reload.
+
+**Redirect old URL to…** When you unpublish a page, delete it in the page tree, or release a page's deletion in
+Changes, and the page is online, the dialog offers **Redirect old URL to…** with a page picker (preselected with the
+page that indexes the nearest folder above, when there is one). It's there for everyone who may unpublish. The
+redirect is added after the page went offline; until a build no longer contains the page it shows as *Shadowed*, and
+the confirmation links to the Redirects tab. If adding the redirect fails, the unpublish still stands — add the
+redirect in the Redirects tab.
+
+**How redirects are published** — per target, in *Settings → Generation*, the target form's *Redirect output*
+(developers; none checked publishes no redirects):
+
+- **HTML redirect pages** (default) — a small page at each old address that forwards at once. Works on every web
+  server, from a ZIP opened locally, and on any static host.
+- **Apache .htaccess** — redirect rules for Apache (with `AllowOverride FileInfo`); other servers ignore the file.
+- **redirects.json** — the list as data, for a host or proxy that reads it.
+
+Redirect pages never appear in the sitemap or the site search. A link in your content or templates that still points
+at an old address works, but the build reports it (`SF-CHK-0109`) so it can be updated — links made with page
+pickers follow moves by themselves.
 
 ### Revisions, spine, and time travel
 

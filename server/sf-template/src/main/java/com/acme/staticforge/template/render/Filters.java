@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -37,7 +38,21 @@ public final class Filters {
 
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
-    private static final Set<String> ESCAPING_OR_RAW = Set.of("html", "attr", "js", "url", "raw");
+    /**
+     * Filters whose output is already safe for the channel, so the render doesn't escape it again: the escaping filters,
+     * {@code raw}, and the two that build markup from input they escape themselves ({@code md}, {@code nl2br}). Escaping
+     * their output again printed the markup as text ({@code &lt;p&gt;}) in every HTML channel.
+     */
+    private static final Set<String> ESCAPING_OR_RAW = Set.of("html", "attr", "js", "url", "raw", "md", "nl2br");
+
+    /** A URL scheme: {@code javascript:} and friends are dropped from Markdown links and images. */
+    private static final Pattern URL_SCHEME = Pattern.compile("^([a-zA-Z][a-zA-Z0-9+.-]*):");
+
+    private static final Set<String> SAFE_URL_SCHEMES = Set.of("http", "https", "mailto", "tel");
+
+    private static final Pattern MD_IMAGE = Pattern.compile("!\\[([^\\]]*)\\]\\(([^)]+)\\)");
+
+    private static final Pattern MD_LINK = Pattern.compile("\\[([^\\]]*)\\]\\(([^)]+)\\)");
 
     private static final Map<String, Filter> REGISTRY = buildRegistry();
 
@@ -79,7 +94,7 @@ public final class Filters {
         return REGISTRY.get(name);
     }
 
-    /** True for filters that already escape, or {@code raw}, which suppress auto-escaping. */
+    /** True for filters whose output is already escaped (see {@link #ESCAPING_OR_RAW}), which suppress auto-escaping. */
     public static boolean isEscapingOrRaw(String name) {
         return ESCAPING_OR_RAW.contains(name);
     }
@@ -347,9 +362,24 @@ public final class Filters {
         out = out.replaceAll("`([^`]+)`", "<code>$1</code>");
         out = out.replaceAll("\\*\\*([^*]+)\\*\\*", "<strong>$1</strong>");
         out = out.replaceAll("\\*([^*]+)\\*", "<em>$1</em>");
-        out = out.replaceAll("!\\[([^\\]]*)\\]\\(([^)]+)\\)", "<img alt=\"$1\" src=\"$2\">");
-        out = out.replaceAll("\\[([^\\]]*)\\]\\(([^)]+)\\)", "<a href=\"$2\">$1</a>");
+        // Label and URL are escaped text at this point; an unsafe scheme keeps the label and drops the link or image.
+        out = MD_IMAGE.matcher(out).replaceAll(m -> Matcher.quoteReplacement(safeUrl(m.group(2))
+                ? "<img alt=\"" + m.group(1) + "\" src=\"" + m.group(2) + "\">"
+                : m.group(1)));
+        out = MD_LINK.matcher(out).replaceAll(m -> Matcher.quoteReplacement(safeUrl(m.group(2))
+                ? "<a href=\"" + m.group(2) + "\">" + m.group(1) + "</a>"
+                : m.group(1)));
         return out;
+    }
+
+    /**
+     * Whether a Markdown link or image URL may be written into an attribute: relative, or with a safe scheme. Browsers
+     * ignore tabs, line breaks and leading control characters in a URL ({@code java\tscript:}), so they are removed
+     * before the scheme is read.
+     */
+    private static boolean safeUrl(String url) {
+        Matcher scheme = URL_SCHEME.matcher(url.replaceAll("[\\x00-\\x20]", ""));
+        return !scheme.lookingAt() || SAFE_URL_SCHEMES.contains(scheme.group(1).toLowerCase(Locale.ROOT));
     }
 
     private static String plain(String s) {

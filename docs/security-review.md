@@ -20,15 +20,15 @@ Legend: ✅ implemented, ⚠️ partial, ➖ not applicable (given v1 scope).
 | Injection (parameterized JPQL/SQL only) | ✅ | `RevisionRepository.findFiltered` uses `@Query` with `:param` only. No string-built queries anywhere. OCTL has no Java/reflection/I/O surface (§16.1); render is a total language (`OctlRenderer`). |
 | XSS (channel-default escaping, TipTap schema, sanitizer, strict CSP on preview) | ✅ | OCTL escaping by channel `default_escaping` (`Escaping`, `Filters`, `GenerationRenderer.escapingFor`). SVG sanitizer (`SvgSanitizer`) strips script/foreignObject/event attrs. Preview served under `Content-Security-Policy: sandbox allow-scripts` + `nosniff` (`PreviewController`). TipTap schema is frontend. |
 | Upload (Tika sniff, allow-list, size cap, SVG strip, EXIF strip, non-executable storage) | ✅ | `MediaServiceImpl` — `Tika.detect` (client MIME never trusted), `requireAllowed` allow-list, `checkSize` (413), `strip` (EXIF re-encode + SVG sanitize). Content-addressed blobs keyed by SHA-256 (`FilesystemBlobStore`), served as `attachment` for non-renderable types. |
-| SSRF (no server-side fetch of user URLs in v1) | ➖ | No server-side HTTP client in the runtime code. The only `java.net.http.HttpClient` is `tooling/OpenApiGeneratorMain` (dev-only, fetches its own `localhost`). No feature fetches user-supplied URLs. |
-| Path traversal (normalize + `..` reject, stay under target root) | ✅ | `OutputFile.normalize` rejects `..`/`.` segments and leading slashes; target writers `root.resolve(...).normalize()` (`TargetIo`, `FilesystemTargetWriter`). |
+| SSRF (no server-side fetch of user URLs in v1) | ➖ | No server-side HTTP client in the runtime code. The only `java.net.http.HttpClient` is `tooling/OpenApiGeneratorMain` (dev-only, fetches its own `localhost`). No feature fetches user-supplied URLs. Unchanged by M30: the build-time link checks (`generate/quality/LinkResolver`) resolve links against the build's own outputs and skip every external URL; redirect targets (`redirect/RedirectPaths`) are validated (`http(s)` only, no `..`, no `//host`) and written into stubs/`.htaccess`/`redirects.json`, never fetched. |
+| Path traversal (normalize + `..` reject, stay under target root) | ✅ | `OutputFile.normalize` rejects `..`/`.` segments and leading slashes; target writers `root.resolve(...).normalize()` (`TargetIo`, `FilesystemTargetWriter`). M30 redirects: source and target paths are normalized and `..` refused on every write (`RedirectPaths`, `422 SF-DOM-0193`); stubs are ordinary `OutputFile`s. `.htaccess` lines escape the source as a regex and the target against mod_alias substitution (`HtaccessPostProcessor`); stub values are HTML-attribute- and JS-escaped (`HtmlStubPostProcessor`). |
 | Secrets (env/secret-manager only) | ✅ | `application*.yml` references `${SF_JWT_SECRET}`, `${DB_USER}`, `${DB_PASSWORD}` etc.; no secrets in source or logs (no `password` logged). |
 | Audit (`audit_log` covers auth, membership, channel, target; + revisions for content) | ✅ | `audit_log` table (`011-audit-log.xml`) + `AuditService`. Wired: `AuthService` (login success/failure), `ProjectServiceImpl` (`MEMBER_ROLE_SET`/`MEMBER_REMOVED`), `ChannelServiceImpl` (`CHANNEL_CREATE/UPDATE/DELETE`), `TargetController` (`TARGET_CREATE/UPDATE/DELETE`). Content changes already covered by the revision trail (`revision` table). Read endpoint: `GET /api/v1/projects/{projectKey}/audit` (`AuditController`, `PROJECT_ADMIN`). |
-| Rate limits (login, preview render, generation start) | ⚠️ | Login fully implemented (`LoginAttemptService`). Preview render and generation-start rate limiting are **not yet implemented** — flagged gap. |
+| Rate limits (login, preview render, generation start) | ⚠️ | Login fully implemented (`LoginAttemptService`). Draft checks, the costliest preview render (M30), are limited per user (`RenderRateLimiter`, `sf.preview.rate-limit.checks-per-minute`, default 60/min, `429 SF-API-0429`); the plain preview render and generation start are **not yet limited** — flagged gap. |
 | Headers (CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`) | ⚠️ | Preview adds CSP + `nosniff` (`PreviewController`). There is **no global response-header filter** for the API/static output (`Referrer-Policy`, `Permissions-Policy`). Recommend a `OncePerRequestFilter` or Nginx header layer — flagged gap. |
 
 ### Gaps (flagged for follow-up)
-1. **Rate limiting** for preview render and generation start (§26.3) — only login is done.
+1. **Rate limiting** for the plain preview render and generation start (§26.3) — login and draft checks (M30) are done.
 2. **Global security headers** (`Referrer-Policy`, `Permissions-Policy`, plus a global `X-Content-Type-Options`) — only preview is covered.
 3. **TLS/HSTS** are edge-proxy concerns and must be enforced in the Nginx/infra layer (§26.6), not the backend.
 4. **JWT signing** uses HS256 in dev; RS256 + JWKS + two-key rotation is a documented follow-up (see `SecurityConfig` TODO, §9.3). `prod` profile selects RS256 but key-store wiring is deferred.
@@ -72,6 +72,8 @@ Recommended cadence: nightly scheduled job + a PR-blocking run on dependency-fil
   - `sf.generation.duration` — timer, tag `{mode}` (FULL/INCREMENTAL).
   - `sf.generation.files` — counter, tag `{mode}`.
   - `sf.media.upload.bytes` — counter (bytes uploaded).
+  - `sf.quality.check.duration` — timer (the CHECK stage per build, M30).
+  - `sf.quality.findings` — counter, tags `{severity, category}` (quality findings per build, M30).
   - HTTP histograms: `http.server.requests` (provided automatically by Spring Boot web autoconfiguration).
 
 ### 3.2 Deferred — OpenTelemetry tracing

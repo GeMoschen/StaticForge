@@ -20,6 +20,8 @@ import { RevisionsListComponent } from './features/revisions/revisions-list.comp
 import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
 import { ProjectSettingsImportExportComponent } from './features/settings/project-settings-import-export.component';
 import { ProjectSettingsUrlRegistryComponent } from './features/settings/project-settings-url-registry.component';
+import { ProjectSettingsQualityComponent } from './features/settings/project-settings-quality.component';
+import { ProjectSettingsRedirectsComponent } from './features/settings/project-settings-redirects.component';
 import { ContentComponent } from './features/content/content.component';
 import { RecordEditorComponent } from './features/content/record-editor.component';
 import { RecordSetViewComponent } from './features/content/record-set-view.component';
@@ -150,6 +152,14 @@ export const routes: Routes = [
           { path: 'locales', redirectTo: 'general' },
           { path: 'channels', redirectTo: 'general' },
           { path: 'targets', redirectTo: 'generation' },
+          {
+            path: 'quality',
+            component: ProjectSettingsQualityComponent,
+          },
+          {
+            path: 'redirects',
+            component: ProjectSettingsRedirectsComponent,
+          },
           {
             path: 'revisions',
             component: RevisionsListComponent,

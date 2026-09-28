@@ -36,6 +36,18 @@ public interface TargetWriter {
     /** The manifest of build {@code runId}; empty when the build is gone or has none. */
     Optional<BuildManifest> readManifest(long runId);
 
+    /**
+     * Stores sidecar {@code name} of the staged build {@code runId} ({@code builds/{runId}.{name}.json} next to the
+     * manifest, outside the served files; M30.1.3): data about the build that isn't part of the site, such as the
+     * quality check facts. Kept and pruned with the build like the manifest.
+     *
+     * @param name a lower-case word ({@code quality})
+     */
+    void writeSidecar(long runId, String name, byte[] bytes);
+
+    /** Sidecar {@code name} of build {@code runId}; empty when the build is gone or has none. */
+    Optional<byte[]> readSidecar(long runId, String name);
+
     /** One file of build {@code runId}; empty when the build or the file doesn't exist. */
     Optional<byte[]> readFile(long runId, String path);
 

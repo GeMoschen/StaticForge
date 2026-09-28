@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseDiagnostics } from './generation-diagnostics';
+import { parseDiagnostics, parseHeldBack } from './generation-diagnostics';
+import { ALPHA, RUN_WITH_FINDINGS } from './findings/testing/findings.fixtures';
 
 describe('parseDiagnostics', () => {
   it('flattens errors before warnings', () => {
@@ -27,5 +28,33 @@ describe('parseDiagnostics', () => {
     });
 
     expect(groups).toEqual([{ severity: 'error', code: '', count: 1, messages: ['kept'] }]);
+  });
+});
+
+describe('parseHeldBack', () => {
+  it('reads the held-back pages of a run, in order', () => {
+    const pages = parseHeldBack(RUN_WITH_FINDINGS.diagnostics);
+    expect(pages).toHaveLength(4);
+    expect(pages[2]).toEqual({ asset: ALPHA, uid: 'alpha', channel: 'html', locale: 'en', codes: ['SF-CHK-0301'] });
+  });
+
+  it('keeps a null uid and locale, and drops entries without asset or channel', () => {
+    expect(
+      parseHeldBack({
+        errors: [],
+        warnings: [],
+        heldBack: [
+          { asset: ALPHA, uid: null, channel: 'html', locale: null, codes: ['SF-CHK-0201'] },
+          { uid: 'x', channel: 'html', codes: [] },
+          'oops',
+        ],
+      }),
+    ).toEqual([{ asset: ALPHA, uid: null, channel: 'html', locale: null, codes: ['SF-CHK-0201'] }]);
+  });
+
+  it('is empty for runs from before heldBack and for anything else', () => {
+    expect(parseHeldBack({ errors: [], warnings: [] })).toEqual([]);
+    expect(parseHeldBack(null)).toEqual([]);
+    expect(parseHeldBack({ heldBack: 'x' })).toEqual([]);
   });
 });

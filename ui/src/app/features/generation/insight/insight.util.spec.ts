@@ -11,6 +11,7 @@ import {
   planSummaryLine,
   reasonBadge,
   reasonText,
+  redirectsLine,
   rootKindRows,
   viaRows,
   type PlanEntryView,
@@ -139,6 +140,12 @@ describe('build insight summaries', () => {
     expect(fallbackWarning('NO_COMPLETE_BUILD_FOR_TARGET', 'Site')).toBe(
       'Incremental requested — no previous complete build for target Site; this will be a full build.',
     );
+    expect(fallbackWarning('BASE_BUILD_WITHOUT_QUALITY_FACTS', 'Site')).toBe(
+      'Incremental requested — the previous build of target Site has no quality check results; this will be a full build.',
+    );
+    expect(fallbackWarning('QUALITY_RULES_CHANGED', undefined)).toBe(
+      'Incremental requested — the quality rules changed since the previous build; this will be a full build.',
+    );
   });
 
   it('heads the impact panel', () => {
@@ -161,5 +168,15 @@ describe('build insight summaries', () => {
       q: 'news',
       validate: 'true',
     });
+  });
+});
+
+describe('redirectsLine', () => {
+  it('reads the redirect counts of a run, leaving out what the summary lacks', () => {
+    expect(redirectsLine({ redirectsAdded: 2, redirectsActive: 14 })).toBe('2 redirects added · 14 redirects active');
+    expect(redirectsLine({ redirectsAdded: 1 })).toBe('1 redirect added');
+    expect(redirectsLine({ redirectsAdded: 0, redirectsActive: 0 })).toBe('0 redirects added · 0 redirects active');
+    expect(redirectsLine({ pageCount: 3 })).toBe('');
+    expect(redirectsLine(null)).toBe('');
   });
 });

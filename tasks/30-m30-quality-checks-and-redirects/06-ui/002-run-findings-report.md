@@ -1,6 +1,6 @@
 ---
 id: M30.6.2
-status: todo
+status: done
 depends: [M30.1.3]
 epic: m30-quality-checks-and-redirects
 feature: ui
@@ -30,10 +30,10 @@ as the paged-table model, `insight.util.ts` cause labels), `GenerationRunView.fi
 
 ## Acceptance criteria
 
-- [ ] Vitest specs with fixtures from the real API shape: chips, filters → query params, paging, carried marker,
+- [x] Vitest specs with fixtures from the real API shape: chips, filters → query params, paging, carried marker,
       link to the page editor, truncated notice, stage label.
-- [ ] Manual check with the golden fixture project.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] Manual check with the golden fixture project.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Out of scope
 
@@ -43,3 +43,13 @@ as the paged-table model, `insight.util.ts` cause labels), `GenerationRunView.fi
 
 - Keep the filters in the URL (like the M26 audit view) so a findings view can be shared; show the chosen filters as
   chips (M26 journey defect: hidden multi-select state).
+- Deviation: the manual check ran against a project seeded via the API with the same defect kinds (templates without
+  title/alt, broken page and media links, a moved page, SF-CHK-0301 set to ERROR) — the golden fixture is built by
+  the parallel golden lane. Fixtures in `findings/testing/findings.fixtures.ts` are captured from that backend.
+- Held-back pages: the run's `diagnostics.heldBack` lists them as data — `[{asset, uid, channel, locale, codes}]`, one
+  per page, channel and language, in the order of the `SF-GEN-0125` messages (`QualityCheckStage.HeldBackPage`,
+  written by `GenerationService.diagnosticsJson`). "Show findings" filters by `assetUuid` + `channel` + `locale`, no
+  message parsing and no extra request; runs without `heldBack` (before this change) show no link.
+- URL: `?run=&tab=findings&fSeverity&fCategory&fCode…&fAsset&fChannel&fLocale&fPath&fPage` (prefixed; the Generation
+  settings view binds `tab` next to `run`). Also added: redirect counts (`redirectsAdded/redirectsActive`) in the run
+  summary and the dry run's `redirectCandidates` in the plan dialog.

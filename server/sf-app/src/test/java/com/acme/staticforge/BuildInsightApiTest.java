@@ -28,6 +28,7 @@ import com.acme.staticforge.security.JwtService;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -187,6 +188,38 @@ class BuildInsightApiTest {
         fixtures.succeeded(fixtures.await(site.fx(), longer.path("id").asLong()));
     }
 
+    /**
+     * Redirect detection in the plan views (M30.4.2): the dry run lists the redirects a run would add and counts them;
+     * the run's summary counts what it added and emitted; a stored plan lists no candidates.
+     */
+    @Test
+    void thePlanViewsCarryTheDetectedRedirects() throws Exception {
+        Site site = site("bi-redirect");
+        startAndAwait(site, "FULL");
+        fixtures.rename(site.fx(), site.legal().uuid(), "Imprint");
+
+        JsonNode plan = body(dryRun(site, site.token(), "INCREMENTAL", "").andExpect(status().isOk()));
+        assertThat(plan.path("redirectCandidates")).singleElement().satisfies(candidate -> {
+            assertThat(candidate.path("channel").asText()).isEqualTo("html");
+            assertThat(candidate.path("locale").asText()).isEmpty();
+            assertThat(candidate.path("fromPath").asText()).isEqualTo("legal.html");
+            assertThat(candidate.path("toAssetUuid").asText()).isEqualTo(site.legal().uuid().toString());
+            assertThat(candidate.path("toPageNumber").asInt()).isEqualTo(1);
+            assertThat(candidate.path("toPath").asText()).isEqualTo("imprint.html");
+        });
+        assertThat(plan.path("summary").path("redirectsAdded").asInt()).isEqualTo(1);
+        assertThat(plan.path("summary").path("redirectsActive").isNull()).isTrue();
+
+        GenerationRun run = startAndAwait(site, "INCREMENTAL");
+        JsonNode view = body(getJson(site.token(), base(site.fx()) + "/generations/" + run.getId()).andExpect(status().isOk()));
+        assertThat(view.path("planSummary").path("redirectsAdded").asInt()).isEqualTo(1);
+        assertThat(view.path("planSummary").path("redirectsActive").asInt()).isEqualTo(1);
+        JsonNode stored = body(getJson(site.token(), base(site.fx()) + "/generations/" + run.getId() + "/plan")
+                .andExpect(status().isOk()));
+        assertThat(stored.path("summary").path("redirectsAdded").asInt()).isEqualTo(1);
+        assertThat(stored.path("redirectCandidates").isNull()).isTrue();
+    }
+
     /** Starts a run; the body is read as UTF-8, so a comment's "…" stays one character. */
     private JsonNode start(Site site, String body) throws Exception {
         return fixtures.json(mvc.perform(post(base(site.fx()) + "/generations")
@@ -226,7 +259,10 @@ class BuildInsightApiTest {
 
         assertThat(stored.path("runId").asLong()).isEqualTo(run.getId());
         assertThat(stored.path("entries").path("content")).isEqualTo(dryRun.path("entries").path("content"));
-        assertThat(stored.path("summary")).isEqualTo(dryRun.path("summary"));
+        // The plan is the same; only the run knows how many redirects it emitted (M30.4.2).
+        assertThat(((ObjectNode) stored.path("summary").deepCopy()).put("redirectsActive", (Integer) null))
+                .isEqualTo(dryRun.path("summary"));
+        assertThat(stored.path("summary").path("redirectsActive").asInt(-1)).isZero();
         assertThat(stored.path("changedAssets")).isEqualTo(dryRun.path("changedAssets"));
 
         JsonNode history = body(getJson(site.token(), base(site.fx()) + "/generations/" + run.getId()));

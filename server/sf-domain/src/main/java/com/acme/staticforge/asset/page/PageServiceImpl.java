@@ -67,9 +67,10 @@ public class PageServiceImpl implements PageService {
         payload.putObject("content");
         ObjectNode bodies = payload.putObject("bodies");
         declaredBodies(ctx.projectId(), cmd.templateUuid()).forEach(name -> bodies.putArray(name));
-        ObjectNode nav = payload.putObject("nav");
+        ObjectNode nav = payload.putObject(PageNav.NAV);
         nav.put("visible", true);
         nav.put("position", 0);
+        nav.put(PageNav.NO_INDEX, false);
         payload.putObject("output");
         payload.putObject("meta");
 
@@ -257,12 +258,27 @@ public class PageServiceImpl implements PageService {
                 .toList();
     }
 
+    /** {@code nav}, when present, is an object; its {@code noIndex}, when present, a boolean (M30, spec §10.3). */
+    private static void requireValidNav(JsonNode nav) {
+        if (nav == null || nav.isNull()) {
+            return;
+        }
+        if (!nav.isObject()) {
+            throw new SfException(ProblemFactory.unprocessableEntity("Page payload nav must be an object."));
+        }
+        JsonNode noIndex = nav.get(PageNav.NO_INDEX);
+        if (noIndex != null && !noIndex.isNull() && !noIndex.isBoolean()) {
+            throw new SfException(ProblemFactory.unprocessableEntity("Page payload nav.noIndex must be true or false."));
+        }
+    }
+
     private void validatePagePayload(ObjectNode payload, long projectId) {
         String templateRef = JsonUtil.text(payload, "templateRef").orElseThrow(
                 () -> new SfException(ProblemFactory.unprocessableEntity("Page payload requires templateRef.")));
         UUID templateUuid = UUID.fromString(templateRef);
         Template template = resolveTemplate(templateUuid, projectId, AssetType.PAGE_TEMPLATE);
         requireConcrete(template);
+        requireValidNav(payload.get(PageNav.NAV));
 
         JsonNode bodies = payload.get("bodies");
         if (bodies != null && bodies.isObject()) {

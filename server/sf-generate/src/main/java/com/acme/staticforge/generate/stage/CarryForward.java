@@ -1,5 +1,6 @@
 package com.acme.staticforge.generate.stage;
 
+import com.acme.staticforge.asset.page.PageNav;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.plan.BuildPlan;
@@ -41,10 +42,15 @@ import java.util.UUID;
  *   <li><b>a media file</b>: some kept or rendered page, or a kept or rendered processed media file, still needs it, and
  *       the run didn't copy it again. A reference from a locale needs the output it resolves to in that locale
  *       ({@link MediaOutputs}, M27.3.2): a localized media's outputs are carried per locale they are written for;</li>
- *   <li><b>a site file</b> (sitemap, search index…): never; post-processing writes them again for the whole site.</li>
+ *   <li><b>a site file</b> (sitemap, search index, redirect stubs…): never; post-processing writes them again for the
+ *       whole site.</li>
  * </ul>
  *
  * <p>Each file of the new build is described in its {@link BuildManifest}; kept outputs keep their base entries.
+ *
+ * <p><b>Withheld outputs (M30.1.3).</b> A page output the run planned but doesn't publish — held back for incomplete
+ * content, a render limit or a failed quality check — is {@linkplain #withhold withheld}: it is no site page (not in the
+ * sitemap or the search index), and a base output at its path is not kept.
  */
 public final class CarryForward {
 
@@ -61,6 +67,7 @@ public final class CarryForward {
     private final Map<String, JsonNode> baseIndex;
 
     private final List<BuildManifest.Output> carriedPages = new ArrayList<>();
+    private final Set<String> withheld = new HashSet<>();
 
     /**
      * @param channels the channels the run planned
@@ -89,6 +96,34 @@ public final class CarryForward {
         if (base != null) {
             selectCarriedPages();
         }
+    }
+
+    /**
+     * Withholds the page outputs at {@code paths} (M30.1.3): outputs the run planned but doesn't publish, and kept base
+     * outputs of a page the quality checks held back. Call before {@link #sitePages()} and {@link #publication}.
+     */
+    public void withhold(Set<String> paths) {
+        withheld.addAll(paths);
+        carriedPages.removeIf(output -> withheld.contains(output.path()));
+    }
+
+    /** The base build's page outputs the run keeps. */
+    public List<BuildManifest.Output> carriedPages() {
+        return List.copyOf(carriedPages);
+    }
+
+    /**
+     * The base build's media outputs the run keeps: those the kept pages, the rendered files and the written media still
+     * need and the run didn't write again.
+     */
+    public List<BuildManifest.Output> carriedMedia(List<RenderedFile> rendered, AssetCopyResult assets) {
+        return carriedMedia(entriesByPath(), rendered, assets);
+    }
+
+    private Map<String, PlanEntry> entriesByPath() {
+        Map<String, PlanEntry> entriesByPath = new HashMap<>();
+        plan.entries().forEach(entry -> entriesByPath.put(entry.outputPath(), entry));
+        return entriesByPath;
     }
 
     /** Whether the run builds on a base build. */
@@ -149,14 +184,19 @@ public final class CarryForward {
     public List<SitePage> sitePages() {
         List<SitePage> pages = new ArrayList<>();
         for (PlanEntry entry : plan.siteOutputs()) {
-            // Listed as the language's released version names it (M27.2.1).
+            if (withheld.contains(entry.outputPath())) {
+                continue;
+            }
+            // Listed as the language's released version names it (M27.2.1), with its nav.noIndex (M30).
             SnapshotAsset page = snapshot.asset(entry.pageUuid(), entry.locale());
             if (page != null) {
+                boolean noIndex = PageNav.noIndex(page.payload());
                 pages.add(entry.pagination() == null
                         ? new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
-                                null, null, entry.locale())
+                                null, null, entry.locale(), noIndex)
                         : new SitePage(page.uid(), entry.outputPath(), entry.channel(), page.displayName(),
-                                entry.pagination().pageNumber(), entry.pagination().totalPages()));
+                                entry.pagination().pageNumber(), entry.pagination().totalPages(), entry.locale(),
+                                noIndex));
             }
         }
         for (BuildManifest.Output output : carriedPages) {
@@ -176,7 +216,11 @@ public final class CarryForward {
         String title = entry != null
                 ? baseTitle(entry, output.pageNumber())
                 : page == null ? "" : page.displayName();
-        return new SitePage(uid, output.path(), output.channel(), title, output.pageNumber(), null, output.locale());
+        // The page's current nav.noIndex (a tombstone's or unreleased draft's is never read): the base build doesn't
+        // record it, and the sitemap is written anew each run.
+        boolean noIndex = page != null && !page.deleted() && PageNav.noIndex(page.payload());
+        return new SitePage(
+                uid, output.path(), output.channel(), title, output.pageNumber(), null, output.locale(), noIndex);
     }
 
     /** The base entry's title without the {@code " – page n"} suffix the search index adds again. */
@@ -214,8 +258,7 @@ public final class CarryForward {
      */
     public Publication publication(
             long runId, List<OutputFile> files, List<RenderedFile> rendered, AssetCopyResult assets) {
-        Map<String, PlanEntry> entriesByPath = new HashMap<>();
-        plan.entries().forEach(entry -> entriesByPath.put(entry.outputPath(), entry));
+        Map<String, PlanEntry> entriesByPath = entriesByPath();
         Map<String, RenderedFile> renderedByPath = new HashMap<>();
         rendered.forEach(file -> renderedByPath.put(file.outputPath(), file));
 
@@ -225,7 +268,11 @@ public final class CarryForward {
         kept.forEach(output -> outputs.put(output.path(), output));
 
         for (OutputFile file : files) {
-            outputs.put(file.path(), describe(file, entriesByPath, renderedByPath, assets));
+            BuildManifest.Output described = describe(file, entriesByPath, renderedByPath, assets);
+            BuildManifest.Output keptHere = outputs.get(file.path());
+            // Post-processing may rewrite a kept output (a carried .htaccess page gets the redirect block, M30.5.1):
+            // it stays what it was, not a site file.
+            outputs.put(file.path(), described.kind() == BuildManifest.Kind.SITE && keptHere != null ? keptHere : described);
         }
 
         Set<String> removed = new HashSet<>();

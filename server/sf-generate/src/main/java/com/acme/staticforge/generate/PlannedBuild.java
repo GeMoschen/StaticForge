@@ -1,6 +1,7 @@
 package com.acme.staticforge.generate;
 
 import com.acme.staticforge.generate.plan.BuildPlan;
+import com.acme.staticforge.generate.quality.EffectiveQualityConfig;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.target.BuildManifest;
@@ -15,6 +16,10 @@ import java.util.Set;
  * @param channels the channels planned
  * @param baseRunId the build the run carries forward, or {@code -1} when it publishes only its own files
  * @param base that build's manifest; {@code null} with {@code baseRunId == -1}
+ * @param quality the project's quality rule configuration the build is checked under (M30.1.3)
+ * @param baseQuality the base build's quality check facts; {@code null} without a base build or when it has none
+ * @param current the manifest of the build the target serves now (M30.4.2, redirect detection); {@code null} when
+ *     nothing was published there or its manifest can't be read
  */
 public record PlannedBuild(
         Project project,
@@ -25,7 +30,9 @@ public record PlannedBuild(
         Set<String> channels,
         long baseRunId,
         BuildManifest base,
-        BuildPlan plan) {
+        BuildPlan plan,
+        EffectiveQualityConfig quality,
+        BuildManifest current) {
 
     public boolean carries() {
         return base != null;

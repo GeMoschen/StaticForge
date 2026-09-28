@@ -29,7 +29,7 @@ This milestone delivers:
   current build; a changed path adds old → new to a persistent per-project **redirect registry**. Manual redirects
   can be added, edited and deleted in a Redirects tab; unpublishing or deleting a page offers "Redirect old URL to…".
 - **Redirect output per target**: HTML stub pages (meta refresh + canonical + JS fallback), Apache `.htaccess`
-  (`Redirect 301`) and the existing `redirects.json`.
+  (anchored `RedirectMatch 301`) and the existing `redirects.json`.
 
 ## Findings from planning (2026-09-25)
 
@@ -157,8 +157,10 @@ This milestone delivers:
     `["HTML_STUB"]`. HTML stubs are written at `from_path` (meta refresh 0, `<link rel="canonical">` absolute when the
     target has a `baseUrl`, `location.replace` JS fallback, `<meta name="robots" content="noindex">`, a visible link);
     the stub's link is **relative to the stub's own path** (lessons: "links relative to the current page"). `.htaccess`
-    `Redirect 301 "<url-path>" "<url-path-or-URL>"` needs site-root URL paths (prefixed with the `baseUrl` path when it
-    has one). All three are `SITE` outputs in the manifest; stubs never appear in `sitemap.xml` or `search-index.json`.
+    `RedirectMatch 301 "^<regex-escaped decoded url-path>$" "<url-path-or-URL>"` (anchored; `$`, `&` and `\` in the
+    target escaped) needs site-root URL paths (prefixed with the `baseUrl` path when it has one). *Decision amended by
+    the user 2026-09-27: RedirectMatch, anchored, because `Redirect` matches by prefix* (a directory source would also
+    redirect the live pages below it). All three are `SITE` outputs in the manifest; stubs never appear in `sitemap.xml` or `search-index.json`.
     A stub whose path collides with a real output is shadowed (decision 16), never a build error.
 19. **Error codes.** Checks `SF-CHK-0001` (output could not be checked) and `SF-CHK-0101…0399` (one per rule, catalogue
     in feature 2); hold-back `SF-GEN-0125`; redirects `SF-DOM-0190` (redirect not found, `404`), `SF-DOM-0191`
@@ -170,22 +172,24 @@ This milestone delivers:
 
 ## Exit criteria (epic is done when)
 
-- [ ] A full build of a fixture site reports every seeded defect (broken page/media link, missing anchor, link to an
+- [x] A full build of a fixture site reports every seeded defect (broken page/media link, missing anchor, link to an
       unreleased and to a deleted page, missing title/description/h1, duplicate title, missing alt, heading skip,
       duplicate id, unlabeled input, untitled iframe, missing lang, noIndex page without robots meta) with the right
       code, page, channel, locale and selector — and nothing on the clean pages (golden fixture).
-- [ ] Rule configuration per project works: `OFF` silences a rule, `ERROR` holds the page back (run `PARTIAL`,
+- [x] Rule configuration per project works: `OFF` silences a rule, `ERROR` holds the page back (run `PARTIAL`,
       `SF-GEN-0125`), warnings leave a clean run `SUCCESS`.
-- [ ] An incremental run reuses carried outputs' facts and findings, re-runs site-wide rules, and reports a broken
+- [x] An incremental run reuses carried outputs' facts and findings, re-runs site-wide rules, and reports a broken
       link in a carried page after its target was unpublished; a pre-M30 base or a changed rule config plans FULL with
       the new fallback cause.
-- [ ] A link to a missing page uuid no longer fails the run; it is a finding on the linking page.
-- [ ] The page editor shows completeness issues and draft check findings, and jumps to the field or section.
-- [ ] Moving or renaming a released page and building adds an AUTO redirect; the next build of each configured format
+- [x] A link to a missing page uuid no longer fails the run; it is a finding on the linking page.
+- [x] The page editor shows completeness issues and draft check findings, and jumps to the field or section.
+- [x] Moving or renaming a released page and building adds an AUTO redirect; the next build of each configured format
       contains a working stub / `.htaccess` line / JSON entry; moving it again keeps one hop; putting a new page at the
       old path shadows the redirect; manual redirects can be added, edited and deleted; unpublish offers a redirect.
 - [ ] The 5,000-page fixture's full build stays within +15 % of its pre-M30 time (documented result).
+  — **Not met; accepted by the user on 2026-09-28 as measured**: about +20–30 % on the 4-core dev machine (cold JVM; warm ≈ +10 %); numbers in `M30.1.3`.
 - [ ] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey green.
+  — Backend (`test --rerun`), `npm run build` and `npx vitest run` green (2026-09-28); the journey was **deferred by the user** (parked on branch `m30-d-journey`).
 
 ## Features (dependency order)
 
@@ -217,6 +221,25 @@ sidecar and findings back carried outputs).
   `ui/src/app/core/api/generated/schema.d.ts` after each backend task that changes the API. `quality-rules` and
   `redirects` writes are refused on archived projects by the M26 interceptor (no annotation needed); the draft-check
   `POST` carries `@AllowedOnArchivedProject("read-only check render")` and joins the endpoint-walk allowlist.
+- **Backend exit-criteria audit (phase C, golden lane)** — the test that proves each backend criterion:
+  1 `GoldenQualityFixtureIntegrationTest` (`quality/expected-findings.json`);
+  2 `AccessibilityRulesIntegrationTest.aRuleSwitchedOffReportsNothingAndAWarningLeavesTheRunSuccessful` (OFF,
+  production rule), `QualityCheckStageIntegrationTest.anErrorHoldsThePageBackEverywhereAndTheRunIsPartial` /
+  `anErrorHoldsBackEveryPageNumberOfThePageInThatLanguageOnly` (ERROR, SF-GEN-0125, PARTIAL, all page numbers, one
+  language), `warningsAloneLeaveTheRunSuccessfulAndTheWarningCountUnchanged`;
+  3 `QualityCheckStageIntegrationTest.incrementalRunsCarryFactsAndFindingsAndFallBackWhenTheyCant` (carried
+  findings, both fallback causes), `LinkRulesIntegrationTest.aCarriedPageReportsItsLinkToAnUnpublishedPage…`;
+  4 `QualityCheckStageIntegrationTest.aLinkToAPageMissingFromTheSnapshotNoLongerFailsTheRun`,
+  `LinkRulesIntegrationTest.referencesToUnreleasedDeletedAndMissingPages…`;
+  6 (backend) `RedirectDetectionIntegrationTest` (every change kind × FULL/INCREMENTAL, shadowing),
+  `RedirectOutputIntegrationTest.formatsPerTarget` and `aPageMovedTwiceIsOneHopInEveryFormat` (stub, `.htaccess`,
+  JSON after one and two moves), `RedirectApiIntegrationTest` (manual CRUD, for-asset).
+  Also added: CHECK stage on the event stream (`theCheckStageIsReportedOnTheEventStream`), findings deleted by run
+  retention (`GenerationRunRetentionIntegrationTest`), SEO rules in `GET /quality-rules`, 0206 channel separation and
+  the paginated-duplicate decision (`SeoRulesTest`), redirect role gaps. Defects found and fixed: pagination item
+  links without the `{locale}` prefix; media editor values not reading the media's `altText`/`width`.
+  Open: PostgreSQL changelog unproven (no PostgreSQL here); the `SF-CHK-0001` parse-failure branch is unreachable
+  with jsoup's lenient parser (the rule-threw branch is tested); benchmark (orchestrator).
 - **Not in scope:** external link checking (network access), colour contrast and other checks that need a browser
   (layout, computed styles), runtime crawling of the published site, checks of non-HTML channels, CSS `url()` in
   processed text media, redirect rules with wildcards/regex, nginx map and `_redirects` formats (not chosen), automatic

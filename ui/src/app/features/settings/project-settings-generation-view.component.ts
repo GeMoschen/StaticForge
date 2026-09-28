@@ -21,5 +21,7 @@ export class ProjectSettingsGenerationViewComponent {
   readonly projectKey = input.required<string>();
   /** `?run=` opens that run's details (the Schedules history links a run it started, M27.6.5). */
   readonly run = input<string | undefined>();
+  /** `?tab=findings` opens that run's findings (M30.6.2): a shared findings view. */
+  readonly tab = input<string | undefined>();
   protected readonly runId = computed(() => (this.run() ? Number(this.run()) : null));
 }

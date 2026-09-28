@@ -9,13 +9,16 @@ import java.util.List;
  * @param releaseMode the release mode the import applies: the requested one, or {@link ReleaseMode#DRAFT} for an
  *     archive without release state
  * @param scheduleCount the number of schedules in the archive (M27.8.1), whether or not they are imported
+ * @param redirectCount the number of redirects the import reads from the archive (M30.4.1, protocol {@code >= 10};
+ *     {@code 0} for an older archive), whether or not they are imported
  */
 public record ConflictReport(
-        List<ImportConflict> conflicts, boolean releaseState, ReleaseMode releaseMode, int scheduleCount) {
+        List<ImportConflict> conflicts, boolean releaseState, ReleaseMode releaseMode, int scheduleCount,
+        int redirectCount) {
 
     /** A report about an archive whose release state doesn't matter (an unreadable or rejected one). */
     public ConflictReport(List<ImportConflict> conflicts) {
-        this(conflicts, false, ReleaseMode.DRAFT, 0);
+        this(conflicts, false, ReleaseMode.DRAFT, 0, 0);
     }
 
     /**

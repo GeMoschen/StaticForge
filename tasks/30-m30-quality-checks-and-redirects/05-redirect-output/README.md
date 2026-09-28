@@ -15,10 +15,10 @@ rules for Apache hosts, and the machine-readable JSON — chosen per target.
 
 ## Feature exit criteria
 
-- [ ] Each format is written when configured and only then; stubs redirect in a browser; `.htaccess` passes an
+- [x] Each format is written when configured and only then; stubs redirect in a browser; `.htaccess` passes an
       Apache config test (or a documented parser test).
-- [ ] Stubs never collide with real outputs and never appear in sitemap or search index.
-- [ ] `./gradlew build` green.
+- [x] Stubs never collide with real outputs and never appear in sitemap or search index.
+- [x] `./gradlew build` green.
 
 ## Dependencies
 

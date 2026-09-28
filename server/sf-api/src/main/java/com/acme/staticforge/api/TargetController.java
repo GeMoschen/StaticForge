@@ -7,6 +7,7 @@ import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
+import com.acme.staticforge.generate.RedirectFormat;
 import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.project.ProjectService;
@@ -71,6 +72,7 @@ public class TargetController {
                 projectId, requireName(body.name()), parseType(body.type()), body.config(), body.isDefault());
         List<GenerationTarget> siblings = targets.findByProjectId(projectId);
         requireDistinctPath(target, siblings);
+        requireRedirectFormats(target);
         target = targets.save(target);
         clearOtherDefaults(target, siblings);
         auditService.record(projectId, securitySupport.currentUserId(), "TARGET_CREATE", "target:" + target.getId());
@@ -93,6 +95,7 @@ public class TargetController {
                 .filter(other -> !other.getId().equals(id))
                 .toList();
         requireDistinctPath(target, siblings);
+        requireRedirectFormats(target);
         target = targets.save(target);
         clearOtherDefaults(target, siblings);
         auditService.record(target.getProjectId(), securitySupport.currentUserId(), "TARGET_UPDATE", "target:" + target.getId());
@@ -142,6 +145,15 @@ public class TargetController {
         }
     }
 
+    /** Rejects an invalid {@code config.redirectFormats} (M30.5.1): {@code 400} naming the field. */
+    private static void requireRedirectFormats(GenerationTarget target) {
+        try {
+            RedirectFormat.validate(target.getConfig());
+        } catch (IllegalArgumentException e) {
+            throw new SfException(ProblemFactory.badRequest(e.getMessage(), "config." + RedirectFormat.CONFIG_KEY));
+        }
+    }
+
     /** Keeps at most one default target per project: the one just saved wins. */
     private void clearOtherDefaults(GenerationTarget saved, List<GenerationTarget> siblings) {
         if (!saved.isDefaultTarget()) {
@@ -179,6 +191,7 @@ public class TargetController {
                 target.getType().name(),
                 target.getConfig(),
                 target.isDefaultTarget(),
-                TargetLocations.outputPath(projectKey, target));
+                TargetLocations.outputPath(projectKey, target),
+                RedirectFormat.of(target.getConfig()).stream().sorted().map(Enum::name).toList());
     }
 }

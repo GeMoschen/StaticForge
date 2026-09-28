@@ -6,6 +6,8 @@ import com.acme.staticforge.api.dto.PlanSummaryView;
 import com.acme.staticforge.api.dto.RecordPageView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.generate.GenerationService;
+import com.acme.staticforge.generate.PlanInsight;
 import com.acme.staticforge.generate.insight.PlanEntryRecord;
 import com.acme.staticforge.generate.insight.RebuildReason;
 import com.acme.staticforge.generate.insight.RebuildRootKind;
@@ -107,7 +109,22 @@ final class PlanViews {
                 counts(summary.path("byFirstEdge")),
                 counts(summary.path("byChannel")),
                 via,
-                RunPlanStore.available(summary));
+                RunPlanStore.available(summary),
+                summary.hasNonNull(PlanInsight.REDIRECTS_ADDED) ? summary.get(PlanInsight.REDIRECTS_ADDED).asInt() : null,
+                summary.hasNonNull(PlanInsight.REDIRECTS_ACTIVE) ? summary.get(PlanInsight.REDIRECTS_ACTIVE).asInt() : null);
+    }
+
+    /** The automatic redirects a dry run would add (M30.4.2). */
+    static List<GenerationPlanView.RedirectCandidate> redirectCandidates(GenerationService.DryRun dryRun) {
+        return dryRun.redirectCandidates().stream()
+                .map(planned -> new GenerationPlanView.RedirectCandidate(
+                        planned.candidate().channel(),
+                        planned.candidate().locale(),
+                        planned.candidate().fromPath(),
+                        planned.candidate().toAssetUuid(),
+                        planned.candidate().toPageNumber(),
+                        planned.toPath()))
+                .toList();
     }
 
     static List<GenerationPlanView.ChangedAsset> changedAssets(JsonNode summary) {

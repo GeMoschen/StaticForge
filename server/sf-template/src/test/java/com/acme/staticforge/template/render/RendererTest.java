@@ -180,6 +180,26 @@ class RendererTest {
                 .isEqualTo("Hello");
     }
 
+    @Test
+    void mdAndNl2brWriteMarkupIntoAnHtmlChannel() {
+        // They escape their input themselves: escaping their output again printed "&lt;p&gt;" into HTML pages.
+        JsonNode content = values("{\"x\":\"Plan your visit: [hours](details.html#hours) & <b>more</b>\","
+                + "\"lines\":\"one <two>\\nthree\"}");
+
+        assertThat(render("$CMS_VALUE(x | md)$", content))
+                .isEqualTo("<p>Plan your visit: <a href=\"details.html#hours\">hours</a> &amp; &lt;b&gt;more&lt;/b&gt;</p>");
+        assertThat(render("$CMS_VALUE(lines | nl2br)$", content)).isEqualTo("one &lt;two&gt;<br>\nthree");
+    }
+
+    @Test
+    void mdDropsLinksAndImagesWithAnUnsafeScheme() {
+        JsonNode content = values("{\"x\":\"[a](javascript:evil) [b](java\\tscript:evil) "
+                + "![c](data:image/svg+xml;x) [d](https://example.com/?q=1) [e](mailto:a@example.com)\"}");
+
+        assertThat(render("$CMS_VALUE(x | md)$", content))
+                .isEqualTo("<p>a b c <a href=\"https://example.com/?q=1\">d</a> <a href=\"mailto:a@example.com\">e</a></p>");
+    }
+
     // ------------------------------------------------------------------
     // Diagnostics
     // ------------------------------------------------------------------

@@ -9,6 +9,7 @@ import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -163,6 +164,30 @@ public final class PlanInsight {
                 });
         summary.put(RunPlanStore.PLAN_AVAILABLE, true);
         return summary;
+    }
+
+    /** Summary key: how many automatic redirects the build added or re-pointed (a dry run: would add). */
+    public static final String REDIRECTS_ADDED = "redirectsAdded";
+
+    /** Summary key: how many redirects the build emitted. */
+    public static final String REDIRECTS_ACTIVE = "redirectsActive";
+
+    /**
+     * A copy of {@code summary} with the redirect counts of its build (M30.4.2); a {@code null} count is left out (a dry
+     * run knows what it would add, not what a build would emit). {@code null} for a {@code null} summary.
+     */
+    public static ObjectNode redirects(JsonNode summary, Integer added, Integer active) {
+        if (summary == null || !summary.isObject()) {
+            return null;
+        }
+        ObjectNode copy = ((ObjectNode) summary).deepCopy();
+        if (added != null) {
+            copy.put(REDIRECTS_ADDED, added);
+        }
+        if (active != null) {
+            copy.put(REDIRECTS_ACTIVE, active);
+        }
+        return copy;
     }
 
     /** The first edge of a chain and the asset it leads to: "412 pages via section_template:teaser". */

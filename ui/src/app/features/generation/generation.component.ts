@@ -10,6 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, Subscription, map } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { AuthStore } from '../../core/auth/auth.store';
@@ -20,10 +21,32 @@ import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component
 import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { GenerationService } from './generation.service';
 import { GenerationDialogComponent } from './generation-dialog.component';
-import { DiagnosticGroup, parseDiagnostics } from './generation-diagnostics';
+import {
+  DiagnosticGroup,
+  HELD_BACK_CODE,
+  parseDiagnostics,
+  parseHeldBack,
+  type HeldBackPage,
+} from './generation-diagnostics';
 import { GenerationRunEvent } from './generation-sse';
-import { planSummaryLine, rootKindRows, type EntryPage, type PlanEntryQuery } from './insight/insight.util';
+import {
+  planSummaryLine,
+  redirectsLine,
+  rootKindRows,
+  type EntryPage,
+  type PlanEntryQuery,
+} from './insight/insight.util';
 import { SfPlanEntriesTableComponent } from './insight/sf-plan-entries-table.component';
+import {
+  FINDINGS_TAB,
+  FINDING_PARAM_NAMES,
+  findingCountsLabel,
+  paramsFromFindingFilter,
+  NO_FINDING_FILTER,
+  type FindingFilter,
+} from './findings/findings.util';
+import { SfFindingCountsComponent } from './findings/sf-finding-counts.component';
+import { SfRunFindingsComponent } from './findings/sf-run-findings.component';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 
@@ -37,6 +60,9 @@ interface LogLine {
 }
 
 const TERMINAL_STATUSES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'CANCELLED']);
+
+/** The tabs of a run's details, in order. */
+type DetailsTab = 'summary' | 'pages' | 'findings';
 
 interface LiveSummary {
   filesWritten: number;
@@ -56,6 +82,8 @@ interface LiveSummary {
     SfRelativeTimePipe,
     GenerationDialogComponent,
     SfPlanEntriesTableComponent,
+    SfFindingCountsComponent,
+    SfRunFindingsComponent,
   ],
   templateUrl: './generation.component.html',
   styleUrl: './generation.component.scss',
@@ -64,8 +92,16 @@ export class GenerationComponent implements OnDestroy {
   readonly projectKey = input.required<string>();
   /** A run to open on arrival — the Schedules history links here with `?run=` (M27.6.5). */
   readonly openRun = input<number | null>(null);
+  /** The details tab to open {@link openRun} on: `findings` for a shared findings view (M30.6.2, `?tab=`). */
+  readonly openTab = input<string | null>(null);
 
   private readonly api = inject(GenerationService);
+  /**
+   * The route whose query holds the open findings view (`?run=&tab=findings&fSeverity=…`); absent where the component
+   * is rendered outside a route, and then the findings view isn't kept in the URL.
+   */
+  private readonly route = inject(ActivatedRoute, { optional: true });
+  private readonly router = this.route ? inject(Router) : null;
   private readonly auth = inject(AuthStore);
   private readonly toasts = inject(ToastService);
   /** No new runs or promotes in time travel or in an archived project (M26); running ones may still be cancelled. */
@@ -97,7 +133,8 @@ export class GenerationComponent implements OnDestroy {
 
   readonly expandedRunId = signal<number | null>(null);
   /** The open tab of a run's details (M22.3.2). */
-  readonly detailsTab = signal<'summary' | 'pages'>('summary');
+  readonly detailsTab = signal<DetailsTab>('summary');
+  protected readonly heldBackCode = HELD_BACK_CODE;
   private readonly runPlanFetches = new Map<number, (query: PlanEntryQuery) => Observable<EntryPage | undefined>>();
 
   private liveSub: Subscription | null = null;
@@ -112,12 +149,32 @@ export class GenerationComponent implements OnDestroy {
     });
   }
 
-  /** Opens {@link openRun}'s details once the history holds it. */
+  /** Whether the history holds {@link openRun}: a refreshed history doesn't reopen details the user closed. */
+  private readonly openRunListed = computed(() => {
+    const id = this.openRun();
+    return id != null && this.runs().some((run) => run.id === id);
+  });
+
+  /**
+   * Opens {@link openRun}'s details (on {@link openTab}) once the history holds it, and follows it in the live log while
+   * it is still queued or running — "Show progress" after "Build now" lands here, and the row would otherwise keep the
+   * status it had when the history was read.
+   */
   private readonly openRunEffect = effect(
     () => {
       const id = this.openRun();
-      if (id != null && this.runs().some((run) => run.id === id)) {
-        untracked(() => this.expandedRunId.set(id));
+      const findings = this.openTab() === FINDINGS_TAB;
+      if (this.openRunListed()) {
+        untracked(() => {
+          this.expandedRunId.set(id);
+          if (findings) {
+            this.detailsTab.set('findings');
+          }
+          const run = this.runs().find((r) => r.id === id);
+          if (run && (run.status === 'QUEUED' || run.status === 'RUNNING') && this.liveRunId() !== id) {
+            this.watchLive(run);
+          }
+        });
       }
     },
     { allowSignalWrites: true },
@@ -175,6 +232,97 @@ export class GenerationComponent implements OnDestroy {
   toggleDetails(run: GenerationRunView): void {
     const id = run.id ?? null;
     this.expandedRunId.update((current) => (current === id ? null : id));
+    this.syncFindingsUrl();
+  }
+
+  /** The details tabs `run` has: findings only once its checks have run (M30.6.2). */
+  detailsTabsOf(run: GenerationRunView): DetailsTab[] {
+    return run.findingCounts ? ['summary', 'pages', 'findings'] : ['summary', 'pages'];
+  }
+
+  selectTab(run: GenerationRunView, tab: DetailsTab): void {
+    if (!this.detailsTabsOf(run).includes(tab)) {
+      return;
+    }
+    this.detailsTab.set(tab);
+    this.syncFindingsUrl();
+  }
+
+  /** Arrow keys move between the tabs (WAI-ARIA tabs pattern), wrapping around. */
+  stepTab(run: GenerationRunView, step: 1 | -1): void {
+    const tabs = this.detailsTabsOf(run);
+    const index = tabs.indexOf(this.visibleTab(run));
+    this.selectTab(run, tabs[(index + step + tabs.length) % tabs.length]);
+  }
+
+  /** The tab shown for `run`: findings fall back to the summary for a run without check results. */
+  visibleTab(run: GenerationRunView): DetailsTab {
+    const tab = this.detailsTab();
+    return this.detailsTabsOf(run).includes(tab) ? tab : 'summary';
+  }
+
+  /** The run list's findings summary: "3 errors · 41 warnings". */
+  findingsLine(run: GenerationRunView): string {
+    return findingCountsLabel(run.findingCounts);
+  }
+
+  redirectsOf(run: GenerationRunView): string {
+    return redirectsLine(run.planSummary);
+  }
+
+  /** Opens `run`'s findings narrowed by `filter`, in the URL so the view can be shared. */
+  showFindings(run: GenerationRunView, filter: Partial<FindingFilter> = {}): void {
+    const id = run.id ?? null;
+    if (id === null || !run.findingCounts) {
+      return;
+    }
+    this.expandedRunId.set(id);
+    this.detailsTab.set('findings');
+    this.navigateFindings({
+      run: id,
+      tab: FINDINGS_TAB,
+      ...paramsFromFindingFilter({ ...NO_FINDING_FILTER, ...filter }),
+    });
+  }
+
+  /**
+   * The pages `run`'s `SF-GEN-0125` messages are about, by message index (the server lists `heldBack` in the order of
+   * those messages). Empty — no links — for a run without findings or from before `heldBack`, or when the two
+   * disagree.
+   */
+  heldBackOf(run: GenerationRunView, groups: DiagnosticGroup[]): HeldBackPage[] {
+    const pages = run.findingCounts ? parseHeldBack(run.diagnostics) : [];
+    const messages = groups.find((group) => group.code === HELD_BACK_CODE)?.messages.length ?? 0;
+    return pages.length === messages ? pages : [];
+  }
+
+  /** Opens the findings of a page the quality checks held back: that page, channel and language. */
+  showHeldBack(run: GenerationRunView, page: HeldBackPage): void {
+    this.showFindings(run, { asset: page.asset, channel: page.channel, locale: page.locale });
+  }
+
+  /**
+   * Keeps the URL on the open findings view: `?run=&tab=findings` while a run's findings are shown (a view of another
+   * run starts unfiltered), and none of the findings parameters once they are closed.
+   */
+  private syncFindingsUrl(): void {
+    const id = this.expandedRunId();
+    const run = id === null ? undefined : this.runs().find((r) => r.id === id);
+    const shown = run && this.visibleTab(run) === 'findings' ? id : null;
+    const urlShows = this.openTab() === FINDINGS_TAB ? this.openRun() : null;
+    if (shown === urlShows) {
+      return;
+    }
+    const cleared = Object.fromEntries(FINDING_PARAM_NAMES.map((name) => [name, null]));
+    this.navigateFindings(
+      shown === null ? { run: null, tab: null, ...cleared } : { run: shown, tab: FINDINGS_TAB, ...cleared },
+    );
+  }
+
+  private navigateFindings(queryParams: Record<string, unknown>): void {
+    if (this.router && this.route) {
+      void this.router.navigate([], { relativeTo: this.route, queryParams, queryParamsHandling: 'merge' });
+    }
   }
 
   diagnosticsOf(run: GenerationRunView): DiagnosticGroup[] {

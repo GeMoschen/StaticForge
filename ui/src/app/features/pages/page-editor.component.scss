@@ -257,6 +257,19 @@
   min-width: 0;
 }
 
+.page-editor__issues {
+  padding-top: var(--sf-3);
+  border-top: 1px solid var(--sf-line);
+  min-width: 0;
+}
+
+/* The field or section an issue was opened at (M30.3.2), outlined for a moment. */
+:host ::ng-deep .sf-issue-target {
+  outline: 2px solid var(--sf-signal);
+  outline-offset: 2px;
+  border-radius: var(--sf-radius-sm);
+}
+
 /* How many fields the language being edited still owes (M24.4.2). */
 .page-editor__translation {
   margin-left: auto;

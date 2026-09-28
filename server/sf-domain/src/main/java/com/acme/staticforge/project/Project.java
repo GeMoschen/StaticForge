@@ -61,6 +61,14 @@ public class Project {
     private JsonNode compactionPolicy;
 
     /**
+     * The quality rule configuration (M30.1.2): {@code {"rules": {code: {"severity", "params"}}}} with only the entries
+     * that differ from a rule's default; {@code null} = every rule at its default.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "quality_rule_config")
+    private JsonNode qualityRuleConfig;
+
+    /**
      * The newest revision the revision-compaction job has processed (M29.4.1), {@code null} when it never ran. Written
      * only by {@code RevisionCompactor} (JDBC), so this mapping is read-only: a project save never overwrites it.
      */
@@ -160,6 +168,14 @@ public class Project {
 
     public void setCompactionPolicy(JsonNode compactionPolicy) {
         this.compactionPolicy = compactionPolicy;
+    }
+
+    public JsonNode getQualityRuleConfig() {
+        return qualityRuleConfig;
+    }
+
+    public void setQualityRuleConfig(JsonNode qualityRuleConfig) {
+        this.qualityRuleConfig = qualityRuleConfig;
     }
 
     public Long getCompactedThrough() {

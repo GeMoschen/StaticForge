@@ -1,0 +1,5 @@
+$CMS_EXTENDS(page_template:layout)$
+$CMS_BLOCK(content)$<p>$CMS_VALUE(intro)$</p>
+<figure><img src="$CMS_REF(image)$" alt="$CMS_VALUE(image.altText | attr)$"></figure>
+<nav><a href="$CMS_REF(about)$">About us</a> <a href="$CMS_REF(about)$#team">Our team</a> <a href="$CMS_REF(news)$">News</a></nav>
+$CMS_END_BLOCK$

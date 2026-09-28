@@ -52,6 +52,12 @@ public enum ConflictType {
     LOCALE_CONFIG_MISMATCH(ConflictSeverity.WARNING),
 
     /**
+     * The archive's quality rule configuration names rules this server doesn't know (M30.1.2): their settings are
+     * dropped, every other rule's configuration is imported. The message names the codes.
+     */
+    UNKNOWN_QUALITY_RULE(ConflictSeverity.WARNING),
+
+    /**
      * An imported asset carries language-dependent values but the target project has no languages
      * (or the other way round) (M24.5.1). The payload is imported as it is; the next template save
      * or language change migrates its shape, so exactly one migration implementation exists.
@@ -176,7 +182,20 @@ public enum ConflictType {
      * The owner of a schedule has no account in the target, or may not own it there (M27.8.1): the importing user
      * becomes its owner.
      */
-    SCHEDULE_OWNER_REPLACED(ConflictSeverity.WARNING);
+    SCHEDULE_OWNER_REPLACED(ConflictSeverity.WARNING),
+
+    /**
+     * The target project already redirects the source path of an archived redirect in the same channel and locale
+     * (M30.4.1), or the archive redirects it twice: the target's redirect (or the archive's first one) is kept, the
+     * archive's is not imported.
+     */
+    REDIRECT_SOURCE_EXISTS(ConflictSeverity.WARNING),
+
+    /**
+     * An archived redirect doesn't fit the target project (M30.4.1): its channel or language doesn't exist there, or
+     * its paths are malformed. It is not imported.
+     */
+    REDIRECT_INVALID(ConflictSeverity.WARNING);
 
     private final ConflictSeverity severity;
     private final boolean rejectsAssetOnly;

@@ -1,6 +1,6 @@
 ---
 id: M30.1.2
-status: todo
+status: done
 depends: [M30.1.1]
 epic: m30-quality-checks-and-redirects
 feature: check-framework
@@ -47,12 +47,13 @@ Epic decisions 4, 9, 10.
 
 ## Acceptance criteria
 
-- [ ] Config round trip: defaults, override, reset to default removes the stored entry; invalid body → `400` with
+- [x] Config round trip: defaults, override, reset to default removes the stored entry; invalid body → `400` with
       per-entry messages; `EDITOR` → `403`; archived project → `409 SF-DOM-0141`.
-- [ ] `PUT` writes exactly one revision and one audit entry; a `PUT` that changes nothing writes neither.
-- [ ] Findings API: paging, each filter, caps and `truncated`, run of another project → `404`.
-- [ ] Liquibase changelog runs on H2 and PostgreSQL (dialect test if available).
-- [ ] `./gradlew build` green.
+- [x] `PUT` writes exactly one revision and one audit entry; a `PUT` that changes nothing writes neither.
+- [x] Findings API: paging, each filter, caps and `truncated`, run of another project → `404`.
+- [x] Liquibase changelog runs on H2 and PostgreSQL (dialect test if available) — H2 proven by every test context;
+      no PostgreSQL on this machine (see notes).
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -65,3 +66,17 @@ Epic decisions 4, 9, 10.
 - `finding_counts` is what the run list shows; don't make the run list query the findings table.
 - Retention: findings go with their run (FK `ON DELETE CASCADE` or explicit delete in the M29 run-retention job — pick
   one and say it in the changelog comment).
+- Deviation: changelog is `v1.0/028-quality-checks.xml` (026/027 taken); archives are protocol **10** (9 is M27.8).
+  Quality config is imported only from protocol >= 10 archives, only when the target project has none of its own
+  (settings import never overwrites, like the locale config); unknown codes are dropped with a non-blocking
+  `UNKNOWN_QUALITY_RULE` conflict. The import learns the known codes through `QualityRuleCatalog` (sf-domain interface,
+  implemented by `QualityRuleRegistry`).
+- Deviation: `PUT /quality-rules` replaces the whole configuration (a rule missing from the body is at its default).
+- Retention: FK `ON DELETE CASCADE` **and** an explicit delete in the `generation-run-retention` batch (like plan rows).
+- Counts on the run (`finding_errors/warnings/counts`) cover every finding; the caps (`sf.quality.*`) only limit what
+  is stored (errors are stored first) and the dropped number is `finding_truncated`.
+- Liquibase: proven on H2 only (no PostgreSQL/Docker here); the JSON columns follow the per-dialect pattern of 017/027.
+- `QualityRuleSetting.params` generates as `Record<string, never>` values in `schema.d.ts` (springdoc maps `Object`
+  to `object`); the response's param `value`/`defaultValue` are `number | boolean`.
+- Tests: `QualityRulesApiTest`, `RunFindingsApiTest`, `QualityRulesExportImportIntegrationTest`; test-only rules in
+  `QualityTestRules` (`SF-CHK-0190`, `0191`, `0390` — codes the catalogue leaves free).

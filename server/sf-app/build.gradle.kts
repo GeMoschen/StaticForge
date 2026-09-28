@@ -28,6 +28,14 @@ dependencies {
     // Search recovery tests forge Lucene commits (outdated schema, foreign owner); production code reaches Lucene only
     // through sf-domain.
     testImplementation(libs.lucene.core)
+    // Quality rule tests read the parsed document (jsoup) the rules see; production code parses only in sf-generate.
+    testImplementation(libs.jsoup)
+}
+
+tasks.named<Test>("test") {
+    // `-Dsf.quality.golden.update=true` rewrites quality/expected-findings.json from the golden build
+    // (GoldenQualityFixtureIntegrationTest); off by default, so the test only compares.
+    System.getProperty("sf.quality.golden.update")?.let { systemProperty("sf.quality.golden.update", it) }
 }
 
 tasks.named<Jar>("bootJar") {

@@ -99,6 +99,23 @@ public class GenerationRun {
     @Column(name = "heartbeat_at", insertable = false, updatable = false)
     private Instant heartbeatAt;
 
+    /** Quality check findings of the run with severity ERROR (M30.1.2), counted before the storage caps. */
+    @Column(name = "finding_errors", nullable = false)
+    private int findingErrors;
+
+    /** Quality check findings of the run with severity WARNING (M30.1.2), counted before the storage caps. */
+    @Column(name = "finding_warnings", nullable = false)
+    private int findingWarnings;
+
+    /** Findings the storage caps dropped ({@code sf.quality.max-findings-per-*}, M30.1.2). */
+    @Column(name = "finding_truncated", nullable = false)
+    private int findingTruncated;
+
+    /** Findings by category ({@code {"links": n, "seo": n, "accessibility": n}}); {@code null} for a run before M30. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "finding_counts")
+    private JsonNode findingCounts;
+
     protected GenerationRun() {}
 
     public GenerationRun(long projectId, Long revisionId, GenerationMode mode, String channels, Long targetId,
@@ -121,6 +138,38 @@ public class GenerationRun {
         this.warningCount = warningCount;
         this.diagnostics = diagnostics;
         this.logBlobSha = logBlobSha;
+    }
+
+    public int getFindingErrors() {
+        return findingErrors;
+    }
+
+    public void setFindingErrors(int findingErrors) {
+        this.findingErrors = findingErrors;
+    }
+
+    public int getFindingWarnings() {
+        return findingWarnings;
+    }
+
+    public void setFindingWarnings(int findingWarnings) {
+        this.findingWarnings = findingWarnings;
+    }
+
+    public int getFindingTruncated() {
+        return findingTruncated;
+    }
+
+    public void setFindingTruncated(int findingTruncated) {
+        this.findingTruncated = findingTruncated;
+    }
+
+    public JsonNode getFindingCounts() {
+        return findingCounts;
+    }
+
+    public void setFindingCounts(JsonNode findingCounts) {
+        this.findingCounts = findingCounts;
     }
 
     public Long getId() {

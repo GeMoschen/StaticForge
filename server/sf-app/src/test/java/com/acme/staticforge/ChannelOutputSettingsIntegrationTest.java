@@ -26,6 +26,7 @@ import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.RunStatus;
 import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
+import com.acme.staticforge.generate.target.BuildManifest;
 import com.acme.staticforge.preview.PageRenderService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
@@ -188,6 +189,9 @@ class ChannelOutputSettingsIntegrationTest {
         // No page asset changed, yet every page moved: the run must have fallen back to FULL.
         assertThat(pageFiles(site, runId).keySet()).containsExactly(
                 "about/index.html", "index.html", "pf/p2/index.html", "pf/pf1/deep/index.html", "pf/pf1/p3/index.html");
+        // Every previous path now redirects to the page's directory (M30.4.2, M30.5.1).
+        assertThat(read(site, runId, "about.html")).contains("<meta http-equiv=\"refresh\" content=\"0; url=about/\">");
+        assertThat(read(site, runId, "pf/pf1/p3.html")).contains("<meta http-equiv=\"refresh\" content=\"0; url=p3/\">");
     }
 
     // ------------------------------------------------------------------
@@ -274,14 +278,20 @@ class ChannelOutputSettingsIntegrationTest {
     }
 
     /** Output path → content of every generated {@code .html} page. */
+    /** The build's page outputs, by path — not the redirect stubs (M30.5.1) it writes at the pages' previous paths. */
     private Map<String, String> pageFiles(Site site, long runId) throws IOException {
         Map<String, String> pages = new TreeMap<>();
-        for (String file : files(site, runId)) {
-            if (file.endsWith(".html")) {
-                pages.put(file, read(site, runId, file));
+        for (BuildManifest.Output output : manifest(site, runId).outputs()) {
+            if (output.kind() == BuildManifest.Kind.PAGE && output.path().endsWith(".html")) {
+                pages.put(output.path(), read(site, runId, output.path()));
             }
         }
         return pages;
+    }
+
+    private BuildManifest manifest(Site site, long runId) throws IOException {
+        Path file = buildDir(site, runId).resolveSibling(runId + ".manifest.json");
+        return BuildManifest.parse(Files.readAllBytes(file)).orElseThrow();
     }
 
     private String read(Site site, long runId, String file) throws IOException {

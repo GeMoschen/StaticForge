@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Form controls without label</title>
+  <meta name="description" content="A fixture page for the accessibility checks: Form controls without label.">
+</head>
+<body>
+  <main id="content">
+    <h1>Form controls without label</h1>
+    <form action="search.html">
+      <input type="text" name="q" placeholder="Search">
+      <select name="sort"><option>Newest</option><option>Oldest</option></select>
+      <label><textarea name="note">Note</textarea></label>
+      <label for="other">Mail</label>
+      <input type="email" id="mail">
+      <input id="other" type="hidden" name="token" value="1">
+      <input type="checkbox" name="terms" aria-labelledby="nowhere">
+      <input type="submit" value="Go">
+    </form>
+  </main>
+</body>
+</html>

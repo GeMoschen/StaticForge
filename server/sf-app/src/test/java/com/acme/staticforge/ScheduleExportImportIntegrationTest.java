@@ -453,7 +453,7 @@ class ScheduleExportImportIntegrationTest {
                 return null;
             }
             if (name.equals("manifest.json")) {
-                return text.replace("\"protocolVersion\":9", "\"protocolVersion\":8");
+                return text.replaceAll("\"protocolVersion\":\\d+","\"protocolVersion\":8");
             }
             return name.equals("settings.json") ? text.replaceAll("\"uuid\":\"[0-9a-f-]+\",", "") : text;
         });

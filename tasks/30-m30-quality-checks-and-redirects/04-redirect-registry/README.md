@@ -18,11 +18,11 @@ page's URL" when unpublishing or deleting it.
 
 ## Feature exit criteria
 
-- [ ] Manual redirects CRUD with validation, `If-Match`, audit; `for-asset` creates entries from the current manifest.
-- [ ] A build after a move/rename/UID change/folder rename/template `outputPath` change adds AUTO entries (FULL and
+- [x] Manual redirects CRUD with validation, `If-Match`, audit; `for-asset` creates entries from the current manifest.
+- [x] A build after a move/rename/UID change/folder rename/template `outputPath` change adds AUTO entries (FULL and
       incremental), persisted only when the build published.
-- [ ] Shadowed, dangling and loop handling as in epic decision 16; the run's redirect set is available to POST.
-- [ ] `./gradlew build` green.
+- [x] Shadowed, dangling and loop handling as in epic decision 16; the run's redirect set is available to POST.
+- [x] `./gradlew build` green.
 
 ## Dependencies
 

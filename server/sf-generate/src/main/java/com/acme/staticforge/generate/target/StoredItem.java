@@ -20,6 +20,8 @@ public record StoredItem(Kind kind, long runId, Path path, Instant modified) {
         STAGED,
         /** A build manifest, {@code builds/{runId}.manifest.json}; present for every published build. */
         MANIFEST,
+        /** A build sidecar, {@code builds/{runId}.{name}.json} (M30.1.3: {@code quality}); kept and removed like its manifest. */
+        SIDECAR,
         /** A temporary link of an interrupted flip of {@code current}: {@code .current-<nanos>.link}. */
         TEMP_LINK
     }

@@ -38,6 +38,7 @@
           <th>Files</th>
           <th>Errors</th>
           <th>Warnings</th>
+          <th>Findings</th>
           <th>Started</th>
           <th></th>
         </tr>
@@ -76,6 +77,13 @@
             >
               {{ run.warningCount ?? 0 }}
             </td>
+            <td>
+              @if (run.findingCounts; as counts) {
+                <sf-finding-counts [counts]="counts" (pick)="showFindings(run, { severity: $event })" />
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
             <td>{{ run.startedAt | sfRelativeTime }}</td>
             <td>
               <div class="cell-actions">
@@ -105,41 +113,38 @@
           </tr>
           @if (expandedRunId() === run.id) {
             <tr class="details-row">
-              <td colspan="8">
+              <td colspan="9">
+                @let tab = visibleTab(run);
                 <div class="tabs" role="tablist" aria-label="Run details">
-                  <button
-                    type="button"
-                    role="tab"
-                    class="tabs__tab"
-                    [id]="'run-' + run.id + '-summary-tab'"
-                    [attr.aria-selected]="detailsTab() === 'summary'"
-                    [attr.aria-controls]="'run-' + run.id + '-panel'"
-                    [attr.tabindex]="detailsTab() === 'summary' ? 0 : -1"
-                    (click)="detailsTab.set('summary')"
-                    (keydown.arrowRight)="detailsTab.set('pages')"
-                  >
-                    Summary
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    class="tabs__tab"
-                    [id]="'run-' + run.id + '-pages-tab'"
-                    [attr.aria-selected]="detailsTab() === 'pages'"
-                    [attr.aria-controls]="'run-' + run.id + '-panel'"
-                    [attr.tabindex]="detailsTab() === 'pages' ? 0 : -1"
-                    (click)="detailsTab.set('pages')"
-                    (keydown.arrowLeft)="detailsTab.set('summary')"
-                  >
-                    Rebuilt pages
-                  </button>
+                  @for (option of detailsTabsOf(run); track option) {
+                    <button
+                      type="button"
+                      role="tab"
+                      class="tabs__tab"
+                      [id]="'run-' + run.id + '-' + option + '-tab'"
+                      [attr.aria-selected]="tab === option"
+                      [attr.aria-controls]="'run-' + run.id + '-panel'"
+                      [attr.tabindex]="tab === option ? 0 : -1"
+                      (click)="selectTab(run, option)"
+                      (keydown.arrowRight)="stepTab(run, 1)"
+                      (keydown.arrowLeft)="stepTab(run, -1)"
+                    >
+                      @switch (option) {
+                        @case ('summary') { Summary }
+                        @case ('pages') { Rebuilt pages }
+                        @case ('findings') { Findings }
+                      }
+                    </button>
+                  }
                 </div>
                 <div
                   role="tabpanel"
                   [id]="'run-' + run.id + '-panel'"
-                  [attr.aria-labelledby]="'run-' + run.id + (detailsTab() === 'summary' ? '-summary-tab' : '-pages-tab')"
+                  [attr.aria-labelledby]="'run-' + run.id + '-' + tab + '-tab'"
                 >
-                @if (detailsTab() === 'pages') {
+                @if (tab === 'findings') {
+                  <sf-run-findings [projectKey]="projectKey()" [run]="run" />
+                } @else if (tab === 'pages') {
                   @if (!run.planSummary) {
                     <p class="details__empty">No plan is stored for this run.</p>
                   } @else if (!run.planSummary.planAvailable) {
@@ -175,16 +180,32 @@
                     {{ run.filesWritten ?? 0 }} written, {{ run.filesSkipped ?? 0 }} skipped,
                     {{ run.bytesWritten ?? 0 }} bytes
                   </dd>
+                  @if (redirectsOf(run); as redirects) {
+                    <dt>Redirects</dt>
+                    <dd>{{ redirects }}</dd>
+                  }
+                  @if (run.findingCounts) {
+                    <dt>Findings</dt>
+                    <dd>
+                      <button type="button" class="link-button" (click)="showFindings(run)">{{ findingsLine(run) }}</button>
+                    </dd>
+                  }
                 </dl>
                 @let groups = diagnosticsOf(run);
+                @let heldBack = heldBackOf(run, groups);
                 @if (groups.length === 0) {
                   <p class="details__empty">No errors or warnings.</p>
                 } @else {
                   <ul class="diagnostics">
                     @for (group of groups; track $index) {
-                      @for (message of group.messages; track $index) {
+                      @for (message of group.messages; track $index; let messageIndex = $index) {
                         <li class="diagnostic" [class.diagnostic--error]="group.severity === 'error'">
                           <span class="diagnostic__code">{{ group.code }}</span>{{ message }}
+                          @if (group.code === heldBackCode && heldBack[messageIndex]; as page) {
+                            <button type="button" class="link-button diagnostic__link" (click)="showHeldBack(run, page)">
+                              Show findings
+                            </button>
+                          }
                         </li>
                       }
                     }

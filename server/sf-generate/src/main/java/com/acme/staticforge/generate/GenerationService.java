@@ -12,9 +12,19 @@ import com.acme.staticforge.generate.plan.Baseline;
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.BuildPlanner;
 import com.acme.staticforge.generate.plan.PlanRequest;
+import com.acme.staticforge.generate.quality.EffectiveQualityConfig;
+import com.acme.staticforge.generate.quality.OutputKey;
+import com.acme.staticforge.generate.quality.QualityCheckStage;
+import com.acme.staticforge.generate.quality.QualityRuleConfigService;
+import com.acme.staticforge.generate.quality.RedirectSources;
+import com.acme.staticforge.generate.quality.QualitySidecar;
+import com.acme.staticforge.generate.quality.RunFindingStore;
 import com.acme.staticforge.generate.pipeline.OutputFile;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.pipeline.RunAbortedException;
+import com.acme.staticforge.generate.postprocess.HtaccessPostProcessor;
+import com.acme.staticforge.generate.postprocess.RedirectPostProcessor;
+import com.acme.staticforge.generate.redirect.BuildRedirects;
 import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.RenderOutcome;
@@ -34,6 +44,9 @@ import com.acme.staticforge.generate.target.TargetWriter;
 import com.acme.staticforge.generate.target.TargetWriterSelector;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.redirect.RedirectOutputs;
+import com.acme.staticforge.redirect.RedirectService;
+import com.acme.staticforge.redirect.RedirectService.AutoCandidate;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -54,8 +67,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -97,6 +113,8 @@ public class GenerationService {
     static final String STAGE_VALIDATE = "VALIDATE";
     static final String STAGE_RENDER = "RENDER";
     static final String STAGE_ASSETS = "ASSETS";
+    /** The quality checks over the rendered output (M30.1.3), between ASSETS and POST. */
+    static final String STAGE_CHECK = "CHECK";
     static final String STAGE_POST = "POST";
     static final String STAGE_WRITE = "WRITE";
     static final String STAGE_REPORT = "REPORT";
@@ -136,6 +154,10 @@ public class GenerationService {
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
     private final AuditService audit;
     private final GenerationRunControl control;
+    private final QualityCheckStage qualityCheckStage;
+    private final QualityRuleConfigService qualityConfig;
+    private final RunFindingStore findingStore;
+    private final RedirectService redirectService;
 
     /** A remembered {@code Idempotency-Key}: the run it started and when (M29.2.4). */
     private record IdempotentStart(long runId, Instant at) {}
@@ -158,7 +180,11 @@ public class GenerationService {
             MeterRegistry meterRegistry,
             com.acme.staticforge.project.ProjectLocales projectLocales,
             AuditService audit,
-            GenerationRunControl control) {
+            GenerationRunControl control,
+            QualityCheckStage qualityCheckStage,
+            QualityRuleConfigService qualityConfig,
+            RunFindingStore findingStore,
+            RedirectService redirectService) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
@@ -177,6 +203,10 @@ public class GenerationService {
         this.projectLocales = projectLocales;
         this.audit = audit;
         this.control = control;
+        this.qualityCheckStage = qualityCheckStage;
+        this.qualityConfig = qualityConfig;
+        this.findingStore = findingStore;
+        this.redirectService = redirectService;
     }
 
     /**
@@ -455,13 +485,14 @@ public class GenerationService {
         Set<String> channels = BuildPlanner.effectiveChannels(request.channels());
         Set<UUID> scopeAssets = scopeAssets(request);
         GenerationMode mode = request.mode() == null ? GenerationMode.FULL : request.mode();
+        EffectiveQualityConfig quality = qualityConfig.effective(projectId);
 
         long baseRunId = -1;
         BuildManifest base = null;
         Baseline baseline = null;
         FallbackCause fallback = null;
         if (mode == GenerationMode.INCREMENTAL) {
-            BaselineChoice choice = baselineFor(projectId, writer, channels, snapshot);
+            BaselineChoice choice = baselineFor(projectId, writer, channels, snapshot, quality);
             baseline = choice.baseline();
             fallback = choice.fallbackCause();
             if (baseline != null) {
@@ -480,7 +511,29 @@ public class GenerationService {
             }
         }
         BuildPlan plan = buildPlanner.plan(snapshot, planRequest, paths);
-        return new PlannedBuild(project, target, writer, snapshot, paths, channels, baseRunId, base, plan);
+        return new PlannedBuild(project, target, writer, snapshot, paths, channels, baseRunId, base, plan, quality,
+                currentManifest(writer, baseRunId, base));
+    }
+
+    /**
+     * The manifest of the build {@code writer}'s target serves now (M30.4.2): what redirect detection compares with —
+     * the base build when the run carries the current one, else read; {@code null} when there is none. Never fails the
+     * plan: an unreadable current build only means nothing is detected.
+     */
+    private static BuildManifest currentManifest(TargetWriter writer, long baseRunId, BuildManifest base) {
+        try {
+            long current = writer.currentRunId();
+            if (current < 0) {
+                return null;
+            }
+            if (base != null && current == baseRunId) {
+                return base;
+            }
+            return writer.readManifest(current).orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("Could not read the current build of the target; no redirects are detected: {}", e.toString());
+            return null;
+        }
     }
 
     /**
@@ -488,11 +541,23 @@ public class GenerationService {
      *
      * @param diagnostics the VALIDATE findings grouped by code, like a run's diagnostics; {@code null} unless requested
      */
-    public record DryRun(PlannedBuild build, ObjectNode summary, List<PlanEntryRecord> entries, JsonNode diagnostics) {}
+    public record DryRun(
+            PlannedBuild build,
+            ObjectNode summary,
+            List<PlanEntryRecord> entries,
+            JsonNode diagnostics,
+            List<PlannedRedirect> redirectCandidates) {}
+
+    /** An automatic redirect a dry run would add (M30.4.2), and the path the plan renders its page at. */
+    public record PlannedRedirect(AutoCandidate candidate, String toPath) {}
 
     /**
      * Plans {@code request} exactly as a run started now would, and explains the plan (M22.2.1). Nothing is rendered,
      * written, stored or locked: no run row, no plan rows, no SSE, no idempotency key, so it works while a run is active.
+     *
+     * <p>It also names the automatic redirects the run would add (M30.4.2): each planned page output whose path differs
+     * from the target's current build. A page the run would then hold back (incomplete content, a failed quality check)
+     * is only known once it renders, so a run may add fewer.
      *
      * @param validate also compile every template the plan needs and return the findings (never renders)
      */
@@ -502,7 +567,30 @@ public class GenerationService {
         JsonNode diagnostics = validate
                 ? diagnosticsJson(renderPipeline.validate(build.snapshot(), build.plan()), List.of())
                 : null;
-        return new DryRun(build, PlanInsight.summary(mapper, build, request, entries), entries, diagnostics);
+        List<OutputKey> planned = plannedPages(build.plan());
+        Map<RedirectOutputs.PageKey, String> plannedPaths = new HashMap<>();
+        planned.forEach(key -> plannedPaths.putIfAbsent(
+                new RedirectOutputs.PageKey(key.asset(), key.channel(), key.locale(), key.number()), key.path()));
+        List<PlannedRedirect> candidates = buildRedirects(build).candidates(planned).stream()
+                .map(candidate -> new PlannedRedirect(candidate, plannedPaths.get(new RedirectOutputs.PageKey(
+                        candidate.toAssetUuid(), candidate.channel(), candidate.locale(), candidate.toPageNumber()))))
+                .toList();
+        ObjectNode summary = PlanInsight.summary(mapper, build, request, entries);
+        return new DryRun(build, PlanInsight.redirects(summary, candidates.size(), null), entries, diagnostics, candidates);
+    }
+
+    /** The redirects of {@code build}: the target's current build, the project's registry and its languages. */
+    private BuildRedirects buildRedirects(PlannedBuild build) {
+        return BuildRedirects.of(
+                build.current(), redirectService.all(build.project().getId()), build.paths().locales().isLocalized());
+    }
+
+    /** The page outputs {@code plan} renders, as output keys. */
+    private static List<OutputKey> plannedPages(BuildPlan plan) {
+        return plan.entries().stream()
+                .map(entry -> new OutputKey(entry.outputPath(), entry.pageUuid(), entry.channel(), entry.locale(),
+                        entry.pagination() == null ? null : entry.pageNumber()))
+                .toList();
     }
 
     /**
@@ -545,8 +633,14 @@ public class GenerationService {
      * from its consistent revision, so a scoped build (which keeps its base's consistent revision) never advances the
      * baseline, and a build of another target never counts. Without such a build the request plans FULL, with the
      * reason.
+     *
+     * <p>The baseline also carries the quality check facts of its outputs (M30.1.3): a build without its
+     * {@code quality.json} sidecar (published before M30), or one checked under another rule configuration — changed
+     * since the baseline, or a rule set that changed with the application — can't vouch for its carried outputs, so the
+     * request plans FULL.
      */
-    BaselineChoice baselineFor(long projectId, TargetWriter writer, Set<String> channels, Snapshot snapshot) {
+    BaselineChoice baselineFor(
+            long projectId, TargetWriter writer, Set<String> channels, Snapshot snapshot, EffectiveQualityConfig quality) {
         long current = writer.currentRunId();
         if (current < 0) {
             return BaselineChoice.none(FallbackCause.NO_COMPLETE_BUILD_FOR_TARGET);
@@ -566,6 +660,15 @@ public class GenerationService {
         // changes over references) cannot see: build FULL instead.
         if (channelService.outputSettingsChangedSince(projectId, revision)) {
             return BaselineChoice.none(FallbackCause.CHANNEL_SETTINGS_CHANGED);
+        }
+        // The manifest names the rule configuration its build was checked under, so planning never reads the facts
+        // themselves: a run loads them once it executes (baseFacts).
+        String checkedUnder = manifest.get().qualityFingerprint();
+        if (checkedUnder == null) {
+            return BaselineChoice.none(FallbackCause.BASE_BUILD_WITHOUT_QUALITY_FACTS);
+        }
+        if (qualityConfig.qualityRulesChangedSince(projectId, revision) || !quality.fingerprint().equals(checkedUnder)) {
+            return BaselineChoice.none(FallbackCause.QUALITY_RULES_CHANGED);
         }
         return new BaselineChoice(current, new Baseline(revision, manifest.get()), null);
     }
@@ -656,14 +759,6 @@ public class GenerationService {
             List<Diagnostic> fileErrors = new ArrayList<>(outcome.pageErrors());
             fileErrors.addAll(assets.fileErrors());
 
-            List<OutputFile> allFiles = new ArrayList<>();
-            for (RenderedFile file : outcome.files()) {
-                allFiles.add(file.toOutputFile());
-            }
-            allFiles.addAll(assets.files());
-
-            control.stage(runId, STAGE_POST);
-            emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
             TargetWriter writer = build.writer();
             CarryForward carry = new CarryForward(
                     snapshot,
@@ -674,16 +769,72 @@ public class GenerationService {
                     scopeAssets(request),
                     build.base(),
                     build.carries() ? writer.readFile(build.baseRunId(), SEARCH_INDEX_PATH) : Optional.empty());
+
+            // CHECK (M30.1.3): quality checks over what the run rendered and what it carries; an ERROR holds a page
+            // back, and every output planned but not published is withheld from the site pages.
+            control.stage(runId, STAGE_CHECK);
+            emit(runId, STAGE_CHECK, "Checking output", 0, fileErrors.size(), warnings.size(), null);
+            String baseUrl = baseUrl(build.target());
+            Set<String> notRendered = notRendered(plan, outcome);
+            // Redirects (M30.4.2, M30.5.1): what moved since the build the target serves, and where this build serves
+            // redirects — which the link checks need (SF-CHK-0109), before and after the hold-back.
+            Set<RedirectFormat> redirectFormats = RedirectFormat.of(build.target().getConfig());
+            BuildRedirects buildRedirects = buildRedirects(build);
+            RedirectSources redirectSources = redirectFormats.isEmpty()
+                    ? RedirectSources.NONE
+                    : outputs -> buildRedirects.forOutputs(outputs).sources();
+            QualityCheckStage.CheckResult check = qualityCheckStage.check(new QualityCheckStage.CheckInput(
+                    build.quality(),
+                    baseUrl,
+                    locales,
+                    build.paths()::settingsFor,
+                    snapshot,
+                    plan.entries(),
+                    outcome.files(),
+                    notRendered,
+                    carry.carriedPages(),
+                    mediaOutputsOf(assets, carry.carriedMedia(outcome.files(), assets)),
+                    siteFiles(baseUrl, redirectFormats),
+                    baseFacts(build),
+                    () -> control.checkpoint(runId, GenerationRunProbe.CHECK_OUTPUT),
+                    redirectSources));
+            Set<String> withheld = new LinkedHashSet<>(notRendered);
+            withheld.addAll(check.heldBack());
+            carry.withhold(withheld);
+            fileErrors.addAll(check.pageErrors());
+            List<RenderedFile> published = check.published(outcome.files());
+            emit(runId, STAGE_CHECK, checkedMessage(check), 0, fileErrors.size(), warnings.size(), null);
+
+            // What the report stores is prepared alongside POST and WRITE, which mostly wait for storage: the
+            // sidecar's bytes and the findings the caps keep.
+            CompletableFuture<byte[]> qualityFacts = alongside(() -> check.sidecar().toJson());
+            CompletableFuture<RunFindingStore.Prepared> findings = alongside(() -> findingStore.prepare(check.findings()));
+
+            // The redirects this build emits, against what it publishes after the hold-back; the detected ones are
+            // stored only with the published run, below.
+            BuildRedirects.Result redirects = buildRedirects.forOutputs(check.finalOutputs().values());
+
+            List<OutputFile> allFiles = new ArrayList<>();
+            for (RenderedFile file : published) {
+                allFiles.add(file.toOutputFile());
+            }
+            allFiles.addAll(assets.files());
+            carriedHtaccess(carry, writer, build.baseRunId()).ifPresent(allFiles::add);
+
+            control.stage(runId, STAGE_POST);
+            emit(runId, STAGE_POST, "Post-processing", allFiles.size(), 0, warnings.size(), null);
             List<String> channels = request.channels() == null ? parseChannels(run.getChannels()) : request.channels();
+            Map<String, com.acme.staticforge.channel.ChannelOutputSettings> redirectChannels = new HashMap<>();
+            redirects.redirects().forEach(r -> redirectChannels.computeIfAbsent(r.channel(), build.paths()::settingsFor));
             PostProcessContext ctx = new PostProcessContext(
-                    build.project().getId(), projectKey, baseUrl(build.target()), channels, carry.sitePages(),
-                    false, java.util.List.of(), java.util.List.of(), carry.carriedText(),
-                    locales.isLocalized() ? locales.defaultLocale() : null);
+                    build.project().getId(), projectKey, baseUrl, channels, carry.sitePages(),
+                    false, redirects.redirects(), java.util.List.of(), carry.carriedText(),
+                    locales.isLocalized() ? locales.defaultLocale() : null, redirectFormats, redirectChannels);
             List<OutputFile> processed = postProcessStage.apply(ctx, allFiles);
 
             control.stage(runId, STAGE_WRITE);
             emit(runId, STAGE_WRITE, "Writing output", processed.size(), 0, warnings.size(), null);
-            CarryForward.Publication publication = carry.publication(runId, processed, outcome.files(), assets);
+            CarryForward.Publication publication = carry.publication(runId, processed, published, assets);
             if (build.carries()) {
                 writer.stage(runId, build.baseRunId(), publication.files(), publication.removedPaths());
             } else {
@@ -692,13 +843,26 @@ public class GenerationService {
 
             control.stage(runId, GenerationRunProbe.PUBLISH);
             long bytes = processed.stream().mapToLong(f -> f.bytes().length).sum();
-            // A page or processed media file held back makes the run PARTIAL; the rest is published.
+            // A page or processed media file held back makes the run PARTIAL; the rest is published. Quality findings
+            // don't: they are stored apart from the diagnostics (a warning alone leaves the run SUCCESS).
             boolean partial = !warnings.isEmpty() || !fileErrors.isEmpty();
-            JsonNode diagnostics = diagnosticsJson(fileErrors, warnings);
+            JsonNode diagnostics = diagnosticsJson(fileErrors, warnings, check.heldBackPages());
+            byte[] sidecar = joined(qualityFacts);
+            RunFindingStore.Prepared preparedFindings = joined(findings);
             // The manifest marks a published build (M29.2.2): it is written right before the flip, and both happen
-            // only while the run is still RUNNING, on its locked row — a cancel that committed first wins.
+            // only while the run is still RUNNING, on its locked row — a cancel that committed first wins. The
+            // findings are stored in the same transaction: a run that isn't recorded stores none. So are the detected
+            // redirects (M30.4.2): written before the publish, so a failed publish rolls them back with the run.
+            int activeRedirects = redirectFormats.isEmpty() ? 0 : redirects.active().size();
             GenerationRun done = control.whileRunning(runId, active -> {
-                        writer.writeManifest(runId, publication.manifest());
+                        findingStore.save(runId, preparedFindings).applyTo(active);
+                        RedirectService.AutoResult stored =
+                                redirectService.upsertAuto(active.getProjectId(), runId, redirects.candidates());
+                        active.setPlanSummary(PlanInsight.redirects(
+                                active.getPlanSummary(), stored.added() + stored.replaced(), activeRedirects));
+                        writer.writeSidecar(runId, QualitySidecar.NAME, sidecar);
+                        writer.writeManifest(
+                                runId, publication.manifest().withQualityFingerprint(build.quality().fingerprint()));
                         writer.publish(runId);
                         active.setStatus(partial ? RunStatus.PARTIAL : RunStatus.SUCCESS);
                         active.setFilesWritten(processed.size());
@@ -720,6 +884,109 @@ public class GenerationService {
         } catch (Exception e) {
             fail(runId, sample, generationTimer, List.of(), List.of(), e);
         }
+    }
+
+    /**
+     * The quality check facts of the build a run carries forward (M30.1.3): its outputs' facts and page-local findings,
+     * from the base build's {@code quality.json}; {@code null} for a run that carries nothing. Planning decided on the
+     * manifest's fingerprint alone; a sidecar that can't be read now leaves the carried outputs unchecked, as for a
+     * scoped run on a base without facts — it never changes the plan.
+     */
+    private static QualitySidecar baseFacts(PlannedBuild build) {
+        if (!build.carries()) {
+            return null;
+        }
+        return build.writer().readSidecar(build.baseRunId(), QualitySidecar.NAME)
+                .flatMap(QualitySidecar::parse)
+                .orElse(null);
+    }
+
+    /**
+     * Runs {@code work} on a virtual thread of its own, alongside the run: pure computation the run needs only at its
+     * end. A run that stops before then just leaves the result unused.
+     */
+    private static <T> CompletableFuture<T> alongside(Supplier<T> work) {
+        return CompletableFuture.supplyAsync(work, task -> Thread.ofVirtual().name("sf-generation-report").start(task));
+    }
+
+    /** The result of work started {@link #alongside}; its failure is rethrown as it was thrown. */
+    private static <T> T joined(CompletableFuture<T> future) {
+        try {
+            return future.join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof RuntimeException failure) {
+                throw failure;
+            }
+            if (e.getCause() instanceof Error error) {
+                throw error;
+            }
+            throw e;
+        }
+    }
+
+    /** The page outputs the run planned but didn't render: held back before the checks, or with no channel source. */
+    private static Set<String> notRendered(BuildPlan plan, RenderOutcome outcome) {
+        Set<String> rendered = new java.util.HashSet<>();
+        outcome.files().forEach(file -> rendered.add(file.outputPath()));
+        Set<String> missing = new LinkedHashSet<>();
+        for (com.acme.staticforge.generate.plan.PlanEntry entry : plan.entries()) {
+            if (!rendered.contains(entry.outputPath())) {
+                missing.add(entry.outputPath());
+            }
+        }
+        return missing;
+    }
+
+    /** Every media output of the build: written by the run, and carried from the base build. */
+    private static Map<String, MediaOutputs.Key> mediaOutputsOf(
+            AssetCopyResult assets, List<BuildManifest.Output> carriedMedia) {
+        Map<String, MediaOutputs.Key> media = new LinkedHashMap<>(assets.owners());
+        for (BuildManifest.Output output : carriedMedia) {
+            media.putIfAbsent(output.path(), new MediaOutputs.Key(output.asset(), output.locale()));
+        }
+        return media;
+    }
+
+    /**
+     * The site files post-processing writes for a target with {@code baseUrl} and {@code redirectFormats} (a link to
+     * them is no broken link, and no redirect replaces them). The HTML stubs are not among them: they are where the
+     * build serves its redirects. A draft check (M30.3.1) resolves links against the same files.
+     */
+    public static Set<String> siteFiles(String baseUrl, Set<RedirectFormat> redirectFormats) {
+        Set<String> files = new LinkedHashSet<>();
+        files.add(SEARCH_INDEX_PATH);
+        if (!baseUrl.isBlank()) {
+            files.add("sitemap.xml");
+            files.add("robots.txt");
+        }
+        if (redirectFormats.contains(RedirectFormat.JSON)) {
+            files.add(RedirectPostProcessor.PATH);
+        }
+        if (redirectFormats.contains(RedirectFormat.HTACCESS)) {
+            files.add(HtaccessPostProcessor.PATH);
+        }
+        return files;
+    }
+
+    /**
+     * The base build's {@code .htaccess} when the run keeps it as a page output (M30.5.1): its bytes go through
+     * post-processing again, so the redirect block a previous build appended is replaced rather than kept stale.
+     */
+    private static Optional<OutputFile> carriedHtaccess(CarryForward carry, TargetWriter writer, long baseRunId) {
+        if (!carry.carries()
+                || carry.carriedPages().stream().noneMatch(output -> output.path().equals(HtaccessPostProcessor.PATH))) {
+            return Optional.empty();
+        }
+        return writer.readFile(baseRunId, HtaccessPostProcessor.PATH)
+                .map(bytes -> new OutputFile(HtaccessPostProcessor.PATH, bytes));
+    }
+
+    /** The {@code CHECK} stage's closing progress line: how much was checked and found. */
+    private static String checkedMessage(QualityCheckStage.CheckResult check) {
+        return "Checked " + check.checkedOutputs() + (check.checkedOutputs() == 1 ? " output: " : " outputs: ")
+                + check.errorCount() + (check.errorCount() == 1 ? " error, " : " errors, ")
+                + check.warningCount() + (check.warningCount() == 1 ? " warning" : " warnings")
+                + (check.pageErrors().isEmpty() ? "" : "; " + check.pageErrors().size() + " held back");
     }
 
     /** The request as the queued run recorded it: its revision, mode, target and channels. */
@@ -890,7 +1157,8 @@ public class GenerationService {
         return List.copyOf(keys);
     }
 
-    private static String baseUrl(GenerationTarget target) {
+    /** The {@code baseUrl} of {@code target}'s configuration; {@code ""} when it has none. */
+    public static String baseUrl(GenerationTarget target) {
         JsonNode config = target.getConfig();
         if (config == null || !config.path("baseUrl").isTextual()) {
             return "";
@@ -931,9 +1199,32 @@ public class GenerationService {
     }
 
     private JsonNode diagnosticsJson(List<Diagnostic> errors, List<Diagnostic> warnings) {
+        return diagnosticsJson(errors, warnings, List.of());
+    }
+
+    /**
+     * A run's diagnostics: {@code errors} and {@code warnings} grouped by code ({@code [{code, count, messages}]}) and,
+     * when the quality checks held pages back (M30.6.2), {@code heldBack}: one
+     * {@code {asset, uid, channel, locale, codes}} per page, channel and language — the {@code SF-GEN-0125} errors as
+     * data, so clients can link them to the page's findings without reading the message.
+     */
+    private JsonNode diagnosticsJson(
+            List<Diagnostic> errors, List<Diagnostic> warnings, List<QualityCheckStage.HeldBackPage> heldBack) {
         ObjectNode root = mapper.createObjectNode();
         root.set("errors", groupByCode(errors));
         root.set("warnings", groupByCode(warnings));
+        if (!heldBack.isEmpty()) {
+            ArrayNode pages = root.putArray("heldBack");
+            for (QualityCheckStage.HeldBackPage page : heldBack) {
+                ObjectNode node = pages.addObject();
+                node.put("asset", page.asset() == null ? null : page.asset().toString());
+                node.put("uid", page.uid());
+                node.put("channel", page.channel());
+                node.put("locale", page.locale());
+                ArrayNode codes = node.putArray("codes");
+                page.codes().forEach(codes::add);
+            }
+        }
         return root;
     }
 

@@ -12,15 +12,20 @@ import java.util.List;
  * <p>M27.8.1: {@code importedScheduleCount} new schedules, {@code updatedScheduleCount} open schedules replaced, and
  * {@code scheduleWarnings} — what happened to the archive's schedules at commit time, which can differ from the
  * analysis (time passes, a pinned version turns out incomplete).
+ *
+ * <p>M30.4.1: {@code importedRedirectCount} redirects added, and {@code redirectWarnings} — the archive's redirects
+ * left out ({@link ConflictType#REDIRECT_SOURCE_EXISTS}, {@link ConflictType#REDIRECT_INVALID}).
  */
 public record ImportResult(
         String sourceProjectKey, int importedAssetCount, int updatedAssetCount, int importedBlobCount,
-        int releasedCount, int importedScheduleCount, int updatedScheduleCount, List<ImportConflict> scheduleWarnings) {
+        int releasedCount, int importedScheduleCount, int updatedScheduleCount, List<ImportConflict> scheduleWarnings,
+        int importedRedirectCount, List<ImportConflict> redirectWarnings) {
 
-    /** A result without schedules. */
+    /** A result without schedules and redirects. */
     public ImportResult(
             String sourceProjectKey, int importedAssetCount, int updatedAssetCount, int importedBlobCount,
             int releasedCount) {
-        this(sourceProjectKey, importedAssetCount, updatedAssetCount, importedBlobCount, releasedCount, 0, 0, List.of());
+        this(sourceProjectKey, importedAssetCount, updatedAssetCount, importedBlobCount, releasedCount, 0, 0, List.of(),
+                0, List.of());
     }
 }

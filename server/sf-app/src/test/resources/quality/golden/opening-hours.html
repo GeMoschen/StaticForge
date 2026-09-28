@@ -1,0 +1,10 @@
+$CMS_EXTENDS(page_template:layout)$
+$CMS_COMMENT$ Seeded: SF-CHK-0301 image without alt, 0304 h1 -> h3, 0305 duplicate id, 0306 unlabeled input, 0307 iframe without title. $CMS_END_COMMENT$
+$CMS_BLOCK(content)$<p>$CMS_VALUE(intro)$</p>
+<h3>Weekdays</h3>
+<p><img src="$CMS_REF(image)$"></p>
+<p id="hours">Monday to Friday, 8 to 18</p>
+<p id="hours">Saturday, 9 to 13</p>
+<form><input type="search" name="q"> <button type="submit">Search</button></form>
+<iframe src="https://maps.example.org/embed?shop=golden"></iframe>
+$CMS_END_BLOCK$

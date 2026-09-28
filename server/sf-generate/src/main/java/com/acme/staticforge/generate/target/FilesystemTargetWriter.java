@@ -104,6 +104,19 @@ public final class FilesystemTargetWriter implements TargetWriter {
     }
 
     @Override
+    public void writeSidecar(long runId, String name, byte[] bytes) {
+        TargetIo.write(TargetIo.sidecarFile(buildsDir(), runId, name), bytes);
+    }
+
+    @Override
+    public Optional<byte[]> readSidecar(long runId, String name) {
+        if (runId < 0 || !Files.isDirectory(buildDir(runId))) {
+            return Optional.empty();
+        }
+        return TargetIo.readIfExists(TargetIo.sidecarFile(buildsDir(), runId, name));
+    }
+
+    @Override
     public Optional<BuildManifest> readManifest(long runId) {
         if (runId < 0 || !Files.isDirectory(buildDir(runId))) {
             return Optional.empty();
@@ -214,10 +227,13 @@ public final class FilesystemTargetWriter implements TargetWriter {
                 String name = p.getFileName().toString();
                 long build = TargetIo.leadingRunId(name, "");
                 long manifest = TargetIo.leadingRunId(name, ".manifest.json");
+                long sidecar = TargetIo.sidecarRunId(name);
                 if (build >= 0 && Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
                     items.add(new StoredItem(StoredItem.Kind.BUILD, build, p, TargetIo.modified(p)));
                 } else if (manifest >= 0) {
                     items.add(new StoredItem(StoredItem.Kind.MANIFEST, manifest, p, TargetIo.modified(p)));
+                } else if (sidecar >= 0) {
+                    items.add(new StoredItem(StoredItem.Kind.SIDECAR, sidecar, p, TargetIo.modified(p)));
                 }
             });
         } catch (IOException e) {
@@ -272,6 +288,7 @@ public final class FilesystemTargetWriter implements TargetWriter {
             TargetIo.deleteRecursively(buildDir(id));
             try {
                 Files.deleteIfExists(manifestFile(id));
+                TargetIo.deleteSidecars(buildsDir(), id);
             } catch (IOException ignored) {
                 // best-effort cleanup
             }

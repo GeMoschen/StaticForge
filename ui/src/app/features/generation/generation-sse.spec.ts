@@ -16,6 +16,16 @@ describe('parseGenerationFrame', () => {
     });
   });
 
+  it('passes the CHECK stage (M30) and any later stage name through unchanged', () => {
+    for (const stage of ['CHECK', 'SOMETHING_NEW']) {
+      const event = parseGenerationFrame(
+        `data: {"stage":"${stage}","message":"Checking output","filesWritten":0,"errors":0,"warnings":2,"diagnostics":null}
+`,
+      );
+      expect(event).toMatchObject({ stage, message: 'Checking output', warnings: 2 });
+    }
+  });
+
   it('tolerates the SSE single leading space after data:', () => {
     const frame =
       'data: {"stage":"STATUS","message":"Done","filesWritten":12,"errors":1,"warnings":2}';

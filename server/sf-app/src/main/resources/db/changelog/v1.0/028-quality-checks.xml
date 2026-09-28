@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M30.1.2: build-time quality checks (epic decisions 4, 9, 10).
+
+         project.quality_rule_config    {"rules": {"SF-CHK-0201": {"severity": "OFF|WARNING|ERROR", "params": {…}}}};
+                                        only entries that differ from a rule's default; NULL = every rule at its
+                                        default. A JSON column declared per dialect like project.locale_config (017).
+         generation_run.finding_*       what the run list shows without reading the findings: errors, warnings,
+                                        findings dropped by the caps (truncated), and counts by category (JSON,
+                                        {"links": n, "seo": n, "accessibility": n}). NULL counts = a run before M30.
+         generation_run_finding         one row per stored finding. Retention: rows go with their run — the FK
+                                        cascades on delete, and the generation-run-retention job also deletes them
+                                        explicitly in the batch that deletes the run (like the plan rows, 016). -->
+    <changeSet id="028-quality-rule-config-postgresql" author="sf" dbms="postgresql">
+        <comment>Quality rule configuration per project (M30.1.2) — PostgreSQL (jsonb).</comment>
+        <addColumn tableName="project">
+            <column name="quality_rule_config" type="JSONB"/>
+        </addColumn>
+        <addColumn tableName="generation_run">
+            <column name="finding_counts" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="028-quality-rule-config-h2" author="sf" dbms="h2">
+        <comment>Quality rule configuration per project (M30.1.2) — H2 (json).</comment>
+        <addColumn tableName="project">
+            <column name="quality_rule_config" type="JSON"/>
+        </addColumn>
+        <addColumn tableName="generation_run">
+            <column name="finding_counts" type="JSON"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="028-generation-run-findings" author="sf">
+        <comment>Quality check findings per generation run (M30.1.2).</comment>
+        <addColumn tableName="generation_run">
+            <column name="finding_errors" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finding_warnings" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finding_truncated" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <createTable tableName="generation_run_finding">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="run_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_run_finding_run"
+                        referencedTableName="generation_run" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="asset_uuid" type="UUID"/>
+            <column name="channel" type="VARCHAR(40)"/>
+            <column name="locale" type="VARCHAR(35)"/>
+            <column name="page_number" type="INT"/>
+            <column name="output_path" type="VARCHAR(1000)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="severity" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="VARCHAR(2000)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="selector" type="VARCHAR(1000)"/>
+            <column name="section_instance_id" type="VARCHAR(100)"/>
+            <column name="carried" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="generation_run_finding" indexName="idx_run_finding_severity_category">
+            <column name="run_id"/>
+            <column name="severity"/>
+            <column name="category"/>
+        </createIndex>
+        <createIndex tableName="generation_run_finding" indexName="idx_run_finding_asset">
+            <column name="run_id"/>
+            <column name="asset_uuid"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

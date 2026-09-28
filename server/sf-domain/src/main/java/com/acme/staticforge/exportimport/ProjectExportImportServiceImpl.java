@@ -1,5 +1,7 @@
 package com.acme.staticforge.exportimport;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.acme.staticforge.generate.quality.QualityRuleCatalog;
 import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
@@ -116,6 +118,10 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@code schedules/<uuid>.json}), and the import brings them in last, in the same transaction — see {@link
  * ScheduleArchive}. A pinned version that isn't the draft is written like a released version and shared with an
  * identical one.
+ *
+ * <p><strong>Redirects</strong> (M30.4.1, protocol {@code 10}): a full-project archive carries the redirect registry
+ * ({@code redirects.json}); the import adds each redirect whose source path is free in the target, after the settings
+ * — see {@link RedirectArchive}. A protocol {@code <= 9} archive imports without redirects.
  */
 @Service
 @RevisionAware
@@ -126,6 +132,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private static final String ASSETS_PREFIX = "assets/";
     private static final String SETTINGS_ENTRY = "settings.json";
     private static final String SCHEDULES_PREFIX = "schedules/";
+    private static final String REDIRECTS_ENTRY = "redirects.json";
     private static final String BLOBS_PREFIX = "blobs/";
     private static final String ROOT_UID = "root";
 
@@ -193,6 +200,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
     private final AssetReleaseRepository releaseRepository;
     private final ScheduleArchive scheduleArchive;
+    private final RedirectArchive redirectArchive;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -211,9 +219,11 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             com.acme.staticforge.project.ProjectLocales projectLocales,
             AssetReleaseRepository releaseRepository,
             ScheduleArchive scheduleArchive,
+            RedirectArchive redirectArchive,
             BlobWriter blobWriter,
             MediaVariantResolver variantResolver) {
         this.projectRepository = projectRepository;
+        this.redirectArchive = redirectArchive;
         this.blobWriter = blobWriter;
         this.variantResolver = variantResolver;
         this.scheduleArchive = scheduleArchive;
@@ -352,6 +362,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     full, payload -> collectBlobs(payload, blobs));
         }
 
+        // The redirect registry belongs to the whole project (M30.4.1): only a full export carries it.
+        List<ExportedRedirect> redirects = full ? redirectArchive.export(projectId) : List.of();
+
         ExportManifest manifest = new ExportManifest(
                 PROTOCOL_VERSION, project.getKey(), project.getName(), project.getDescription(), Instant.now(),
                 projectLocales.forProject(projectId).codes());
@@ -368,6 +381,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 }
                 for (ExportedSchedule schedule : schedules) {
                     writeJson(zip, SCHEDULES_PREFIX + schedule.uuid() + ".json", schedule);
+                }
+                if (!redirects.isEmpty()) {
+                    writeJson(zip, REDIRECTS_ENTRY, redirects);
                 }
                 for (Map.Entry<String, byte[]> blob : blobs.entrySet()) {
                     zip.putNextEntry(new ZipEntry(BLOBS_PREFIX + blob.getKey()));
@@ -831,6 +847,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         List<TargetImportPlan.Decision> targetPlan = targetPlan(targetProjectId, content);
         if (content.settings() != null) {
             importSettings(targetProjectId, content.settings());
+            importQualityRules(targetProjectId, content.manifest(), content.settings());
         }
 
         ScheduleArchive.Result schedules = new ScheduleArchive.Result(0, 0, List.of());
@@ -873,8 +890,18 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     writes, ctx.userId(), manifest.sourceProjectKey());
         }
 
+        RedirectArchive.Result redirects = new RedirectArchive.Result(0, List.of());
+        if (!content.redirects().isEmpty()) {
+            Set<String> channelKeys = outputChannelRepository.findByProjectIdOrderByPositionAsc(targetProjectId).stream()
+                    .map(OutputChannel::getKey)
+                    .collect(Collectors.toSet());
+            redirects = redirectArchive.importAll(targetProjectId, content.redirects(), channelKeys,
+                    projectLocales.forProject(targetProjectId),
+                    uuid -> remap.getOrDefault(uuid.toLowerCase(), UUID.fromString(uuid)));
+        }
+
         return new ImportResult(manifest.sourceProjectKey(), created, updated, importedShas.size(), released,
-                schedules.created(), schedules.replaced(), schedules.warnings());
+                schedules.created(), schedules.replaced(), schedules.warnings(), redirects.imported(), redirects.warnings());
     }
 
     /** What the settings import does with each archived generation target, decided before it runs. */
@@ -1098,6 +1125,75 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         return assetVersionRepository.save(version);
     }
 
+    // ------------------------------------------------------------------
+    // Quality rule configuration (M30.1.2)
+    // ------------------------------------------------------------------
+
+    private QualityRuleCatalog qualityRuleCatalog;
+
+    /** The rule codes this server knows; the import drops the configuration of any other. */
+    @Autowired
+    void setQualityRuleCatalog(QualityRuleCatalog qualityRuleCatalog) {
+        this.qualityRuleCatalog = qualityRuleCatalog;
+    }
+
+    /** The archive's quality rule configuration; {@code null} when it has none or predates protocol 10. */
+    private static JsonNode archivedQualityRules(ExportManifest manifest, ExportedSettings settings) {
+        if (manifest.protocolVersion() < QUALITY_AND_REDIRECTS_PROTOCOL || settings == null) {
+            return null;
+        }
+        JsonNode rules = settings.qualityRules() == null ? null : settings.qualityRules().get("rules");
+        return rules != null && rules.isObject() ? settings.qualityRules() : null;
+    }
+
+    /** The codes of the archive's configuration this server doesn't know, in archive order. */
+    private List<String> unknownQualityRules(JsonNode config) {
+        List<String> unknown = new ArrayList<>();
+        config.get("rules").fieldNames().forEachRemaining(code -> {
+            if (!qualityRuleCatalog.codes().contains(code)) {
+                unknown.add(code);
+            }
+        });
+        return unknown;
+    }
+
+    /** One {@link ConflictType#UNKNOWN_QUALITY_RULE} warning naming the rules whose settings the import drops. */
+    private List<ImportConflict> qualityRuleConflicts(ArchiveContent content) {
+        JsonNode config = archivedQualityRules(content.manifest(), content.settings());
+        if (config == null) {
+            return List.of();
+        }
+        List<String> unknown = unknownQualityRules(config);
+        if (unknown.isEmpty()) {
+            return List.of();
+        }
+        return List.of(ImportConflict.of(
+                ConflictType.UNKNOWN_QUALITY_RULE,
+                null,
+                null,
+                "The archive configures quality rules this server doesn't know " + unknown
+                        + "; their settings are not imported."));
+    }
+
+    /**
+     * Adopts the archive's quality rule configuration without the rules this server doesn't know — like the language
+     * configuration, only when the target project has none of its own: settings import never overwrites.
+     */
+    private void importQualityRules(long targetProjectId, ExportManifest manifest, ExportedSettings settings) {
+        JsonNode config = archivedQualityRules(manifest, settings);
+        if (config == null) {
+            return;
+        }
+        projectRepository.findById(targetProjectId)
+                .filter(project -> project.getQualityRuleConfig() == null)
+                .ifPresent(project -> {
+                    ObjectNode known = config.deepCopy();
+                    ((ObjectNode) known.get("rules")).remove(unknownQualityRules(config));
+                    project.setQualityRuleConfig(known.get("rules").isEmpty() ? null : known);
+                    projectRepository.save(project);
+                });
+    }
+
     /**
      * What the languages of the archive and of the target project say about each other (M24.5.1).
      * Both findings are warnings: nothing is lost either way, but the operator should know that some
@@ -1172,6 +1268,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
         List<ImportConflict> conflicts = new ArrayList<>();
         conflicts.addAll(localeConflicts(targetProjectId, content));
+        conflicts.addAll(qualityRuleConflicts(content));
         boolean releaseState = manifest.protocolVersion() >= RELEASE_STATE_PROTOCOL;
         ReleaseMode releaseMode = releaseMode(manifest, options);
         if (!releaseState) {
@@ -1339,7 +1436,17 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             conflicts.addAll(scheduleArchive.analyze(
                     targetProjectId, content.schedules(), scheduleView(targetProjectId, content, archiveByUuid, rejected, options)));
         }
-        return new ConflictReport(conflicts, releaseState, releaseMode, content.schedules().size());
+        if (!content.redirects().isEmpty()) {
+            Set<String> channelKeys = new HashSet<>();
+            outputChannelRepository.findByProjectIdOrderByPositionAsc(targetProjectId).forEach(c -> channelKeys.add(c.getKey()));
+            if (content.settings() != null) {
+                content.settings().channels().forEach(c -> channelKeys.add(c.key()));
+            }
+            conflicts.addAll(redirectArchive.analyze(
+                    targetProjectId, content.redirects(), channelKeys, effectiveLocales(targetProjectId, content)));
+        }
+        return new ConflictReport(
+                conflicts, releaseState, releaseMode, content.schedules().size(), content.redirects().size());
     }
 
     /** The target as the archive's schedules will find it once the import has run (M27.8.1). */
@@ -1843,7 +1950,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // The language configuration travels with the settings, so an archive restores a localized
         // project as one rather than as a single-language project holding L10N values (M24.5.1).
         com.acme.staticforge.project.LocaleConfig locales = projectLocales.forProject(projectId);
-        return new ExportedSettings(channels, targets, locales.isLocalized() ? locales : null);
+        JsonNode qualityRules = projectRepository.findById(projectId).map(Project::getQualityRuleConfig).orElse(null);
+        return new ExportedSettings(channels, targets, locales.isLocalized() ? locales : null, qualityRules);
     }
 
     /**
@@ -1895,6 +2003,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         List<ExportedAsset> perFileAssets = null;
         ExportedSettings settings = null;
         List<ExportedSchedule> schedules = new ArrayList<>();
+        List<ExportedRedirect> redirects = List.of();
         Map<String, byte[]> blobs = new HashMap<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
             ZipEntry entry;
@@ -1912,6 +2021,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     perFileAssets.add(objectMapper.readValue(zip.readAllBytes(), ExportedAsset.class));
                 } else if (name.startsWith(SCHEDULES_PREFIX)) {
                     schedules.add(objectMapper.readValue(zip.readAllBytes(), ExportedSchedule.class));
+                } else if (REDIRECTS_ENTRY.equals(name)) {
+                    redirects = List.of(objectMapper.readValue(zip.readAllBytes(), ExportedRedirect[].class));
                 } else if (SETTINGS_ENTRY.equals(name)) {
                     settings = objectMapper.readValue(zip.readAllBytes(), ExportedSettings.class);
                 } else if (name.startsWith(BLOBS_PREFIX)) {
@@ -1941,7 +2052,11 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         }
         assets.sort(Comparator.comparing(ExportedAsset::uuid));
         schedules.sort(Comparator.comparing(ExportedSchedule::uuid));
-        return new ArchiveContent(manifest, assets, blobs, settings, schedules);
+        // Redirects arrived with protocol 10 (M30.4.1); an older archive has none by definition.
+        if (manifest.protocolVersion() < QUALITY_AND_REDIRECTS_PROTOCOL) {
+            redirects = List.of();
+        }
+        return new ArchiveContent(manifest, assets, blobs, settings, schedules, redirects);
     }
 
     private static String textOrNull(JsonNode node) {
@@ -1969,7 +2084,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     private record ArchiveContent(
             ExportManifest manifest, List<ExportedAsset> assets, Map<String, byte[]> blobs,
-            ExportedSettings settings, List<ExportedSchedule> schedules) {
+            ExportedSettings settings, List<ExportedSchedule> schedules, List<ExportedRedirect> redirects) {
 
         /**
          * The archive as an import in {@code mode} reads it: a {@link ReleaseMode#DRAFT} import leaves out the
@@ -1981,7 +2096,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 return this;
             }
             List<ExportedAsset> drafts = assets.stream().filter(asset -> !asset.isDraftDeleted()).toList();
-            return new ArchiveContent(manifest, drafts, blobs, settings, schedules);
+            return new ArchiveContent(manifest, drafts, blobs, settings, schedules, redirects);
         }
     }
 

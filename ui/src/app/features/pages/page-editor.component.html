@@ -48,6 +48,10 @@
                 (uidChanged)="onUidChanged($event)"
               />
             </section>
+            <section class="page-editor__meta-section">
+              <h3 class="page-editor__meta-title">Navigation and search</h3>
+              <sf-page-nav-settings [nav]="navOf(p)" [disabled]="readOnly()" (navChange)="onNavChange($event)" />
+            </section>
             <div class="page-editor__meta-footer">
               <sf-button variant="ghost" (click)="closeMeta()">Close</sf-button>
             </div>
@@ -77,7 +81,7 @@
         } @else if (page()) {
           @if (focusedSection(); as ctx) {
             <!-- Section scope: only this one section. -->
-            <section class="page-editor__body">
+            <section class="page-editor__body" [attr.data-sf-section-scope]="ctx.section.instanceId">
               <header class="page-editor__body-header">
                 <span class="page-editor__body-title">{{ sectionTitle(ctx.section.templateRef) }}</span>
               </header>
@@ -92,6 +96,7 @@
                 [count]="ctx.count"
                 [readOnly]="readOnly()"
                 [hideActions]="true"
+                [issues]="issues()"
                 (valueChange)="onSectionValueChange(ctx.bodyName, ctx.section.instanceId, $event)"
                 (remove)="removeSection(ctx.bodyName, ctx.section.instanceId)"
                 (moveUp)="moveSectionBy(ctx.bodyName, ctx.index, -1)"
@@ -147,6 +152,7 @@
                     [index]="$index"
                     [count]="bodyCount(body.name)"
                     [readOnly]="readOnly()"
+                    [issues]="issues()"
                     (valueChange)="onSectionValueChange(body.name, section.instanceId, $event)"
                     (remove)="removeSection(body.name, section.instanceId)"
                     (moveUp)="moveSectionBy(body.name, $index, -1)"
@@ -161,9 +167,11 @@
               <!-- Page scope: only the page's own fields, no bodies/sections. -->
               @if (contentDefinition(); as def) {
                 <sf-content-form
+                  data-sf-page-fields
                   [definition]="def"
                   [formGroup]="fieldsForm()!"
                   [projectKey]="projectKey()"
+                  [issues]="issues()"
                   [editingLocale]="editingLocale()"
                   [storedValue]="storedContent()"
                   [localeLabels]="localeLabels()"
@@ -174,6 +182,21 @@
               </div>
             }
           }
+        }
+        @if (!error()) {
+          <!-- Every scope: an issue opens the field or section it is about (M30.3.2). -->
+          <div class="page-editor__issues">
+            <sf-page-issues-panel
+              [projectKey]="projectKey()"
+              [pageUuid]="uuid()"
+              [revision]="timeTravelRevision()"
+              [refreshKey]="autosave.revision()"
+              [completeness]="issues()"
+              [previewView]="previewView()"
+              (issueSelect)="onIssueSelect($event)"
+              (checked)="onIssuesChecked($event)"
+            />
+          </div>
         }
       </div>
 
@@ -191,6 +214,7 @@
           [revision]="timeTravelRevision()"
           [refreshKey]="autosave.revision()"
           (sectionClick)="onPreviewSectionClick($event)"
+          (viewChange)="previewView.set($event)"
         />
       </div>
     </div>

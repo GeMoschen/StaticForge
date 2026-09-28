@@ -20,9 +20,9 @@ Tasks 1–3 touch different components and can run in parallel; 1 and 3 both add
 
 ## Feature exit criteria
 
-- [ ] Quality tab (editable for developers), Redirects tab (editable for developers), findings in run details,
+- [x] Quality tab (editable for developers), Redirects tab (editable for developers), findings in run details,
       redirect formats in the target form, "Redirect old URL to…" in unpublish/delete dialogs.
-- [ ] `npm run build` and `npx vitest run` green.
+- [x] `npm run build` and `npx vitest run` green.
 
 ## Dependencies
 

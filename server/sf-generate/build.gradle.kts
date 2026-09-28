@@ -11,6 +11,9 @@ dependencies {
     // Micrometer metrics (§26.4).
     implementation(libs.micrometer.core)
 
+    // HTML parser for the build-time quality checks (M30, epic decision 2): MIT licence.
+    implementation(libs.jsoup)
+
     testImplementation(libs.spring.boot.starter.test)
     // Architecture guard over the modules generation sees: one record set query evaluator (M25.1.2).
     testImplementation(libs.archunit)

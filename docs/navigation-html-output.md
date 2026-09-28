@@ -140,6 +140,10 @@ Both "Section" and "Sub" pick up `trail` because "Leaf One" is active somewhere 
   `UrlArea.GENERATED`), keyed on the reference's own UUID — stable across regeneration even if
   the target page's slug changes. A `FOLDER` entry-point node (resolved via its `startNode`
   chain) resolves directly via `OutputPathResolver` instead.
+  Because the entry is assigned once, a target page that **moves** keeps being linked at its old path
+  until the entry is reset (`POST …/url-registry/reset`) or the channel's output settings change. Since M30
+  that link still works: the build records an automatic redirect from the old path (spec §18.9), and the
+  quality check `SF-CHK-0109` reports the link so the entry can be reset.
 - If a `PAGE_REFERENCE` node's target doesn't resolve to any page at all (deleted target, or an
   empty-subtree folder target), the page's render **fails** with diagnostic `SF-GEN-0411` rather
   than silently emitting the entry as an unlinked `<span>` — a broken nav link is treated as a

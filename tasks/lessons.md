@@ -132,3 +132,14 @@
   an edit landing between stash and pop would have been lost or conflicted.
 - **Rule:** to compare against the old code, use `git worktree add` (or read `git show HEAD:path`), never stash a tree
   that someone else is writing to.
+
+## Benchmarks on a shared machine: compare fastest runs, not medians (2026-09-28)
+- **Mistake (M30 performance budget):** I reported the full build as "+11 % by median" after three alternating rounds.
+  The baseline runs themselves spread from 4.4 to 5.1 s because the user's browser and another agent were loading the
+  4-core machine; the noisy baselines flattered the median. Compared fastest to fastest, the overhead was +20–30 %, and
+  I had to correct the claim.
+- **Rule:** background load only ever adds time, so compare the fastest run of each side, and alternate baseline and
+  change in the same window. Check the machine's load (`Get-Counter` per process) before trusting a timing, say when the
+  numbers are unreliable, and never kill a process this session didn't start to get a quiet machine.
+- **Rule:** profile the cold path the benchmark actually measures. A single build in a fresh JVM pays the JIT warm-up of
+  every new code path (jsoup + rules: ~0.85 s cold vs ~0.27 s warm here); a warm micro benchmark hides it.

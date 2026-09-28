@@ -36,8 +36,19 @@ import { SectionEditorComponent } from './section-editor.component';
 import { ConflictDrawerComponent } from './conflict-drawer.component';
 import { PageAutosaveService, PagePayload } from './autosave.service';
 import { composePagePayload } from './page-payload.util';
+import { PageNav, PageNavSettingsComponent } from './page-nav-settings.component';
 import { mergePayload } from './conflict-util';
 import { SfPreviewFrameComponent } from '../preview';
+import { readStoredView } from '../preview/preview-view.util';
+import type { PreviewView } from '../../core/api/api.client';
+import { PageIssuesPanelComponent } from './page-issues-panel.component';
+import {
+  issueDestination,
+  issueFocusTarget,
+  type ContentIssue,
+  type DraftCheckView,
+  type IssueTarget,
+} from './page-issues.util';
 import type { BodiesMap, FieldResolveEvent, ResolveMode, SectionInstance } from './types';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseBarComponent } from '../release/release-bar.component';
@@ -71,6 +82,8 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
     SfAssetImpactComponent,
     SfUidRenameComponent,
     ReleaseBarComponent,
+    PageNavSettingsComponent,
+    PageIssuesPanelComponent,
   ],
   providers: [PageAutosaveService],
   templateUrl: './page-editor.component.html',
@@ -120,6 +133,16 @@ export class PageEditorComponent {
   protected readonly changedKeys = signal<string[]>([]);
 
   private readonly mainRef = viewChild.required<ElementRef<HTMLElement>>('main');
+  private readonly previewFrame = viewChild(SfPreviewFrameComponent);
+
+  /**
+   * The page's content findings (`PageView.issues`, M30.3.2): from the load, every save and section change, and every
+   * draft check (which also serves them in time travel, where the version read carries none). Shown at their fields and
+   * in the Issues panel.
+   */
+  protected readonly issues = signal<ContentIssue[]>([]);
+  /** The view the preview shows; the Issues panel notes that its checks cover the draft. */
+  protected readonly previewView = signal<PreviewView>(readStoredView());
 
   private fieldsSub: { unsubscribe(): void } | null = null;
 
@@ -223,6 +246,8 @@ export class PageEditorComponent {
 
     this.autosave.setPayloadProvider(() => this.composePayload());
     this.autosave.setRefetchHandler((page, mode) => this.onResolved(page, mode));
+    // Every save answers with the page's findings for what was just saved.
+    this.autosave.setSavedHandler((page) => this.issues.set((page.issues ?? []) as ContentIssue[]));
   }
 
   /**
@@ -319,6 +344,21 @@ export class PageEditorComponent {
       });
   }
 
+  /** The page's `nav` settings (a `JsonNode` in the API types). */
+  protected navOf(page: PageView): PageNav | undefined {
+    return page.nav as PageNav | undefined;
+  }
+
+  /** "Show in navigation" / "Hide from search engines" (M30.2.2): saved with the page right away. */
+  protected onNavChange(nav: PageNav): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.page.update((cur) => (cur ? { ...cur, nav: nav as PageView['nav'] } : cur));
+    this.autosave.markDirty();
+    this.autosave.flush();
+  }
+
   protected onUidChanged(newUid: string): void {
     this.page.update((cur) => (cur ? { ...cur, uid: newUid } : cur));
     this.selfMutating = true;
@@ -372,6 +412,7 @@ export class PageEditorComponent {
 
   private onPageLoaded(key: string, page: PageView): void {
     this.page.set(page);
+    this.issues.set((page.issues ?? []) as ContentIssue[]);
     if (!this.readOnly()) {
       this.autosave.configure(key, this.uuid(), page.revision ?? null);
     }
@@ -562,6 +603,7 @@ export class PageEditorComponent {
 
   private applyServerFull(page: PageView): void {
     this.page.set(page);
+    this.issues.set((page.issues ?? []) as ContentIssue[]);
     this.autosave.setRevision(page.revision ?? null);
     const def = this.contentDefinition() ?? EMPTY_DEF;
     this.buildFieldsForm(def, page.content);
@@ -573,6 +615,7 @@ export class PageEditorComponent {
 
   private applyServerPage(page: PageView): void {
     this.page.set(page);
+    this.issues.set((page.issues ?? []) as ContentIssue[]);
     this.autosave.setRevision(page.revision ?? null);
     this.loadSectionDefs(this.projectKey(), page);
     // So an already-expanded nav-tree node for this same page (bodies/sections shown read-only alongside the editor) picks up the change without an F5.
@@ -863,6 +906,55 @@ export class PageEditorComponent {
       output: payload['output'] as PageView['output'],
       meta: payload['meta'] as PageView['meta'],
     };
+  }
+
+  // ── Issues (M30.3.2) ───────────────────────────────────────────────────
+
+  /** A draft check returns the completeness of the version it checked: the freshest there is. */
+  protected onIssuesChecked(result: DraftCheckView): void {
+    this.issues.set((result.completeness ?? []) as ContentIssue[]);
+  }
+
+  /**
+   * Goes where an issue points: a page field opens the page's fields and focuses it; a section field or a section opens
+   * that section (`?section=`) and focuses the field or the section; the section — or else the element — is outlined in
+   * the preview while it shows the draft (the checks' view).
+   */
+  protected onIssueSelect(target: IssueTarget): void {
+    const destination = issueDestination(target, (body, index) => this.sectionsFor(body)[index]?.instanceId ?? null);
+    if (destination.form?.scope === 'page') {
+      const editor = destination.form.editor;
+      void this.router.navigate([], { queryParams: {} }).then(() => this.focusField(null, editor));
+    } else if (destination.form?.scope === 'section') {
+      const { instanceId, editor } = destination.form;
+      void this.router.navigate([], { queryParams: { section: instanceId } }).then(() => this.focusField(instanceId, editor));
+    }
+    // The preview shows the checked view only in Draft: outlining an element of the published page would mislead.
+    if (destination.preview && this.previewView() === 'draft') {
+      this.previewFrame()?.focusSection(destination.preview.instanceId, destination.preview.selector);
+    }
+  }
+
+  /**
+   * Scrolls to a field of the page's own form (`section` null) or of a section card, or to the card itself when no
+   * field is named (or the card is collapsed), and focuses it. Waits for the scope switch to render.
+   */
+  private focusField(section: string | null, editor: string | null, attempt = 0): void {
+    const found = issueFocusTarget(this.mainRef().nativeElement, section, editor);
+    if (!found) {
+      if (attempt < 20) {
+        setTimeout(() => this.focusField(section, editor, attempt + 1), 50);
+      }
+      return;
+    }
+    found.scrollIntoView?.({ block: 'center' });
+    const field = found.hasAttribute('data-sf-editor');
+    const focusable = field
+      ? found.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select, [contenteditable="true"], button')
+      : found.querySelector<HTMLElement>('.section-card__header');
+    focusable?.focus({ preventScroll: true });
+    found.classList.add('sf-issue-target');
+    setTimeout(() => found.classList.remove('sf-issue-target'), 2000);
   }
 
   /**

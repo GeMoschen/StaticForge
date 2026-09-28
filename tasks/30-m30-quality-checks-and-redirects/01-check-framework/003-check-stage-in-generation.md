@@ -1,6 +1,6 @@
 ---
 id: M30.1.3
-status: todo
+status: done
 depends: [M30.1.1, M30.1.2]
 epic: m30-quality-checks-and-redirects
 feature: check-framework
@@ -47,19 +47,21 @@ at `:466`, `OutputPathResolver.resolvePagePath` throwing at `:106` → `SF-GEN-0
 
 ## Acceptance criteria
 
-- [ ] Integration test with two test rules (one page, one site): findings stored with the right key and selector;
+- [x] Integration test with two test rules (one page, one site): findings stored with the right key and selector;
       `ERROR` holds the page back (not in output, manifest, sitemap or search index; `SF-GEN-0125`; run `PARTIAL`);
       `WARNING` only → run `SUCCESS`, `warning_count` unchanged.
-- [ ] With every rule `OFF` the output bytes are identical to a build with checks enabled (checks never change bytes).
-- [ ] A link to a page uuid missing from the snapshot: run no longer `FAILED`; a `MISSING` reference event exists for
+- [x] With every rule `OFF` the output bytes are identical to a build with checks enabled (checks never change bytes).
+- [x] A link to a page uuid missing from the snapshot: run no longer `FAILED`; a `MISSING` reference event exists for
       the linking output.
-- [ ] Incremental: carried facts and findings come from the base sidecar (`carried = true`); a site rule sees carried
+- [x] Incremental: carried facts and findings come from the base sidecar (`carried = true`); a site rule sees carried
       outputs; no sidecar → FULL with `BASE_BUILD_WITHOUT_QUALITY_FACTS`; rule config changed → FULL with
       `QUALITY_RULES_CHANGED`.
-- [ ] Filesystem, ZIP and S3-mirror writers write, read and prune the sidecar (writer tests).
+- [x] Filesystem, ZIP and S3-mirror writers write, read and prune the sidecar (writer tests).
 - [ ] Benchmark on the 5,000-page fixture (`infra/scripts/README-benchmark.md`): full build with the complete M30 rule
       set within +15 % of the pre-M30 time; result recorded in the task notes. (Run it again after `M30.2.*`.)
-- [ ] `./gradlew build` green.
+      — open by design: the orchestrator runs the 5,000-page baseline vs M30 back to back; 500-page run below.
+  — **Not met; accepted by the user on 2026-09-28 as measured**: about +20–30 % on the 4-core dev machine (cold JVM; warm ≈ +10 %); numbers in `M30.1.3`.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -74,3 +76,44 @@ at `:466`, `OutputPathResolver.resolvePagePath` throwing at `:106` → `SF-GEN-0
 - Order inside `executeRun` matters for `M30.4.2` (redirect detection needs the final output set after hold-back);
   leave a clearly named seam (`CheckResult.finalOutputs()`).
 - Findings are persisted in the REPORT step together with the run status; a cancelled run stores none.
+- Built: `QualityCheckStage` (CHECK between ASSETS and POST; SSE `CHECK` "Checking output", then "Checked N outputs:
+  e errors, w warnings[; k held back]"), `QualitySidecar` (`builds/{runId}.quality.json`, facts + page-local findings +
+  config fingerprint), `TargetWriter.writeSidecar/readSidecar` (filesystem, ZIP, S3 mirror; pruned with the build,
+  `StoredItem.Kind.SIDECAR` for `build-output-cleanup`), `RenderedFile.references` (`ReferenceEvent` DELETED /
+  UNRELEASED / MISSING recorded by `GenerationRenderer.urlResolver`, also a deleted section template),
+  `GenerationRunProbe.CHECK_OUTPUT`.
+- Seam for M30.4.2: `QualityCheckStage.CheckResult.finalOutputs()` (outputs after the hold-back) is available in
+  `GenerationService.executeHeld` as `check`, before POST; `check.published(outcome.files())` are the rendered files the
+  run publishes.
+- Deviation (fix): every page output the run planned but doesn't publish — held back by `SF-GEN-0120`, a render limit,
+  a missing channel source or the checks — is now withheld from `sitemap.xml` and `search-index.json`
+  (`CarryForward.withhold`). Before, `SF-GEN-0120` pages were listed there although they had no file.
+- Deviation: `QUALITY_RULES_CHANGED` also fires when the base sidecar's configuration fingerprint differs from the
+  current one (a rule added or changed by an application update), not only on a `qualityRules` revision.
+- Carried findings take the current severity of their rule (switched-off rules drop them); they never hold back.
+- A `MISSING` page/media/folder reference renders `""` without a render warning (the finding reports it); deleted and
+  unreleased keep their `SF-GEN-0220`/`0221` warnings.
+- Site files known to the index before POST: `search-index.json`, plus `sitemap.xml` and `robots.txt` with a `baseUrl`.
+- Test infrastructure: `QualityBuildFixtures` (build a fixture project, read stored findings, sidecar and manifest),
+  `QualityTestRules` (`SF-CHK-0190` missing target, `0191` after hold-back, `0192` reference events, `0390` flag).
+- Benchmark (default fixture, `SF_PERF=true`, 500 pages, production rule set = `SF-CHK-0001` only, i.e. parse + facts):
+  `fullMs=2492, msPerEntry=4.95, incrementalMs=1388, allChangedIncrementalMs=1515`. The 5,000-page baseline vs M30
+  comparison is run by the orchestrator; rerun after `M30.2.*` with the full rule set.
+- **Benchmark, 5,000 pages, full M30 rule set (2026-09-27/28, 4-core dev machine, test JVM with JaCoCo).** Not met yet.
+  Baseline = worktree at `288a8c6` (pre-M30), run alternately with M30. First measurement (M30 at `048fd62`):
+  fullMs 4203/4018 vs 6118/6432 (+53 %); incrementalMs 6518/6691 vs 7531/7532; allChangedIncrementalMs 3912/3791 vs
+  5542/5277; onePageDryRunMs 358/444 vs 567/605. Profile of the M30 full build: page checks ~0.8 s wall (2.7 s CPU),
+  site rules ~0.1 s, findings insert ~0.18 s, the rest < 0.1 s; `writer.stage` (disk, ~3.3 s) is unchanged by M30.
+  Warm, the page checks of all 5,000 outputs cost ~0.17 s serially (~0.27 s in the stage); cold — the benchmark's
+  single build in a fresh JVM — ~0.85 s whatever the parallelism: JIT warm-up of jsoup and the rules.
+- Performance changes: one jsoup `Parser` per check worker (fixed worker pool, parsed documents never retained);
+  selectors compiled once (`Selector.evaluatorOf`) instead of per document; severities resolved once per build;
+  duplicate title/description messages built in O(n) (they copied the whole group per member); streamed sidecar JSON
+  (`QualitySidecarJson`); findings stored with multi-row inserts, prepared alongside POST/WRITE; the manifest records
+  the checked configuration (`BuildManifest.qualityFingerprint`), so planning and the dry run decide the two quality
+  fallbacks without reading the sidecar — a run loads the base facts when it executes, and a base whose sidecar is gone
+  leaves carried outputs unchecked instead of changing the plan (a pre-M30 manifest has no fingerprint → FULL).
+- After these changes (fastest of three alternating runs each; the machine was shared with other load, so the medians
+  are unreliable): full 4,382 ms baseline vs 5,334 ms M30 — about +20–30 %, over the +15 % budget. The remaining cost
+  is mostly the cold page check. Open: pipelining the page checks into the render tasks, or accepting the budget as
+  measured — decision with the user.

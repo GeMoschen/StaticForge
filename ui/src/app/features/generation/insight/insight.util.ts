@@ -38,6 +38,8 @@ const FALLBACK_LABELS: Record<string, string> = {
   BASE_BUILD_MISSING: 'the previous build of {target} is no longer available',
   CHANNEL_SETTINGS_CHANGED: 'channel output settings changed since the previous build',
   REVISION_BEFORE_BASELINE: 'the requested revision is older than the previous build',
+  BASE_BUILD_WITHOUT_QUALITY_FACTS: 'the previous build of {target} has no quality check results',
+  QUALITY_RULES_CHANGED: 'the quality rules changed since the previous build',
 };
 
 /**
@@ -212,6 +214,23 @@ export function planSummaryLine(summary: PlanSummaryView | undefined | null): st
   const scope = summary.scoped ? 'Scoped' : 'Full';
   const fallback = summary.fallbackCause ? ' · fell back from incremental' : '';
   return `${scope} · ${pages}${fallback}`;
+}
+
+/**
+ * A run's redirect counts (M30.4.2): "2 redirects added · 14 redirects active"; `active` is left out for a run that
+ * published nothing, and the line is empty for a run from before redirects.
+ */
+export function redirectsLine(summary: PlanSummaryView | undefined | null): string {
+  const added = summary?.redirectsAdded;
+  const active = summary?.redirectsActive;
+  const parts: string[] = [];
+  if (added != null) {
+    parts.push(`${count(added, 'redirect')} added`);
+  }
+  if (active != null) {
+    parts.push(`${count(active, 'redirect')} active`);
+  }
+  return parts.join(' · ');
 }
 
 export interface CountRow {

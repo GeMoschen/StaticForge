@@ -69,7 +69,7 @@ public class ProjectImportController {
         return new ImportResultView(
                 result.sourceProjectKey(), result.importedAssetCount(), result.updatedAssetCount(), result.importedBlobCount(),
                 result.releasedCount(), result.importedScheduleCount(), result.updatedScheduleCount(),
-                views(result.scheduleWarnings()));
+                views(result.scheduleWarnings()), result.importedRedirectCount(), views(result.redirectWarnings()));
     }
 
     @AllowedOnArchivedProject("Analyzes an archive against the project, imports nothing.")
@@ -90,7 +90,7 @@ public class ProjectImportController {
     private static ConflictReportView toView(ConflictReport report) {
         return new ConflictReportView(
                 views(report.conflicts()), report.hasBlocking(), report.blocksImport(), report.releaseState(),
-                report.releaseMode().name(), report.scheduleCount());
+                report.releaseMode().name(), report.scheduleCount(), report.redirectCount());
     }
 
     private static List<ImportConflictView> views(List<ImportConflict> conflicts) {

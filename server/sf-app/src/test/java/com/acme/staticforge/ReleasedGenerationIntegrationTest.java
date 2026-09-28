@@ -202,7 +202,9 @@ class ReleasedGenerationIntegrationTest {
 
         releaseFixtures.releaseAll(fx.projectId());
         Map<String, String> released = files(fx, generate(fx, GenerationMode.FULL, null));
-        assertThat(released).containsKey("pf/about.html").doesNotContainKeys("news.html", "about.html");
+        // The moved page's old path now redirects (M30.4.2, M30.5.1); the deleted page's path is simply gone.
+        assertThat(released).containsKeys("pf/about.html", "about.html").doesNotContainKey("news.html");
+        assertThat(released.get("about.html")).contains("<meta http-equiv=\"refresh\" content=\"0; url=pf/about.html\">");
     }
 
     @Test

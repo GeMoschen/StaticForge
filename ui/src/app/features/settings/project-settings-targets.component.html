@@ -53,6 +53,22 @@
         <input class="checkbox" type="checkbox" formControlName="isDefault" />
       </sf-field>
 
+      <fieldset class="formats" formGroupName="redirectFormats">
+        <legend>Redirect output</legend>
+        <p>
+          How builds publish redirects from old URLs (a moved page, a manual redirect). None checked: no redirect output.
+        </p>
+        @for (item of redirectFormats; track item.format) {
+          <label>
+            <input class="checkbox" type="checkbox" [formControlName]="item.format" />
+            <span>
+              <span class="formats__label">{{ item.label }}</span>
+              <span>{{ item.hint }}</span>
+            </span>
+          </label>
+        }
+      </fieldset>
+
       @if (error()) {
         <p class="form__error" role="alert">{{ error() }}</p>
       }
