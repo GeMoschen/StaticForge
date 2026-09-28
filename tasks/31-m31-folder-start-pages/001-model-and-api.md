@@ -1,6 +1,6 @@
 ---
 id: M31.1
-status: todo
+status: in-progress
 depends: []
 epic: m31-folder-start-pages
 feature: model-and-api
@@ -37,16 +37,16 @@ to mirror), `FolderController` / `FolderView` / `FolderNode`, `ReferenceMaterial
 
 ## Acceptance criteria
 
-- [ ] `FolderStartPageApiIntegrationTest`: set, read back in the tree and in the PATCH response, clear with `null`.
-- [ ] Roles: viewer `403`, editor allowed, stranger `404`; archived project `409 SF-DOM-0141`; missing `If-Match`
+- [x] `FolderStartPageApiIntegrationTest`: set, read back in the tree and in the PATCH response, clear with `null`.
+- [x] Roles: viewer `403`, editor allowed, stranger `404`; archived project `409 SF-DOM-0141`; missing `If-Match`
       `412`, stale `If-Match` `409 SF-API-0409`.
-- [ ] Refusals: a page of another folder, a non-page asset, an unknown uuid (`422`); a non-PAGES folder and the hidden
+- [x] Refusals: a page of another folder, a non-page asset, an unknown uuid (`422`); a non-PAGES folder and the hidden
       `root` (`422`); `pages_root` allowed.
-- [ ] Index claim: a page `index` in the folder refuses another start page with `409 SF-DOM-0111` naming it; making the
-      `index` page itself the start page is allowed.
-- [ ] The `START_PAGE` edge appears in the page's usages; releasing the folder proposes its unreleased start page.
-- [ ] Deleting the start page is allowed without `force` (the edge doesn't block it).
-- [ ] The revision history shows the change; the earlier folder version keeps its payload.
+- [x] Index claim: a page whose UID is the index file stem refuses another start page with `409 SF-DOM-0111` naming
+      it; making that page itself the start page is allowed; an `indexUid` page is no conflict.
+- [x] The `START_PAGE` edge appears in the page's usages; releasing the folder proposes its unreleased start page.
+- [x] Deleting the start page is allowed without `force` (the edge doesn't block it).
+- [x] The revision history shows the change; the earlier folder version keeps its payload.
 - [ ] `./gradlew build` green; OpenAPI and `schema.d.ts` regenerated; `ng build` + `vitest` green.
 
 ## Out of scope
@@ -58,3 +58,17 @@ to mirror), `FolderController` / `FolderView` / `FolderNode`, `ReferenceMaterial
 - Adding an enum constant to `ReferenceKind` is safe for storage (`VARCHAR(30)`, no check constraint). The planner's
   generic referrer walk (`RebuildExpansion.Walk.visit`) sees `START_PAGE` rows like any other; M31.4 owns what they
   mean there.
+- Seams: `FolderService.updateStartPage(UUID folderUuid, UUID pageUuid, long expectedRevision, RevisionContext)`;
+  `StartPage.fromPayload(JsonNode)`, `StartPage.PAYLOAD_KEY` (`"startPage"`); `FolderNode.startPage()`;
+  `FolderView.startPageUuid`; `UpdateFolderRequest` (`startPage`, explicit `null` clears, absent keeps);
+  `ReferenceKind.START_PAGE` (source path `startPage`); `FolderServiceImpl.INDEX_CLAIM_CONFLICT` = `SF-DOM-0111`
+  (409, properties `conflictingPageUuid`, `conflictingPageUid`).
+- Deviation: the index claim conflict counts only pages whose UID equals a channel's index file **stem**, not those
+  whose UID equals `indexUid`: next to a start page an `indexUid` page renders under its own UID (user decision 2), so
+  it claims nothing. Note that `index` is a reserved UID (`UidGenerator`), so with default settings no page can claim
+  `index.html` by UID; the check matters for channels with another `indexFileName` (tested with `start.html`).
+- Deviation: `PATCH` without an `If-Match` answers `412 SF-API-0412` even for a body without `startPage` (the header is
+  parsed first, like every revisioned write).
+- Evidence: `FolderStartPageApiIntegrationTest` (8 tests); `ng build` and `npx vitest run` (121 files, 821 tests) green
+  after regenerating `schema.d.ts` (the generator also reorders a few `Page*` properties and renumbers `update_N`
+  operation ids; nothing in the UI references them).

@@ -693,6 +693,8 @@ public class AssetServiceImpl implements AssetService {
 
     private boolean isReferencedByLiveAssets(Asset asset) {
         return assetReferenceRepository.findIncomingOpen(asset.getId()).stream()
+                // A folder's start page may go: the folder falls back to the indexUid rule (M31).
+                .filter(ref -> ref.getKind() != ReferenceKind.START_PAGE)
                 .map(AssetReference::getFromAssetId)
                 .filter(fromAssetId -> !fromAssetId.equals(asset.getId()))
                 .distinct()
