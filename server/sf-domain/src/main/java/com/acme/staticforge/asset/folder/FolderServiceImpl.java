@@ -11,7 +11,11 @@ import com.acme.staticforge.asset.ChildCount;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
+import com.acme.staticforge.channel.ChannelOutputSettings;
+import com.acme.staticforge.channel.ChannelService;
+import com.acme.staticforge.channel.ChannelServiceImpl;
 import com.acme.staticforge.common.JsonUtil;
+import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.revision.AssetChange;
@@ -36,12 +40,16 @@ import org.springframework.transaction.annotation.Transactional;
 @RevisionAware
 public class FolderServiceImpl implements FolderService {
 
+    /** Another page of the folder claims the index path a start page would take (M31). */
+    static final String INDEX_CLAIM_CONFLICT = "SF-DOM-0111";
+
     private final AssetRepository assetRepository;
     private final AssetVersionRepository assetVersionRepository;
     private final AssetService assetService;
     private final PathService pathService;
     private final RevisionService revisionService;
     private final ReferenceMaterializer referenceMaterializer;
+    private final ChannelService channelService;
 
     public FolderServiceImpl(
             AssetRepository assetRepository,
@@ -49,13 +57,15 @@ public class FolderServiceImpl implements FolderService {
             AssetService assetService,
             PathService pathService,
             RevisionService revisionService,
-            ReferenceMaterializer referenceMaterializer) {
+            ReferenceMaterializer referenceMaterializer,
+            ChannelService channelService) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.pathService = pathService;
         this.revisionService = revisionService;
         this.referenceMaterializer = referenceMaterializer;
+        this.channelService = channelService;
     }
 
     @Override
@@ -77,7 +87,7 @@ public class FolderServiceImpl implements FolderService {
             info.put(asset.getId(), new FolderInfo(
                     asset.getUuid(), asset.getUid(), version.getDisplayName(), version.getFolderPath(),
                     FolderScope.fromPayload(version.getPayload()), FolderScope.isProtected(version.getPayload()),
-                    version.getValidFromRevision()));
+                    version.getValidFromRevision(), startPageOf(version)));
             children.put(asset.getId(), new java.util.ArrayList<>());
         }
         java.util.Map<Long, List<FolderNode>> setsByFolder = scope == FolderScope.CONTENT
@@ -120,7 +130,8 @@ public class FolderServiceImpl implements FolderService {
             Asset asset = set.getAsset();
             byFolder.computeIfAbsent(set.getFolderId(), id -> new java.util.ArrayList<>()).add(new FolderNode(
                     asset.getUuid(), asset.getUid(), set.getDisplayName(), set.getFolderPath(), FolderScope.CONTENT,
-                    false, AssetType.RECORD_SET, counts.getOrDefault(asset.getId(), 0L), set.getValidFromRevision(), List.of()));
+                    false, AssetType.RECORD_SET, counts.getOrDefault(asset.getId(), 0L), set.getValidFromRevision(), null,
+                    List.of()));
         }
         return byFolder;
     }
@@ -135,11 +146,16 @@ public class FolderServiceImpl implements FolderService {
         }
         return new FolderNode(
                 f.uuid(), f.uid(), f.displayName(), f.path(), f.scope(), f.protectedFolder(), AssetType.FOLDER, null,
-                f.revision(), List.copyOf(childNodes));
+                f.revision(), f.startPage(), List.copyOf(childNodes));
     }
 
     private record FolderInfo(UUID uuid, String uid, String displayName, String path, FolderScope scope, boolean protectedFolder,
-            long revision) {}
+            long revision, UUID startPage) {}
+
+    /** A {@code PAGES} folder's stored start page pointer (M31); {@code null} for every other folder. */
+    private static UUID startPageOf(AssetVersion folder) {
+        return FolderScope.fromPayload(folder.getPayload()) == FolderScope.PAGES ? StartPage.fromPayload(folder.getPayload()) : null;
+    }
 
     @Override
     @Transactional
@@ -249,6 +265,74 @@ public class FolderServiceImpl implements FolderService {
             startNodeNode.put("assetUuid", startNode.assetUuid().toString());
         }
         return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView updateStartPage(UUID uuid, UUID pageUuid, long expectedRevision, RevisionContext ctx) {
+        Asset folder = requireFolder(uuid, ctx.projectId());
+        AssetVersion current = requireOpen(folder.getId());
+        if (current.isDeleted()) {
+            throw new SfException(ProblemFactory.notFound("Folder not found."));
+        }
+        // Deliberately no requireNotProtected: pages_root (the site root) is protected and may name a start page.
+        if (FolderScope.fromPayload(current.getPayload()) != FolderScope.PAGES) {
+            throw new SfException(ProblemFactory.unprocessableEntity("A start page can only be set on a pages folder."));
+        }
+        if (pageUuid != null) {
+            Asset page = assetRepository.findByProjectIdAndUuid(ctx.projectId(), pageUuid)
+                    .filter(asset -> asset.getAssetType() == AssetType.PAGE)
+                    .orElseThrow(() -> new SfException(ProblemFactory.unprocessableEntity("The start page must be a page.")));
+            AssetVersion pageVersion = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(page.getId())
+                    .filter(version -> !version.isDeleted())
+                    .orElseThrow(() -> new SfException(ProblemFactory.unprocessableEntity("The start page is deleted.")));
+            if (!folder.getId().equals(pageVersion.getFolderId())) {
+                throw new SfException(ProblemFactory.unprocessableEntity("The start page must be a page of this folder."));
+            }
+            requireNoIndexClaim(folder, page, ctx.projectId());
+        }
+
+        if (java.util.Objects.equals(pageUuid, StartPage.fromPayload(current.getPayload()))) {
+            assetService.requireRevision(ctx.projectId(), uuid, expectedRevision);
+            return assetService.requireCurrent(ctx.projectId(), uuid);
+        }
+        ObjectNode payload = current.getPayload().deepCopy();
+        if (pageUuid == null) {
+            payload.putNull(StartPage.PAYLOAD_KEY);
+        } else {
+            payload.put(StartPage.PAYLOAD_KEY, pageUuid.toString());
+        }
+        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx);
+    }
+
+    /**
+     * Refuses a start page while another live page of the folder would also be written at the folder's index path: its
+     * UID is the index file stem of one of the project's channels ({@code index} for {@code index.html}). A page whose
+     * UID is only the channel's {@code indexUid} is no conflict — next to a start page it renders under its own UID.
+     * Conflicts that arise later (a page created, renamed or moved in) are caught by the build's path collision check.
+     */
+    private void requireNoIndexClaim(Asset folder, Asset startPage, long projectId) {
+        java.util.Set<String> stems = new java.util.HashSet<>();
+        channelService.outputSettings(projectId).values().forEach(settings -> stems.add(settings.indexStem()));
+        if (stems.isEmpty()) {
+            stems.add(ChannelOutputSettings.defaults(ChannelServiceImpl.HTML_KEY).indexStem());
+        }
+        for (AssetVersion sibling : assetVersionRepository.findByFolderIdAndValidToRevisionIsNullAndDeletedFalse(folder.getId())) {
+            Asset asset = sibling.getAsset();
+            if (asset.getAssetType() != AssetType.PAGE || asset.getId().equals(startPage.getId()) || !stems.contains(asset.getUid())) {
+                continue;
+            }
+            throw new SfException(Problem.builder()
+                    .type("https://cms.example.com/problems/sf-dom-0111")
+                    .title("Conflict")
+                    .status(409)
+                    .detail("Page '" + asset.getUid() + "' in this folder is also written as the folder's index file. "
+                            + "Change its UID first, or make it the start page.")
+                    .property("code", INDEX_CLAIM_CONFLICT)
+                    .property("conflictingPageUuid", asset.getUuid().toString())
+                    .property("conflictingPageUid", asset.getUid())
+                    .build());
+        }
     }
 
     @Override

@@ -1,3 +1,46 @@
+# M31 — Folder start pages (branch `m31-folder-start-pages`)
+
+Spec: `tasks/31-m31-folder-start-pages/` (written in M31.0 from the approved plan). User decisions (2026-09-28): a
+folder's start page always renders at the folder's index path (only a per-page `pathOverride` wins); the channel
+`indexUid` rule stays as the fallback for folders without a start page.
+
+- [x] M31.0 epic + task files
+- [x] M31.1 model + API (payload `startPage`, `updateStartPage`, PATCH, `FolderView.startPageUuid`, `START_PAGE` edge)
+- [x] M31.2 output paths (both resolvers, collision, stale-pointer diagnostic)
+- [x] M31.3 consumers (folder `$CMS_REF`, preview folder links, navigation, URL registry invalidation)
+- [x] M31.4 planner edge, redirects, export/import protocol 11
+- [x] M31.5 UI (folder start page, root reachable in Pages and Navigation, badge + menu, `nearestIndexPage`, hint)
+- [x] M31.6 spec + docs
+- [x] Full verification: `./gradlew spotlessCheck build test --rerun` (1,845 tests, 0 failures, 6 skipped benchmarks), `ng build`, `npx vitest run` (123 files, 847 tests), manual check in the running app
+
+
+## Review
+
+- **Model + API (M31.1).** Folder payload `startPage` (PAGES folders incl. `pages_root`), `FolderService.updateStartPage`,
+  `PATCH /folders/{uuid}` with If-Match, `FolderView.startPageUuid`, `START_PAGE` reference edge (release closure,
+  usages, not a delete guard), `SF-DOM-0111` when another page claims the index file.
+- **Output paths (M31.2).** `pathOverride` > start page (always the folder index) > template > default; the `indexUid`
+  rule only for folders without a start page; stale pointer → fallback + `SF-GEN-0112`.
+- **Consumers (M31.3).** One index-page rule (`NavigationService.indexPage`) for `$CMS_REF(folder:…)`, preview folder
+  links, navigation folder targets and URL registry resolution; `StartPageUrlInvalidation` on update, restore,
+  discard, release and import.
+- **Planner, redirects, import (M31.4).** `RebuildEdgeKind.START_PAGE`; moved outputs now also re-render navigation;
+  AUTO redirects when a page moves to or from `index.html`; export protocol 11 with `START_PAGE_NOT_MERGED`.
+- **UI (M31.5).** Start page picker in the folder panel, "All pages" / "All navigation" open the roots, "Start page"
+  badge and "Make start page of …", redirect preselection from start pages, channels hint.
+- **Docs (M31.6).** Spec §3, §5.4, §10.2, §15.2, §16.4, §17.2, §18.2/§18.3/§18.9, §19.2, §20.2, §24.5, §26.5, App. B;
+  API, user and template developer guides.
+- **Found on the way:** the UID `index` is reserved, so the default `indexUid` rule could never match — a default
+  site had no way to get an `index.html`; the Navigation root's Entry page was unreachable in the UI;
+  `$CMS_REF(folder:…)` leaked `pages_root/` into URLs and never looked for an index page; preview folder links issued a
+  page share token for a folder; moved outputs never re-rendered navigation.
+- **Deviations:** tasks directly under the epic (no feature folders); the set-time conflict counts index file stems,
+  not `indexUid`; a preview link to a folder without an index page is empty; channel-less lookups know start pages
+  only.
+- **Open:** the folder panel shows the internal path `/pages_root/` for the site root (pre-existing display).
+
+---
+
 # M30 — Quality checks and redirects (branch `m30-quality-checks-and-redirects`)
 
 Spec: `tasks/30-m30-quality-checks-and-redirects/`. Decisions 1–20 there are binding.

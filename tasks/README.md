@@ -84,7 +84,7 @@ Rules of thumb:
 | 06 | [m6-revision-ux](06-m6-revision-ux/README.md) | 17, 24 | Journeys 5–8 pass |
 | 07 | [m7-hardening](07-m7-hardening/README.md) | 2, 25, 26 | Quality gates (§25.7) met; pen-test findings closed |
 
-### Post-roadmap feature epics (M16–M30)
+### Post-roadmap feature epics (M16–M31)
 
 Inserted after the §27 roadmap the same way `M8`–`M15` were. Decisions and the binding
 feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M24").
@@ -106,6 +106,7 @@ feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M2
 | 28 | [m28-editor-publishing](28-m28-editor-publishing/README.md) | 8.3, 18.1, 20, 24 | Per-project publish policy lets editors release, schedule and build; UI gated by effective permissions |
 | 29 | [m29-housekeeping-jobs](29-m29-housekeeping-jobs/README.md) | 7.7, 11.2, 18, 26 | Housekeeping jobs (blob sweep, purges, recovery, retention, compaction) run on schedule and are managed on the admin Jobs page |
 | 30 | [m30-quality-checks-and-redirects](30-m30-quality-checks-and-redirects/README.md) | 16, 18, 24 | Builds check links/SEO/accessibility per configurable rule; moved pages get automatic redirects in per-target formats |
+| 31 | [m31-folder-start-pages](31-m31-folder-start-pages/README.md) | 10.2, 15.2, 16.4, 17, 18, 20.2, 24, 26.5 | Every pages folder, the site root included, can name a start page that renders as its index file |
 
 Epics are sequential **hard** dependencies. Within an epic, features and tasks declare
 their own `depends` graph; anything with no dependencies can be parallelised across

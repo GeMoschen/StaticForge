@@ -11,7 +11,10 @@ import java.util.UUID;
  *
  * <p>{@code type} is {@code FOLDER}, or {@code RECORD_SET} for a record set in the {@code CONTENT} tree
  * (M25): a leaf whose {@code recordCount} is its live record count ({@code null} for folders).
- * {@code revision} is the node's current revision, sent back as {@code If-Match} on a rename.
+ * {@code revision} is the node's current revision, sent back as {@code If-Match} on a rename or a start page change.
+ *
+ * <p>{@code startPageUuid} is a {@code PAGES} folder's start page as stored in its draft (M31): the page that renders
+ * as the folder's index file. {@code null} when none is set and for folders of every other store.
  */
 public record FolderView(
         UUID uuid,
@@ -23,6 +26,7 @@ public record FolderView(
         String type,
         Long recordCount,
         long revision,
+        UUID startPageUuid,
         List<FolderView> children,
         java.util.Map<String, LocaleReleaseView> release,
         java.util.List<ScheduledRefView> scheduled) {}

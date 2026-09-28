@@ -5,6 +5,7 @@ import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.folder.StartNode;
 import com.acme.staticforge.asset.folder.StartNodeKind;
+import com.acme.staticforge.asset.folder.StartPage;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -81,7 +82,10 @@ public class NavigationServiceImpl implements NavigationService {
                 .sorted(PAGE_ORDER)
                 .toList();
         if (!pages.isEmpty()) {
-            return Optional.of(pages.get(0).uuid());
+            UUID index = lookup.byUuid(projectId, folderUuid)
+                    .map(folder -> indexPage(folder, pages, lookup.indexUid()))
+                    .orElse(null);
+            return Optional.of(index != null ? index : pages.get(0).uuid());
         }
 
         List<NavigationAsset> subfolders = children.stream()
@@ -95,6 +99,41 @@ public class NavigationServiceImpl implements NavigationService {
             }
         }
         return Optional.empty();
+    }
+
+    @Override
+    public Optional<UUID> indexPage(long projectId, UUID pageStoreFolderUuid, NavigationLookup lookup) {
+        NavigationAsset folder = pageStoreFolderUuid == null
+                ? null
+                : lookup.byUuid(projectId, pageStoreFolderUuid).filter(a -> a.type() == AssetType.FOLDER).orElse(null);
+        if (folder == null) {
+            return Optional.empty();
+        }
+        List<NavigationAsset> pages = lookup.childrenOf(projectId, pageStoreFolderUuid).stream()
+                .filter(a -> a.type() == AssetType.PAGE)
+                .toList();
+        return Optional.ofNullable(indexPage(folder, pages, lookup.indexUid()));
+    }
+
+    /**
+     * The folder's index page among its pages in the view: the effective start page, else the page whose UID is
+     * {@code indexUid}; {@code null} when neither is there. A start page counts only on a pages folder, like in the build.
+     */
+    private static UUID indexPage(NavigationAsset folder, List<NavigationAsset> pages, String indexUid) {
+        UUID startPage = FolderScope.fromPayload(folder.payload()) == FolderScope.PAGES
+                ? StartPage.fromPayload(folder.payload())
+                : null;
+        if (startPage != null && pages.stream().anyMatch(page -> page.uuid().equals(startPage))) {
+            return startPage;
+        }
+        if (indexUid == null || indexUid.isBlank()) {
+            return null;
+        }
+        return pages.stream()
+                .filter(page -> indexUid.equals(page.uid()))
+                .map(NavigationAsset::uuid)
+                .findFirst()
+                .orElse(null);
     }
 
     @Override

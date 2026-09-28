@@ -17,6 +17,7 @@ import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
+import com.acme.staticforge.urlregistry.StartPageUrlInvalidation;
 import com.acme.staticforge.urlregistry.UrlRegistryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
@@ -54,6 +55,7 @@ public class AssetServiceImpl implements AssetService {
     private final UrlRegistryRepository urlRegistryRepository;
     private final ReferenceMaterializer referenceMaterializer;
     private final BlobStore blobStore;
+    private final StartPageUrlInvalidation startPageUrls;
 
     public AssetServiceImpl(
             AssetRepository assetRepository,
@@ -65,7 +67,8 @@ public class AssetServiceImpl implements AssetService {
             PathService pathService,
             UrlRegistryRepository urlRegistryRepository,
             ReferenceMaterializer referenceMaterializer,
-            BlobStore blobStore) {
+            BlobStore blobStore,
+            StartPageUrlInvalidation startPageUrls) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetReferenceRepository = assetReferenceRepository;
@@ -76,6 +79,7 @@ public class AssetServiceImpl implements AssetService {
         this.urlRegistryRepository = urlRegistryRepository;
         this.referenceMaterializer = referenceMaterializer;
         this.blobStore = blobStore;
+        this.startPageUrls = startPageUrls;
     }
 
     @Override
@@ -260,6 +264,7 @@ public class AssetServiceImpl implements AssetService {
                 current.getTemplateAssetId(),
                 current.isDeleted());
         appendSummary(asset, revision, "UPDATE", List.of("payload"));
+        startPageUrls.payloadChanged(asset, current.getPayload(), next.getPayload());
         return toView(next);
     }
 
@@ -389,6 +394,7 @@ public class AssetServiceImpl implements AssetService {
                 source.getTemplateAssetId(),
                 false);
         appendSummary(asset, revision, "RESTORE", List.of("payload"));
+        startPageUrls.payloadChanged(asset, current.isDeleted() ? null : current.getPayload(), next.getPayload());
         if (asset.getAssetType() == AssetType.RECORD_SET) {
             if (deletedAt != null) {
                 restoreCascadeDeletedRecords(asset, deletedAt, next.getFolderPath(), revision, ctx);
@@ -693,6 +699,8 @@ public class AssetServiceImpl implements AssetService {
 
     private boolean isReferencedByLiveAssets(Asset asset) {
         return assetReferenceRepository.findIncomingOpen(asset.getId()).stream()
+                // A folder's start page may go: the folder falls back to the indexUid rule (M31).
+                .filter(ref -> ref.getKind() != ReferenceKind.START_PAGE)
                 .map(AssetReference::getFromAssetId)
                 .filter(fromAssetId -> !fromAssetId.equals(asset.getId()))
                 .distinct()

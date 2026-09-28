@@ -216,7 +216,10 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
 
     private UrlRegistryEntry computeAndPersist(
             UUID pageReferenceUuid, String channelKey, UrlArea area, String localeKey, RevisionContext ctx) {
-        UUID resolvedPageUuid = navigationService.resolve(ctx.projectId(), pageReferenceUuid, navigationLookup);
+        ChannelOutputSettings settings = channelService.outputSettings(ctx.projectId(), channelKey);
+        // A folder target resolves to its index page in this channel (M31): start page, else the indexUid page.
+        UUID resolvedPageUuid = navigationService.resolve(
+                ctx.projectId(), pageReferenceUuid, navigationLookup.withIndexUid(settings.indexUid()));
         if (resolvedPageUuid == null) {
             throw new SfException(ProblemFactory.notFound("Page reference does not resolve to a navigable page."));
         }
@@ -225,7 +228,7 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
                         ctx.projectId(),
                         resolvedPageUuid,
                         channelKey,
-                        channelService.outputSettings(ctx.projectId(), channelKey),
+                        settings,
                         localeContext(ctx.projectId(), localeKey))
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Resolved page not found.")));
         return persist(pageReferenceUuid, channelKey, area, localeKey, url, ctx);

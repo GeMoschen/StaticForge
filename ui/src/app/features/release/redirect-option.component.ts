@@ -4,11 +4,12 @@ import { ApiClient } from '../../core/api/api.client';
 import type { AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
 import { ChannelsService } from '../channels/channels.service';
 import { indexUidOf } from '../settings/redirect.util';
-import { type RedirectIntent, type RedirectSource, NO_REDIRECT, commonIndexPage } from './redirect-option.util';
+import { type RedirectIntent, type RedirectSource, NO_REDIRECT, commonIndexPage, startPagesByFolder } from './redirect-option.util';
 
 /**
  * "Redirect old URL to…" in the unpublish and delete dialogs of a page (M30.6.3): opt-in, with the shared page picker
- * preselected with the index page of the nearest folder above that is online (or nothing). The host dialog reads the
+ * preselected with the index page of the nearest folder above that is online (or nothing) — a folder's start page
+ * first, else its index UID page (M31). The host dialog reads the
  * `intent` and, after its own action succeeded, hands it to `RedirectAfterService`.
  *
  * The host renders the page picker (on `pickRequested`) as a sibling of its dialog panel — a fixed-position picker
@@ -161,13 +162,14 @@ export class RedirectOptionComponent {
     forkJoin({
       pages: this.api.listPages(projectKey).pipe(catchError(() => of([]))),
       channels: this.channelsApi.list(projectKey).pipe(catchError(() => of([]))),
-    }).subscribe(({ pages, channels }) => {
+      folders: this.api.listFolders(projectKey, 'PAGES').pipe(catchError(() => of([]))),
+    }).subscribe(({ pages, channels, folders }) => {
       this.loading.set(false);
       if (this.picked) {
         return;
       }
       const indexUids = new Set((channels.length > 0 ? channels : [null]).map((channel) => indexUidOf(channel)));
-      const hit = commonIndexPage(sources, pages ?? [], indexUids);
+      const hit = commonIndexPage(sources, pages ?? [], indexUids, startPagesByFolder(folders ?? []));
       this.intent.update((intent) => ({
         ...intent,
         page: hit?.uuid ? { uuid: hit.uuid, name: hit.displayName || hit.uid || 'Untitled' } : null,

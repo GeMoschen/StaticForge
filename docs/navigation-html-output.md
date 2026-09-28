@@ -140,6 +140,9 @@ Both "Section" and "Sub" pick up `trail` because "Leaf One" is active somewhere 
   `UrlArea.GENERATED`), keyed on the reference's own UUID — stable across regeneration even if
   the target page's slug changes. A `FOLDER` entry-point node (resolved via its `startNode`
   chain) resolves directly via `OutputPathResolver` instead.
+  A reference (or `startNode` chain) that ends in a **pages folder** resolves to that folder's index page first —
+  its start page, else its page with the channel's `indexUid` (M31, spec §17.2) — before the first navigable page.
+  Changing a folder's start page deletes the affected computed registry entries, so they follow at once.
   Because the entry is assigned once, a target page that **moves** keeps being linked at its old path
   until the entry is reset (`POST …/url-registry/reset`) or the channel's output settings change. Since M30
   that link still works: the build records an automatic redirect from the old path (spec §18.9), and the

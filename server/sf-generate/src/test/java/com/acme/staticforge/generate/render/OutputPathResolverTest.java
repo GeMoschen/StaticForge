@@ -194,8 +194,109 @@ class OutputPathResolverTest {
     }
 
     // ------------------------------------------------------------------
+    // Folder start pages (M31)
+    // ------------------------------------------------------------------
+
+    private static final ChannelOutputSettings HOME_INDEX = ChannelOutputSettings.of(
+            "html", null, MAPPER.createObjectNode().put("indexUid", "home"));
+
+    @Test
+    void theFoldersStartPageRendersAsItsIndexAndTheIndexUidPageBecomesOrdinary() {
+        UUID folder = UUID.randomUUID();
+        SnapshotAsset products = folder(folder, 500L, "products", "/pages_root/products/", PAGE);
+        SnapshotAsset overview = page(PAGE, "overview", "Overview", "/pages_root/products/", "{}", TEMPLATE, 500L);
+        SnapshotAsset home = page(PAGE_B, "home", "Home", "/pages_root/products/", "{}", null, 500L);
+        OutputPathResolver resolver = OutputPathResolver.forSnapshot(
+                snapshot(products, overview, home, template("{\"outputPath\":{\"html\":\"x/{uid}.{ext}\"}}")),
+                Map.of("html", HOME_INDEX));
+
+        assertThat(resolver.resolvePagePath(PAGE, "html")).isEqualTo("products/index.html");
+        assertThat(resolver.resolvePagePath(PAGE_B, "html")).isEqualTo("products/home.html");
+        assertThat(resolver.startPageOf(folder, null)).isEqualTo(PAGE);
+        assertThat(resolver.declaredStartPageOf(folder, null)).isEqualTo(PAGE);
+        assertThat(resolver.effectiveExpression(PAGE, "html")).isEqualTo("{folder}{uid}.{ext}");
+    }
+
+    @Test
+    void aStalePointerFallsBackToTheIndexUidRule() {
+        UUID folder = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        // The pointer names PAGE, which lives in another folder now.
+        SnapshotAsset products = folder(folder, 500L, "products", "/pages_root/products/", PAGE);
+        SnapshotAsset elsewhere = folder(other, 501L, "elsewhere", "/pages_root/elsewhere/", null);
+        SnapshotAsset moved = page(PAGE, "overview", "Overview", "/pages_root/elsewhere/", "{}", null, 501L);
+        SnapshotAsset home = page(PAGE_B, "home", "Home", "/pages_root/products/", "{}", null, 500L);
+        OutputPathResolver resolver = OutputPathResolver.forSnapshot(
+                snapshot(products, elsewhere, moved, home), Map.of("html", HOME_INDEX));
+
+        assertThat(resolver.startPageOf(folder, null)).isNull();
+        assertThat(resolver.declaredStartPageOf(folder, null)).isEqualTo(PAGE);
+        assertThat(resolver.resolvePagePath(PAGE_B, "html")).isEqualTo("products/index.html");
+        assertThat(resolver.resolvePagePath(PAGE, "html")).isEqualTo("elsewhere/overview.html");
+    }
+
+    @Test
+    void aPointerToAnAbsentPageFallsBackToo() {
+        UUID folder = UUID.randomUUID();
+        SnapshotAsset products = folder(folder, 500L, "products", "/pages_root/products/", PAGE);
+        SnapshotAsset unreleased = new SnapshotAsset(PAGE, 77L, AssetType.PAGE, "overview", "Overview", "/pages_root/products/",
+                parse("{}"), false, null, 500L).asUnreleased();
+        SnapshotAsset home = page(PAGE_B, "home", "Home", "/pages_root/products/", "{}", null, 500L);
+        OutputPathResolver resolver = OutputPathResolver.forSnapshot(
+                snapshot(products, unreleased, home), Map.of("html", HOME_INDEX));
+
+        assertThat(resolver.startPageOf(folder, null)).isNull();
+        assertThat(resolver.resolvePagePath(PAGE_B, "html")).isEqualTo("products/index.html");
+    }
+
+    @Test
+    void aFolderAbsentFromTheViewHasNoStartPage() {
+        UUID folder = UUID.randomUUID();
+        SnapshotAsset products = new SnapshotAsset(folder, 500L, AssetType.FOLDER, "products", "products", "/pages_root/products/",
+                folderPayload(PAGE), false, null, null).asUnreleased();
+        SnapshotAsset overview = page(PAGE, "overview", "Overview", "/pages_root/products/", "{}", null, 500L);
+        OutputPathResolver resolver = OutputPathResolver.forSnapshot(snapshot(products, overview), Map.of());
+
+        assertThat(resolver.startPageOf(folder, null)).isNull();
+        assertThat(resolver.declaredStartPageOf(folder, null)).isNull();
+        assertThat(resolver.resolvePagePath(PAGE, "html")).isEqualTo("products/overview.html");
+    }
+
+    @Test
+    void theSitesStartPageIsTheRootIndexInEveryUrlForm() {
+        UUID root = UUID.randomUUID();
+        SnapshotAsset pagesRoot = folder(root, 400L, "pages_root", "/pages_root/", PAGE);
+        SnapshotAsset homepage = page(PAGE, "homepage", "Homepage", "/pages_root/", "{}", null, 400L);
+        OutputPathResolver resolver = OutputPathResolver.forSnapshot(
+                snapshot(pagesRoot, homepage), Map.of("html", PRETTY_SLASH));
+
+        assertThat(resolver.resolvePagePath(PAGE, "html")).isEqualTo("index.html");
+        assertThat(resolver.resolvePageUrl(PAGE, "html")).isEqualTo("./");
+        assertThat(resolver.resolvePaginationPath(PAGE, "html", "index.html", 2)).isEqualTo("index-2.html");
+    }
+
+    // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
+
+    private static SnapshotAsset folder(UUID uuid, long assetId, String uid, String path, UUID startPage) {
+        return new SnapshotAsset(uuid, assetId, AssetType.FOLDER, uid, uid, path, folderPayload(startPage), false, null, null);
+    }
+
+    private static JsonNode folderPayload(UUID startPage) {
+        ObjectNode payload = MAPPER.createObjectNode().put("scope", "PAGES");
+        if (startPage != null) {
+            payload.put("startPage", startPage.toString());
+        }
+        return payload;
+    }
+
+    private static SnapshotAsset page(
+            UUID uuid, String uid, String displayName, String folderPath, String payloadJson, UUID templateUuid, Long folderId) {
+        SnapshotAsset page = page(uuid, uid, displayName, folderPath, payloadJson, templateUuid);
+        return new SnapshotAsset(page.uuid(), page.assetId(), page.type(), page.uid(), page.displayName(), page.folderPath(),
+                page.payload(), false, null, folderId);
+    }
 
     private static Snapshot snapshot(SnapshotAsset... assets) {
         Map<UUID, SnapshotAsset> byUuid = new HashMap<>();

@@ -195,7 +195,14 @@ public enum ConflictType {
      * An archived redirect doesn't fit the target project (M30.4.1): its channel or language doesn't exist there, or
      * its paths are malformed. It is not imported.
      */
-    REDIRECT_INVALID(ConflictSeverity.WARNING);
+    REDIRECT_INVALID(ConflictSeverity.WARNING),
+
+    /**
+     * The archive's site root names a start page that the import doesn't set on the target's site root (M31): the
+     * target's {@code pages_root} already has a different start page, which is kept, or the archive's start page won't
+     * be a page of the site root after the import. Every other folder's start page travels with its payload.
+     */
+    START_PAGE_NOT_MERGED(ConflictSeverity.WARNING);
 
     private final ConflictSeverity severity;
     private final boolean rejectsAssetOnly;

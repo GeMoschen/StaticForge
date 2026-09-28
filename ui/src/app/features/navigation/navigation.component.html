@@ -8,8 +8,8 @@
     <button
       type="button"
       class="navigation__clear"
-      [class.navigation__clear--active]="!selectedUuid()"
-      (click)="closeDetail()"
+      [class.navigation__clear--active]="!selectedUuid() || rootSelected()"
+      (click)="selectRoot()"
       (dragover)="onRootDragOver($event)"
       (drop)="onRootDrop($event)"
       (contextmenu)="onRootContextMenu($event)"

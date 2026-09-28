@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -11,11 +11,14 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import type { BodiesMap, SectionInstance } from './types';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ReleaseBadgeComponent } from '../release/release-badge.component';
 import { PageDeleteDialogComponent } from './page-delete-dialog.component';
+import { startPageFailure, startPageFolderLabel } from './start-page.util';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type PageView = components['schemas']['PageView'];
+type FolderView = components['schemas']['FolderView'];
 
 const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
 
@@ -44,10 +47,20 @@ export class PageNavNodeComponent {
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
+  /** Choosing a folder's start page is an editor's write (`PATCH /folders/{uuid}`, M31). */
+  private readonly canEditContent = inject(ProjectPermissionsStore).canEditContent;
 
   readonly projectKey = input.required<string>();
   readonly summary = input.required<AssetSummaryView>();
+  /** The folder the page sits in (the pages root for top-level pages): its start page and "Make start page of …". */
+  readonly folder = input<FolderView | null>(null);
   readonly depth = input<number>(0);
+
+  /** This page renders as its folder's index file (M31). */
+  protected readonly isStartPage = computed(() => {
+    const uuid = this.summary().uuid;
+    return !!uuid && this.folder()?.startPageUuid === uuid;
+  });
 
   /** Emitted after a duplicate or delete succeeds, so the parent list reloads. */
   readonly changed = output<void>();
@@ -292,6 +305,16 @@ export class PageNavNodeComponent {
       items.push(
         { label: 'Duplicate', icon: 'content_copy', action: () => this.duplicate() },
         { label: 'Rename', icon: 'edit', action: () => this.renameOpen.set(true) },
+      );
+      const folder = this.folder();
+      if (folder?.uuid && this.canEditContent() && !this.isStartPage()) {
+        items.push({
+          label: `Make start page of ${startPageFolderLabel(folder)}`,
+          icon: 'home',
+          action: () => this.makeStartPage(folder),
+        });
+      }
+      items.push(
         { label: '', separator: true },
         { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('PAGE', uuid, label) },
         { label: 'Copy', icon: 'file_copy', action: () => this.clipboard.copy('PAGE', uuid, label) },
@@ -300,6 +323,31 @@ export class PageNavNodeComponent {
       );
     }
     this.menu.open(event, items);
+  }
+
+  /** Names this page as its folder's start page, against the folder's revision from the tree. */
+  private makeStartPage(folder: FolderView): void {
+    const uuid = this.summary().uuid;
+    if (!uuid || !folder.uuid || !this.canEditContent()) {
+      return;
+    }
+    const folderLabel = startPageFolderLabel(folder);
+    this.api.updateFolder(this.projectKey(), folder.uuid, { startPage: uuid }, folder.revision).subscribe({
+      next: () => {
+        this.toast.show(`Start page of ${folderLabel} set`, 'success');
+        this.changed.emit();
+      },
+      error: (err: unknown) => {
+        const failure = startPageFailure(err);
+        if (failure.kind === 'stale') {
+          // The tree held an old revision of the folder: re-read it so the next try saves against the current one.
+          this.toast.show(`${folderLabel} was changed in the meantime — the tree was reloaded, try again.`, 'error');
+          this.changed.emit();
+        } else {
+          this.toast.show(failure.message, 'error');
+        }
+      },
+    });
   }
 
   private duplicate(): void {

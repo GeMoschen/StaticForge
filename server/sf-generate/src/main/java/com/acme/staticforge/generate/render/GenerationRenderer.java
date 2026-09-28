@@ -18,7 +18,9 @@ import com.acme.staticforge.asset.navigation.NavigationTreeJson;
 import com.acme.staticforge.asset.template.CompiledChannel;
 import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.asset.template.TemplateHierarchy;
+import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.channel.ChannelService;
+import com.acme.staticforge.channel.OutputPathExpander;
 import com.acme.staticforge.generate.GenerationDiagnosticCodes;
 import com.acme.staticforge.generate.nav.SnapshotNavigationLookup;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
@@ -489,7 +491,7 @@ final class GenerationRenderer {
             return switch (kind) {
                 case "media" -> relativeUrl(pagePath, resolveMedia(uuid, args, renderLocale));
                 case "page" -> paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(uuid, channel, locale));
-                case "folder" -> resolveFolder(uuid, pagePath);
+                case "folder" -> resolveFolder(uuid, channel, pagePath, renderLocale);
                 default -> "";
             };
         };
@@ -529,29 +531,36 @@ final class GenerationRenderer {
         return path == null ? "" : path;
     }
 
-    private String resolveFolder(UUID uuid, String pagePath) {
+    /**
+     * The URL a {@code $CMS_REF(folder:…)} links (M31, spec §16.4): the folder's index page — its start page in the
+     * render language's view, else its page with the channel's {@code indexUid} — like any page link; without one, the
+     * folder's directory ({@code {locale}/{folder}}, the site root as {@code ./}). Relative to the rendering page.
+     */
+    private String resolveFolder(UUID uuid, String channel, String pagePath, String renderLocale) {
         SnapshotAsset folder = snapshot.assetByUuid(uuid);
         if (folder == null) {
             return "";
         }
-        String relative = relativeFolder(folder.folderPath());
-        return relativeUrl(pagePath, relative.isEmpty() ? "./" : relative);
+        UUID indexPage = paths == null
+                ? null
+                : navigationService.indexPage(snapshot.projectId(), uuid, channelNavigation(channel)).orElse(null);
+        if (indexPage != null) {
+            return relativeUrl(pagePath, paths.resolvePageUrl(indexPage, channel, renderLocale));
+        }
+        OutputPathExpander.LocaleContext locale =
+                paths == null ? OutputPathExpander.LocaleContext.NONE : paths.localeContext(renderLocale);
+        return relativeUrl(pagePath, OutputPathExpander.folderUrl(folder.folderPath(), locale));
+    }
+
+    /** This view's navigation, with {@code channel}'s {@code indexUid} as the index page of a folder without a start page. */
+    private NavigationLookup channelNavigation(String channel) {
+        ChannelOutputSettings settings = paths == null ? ChannelOutputSettings.defaults(channel) : paths.settingsFor(channel);
+        return navigationLookup.withIndexUid(settings.indexUid());
     }
 
     /** See {@link SiteLinks#relativeUrl}; the renderer's name for it. */
     static String relativeUrl(String pagePath, String sitePath) {
         return SiteLinks.relativeUrl(pagePath, sitePath);
-    }
-
-    private static String relativeFolder(String folderPath) {
-        if (folderPath == null || folderPath.isBlank() || "/".equals(folderPath)) {
-            return "";
-        }
-        String path = folderPath.replace('\\', '/');
-        while (path.startsWith("/")) {
-            path = path.substring(1);
-        }
-        return path.isEmpty() ? "" : (path.endsWith("/") ? path : path + "/");
     }
 
     // ------------------------------------------------------------------
@@ -703,7 +712,7 @@ final class GenerationRenderer {
 
         List<Diagnostic> navDiagnostics = new ArrayList<>();
         NavTreeNode tree = navigationService.tree(
-                snapshot.projectId(), navFolderUuid, depth, navigationLookup, navDiagnostics,
+                snapshot.projectId(), navFolderUuid, depth, channelNavigation(navChannel), navDiagnostics,
                 localeConfig.effectiveChain(locale));
         warnings.addAll(navDiagnostics);
         if (tree == null) {

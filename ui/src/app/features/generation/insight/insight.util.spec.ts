@@ -63,6 +63,8 @@ describe('build insight reasons', () => {
     expect(edgeLabel({ edge: 'RECORD_SET_MEMBERSHIP' })).toBe('reads record set containing');
     expect(edgeLabel({ edge: 'RECORD_SET_QUERY' })).toBe('reads record set with changed query');
     expect(edgeLabel({ edge: 'RECORD_TEMPLATE' })).toBe('renders through record template of');
+    expect(edgeLabel({ edge: 'START_PAGE', sourcePath: 'startPage' })).toBe('takes or leaves the index path of');
+    expect(edgeLabel({ edge: 'REFERENCE', referenceKind: 'START_PAGE' })).toBe('has start page');
     expect(edgeLabel({ edge: 'REFERENCE', referenceKind: 'MEDIA_REF' })).toBe('references media');
     expect(edgeLabel({ edge: 'REFERENCE', referenceKind: 'SOMETHING' })).toBe('references (SOMETHING)');
     expect(edgeLabel({ edge: 'LOCALE_VARIANT' })).toBe('LOCALE_VARIANT');

@@ -75,6 +75,30 @@ final class FakeNavigationLookup implements NavigationLookup {
         assets.put(folderUuid, new NavigationAsset(folderUuid, AssetType.FOLDER, existing.uid(), existing.displayName(), payload));
     }
 
+    /** A page with an explicit UID (every other page's UID is its uuid). */
+    UUID addPageWithUid(UUID parent, String uid, String displayName, int navPosition) {
+        UUID uuid = addPage(parent, displayName, navPosition);
+        NavigationAsset page = assets.get(uuid);
+        assets.put(uuid, new NavigationAsset(uuid, AssetType.PAGE, uid, page.displayName(), page.payload()));
+        return uuid;
+    }
+
+    /** Makes {@code folderUuid} a pages folder whose {@code startPage} is {@code pageUuid} (M31). */
+    void setStartPage(UUID folderUuid, UUID pageUuid) {
+        NavigationAsset existing = assets.get(folderUuid);
+        ObjectNode payload = existing.payload().deepCopy();
+        payload.put("scope", "PAGES");
+        payload.put("startPage", pageUuid.toString());
+        assets.put(folderUuid, new NavigationAsset(folderUuid, AssetType.FOLDER, existing.uid(), existing.displayName(), payload));
+    }
+
+    void setScope(UUID folderUuid, String scope) {
+        NavigationAsset existing = assets.get(folderUuid);
+        ObjectNode payload = existing.payload().deepCopy();
+        payload.put("scope", scope);
+        assets.put(folderUuid, new NavigationAsset(folderUuid, AssetType.FOLDER, existing.uid(), existing.displayName(), payload));
+    }
+
     void remove(UUID uuid) {
         assets.remove(uuid);
     }
