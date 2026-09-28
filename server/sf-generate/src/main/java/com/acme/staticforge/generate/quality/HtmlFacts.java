@@ -10,6 +10,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 
 /**
  * What one parsed HTML output tells the site-wide rules (M30.1.1, epic decision 7), extracted in one pass over the
@@ -49,6 +51,9 @@ public record HtmlFacts(
         boolean linksTruncated) {
 
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+
+    /** An {@code <svg>}, parsed once: a query string would be parsed for every document. */
+    private static final Evaluator SVG = Selector.evaluatorOf("svg");
 
     /** At most this many ids and this many anchors are recorded per output. */
     public static final int MAX_IDS = 2_000;
@@ -155,7 +160,7 @@ public record HtmlFacts(
                 }
                 case "title" -> {
                     // A <title> inside <svg> names the drawing, not the document.
-                    if (title == null && element.closest("svg") == null) {
+                    if (title == null && element.closest(SVG) == null) {
                         title = WHITESPACE.matcher(element.text()).replaceAll(" ").strip();
                     }
                 }

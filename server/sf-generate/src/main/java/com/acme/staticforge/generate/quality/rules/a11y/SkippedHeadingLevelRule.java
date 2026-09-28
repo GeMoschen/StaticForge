@@ -9,6 +9,8 @@ import com.acme.staticforge.generate.quality.RuleContext;
 import java.util.ArrayList;
 import java.util.List;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,6 +22,9 @@ import org.springframework.stereotype.Component;
 public class SkippedHeadingLevelRule implements PageRule {
 
     public static final String CODE = "SF-CHK-0304";
+
+    /** Parsed once: selecting by a query string would parse it for every document. */
+    private static final Evaluator HEADINGS = Selector.evaluatorOf("h1, h2, h3, h4, h5, h6");
 
     @Override
     public String code() {
@@ -53,7 +58,7 @@ public class SkippedHeadingLevelRule implements PageRule {
     public List<Finding> check(ParsedOutput output, RuleContext context) {
         List<Finding> findings = new ArrayList<>();
         int previous = 0;
-        for (Element heading : output.document().select("h1, h2, h3, h4, h5, h6")) {
+        for (Element heading : output.document().select(HEADINGS)) {
             int level = heading.normalName().charAt(1) - '0';
             if (previous > 0 && level > previous + 1) {
                 findings.add(context.finding(heading, "Heading level skipped: h" + level + " follows h" + previous

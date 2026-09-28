@@ -2,7 +2,6 @@ package com.acme.staticforge.generate;
 
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.quality.EffectiveQualityConfig;
-import com.acme.staticforge.generate.quality.QualitySidecar;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.target.BuildManifest;
@@ -33,7 +32,6 @@ public record PlannedBuild(
         BuildManifest base,
         BuildPlan plan,
         EffectiveQualityConfig quality,
-        QualitySidecar baseQuality,
         BuildManifest current) {
 
     public boolean carries() {

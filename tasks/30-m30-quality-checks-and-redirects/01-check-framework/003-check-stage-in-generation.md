@@ -98,3 +98,21 @@ at `:466`, `OutputPathResolver.resolvePagePath` throwing at `:106` → `SF-GEN-0
 - Benchmark (default fixture, `SF_PERF=true`, 500 pages, production rule set = `SF-CHK-0001` only, i.e. parse + facts):
   `fullMs=2492, msPerEntry=4.95, incrementalMs=1388, allChangedIncrementalMs=1515`. The 5,000-page baseline vs M30
   comparison is run by the orchestrator; rerun after `M30.2.*` with the full rule set.
+- **Benchmark, 5,000 pages, full M30 rule set (2026-09-27/28, 4-core dev machine, test JVM with JaCoCo).** Not met yet.
+  Baseline = worktree at `288a8c6` (pre-M30), run alternately with M30. First measurement (M30 at `048fd62`):
+  fullMs 4203/4018 vs 6118/6432 (+53 %); incrementalMs 6518/6691 vs 7531/7532; allChangedIncrementalMs 3912/3791 vs
+  5542/5277; onePageDryRunMs 358/444 vs 567/605. Profile of the M30 full build: page checks ~0.8 s wall (2.7 s CPU),
+  site rules ~0.1 s, findings insert ~0.18 s, the rest < 0.1 s; `writer.stage` (disk, ~3.3 s) is unchanged by M30.
+  Warm, the page checks of all 5,000 outputs cost ~0.17 s serially (~0.27 s in the stage); cold — the benchmark's
+  single build in a fresh JVM — ~0.85 s whatever the parallelism: JIT warm-up of jsoup and the rules.
+- Performance changes: one jsoup `Parser` per check worker (fixed worker pool, parsed documents never retained);
+  selectors compiled once (`Selector.evaluatorOf`) instead of per document; severities resolved once per build;
+  duplicate title/description messages built in O(n) (they copied the whole group per member); streamed sidecar JSON
+  (`QualitySidecarJson`); findings stored with multi-row inserts, prepared alongside POST/WRITE; the manifest records
+  the checked configuration (`BuildManifest.qualityFingerprint`), so planning and the dry run decide the two quality
+  fallbacks without reading the sidecar — a run loads the base facts when it executes, and a base whose sidecar is gone
+  leaves carried outputs unchecked instead of changing the plan (a pre-M30 manifest has no fingerprint → FULL).
+- After these changes (fastest of three alternating runs each; the machine was shared with other load, so the medians
+  are unreliable): full 4,382 ms baseline vs 5,334 ms M30 — about +20–30 %, over the +15 % budget. The remaining cost
+  is mostly the cold page check. Open: pipelining the page checks into the render tasks, or accepting the budget as
+  measured — decision with the user.

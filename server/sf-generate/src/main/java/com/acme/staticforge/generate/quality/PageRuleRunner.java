@@ -2,6 +2,7 @@ package com.acme.staticforge.generate.quality;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.jsoup.parser.Parser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -45,9 +46,18 @@ public class PageRuleRunner {
 
     /** Parses {@code html} as output {@code key} and runs the enabled page rules on it. */
     public PageCheck check(OutputKey key, byte[] html, EffectiveQualityConfig config, CheckEnvironment environment) {
+        return check(key, html, config, environment, Parser.htmlParser());
+    }
+
+    /**
+     * As {@link #check(OutputKey, byte[], EffectiveQualityConfig, CheckEnvironment)} with {@code parser}, which the
+     * caller reuses for one output after another on its thread (a build's check workers do).
+     */
+    public PageCheck check(
+            OutputKey key, byte[] html, EffectiveQualityConfig config, CheckEnvironment environment, Parser parser) {
         ParsedOutput parsed;
         try {
-            parsed = ParsedOutput.parse(key, html, environment.resolverFor(key.channel()));
+            parsed = ParsedOutput.parse(key, html, environment.resolverFor(key.channel()), parser);
         } catch (RuntimeException | StackOverflowError e) {
             log.warn("Could not parse output '{}' for the quality checks", key.path(), e);
             return new PageCheck(null, null, notChecked(key, config, "the document could not be parsed (" + describe(e) + ")."));

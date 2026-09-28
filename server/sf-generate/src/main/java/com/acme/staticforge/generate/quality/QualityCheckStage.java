@@ -17,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -29,10 +30,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import org.jsoup.parser.Parser;
 import org.springframework.stereotype.Service;
 
 /**
@@ -285,43 +287,60 @@ public class QualityCheckStage {
         if (html.isEmpty()) {
             return;
         }
-        Semaphore permits = new Semaphore(Math.max(1, properties.getParallelism()));
+        // A fixed set of workers, each checking one output after another with its own parser: the parser and its
+        // thread's buffers (jsoup pools them per thread) are reused, and only the facts and findings outlive an
+        // output's check — never the parsed document.
+        int count = html.size();
+        HtmlFacts[] checkedFacts = new HtmlFacts[count];
+        List<List<Finding>> checkedFindings = new ArrayList<>(Collections.nCopies(count, List.<Finding>of()));
+        AtomicInteger next = new AtomicInteger();
+        int workers = Math.min(count, Math.max(1, properties.getParallelism()));
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<PageRuleRunner.PageCheck>> futures = new ArrayList<>(html.size());
-            for (RenderedFile file : html) {
-                OutputKey key = outputs.get(file.outputPath()).key();
+            List<Future<?>> futures = new ArrayList<>(workers);
+            for (int w = 0; w < workers; w++) {
                 futures.add(executor.submit(() -> {
-                    permits.acquire();
-                    try {
+                    Parser parser = Parser.htmlParser();
+                    for (int i = next.getAndIncrement(); i < count; i = next.getAndIncrement()) {
                         checkpoint.check();
-                        return pageRules.check(key, file.bytes(), config, environment);
-                    } finally {
-                        permits.release();
+                        OutputKey key = outputs.get(html.get(i).outputPath()).key();
+                        PageRuleRunner.PageCheck check;
+                        try {
+                            check = pageRules.check(key, html.get(i).bytes(), config, environment, parser);
+                        } catch (RuntimeException | StackOverflowError e) {
+                            check = new PageRuleRunner.PageCheck(null, null, pageRules.notChecked(
+                                    key, config, "the check failed (" + e + ")."));
+                        }
+                        checkedFacts[i] = check.facts();
+                        checkedFindings.set(i, check.findings());
                     }
+                    return null;
                 }));
             }
-            for (int i = 0; i < html.size(); i++) {
-                String path = html.get(i).outputPath();
-                PageRuleRunner.PageCheck check;
+            for (Future<?> future : futures) {
                 try {
-                    check = futures.get(i).get();
+                    future.get();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    futures.forEach(future -> future.cancel(true));
+                    next.set(count);
+                    futures.forEach(f -> f.cancel(true));
                     throw new IllegalStateException("Interrupted while checking output", e);
                 } catch (ExecutionException e) {
+                    // A cancelled run: the other workers take no further output.
+                    next.set(count);
+                    futures.forEach(f -> f.cancel(true));
                     if (e.getCause() instanceof RunAbortedException aborted) {
-                        futures.forEach(future -> future.cancel(true));
                         throw aborted;
                     }
-                    check = new PageRuleRunner.PageCheck(null, null, pageRules.notChecked(
-                            outputs.get(path).key(), config, "the check failed (" + e.getCause() + ")."));
+                    throw new IllegalStateException("Checking the output failed", e.getCause());
                 }
-                if (check.facts() != null) {
-                    facts.put(path, check.facts());
-                }
-                findings.put(path, check.findings());
             }
+        }
+        for (int i = 0; i < count; i++) {
+            String path = html.get(i).outputPath();
+            if (checkedFacts[i] != null) {
+                facts.put(path, checkedFacts[i]);
+            }
+            findings.put(path, checkedFindings.get(i));
         }
     }
 

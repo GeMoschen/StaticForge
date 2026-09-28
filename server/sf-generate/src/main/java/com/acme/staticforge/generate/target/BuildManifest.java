@@ -21,10 +21,19 @@ import java.util.UUID;
  *     build published on top of an earlier one, that build's consistent revision (a scoped run never advances it)
  * @param completeChannels the channels in which the build holds every page of the site; empty for a scoped build
  *     published without a base
+ * @param qualityFingerprint the fingerprint of the quality rule configuration the build was checked under (M30),
+ *     next to its {@code quality.json} sidecar; {@code null} in manifests written before M30 — a build whose
+ *     facts can't back an incremental build
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record BuildManifest(
-        int version, long runId, long revision, long consistentRevision, Set<String> completeChannels, List<Output> outputs) {
+        int version,
+        long runId,
+        long revision,
+        long consistentRevision,
+        Set<String> completeChannels,
+        List<Output> outputs,
+        String qualityFingerprint) {
 
     public static final int VERSION = 1;
 
@@ -37,6 +46,22 @@ public record BuildManifest(
         outputs = outputs == null
                 ? List.of()
                 : outputs.stream().sorted(Comparator.comparing(Output::path)).toList();
+    }
+
+    /** A manifest without a quality fingerprint (built before M30, or not yet stamped by its run). */
+    public BuildManifest(
+            int version,
+            long runId,
+            long revision,
+            long consistentRevision,
+            Set<String> completeChannels,
+            List<Output> outputs) {
+        this(version, runId, revision, consistentRevision, completeChannels, outputs, null);
+    }
+
+    /** This manifest, recording that its build was checked under the rule configuration {@code fingerprint}. */
+    public BuildManifest withQualityFingerprint(String fingerprint) {
+        return new BuildManifest(version, runId, revision, consistentRevision, completeChannels, outputs, fingerprint);
     }
 
     /** What produced an output. */

@@ -2,7 +2,6 @@ package com.acme.staticforge.generate.quality;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.parser.Parser;
@@ -37,13 +36,25 @@ public final class ParsedOutput {
      * @param resolver resolves the output's links against the build ({@link CheckEnvironment#resolverFor})
      */
     public static ParsedOutput parse(OutputKey key, byte[] html, LinkResolver resolver) {
-        return parse(key, new String(html, StandardCharsets.UTF_8), resolver);
+        return parse(key, html, resolver, Parser.htmlParser());
+    }
+
+    /**
+     * As {@link #parse(OutputKey, byte[], LinkResolver)} with {@code parser}, an HTML parser the caller reuses for one
+     * document after another (a parser is not thread-safe: one per thread).
+     */
+    public static ParsedOutput parse(OutputKey key, byte[] html, LinkResolver resolver, Parser parser) {
+        return parse(key, new String(html, StandardCharsets.UTF_8), resolver, parser);
     }
 
     /** As {@link #parse(OutputKey, byte[], LinkResolver)} for text. */
     public static ParsedOutput parse(OutputKey key, String html, LinkResolver resolver) {
+        return parse(key, html, resolver, Parser.htmlParser());
+    }
+
+    private static ParsedOutput parse(OutputKey key, String html, LinkResolver resolver, Parser parser) {
         Objects.requireNonNull(key, "key");
-        Document document = Jsoup.parse(html, "", Parser.htmlParser());
+        Document document = parser.parseInput(html, "");
         Selectors selectors = Selectors.of(document);
         HtmlFacts facts = HtmlFacts.extract(document, key.path(), resolver, selectors);
         SectionMarkers sections = SectionMarkers.present(html) ? SectionMarkers.of(document) : SectionMarkers.none();

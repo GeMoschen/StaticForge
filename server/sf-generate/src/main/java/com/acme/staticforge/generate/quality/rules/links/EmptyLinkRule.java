@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 import org.springframework.stereotype.Component;
 
 /**
@@ -34,6 +36,9 @@ public class EmptyLinkRule implements PageRule {
 
     /** Reference kinds whose unresolved reference renders an empty URL (a missing section renders no markup). */
     private static final Set<String> URL_REFERENCES = Set.of("page", "media", "folder");
+
+    /** Parsed once: selecting by a query string would parse it for every document. */
+    private static final Evaluator LINKS = Selector.evaluatorOf("a[href]");
 
     @Override
     public String code() {
@@ -69,7 +74,7 @@ public class EmptyLinkRule implements PageRule {
                 .map(ReferenceEvent::targetKind)
                 .anyMatch(URL_REFERENCES::contains);
         List<Finding> findings = new ArrayList<>();
-        for (Element link : output.document().select("a[href]")) {
+        for (Element link : output.document().select(LINKS)) {
             String href = link.attr("href").strip();
             if (!href.isEmpty() && !href.equals("#") || link.attr("role").strip().equalsIgnoreCase("button")) {
                 continue;

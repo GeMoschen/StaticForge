@@ -2,9 +2,6 @@ package com.acme.staticforge.generate.quality;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -28,10 +25,6 @@ public record QualitySidecar(int version, String configFingerprint, Map<String, 
     public static final String NAME = "quality";
 
     public static final int VERSION = 1;
-
-    private static final ObjectMapper JSON = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
     public QualitySidecar {
         outputs = outputs == null ? Map.of() : new TreeMap<>(outputs);
@@ -84,18 +77,15 @@ public record QualitySidecar(int version, String configFingerprint, Map<String, 
         return Optional.ofNullable(outputs.get(path));
     }
 
+    /** The sidecar as JSON ({@link QualitySidecarJson}: the fields as annotated here, streamed). */
     public byte[] toJson() {
-        try {
-            return JSON.writeValueAsBytes(this);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize the quality sidecar", e);
-        }
+        return QualitySidecarJson.write(this);
     }
 
     /** The sidecar in {@code bytes}; empty when it can't be read or was written by an incompatible version. */
     public static Optional<QualitySidecar> parse(byte[] bytes) {
         try {
-            QualitySidecar sidecar = JSON.readValue(bytes, QualitySidecar.class);
+            QualitySidecar sidecar = QualitySidecarJson.read(bytes);
             return sidecar.version() == VERSION ? Optional.of(sidecar) : Optional.empty();
         } catch (IOException | RuntimeException e) {
             return Optional.empty();

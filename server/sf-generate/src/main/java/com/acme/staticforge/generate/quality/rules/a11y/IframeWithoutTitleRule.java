@@ -7,6 +7,8 @@ import com.acme.staticforge.generate.quality.QualityCategory;
 import com.acme.staticforge.generate.quality.RuleContext;
 import java.util.List;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,6 +19,9 @@ import org.springframework.stereotype.Component;
 public class IframeWithoutTitleRule implements PageRule {
 
     public static final String CODE = "SF-CHK-0307";
+
+    /** Parsed once: selecting by a query string would parse it for every document. */
+    private static final Evaluator IFRAMES = Selector.evaluatorOf("iframe");
 
     @Override
     public String code() {
@@ -42,7 +47,7 @@ public class IframeWithoutTitleRule implements PageRule {
 
     @Override
     public List<Finding> check(ParsedOutput output, RuleContext context) {
-        return output.document().select("iframe").stream()
+        return output.document().select(IFRAMES).stream()
                 .filter(frame -> !AccessibleNames.hidden(frame) && AccessibleNames.isBlank(frame.attr("title")))
                 .map(frame -> context.finding(frame, message(frame)))
                 .toList();
