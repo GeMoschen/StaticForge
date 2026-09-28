@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/angular';
+import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
@@ -91,5 +91,39 @@ describe('NavigationComponent', () => {
 
     await waitFor(() => expect(api.assetDetail).toHaveBeenCalledWith('proj', 'ref-uuid'));
     await waitFor(() => expect(screen.getByText('Delete reference')).toBeTruthy());
+  });
+  it('selects the "All Navigation" root so its entry page can be set (M31)', async () => {
+    const nav = { tree: vi.fn().mockReturnValue(of(tree)) };
+    // GET /assets/{uuid} for the wrapper root, as AssetController#detail sends it.
+    const api = {
+      assetDetail: vi.fn().mockReturnValue(
+        of({
+          uuid: 'nav-root-uuid',
+          uid: 'navigation_root',
+          type: 'FOLDER',
+          displayName: 'All Navigation',
+          revision: 3,
+          folderPath: '/navigation_root/',
+          payload: { scope: 'NAVIGATION', protected: true },
+        }),
+      ),
+    };
+    await render(NavigationComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: NavigationService, useValue: nav },
+        { provide: ApiClient, useValue: api },
+      ],
+    });
+    await screen.findByText('Main Menu');
+
+    fireEvent.click(screen.getByRole('button', { name: /All navigation/ }));
+
+    await waitFor(() => expect(api.assetDetail).toHaveBeenCalledWith('proj', 'nav-root-uuid'));
+    expect(await screen.findByText('Entry page (startNode)')).toBeTruthy();
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => option.textContent?.trim())).toContain('Main Menu');
+    expect(screen.queryByRole('button', { name: 'Delete folder' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rename folder' })).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 <div class="folder-detail">
   <sf-release-bar [projectKey]="projectKey()" [assetUuid]="folder().uuid" [refreshKey]="folder().revision" />
   <header class="folder-detail__header">
-    <sf-icon name="folder" class="folder-detail__icon" />
+    <sf-icon [name]="isProtected() ? 'home' : 'folder'" class="folder-detail__icon" />
     @if (editingName()) {
       <input
         class="folder-detail__name-input"
@@ -16,9 +16,11 @@
       <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
     } @else {
       <h2 class="folder-detail__title">{{ folder().displayName ?? folder().uid }}</h2>
-      <button type="button" class="folder-detail__edit" [disabled]="readOnly()" (click)="startEditName()" aria-label="Rename folder">
-        <sf-icon name="edit" />
-      </button>
+      @if (!isProtected()) {
+        <button type="button" class="folder-detail__edit" [disabled]="readOnly()" (click)="startEditName()" aria-label="Rename folder">
+          <sf-icon name="edit" />
+        </button>
+      }
     }
     <span class="folder-detail__spacer"></span>
     <sf-button variant="ghost" (click)="close.emit()">Close</sf-button>
@@ -31,22 +33,66 @@
         <dt>Path</dt>
         <dd class="folder-detail__mono">{{ parentPath() }}</dd>
         <dt>Contains</dt>
-        <dd>{{ pageCount() }} page(s), {{ folderCount() }} sub-folder(s)</dd>
+        <dd>{{ pages().length }} page(s), {{ folderCount() }} sub-folder(s)</dd>
       </dl>
     </section>
 
     <section class="folder-detail__section">
+      <h3 class="folder-detail__section-title">Start page</h3>
+      <sf-field label="Start page" hint="Renders as this folder's index.html.">
+        <select
+          (change)="onStartPageChange($event)"
+          [disabled]="savingStartPage() || !canEditStartPage() || (pages().length === 0 && !startPageMissing())"
+        >
+          <!-- `[selected]` per option rather than `[value]` on the select — see nav-folder-detail's entry page picker. -->
+          <option value="" [selected]="startPageUuid() === ''">— None (index page UID rule) —</option>
+          @if (startPageMissing()) {
+            <option [value]="startPageUuid()" [selected]="true">(page no longer in this folder)</option>
+          }
+          @for (page of pages(); track page.uuid) {
+            <option [value]="page.uuid" [selected]="page.uuid === startPageUuid()">{{ pageLabel(page) }}</option>
+          }
+        </select>
+      </sf-field>
+      @if (startPageMissing()) {
+        <p class="folder-detail__hint">
+          The chosen start page is no longer in this folder, so the page with the channel's index page UID is used.
+        </p>
+      } @else if (pages().length === 0) {
+        <p class="folder-detail__hint">Add a page to this folder first to choose its start page.</p>
+      }
+      @if (startPageProblem(); as problem) {
+        <div class="folder-detail__problem" role="alert">
+          <p>{{ problem.message }}</p>
+          @if (problem.kind === 'stale') {
+            <sf-button variant="secondary" (click)="reloadFolder()">Reload</sf-button>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="folder-detail__section">
       <h3 class="folder-detail__section-title">Identity</h3>
-      <sf-uid-rename
-        [projectKey]="projectKey()"
-        [uuid]="folder().uuid ?? ''"
-        [uid]="folder().uid ?? ''"
-        (uidChanged)="onUidChanged()"
-      />
+      @if (isProtected()) {
+        <dl class="folder-detail__meta">
+          <dt>UID</dt>
+          <dd class="folder-detail__mono">{{ folder().uid }}</dd>
+        </dl>
+        <p class="folder-detail__hint">Built-in folder — it can't be renamed, moved or deleted.</p>
+      } @else {
+        <sf-uid-rename
+          [projectKey]="projectKey()"
+          [uuid]="folder().uuid ?? ''"
+          [uid]="folder().uid ?? ''"
+          (uidChanged)="onUidChanged()"
+        />
+      }
     </section>
   </div>
 
-  <footer class="folder-detail__footer">
-    <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete()">Delete folder</sf-button>
-  </footer>
+  @if (!isProtected()) {
+    <footer class="folder-detail__footer">
+      <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete()">Delete folder</sf-button>
+    </footer>
+  }
 </div>

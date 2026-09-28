@@ -12,6 +12,7 @@ import { PageDeleteDialogComponent } from './page-delete-dialog.component';
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type ChannelView = components['schemas']['ChannelView'];
 type PageAssetSummaryView = components['schemas']['PageAssetSummaryView'];
+type FolderView = components['schemas']['FolderView'];
 
 const BASE = '/api/v1/projects/proj';
 const HAMMER = '0f7e6a53-8a1d-4f55-9d3a-1c1c7a2f1a01';
@@ -24,17 +25,21 @@ const HAMMER_PAGE: AssetSummaryView = {
   uid: 'hammer',
   type: 'PAGE',
   displayName: 'Hammer',
-  folderPath: '/products/tools/',
+  folderPath: '/pages_root/products/tools/',
   revision: 6,
   release: { de: { status: 'PUBLISHED', releasedRevision: 4 }, en: { status: 'CHANGED', releasedRevision: 4 } },
 };
 const PAGES: AssetSummaryView[] = [
-  { uuid: HOME, uid: 'index', type: 'PAGE', displayName: 'Home', folderPath: '/', revision: 2, release: { de: { status: 'PUBLISHED' } } },
+  { uuid: HOME, uid: 'index', type: 'PAGE', displayName: 'Home', folderPath: '/pages_root/', revision: 2, release: { de: { status: 'PUBLISHED' } } },
   HAMMER_PAGE,
+];
+// GET /folders?scope=PAGES: the protected pages root, no start pages (M31).
+const FOLDERS: FolderView[] = [
+  { uuid: 'pages-root', uid: 'pages_root', displayName: 'All Pages', path: '/pages_root/', scope: 'PAGES', protectedFolder: true, type: 'FOLDER', revision: 1, children: [] },
 ];
 const CHANNELS: ChannelView[] = [{ key: 'html', name: 'Website', fileExtension: 'html', isDefault: true, enabled: true }];
 const PICKER: PageAssetSummaryView = {
-  content: [{ uuid: SAW, uid: 'saw', type: 'PAGE', displayName: 'Saw', folderPath: '/products/tools/' }],
+  content: [{ uuid: SAW, uid: 'saw', type: 'PAGE', displayName: 'Saw', folderPath: '/pages_root/products/tools/' }],
   totalElements: 1,
   totalPages: 1,
 };
@@ -82,6 +87,7 @@ describe('PageDeleteDialogComponent', () => {
     open(HAMMER_PAGE);
     http.expectOne(`${BASE}/pages`).flush(PAGES);
     http.expectOne(`${BASE}/channels`).flush(CHANNELS);
+    http.expectOne((r) => r.url === `${BASE}/folders`).flush(FOLDERS);
     fixture.detectChanges();
     expect(el().textContent).toContain('It stays online until you release the deletion.');
 
@@ -116,6 +122,7 @@ describe('PageDeleteDialogComponent', () => {
     open(HAMMER_PAGE);
     http.expectOne(`${BASE}/pages`).flush(PAGES);
     http.expectOne(`${BASE}/channels`).flush(CHANNELS);
+    http.expectOne((r) => r.url === `${BASE}/folders`).flush(FOLDERS);
     (el().querySelector('sf-redirect-option input[type="checkbox"]') as HTMLInputElement).click();
     fixture.detectChanges();
     button('Change page…').click();
@@ -145,6 +152,7 @@ describe('PageDeleteDialogComponent', () => {
     open(HAMMER_PAGE);
     http.expectOne(`${BASE}/pages`).flush(PAGES);
     http.expectOne(`${BASE}/channels`).flush(CHANNELS);
+    http.expectOne((r) => r.url === `${BASE}/folders`).flush(FOLDERS);
     (el().querySelector('sf-redirect-option input[type="checkbox"]') as HTMLInputElement).click();
     fixture.detectChanges();
     button('Delete').click();

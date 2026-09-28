@@ -42,7 +42,9 @@ interface RawReferencePayload {
  * drawer on selection. The wrapper is unwrapped for display (`topLevelNodes`)
  * — its own "All navigation" affordance (the `navigation__clear` button)
  * replaces it, exactly matching Pages/Media's tree visualization — rather
- * than rendering the wrapper a second time as an ordinary folder row.
+ * than rendering the wrapper a second time as an ordinary folder row. That
+ * button selects the wrapper, so its folder drawer (the navigation's own
+ * "Entry page") is reachable (M31).
  */
 @Component({
   selector: 'sf-navigation',
@@ -100,9 +102,18 @@ export class NavigationComponent {
     return findNode(this.forest(), uuid);
   });
 
+  /** The fixed, protected "All Navigation" wrapper root (see the class doc). */
+  readonly navigationRoot = computed<NavTreeView | null>(() => this.forest()[0] ?? null);
+
   /** The store's real top-level entries — the fixed "All Navigation" wrapper root's children
    * (see the class doc). */
-  readonly topLevelNodes = computed<NavTreeView[]>(() => this.forest()[0]?.children ?? []);
+  readonly topLevelNodes = computed<NavTreeView[]>(() => this.navigationRoot()?.children ?? []);
+
+  /** Whether "All navigation" — the wrapper root — is selected. */
+  readonly rootSelected = computed(() => {
+    const selected = this.selectedUuid();
+    return selected !== null && selected === this.navigationRoot()?.uuid;
+  });
 
   /**
    * The same entries in the store-agnostic shape {@link SfStoreTreeNodeComponent} renders. A
@@ -117,11 +128,11 @@ export class NavigationComponent {
     this.nav.renameFolder(projectKey, uuid, displayName, revision === undefined ? undefined : etagFor(revision));
 
   /** The folder currently targeted by "New folder"/"New reference" — the selected folder, or
-   * `undefined` (the project root — matches Pages' `selectedFolder() ?? undefined`) if nothing
+   * `undefined` (the project root — matches Pages' "All pages") if the root or nothing
    * folder-shaped is selected. */
   readonly targetFolderUuid = computed<string | undefined>(() => {
     const node = this.selectedNode();
-    return node && node.type === 'FOLDER' && node.uuid ? node.uuid : undefined;
+    return node && node.type === 'FOLDER' && node.uuid && !this.rootSelected() ? node.uuid : undefined;
   });
 
   constructor() {
@@ -154,6 +165,16 @@ export class NavigationComponent {
   protected select(uuid: string): void {
     this.selectedUuid.set(uuid);
     this.loadDetail(uuid);
+  }
+
+  /** "All navigation" opens the wrapper root's folder drawer — its "Entry page" (M31). */
+  protected selectRoot(): void {
+    const uuid = this.navigationRoot()?.uuid;
+    if (uuid) {
+      this.select(uuid);
+    } else {
+      this.closeDetail();
+    }
   }
 
   protected closeDetail(): void {
@@ -322,16 +343,33 @@ export class NavigationComponent {
   }
 
   /** "All navigation" is the store's root — it can't be renamed, moved, or deleted, but you can
-   * create a folder/reference directly in it (mirrors `PagesListComponent.onRootContextMenu`). */
+   * open its settings (the entry page) and create a folder/reference directly in it (mirrors
+   * `PagesListComponent.onRootContextMenu`). */
   protected onRootContextMenu(event: MouseEvent): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.closeDetail();
     const items: ContextMenuItem[] = [
-      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newFolder() },
-      { label: 'New reference', icon: 'link', action: () => this.newReference() },
+      { label: 'Folder settings…', icon: 'settings', action: () => this.selectRoot() },
     ];
+    if (!this.readOnly()) {
+      items.push(
+        { label: '', separator: true },
+        {
+          label: 'New subfolder',
+          icon: 'create_new_folder',
+          action: () => {
+            this.closeDetail();
+            this.newFolder();
+          },
+        },
+        {
+          label: 'New reference',
+          icon: 'link',
+          action: () => {
+            this.closeDetail();
+            this.newReference();
+          },
+        },
+      );
+    }
     this.menu.open(event, items);
   }
 
