@@ -1,6 +1,6 @@
 ---
 id: M31.1
-status: in-progress
+status: done
 depends: []
 epic: m31-folder-start-pages
 feature: model-and-api
@@ -47,7 +47,7 @@ to mirror), `FolderController` / `FolderView` / `FolderNode`, `ReferenceMaterial
 - [x] The `START_PAGE` edge appears in the page's usages; releasing the folder proposes its unreleased start page.
 - [x] Deleting the start page is allowed without `force` (the edge doesn't block it).
 - [x] The revision history shows the change; the earlier folder version keeps its payload.
-- [ ] `./gradlew build` green; OpenAPI and `schema.d.ts` regenerated; `ng build` + `vitest` green.
+- [x] `./gradlew build` green; OpenAPI and `schema.d.ts` regenerated; `ng build` + `vitest` green.
 
 ## Out of scope
 

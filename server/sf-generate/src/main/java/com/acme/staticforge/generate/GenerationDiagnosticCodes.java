@@ -38,4 +38,11 @@ public final class GenerationDiagnosticCodes {
      * {@code SF-TPL-*} code, with the media uid in the message.
      */
     public static final String GEN_MEDIA_SOURCE_MISSING = "SF-GEN-0230";
+
+    /**
+     * A pages folder names a start page (M31) that isn't available in a language of the build — deleted, moved to another
+     * folder, or not released there: tolerated build warning, the folder falls back to the channel's {@code indexUid}
+     * rule in that language. Reported once per folder and language, for folders holding a page of the plan.
+     */
+    public static final String GEN_START_PAGE_UNAVAILABLE = "SF-GEN-0112";
 }
