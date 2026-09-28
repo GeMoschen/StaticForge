@@ -11,8 +11,8 @@
     <button
       type="button"
       class="pages__clear"
-      [class.pages__clear--active]="!selectedFolder()"
-      (click)="selectFolder(null)"
+      [class.pages__clear--active]="!selectedFolder() || rootSelected()"
+      (click)="selectRoot()"
       (dragover)="onRootDragOver($event)"
       (drop)="onRootDrop($event)"
       (contextmenu)="onRootContextMenu($event)"
@@ -45,6 +45,7 @@
           <sf-page-nav-node
             [projectKey]="projectKey()"
             [summary]="page"
+            [folder]="pagesRoot()"
             [depth]="0"
             (changed)="onTreeChanged()"
           />
@@ -75,17 +76,19 @@
           <sf-folder-detail
             [projectKey]="projectKey()"
             [folder]="folder"
-            [pageCount]="selectedFolderPageCount()"
+            [pages]="selectedFolderPages()"
             [folderCount]="selectedFolderSubfolderCount()"
             (close)="selectFolder(null)"
             (renamed)="onTreeChanged()"
+            (changed)="onTreeChanged()"
             (deleted)="onFolderDeleted()"
           />
         } @else {
           <p class="pages__hint">
             Browse the tree to open a page, jump to one of its bodies, or open a section directly.
-            Select a folder to see its details. New pages and folders are created inside whichever
-            folder is selected in the tree ("All pages" targets the project root).
+            Select a folder to see its details and choose its start page — "All pages" opens the site
+            root's. New pages and folders are created inside whichever folder is selected in the tree
+            ("All pages" targets the project root).
           </p>
         }
       }
