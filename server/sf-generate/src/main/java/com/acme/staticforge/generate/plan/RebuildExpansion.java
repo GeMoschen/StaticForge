@@ -117,7 +117,17 @@ import org.springframework.stereotype.Service;
  *       {@code NAV} rows, or its pages folders with edge {@code NAVIGATION}, and they continue as above.</li>
  * </ul>
  * A navigation folder reached this way only walks to templates and media (its page referrers paginate it, which only
- * direct members affect); a pages folder reached this way only to the page references pointing at it.
+ * direct members affect); a pages folder reached this way only to the page references pointing at it. A page whose
+ * output moved without changing itself is navigation-visible too: it reaches its page references and pages folders
+ * like a changed one.
+ *
+ * <p><b>Start pages (M31).</b> A pages folder's effective start page decides which page renders at the folder's index
+ * path. When it differs from the baseline — the folder's {@code startPage} pointer changed, or the page it names moved
+ * into or out of the folder, was deleted, unpublished or released — the folder reaches the page it names now, the one it
+ * named at the baseline and its {@code indexUid} pages ({@link RebuildEdgeKind#START_PAGE}), and walks on to every
+ * referrer (links to the folder, page references pointing at it, which count as navigation-visible). Their moved
+ * outputs walk on to their linkers and navigation as above. The folder's {@code START_PAGE} reference row makes the
+ * named page's change reach the folder only in that case: a content edit of a start page doesn't move the index path.
  *
  * <p><b>Reasons.</b> The walk is a breadth-first search seeded in UUID order whose neighbours are visited in a stable
  * order (referrer id, reference kind, source path), and every asset keeps the first edge it was discovered by. So the
