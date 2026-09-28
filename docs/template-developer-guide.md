@@ -128,7 +128,7 @@ A dataset's **record template** (§2.9, M25) sees the record's fields as top-lev
 
 ### 2.6 Reference resolution (§16.4)
 
-`assetType:uid` resolves to a UUID at compile time; saving the template records one `asset_reference` row per resolved reference and use (`OCTL_VALUE`, `OCTL_REF`, `OCTL_INCLUDE`, source path `channelTemplates.<channel>`), so usages of the target list your template immediately. An unresolvable UID is a compile error (`SF-TPL-0110`). A reference to a soft-deleted asset renders empty with a warning, in preview and generation alike: `SF-TPL-0112` for a cross-asset value, `SF-GEN-0220` for a `$CMS_REF`, `$CMS_INCLUDE` or body section target in generation. A link to an asset not released in the render language renders empty with `SF-GEN-0221`; a cross-asset value of it reads as missing (`SF-TPL-0112`) (M27, §2.13). `$CMS_REF` resolves pages → output path (per URL strategy), media → public path (`?variant=w800`), folders → index page.
+`assetType:uid` resolves to a UUID at compile time; saving the template records one `asset_reference` row per resolved reference and use (`OCTL_VALUE`, `OCTL_REF`, `OCTL_INCLUDE`, source path `channelTemplates.<channel>`), so usages of the target list your template immediately. An unresolvable UID is a compile error (`SF-TPL-0110`). A reference to a soft-deleted asset renders empty with a warning, in preview and generation alike: `SF-TPL-0112` for a cross-asset value, `SF-GEN-0220` for a `$CMS_REF`, `$CMS_INCLUDE` or body section target in generation. A link to an asset not released in the render language renders empty with `SF-GEN-0221`; a cross-asset value of it reads as missing (`SF-TPL-0112`) (M27, §2.13). `$CMS_REF` resolves pages → output path (per URL strategy), media → public path (`?variant=w800`), folders → the folder's index page (its start page, else its page with the channel's `indexUid`, §2.15), or the folder's directory URL (`products/`, the site root as `./`) when it has none — never with a `pages_root/` segment.
 
 Cross-asset values walk the target's *root value object* exactly like a local value, so paths, `$CMS_IF`, `$CMS_SET`, `$CMS_FOR` and filters work unchanged (`$CMS_FOR(link : page:about.links)$`). The prefixes (`AssetReferencePrefixes` is their single registry) and what each reads:
 
@@ -1225,6 +1225,32 @@ never written over a real page — a page you publish at an old path wins. A tar
 `redirects.json` instead of or in addition to stubs. If a template itself writes a `.htaccess` page, the build appends
 its redirect block to it rather than replacing it.
 
+### 2.15 Start pages and output paths (M31)
+
+Editors choose a **start page** for any pages folder, the site root (`pages_root`, "All pages") included (spec §10.2):
+that page is written as the folder's index file. For your templates this means:
+
+- **Resolution order per channel:** the page's own `pathOverride` → *the start page's folder index path* → the page
+  template's `outputPath` expression → the default `{folder}{uid}.{ext}` (`{locale}/{folder}{uid}.{ext}` with
+  languages). A start page **ignores your template's `outputPath`**: a "Homepage" whose template writes
+  `pages/{uid}.html` still becomes `index.html` while it is the site root's start page (and `pages/homepage.html` again
+  once it isn't). Only an explicit per-page `pathOverride` still wins.
+- The index path is the default expression with `{uid}` replaced by the stem of the channel's `indexFileName` — the
+  same file the `indexUid` rule produces: `index.html`, `products/index.html`, `de/index.html`; with pretty URLs and a
+  trailing slash it is linked as `./` / `products/`; pagination writes `index-2.html`, `index-3.html` (or your
+  `paginationPath`).
+- The channel's `indexUid` rule applies only in folders **without** an effective start page; next to a start page the
+  `indexUid` page renders under its own UID. `index` is a reserved UID, so with the default channel settings folders
+  get index files only from start pages.
+- `$CMS_META(path)$` of a start page is its index path; `$CMS_REF(page:…)$` to it and `$CMS_REF(folder:…)$` to its
+  folder link the index file (relative to the rendering page, like every link), and navigation entries for the folder
+  lead to it.
+- A start page that isn't available in a language (moved away, deleted, not released there) is skipped: that language
+  falls back to the `indexUid` rule and the build warns `SF-GEN-0112`. A page that claims the index path next to a
+  start page by its UID, a `pathOverride` or your `outputPath` collides with it: `SF-GEN-0110`.
+- Incremental builds follow start-page changes (rebuild reason `START_PAGE`, "takes or leaves the index path of"), and
+  the page's old address gets an automatic redirect (§2.14).
+
 ## Part 3 — Diagnostics
 
 ### 3.1 OCTL (`SF-TPL-*`) — `template.diagnostic.DiagnosticCodes`
@@ -1298,6 +1324,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | Code | Severity | Meaning |
 |---|---|---|
 | `SF-GEN-0110` | error | output path collision |
+| `SF-GEN-0112` | warning | a folder's start page isn't available in a language (moved away, deleted, unpublished or not released there): the folder falls back to the `indexUid` rule; once per folder and language, the run ends `PARTIAL` (M31, §2.15) |
 | `SF-GEN-0120` | error (per page) | content incomplete: the page has `ERROR` completeness findings (an empty required editor, a count or length out of bounds) and is not published; the message lists `path (message)`, other pages are written and the run ends `PARTIAL` |
 | `SF-GEN-0125` | error (per page) | quality check failed: a quality rule configured *Error* found something on the page (M30, §2.14); all its outputs in that channel and language are held back, the message lists the rule codes, other pages are written and the run ends `PARTIAL` |
 | `SF-GEN-0210` | warning | no channel template for an enabled channel |

@@ -80,6 +80,13 @@ language, a malformed path) with `REDIRECT_INVALID`; none blocks the import. The
 import result `importedRedirectCount` and `redirectWarnings`. Selective exports carry no redirects; archives of
 protocol ≤ 9 import without rule configuration and redirects.
 
+**Start pages (M31, protocol 11).** Folder payloads carry `startPage`; page uuids survive import, so imported folders
+keep their start pages. The fixed `pages_root` is never imported: the archive's site start page is set on the target's
+`pages_root` (its own revision after the import) when the target has none that stays a page of the site root and the
+archive's page will be one after the import. Otherwise the analysis and the result carry the warning
+`START_PAGE_NOT_MERGED` (non-blocking; `elementUuid` = the archive's start page) — the target keeps a different start
+page, or the archive's page won't be a page of the site root. Archives of protocol ≤ 10 carry no start pages.
+
 ### 3.1 Content languages (M24)
 
 `GET /projects/{key}/locales` returns the project's content languages; a project that declares none answers
@@ -321,10 +328,49 @@ a non-boolean value is `422`. A `noIndex` page leaves `sitemap.xml` and is `$CMS
 | Method | Path |
 |---|---|
 | `GET`/`POST` | `/projects/{projectKey}/folders` (`scope` = `PAGES`, `MEDIA`, `NAVIGATION`, `TEMPLATES`, `GLOBALS` or `CONTENT`) |
-| `PUT`/`DELETE` | `/projects/{projectKey}/folders/{uuid}` |
+| `PUT`/`PATCH`/`DELETE` | `/projects/{projectKey}/folders/{uuid}` |
 | `POST` | `/projects/{projectKey}/folders/{uuid}/move` |
 
 Every node of the folder tree (and of `GET /navigation/tree`) carries its current `revision`, the `If-Match` a rename from the tree sends back.
+
+**Start page (M31, spec §10.2).** A pages folder — the site root `pages_root` (path `/pages_root/`, "All pages")
+included — can name one of its own pages as its start page: that page renders as the folder's index file
+(`index.html`, `de/index.html`, `./` with pretty URLs) whatever its UID and its template's `outputPath`; only the
+page's own `pathOverride` still wins. Without an effective start page the channel's `indexUid` rule applies as before.
+
+```http
+PATCH /api/v1/projects/{projectKey}/folders/{uuid}
+If-Match: "rev-1842"
+Content-Type: application/json
+
+{"startPage": "0190c3e2-…-page-uuid"}
+```
+
+- Body `UpdateFolderRequest`: `startPage` a page uuid, or an explicit `null` to clear it. A body without `startPage`
+  changes nothing and answers the current folder. An unchanged value writes no revision (the `If-Match` is still
+  checked).
+- Role `EDITOR` (like a folder rename). `If-Match: "rev-N"` is required: `412 SF-API-0412` when missing (also for a
+  body without `startPage`), `409 SF-API-0409` when stale. Archived projects: `409 SF-DOM-0141`. A viewer gets `403`,
+  a stranger `404`.
+- Answers `200` with the `FolderView` and `ETag: "rev-N"` of the new folder version (one `UPDATE` revision; the
+  revision history is the audit trail).
+- `404 SF-API-0404`: unknown or deleted folder. `422 SF-API-0422`: the folder isn't in the Pages store (this includes
+  the hidden shared `root`) — "A start page can only be set on a pages folder."; the uuid is unknown or not a page
+  ("The start page must be a page."), the page is deleted ("The start page is deleted."), or it isn't directly in
+  this folder ("The start page must be a page of this folder.").
+- `409 SF-DOM-0111`: another live page in the folder has a UID equal to the index file stem of one of the project's
+  channels (`indexFileName`), so it would be written at the same index path. The problem carries
+  `conflictingPageUuid` and `conflictingPageUid`; rename that page's UID, or make it the start page. `index` is a
+  reserved UID, so this only happens with an index file name like `home.html`. A page whose UID merely equals
+  `indexUid` is no conflict.
+- `FolderView.startPageUuid` (nullable) is the folder's stored (draft) pointer, in the tree (`GET /folders?scope=PAGES`)
+  and in every single-folder response; always `null` outside the Pages store. The pointer is released with the folder
+  per language (`pages_root`'s is live). A pointer to a page that has left the folder, was deleted, or isn't released
+  in a language is kept but not effective: that language falls back to the `indexUid` rule and the build warns
+  `SF-GEN-0112`.
+- The folder gets a `START_PAGE` reference edge to the page (source path `startPage`): the page's usages
+  (`GET /assets/{uuid}/usages`) list the folder, and releasing the folder proposes an unreleased start page
+  (`POST …/releases/plan`). The edge never blocks deleting, unpublishing or moving the page.
 
 ### 6.1 Globals (M17)
 
@@ -554,7 +600,7 @@ run.
   "diagnostics": null }
 ```
 
-`steps` run from the planned asset towards the root and exclude it; each step says how its asset depends on the next (`PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE`, `REFERENCE` with `referenceKind`, `NAVIGATION`, `DATASET_MEMBERSHIP`, `PAGINATION_SOURCE`, and for record sets `RECORD_SET_MEMBERSHIP` — the reader's set may select the changed record, `sourcePath` is the set's uid —, `RECORD_SET_QUERY` — the set's stored query changed — and `RECORD_TEMPLATE` — the reader renders a set's records through the dataset's record template, `sourcePath` is the set's uid). Root kinds are `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL`, `EXPLICIT_SCOPE`, `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD`; clients must tolerate names added later. `validate=true` adds `diagnostics` (the VALIDATE findings grouped by code, like a run's). A pruned stored plan has `summary.planAvailable: false` and `entries: null`. Entries of processed media re-rendered by an incremental plan have `channel: null`. `size` is 1–500 (`400` otherwise).
+`steps` run from the planned asset towards the root and exclude it; each step says how its asset depends on the next (`PAGE_TEMPLATE`, `SECTION_TEMPLATE`, `PARENT_TEMPLATE`, `REFERENCE` with `referenceKind`, `NAVIGATION`, `DATASET_MEMBERSHIP`, `PAGINATION_SOURCE`, and for record sets `RECORD_SET_MEMBERSHIP` — the reader's set may select the changed record, `sourcePath` is the set's uid —, `RECORD_SET_QUERY` — the set's stored query changed — and `RECORD_TEMPLATE` — the reader renders a set's records through the dataset's record template, `sourcePath` is the set's uid —, and `START_PAGE` (M31) — the page takes or leaves its folder's index path because the folder's effective start page changed, `sourcePath` `startPage` for the current and previous start page, `indexUid` for the page that holds the index path without one). `REFERENCE` steps may carry `referenceKind` `START_PAGE` (folder → its start page). Root kinds are `FULL_BUILD`, `INCREMENTAL_FALLBACK_FULL`, `EXPLICIT_SCOPE`, `ASSET_CHANGED`, `ASSET_DELETED`, `NOT_IN_BASE_BUILD`; clients must tolerate names added later. `validate=true` adds `diagnostics` (the VALIDATE findings grouped by code, like a run's). A pruned stored plan has `summary.planAvailable: false` and `entries: null`. Entries of processed media re-rendered by an incremental plan have `channel: null`. `size` is 1–500 (`400` otherwise).
 
 `GET /assets/{uuid}/impact` answers what would rebuild if the asset changed, with the planner's own walk over the current state: `{asset: {uuid, type, uid}, revision, entryCount, pageCount, byFirstEdge, entries}` (entries as above, root = the asset, `rootRevision` null). It is an upper bound — every loop over a record's dataset, a page change counted as navigation-affecting — so a real edit rebuilds the same entries or fewer. `404` for an unknown or deleted asset.
 
@@ -833,6 +879,9 @@ projection (`path` like `payload.content.headline`).
 | `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token; `?page=` as above, not part of the token — the language is) |
 | `GET` | `/projects/{projectKey}/pagination/count` (`?kind=NAV\|DATASET&source=uuid`) — M21: `{itemCount, skipped}` of a pagination source now, counted like generation does; `404` when the source isn't a live Navigation folder or dataset, `422` for another `kind` |
 
+Folder links in a preview (`$CMS_REF(folder:…)`, M31) open the folder's index page — its start page, else its page
+with the channel's `indexUid`; a folder without an index page renders an empty href.
+
 ## 13. Search (M23)
 
 Editorial full-text search over a project's **current** assets, answered from an embedded per-project index that is
@@ -995,6 +1044,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0104` | 422 | record set containment violated (M25): a record outside a live record set of its dataset, a record set outside a Content folder, or anything but a record in a set — on create, move, restore — `RecordSetContainment` |
 | `SF-DOM-0105` | 422 | a record's uid and display name are derived and can't be set or changed (M25) — `RecordNaming` |
 | `SF-DOM-0110` | 409 | folder not empty — `FolderService`; a record set with live records (delete without `cascade`) carries `recordCount` (M25) |
+| `SF-DOM-0111` | 409 | start page index claim: another live page in the folder has a UID equal to a channel's index file stem; carries `conflictingPageUuid`, `conflictingPageUid` (M31) — `FolderServiceImpl.INDEX_CLAIM_CONFLICT` |
 | `SF-DOM-0120` | 409 | asset still referenced by an open edge from a non-deleted asset (delete without `force`) — `AssetServiceImpl` |
 | `SF-DOM-0121` | 409 | dataset still has live records or live record sets (delete, with or without `force`); the problem carries `recordCount` and `setCount` (M25) — `AssetServiceImpl` |
 | `SF-DOM-0122` | 422 | a page template that pages use can't become abstract; carries `pageCount`, `pageUids`, `pageUuids` — `TemplateServiceImpl` |
@@ -1071,6 +1121,7 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 |---|---|---|---|
 | `SF-GEN-0110` | error | output path collision | `RenderPipeline` (`COLLISION_CODE`) |
 | `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several content languages, so two languages would write the same file (M24) | `RenderPipeline` (`NOT_LOCALE_DISTINCT_CODE`) |
+| `SF-GEN-0112` | warning | a folder's start page isn't available in a language (moved away, deleted, unpublished, not released there); the folder falls back to the `indexUid` rule; once per folder and language, run `PARTIAL` (M31) | `GenerationDiagnosticCodes.GEN_START_PAGE_UNAVAILABLE` (`RenderPipeline`) |
 | `SF-GEN-0120` | error (per page) | content incomplete; page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.incompletePages`) |
 | `SF-GEN-0125` | error (per page) | quality check failed: a rule configured `ERROR` found something on the page; all its outputs in that channel and language held back, run `PARTIAL`; the message lists the codes (M30) | `QualityCodes.GEN_QUALITY_CHECK_FAILED` (`QualityCheckStage`) |
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
