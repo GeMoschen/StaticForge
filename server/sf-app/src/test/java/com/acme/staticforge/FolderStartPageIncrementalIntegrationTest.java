@@ -251,6 +251,42 @@ class FolderStartPageIncrementalIntegrationTest {
     }
 
     @Test
+    @DisplayName("a page linking a folder by $CMS_REF(folder:…) rebuilds when the folder's start page is set or cleared, "
+            + "and not for an unrelated edit")
+    void folderLinkersRebuild() {
+        Site s = site("m31flink");
+        UUID products = folderService.create(null, "Products", FolderScope.PAGES, s.fx().ctx()).uuid();
+        TemplateView plain = template(s.fx(), "Product", "<p>$CMS_VALUE(title)$</p>");
+        UUID overview = titled(s.fx(), "Overview", plain);
+        assetService.move(overview, products, s.fx().ctx());
+        UUID hammer = titled(s.fx(), "Hammer", plain);
+        assetService.move(hammer, products, s.fx().ctx());
+        TemplateView folderLinking = template(s.fx(), "Folder linking", "<a href=\"$CMS_REF(folder:products)$\">p</a>");
+        UUID folderLinker = fixtures.page(s.fx(), "Folder linker", folderLinking.uuid()).uuid();
+        fixtures.succeeded(generate(s));
+
+        setStartPage(s, products, overview);
+        BuildPlan set = plan(s);
+        assertThat(plannedPages(set)).containsExactlyInAnyOrder(overview, folderLinker);
+        assertThat(set.reasonFor(overview).steps()).singleElement().isEqualTo(
+                new RebuildStep(overview, "PAGE", "overview", RebuildEdgeKind.START_PAGE, null, "startPage"));
+        RebuildReason linker = set.reasonFor(folderLinker);
+        assertThat(linker.rootUuid()).isEqualTo(products);
+        assertThat(linker.steps()).extracting(RebuildStep::edge)
+                .containsExactly(RebuildEdgeKind.PAGE_TEMPLATE, RebuildEdgeKind.REFERENCE);
+        Map<String, String> files = files(s, fixtures.succeeded(generate(s)));
+        assertThat(files.get("products/index.html")).isEqualTo("<p>Overview</p>");
+
+        // An edit that doesn't touch the folder's index doesn't reach the folder's linkers.
+        fixtures.edit(s.fx(), hammer, payload -> payload.withObject("content").put("title", "Hammer 2"));
+        assertThat(plannedPages(plan(s))).containsExactly(hammer);
+        fixtures.succeeded(generate(s));
+
+        setStartPage(s, products, null);
+        assertThat(plannedPages(plan(s))).containsExactlyInAnyOrder(overview, folderLinker);
+    }
+
+    @Test
     @DisplayName("impact of a pages folder: its start page and indexUid page over START_PAGE, and what links them")
     void impactOfTheFolder() {
         Site s = site("m31impact");
