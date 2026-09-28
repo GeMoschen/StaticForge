@@ -62,11 +62,12 @@ Every rule also declares where its findings are usually fixed, `QualityRule.fixH
 
 ## Feature exit criteria
 
-- [ ] Every rule has a positive and a negative fixture and appears in `GET /quality-rules`.
+- [x] Every rule has a positive and a negative fixture and appears in `GET /quality-rules`.
 - [x] The golden fixture build reports exactly the seeded findings (`quality/expected-findings.json`) —
       `GoldenQualityFixtureIntegrationTest` (regenerate with `-Dsf.quality.golden.update=true`).
 - [ ] Benchmark with the full rule set within budget (`M30.1.3`).
-- [ ] `./gradlew build` green.
+  — **Not met; accepted by the user on 2026-09-28 as measured**: about +20–30 % on the 4-core dev machine (cold JVM; warm ≈ +10 %); numbers in `M30.1.3`.
+- [x] `./gradlew build` green.
 
 ## Notes
 

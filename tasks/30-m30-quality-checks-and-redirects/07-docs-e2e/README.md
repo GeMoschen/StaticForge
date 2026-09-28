@@ -17,9 +17,10 @@ proves checks and redirects end to end.
 
 ## Feature exit criteria
 
-- [ ] Every new endpoint, code, stage, fallback cause, target key and project setting documented.
+- [x] Every new endpoint, code, stage, fallback cause, target key and project setting documented.
 - [ ] Journey green twice in a row on a clean dev stack.
-- [ ] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
+  — **Deferred by the user on 2026-09-27**: the unfinished journey is parked on branch `m30-d-journey`.
+- [x] Full `./gradlew build` (`test --rerun`), `npm run build`, `npx vitest run` green.
 
 ## Dependencies
 

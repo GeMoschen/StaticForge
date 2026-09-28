@@ -60,6 +60,7 @@ at `:466`, `OutputPathResolver.resolvePagePath` throwing at `:106` → `SF-GEN-0
 - [ ] Benchmark on the 5,000-page fixture (`infra/scripts/README-benchmark.md`): full build with the complete M30 rule
       set within +15 % of the pre-M30 time; result recorded in the task notes. (Run it again after `M30.2.*`.)
       — open by design: the orchestrator runs the 5,000-page baseline vs M30 back to back; 500-page run below.
+  — **Not met; accepted by the user on 2026-09-28 as measured**: about +20–30 % on the 4-core dev machine (cold JVM; warm ≈ +10 %); numbers in `M30.1.3`.
 - [x] `./gradlew build` green.
 
 ## Out of scope

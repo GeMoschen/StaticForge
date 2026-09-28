@@ -182,12 +182,14 @@ This milestone delivers:
       link in a carried page after its target was unpublished; a pre-M30 base or a changed rule config plans FULL with
       the new fallback cause.
 - [x] A link to a missing page uuid no longer fails the run; it is a finding on the linking page.
-- [ ] The page editor shows completeness issues and draft check findings, and jumps to the field or section.
-- [ ] Moving or renaming a released page and building adds an AUTO redirect; the next build of each configured format
+- [x] The page editor shows completeness issues and draft check findings, and jumps to the field or section.
+- [x] Moving or renaming a released page and building adds an AUTO redirect; the next build of each configured format
       contains a working stub / `.htaccess` line / JSON entry; moving it again keeps one hop; putting a new page at the
       old path shadows the redirect; manual redirects can be added, edited and deleted; unpublish offers a redirect.
 - [ ] The 5,000-page fixture's full build stays within +15 % of its pre-M30 time (documented result).
+  — **Not met; accepted by the user on 2026-09-28 as measured**: about +20–30 % on the 4-core dev machine (cold JVM; warm ≈ +10 %); numbers in `M30.1.3`.
 - [ ] `./gradlew build` (`test --rerun`), `ui` `npm run build` and `npx vitest run` green; the Playwright journey green.
+  — Backend (`test --rerun`), `npm run build` and `npx vitest run` green (2026-09-28); the journey was **deferred by the user** (parked on branch `m30-d-journey`).
 
 ## Features (dependency order)
 

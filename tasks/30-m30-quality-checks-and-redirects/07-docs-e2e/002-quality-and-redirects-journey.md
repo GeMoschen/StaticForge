@@ -1,6 +1,6 @@
 ---
 id: M30.7.2
-status: todo
+status: blocked
 depends: [M30.3.2, M30.6.1, M30.6.2, M30.6.3]
 epic: m30-quality-checks-and-redirects
 feature: docs-e2e
@@ -51,3 +51,5 @@ One self-seeding journey (`ui/e2e/m30-journeys.spec.ts`), every step as a real u
 - The editor needs the M28 policy toggles *Release* and *Incremental builds* switched on by the project admin at the
   start (via the settings UI, not the API), or the developer does the builds — pick one and keep it realistic.
 - Wait for run completion through the UI's status (SSE), not a timer.
+
+- **Blocked — deferred by the user (2026-09-27)**: the run was stopped on request. The spec file and the defects it found are on branch `m30-d-journey` (WIP commit `3d2cead`); all six product fixes with their tests are merged (M30 journey-fixes merge). When resuming: merge the M30 branch into `m30-d-journey`, drop its `OctlRenderer` media-field change (superseded by `09f5e6f` + `f80f738`), run the journey twice on a clean stack.

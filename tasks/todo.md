@@ -25,8 +25,41 @@ verification.
 - [x] C — M30.6.3 Redirects tab, target formats, unpublish redirect
 - [x] D — M30.7.1 spec + docs
 - [ ] D — M30.7.2 `ui/e2e/m30-journeys.spec.ts` green twice — **deferred by the user (2026-09-27)**; unfinished work on branch `m30-d-journey` (WIP commit)
-- [ ] Benchmark: 5,000-page full build within +15 % of pre-M30 (baseline measured on master before phase A merges)
-- [ ] `./gradlew spotlessCheck test --rerun`, `ng build`, `npx vitest run`, journey green twice
+- [x] Benchmark: 5,000-page full build within +15 % of pre-M30 — **not met, accepted by the user (2026-09-28)** at about +20–30 % (cold JVM, 4 cores; warm ≈ +10 %), down from +53 % after the M30.1.3 performance pass
+- [x] `./gradlew spotlessCheck build test --rerun` (1,795 tests, 0 failures, 6 skipped benchmarks), `ng build`, `npx vitest run` (121 files, 821 tests) — journey deferred by the user
+
+
+## Review
+
+- **Framework (M30.1).** `generate/quality/` rule SPI (page and site rules, typed params, fix hints, max severity),
+  jsoup facts per HTML output, `LinkResolver`, stable selectors, section markers; per-project rule config
+  (`quality_rule_config`, changelog 028, `GET/PUT /quality-rules`, revision + audit); findings table with caps and the
+  findings API; the `CHECK` stage with hold-back (`SF-GEN-0125`), no-cascade, reference events (a missing link target no
+  longer fails a run), `quality.json` sidecar, carried facts, the two new fallback causes, and structured `heldBack`
+  run diagnostics.
+- **Rules (M30.2).** The 30 catalogue rules (links, SEO, accessibility), pinned by `QualityRuleCatalogTest` against the
+  registry and the spec table; `nav.noIndex` end to end (sitemap, `$CMS_META`, `CMS_META.` expression root, editor
+  switch); golden fixture site (de/en/de-CH, two channels, pagination) with `expected-findings.json`.
+- **Editor issues (M30.3).** Draft check endpoint (draft render with section markers, page + link rules, rate limited)
+  and the page editor's Issues panel with jumps to field, section and preview element.
+- **Redirects (M30.4–M30.5).** Registry (changelog 029, CRUD, for-asset, states incl. LOOP, export protocol 10),
+  detection against the target's current manifest on every build, HTML stubs / `.htaccess` / `redirects.json` per
+  target. Decision 18 amended by the user: anchored `RedirectMatch 301` (a directory source also matches its index file).
+- **UI (M30.6).** Quality tab, Redirects tab, redirect formats in the target form, "Redirect old URL to…" in unpublish
+  and delete dialogs, run findings tab with URL filters, held-back links and redirect counts.
+- **Docs (M30.7.1).** Spec §10.3, §16, §18.2–§18.9, §19.4, §20.2, §24.5, §26, Appendix B; API, user, template developer
+  and operator guides; checked against the merged code.
+- **Found on the way:** localized pagination item links had no locale prefix (since M21); `media` editor values didn't
+  expose the media's fields (the documented `altText` rendered empty) and ignored `altOverride`; the `md` filter wrote
+  live `javascript:` links and `md`/`nl2br` output was escaped twice; form editors kept a stale "required" message; the
+  media editor's picker never listed anything; Issues-panel focus and "Show progress" live follow. Each with a test.
+- **Deviations:** changelogs 028/029 and export protocol 10 (numbers taken); spec sections §18.8/§18.9/§19.4; LOOP
+  state; site files never shadow a redirect; draft checks rendered with the generation renderer; the manifest's
+  `qualityFingerprint` decides the quality fallbacks (planning never reads the sidecar); initial bundle budget raised
+  to 1.7/1.9 MB (user).
+- **Open:** Playwright journey deferred by the user (branch `m30-d-journey`); performance budget accepted by the user
+  at about +20–30 %; Liquibase 028/029 proven on H2 only; rich text `$CMS_VALUE(body | raw)$` prints the stored JSON and
+  there is no server-side HTML sanitiser (needs a decision); findings name media by uid, not file name.
 
 ---
 

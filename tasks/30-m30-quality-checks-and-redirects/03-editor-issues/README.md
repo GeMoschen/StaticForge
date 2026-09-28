@@ -17,9 +17,9 @@ field or section that causes them.
 
 ## Feature exit criteria
 
-- [ ] `POST …/preview/pages/{uuid}/checks` returns page-local and link findings for the draft plus completeness issues.
-- [ ] The page editor's Issues panel lists both, refreshes after autosave, and jumps to the field or section.
-- [ ] `./gradlew build`, `ui` `npm run build` and `npx vitest run` green.
+- [x] `POST …/preview/pages/{uuid}/checks` returns page-local and link findings for the draft plus completeness issues.
+- [x] The page editor's Issues panel lists both, refreshes after autosave, and jumps to the field or section.
+- [x] `./gradlew build`, `ui` `npm run build` and `npx vitest run` green.
 
 ## Dependencies
 
