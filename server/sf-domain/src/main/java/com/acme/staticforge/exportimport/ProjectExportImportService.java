@@ -40,14 +40,23 @@ public interface ProjectExportImportService {
      * <p>Bumped to {@code 10} by M30 ({@link #QUALITY_AND_REDIRECTS_PROTOCOL}): a full-project archive carries the
      * redirect registry ({@link ExportedRedirect}, {@code redirects.json}) and the quality rule configuration. An archive
      * of protocol {@code <= 9} imports without either.
+     *
+     * <p>Bumped to {@code 11} by M31 ({@link #START_PAGE_PROTOCOL}): a pages folder's payload may name its start page
+     * ({@code startPage}), and the site root's start page travels with the archive's {@code pages_root}, which the import
+     * merges into the target's {@code pages_root} (a fixed root, never overwritten) when that has none. An older server
+     * would silently drop the site's start page. An archive of protocol {@code <= 10} has no start pages and imports
+     * unchanged.
      */
-    int PROTOCOL_VERSION = 10;
+    int PROTOCOL_VERSION = 11;
 
     /** The first protocol whose archives carry release state (M27.5.1). */
     int RELEASE_STATE_PROTOCOL = 8;
 
     /** The first protocol whose archives carry the redirect registry and the quality rule configuration (M30). */
     int QUALITY_AND_REDIRECTS_PROTOCOL = 10;
+
+    /** The first protocol whose archives carry folder start pages, the site root's included (M31). */
+    int START_PAGE_PROTOCOL = 11;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP
