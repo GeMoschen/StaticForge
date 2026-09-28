@@ -25,7 +25,7 @@ public interface NavigationService {
 
     /**
      * Resolves a {@code PAGE_REFERENCE} to its target {@code Page} uuid: direct for a
-     * {@code PAGE} target; the target folder's first navigable page (see
+     * {@code PAGE} target; the target folder's index page, else its first navigable page (see
      * {@link #firstNavigablePage}) for a {@code FOLDER} target. Returns {@code null} — never
      * throws — when the reference itself, or its target, cannot be resolved (missing/deleted
      * asset, or a dangling folder with no page anywhere in its subtree); this can only happen
@@ -38,14 +38,22 @@ public interface NavigationService {
     UUID resolve(long projectId, UUID pageReferenceUuid, NavigationLookup lookup, List<Diagnostic> diagnostics);
 
     /**
-     * The first navigable page in a page-store folder's subtree: the folder's own direct child
-     * pages first (in the store's deterministic order — {@code nav.position} ascending, then
-     * {@code displayName}, then {@code uid} as a final tiebreak); if the folder itself has no
-     * direct pages, its direct subfolders are searched in the same deterministic order,
-     * depth-first, returning the first page found. Empty when the entire subtree has no pages
-     * (a "dangling" folder).
+     * The first navigable page in a page-store folder's subtree: the folder's {@link #indexPage index page} when it has
+     * one (M31), else its own direct child pages (in the store's deterministic order — {@code nav.position} ascending,
+     * then {@code displayName}, then {@code uid} as a final tiebreak); if the folder itself has no direct pages, its
+     * direct subfolders are searched in the same deterministic order, depth-first, each preferring its own index page,
+     * returning the first page found. Empty when the entire subtree has no pages (a "dangling" folder).
      */
     Optional<UUID> firstNavigablePage(long projectId, UUID pageStoreFolderUuid, NavigationLookup lookup);
+
+    /**
+     * A page-store folder's index page in the lookup's view (M31, spec §17): its effective start page — the page its
+     * {@code startPage} names when that page is one of the folder's pages in the view — else its page whose UID is the
+     * lookup's {@link NavigationLookup#indexUid() indexUid}. Empty when the folder has neither, isn't a folder, or isn't
+     * in the view. The same rule the build's output paths follow, so the index page is the page written as the folder's
+     * index file.
+     */
+    Optional<UUID> indexPage(long projectId, UUID pageStoreFolderUuid, NavigationLookup lookup);
 
     /**
      * Resolves a {@code NAVIGATION} folder's {@code startNode} chain to a {@code Page} uuid: a

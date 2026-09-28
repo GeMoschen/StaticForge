@@ -79,6 +79,12 @@ public interface UrlRegistryRepository extends JpaRepository<UrlRegistryEntry, L
     /** Reset scope: every entry in one area for a project (all channels), added for {@code M8.2.2}. */
     void deleteByProjectIdAndArea(long projectId, UrlArea area);
 
+    /**
+     * Every computed (non-overridden) entry of the given page references, both areas, every channel and language —
+     * used when a folder's start page changes ({@link StartPageUrlInvalidation}); manual overrides are kept.
+     */
+    void deleteByProjectIdAndPageReferenceUuidInAndOverriddenFalse(long projectId, java.util.Collection<UUID> pageReferenceUuids);
+
     /** Cascade-delete hook for {@code PageReference} deletion — both areas, every channel. */
     void deleteByPageReferenceUuid(UUID pageReferenceUuid);
 }

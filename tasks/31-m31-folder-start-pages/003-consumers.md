@@ -1,6 +1,6 @@
 ---
 id: M31.3
-status: todo
+status: done
 depends: [M31.2]
 epic: m31-folder-start-pages
 feature: consumers
@@ -30,12 +30,12 @@ area: backend
 
 ## Acceptance criteria
 
-- [ ] `$CMS_REF(folder:…)` to `pages_root` and to a subfolder with a start page links `index.html` / `./` (pretty),
+- [x] `$CMS_REF(folder:…)` to `pages_root` and to a subfolder with a start page links `index.html` / `./` (pretty),
       without one the directory link; no `pages_root/` in any generated href.
-- [ ] Preview folder link opens the start page.
-- [ ] `M8NavigationJourneyIntegrationTest` / `NavigationUrlRegistryIntegrationTest` cases: a folder page reference
+- [x] Preview folder link opens the start page.
+- [x] `M8NavigationJourneyIntegrationTest` / `NavigationUrlRegistryIntegrationTest` cases: a folder page reference
       resolves to the start page; changing the start page changes the cached href.
-- [ ] `./gradlew build` green.
+- [x] `./gradlew build` green.
 
 ## Out of scope
 
@@ -44,3 +44,30 @@ area: backend
 ## Notes / hazards
 
 - Keep links relative to the rendering page (lessons: "Generated links: relative to the current page").
+- The index-page rule lives once, in `NavigationService.indexPage(projectId, folderUuid, lookup)`: the effective start
+  page (the pointer names one of the folder's pages in the lookup's view, pages folders only), else the page whose UID
+  is `lookup.indexUid()`. `NavigationLookup.indexUid()` (default `null`) and `withIndexUid(String)` (wrapper
+  `ChannelNavigationLookup`) make a lookup channel-specific. Channel-aware callers: `GenerationRenderer` (folder links,
+  `$CMS_NAVIGATION`), `PageRenderService` (folder links, navigation), `UrlRegistryServiceImpl.computeAndPersist`.
+  `firstNavigablePage` prefers the index page of every folder it walks, so FOLDER-kind references and navigation folder
+  entries (their `startNode` chain ends in a reference) follow.
+- Channel-less lookups (the Navigation screen's tree/resolve endpoints, pagination sources, the page-reference
+  validation) know start pages only; the `indexUid` fallback needs a channel, and the default `indexUid` (`index`) is a
+  reserved UID anyway.
+- `$CMS_REF(folder:…)` without an index page links `OutputPathExpander.folderUrl(folderPath, localeContext)`
+  (`{locale}/{folder}`, `pages_root/` stripped, the root as `./`); the renderer's own `relativeFolder` is gone.
+- Deviation: a preview folder link to a folder without an index page renders an empty href. The "current fallback"
+  issued a page share token for the folder's uuid, which the share route can't render (a folder isn't a page), and a
+  preview has no directory to show.
+- URL registry: `StartPageUrlInvalidation` (sf-domain `urlregistry`) deletes, via the new
+  `UrlRegistryRepository.deleteByProjectIdAndPageReferenceUuidInAndOverriddenFalse`, the computed rows (both areas,
+  every channel and locale) of the page references with an open `NAV` edge to the old or new start page or the folder,
+  plus references to an ancestor folder whose (draft) resolution now lands in the folder. Called from
+  `AssetServiceImpl.update`/`restore` for every folder whose `startPage` changed (the start-page endpoint, discard,
+  restore, and any import that writes through them) and from `ReleaseServiceImpl.release` when a folder is released
+  with another start page than its released version.
+- Seam for M31.4: a page with `$CMS_REF(folder:F)` depends on F's index page; the planner has to re-render F's
+  referrers when F's start page changes (the changed folder's referrer walk) and when F's index page's output moves.
+- Evidence: `./gradlew spotlessCheck build test --rerun -Pfrontend.skip=true` green (sf-app 927, 6 skipped as before;
+  sf-domain 415; sf-generate 182; sf-api 22; sf-template 271); `FolderStartPageConsumersIntegrationTest` 7,
+  `M8NavigationJourneyIntegrationTest` +1 case, `NavigationServiceImplTest` +5, `OutputPathExpanderTest` +2. No API change.

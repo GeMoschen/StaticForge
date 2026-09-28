@@ -147,6 +147,22 @@ public final class OutputPathExpander {
     }
 
     /**
+     * The directory URL of a pages folder, relative to the site root (M31): the default expression's
+     * {@code {locale}/{folder}} with a trailing slash — the invisible {@code pages_root/} segment stripped like in every
+     * output path — and the site root as {@code ./}. What a folder link names when the folder has no index page.
+     *
+     * @param folderPath the folder's own stored path, e.g. {@code /pages_root/products/}
+     */
+    public static String folderUrl(String folderPath, LocaleContext locale) {
+        String segment = locale == null || locale.segment() == null ? "" : locale.segment();
+        String path = collapseSlashes(segment + "/" + relativeFolder(folderPath));
+        if (path.isEmpty()) {
+            return "./";
+        }
+        return path.endsWith("/") ? path : path + "/";
+    }
+
+    /**
      * The (not-yet-syntax-normalized) output path of page {@code pageNumber} ≥ 2 of a paginated page (M21.2.1). The page
      * template's {@code paginationPath.<channel>} pattern when set, expanded with {@code {pageNumber}}, {@code {pagePath}}
      * (page 1's path without its extension) and every page placeholder; otherwise a sibling of page 1 with {@code -N}

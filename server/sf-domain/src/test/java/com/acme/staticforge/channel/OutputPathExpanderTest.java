@@ -189,6 +189,27 @@ class OutputPathExpanderTest {
         assertThat(OutputPathExpander.resolvePaginationPath(startPage, "html", HTML, first, 2)).isEqualTo("blog/index-2.html");
     }
 
+    @Test
+    void aFoldersDirectoryUrlHasNoPagesRootSegment() {
+        OutputPathExpander.LocaleContext none = OutputPathExpander.LocaleContext.NONE;
+        assertThat(OutputPathExpander.folderUrl("/pages_root/", none)).isEqualTo("./");
+        assertThat(OutputPathExpander.folderUrl("/pages_root/products/", none)).isEqualTo("products/");
+        assertThat(OutputPathExpander.folderUrl("/pages_root/products/tools/", none)).isEqualTo("products/tools/");
+        assertThat(OutputPathExpander.folderUrl("/legacy/", none)).isEqualTo("legacy/");
+        assertThat(OutputPathExpander.folderUrl("/", none)).isEqualTo("./");
+        assertThat(OutputPathExpander.folderUrl(null, none)).isEqualTo("./");
+    }
+
+    @Test
+    void aFoldersDirectoryUrlIsInItsLanguage() {
+        OutputPathExpander.LocaleContext de = new OutputPathExpander.LocaleContext("de", "de");
+        OutputPathExpander.LocaleContext atRoot = new OutputPathExpander.LocaleContext("en", "");
+        assertThat(OutputPathExpander.folderUrl("/pages_root/products/", de)).isEqualTo("de/products/");
+        assertThat(OutputPathExpander.folderUrl("/pages_root/", de)).isEqualTo("de/");
+        assertThat(OutputPathExpander.folderUrl("/pages_root/products/", atRoot)).isEqualTo("products/");
+        assertThat(OutputPathExpander.folderUrl("/pages_root/", atRoot)).isEqualTo("./");
+    }
+
     private static ObjectNode payload() {
         return JsonNodeFactory.instance.objectNode();
     }

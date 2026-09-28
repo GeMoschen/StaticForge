@@ -60,6 +60,86 @@ class NavigationServiceImplTest {
     }
 
     @Test
+    void aFolderTargetResolvesToTheFoldersStartPageBeforeItsFirstPage() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID navRoot = lookup.addFolder(null, "Navigation");
+        UUID pagesFolder = lookup.addFolder(null, "Products");
+        lookup.addPage(pagesFolder, "Alpha", 1);
+        UUID overview = lookup.addPage(pagesFolder, "Overview", 9);
+        lookup.setStartPage(pagesFolder, overview);
+        UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
+
+        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(overview);
+        assertThat(service.resolve(1L, ref, lookup.withIndexUid("alpha"))).isEqualTo(overview);
+        assertThat(service.indexPage(1L, pagesFolder, lookup)).contains(overview);
+    }
+
+    @Test
+    void aStaleStartPageDoesNotCount() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID navRoot = lookup.addFolder(null, "Navigation");
+        UUID pagesFolder = lookup.addFolder(null, "Products");
+        UUID archive = lookup.addFolder(null, "Archive");
+        UUID first = lookup.addPage(pagesFolder, "Alpha", 1);
+        UUID movedAway = lookup.addPage(archive, "Overview", 0); // named, but lives in another folder
+        lookup.setStartPage(pagesFolder, movedAway);
+        UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
+
+        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(first);
+        assertThat(service.indexPage(1L, pagesFolder, lookup)).isEmpty();
+    }
+
+    @Test
+    void withoutAStartPageTheChannelsIndexUidPageIsTheIndexPage() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID navRoot = lookup.addFolder(null, "Navigation");
+        UUID pagesFolder = lookup.addFolder(null, "Products");
+        UUID first = lookup.addPage(pagesFolder, "Alpha", 1);
+        UUID home = lookup.addPageWithUid(pagesFolder, "home", "Products home", 9);
+        UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
+
+        assertThat(service.resolve(1L, ref, lookup.withIndexUid("home"))).isEqualTo(home);
+        assertThat(service.indexPage(1L, pagesFolder, lookup.withIndexUid("home"))).contains(home);
+        // A lookup serving no single channel knows start pages only.
+        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(first);
+        assertThat(service.indexPage(1L, pagesFolder, lookup)).isEmpty();
+        // Re-wrapping replaces the channel instead of stacking.
+        assertThat(lookup.withIndexUid("home").withIndexUid("other").indexUid()).isEqualTo("other");
+    }
+
+    @Test
+    void theSubfolderWalkPrefersEachFoldersIndexPage() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID navRoot = lookup.addFolder(null, "Navigation");
+        UUID pagesFolder = lookup.addFolder(null, "Products");
+        UUID bikes = lookup.addFolder(pagesFolder, "Bikes");
+        lookup.addPage(bikes, "Road Bikes", 0);
+        UUID bikesStart = lookup.addPage(bikes, "All bikes", 5);
+        lookup.setStartPage(bikes, bikesStart);
+        UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
+
+        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(bikesStart);
+        assertThat(service.firstNavigablePage(1L, pagesFolder, lookup)).contains(bikesStart);
+    }
+
+    @Test
+    void aStartPageCountsOnlyOnAPagesFolder() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID folder = lookup.addFolder(null, "Products");
+        UUID page = lookup.addPage(folder, "Overview", 0);
+        lookup.setStartPage(folder, page);
+        assertThat(service.indexPage(1L, folder, lookup)).contains(page);
+
+        UUID navFolder = lookup.addFolder(null, "Nav");
+        UUID stray = lookup.addPage(navFolder, "Stray", 0);
+        lookup.setStartPage(navFolder, stray);
+        lookup.setScope(navFolder, "NAVIGATION");
+        assertThat(service.indexPage(1L, navFolder, lookup)).isEmpty();
+        assertThat(service.indexPage(1L, page, lookup)).as("not a folder").isEmpty();
+        assertThat(service.indexPage(1L, UUID.randomUUID(), lookup)).isEmpty();
+    }
+
+    @Test
     void resolveReturnsNullForADanglingFolderTarget() {
         FakeNavigationLookup lookup = new FakeNavigationLookup();
         UUID navRoot = lookup.addFolder(null, "Navigation");

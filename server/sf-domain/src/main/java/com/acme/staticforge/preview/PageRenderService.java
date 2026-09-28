@@ -18,6 +18,7 @@ import com.acme.staticforge.asset.media.TextMediaCompiler;
 import com.acme.staticforge.asset.media.TextMediaRenderer;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.navigation.NavigationLookup;
+import com.acme.staticforge.channel.ChannelService;
 import com.acme.staticforge.asset.navigation.NavTreeNode;
 import com.acme.staticforge.asset.navigation.NavigationDiagnosticCodes;
 import com.acme.staticforge.asset.navigation.NavigationHtmlRenderer;
@@ -95,6 +96,7 @@ public class PageRenderService {
     private final TextMediaCompiler textMediaCompiler;
     private final TemplateHierarchies templateHierarchies;
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
+    private final ChannelService channelService;
 
     private final Renderer renderer = new OctlRenderer();
     private final TextMediaRenderer textMediaRenderer = new TextMediaRenderer();
@@ -113,7 +115,8 @@ public class PageRenderService {
             BlobStore blobStore,
             TextMediaCompiler textMediaCompiler,
             TemplateHierarchies templateHierarchies,
-            com.acme.staticforge.project.ProjectLocales projectLocales) {
+            com.acme.staticforge.project.ProjectLocales projectLocales,
+            ChannelService channelService) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
@@ -128,6 +131,7 @@ public class PageRenderService {
         this.textMediaCompiler = textMediaCompiler;
         this.templateHierarchies = templateHierarchies;
         this.projectLocales = projectLocales;
+        this.channelService = channelService;
     }
 
     /**
@@ -648,7 +652,8 @@ public class PageRenderService {
         // Diagnostics (cycle/depth-cap truncation) aren't surfaced by this preview path today —
         // renderPage already discards RenderResult.warnings() the same way, so this keeps parity
         // rather than introducing a new reporting channel just for navigation.
-        NavTreeNode tree = navigationService.tree(projectId, navFolderUuid, depth, reading.navigation(), new ArrayList<>());
+        NavTreeNode tree = navigationService.tree(
+                projectId, navFolderUuid, depth, channelNavigation(projectId, navChannel, reading), new ArrayList<>());
         if (tree == null) {
             return null;
         }
@@ -927,11 +932,26 @@ public class PageRenderService {
                 String query = variant == null || variant.isBlank() ? "" : "&variant=" + variant;
                 return base + "/projects/" + projectKey + "/media/" + uuid + "/share?t=" + mediaToken + query;
             }
+            UUID pageUuid = uuid;
+            if ("folder".equals(kind)) {
+                // A folder link opens the folder's index page (M31): its start page in the preview's view, else its page
+                // with the channel's indexUid. A folder without one has nothing a preview can show.
+                pageUuid = navigationService.indexPage(view.projectId(), uuid, channelNavigation(view.projectId(), channel, reading))
+                        .orElse(null);
+                if (pageUuid == null) {
+                    return "";
+                }
+            }
             // Page links follow the current state, in the preview's view and language, so navigating inside the
             // frame stays in the same view.
-            String token = previewTokenService.issueShareToken(uuid, null, channel, projectKey, reading.locale(), view.kind());
+            String token = previewTokenService.issueShareToken(pageUuid, null, channel, projectKey, reading.locale(), view.kind());
             return base + "/projects/" + projectKey + "/preview/share?t=" + token;
         };
+    }
+
+    /** The preview's navigation, with {@code channel}'s {@code indexUid} as the index page of a folder without a start page. */
+    private NavigationLookup channelNavigation(long projectId, String channel, Reading reading) {
+        return reading.navigation().withIndexUid(channelService.outputSettings(projectId, channel).indexUid());
     }
 
     private static Escaping escapingFor(String channel) {

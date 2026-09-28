@@ -23,4 +23,21 @@ public interface NavigationLookup {
      * {@code null}) when {@code folderUuid} is not a live folder or has no children.
      */
     List<NavigationAsset> childrenOf(long projectId, UUID folderUuid);
+
+    /**
+     * The page UID that makes a page its folder's index page when the folder has no start page (M31): the
+     * {@code indexUid} of the channel this lookup resolves for. {@code null} — the default — when the lookup serves no
+     * single channel (the navigation UI, pagination sources); then only start pages count as index pages.
+     */
+    default String indexUid() {
+        return null;
+    }
+
+    /**
+     * This lookup, resolving folder index pages for a channel whose {@code indexUid} is {@code indexUid} (M31). A
+     * wrapper: it reads the same assets, so it can be made per channel at the call site.
+     */
+    default NavigationLookup withIndexUid(String indexUid) {
+        return new ChannelNavigationLookup(this, indexUid);
+    }
 }
