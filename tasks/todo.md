@@ -1,3 +1,20 @@
+# M31 — Folder start pages (branch `m31-folder-start-pages`)
+
+Spec: `tasks/31-m31-folder-start-pages/` (written in M31.0 from the approved plan). User decisions (2026-09-28): a
+folder's start page always renders at the folder's index path (only a per-page `pathOverride` wins); the channel
+`indexUid` rule stays as the fallback for folders without a start page.
+
+- [ ] M31.0 epic + task files
+- [ ] M31.1 model + API (payload `startPage`, `updateStartPage`, PATCH, `FolderView.startPageUuid`, `START_PAGE` edge)
+- [ ] M31.2 output paths (both resolvers, collision, stale-pointer diagnostic)
+- [ ] M31.3 consumers (folder `$CMS_REF`, preview folder links, navigation, URL registry invalidation)
+- [ ] M31.4 planner edge, redirects, export/import protocol 11
+- [ ] M31.5 UI (folder start page, root reachable in Pages and Navigation, badge + menu, `nearestIndexPage`, hint)
+- [ ] M31.6 spec + docs
+- [ ] Full verification: `./gradlew spotlessCheck build test --rerun`, `ng build`, `npx vitest run`, manual check
+
+---
+
 # M30 — Quality checks and redirects (branch `m30-quality-checks-and-redirects`)
 
 Spec: `tasks/30-m30-quality-checks-and-redirects/`. Decisions 1–20 there are binding.
