@@ -14,12 +14,14 @@ import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.LocaleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 /**
@@ -96,6 +98,16 @@ public final class OutputPathResolver {
     public ChannelOutputSettings settingsFor(String channel) {
         ChannelOutputSettings settings = settingsByChannel.get(channel);
         return settings != null ? settings : ChannelOutputSettings.defaults(channel);
+    }
+
+    /**
+     * The {@code indexUid} of each of {@code channels} (M31): a page with one of them holds its folder's index path while
+     * the folder has no start page.
+     */
+    public Set<String> indexUids(Collection<String> channels) {
+        Set<String> uids = new TreeSet<>();
+        channels.forEach(channel -> uids.add(settingsFor(channel).indexUid()));
+        return uids;
     }
 
     /**
