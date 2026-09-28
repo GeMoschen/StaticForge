@@ -67,8 +67,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -488,7 +491,6 @@ public class GenerationService {
         BuildManifest base = null;
         Baseline baseline = null;
         FallbackCause fallback = null;
-        QualitySidecar baseQuality = null;
         if (mode == GenerationMode.INCREMENTAL) {
             BaselineChoice choice = baselineFor(projectId, writer, channels, snapshot, quality);
             baseline = choice.baseline();
@@ -496,7 +498,6 @@ public class GenerationService {
             if (baseline != null) {
                 baseRunId = choice.runId();
                 base = baseline.manifest();
-                baseQuality = choice.quality();
             }
         }
         PlanRequest planRequest = new PlanRequest(mode, baseline, fallback, channels, request.folderPath(), scopeAssets);
@@ -507,13 +508,11 @@ public class GenerationService {
             if (manifest.isPresent()) {
                 baseRunId = current;
                 base = manifest.get();
-                // A scoped run keeps what the target serves; outputs of a build without facts are simply not checked.
-                baseQuality = writer.readSidecar(current, QualitySidecar.NAME).flatMap(QualitySidecar::parse).orElse(null);
             }
         }
         BuildPlan plan = buildPlanner.plan(snapshot, planRequest, paths);
         return new PlannedBuild(project, target, writer, snapshot, paths, channels, baseRunId, base, plan, quality,
-                baseQuality, currentManifest(writer, baseRunId, base));
+                currentManifest(writer, baseRunId, base));
     }
 
     /**
@@ -621,10 +620,10 @@ public class GenerationService {
     }
 
     /** The baseline an incremental build of a target uses, or why it has none. */
-    record BaselineChoice(long runId, Baseline baseline, FallbackCause fallbackCause, QualitySidecar quality) {
+    record BaselineChoice(long runId, Baseline baseline, FallbackCause fallbackCause) {
 
         static BaselineChoice none(FallbackCause cause) {
-            return new BaselineChoice(-1, null, cause, null);
+            return new BaselineChoice(-1, null, cause);
         }
     }
 
@@ -662,15 +661,16 @@ public class GenerationService {
         if (channelService.outputSettingsChangedSince(projectId, revision)) {
             return BaselineChoice.none(FallbackCause.CHANNEL_SETTINGS_CHANGED);
         }
-        Optional<QualitySidecar> facts = writer.readSidecar(current, QualitySidecar.NAME).flatMap(QualitySidecar::parse);
-        if (facts.isEmpty()) {
+        // The manifest names the rule configuration its build was checked under, so planning never reads the facts
+        // themselves: a run loads them once it executes (baseFacts).
+        String checkedUnder = manifest.get().qualityFingerprint();
+        if (checkedUnder == null) {
             return BaselineChoice.none(FallbackCause.BASE_BUILD_WITHOUT_QUALITY_FACTS);
         }
-        if (qualityConfig.qualityRulesChangedSince(projectId, revision)
-                || !quality.fingerprint().equals(facts.get().configFingerprint())) {
+        if (qualityConfig.qualityRulesChangedSince(projectId, revision) || !quality.fingerprint().equals(checkedUnder)) {
             return BaselineChoice.none(FallbackCause.QUALITY_RULES_CHANGED);
         }
-        return new BaselineChoice(current, new Baseline(revision, manifest.get()), null, facts.get());
+        return new BaselineChoice(current, new Baseline(revision, manifest.get()), null);
     }
 
     private void executeRun(String projectKey, long runId, GenerationRequest request) {
@@ -795,7 +795,7 @@ public class GenerationService {
                     carry.carriedPages(),
                     mediaOutputsOf(assets, carry.carriedMedia(outcome.files(), assets)),
                     siteFiles(baseUrl, redirectFormats),
-                    build.baseQuality(),
+                    baseFacts(build),
                     () -> control.checkpoint(runId, GenerationRunProbe.CHECK_OUTPUT),
                     redirectSources));
             Set<String> withheld = new LinkedHashSet<>(notRendered);
@@ -804,6 +804,11 @@ public class GenerationService {
             fileErrors.addAll(check.pageErrors());
             List<RenderedFile> published = check.published(outcome.files());
             emit(runId, STAGE_CHECK, checkedMessage(check), 0, fileErrors.size(), warnings.size(), null);
+
+            // What the report stores is prepared alongside POST and WRITE, which mostly wait for storage: the
+            // sidecar's bytes and the findings the caps keep.
+            CompletableFuture<byte[]> qualityFacts = alongside(() -> check.sidecar().toJson());
+            CompletableFuture<RunFindingStore.Prepared> findings = alongside(() -> findingStore.prepare(check.findings()));
 
             // The redirects this build emits, against what it publishes after the hold-back; the detected ones are
             // stored only with the published run, below.
@@ -842,20 +847,22 @@ public class GenerationService {
             // don't: they are stored apart from the diagnostics (a warning alone leaves the run SUCCESS).
             boolean partial = !warnings.isEmpty() || !fileErrors.isEmpty();
             JsonNode diagnostics = diagnosticsJson(fileErrors, warnings, check.heldBackPages());
-            byte[] qualityFacts = check.sidecar().toJson();
+            byte[] sidecar = joined(qualityFacts);
+            RunFindingStore.Prepared preparedFindings = joined(findings);
             // The manifest marks a published build (M29.2.2): it is written right before the flip, and both happen
             // only while the run is still RUNNING, on its locked row — a cancel that committed first wins. The
             // findings are stored in the same transaction: a run that isn't recorded stores none. So are the detected
             // redirects (M30.4.2): written before the publish, so a failed publish rolls them back with the run.
             int activeRedirects = redirectFormats.isEmpty() ? 0 : redirects.active().size();
             GenerationRun done = control.whileRunning(runId, active -> {
-                        findingStore.save(runId, check.findings()).applyTo(active);
+                        findingStore.save(runId, preparedFindings).applyTo(active);
                         RedirectService.AutoResult stored =
                                 redirectService.upsertAuto(active.getProjectId(), runId, redirects.candidates());
                         active.setPlanSummary(PlanInsight.redirects(
                                 active.getPlanSummary(), stored.added() + stored.replaced(), activeRedirects));
-                        writer.writeSidecar(runId, QualitySidecar.NAME, qualityFacts);
-                        writer.writeManifest(runId, publication.manifest());
+                        writer.writeSidecar(runId, QualitySidecar.NAME, sidecar);
+                        writer.writeManifest(
+                                runId, publication.manifest().withQualityFingerprint(build.quality().fingerprint()));
                         writer.publish(runId);
                         active.setStatus(partial ? RunStatus.PARTIAL : RunStatus.SUCCESS);
                         active.setFilesWritten(processed.size());
@@ -876,6 +883,44 @@ public class GenerationService {
             stopped(runId, run.getProjectId());
         } catch (Exception e) {
             fail(runId, sample, generationTimer, List.of(), List.of(), e);
+        }
+    }
+
+    /**
+     * The quality check facts of the build a run carries forward (M30.1.3): its outputs' facts and page-local findings,
+     * from the base build's {@code quality.json}; {@code null} for a run that carries nothing. Planning decided on the
+     * manifest's fingerprint alone; a sidecar that can't be read now leaves the carried outputs unchecked, as for a
+     * scoped run on a base without facts — it never changes the plan.
+     */
+    private static QualitySidecar baseFacts(PlannedBuild build) {
+        if (!build.carries()) {
+            return null;
+        }
+        return build.writer().readSidecar(build.baseRunId(), QualitySidecar.NAME)
+                .flatMap(QualitySidecar::parse)
+                .orElse(null);
+    }
+
+    /**
+     * Runs {@code work} on a virtual thread of its own, alongside the run: pure computation the run needs only at its
+     * end. A run that stops before then just leaves the result unused.
+     */
+    private static <T> CompletableFuture<T> alongside(Supplier<T> work) {
+        return CompletableFuture.supplyAsync(work, task -> Thread.ofVirtual().name("sf-generation-report").start(task));
+    }
+
+    /** The result of work started {@link #alongside}; its failure is rethrown as it was thrown. */
+    private static <T> T joined(CompletableFuture<T> future) {
+        try {
+            return future.join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof RuntimeException failure) {
+                throw failure;
+            }
+            if (e.getCause() instanceof Error error) {
+                throw error;
+            }
+            throw e;
         }
     }
 

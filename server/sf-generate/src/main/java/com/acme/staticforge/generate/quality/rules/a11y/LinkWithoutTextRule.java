@@ -8,6 +8,8 @@ import com.acme.staticforge.generate.quality.QualityFixHint;
 import com.acme.staticforge.generate.quality.RuleContext;
 import java.util.List;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,6 +22,11 @@ import org.springframework.stereotype.Component;
 public class LinkWithoutTextRule implements PageRule {
 
     public static final String CODE = "SF-CHK-0302";
+
+    /** Parsed once: selecting by a query string would parse it for every document. */
+    private static final Evaluator LINKS = Selector.evaluatorOf("a[href]");
+
+    private static final Evaluator IMAGES = Selector.evaluatorOf("img, svg");
 
     @Override
     public String code() {
@@ -51,7 +58,7 @@ public class LinkWithoutTextRule implements PageRule {
 
     @Override
     public List<Finding> check(ParsedOutput output, RuleContext context) {
-        return output.document().select("a[href]").stream()
+        return output.document().select(LINKS).stream()
                 .filter(link -> !link.attr("role").strip().equalsIgnoreCase("button"))
                 .filter(link -> !AccessibleNames.hidden(link) && !AccessibleNames.hasName(link))
                 .map(link -> context.finding(link, message(link)))
@@ -60,7 +67,7 @@ public class LinkWithoutTextRule implements PageRule {
 
     private static String message(Element link) {
         String target = "Link to " + link.attr("href").strip();
-        return link.selectFirst("img, svg") != null
+        return link.selectFirst(IMAGES) != null
                 ? target + " has no accessible text: its image has no alt text."
                 : target + " has no accessible text.";
     }

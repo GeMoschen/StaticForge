@@ -1,16 +1,22 @@
 package com.acme.staticforge.generate.quality.rules.seo;
 
 import com.acme.staticforge.generate.quality.OutputKey;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 
 /** Text and element helpers shared by the SEO rules (M30.2.2). */
 final class SeoText {
 
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+
+    /** An {@code <svg>}, parsed once: a query string would be parsed for every document. */
+    private static final Evaluator SVG = Selector.evaluatorOf("svg");
 
     /** At most this many other outputs are named in one message; the rest are counted. */
     static final int MAX_NAMED = 10;
@@ -35,7 +41,7 @@ final class SeoText {
     /** The document's {@code <title>} — the first one outside an {@code <svg>}, as the facts read it. */
     static Element title(Document document) {
         for (Element title : document.getElementsByTag("title")) {
-            if (title.closest("svg") == null) {
+            if (title.closest(SVG) == null) {
                 return title;
             }
         }
@@ -52,12 +58,20 @@ final class SeoText {
         return null;
     }
 
-    /** {@code paths} for a message: the first {@link #MAX_NAMED}, then how many more. */
-    static String names(List<String> paths) {
-        if (paths.size() <= MAX_NAMED) {
-            return String.join(", ", paths);
+    /**
+     * {@code paths} without the one at index {@code except}, for a message: the first {@link #MAX_NAMED}, then how many
+     * more. Reads only the first {@code MAX_NAMED + 1} paths.
+     */
+    static String namesExcept(List<String> paths, int except) {
+        List<String> named = new ArrayList<>(MAX_NAMED);
+        for (int i = 0; i < paths.size() && named.size() < MAX_NAMED; i++) {
+            if (i != except) {
+                named.add(paths.get(i));
+            }
         }
-        return String.join(", ", paths.subList(0, MAX_NAMED)) + " and " + (paths.size() - MAX_NAMED) + " more";
+        int others = paths.size() - 1;
+        String text = String.join(", ", named);
+        return others <= MAX_NAMED ? text : text + " and " + (others - MAX_NAMED) + " more";
     }
 
     /** Where an output is: its channel and, in a localized project, its language — for messages. */

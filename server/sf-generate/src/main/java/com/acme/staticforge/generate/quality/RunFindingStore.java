@@ -4,10 +4,12 @@ import com.acme.staticforge.generate.GenerationRun;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -24,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The stored quality check findings of generation runs (M30.1.2, epic decision 9): table {@code generation_run_finding},
- * written with JDBC batches and capped — at most {@code sf.quality.max-findings-per-output} findings of one rule per
+ * written with multi-row inserts and capped — at most {@code sf.quality.max-findings-per-output} findings of one rule per
  * output and {@code sf.quality.max-findings-per-run} per run. What the caps drop is counted, not stored; errors are
  * stored before warnings, so a cap never drops an error while it keeps a warning. The counts a run carries
  * ({@link Counts}) cover every finding, stored or not.
@@ -32,7 +34,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RunFindingStore {
 
-    private static final int BATCH = 500;
+    /** Findings inserted by one statement: 13 parameters each, well within every driver's parameter limit. */
+    private static final int ROWS_PER_INSERT = 100;
+
+    private static final int COLUMNS = 13;
+
+    private static final String INSERT_PREFIX = """
+            INSERT INTO generation_run_finding
+                (run_id, asset_uuid, channel, locale, page_number, output_path, code, category, severity, message,
+                 selector, section_instance_id, carried)
+            VALUES\s""";
+
+    private static final String ROW = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+    private static final String INSERT_FULL =
+            INSERT_PREFIX + String.join(", ", Collections.nCopies(ROWS_PER_INSERT, ROW));
+
     private static final int MAX_MESSAGE = 2000;
     private static final int MAX_SELECTOR = 1000;
     private static final int MAX_SECTION = 100;
@@ -101,6 +118,19 @@ public class RunFindingStore {
     }
 
     /**
+     * A run's findings ready to store: what {@link #prepare} decided without touching the database.
+     *
+     * @param counts the counts over every finding, with what the caps drop
+     * @param kept the findings the caps keep, in the order they are stored (errors first, then by output and code)
+     */
+    public record Prepared(Counts counts, List<Finding> kept) {
+
+        public Prepared {
+            kept = List.copyOf(kept);
+        }
+    }
+
+    /**
      * Stores the findings of run {@code runId} within the caps. Runs in the caller's transaction (the run's REPORT
      * write), so a run that isn't recorded stores no findings.
      *
@@ -108,6 +138,33 @@ public class RunFindingStore {
      */
     @Transactional
     public Counts save(long runId, List<Finding> findings) {
+        return save(runId, prepare(findings));
+    }
+
+    /**
+     * Stores findings {@link #prepare prepared} before — a build prepares them while it writes its files, and stores
+     * them in its REPORT write like {@link #save(long, List)}.
+     *
+     * @return the prepared counts
+     */
+    @Transactional
+    public Counts save(long runId, Prepared prepared) {
+        List<Finding> kept = prepared.kept();
+        // Many rows per statement: one statement per finding costs a round trip and an execution each.
+        for (int from = 0; from < kept.size(); from += ROWS_PER_INSERT) {
+            List<Finding> rows = kept.subList(from, Math.min(kept.size(), from + ROWS_PER_INSERT));
+            jdbc.update(insert(rows.size()), ps -> {
+                int column = 1;
+                for (Finding finding : rows) {
+                    column = bind(ps, column, runId, finding);
+                }
+            });
+        }
+        return prepared.counts();
+    }
+
+    /** Counts {@code findings} and applies the caps (a pure computation: the database isn't touched). */
+    public Prepared prepare(List<Finding> findings) {
         int errors = 0;
         int warnings = 0;
         Map<QualityCategory, Integer> byCategory = new EnumMap<>(QualityCategory.class);
@@ -138,36 +195,35 @@ public class RunFindingStore {
             }
         }
 
-        jdbc.batchUpdate(
-                """
-                INSERT INTO generation_run_finding
-                    (run_id, asset_uuid, channel, locale, page_number, output_path, code, category, severity, message,
-                     selector, section_instance_id, carried)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                kept,
-                BATCH,
-                (ps, finding) -> {
-                    OutputKey key = finding.output();
-                    ps.setLong(1, runId);
-                    ps.setObject(2, key.asset());
-                    ps.setString(3, key.channel());
-                    ps.setString(4, key.locale());
-                    if (key.pageNumber() == null) {
-                        ps.setNull(5, Types.INTEGER);
-                    } else {
-                        ps.setInt(5, key.pageNumber());
-                    }
-                    ps.setString(6, truncate(key.path(), MAX_PATH));
-                    ps.setString(7, finding.code());
-                    ps.setString(8, finding.category().name());
-                    ps.setString(9, finding.severity().name());
-                    ps.setString(10, truncate(finding.message(), MAX_MESSAGE));
-                    ps.setString(11, truncate(finding.selector(), MAX_SELECTOR));
-                    ps.setString(12, truncate(finding.sectionInstanceId(), MAX_SECTION));
-                    ps.setBoolean(13, finding.carried());
-                });
-        return new Counts(errors, warnings, byCategory, findings.size() - kept.size());
+        return new Prepared(new Counts(errors, warnings, byCategory, findings.size() - kept.size()), kept);
+    }
+
+    /** {@code INSERT} of {@code rows} findings. */
+    private static String insert(int rows) {
+        return rows == ROWS_PER_INSERT ? INSERT_FULL : INSERT_PREFIX + String.join(", ", Collections.nCopies(rows, ROW));
+    }
+
+    /** Binds {@code finding}'s columns from parameter {@code column} on; returns the next free parameter. */
+    private static int bind(PreparedStatement ps, int column, long runId, Finding finding) throws SQLException {
+        OutputKey key = finding.output();
+        ps.setLong(column, runId);
+        ps.setObject(column + 1, key.asset());
+        ps.setString(column + 2, key.channel());
+        ps.setString(column + 3, key.locale());
+        if (key.pageNumber() == null) {
+            ps.setNull(column + 4, Types.INTEGER);
+        } else {
+            ps.setInt(column + 4, key.pageNumber());
+        }
+        ps.setString(column + 5, truncate(key.path(), MAX_PATH));
+        ps.setString(column + 6, finding.code());
+        ps.setString(column + 7, finding.category().name());
+        ps.setString(column + 8, finding.severity().name());
+        ps.setString(column + 9, truncate(finding.message(), MAX_MESSAGE));
+        ps.setString(column + 10, truncate(finding.selector(), MAX_SELECTOR));
+        ps.setString(column + 11, truncate(finding.sectionInstanceId(), MAX_SECTION));
+        ps.setBoolean(column + 12, finding.carried());
+        return column + COLUMNS;
     }
 
     // ------------------------------------------------------------------

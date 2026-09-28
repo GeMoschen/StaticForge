@@ -7,6 +7,8 @@ import com.acme.staticforge.generate.quality.QualityCategory;
 import com.acme.staticforge.generate.quality.RuleContext;
 import java.util.List;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,6 +20,9 @@ import org.springframework.stereotype.Component;
 public class ButtonWithoutTextRule implements PageRule {
 
     public static final String CODE = "SF-CHK-0303";
+
+    /** Parsed once: selecting by a query string would parse it for every document. */
+    private static final Evaluator BUTTONS = Selector.evaluatorOf("button, [role=button]");
 
     @Override
     public String code() {
@@ -43,7 +48,7 @@ public class ButtonWithoutTextRule implements PageRule {
 
     @Override
     public List<Finding> check(ParsedOutput output, RuleContext context) {
-        return output.document().select("button, [role=button]").stream()
+        return output.document().select(BUTTONS).stream()
                 .filter(button -> !AccessibleNames.hidden(button) && !AccessibleNames.hasName(button))
                 .map(button -> context.finding(button, message(button)))
                 .toList();

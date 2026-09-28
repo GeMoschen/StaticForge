@@ -1,5 +1,6 @@
 package com.acme.staticforge;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import static com.acme.staticforge.QualityBuildFixtures.document;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -229,6 +230,9 @@ class QualityCheckStageIntegrationTest {
         GenerationTarget target = q.target(fx, "t");
         GenerationRun first = q.generate(fx, target, GenerationMode.FULL);
         assertThat(q.sidecar(fx, target, first)).isPresent();
+        // The manifest names the configuration the build was checked under: planning decides on it alone.
+        assertThat(q.manifest(fx, target, first).orElseThrow().qualityFingerprint())
+                .isEqualTo(q.sidecar(fx, target, first).orElseThrow().configFingerprint());
 
         // Only the clean page changes: the flagged page and home are carried with their facts and findings.
         q.build.updateTemplate(fx, templateOf(fx, site.clean()), document("Clean", "<p>clean v2</p>"), "{displayNameSlug}.{ext}");
@@ -254,8 +258,19 @@ class QualityCheckStageIntegrationTest {
                         tuple("home.html", "Missing: gone.html", false),
                         tuple("home.html", "Missing: clean.html", false));
 
-        // A base build without its sidecar can't vouch for carried outputs.
+        // A base whose sidecar is gone, though its manifest names the configuration it was checked under, still plans
+        // incremental — the plan never depends on the sidecar — and its carried outputs simply go unchecked.
         Files.delete(q.buildsDir(fx, target).resolve(third.getId() + ".quality.json"));
+        GenerationRun factsLost = q.generate(fx, target, GenerationMode.INCREMENTAL);
+        assertThat(factsLost.getPlanSummary().path("incremental").asBoolean()).isTrue();
+        assertThat(q.findings(fx, factsLost, QualityTestRules.FLAG)).isEmpty();
+
+        // A base built before M30 — no fingerprint in its manifest, no sidecar — can't vouch for carried outputs.
+        Path manifest = q.buildsDir(fx, target).resolve(factsLost.getId() + ".manifest.json");
+        ObjectNode written = (ObjectNode) new ObjectMapper().readTree(manifest.toFile());
+        written.remove("qualityFingerprint");
+        Files.write(manifest, new ObjectMapper().writeValueAsBytes(written));
+        Files.delete(q.buildsDir(fx, target).resolve(factsLost.getId() + ".quality.json"));
         GenerationRun withoutFacts = q.generate(fx, target, GenerationMode.INCREMENTAL);
         assertThat(withoutFacts.getPlanSummary().path("fallbackCause").asText()).isEqualTo("BASE_BUILD_WITHOUT_QUALITY_FACTS");
         assertThat(q.sidecar(fx, target, withoutFacts)).isPresent();

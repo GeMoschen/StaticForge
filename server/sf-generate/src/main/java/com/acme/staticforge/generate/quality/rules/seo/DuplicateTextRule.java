@@ -64,13 +64,13 @@ abstract class DuplicateTextRule implements SiteRule {
                 .filter(group -> group.getValue().size() > 1)
                 .sorted(Comparator.comparing(group -> group.getValue().firstKey()))
                 .forEach(group -> {
-                    TreeMap<String, IndexedOutput> members = group.getValue();
-                    for (IndexedOutput member : members.values()) {
-                        List<String> others = members.keySet().stream()
-                                .filter(path -> !path.equals(member.path()))
-                                .toList();
-                        findings.add(context.finding(member.key(), null, subject + " \"" + group.getKey().text()
-                                + "\" is also used by " + SeoText.names(others) + "."));
+                    // Each member names the others: the group's first paths without its own, so a large group costs
+                    // a few names per member, not the whole group.
+                    List<String> paths = List.copyOf(group.getValue().keySet());
+                    List<IndexedOutput> members = List.copyOf(group.getValue().values());
+                    for (int i = 0; i < members.size(); i++) {
+                        findings.add(context.finding(members.get(i).key(), null, subject + " \"" + group.getKey().text()
+                                + "\" is also used by " + SeoText.namesExcept(paths, i) + "."));
                     }
                 });
         return findings;

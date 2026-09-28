@@ -8,6 +8,8 @@ import com.acme.staticforge.generate.quality.RuleContext;
 import java.util.List;
 import java.util.Set;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,6 +26,13 @@ public class UnlabelledFormControlRule implements PageRule {
 
     /** Input types that are labelled by their value or {@code alt}, or not shown at all. */
     private static final Set<String> SELF_LABELLED = Set.of("hidden", "submit", "button", "reset", "image");
+
+    /** Parsed once: selecting by a query string would parse it for every document. */
+    private static final Evaluator CONTROLS = Selector.evaluatorOf("input, select, textarea");
+
+    private static final Evaluator LABELS_FOR = Selector.evaluatorOf("label[for]");
+
+    private static final Evaluator LABEL = Selector.evaluatorOf("label");
 
     @Override
     public String code() {
@@ -49,7 +58,7 @@ public class UnlabelledFormControlRule implements PageRule {
 
     @Override
     public List<Finding> check(ParsedOutput output, RuleContext context) {
-        return output.document().select("input, select, textarea").stream()
+        return output.document().select(CONTROLS).stream()
                 .filter(control -> !control.normalName().equals("input")
                         || !SELF_LABELLED.contains(AccessibleNames.type(control)))
                 .filter(control -> !AccessibleNames.hidden(control) && !labelled(control))
@@ -63,12 +72,12 @@ public class UnlabelledFormControlRule implements PageRule {
                 || !AccessibleNames.isBlank(control.attr("title"))) {
             return true;
         }
-        Element wrapping = control.closest("label");
+        Element wrapping = control.closest(LABEL);
         if (wrapping != null && !AccessibleNames.isBlank(AccessibleNames.content(wrapping))) {
             return true;
         }
         String id = control.id();
-        return !id.isEmpty() && control.root().select("label[for]").stream()
+        return !id.isEmpty() && control.root().select(LABELS_FOR).stream()
                 .anyMatch(label -> label.attr("for").equals(id)
                         && !AccessibleNames.isBlank(AccessibleNames.content(label)));
     }

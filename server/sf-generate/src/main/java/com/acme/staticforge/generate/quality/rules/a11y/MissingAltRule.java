@@ -14,6 +14,8 @@ import com.acme.staticforge.generate.target.BuildManifest;
 import java.util.List;
 import java.util.Optional;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Evaluator;
+import org.jsoup.select.Selector;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,6 +27,10 @@ import org.springframework.stereotype.Component;
 public class MissingAltRule implements PageRule {
 
     public static final String CODE = "SF-CHK-0301";
+
+    /** Parsed once: selecting by a query string would parse it for every document. */
+    private static final Evaluator WITHOUT_ALT =
+            Selector.evaluatorOf("img:not([alt]), input[type=image]:not([alt])");
 
     @Override
     public String code() {
@@ -56,7 +62,7 @@ public class MissingAltRule implements PageRule {
 
     @Override
     public List<Finding> check(ParsedOutput output, RuleContext context) {
-        return output.document().select("img:not([alt]), input[type=image]:not([alt])").stream()
+        return output.document().select(WITHOUT_ALT).stream()
                 .map(image -> context.finding(image, message(image, output, context.environment())))
                 .toList();
     }

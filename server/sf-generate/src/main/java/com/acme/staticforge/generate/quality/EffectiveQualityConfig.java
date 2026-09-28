@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -31,10 +32,15 @@ public final class EffectiveQualityConfig {
 
     private final QualityRuleRegistry registry;
     private final Map<String, RuleSetting> settings;
+    /** Every registered rule's effective severity, looked up for each rule on each checked output. */
+    private final Map<QualityRule, QualitySeverity> severities = new IdentityHashMap<>();
 
     private EffectiveQualityConfig(QualityRuleRegistry registry, Map<String, RuleSetting> settings) {
         this.registry = registry;
         this.settings = settings;
+        for (QualityRule rule : registry.all()) {
+            severities.put(rule, configuredSeverity(rule));
+        }
     }
 
     /** Every rule at its defaults. */
@@ -87,6 +93,11 @@ public final class EffectiveQualityConfig {
 
     /** The severity {@code rule}'s findings get: the configured one, capped at the rule's maximum. */
     public QualitySeverity severity(QualityRule rule) {
+        QualitySeverity severity = severities.get(rule);
+        return severity != null ? severity : configuredSeverity(rule);
+    }
+
+    private QualitySeverity configuredSeverity(QualityRule rule) {
         RuleSetting setting = settings.get(rule.code());
         QualitySeverity configured = setting == null ? rule.defaultSeverity() : setting.severity();
         return configured.cappedAt(rule.maxSeverity());
