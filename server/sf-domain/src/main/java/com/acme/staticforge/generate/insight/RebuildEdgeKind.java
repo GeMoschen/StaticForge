@@ -37,6 +37,12 @@ public enum RebuildEdgeKind {
      * (M25.2.3); the source path is the set's uid.
      */
     RECORD_TEMPLATE,
+    /**
+     * A page takes or leaves its folder's index path because the folder's effective start page changed (M31): the
+     * folder's current and baseline start pages (source path {@code startPage}) and its {@code indexUid} pages (source
+     * path {@code indexUid}), which hold the index path while the folder has no start page.
+     */
+    START_PAGE,
     UNKNOWN;
 
     /** The kind named {@code name}; {@link #UNKNOWN} for {@code null} or a name this build doesn't know. */
