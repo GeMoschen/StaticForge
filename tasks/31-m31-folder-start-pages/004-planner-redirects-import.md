@@ -72,4 +72,5 @@ import), `ProjectExportImportService.QUALITY_AND_REDIRECTS_PROTOCOL`, `UuidRemap
 - Folder links: `$CMS_REF(folder:F)` is an `OCTL_REF` row template → F, so a folder whose effective start page
   changed reaches its linkers over the generic referrer walk (`folderLinkersRebuild`). The import writes normal folder
   payloads through `createImportedAsset` (raw repositories): after merging with M31.3, an overwritten folder whose
-  `startPage` changes should call `StartPageUrlInvalidation.payloadChanged` there (not on this branch).
+  `startPage` changes calls `StartPageUrlInvalidation.payloadChanged` once all edges are materialized (done after the merge; test
+  `importInvalidatesCachedNavigationHrefs`).

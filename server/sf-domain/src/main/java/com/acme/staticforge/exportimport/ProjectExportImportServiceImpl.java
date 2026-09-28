@@ -49,6 +49,7 @@ import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.query.RecordSetQueries;
+import com.acme.staticforge.urlregistry.StartPageUrlInvalidation;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -209,6 +210,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final AssetReleaseRepository releaseRepository;
     private final ScheduleArchive scheduleArchive;
     private final RedirectArchive redirectArchive;
+    private final StartPageUrlInvalidation startPageUrls;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -229,8 +231,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             ScheduleArchive scheduleArchive,
             RedirectArchive redirectArchive,
             BlobWriter blobWriter,
-            MediaVariantResolver variantResolver) {
+            MediaVariantResolver variantResolver,
+            StartPageUrlInvalidation startPageUrls) {
         this.projectRepository = projectRepository;
+        this.startPageUrls = startPageUrls;
         this.redirectArchive = redirectArchive;
         this.blobWriter = blobWriter;
         this.variantResolver = variantResolver;
@@ -826,10 +830,17 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         List<ImportedDraft> imported = new ArrayList<>();
         // Versions written for released payloads and pinned ones, per asset id and content: identical ones are shared.
         Map<Long, Map<String, AssetVersion>> writtenVersions = new HashMap<>();
+        // The payload each overwritten folder had before the import (M31): its start page may change.
+        Map<Long, JsonNode> folderPayloadsBefore = new HashMap<>();
         for (ExportedAsset asset : order(assets, rootAsset)) {
             String key = asset.uuid().toLowerCase();
             if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key) || rejected.contains(key)) {
                 continue;
+            }
+            if (AssetType.FOLDER.name().equals(asset.type()) && overwritten.contains(key)) {
+                assetRepository.findByProjectIdAndUuid(targetProjectId, remap.get(key))
+                        .flatMap(existing -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(existing.getId()))
+                        .ifPresent(current -> folderPayloadsBefore.put(current.getAssetId(), current.getPayload()));
             }
             AssetVersion draft = createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest,
                     importedAt, revision.getRevisionId(), ctx);
@@ -846,6 +857,12 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // only once all assets exist, since a reference may point at an asset imported later.
         for (AssetVersion version : importedVersions) {
             referenceMaterializer.materialize(version.getAsset(), version);
+        }
+        // A folder whose start page the import set, changed or cleared makes computed navigation hrefs stale (M31),
+        // like any draft write of a folder payload; the NAV edges they are found by exist now.
+        for (AssetVersion version : importedVersions) {
+            startPageUrls.payloadChanged(
+                    version.getAsset(), folderPayloadsBefore.get(version.getAssetId()), version.getPayload());
         }
         if (siteStartPage.merge() != null) {
             mergeSiteStartPage(targetProjectId, siteStartPage.merge(), ctx);

@@ -7,6 +7,9 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.folder.StartPage;
+import com.acme.staticforge.asset.navigation.CreatePageReferenceCommand;
+import com.acme.staticforge.asset.navigation.PageReferenceService;
+import com.acme.staticforge.asset.navigation.PageReferenceTargetKind;
 import com.acme.staticforge.asset.page.CreatePageCommand;
 import com.acme.staticforge.asset.page.PageService;
 import com.acme.staticforge.asset.template.CreateTemplateCommand;
@@ -23,6 +26,10 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.urlregistry.LiveOutputPathResolver;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlRegistryEntry;
+import com.acme.staticforge.urlregistry.UrlRegistryRepository;
+import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +39,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -66,6 +74,9 @@ class FolderStartPageExportImportIntegrationTest {
     @Autowired PageService pages;
     @Autowired TemplateService templates;
     @Autowired LiveOutputPathResolver livePaths;
+    @Autowired PageReferenceService pageReferences;
+    @Autowired UrlRegistryService urlRegistry;
+    @Autowired UrlRegistryRepository urlRegistryRepository;
     @Autowired ObjectMapper mapper;
 
     private record Fixture(Project project, AppUser admin, RevisionContext ctx, TemplateView template, UUID pagesRoot) {
@@ -172,7 +183,33 @@ class FolderStartPageExportImportIntegrationTest {
         assertThat(assets.requireCurrent(dst.id(), src.hammer()).displayName()).isEqualTo("Hammer");
     }
 
+    @Test
+    @DisplayName("an import that changes a folder's start page drops the navigation hrefs cached for it")
+    void importInvalidatesCachedNavigationHrefs() throws Exception {
+        Source src = source("spu");
+        byte[] archive = exportImportService.exportProject(src.fx().id());
+        // The target (here: the source itself) drops the start page and caches the fallback href.
+        setStartPage(src.fx(), src.products(), null);
+        UUID nav = folders.create(null, "Main nav", FolderScope.NAVIGATION, src.fx().ctx()).uuid();
+        UUID productsRef = pageReferences.create(new CreatePageReferenceCommand(
+                "products", nav, PageReferenceTargetKind.FOLDER, src.products(), "Products"), src.fx().ctx()).uuid();
+        String cached = urlRegistry.resolve(productsRef, "html", UrlArea.PREVIEW, src.fx().ctx());
+        assertThat(cached).isNotEqualTo("products/index.html");
+        assertThat(previewRow(src.fx(), productsRef)).isPresent();
+
+        exportImportService.importProject(src.fx().id(), archive, importCtx(src.fx()), ImportOptions.DEFAULT);
+
+        assertThat(startPageOf(src.fx(), src.products())).isEqualTo(src.overview());
+        assertThat(previewRow(src.fx(), productsRef)).as("the stale computed row is gone").isEmpty();
+        assertThat(urlRegistry.resolve(productsRef, "html", UrlArea.PREVIEW, src.fx().ctx())).isEqualTo("products/index.html");
+    }
+
     // ------------------------------------------------------------------
+
+    private Optional<UrlRegistryEntry> previewRow(Fixture fx, UUID reference) {
+        return urlRegistryRepository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
+                fx.id(), "html", reference, UrlArea.PREVIEW, "");
+    }
 
     private Source source(String prefix) {
         Fixture fx = fixture(prefix);

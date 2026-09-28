@@ -176,7 +176,9 @@ class FolderStartPageIncrementalIntegrationTest {
         assertThat(files.get("homepage.html")).contains("<meta http-equiv=\"refresh\" content=\"0; url=index.html\">");
         assertThat(files.get("linker.html")).isEqualTo(
                 "<a href=\"index.html\">h</a><a href=\"welcome.html\">w</a><a href=\"home.html\">i</a>");
-        // navpage renders again (its hrefs come from the URL registry, which M31.3 invalidates on a start page change).
+        // The navigation's hrefs come from the URL registry, whose stale rows the start page change dropped.
+        assertThat(files.get("navpage.html")).isEqualTo("<nav><ul class=\"nav\"><li class=\"nav-item\"><a href=\"index.html\">"
+                + "Homepage</a></li><li class=\"nav-item\"><a href=\"welcome.html\">Welcome</a></li></ul></nav>");
         // The AUTO redirect homepage.html → Homepage is active; home's old index.html is Homepage's now.
         assertThat(redirects(s)).containsExactlyInAnyOrder(
                 tuple("homepage.html", s.homepage(), RedirectKind.AUTO, RedirectState.ACTIVE),
@@ -200,6 +202,8 @@ class FolderStartPageIncrementalIntegrationTest {
         assertThat(files.get("welcome.html")).contains("<meta http-equiv=\"refresh\" content=\"0; url=index.html\">");
         assertThat(files.get("linker.html")).isEqualTo(
                 "<a href=\"homepage.html\">h</a><a href=\"index.html\">w</a><a href=\"home.html\">i</a>");
+        assertThat(files.get("navpage.html")).isEqualTo("<nav><ul class=\"nav\"><li class=\"nav-item\"><a href=\"homepage.html\">"
+                + "Homepage</a></li><li class=\"nav-item\"><a href=\"index.html\">Welcome</a></li></ul></nav>");
         // The old start page's index.html entry is shadowed by the new start page; the new one's entry is active.
         // Homepage is back at homepage.html, so its first entry now points at its own source: a LOOP, never emitted.
         assertThat(redirects(s)).containsExactlyInAnyOrder(
@@ -216,6 +220,8 @@ class FolderStartPageIncrementalIntegrationTest {
         assertThat(files.get("welcome.html")).isEqualTo("<p>Welcome</p>");
         assertThat(files.get("linker.html")).isEqualTo(
                 "<a href=\"homepage.html\">h</a><a href=\"welcome.html\">w</a><a href=\"index.html\">i</a>");
+        assertThat(files.get("navpage.html")).isEqualTo("<nav><ul class=\"nav\"><li class=\"nav-item\"><a href=\"homepage.html\">"
+                + "Homepage</a></li><li class=\"nav-item\"><a href=\"welcome.html\">Welcome</a></li></ul></nav>");
         assertThat(plannedPages(plan(s))).as("nothing changed since").isEmpty();
         assertThat(files).containsKey("legal.html");
     }
@@ -263,7 +269,8 @@ class FolderStartPageIncrementalIntegrationTest {
         assetService.move(hammer, products, s.fx().ctx());
         TemplateView folderLinking = template(s.fx(), "Folder linking", "<a href=\"$CMS_REF(folder:products)$\">p</a>");
         UUID folderLinker = fixtures.page(s.fx(), "Folder linker", folderLinking.uuid()).uuid();
-        fixtures.succeeded(generate(s));
+        assertThat(files(s, fixtures.succeeded(generate(s))).get("folder_linker.html"))
+                .as("no index page: the directory").isEqualTo("<a href=\"products/\">p</a>");
 
         setStartPage(s, products, overview);
         BuildPlan set = plan(s);
@@ -276,6 +283,7 @@ class FolderStartPageIncrementalIntegrationTest {
                 .containsExactly(RebuildEdgeKind.PAGE_TEMPLATE, RebuildEdgeKind.REFERENCE);
         Map<String, String> files = files(s, fixtures.succeeded(generate(s)));
         assertThat(files.get("products/index.html")).isEqualTo("<p>Overview</p>");
+        assertThat(files.get("folder_linker.html")).isEqualTo("<a href=\"products/index.html\">p</a>");
 
         // An edit that doesn't touch the folder's index doesn't reach the folder's linkers.
         fixtures.edit(s.fx(), hammer, payload -> payload.withObject("content").put("title", "Hammer 2"));
@@ -284,6 +292,9 @@ class FolderStartPageIncrementalIntegrationTest {
 
         setStartPage(s, products, null);
         assertThat(plannedPages(plan(s))).containsExactlyInAnyOrder(overview, folderLinker);
+        files = files(s, fixtures.succeeded(generate(s)));
+        assertThat(files.get("products/overview.html")).isEqualTo("<p>Overview</p>");
+        assertThat(files.get("folder_linker.html")).isEqualTo("<a href=\"products/\">p</a>");
     }
 
     @Test
