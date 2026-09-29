@@ -183,7 +183,22 @@ public class RebuildExpansion {
             Predicate<UUID> outputMoved,
             TemplateCompileMemo definitions,
             LocaleConfig locales) {
-        Delta delta = new Delta(snapshot, baselineRevision);
+        return expandSince(snapshot, baselineRevision, outputMoved, definitions, locales, Set.of());
+    }
+
+    /**
+     * As {@link #expandSince(Snapshot, long, Predicate, TemplateCompileMemo, LocaleConfig)}, with the assets whose
+     * registered URL changed since the base build (M32.5) as roots of their own ({@code URL_CHANGED}) wherever nothing
+     * else made them one: they render again, and so does every page linking them and the navigation showing them.
+     */
+    public Walks expandSince(
+            Snapshot snapshot,
+            long baselineRevision,
+            Predicate<UUID> outputMoved,
+            TemplateCompileMemo definitions,
+            LocaleConfig locales,
+            Set<UUID> urlChanged) {
+        Delta delta = new Delta(snapshot, baselineRevision, urlChanged);
         List<ReferenceRow> rows = rows(snapshot);
         Map<String, Result> walks = new LinkedHashMap<>();
         for (Snapshot view : snapshot.views()) {
@@ -295,8 +310,11 @@ public class RebuildExpansion {
         private final Map<Long, AssetVersion> draftsAtBaseline = new HashMap<>();
         private final Set<Long> preReleaseUidChanges = new HashSet<>();
 
-        Delta(Snapshot snapshot, long baselineRevision) {
+        private final Set<UUID> urlChanged;
+
+        Delta(Snapshot snapshot, long baselineRevision, Set<UUID> urlChanged) {
             this.baselineRevision = baselineRevision;
+            this.urlChanged = urlChanged == null ? Set.of() : Set.copyOf(urlChanged);
             long projectId = snapshot.projectId();
             Set<Long> allUidChanges = new HashSet<>();
             uidHistory.findUidChangesBetween(projectId, baselineRevision, snapshot.revision()).forEach(change -> {
@@ -418,6 +436,13 @@ public class RebuildExpansion {
                     }
                 }
                 seedFallbackMedia(view, candidates, locales, roots, kinds);
+            }
+            for (UUID uuid : urlChanged) {
+                SnapshotAsset asset = view.assetByUuid(uuid);
+                if (asset != null && !asset.deleted() && !roots.containsKey(asset.assetId())) {
+                    roots.put(asset.assetId(), view.revision());
+                    kinds.put(asset.assetId(), RebuildRootKind.URL_CHANGED);
+                }
             }
             return new Changes(roots, kinds, before, uids, outputMoved, false);
         }

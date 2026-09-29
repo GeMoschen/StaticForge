@@ -31,7 +31,6 @@ import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.pagination.PaginationItem;
 import com.acme.staticforge.pagination.PaginationScope;
-import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.OctlResult;
@@ -45,8 +44,6 @@ import com.acme.staticforge.template.render.RenderLimitException;
 import com.acme.staticforge.template.render.RenderResult;
 import com.acme.staticforge.template.render.Renderer;
 import com.acme.staticforge.template.render.UrlResolver;
-import com.acme.staticforge.urlregistry.UrlArea;
-import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.IntNode;
@@ -95,13 +92,6 @@ final class GenerationRenderer {
     private final NavigationService navigationService = new NavigationServiceImpl();
     private final NavigationLookup navigationLookup;
 
-    // `M8.2.3`: the URL registry a nav node's PAGE_REFERENCE href resolves through
-    // (UrlArea.GENERATED). May be null in tests/`RenderPipeline.validate()` (which never invokes
-    // navHref) — navHref falls back to the pre-`M8.2.3` direct OutputPathResolver path when null,
-    // the same graceful-degradation convention `channelService`/`paths` already use in this class.
-    private final UrlRegistryService urlRegistryService;
-    private final Long generationUserId;
-
     /** The project's content locales (M24.3.1); {@link com.acme.staticforge.project.LocaleConfig#EMPTY} is single-language. */
     private com.acme.staticforge.project.LocaleConfig localeConfig = com.acme.staticforge.project.LocaleConfig.EMPTY;
 
@@ -116,32 +106,19 @@ final class GenerationRenderer {
             OutputPathResolver paths,
             String projectKey,
             ChannelService channelService) {
-        this(snapshot, paths, projectKey, channelService, null, null);
-    }
-
-    GenerationRenderer(
-            Snapshot snapshot,
-            OutputPathResolver paths,
-            String projectKey,
-            ChannelService channelService,
-            UrlRegistryService urlRegistryService,
-            Long generationUserId) {
-        this(snapshot, paths, projectKey, channelService, urlRegistryService, generationUserId,
-                new TemplateCompileMemo(Metrics.globalRegistry));
+        this(snapshot, paths, projectKey, channelService, new TemplateCompileMemo(Metrics.globalRegistry));
     }
 
     /**
      * @param compiledTemplates the build's compile memo — shared by every renderer of the same
      *     snapshot (see {@code CompiledTemplateCache#buildMemo}), so each (template, channel)
-     *     compiles once per build; the shorter constructors use a memo private to this renderer
+     *     compiles once per build; the shorter constructor uses a memo private to this renderer
      */
     GenerationRenderer(
             Snapshot snapshot,
             OutputPathResolver paths,
             String projectKey,
             ChannelService channelService,
-            UrlRegistryService urlRegistryService,
-            Long generationUserId,
             TemplateCompileMemo compiledTemplates) {
         this.snapshot = snapshot;
         this.paths = paths;
@@ -149,11 +126,9 @@ final class GenerationRenderer {
         this.channelService = channelService;
         this.uidIndex = indexUids(snapshot.root());
         this.navigationLookup = new SnapshotNavigationLookup(snapshot);
-        this.urlRegistryService = urlRegistryService;
-        this.generationUserId = generationUserId;
         this.compiledTemplates = compiledTemplates;
         this.assetValues = new SnapshotAssetValueResolver(snapshot, compiledTemplates);
-        this.mediaOutputs = new MediaOutputs(snapshot, localeConfig);
+        this.mediaOutputs = new MediaOutputs(snapshot, localeConfig, paths == null ? null : paths.registry());
     }
 
     /**
@@ -162,7 +137,7 @@ final class GenerationRenderer {
      */
     GenerationRenderer withLocales(com.acme.staticforge.project.LocaleConfig config) {
         this.localeConfig = config == null ? com.acme.staticforge.project.LocaleConfig.EMPTY : config;
-        this.mediaOutputs = new MediaOutputs(snapshot, localeConfig);
+        this.mediaOutputs = new MediaOutputs(snapshot, localeConfig, paths == null ? null : paths.registry());
         // Before any entry renders, so nothing has been memoized yet: media values read the view's locale file.
         this.assetValues = new SnapshotAssetValueResolver(snapshot, compiledTemplates, localeConfig);
         return this;
@@ -460,7 +435,8 @@ final class GenerationRenderer {
      * @param events collects every reference that renders empty because its target is deleted, unreleased or missing
      *     (M30.1.3): the quality checks report them on this output
      * @param renderLocale the language links resolve in, so a German page links to German pages
-     *     (M24.3.2). {@code $CMS_REF(page:x, locale="en")} overrides it for one reference.
+     *     (M24.3.2). {@code $CMS_REF(page:x, locale="en")} overrides it for one reference when it names one of the
+     *     project's languages; any other value links in the render language.
      */
     private UrlResolver urlResolver(
             String channel, String pagePath, List<Diagnostic> warnings, List<ReferenceEvent> events, String renderLocale) {
@@ -468,7 +444,7 @@ final class GenerationRenderer {
             if (uuid == null) {
                 return "";
             }
-            String locale = args != null && args.get("locale") != null ? args.get("locale") : renderLocale;
+            String locale = linkLocale(args, renderLocale);
             String eventLocale = "page".equals(kind) ? locale : renderLocale;
             // A page link resolves in the language it links to; media and folders in the render language's view.
             SnapshotAsset target = ("page".equals(kind) ? snapshot.in(locale) : snapshot).assetByUuid(uuid);
@@ -531,6 +507,16 @@ final class GenerationRenderer {
         return path == null ? "" : path;
     }
 
+    /** The language a page link resolves in: {@code locale=} when it is one of the project's languages, else the render's. */
+    private String linkLocale(Map<String, String> args, String renderLocale) {
+        String requested = args == null ? null : args.get("locale");
+        if (requested == null || requested.isBlank() || !localeConfig.isLocalized()) {
+            return renderLocale;
+        }
+        String declared = localeConfig.canonicalDeclared(requested);
+        return declared != null ? declared : renderLocale;
+    }
+
     /**
      * The URL a {@code $CMS_REF(folder:…)} links (spec §16.4): the folder's index page — its page with the channel's
      * {@code indexUid} in the render language's view — like any page link; without one, the
@@ -547,9 +533,10 @@ final class GenerationRenderer {
         if (indexPage != null) {
             return relativeUrl(pagePath, paths.resolvePageUrl(indexPage, channel, renderLocale));
         }
-        OutputPathExpander.LocaleContext locale =
-                paths == null ? OutputPathExpander.LocaleContext.NONE : paths.localeContext(renderLocale);
-        return relativeUrl(pagePath, OutputPathExpander.folderUrl(folder.folderPath(), locale));
+        if (paths == null) {
+            return relativeUrl(pagePath, OutputPathExpander.folderUrl(folder.folderPath(), OutputPathExpander.LocaleContext.NONE));
+        }
+        return relativeUrl(pagePath, paths.resolveFolderUrl(uuid, folder.folderPath(), channel, renderLocale));
     }
 
     /** This view's navigation, with {@code channel}'s {@code indexUid} naming a folder's index page. */
@@ -740,33 +727,13 @@ final class GenerationRenderer {
     }
 
     /**
-     * Href resolution swap point for `M8.2.3`: a {@code PAGE_REFERENCE} node's href is keyed on
-     * the reference's own uuid ({@code node.assetUuid()}, exactly the {@code pageReferenceUuid}
-     * {@link UrlRegistryService#resolve} expects) and resolved through the {@code GENERATED} area
-     * of the URL registry — cached after the first call, stable across subsequent generation runs
-     * even if the target page's slug/displayName changes, until an explicit reset. A {@code
-     * FOLDER} entry-point node (its {@code resolvedPageUuid} comes from walking a {@code
-     * startNode} chain, not from a {@code PageReference} the folder itself owns) has no {@code
-     * PageReference} identity to key a registry lookup on, so it keeps resolving directly via
-     * {@link OutputPathResolver} — unchanged pre-`M8.2.3` behavior for that node kind.
-     *
-     * <p>A first assignment stores the path this build writes the page to (M27.2.1): the registry's own computation
-     * reads the drafts, which would hand out the draft path of a page moved but not released.
+     * A navigation entry's href: the URL of the page it resolves to, like any page link — its registered URL (M32.3),
+     * relative to the rendering page. A page reference or navigation folder has no URL of its own.
      */
     private String navHref(NavTreeNode node, String channel, String pagePath, String locale) {
         UUID resolvedPageUuid = node.resolvedPageUuid();
         if (resolvedPageUuid == null) {
             return "";
-        }
-        if (node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
-            RevisionContext ctx = RevisionContext.of(snapshot.projectId(), generationUserId, "generation");
-            return relativeUrl(pagePath, urlRegistryService.resolve(
-                    node.assetUuid(),
-                    channel,
-                    UrlArea.GENERATED,
-                    locale,
-                    () -> paths == null ? null : paths.resolvePageUrl(resolvedPageUuid, channel, locale),
-                    ctx));
         }
         return paths == null ? "" : relativeUrl(pagePath, paths.resolvePageUrl(resolvedPageUuid, channel, locale));
     }

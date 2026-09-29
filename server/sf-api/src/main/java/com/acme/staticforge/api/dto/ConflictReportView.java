@@ -16,7 +16,10 @@ import java.util.List;
  *
  * <p>{@code redirectCount} (M30.4.1): the redirects the import reads from the archive (protocol {@code >= 10}; 0 for
  * an older one), whether or not they are imported.
+ *
+ * <p>{@code urlCount} (M32.6): the URL registry rows the import reads from the archive (protocol {@code >= 11}; 0 for
+ * an older one), whether or not they are imported.
  */
 public record ConflictReportView(
         List<ImportConflictView> conflicts, boolean hasBlocking, boolean blocksImport, boolean releaseState,
-        String releaseMode, int scheduleCount, int redirectCount) {}
+        String releaseMode, int scheduleCount, int redirectCount, int urlCount) {}

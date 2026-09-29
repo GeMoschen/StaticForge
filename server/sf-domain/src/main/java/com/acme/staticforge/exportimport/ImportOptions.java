@@ -1,5 +1,6 @@
 package com.acme.staticforge.exportimport;
 
+import com.acme.staticforge.urlregistry.UrlRegistryService;
 /**
  * Caller-chosen options for {@link ProjectExportImportService#importProject} and
  * {@link ProjectExportImportService#analyzeImport} (feature `selection-provenance`,
@@ -17,14 +18,26 @@ package com.acme.staticforge.exportimport;
  *     ReleaseMode#KEEP}. An archive without release state (protocol {@code <= 7}) always imports as {@link
  *     ReleaseMode#DRAFT}.
  * @param importSchedules whether the archive's schedules are imported (M27.8.1)
+ * @param urlRegistryMode how the archive's URL registry rows meet the target's (M32.6); {@code null} reads as
+ *     {@code ARCHIVE_WINS}
  */
-public record ImportOptions(boolean skipExistingImplicit, ReleaseMode releaseMode, boolean importSchedules) {
+public record ImportOptions(
+        boolean skipExistingImplicit,
+        ReleaseMode releaseMode,
+        boolean importSchedules,
+        UrlRegistryService.ImportMode urlRegistryMode) {
 
     /** Pre-M11 behavior: every collision mints a fresh UUID, no conflicts are suppressed; release state kept. */
     public static final ImportOptions DEFAULT = new ImportOptions(false, ReleaseMode.KEEP, true);
 
     public ImportOptions {
         releaseMode = releaseMode == null ? ReleaseMode.KEEP : releaseMode;
+        urlRegistryMode = urlRegistryMode == null ? UrlRegistryService.ImportMode.ARCHIVE_WINS : urlRegistryMode;
+    }
+
+    /** The given options, the archive's URLs winning over the target's computed ones ({@code ARCHIVE_WINS}). */
+    public ImportOptions(boolean skipExistingImplicit, ReleaseMode releaseMode, boolean importSchedules) {
+        this(skipExistingImplicit, releaseMode, importSchedules, null);
     }
 
     /** The given skip option and release mode, schedules imported. */

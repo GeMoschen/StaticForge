@@ -45,6 +45,7 @@ public class ImpactService {
     private final CompiledTemplateCache compiledTemplates;
 
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
+    private final com.acme.staticforge.urlregistry.UrlRegistryService urlRegistryService;
 
     public ImpactService(
             ProjectService projectService,
@@ -53,7 +54,9 @@ public class ImpactService {
             BuildPlanner buildPlanner,
             RebuildExpansion expansion,
             CompiledTemplateCache compiledTemplates,
-            com.acme.staticforge.project.ProjectLocales projectLocales) {
+            com.acme.staticforge.project.ProjectLocales projectLocales,
+            com.acme.staticforge.urlregistry.UrlRegistryService urlRegistryService) {
+        this.urlRegistryService = urlRegistryService;
         this.projectService = projectService;
         this.channelService = channelService;
         this.snapshotService = snapshotService;
@@ -88,8 +91,10 @@ public class ImpactService {
             throw new SfException(ProblemFactory.notFound("Asset not found."));
         }
 
+        // Outputs are where the URL registry puts them (M32.3); nothing is registered here.
         OutputPathResolver paths = OutputPathResolver.forSnapshot(
-                snapshot, channelService.outputSettings(project.getId()), projectLocales.forProject(project.getId()));
+                        snapshot, channelService.outputSettings(project.getId()), projectLocales.forProject(project.getId()))
+                .withRegistry(urlRegistryService.view(project.getId(), com.acme.staticforge.urlregistry.UrlArea.GENERATED));
         var memo = compiledTemplates.buildMemo(snapshot.root());
         RebuildExpansion.Result walk = expansion.expand(
                 snapshot,
@@ -113,7 +118,7 @@ public class ImpactService {
                     walk.reasonFor(page.uuid()), output.locale()));
         }
         if (channel == null) {
-            MediaOutputs outputs = new MediaOutputs(snapshot, paths.locales());
+            MediaOutputs outputs = new MediaOutputs(snapshot, paths.locales(), paths.registry());
             walk.processedMedia().stream()
                     .map(snapshot::assetByUuid)
                     .sorted(Comparator.comparing(SnapshotAsset::uid))

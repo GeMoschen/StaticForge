@@ -39,6 +39,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryEntry;
 import com.acme.staticforge.urlregistry.UrlRegistryRepository;
+import com.acme.staticforge.urlregistry.UrlTarget;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -135,6 +136,11 @@ class FolderIndexPageConsumersIntegrationTest {
         assertThat(hrefFor(links, "products")).as("no index page: the directory").isEqualTo("../");
         assertThat(hrefFor(links, "tools")).as("no index page: the directory").isEqualTo("./");
         assertThat(files.values()).noneMatch(html -> html.contains("pages_root"));
+        // A folder without an index page has a URL of its own: its directory (M32).
+        assertThat(row(fx, UrlTarget.folder(products.uuid()), UrlArea.GENERATED, "")).get()
+                .extracting(UrlRegistryEntry::getUrl).isEqualTo("products/");
+        assertThat(row(fx, UrlTarget.folder(tools.uuid()), UrlArea.GENERATED, "")).get()
+                .extracting(UrlRegistryEntry::getUrl).isEqualTo("products/tools/");
     }
 
     @Test
@@ -229,7 +235,7 @@ class FolderIndexPageConsumersIntegrationTest {
         TemplateView plain = template(fx, "Plain", "<p>$CMS_VALUE(title)$</p>", Map.of("html", "{locale}/{folder}{uid}.{ext}"));
         AssetVersionView products = folderService.create(null, "Products", FolderScope.PAGES, fx.ctx());
         page(fx, plain, "Alpha", products.uuid(), "Alpha");
-        page(fx, plain, "Home", products.uuid(), "Products home");
+        UUID productsHome = page(fx, plain, "Home", products.uuid(), "Products home");
         AssetVersionView nav = folderService.create(null, "Main nav " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
         UUID productsRef = reference(fx, nav, "products", PageReferenceTargetKind.FOLDER, products.uuid(), "Products");
         TemplateView navTemplate = template(fx, "Nav", "$CMS_NAVIGATION(nav:" + nav.uid() + ")$", Map.of("html", "{locale}/nav.{ext}"));
@@ -242,8 +248,11 @@ class FolderIndexPageConsumersIntegrationTest {
         assertThat(files.get("de/products/index.html")).isEqualTo("<p>Products home</p>");
         assertThat(hrefFor(files.get("de/nav.html"), "Products")).isEqualTo("products/index.html");
         assertThat(hrefFor(files.get("en/nav.html"), "Products")).isEqualTo("products/index.html");
-        assertThat(row(fx, productsRef, UrlArea.GENERATED, "de")).isPresent();
-        assertThat(row(fx, productsRef, UrlArea.GENERATED, "en")).isPresent();
+        // The reference has no URL of its own (M32): it links its index page's registered URL, per language.
+        assertThat(row(fx, UrlTarget.page(productsHome), UrlArea.GENERATED, "de")).get()
+                .extracting(UrlRegistryEntry::getUrl).isEqualTo("de/products/index.html");
+        assertThat(row(fx, UrlTarget.page(productsHome), UrlArea.GENERATED, "en")).isPresent();
+        assertThat(row(fx, UrlTarget.page(productsRef), UrlArea.GENERATED, "de")).isEmpty();
     }
 
     // ------------------------------------------------------------------
@@ -307,9 +316,9 @@ class FolderIndexPageConsumersIntegrationTest {
                 html.getDefaultEscaping(), html.isEnabled(), html.isDefaultChannel(), html.getPosition(), settings), fx.ctx());
     }
 
-    private Optional<UrlRegistryEntry> row(Fixture fx, UUID reference, UrlArea area, String localeKey) {
-        return urlRegistryRepository.findByProjectIdAndChannelKeyAndPageReferenceUuidAndAreaAndLocaleKey(
-                fx.id(), "html", reference, area, localeKey);
+    private Optional<UrlRegistryEntry> row(Fixture fx, UrlTarget target, UrlArea area, String localeKey) {
+        return urlRegistryRepository.findTuple(fx.id(), target.channelKey("html"), area, localeKey, target.type(),
+                target.uuid(), target.variant(), target.pageNumber());
     }
 
     private String preview(Fixture fx, UUID page, String locale, ContentView.Kind view) {

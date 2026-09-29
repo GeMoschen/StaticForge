@@ -68,7 +68,7 @@ class RenderPipelineCompileCacheTest {
         Snapshot snapshot = snapshot();
         BuildPlan plan = new BuildPlan(false, 1L, entries, Set.of());
         RenderPipeline pipeline = new RenderPipeline(
-                new GenerationProperties(), mock(ProjectRepository.class), null, new SimpleMeterRegistry(), null, cache);
+                new GenerationProperties(), mock(ProjectRepository.class), null, new SimpleMeterRegistry(), cache);
 
         // GenerationService validates first, then executes (which validates again).
         assertThat(pipeline.validate(snapshot, plan)).isEmpty();

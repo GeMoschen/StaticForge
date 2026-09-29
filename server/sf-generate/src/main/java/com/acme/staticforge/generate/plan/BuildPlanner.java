@@ -6,6 +6,7 @@ import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.insight.FallbackCause;
 import com.acme.staticforge.generate.insight.RebuildReason;
 import com.acme.staticforge.generate.insight.RebuildRootKind;
+import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.OutputPathResolver;
 import com.acme.staticforge.generate.render.SnapshotPagination;
 import com.acme.staticforge.generate.snapshot.Snapshot;
@@ -91,7 +92,8 @@ public class BuildPlanner {
         // One walk per language (M27.2.2): an output is rebuilt when its language's walk reaches its page, so a
         // release in one language rebuilds only that language's outputs.
         RebuildExpansion.Walks walks = expansion.expandSince(
-                snapshot, baseline.revision(), pageUuid -> moved(pageUuid, firstPaths, basePaths), memo, paths.locales());
+                snapshot, baseline.revision(), pageUuid -> moved(pageUuid, firstPaths, basePaths), memo, paths.locales(),
+                urlChanged(snapshot, baseline, site, basePaths, paths));
 
         Map<UUID, RebuildReason> reasons = new HashMap<>();
         Map<UUID, Set<String>> siteLocales = new HashMap<>();
@@ -296,6 +298,67 @@ public class BuildPlanner {
             }
         }
         return paths;
+    }
+
+    /**
+     * The assets whose registered URL changed since the base build (M32.5): with the URL registry deciding where outputs
+     * go, an output lands elsewhere than in the base build only when its row was overridden, reset or imported — pages
+     * and media whose paths differ from the manifest's, plus what the manifest can't show ({@link Baseline#urlChanged}).
+     * Without a registry (a resolver computing every path) paths follow the content, and the walk sees moves as today.
+     */
+    private static Set<UUID> urlChanged(
+            Snapshot snapshot,
+            Baseline baseline,
+            List<PlanEntry> site,
+            Map<OutputKey, String> basePaths,
+            OutputPathResolver paths) {
+        Set<UUID> changed = new LinkedHashSet<>(baseline.urlChanged());
+        if (paths.registry() == null || baseline.manifest() == null) {
+            return changed;
+        }
+        for (PlanEntry output : site) {
+            String base = basePaths.get(new OutputKey(output.pageUuid(), output.channel(), output.pageNumber(), output.locale()));
+            if (base != null && !base.equals(output.outputPath())) {
+                changed.add(output.pageUuid());
+            }
+        }
+        Map<UUID, Set<String>> baseMedia = new LinkedHashMap<>();
+        for (BuildManifest.Output output : baseline.manifest().outputs()) {
+            if (output.kind() == BuildManifest.Kind.MEDIA && output.asset() != null) {
+                baseMedia.computeIfAbsent(output.asset(), k -> new java.util.HashSet<>()).add(output.path());
+            }
+        }
+        MediaOutputs media = new MediaOutputs(snapshot, paths.locales(), paths.registry());
+        baseMedia.forEach((uuid, basePathsOfMedia) -> {
+            Set<String> current = new java.util.HashSet<>();
+            for (MediaOutputs.Output output : media.outputsOf(uuid)) {
+                current.add(output.peekPath(null));
+                variantNames(output.payload()).forEach(name -> {
+                    String variant = output.peekPath(name);
+                    if (variant != null) {
+                        current.add(variant);
+                    }
+                });
+            }
+            if (!current.isEmpty() && !current.containsAll(basePathsOfMedia)) {
+                changed.add(uuid);
+            }
+        });
+        return changed;
+    }
+
+    private static List<String> variantNames(com.fasterxml.jackson.databind.JsonNode payload) {
+        List<String> names = new ArrayList<>();
+        com.fasterxml.jackson.databind.JsonNode variants = payload == null ? null : payload.get("variants");
+        if (variants != null && variants.isArray()) {
+            variants.forEach(variant -> {
+                String name = variant.path("name").asText("");
+                if (!name.isBlank()) {
+                    names.add(name);
+                }
+            });
+        }
+        return names;
     }
 
     /** Page 1's path of every site page, per channel and language. */

@@ -400,7 +400,7 @@ In **Channels**, each channel's form sets how its output files and links are nam
 | **Index page UID** | `index` | The page with this UID becomes its folder's index page. A page named "Index" gets the UID `index`, so it becomes your site's `index.html` when it sits in **All pages** |
 | **Index file name** | `index.` + extension | File name of a folder's index page, also used for pretty folder URLs; letters, digits, `.`, `-`, `_`, up to 64 |
 
-An invalid value is rejected with the field named. Changing the extension or URL settings moves every page of the channel: the next generation rebuilds all pages even in incremental mode, and generated URL registry entries are recomputed (manual overrides are kept).
+An invalid value is rejected with the field named. Changing the extension or URL settings moves every page of the channel: the next generation rebuilds all pages even in incremental mode, and the channel's computed URLs are recomputed (manual overrides are kept).
 
 A build publishes what is **released** (see [Publishing](#publishing-draft-release-unpublish-m27)), not the latest drafts.
 
@@ -479,10 +479,30 @@ the new rules. "Output could not be checked", "Link to a page held back in this 
 incomplete or broken" are never errors — their *Error* option is disabled: holding back one page must not hold back
 the pages that link to it.
 
+### Page, media and folder URLs (M32)
+
+Every page, media file and folder has a **URL**, assigned the first time a build (or a preview) publishes it. From then
+on it stays: renaming a page, moving it to another folder or changing its template keeps its address, so links from
+outside your site never break by accident. **Settings → URLs** lists every URL — filter by type, channel, language,
+area (*Build* or *Preview*) or search by name or address — and the page editor, the media details and the folder panel
+show an asset's own URLs.
+
+- **Override** sets an address by hand (developers). The next build writes the page or file there, updates every link
+  to it and redirects the old address.
+- **Reset** (project admins) forgets an address: the next build gives the page its current computed address — the one
+  its folder, UID and template describe — and moves it there, again with a redirect from the old one. *Reset asset*
+  forgets every address of one page, file or folder.
+- A navigation entry uses the URL of the page it points to; a folder with an index page uses that page's URL.
+- An address can belong to one page or file only. A build that would give a new page an address someone else holds —
+  for example one you set by hand for another page — stops with `SF-GEN-0110`; rename one of them or reset the URL.
+- When you import a project archive you choose what happens to URLs the project already has: use the archive's but keep
+  the ones set by hand (default), keep the project's, or use the archive's everywhere.
+
 ### Redirects: old URLs keep working (M30)
 
-When a released page moves — to another folder, with a new UID, because a template or a channel's URL setting
-changed — the next build notices that its address changed and adds an **automatic redirect** from the old address to
+When a released page's address changes — its URL was reset or overridden after it moved to another folder, got a new
+UID or its template changed (M32: until then it keeps its address), or a channel's URL setting changed — the next build
+notices that its address changed and adds an **automatic redirect** from the old address to
 the page. Visitors and search engines following an old link land on the page's new address. Moving the page again
 adds another redirect, and both lead straight to the newest address. Unpublishing or deleting a page adds nothing by
 itself — but you can choose where its old address should lead (below). Changing a folder's UID doesn't change any

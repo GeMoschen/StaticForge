@@ -7,6 +7,7 @@ import {
   ImportExportService,
   ImportResultView,
   ReleaseMode,
+  UrlRegistryImportMode,
   extractConflicts,
 } from './import-export.service';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -48,6 +49,9 @@ const CONFLICT_ICONS: Record<string, string> = {
   SCHEDULE_OWNER_REPLACED: 'person',
   REDIRECT_SOURCE_EXISTS: 'alt_route',
   REDIRECT_INVALID: 'link_off',
+  URL_OVERRIDE_KEPT: 'edit_note',
+  URL_TAKEN: 'link_off',
+  URL_INVALID: 'link_off',
 };
 
 /**
@@ -80,6 +84,9 @@ export function rejectsAssetOnly(conflict: ImportConflictView): boolean {
  * <p>Schedules (M27.8.2): an archive that carries schedules offers to import them (default) or leave them out; the
  * choice is re-analyzed (the schedule warnings only apply when they are imported) and sent with the import. The result
  * lists what happened to them at commit time.
+ *
+ * <p>URLs (M32.6): an archive that carries URL registry rows asks how they meet the project's existing URLs — the
+ * archive's replace computed ones but keep manual ones (default), existing URLs stay, or the archive's replace all.
  */
 @Component({
   selector: 'sf-project-settings-import',
@@ -130,6 +137,11 @@ export class ProjectSettingsImportComponent {
   /** How many schedules the loaded archive carries, from its last analysis; `null` until one answers. */
   protected readonly archiveScheduleCount = signal<number | null>(null);
 
+  /** How the archive's URLs meet the project's existing ones (M32.6). */
+  protected readonly urlRegistryMode = signal<UrlRegistryImportMode>('ARCHIVE_WINS');
+  /** How many URL registry rows the loaded archive carries, from its last analysis; `null` until one answers. */
+  protected readonly archiveUrlCount = signal<number | null>(null);
+
   /** The analysis in flight — dropped when the archive or the project changes before it answers. */
   private analysis: Subscription | null = null;
 
@@ -166,11 +178,12 @@ export class ProjectSettingsImportComponent {
       const skip = this.skipExistingImplicit();
       const releaseMode = this.releaseMode();
       const importSchedules = this.importSchedules();
+      const urlRegistryMode = this.urlRegistryMode();
       const file = this.file();
       if (!file) {
         return;
       }
-      untracked(() => this.analyze(file, skip, releaseMode, importSchedules));
+      untracked(() => this.analyze(file, skip, releaseMode, importSchedules, urlRegistryMode));
     });
 
     // The router reuses this screen when only the project changes (`/p/a/settings/…` → `/p/b/settings/…`): an
@@ -192,7 +205,7 @@ export class ProjectSettingsImportComponent {
    */
   protected hasProvenance(conflict: ImportConflictView): boolean {
     const type = conflict.type ?? '';
-    return !type.includes('SCHEDULE') && !type.startsWith('REDIRECT_');
+    return !type.includes('SCHEDULE') && !type.startsWith('REDIRECT_') && !type.startsWith('URL_');
   }
 
   protected iconFor(type: string | undefined): string {
@@ -213,6 +226,12 @@ export class ProjectSettingsImportComponent {
   protected redirectsSummary(result: ImportResultView): string {
     const imported = result.importedRedirectCount ?? 0;
     return imported > 0 ? `Imported ${imported} redirect(s).` : '';
+  }
+
+  /** "Imported 12 URL(s)." — empty when the import brought none (M32.6). */
+  protected urlsSummary(result: ImportResultView): string {
+    const imported = result.importedUrlCount ?? 0;
+    return imported > 0 ? `Imported ${imported} URL(s).` : '';
   }
 
   /** The badge of an asset left out of the import: a record outside a record set says what it is. */
@@ -259,6 +278,10 @@ export class ProjectSettingsImportComponent {
     this.importSchedules.set(importSchedules);
   }
 
+  protected onUrlRegistryModeChange(mode: UrlRegistryImportMode): void {
+    this.urlRegistryMode.set(mode);
+  }
+
   private pickFile(file: File | null): void {
     if (!file || this.readOnly()) {
       return;
@@ -274,23 +297,32 @@ export class ProjectSettingsImportComponent {
     this.archiveHasReleaseState.set(null);
     this.importSchedules.set(true);
     this.archiveScheduleCount.set(null);
+    this.urlRegistryMode.set('ARCHIVE_WINS');
+    this.archiveUrlCount.set(null);
     // Setting `file` here triggers the constructor's analyze-on-change effect below — no
     // direct `analyze()` call needed.
     this.file.set(file);
   }
 
-  private analyze(file: File, skipExistingImplicit: boolean, releaseMode: ReleaseMode, importSchedules: boolean): void {
+  private analyze(
+    file: File,
+    skipExistingImplicit: boolean,
+    releaseMode: ReleaseMode,
+    importSchedules: boolean,
+    urlRegistryMode: UrlRegistryImportMode,
+  ): void {
     this.analyzing.set(true);
     this.report.set(null);
     this.analysis?.unsubscribe();
     this.analysis = this.api
-      .analyzeImport(this.projectKey(), file, skipExistingImplicit, releaseMode, importSchedules)
+      .analyzeImport(this.projectKey(), file, skipExistingImplicit, releaseMode, importSchedules, urlRegistryMode)
       .subscribe({
         next: (report) => {
           this.analyzing.set(false);
           this.report.set(report);
           this.archiveHasReleaseState.set(report.releaseState !== false);
           this.archiveScheduleCount.set(report.scheduleCount ?? 0);
+          this.archiveUrlCount.set(report.urlCount ?? 0);
         },
         error: () => {
           this.analyzing.set(false);
@@ -315,6 +347,8 @@ export class ProjectSettingsImportComponent {
     this.archiveHasReleaseState.set(null);
     this.importSchedules.set(true);
     this.archiveScheduleCount.set(null);
+    this.urlRegistryMode.set('ARCHIVE_WINS');
+    this.archiveUrlCount.set(null);
   }
 
   commit(): void {
@@ -327,7 +361,16 @@ export class ProjectSettingsImportComponent {
     // Without release state the server imports drafts whatever is sent; send what the analysis applied.
     const releaseMode: ReleaseMode = this.archiveHasReleaseState() === false ? 'DRAFT' : this.releaseMode();
     const importSchedules = this.importSchedules();
-    this.api.commitImport(this.projectKey(), file, this.skipExistingImplicit(), releaseMode, importSchedules).subscribe({
+    this.api
+      .commitImport(
+        this.projectKey(),
+        file,
+        this.skipExistingImplicit(),
+        releaseMode,
+        importSchedules,
+        this.urlRegistryMode(),
+      )
+      .subscribe({
       next: (result) => {
         this.committing.set(false);
         this.result.set(result);
@@ -335,6 +378,7 @@ export class ProjectSettingsImportComponent {
         this.report.set(null);
         this.archiveHasReleaseState.set(null);
         this.archiveScheduleCount.set(null);
+        this.archiveUrlCount.set(null);
         // A committed import can create folders (and move/rename existing ones) that
         // `ProjectContextStore`'s folder trees — loaded once per project and otherwise only
         // refreshed by each store screen's own CRUD actions — have no other way to learn about,
@@ -345,13 +389,15 @@ export class ProjectSettingsImportComponent {
         const released = result.releasedCount ?? 0;
         const schedules = (result.importedScheduleCount ?? 0) + (result.updatedScheduleCount ?? 0);
         const redirects = result.importedRedirectCount ?? 0;
+        const urls = result.importedUrlCount ?? 0;
         this.toasts.show(
           `Imported ${result.importedAssetCount ?? 0} asset(s)`
             + (updated > 0 ? `, overwrote ${updated}` : '')
             + `, ${result.importedBlobCount ?? 0} blob(s)`
             + (released > 0 ? `, ${released} release(s) kept` : '')
             + (schedules > 0 ? `, ${schedules} schedule(s)` : '')
-            + (redirects > 0 ? `, ${redirects} redirect(s)` : ''),
+            + (redirects > 0 ? `, ${redirects} redirect(s)` : '')
+            + (urls > 0 ? `, ${urls} URL(s)` : ''),
           'success',
         );
       },
@@ -366,6 +412,7 @@ export class ProjectSettingsImportComponent {
             releaseState: this.archiveHasReleaseState() !== false,
             releaseMode,
             scheduleCount: this.archiveScheduleCount() ?? 0,
+            urlCount: this.archiveUrlCount() ?? 0,
           });
           this.commitError.set(
             'Conflicts changed since you last checked this archive — please re-check it.',

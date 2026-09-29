@@ -11,14 +11,23 @@ import java.util.List;
  * @param scheduleCount the number of schedules in the archive (M27.8.1), whether or not they are imported
  * @param redirectCount the number of redirects the import reads from the archive (M30.4.1, protocol {@code >= 10};
  *     {@code 0} for an older archive), whether or not they are imported
+ * @param urlCount the number of URL registry rows the import reads from the archive (M32.6, protocol {@code >= 11};
+ *     {@code 0} for an older archive), whether or not they are imported
  */
 public record ConflictReport(
         List<ImportConflict> conflicts, boolean releaseState, ReleaseMode releaseMode, int scheduleCount,
-        int redirectCount) {
+        int redirectCount, int urlCount) {
 
     /** A report about an archive whose release state doesn't matter (an unreadable or rejected one). */
     public ConflictReport(List<ImportConflict> conflicts) {
-        this(conflicts, false, ReleaseMode.DRAFT, 0, 0);
+        this(conflicts, false, ReleaseMode.DRAFT, 0, 0, 0);
+    }
+
+    /** A report about an archive without URL registry rows. */
+    public ConflictReport(
+            List<ImportConflict> conflicts, boolean releaseState, ReleaseMode releaseMode, int scheduleCount,
+            int redirectCount) {
+        this(conflicts, releaseState, releaseMode, scheduleCount, redirectCount, 0);
     }
 
     /**

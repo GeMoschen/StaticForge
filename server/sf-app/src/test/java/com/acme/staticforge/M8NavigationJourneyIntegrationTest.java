@@ -32,6 +32,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.urlregistry.ResetScope;
 import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlTarget;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -158,15 +159,15 @@ class M8NavigationJourneyIntegrationTest {
         String catalogRefHref1 = hrefFor(html1, "Browse Catalog");
 
         assertThat(contactHref1)
-                .as("top-level PAGE-kind reference resolves through the registry, keyed on its own uuid")
-                .isEqualTo(urlRegistryService.resolve(contactRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()));
+                .as("top-level PAGE-kind reference links its page's registered URL")
+                .isEqualTo(urlRegistryService.resolvePageReference(contactRef.uuid(), "html", UrlArea.GENERATED, null, fx.ctx()));
         // "Products" (the folder's own link, via its startNode) and the nested "Browse Catalog"
         // reference both resolve to Page A -- the first navigable page of the Catalog folder --
         // so they must point at the exact same URL.
         assertThat(productsHref1).isEqualTo(catalogRefHref1);
         assertThat(catalogRefHref1)
-                .as("catalog reference URL is registry-assigned for its own PageReference uuid")
-                .isEqualTo(urlRegistryService.resolve(catalogRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()));
+                .as("catalog reference links the registered URL of the page it resolves to")
+                .isEqualTo(urlRegistryService.resolvePageReference(catalogRef.uuid(), "html", UrlArea.GENERATED, null, fx.ctx()));
 
         // ------------------------------------------------------------------
         // 5. Rename the target page (Page A); regenerate; the registry-backed reference href
@@ -183,7 +184,7 @@ class M8NavigationJourneyIntegrationTest {
         assertThat(catalogRefHref2)
                 .as("registry-backed URL is stable across a rename of the resolved target page")
                 .isEqualTo(catalogRefHref1);
-        assertThat(urlRegistryService.resolve(catalogRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
+        assertThat(urlRegistryService.resolvePageReference(catalogRef.uuid(), "html", UrlArea.GENERATED, null, fx.ctx()))
                 .isEqualTo(catalogRefHref1);
 
         // ------------------------------------------------------------------
@@ -199,7 +200,7 @@ class M8NavigationJourneyIntegrationTest {
         assertThat(catalogRefHref3)
                 .as("URL is reassigned to reflect the rename after an explicit channel reset")
                 .isNotEqualTo(catalogRefHref1);
-        assertThat(urlRegistryService.resolve(catalogRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
+        assertThat(urlRegistryService.resolvePageReference(catalogRef.uuid(), "html", UrlArea.GENERATED, null, fx.ctx()))
                 .isEqualTo(catalogRefHref3);
 
         // ------------------------------------------------------------------
@@ -212,7 +213,9 @@ class M8NavigationJourneyIntegrationTest {
         String previewHrefBefore = hrefFor(previewHtmlBefore, "Browse Catalog");
         assertThat(previewHrefBefore).isEqualTo(catalogRefHref3);
 
-        urlRegistryService.override(catalogRef.uuid(), "html", UrlArea.PREVIEW, "preview-only/catalog.html", fx.ctx());
+        // A page reference has no URL of its own (M32): overriding its page's PREVIEW URL moves the preview's link.
+        urlRegistryService.override(
+                UrlTarget.page(pageA.uuid()), "html", UrlArea.PREVIEW, "", "preview-only/catalog.html", fx.ctx());
 
         String previewHtmlAfter = pageRenderService.renderPage(fx.project().getId(), homePage.uuid(), null, "html", false);
         assertThat(hrefFor(previewHtmlAfter, "Browse Catalog")).isEqualTo("preview-only/catalog.html");
@@ -222,7 +225,7 @@ class M8NavigationJourneyIntegrationTest {
         assertThat(hrefFor(html4, "Browse Catalog"))
                 .as("PREVIEW override never leaks into GENERATED")
                 .isEqualTo(catalogRefHref3);
-        assertThat(urlRegistryService.resolve(catalogRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
+        assertThat(urlRegistryService.resolvePageReference(catalogRef.uuid(), "html", UrlArea.GENERATED, null, fx.ctx()))
                 .isEqualTo(catalogRefHref3);
     }
 

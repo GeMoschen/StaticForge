@@ -57,6 +57,37 @@ public class LiveOutputPathResolver {
                 .map(context -> normalize(OutputPathExpander.resolveUrl(context, channel, settings, locale)));
     }
 
+    /**
+     * The output path (relative, forward-slash, no leading slash) a page is written at in a channel, computed from its
+     * draft (M32.4); empty when the page doesn't resolve to a live asset.
+     */
+    public Optional<String> resolvePath(
+            long projectId,
+            UUID pageUuid,
+            String channel,
+            ChannelOutputSettings settings,
+            OutputPathExpander.LocaleContext locale) {
+        return pageContext(projectId, pageUuid)
+                .map(context -> normalize(OutputPathExpander.resolvePath(context, channel, settings, locale)));
+    }
+
+    /**
+     * The output path of page {@code pageNumber} ≥ 2 of a paginated page, next to {@code firstPagePath} (page 1's
+     * registered path) by the page template's pagination pattern (M32.4); empty when the page doesn't resolve.
+     */
+    public Optional<String> resolvePaginationPath(
+            long projectId,
+            UUID pageUuid,
+            String channel,
+            ChannelOutputSettings settings,
+            OutputPathExpander.LocaleContext locale,
+            String firstPagePath,
+            int pageNumber) {
+        return pageContext(projectId, pageUuid)
+                .map(context -> normalize(OutputPathExpander.resolvePaginationPath(
+                        context, channel, settings, firstPagePath, pageNumber, locale)));
+    }
+
     private Optional<OutputPathExpander.PageContext> pageContext(long projectId, UUID pageUuid) {
         if (pageUuid == null) {
             return Optional.empty();

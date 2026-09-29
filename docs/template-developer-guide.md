@@ -1074,7 +1074,34 @@ write the same file; generation refuses the run with `SF-GEN-0111` before writin
 
 `$CMS_REF(page:about)$` links to the target **in the render language**, relative to the page holding the link, so
 `en/pf/p2.html` links to `../about.html`. To cross languages deliberately, name one:
-`$CMS_REF(page:about, locale="en")$`.
+`$CMS_REF(page:about, locale="en")$`. A language the project doesn't have (or an empty value) links the render
+language instead, so a typo never produces a link to a file nobody writes.
+
+The language can come from the template, too: an **unquoted** argument value is evaluated when the link renders — a
+loop or `$CMS_SET` variable, an editor, a `CMS_GLOBAL` value. Pass a `CMS_LOCALES` item itself (it stands for its
+`code`), and one loop links *another* page in every language:
+
+```
+<ul class="languages">
+  $CMS_FOR(l : CMS_LOCALES)$
+    <li><a href="$CMS_REF(page:about, locale=l)$" hreflang="$CMS_VALUE(l.code)$">$CMS_VALUE(l.label)$</a></li>
+  $CMS_END_FOR$
+</ul>
+```
+
+`locale=l.code` does the same. Rules for unquoted values:
+
+- **Quoted is literal.** `locale="en"` is always the text `en`.
+- **A single word that names nothing stays literal**, so existing templates keep working: `variant=w400`,
+  `locale=de-CH`. A word that *does* name something is evaluated: with `$CMS_SET(en = "de")$` in scope, `locale=en`
+  means `de` — quote the value when you mean the text.
+- **A dotted path is a value** and is checked at compile time like `$CMS_VALUE` (`SF-TPL-0103` unknown editor,
+  `SF-TPL-0110` unresolvable asset). If it yields nothing, an empty text, a list or an object without `code`, the
+  argument is left out (the link uses the render language).
+- **Preview.** Page links in the preview follow `locale=` too: the share link opens the target in that language.
+- Only `$CMS_REF` evaluates argument values; `$CMS_INCLUDE`, `$CMS_NAVIGATION` and `$CMS_FOR` arguments stay literal.
+
+For *this* page in every language, `CMS_LOCALES` already has `l.href` (above).
 
 The sitemap lists every output and marks translations as alternates of one another, with `x-default` pointing at the
 default language:
@@ -1217,8 +1244,14 @@ the Quality tab shows its *Error* option disabled.
   links, `mailto:` and `tel:` are never checked (no network access); absolute links under the target's base URL are
   checked like relative ones.
 
-**Why redirect stubs exist.** When a page moves (another folder, a new UID, a template `outputPath` change, a channel
-URL setting), the next build records a redirect from its old path and — by default — writes a small HTML page there
+**Output paths are assigned once (M32).** A template's `outputPath` (and a page's `pathOverride`) computes where a page
+goes the first time it is published. From then on the page keeps that URL in the URL registry: changing the expression
+later moves nothing until the pages' URLs are reset in **Settings → URLs** (or a channel's URL settings change, which
+resets that channel). The same holds for media files and index-less folders. `$CMS_REF(…)$`, navigation, the sitemap
+and canonical links always use the registered URL, so they never point at a path the build didn't write.
+
+**Why redirect stubs exist.** When a page moves (a URL reset after a move to another folder, a new UID or a template
+`outputPath` change; a channel URL setting), the next build records a redirect from its old path and — by default — writes a small HTML page there
 that sends visitors on at once (spec §18.9). These *stubs* are site files like `sitemap.xml`: they don't come from a
 template, never appear in the sitemap or the search index, carry `<meta name="robots" content="noindex">`, and are
 never written over a real page — a page you publish at an old path wins. A target can write Apache `.htaccess` rules or

@@ -9,17 +9,15 @@ import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.pipeline.RenderedFile;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
-import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.render.RenderLimitException;
-import com.acme.staticforge.urlregistry.ResetScope;
 import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryEntry;
-import com.acme.staticforge.urlregistry.UrlRegistryService;
+import com.acme.staticforge.urlregistry.UrlRegistryView;
+import com.acme.staticforge.urlregistry.UrlTarget;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -269,7 +267,7 @@ class GenerationRendererNavigationTest {
     }
 
     @Test
-    void navigationHrefsForPageReferenceNodesRouteThroughTheUrlRegistryGeneratedArea() {
+    void navigationHrefsAreTheTargetPagesRegisteredUrls() {
         SnapshotAsset template = pageTemplate(PAGE_TEMPLATE, "$CMS_NAVIGATION(nav:main)$");
         SnapshotAsset navRoot = folder(NAV_ROOT, "main", "/nav/", "{\"scope\":\"NAVIGATION\"}");
         SnapshotAsset homeRef = pageReference(HOME_REF, "home-ref", "/nav/", HOME_PAGE, "Home");
@@ -278,99 +276,23 @@ class GenerationRendererNavigationTest {
         SnapshotAsset aboutPage = page(ABOUT_PAGE, "about", "/", PAGE_TEMPLATE);
 
         Snapshot snapshot = snapshot(template, navRoot, homeRef, aboutRef, homePage, aboutPage);
-        FakeUrlRegistryService registry = new FakeUrlRegistryService();
+        // The about page keeps the URL it was registered at; the home page has none yet.
+        UrlRegistryView registry = UrlRegistryView.of(List.of(new UrlRegistryEntry(
+                1L, "html", UrlTarget.page(ABOUT_PAGE), UrlArea.GENERATED, "", "company/about-us.html",
+                java.time.Instant.now(), 1L, true)));
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot,
-                OutputPathResolver.forSnapshot(snapshot, Map.of()),
-                "proj",
-                null,
-                registry,
-                42L);
+                snapshot, OutputPathResolver.forSnapshot(snapshot, Map.of()).withRegistry(registry), "proj", null);
 
         RenderedFile file = renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html"));
         String html = new String(file.bytes(), java.nio.charset.StandardCharsets.UTF_8);
 
-        // Every href comes from the registry (UrlArea.GENERATED), keyed on the PAGE_REFERENCE's
-        // own uuid — not the resolved page's uuid.
-        assertThat(registry.resolvedPageReferenceUuids).containsExactlyInAnyOrder(HOME_REF, ABOUT_REF);
-        assertThat(registry.resolvedAreas).containsOnly(UrlArea.GENERATED);
-        assertThat(html).contains("href=\"registry/" + HOME_REF + ".html\"");
-        assertThat(html).contains("href=\"registry/" + ABOUT_REF + ".html\"");
-
-        // Second render of the same page (as a second generation run would do) re-resolves the
-        // same tuples; the fake's cache (mirroring the real read-through-cache contract) returns
-        // the identical url both times.
-        String htmlAgain = new String(
-                renderer.render(new PlanEntry(HOME_PAGE, "html", "home.html")).bytes(),
-                java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(htmlAgain).isEqualTo(html);
-    }
-
-    /**
-     * Minimal in-memory fake proving {@code GenerationRenderer} calls through {@link
-     * UrlRegistryService} for PAGE_REFERENCE nav hrefs, keyed by {@code pageReferenceUuid} —
-     * mirrors the real read-through-cache contract (`M8.2.2`) closely enough to assert routing
-     * and stability without a Spring/DB-backed integration test (that full end-to-end proof,
-     * including a real content rename between two full generation runs, lives in
-     * {@code NavigationUrlRegistryIntegrationTest}, sf-app).
-     */
-    private static final class FakeUrlRegistryService implements UrlRegistryService {
-        final Map<String, String> store = new HashMap<>();
-        final List<UUID> resolvedPageReferenceUuids = new ArrayList<>();
-        final List<UrlArea> resolvedAreas = new ArrayList<>();
-
-        @Override
-        public String resolve(UUID pageReferenceUuid, String channelKey, UrlArea area, RevisionContext ctx) {
-            return resolve(pageReferenceUuid, channelKey, area, null, ctx);
-        }
-
-        @Override
-        public String resolve(
-                UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, RevisionContext ctx) {
-            resolvedPageReferenceUuids.add(pageReferenceUuid);
-            resolvedAreas.add(area);
-            String key = pageReferenceUuid + ":" + channelKey + ":" + area + ":" + (locale == null ? "" : locale);
-            return store.computeIfAbsent(key, k -> "registry/" + pageReferenceUuid + ".html");
-        }
-
-        /** Stores its own marker URL rather than {@code computed}, so the tests see that the href came from here. */
-        @Override
-        public String resolve(
-                UUID pageReferenceUuid,
-                String channelKey,
-                UrlArea area,
-                String locale,
-                java.util.function.Supplier<String> computed,
-                RevisionContext ctx) {
-            return resolve(pageReferenceUuid, channelKey, area, locale, ctx);
-        }
-
-        @Override
-        public UrlRegistryEntry override(UUID pageReferenceUuid, String channelKey, UrlArea area, String url, RevisionContext ctx) {
-            throw new UnsupportedOperationException("not exercised by this test");
-        }
-
-        @Override
-        public UrlRegistryEntry override(
-                UUID pageReferenceUuid, String channelKey, UrlArea area, String locale, String url, RevisionContext ctx) {
-            throw new UnsupportedOperationException("not exercised by this test");
-        }
-
-        @Override
-        public void reset(long projectId, ResetScope scope, RevisionContext ctx) {
-            throw new UnsupportedOperationException("not exercised by this test");
-        }
-
-        @Override
-        public org.springframework.data.domain.Page<UrlRegistryEntry> search(
-                long projectId, String channelKey, UrlArea area, org.springframework.data.domain.Pageable pageable) {
-            throw new UnsupportedOperationException("not exercised by this test");
-        }
-
-        @Override
-        public UrlRegistryEntry require(long projectId, long id) {
-            throw new UnsupportedOperationException("not exercised by this test");
-        }
+        // A page reference has no URL of its own: its href is its page's registered URL, relative to the rendering page.
+        assertThat(html).contains("href=\"company/about-us.html\"");
+        assertThat(html).contains("href=\"home.html\"");
+        // The home page's computed URL is claimed for it; the page references claim nothing.
+        assertThat(registry.claims()).extracting(claim -> claim.key().target())
+                .containsExactly(UrlTarget.page(HOME_PAGE));
+        assertThat(registry.claims()).extracting(UrlRegistryView.Claim::url).containsExactly("home.html");
     }
 
     // ------------------------------------------------------------------

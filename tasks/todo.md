@@ -1,3 +1,57 @@
+# M32 — Complete URL registry (branch `m32-complete-url-registry`)
+
+Spec: `tasks/32-m32-complete-url-registry/`. User decisions (2026-09-29) and binding decisions there. Every page,
+paginated page, media file (per variant and language) and index-less folder gets an assign-once registry row per channel,
+area and language; the registered URL drives the written file and every link. Page references and indexed folders derive
+from their page; existing page-reference rows are dropped.
+
+- [x] M32.1 model + migration (`030-url-registry-all-targets.xml`, `UrlTarget`, URL uniqueness, `ResetScope.ASSET`, change log)
+- [x] M32.2 registry service (all targets, derived targets, pagination from page 1, collisions `SF-DOM-0200`/`0201`)
+- [x] M32.3 generation: outputs written at registry URLs, links/nav/sitemap/canonical/link checker through the registry
+- [x] M32.4 preview per locale through the registry
+- [x] M32.5 root kind `URL_CHANGED`, AUTO redirects after override/reset, removal of computed rows
+- [x] M32.6 export/import protocol 11 (GENERATED rows, `UrlRegistryImportMode`)
+- [x] M32.7 REST API (filters, `PUT` by target, `GET …/assets/{uuid}`, `ASSET` reset, import mode)
+- [x] M32.8 UI ("URLs" panel, per-asset URL sections in page/media/folder, import option, `URL_CHANGED` label)
+- [x] M32.9 spec + docs
+- [x] Benchmark: 5,000-page first full build (registers all 5,000 URLs) 3,532 ms vs 3,375 ms on master, fastest of two
+      alternating runs each (+5 %); incremental 1,251 vs 1,331 ms
+- [x] Verification: see Review
+- [x] Addition (2026-09-29, user): `$CMS_REF` argument values from the template — an unquoted value is a path evaluated at
+      render time (`locale=l` with a `CMS_LOCALES` item, `locale=l.code`, variables, editors, `CMS_GLOBAL`), a single
+      word naming nothing stays literal; an undeclared `locale=` links the render language; preview page links follow
+      `locale=`. `RefArgumentRenderTest`, `LocalizedGenerationIntegrationTest.languageLoopLinksAnotherPageInEveryLanguage`
+
+## Review
+
+- **Model (M32.1).** `url_registry_entry` re-keyed to `(project, channel, area, locale, target_type, target_uuid,
+  variant_key, page_number)` plus unique `(project, channel, area, locale, url)`; `030` deletes every old row;
+  `url_registry_change` records overrides, resets and imports for the planner.
+- **Service (M32.2).** `UrlTarget`, `UrlRegistryView` (a build's in-memory area: registered URLs win, first-time URLs
+  are claimed, a held URL is a collision), `resolvePage`/`resolvePageReference` for previews, target-based `override`
+  with validation, `register` (JDBC batches), `deleteComputed`, `importRows`, `describe`/`indexPages` for the API.
+- **Generation (M32.3).** `OutputPathResolver.withRegistry` and `MediaOutputs(…, registry)`: the plan, the renderer
+  (page, media, folder links, navigation), the manifest, sitemap, redirects and link checks all see registered paths.
+  URL ↔ file is lossless (`OutputPathExpander.urlForOutput` / `pathForUrl`). Claims are stored in the publishing
+  transaction; registry collisions fail the build with `SF-GEN-0110` like path collisions.
+- **Planner (M32.5).** `RebuildRootKind.URL_CHANGED`: pages and media whose path differs from the base manifest, plus
+  folders from the change log (every pages folder after a wide reset), become roots.
+- **Found on the way:** a preview without link rewriting emitted bare uids for page and media links (now registry
+  URLs); `resolvePageUrl` used the directory form for any path in pretty mode, which pointed an overridden file URL at
+  its directory.
+- **Deviations:** build collisions fail the build (the existing `SF-GEN-0110` behavior) rather than holding back one
+  output — the user's choice "fails the build" in the question; media links in a preview ignore language fallback
+  sharing (a localized file is keyed by the preview's language); the migration is not tested against a database that
+  already holds page-reference rows (it deletes them unconditionally before re-keying).
+- **Existing tests adapted to frozen URLs:** redirect detection/output, incremental publish, released generation,
+  rebuild reasons, build insight reset the page's URL after a move — without a reset nothing moves (new tests assert
+  both). `GenerationIntegrationTest.fullGenerationReachesSuccessAndPublishesOutput` fails on master too in this
+  environment (`current` is a directory here), unrelated to M32.
+
+---
+
+---
+
 # M31 — Folder start pages (branch `m31-folder-start-pages`)
 
 > **Correction (2026-09-29, user).** Start pages for pages-store folders were not intended and have been removed again

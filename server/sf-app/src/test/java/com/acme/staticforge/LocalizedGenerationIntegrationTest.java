@@ -21,11 +21,14 @@ import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.RunStatus;
 import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
+import com.acme.staticforge.preview.PageRenderService;
+import com.acme.staticforge.preview.PreviewTokenService;
 import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.release.ContentView;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -83,6 +86,8 @@ class LocalizedGenerationIntegrationTest {
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
     @Autowired ReleaseFixtures releaseFixtures;
+    @Autowired PageRenderService pageRenderService;
+    @Autowired PreviewTokenService previewTokenService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -258,6 +263,67 @@ class LocalizedGenerationIntegrationTest {
         assertThat(Files.readString(build.resolve("de/about.html"))).contains("<html lang=\"de\">");
 
         assertNoBrokenLinks(build);
+    }
+
+    @Test
+    @DisplayName("$CMS_REF(page:x, locale=l) inside a CMS_LOCALES loop links another page in every language, in the build "
+            + "and in the preview; a language the project doesn't have links in the render language")
+    void languageLoopLinksAnotherPageInEveryLanguage() throws Exception {
+        Fixture fx = newFixture("l10nloop");
+        enableLocales(fx, false);
+        TemplateView template = template(fx);
+        AssetVersionView folder = folderService.create(
+                assetService.ensurePagesRootFolder(fx.project().getId(), fx.ctx()).uuid(), "pf", null, fx.ctx());
+        page(fx, template, "about", null, Map.of("de", "Ueber uns", "en", "About us"));
+        UUID p2 = page(fx, template, "p2", folder.uuid(), Map.of("de", "Zwei", "en", "Two"));
+        String loop = "<nav>$CMS_FOR(l : CMS_LOCALES)$<a href=\"$CMS_REF(page:about, locale=l)$\">about-$CMS_VALUE(l.code)$</a>"
+                + "<a href=\"$CMS_REF(page:about, locale=l.code)$\">code-$CMS_VALUE(l.code)$</a>$CMS_END_FOR$"
+                + "<a href=\"$CMS_REF(page:about, locale=\"fr\")$\">about-fr</a></nav>";
+        templateService.update(
+                template.uuid(),
+                new com.acme.staticforge.asset.template.UpdateTemplateCommand(
+                        "Article",
+                        ARTICLE_CDL,
+                        Map.of("html", ARTICLE_HTML.replace("</html>", loop + "</html>")),
+                        null,
+                        false,
+                        Map.of("html", "{locale}/{folder}{uid}.{ext}"),
+                        false,
+                        Map.of()),
+                assetService.requireCurrent(fx.project().getId(), template.uuid()).validFromRevision(),
+                fx.ctx());
+
+        Path build = generate(fx, GenerationMode.FULL);
+
+        // Relative to {locale}/pf/p2.html: the same language's about is one level up, the other one across.
+        for (String locale : List.of("de", "en")) {
+            String html = Files.readString(build.resolve(locale + "/pf/p2.html"));
+            String other = "de".equals(locale) ? "en" : "de";
+            assertThat(html).as(locale).contains("<a href=\"../about.html\">about-" + locale + "</a>");
+            assertThat(html).as(locale).contains("<a href=\"../about.html\">code-" + locale + "</a>");
+            assertThat(html).as(locale).contains("<a href=\"../../" + other + "/about.html\">about-" + other + "</a>");
+            assertThat(html).as(locale).contains("<a href=\"../../" + other + "/about.html\">code-" + other + "</a>");
+            assertThat(html).as("an undeclared language links the render language (%s)", locale)
+                    .contains("<a href=\"../about.html\">about-fr</a>");
+        }
+        assertNoBrokenLinks(build);
+
+        String preview = pageRenderService
+                .renderPage(fx.project().getId(), p2, null, "html", true, "http://localhost/api/v1", null, "de",
+                        ContentView.Kind.PUBLISHED)
+                .html();
+        assertThat(previewLinkLocale(preview, "about-de")).isEqualTo("de");
+        assertThat(previewLinkLocale(preview, "about-en")).isEqualTo("en");
+        assertThat(previewLinkLocale(preview, "code-en")).isEqualTo("en");
+        assertThat(previewLinkLocale(preview, "about-fr")).isEqualTo("de");
+    }
+
+    /** The language of the page a preview share link opens. */
+    private String previewLinkLocale(String html, String label) {
+        Matcher link = Pattern.compile("<a href=\"[^\"]*/preview/share\\?t=([^\"&]+)\">" + Pattern.quote(label) + "</a>")
+                .matcher(html);
+        assertThat(link.find()).as("a share link labeled %s in %s", label, html).isTrue();
+        return previewTokenService.verifyShareToken(link.group(1)).locale();
     }
 
     @Test

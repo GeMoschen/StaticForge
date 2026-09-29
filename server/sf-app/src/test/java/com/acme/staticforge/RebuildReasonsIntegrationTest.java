@@ -1,5 +1,8 @@
 package com.acme.staticforge;
 
+import com.acme.staticforge.urlregistry.UrlRegistryService;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.ResetScope;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.staticforge.BuildInsightFixtures.Fixture;
@@ -66,6 +69,7 @@ class RebuildReasonsIntegrationTest {
     @Autowired PageReferenceService pageReferenceService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired UrlRegistryService urlRegistryService;
     @Autowired ReleaseFixtures releaseFixtures;
 
     private BuildInsightFixtures fixtures;
@@ -267,10 +271,15 @@ class RebuildReasonsIntegrationTest {
         fixtures.succeeded(fixtures.generate(fx, site, GenerationMode.FULL));
 
         fixtures.updateTemplate(fx, movable.uuid(), "<p>moved</p>", "sub/{displayNameSlug}.{ext}");
+        // The template's new outputPath applies once the page's URL is reset (M32).
+        urlRegistryService.reset(fx.projectId(), ResetScope.asset(moved.uuid(), UrlArea.GENERATED), fx.ctx());
         BuildPlan plan = plan(fx, site, GenerationMode.INCREMENTAL);
         assertThat(plannedPages(plan)).containsExactlyInAnyOrder(moved.uuid(), linker.uuid());
+        // The reset makes the moved page a root of its own (M32): its URL changed.
+        assertThat(plan.reasonFor(moved.uuid()).rootKind()).isEqualTo(RebuildRootKind.URL_CHANGED);
+        assertThat(plan.reasonFor(linker.uuid()).rootUuid()).isEqualTo(moved.uuid());
         assertThat(plan.reasonFor(linker.uuid()).steps()).extracting(RebuildStep::assetUuid)
-                .containsExactly(linker.uuid(), linking.uuid(), moved.uuid());
+                .containsExactly(linker.uuid(), linking.uuid());
         GenerationRun run = fixtures.succeeded(fixtures.generate(fx, site, GenerationMode.INCREMENTAL));
         assertThat(fixtures.files(fx, site, run)).containsKey("sub/moved.html");
         // The old path is a redirect stub now (M30.4.2, M30.5.1), no longer the page.

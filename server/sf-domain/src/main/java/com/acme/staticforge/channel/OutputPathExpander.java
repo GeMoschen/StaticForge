@@ -185,6 +185,28 @@ public final class OutputPathExpander {
         return settings.directoryUrls() && leaf.equals(settings.indexFileName()) ? urlForPath(path, settings) : path;
     }
 
+    /**
+     * The URL (href, relative to the site root) of an output path (M32.3): the directory form when the channel uses
+     * directory URLs and the file is the channel's index file ({@code products/hammer/index.html} →
+     * {@code products/hammer/}, a site-root index → {@code ./}); otherwise the path itself. {@link #pathForUrl} reverses
+     * it exactly, which is what lets a registered URL decide where a build writes the file.
+     */
+    public static String urlForOutput(String path, ChannelOutputSettings settings) {
+        return urlForPaginationPath(path, settings);
+    }
+
+    /**
+     * The output path a registered URL is written at (M32.3): a directory URL ({@code products/hammer/}, {@code ./})
+     * names the channel's index file inside it; any other URL is the path itself.
+     */
+    public static String pathForUrl(String url, ChannelOutputSettings settings) {
+        if (url == null || url.isEmpty() || "./".equals(url) || ".".equals(url)) {
+            return settings.indexFileName();
+        }
+        String path = url.startsWith("./") ? url.substring(2) : url;
+        return path.endsWith("/") ? path + settings.indexFileName() : path;
+    }
+
     /** {@code news/blog.html} → {@code news/blog}; a leaf without a dot is returned unchanged. */
     private static String withoutExtension(String path) {
         int slash = path.lastIndexOf('/');

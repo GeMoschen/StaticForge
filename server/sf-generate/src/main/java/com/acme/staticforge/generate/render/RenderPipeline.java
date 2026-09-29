@@ -26,7 +26,6 @@ import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.render.RenderLimitException;
-import com.acme.staticforge.urlregistry.UrlRegistryService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
@@ -74,7 +73,6 @@ public class RenderPipeline {
     private final ProjectRepository projects;
     private final ChannelService channelService;
     private final MeterRegistry meterRegistry;
-    private final UrlRegistryService urlRegistryService;
     private final CompiledTemplateCache compiledTemplates;
 
     public RenderPipeline(
@@ -82,13 +80,11 @@ public class RenderPipeline {
             ProjectRepository projects,
             ChannelService channelService,
             MeterRegistry meterRegistry,
-            UrlRegistryService urlRegistryService,
             CompiledTemplateCache compiledTemplates) {
         this.properties = properties;
         this.projects = projects;
         this.channelService = channelService;
         this.meterRegistry = meterRegistry;
-        this.urlRegistryService = urlRegistryService;
         this.compiledTemplates = compiledTemplates;
     }
 
@@ -100,7 +96,7 @@ public class RenderPipeline {
      */
     public List<Diagnostic> validate(Snapshot snapshot, BuildPlan plan) {
         GenerationRenderer renderer = new GenerationRenderer(
-                snapshot, null, "", channelService, null, null, compiledTemplates.buildMemo(snapshot.root()));
+                snapshot, null, "", channelService, compiledTemplates.buildMemo(snapshot.root()));
         Set<String> seen = new HashSet<>();
         List<Diagnostic> errors = new ArrayList<>();
         for (PlanEntry entry : plan.entries()) {
@@ -239,7 +235,11 @@ public class RenderPipeline {
             return new RenderOutcome(List.of(), notLocaleDistinct, List.of());
         }
 
-        List<OutputPathResolver.Collision> collisions = paths.findCollisions(plan.entries());
+        List<OutputPathResolver.Collision> collisions = new ArrayList<>(paths.findCollisions(plan.entries()));
+        // A first-time URL another target holds in the URL registry collides like two outputs on one path (M32.3).
+        Set<String> reported = new java.util.HashSet<>();
+        collisions.forEach(collision -> reported.add(collision.path()));
+        paths.registryCollisions().stream().filter(collision -> reported.add(collision.path())).forEach(collisions::add);
         if (!collisions.isEmpty()) {
             throw collisionError(collisions);
         }
@@ -317,7 +317,7 @@ public class RenderPipeline {
     public RenderedFile renderForCheck(Snapshot snapshot, PlanEntry entry, OutputPathResolver paths) {
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
         GenerationRenderer renderer = new GenerationRenderer(
-                        snapshot.in(entry.locale()), paths, projectKey, channelService, null, null,
+                        snapshot.in(entry.locale()), paths, projectKey, channelService,
                         compiledTemplates.buildMemo(snapshot.root()))
                 .withLocales(com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales()))
                 .withSectionMarkers();
@@ -347,8 +347,7 @@ public class RenderPipeline {
         /** The renderer of {@code locale}'s view; the root view's for {@code null}. */
         GenerationRenderer of(String locale) {
             return byView.computeIfAbsent(snapshot.in(locale), view -> new GenerationRenderer(
-                            view, paths, projectKey, channelService, urlRegistryService, userId,
-                            compiledTemplates.buildMemo(snapshot.root()))
+                            view, paths, projectKey, channelService, compiledTemplates.buildMemo(snapshot.root()))
                     .withLocales(com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales())));
         }
     }

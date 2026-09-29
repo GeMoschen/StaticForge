@@ -44,7 +44,7 @@ public final class PlanInsight {
     public static List<PlanEntryRecord> entries(PlannedBuild build) {
         Snapshot snapshot = build.snapshot();
         BuildPlan plan = build.plan();
-        MediaOutputs outputs = new MediaOutputs(snapshot, build.paths().locales());
+        MediaOutputs outputs = new MediaOutputs(snapshot, build.paths().locales(), build.paths().registry());
         List<PlanEntryRecord> entries = new ArrayList<>(plan.entries().size() + plan.processedMedia().size());
         for (PlanEntry entry : plan.entries()) {
             SnapshotAsset page = snapshot.asset(entry.pageUuid(), entry.locale());

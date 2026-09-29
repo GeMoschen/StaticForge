@@ -656,6 +656,53 @@ publish). The dry run (`POST /generations/plan`) returns `redirectCandidates: [{
 toAssetUuid, toPageNumber, toPath}]` — the entries a run started now would add, `toPath` being the planned new path —
 and `summary.redirectsAdded`; its `redirectsActive` is `null`.
 
+### 10.4 URL registry (M32)
+
+Every output of a build has a URL in the registry (spec §18.3): each page and page number per channel and language,
+each media file and variant per language (media rows carry `channelKey: ""`), each pages folder without an index page.
+A URL is assigned once and decides where a build writes the output; a page reference or a folder with an index page
+uses its page's URL. URLs are site-root-relative hrefs without a leading `/` (`products/hammer/`, `./`).
+
+| Method | Path | Role |
+|---|---|---|
+| `GET` | `/projects/{projectKey}/url-registry` (`?channelKey=&area=&targetType=&locale=&targetUuid=&q=&page=&size=`) | `VIEWER` |
+| `GET` | `/projects/{projectKey}/url-registry/assets/{uuid}` | `VIEWER` |
+| `PUT` | `/projects/{projectKey}/url-registry` | `DEVELOPER` |
+| `PATCH` | `/projects/{projectKey}/url-registry/{id}` | `DEVELOPER` |
+| `POST` | `/projects/{projectKey}/url-registry/reset` | `PROJECT_ADMIN` |
+
+`area` is `GENERATED` (builds) or `PREVIEW`; `targetType` `PAGE`, `MEDIA` or `FOLDER`; `locale` `""` lists rows without
+a language; `q` matches the URL or the target's display name or uid; `size` 1–500 (default 50); sorted by URL.
+
+```json
+{ "content": [ {
+    "id": 41, "channelKey": "html", "area": "GENERATED", "locale": "", "targetType": "PAGE",
+    "targetUuid": "…", "targetLabel": "About us", "targetUid": "about", "targetPath": "/pages_root/company/",
+    "targetDeleted": false, "variant": "", "pageNumber": 1, "url": "company/about.html", "overridden": false,
+    "assignedAt": "2026-09-29T08:00:00Z", "assignedRevision": 212 } ],
+  "totalElements": 1, "totalPages": 1, "number": 0, "size": 50 }
+```
+
+`GET …/assets/{uuid}` → `{uuid, targetType, indexPages: [{channelKey, pageUuid, pageLabel}], entries: [...]}` —
+`targetType` `null` for an asset without URLs of its own; `indexPages` lists, for a pages folder, the page whose URL it
+uses per channel.
+
+`PUT` sets a target's URL whether or not it has a row: `{targetType, targetUuid, variant?, pageNumber?, channelKey,
+area, locale?, url}` (`channelKey` ignored for media). `PATCH …/{id}` `{url}` overrides an existing row. Both answer
+the row, `overridden: true`. Errors: `409 SF-DOM-0200` (another output has the URL in that channel, area and language;
+`holderType`, `holderUuid`), `422 SF-DOM-0201` (empty; outside the site — `..`, a scheme, `//host`, backslashes; a query
+or fragment; spaces; a page URL that isn't a `.{ext}` file or a directory; a media URL that is a directory; an asset of
+another type, a page reference, a folder with an index page; an undeclared language), `409 SF-DOM-0141` archived.
+
+`POST …/reset` body — at most one of `entryId`, `targetUuid` (optionally with `area`: every row of one asset),
+`channelKey`, `area`; `{}` resets the project. Deleted rows are reassigned by the next build or preview (computed
+paths). An override, a reset and an import are recorded, so the next **incremental** build re-renders the output and
+every page linking it (rebuild reason `URL_CHANGED`) and records the `AUTO` redirect from the old path.
+
+**Import** (`POST /projects/{p}/import`, `…/import/analyze`, protocol 11): `urlRegistryMode` `ARCHIVE_WINS` (default),
+`TARGET_WINS` or `REPLACE_ALL`; the analysis returns `urlCount`, the import `importedUrlCount` and `urlWarnings`
+(`URL_OVERRIDE_KEPT`, `URL_TAKEN`, `URL_INVALID`).
+
 ### 10.1 Schedules (M27)
 
 Scheduled releases, unpublishing and builds (spec §18.7). Every endpoint needs `VIEWER`; every change checks what the
@@ -1030,6 +1077,8 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0192` | 422 | redirect loop: target = source, a cycle of fixed-path redirects, or a page redirected to itself by `for-asset` (M30) — `RedirectService` |
 | `SF-DOM-0193` | 422 | invalid redirect: channel, locale, source or target path/URL, target page; `field` names it (M30) — `RedirectPaths`, `RedirectService` |
 | `SF-DOM-0194` | 422 | `for-asset`: the asset has no page output in the default target's current build (M30) — `RedirectService.createForAsset` |
+| `SF-DOM-0200` | 409 | URL registry override: another output already has the URL in that channel, area and language (M32) — `UrlRegistryService.override` |
+| `SF-DOM-0201` | 422 | URL registry override: not a valid URL for the target, or the target has no URL of its own (M32) — `UrlRegistryService.override` |
 
 ### Media (`SF-MEDIA-*`, localized media)
 

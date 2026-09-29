@@ -15,11 +15,24 @@ import java.util.List;
  *
  * <p>M30.4.1: {@code importedRedirectCount} redirects added, and {@code redirectWarnings} — the archive's redirects
  * left out ({@link ConflictType#REDIRECT_SOURCE_EXISTS}, {@link ConflictType#REDIRECT_INVALID}).
+ *
+ * <p>M32.6: {@code importedUrlCount} URL registry rows written, and {@code urlWarnings} — the rows left out
+ * ({@link ConflictType#URL_OVERRIDE_KEPT}, {@link ConflictType#URL_TAKEN}, {@link ConflictType#URL_INVALID}).
  */
 public record ImportResult(
         String sourceProjectKey, int importedAssetCount, int updatedAssetCount, int importedBlobCount,
         int releasedCount, int importedScheduleCount, int updatedScheduleCount, List<ImportConflict> scheduleWarnings,
-        int importedRedirectCount, List<ImportConflict> redirectWarnings) {
+        int importedRedirectCount, List<ImportConflict> redirectWarnings, int importedUrlCount,
+        List<ImportConflict> urlWarnings) {
+
+    public ImportResult(
+            String sourceProjectKey, int importedAssetCount, int updatedAssetCount, int importedBlobCount,
+            int releasedCount, int importedScheduleCount, int updatedScheduleCount, List<ImportConflict> scheduleWarnings,
+            int importedRedirectCount, List<ImportConflict> redirectWarnings) {
+        this(sourceProjectKey, importedAssetCount, updatedAssetCount, importedBlobCount, releasedCount,
+                importedScheduleCount, updatedScheduleCount, scheduleWarnings, importedRedirectCount, redirectWarnings, 0,
+                List.of());
+    }
 
     /** A result without schedules and redirects. */
     public ImportResult(

@@ -51,6 +51,35 @@ public final class MediaPaths {
         return declared + "/";
     }
 
+    /** A variant's {@code format} ("jpeg") → file extension ("jpg"); {@code bin} when unknown. */
+    public static String extensionForFormat(String format) {
+        if (format == null || format.isBlank()) {
+            return "bin";
+        }
+        String value = format.toLowerCase(Locale.ROOT);
+        return "jpeg".equals(value) ? "jpg" : value;
+    }
+
+    /**
+     * The path of a media file's primary file ({@code variant} {@code null} or blank) or of one of its variants, from
+     * the payload whose top-level fields describe the file — {@code null} when it has no such variant.
+     */
+    public static String pathOf(com.fasterxml.jackson.databind.JsonNode payload, String localePrefix, String uid, String variant) {
+        String name = uid == null ? "" : uid;
+        if (variant == null || variant.isBlank()) {
+            return localizedMediaPath(localePrefix, name, extensionFor(payload == null ? null : payload.path("mimeType").asText(null)));
+        }
+        com.fasterxml.jackson.databind.JsonNode variants = payload == null ? null : payload.get("variants");
+        if (variants != null && variants.isArray()) {
+            for (com.fasterxml.jackson.databind.JsonNode entry : variants) {
+                if (variant.equals(entry.path("name").asText())) {
+                    return localizedVariantPath(localePrefix, name, variant, extensionForFormat(entry.path("format").asText(null)));
+                }
+            }
+        }
+        return null;
+    }
+
     /** File extension for a MIME type, used to name media copies deterministically. */
     public static String extensionFor(String mimeType) {
         if (mimeType == null) {

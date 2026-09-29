@@ -14,6 +14,7 @@ import com.acme.staticforge.exportimport.ReleaseMode;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.urlregistry.UrlRegistryService;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -61,15 +62,17 @@ public class ProjectImportController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(defaultValue = "false") boolean skipExistingImplicit,
             @RequestParam(defaultValue = "KEEP") ReleaseMode releaseMode,
-            @RequestParam(defaultValue = "true") boolean importSchedules) {
+            @RequestParam(defaultValue = "true") boolean importSchedules,
+            @RequestParam(defaultValue = "ARCHIVE_WINS") UrlRegistryService.ImportMode urlRegistryMode) {
         long projectId = projectService.requireByKey(projectKey).getId();
         RevisionContext ctx = RevisionContext.of(projectId, securitySupport.currentUserId(), "import project");
-        ImportResult result = exportImportService.importProject(
-                projectId, bytes(file), ctx, new ImportOptions(skipExistingImplicit, releaseMode, importSchedules));
+        ImportResult result = exportImportService.importProject(projectId, bytes(file), ctx,
+                new ImportOptions(skipExistingImplicit, releaseMode, importSchedules, urlRegistryMode));
         return new ImportResultView(
                 result.sourceProjectKey(), result.importedAssetCount(), result.updatedAssetCount(), result.importedBlobCount(),
                 result.releasedCount(), result.importedScheduleCount(), result.updatedScheduleCount(),
-                views(result.scheduleWarnings()), result.importedRedirectCount(), views(result.redirectWarnings()));
+                views(result.scheduleWarnings()), result.importedRedirectCount(), views(result.redirectWarnings()),
+                result.importedUrlCount(), views(result.urlWarnings()));
     }
 
     @AllowedOnArchivedProject("Analyzes an archive against the project, imports nothing.")
@@ -80,17 +83,18 @@ public class ProjectImportController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(defaultValue = "false") boolean skipExistingImplicit,
             @RequestParam(defaultValue = "KEEP") ReleaseMode releaseMode,
-            @RequestParam(defaultValue = "true") boolean importSchedules) {
+            @RequestParam(defaultValue = "true") boolean importSchedules,
+            @RequestParam(defaultValue = "ARCHIVE_WINS") UrlRegistryService.ImportMode urlRegistryMode) {
         long projectId = projectService.requireByKey(projectKey).getId();
-        ConflictReport report = exportImportService.analyzeImport(
-                projectId, bytes(file), new ImportOptions(skipExistingImplicit, releaseMode, importSchedules));
+        ConflictReport report = exportImportService.analyzeImport(projectId, bytes(file),
+                new ImportOptions(skipExistingImplicit, releaseMode, importSchedules, urlRegistryMode));
         return toView(report);
     }
 
     private static ConflictReportView toView(ConflictReport report) {
         return new ConflictReportView(
                 views(report.conflicts()), report.hasBlocking(), report.blocksImport(), report.releaseState(),
-                report.releaseMode().name(), report.scheduleCount(), report.redirectCount());
+                report.releaseMode().name(), report.scheduleCount(), report.redirectCount(), report.urlCount());
     }
 
     private static List<ImportConflictView> views(List<ImportConflict> conflicts) {

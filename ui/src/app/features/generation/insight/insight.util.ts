@@ -29,6 +29,7 @@ const ROOT_KIND_LABELS: Record<string, string> = {
   ASSET_RELEASED: 'Released',
   ASSET_UNPUBLISHED: 'Unpublished',
   ASSET_DELETED: 'Deleted',
+  URL_CHANGED: 'URL changed',
   NOT_IN_BASE_BUILD: 'Missing from the previous build',
 };
 

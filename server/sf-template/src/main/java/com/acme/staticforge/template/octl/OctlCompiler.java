@@ -532,6 +532,13 @@ public final class OctlCompiler {
                 case OctlNode.Ref r -> {
                     checkAccessorRoot(r.accessor(), shadowed, r.line(), r.col(), ctx);
                     checkRefHasUrl(r.accessor(), r.line(), r.col(), ctx);
+                    for (NamedArg arg : r.args()) {
+                        // A dotted argument path is a value like any other; a single word may be literal text.
+                        Accessor expression = arg.expression();
+                        if (expression != null && (expression.isAssetReference() || expression.path().size() > 1)) {
+                            checkAccessorRoot(expression, shadowed, r.line(), r.col(), ctx);
+                        }
+                    }
                 }
                 case OctlNode.Body b -> {
                     if (ctx.recordTemplate) {

@@ -194,7 +194,7 @@ class RenderPipelineRenderLimitsTest {
         }
         Snapshot snapshot = new Snapshot(1L, 1L, byUuid, byId);
         RenderPipeline pipeline = new RenderPipeline(
-                properties, mock(ProjectRepository.class), null, new SimpleMeterRegistry(), null,
+                properties, mock(ProjectRepository.class), null, new SimpleMeterRegistry(),
                 new CompiledTemplateCache(new SimpleMeterRegistry(), 2000, Duration.ofMinutes(30)));
         return pipeline.execute(
                 snapshot,

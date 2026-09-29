@@ -338,13 +338,13 @@ public class AssetServiceImpl implements AssetService {
                 true);
         appendSummary(asset, revision, "DELETE", List.of());
 
-        // URL registry cascade-cleanup (feature url-registry, M8.2.1): a PageReference's
-        // cached URLs (both PREVIEW and GENERATED areas, every channel) are unenforced-by-FK
-        // value references keyed on this asset's uuid, so they cannot be cleaned up by
-        // ON DELETE CASCADE — remove them explicitly here so a dangling registry row never
-        // outlives the reference it was assigned to.
-        if (asset.getAssetType() == AssetType.PAGE_REFERENCE) {
-            urlRegistryRepository.deleteByPageReferenceUuid(asset.getUuid());
+        // URL registry cleanup (M32.2, user decision 13): a deleted draft has no preview any more, so its computed
+        // PREVIEW rows go; overrides stay, so a restored asset gets its chosen URL back. GENERATED rows follow the site:
+        // a build drops them once the asset left it (a deletion is only published by a release).
+        if (asset.getAssetType() == AssetType.PAGE || asset.getAssetType() == AssetType.MEDIA
+                || asset.getAssetType() == AssetType.FOLDER) {
+            urlRegistryRepository.deleteByProjectIdAndTargetUuidAndAreaAndOverriddenFalse(
+                    asset.getProjectId(), asset.getUuid(), com.acme.staticforge.urlregistry.UrlArea.PREVIEW);
         }
     }
 

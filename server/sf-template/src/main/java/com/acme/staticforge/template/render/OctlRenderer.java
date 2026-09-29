@@ -190,10 +190,40 @@ public final class OctlRenderer implements Renderer {
         }
         Map<String, String> args = new LinkedHashMap<>();
         for (NamedArg a : r.args()) {
-            args.put(a.name(), a.value());
+            String argValue = refArgValue(a, s);
+            if (argValue != null) {
+                args.put(a.name(), argValue);
+            }
         }
         String url = resolver.resolve(target.kind, target.uid, target.uuid, args);
         s.append(url == null ? "" : url);
+    }
+
+    /**
+     * A {@code $CMS_REF} argument's value: a literal as written; an unquoted path evaluated in the render's scope. A
+     * {@code CMS_LOCALES} item — any object with a textual {@code code} — passes its code, so {@code locale=l} links the
+     * target in the loop's language; a scalar passes as text. A single word that resolves to nothing is its own text
+     * ({@code variant=w400}, {@code locale=de-CH}); any other path that yields nothing, an empty text or a structure
+     * leaves the argument out, as if it weren't written.
+     */
+    private String refArgValue(NamedArg arg, State s) {
+        Accessor expression = arg.expression();
+        if (expression == null) {
+            return arg.value();
+        }
+        JsonNode value = resolve(expression, s);
+        if (value == null || value.isNull() || value.isMissingNode()) {
+            boolean word = !expression.isAssetReference() && expression.path().size() == 1;
+            return word ? arg.value() : null;
+        }
+        if (value.isObject() && value.path("code").isTextual()) {
+            value = value.get("code");
+        }
+        if (!value.isValueNode()) {
+            return null;
+        }
+        String text = value.asText();
+        return text.isEmpty() ? null : text;
     }
 
     private void renderBody(OctlNode.Body b, State s) {
