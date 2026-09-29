@@ -1,5 +1,8 @@
 package com.acme.staticforge;
 
+import com.acme.staticforge.urlregistry.UrlRegistryService;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.ResetScope;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.staticforge.BuildInsightFixtures.Fixture;
@@ -63,6 +66,7 @@ class IncrementalPublishIntegrationTest {
     @Autowired PageReferenceService pageReferenceService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired UrlRegistryService urlRegistryService;
     @Autowired ReleaseFixtures releaseFixtures;
 
     private BuildInsightFixtures fixtures;
@@ -106,6 +110,8 @@ class IncrementalPublishIntegrationTest {
 
         changeTemplate(fx, site.about(), "<p>about v2</p>");
         fixtures.rename(fx, site.pages().get("news").uuid(), "News Room");
+        // A rename keeps the page's URL until it is reset (M32): the reset moves it to its new computed path.
+        urlRegistryService.reset(fx.projectId(), ResetScope.asset(site.pages().get("news").uuid(), UrlArea.GENERATED), fx.ctx());
         assetService.softDelete(site.pages().get("old").uuid(), true, fx.ctx());
 
         GenerationRun run = fixtures.succeeded(fixtures.generate(fx, incremental, GenerationMode.INCREMENTAL));

@@ -1,5 +1,8 @@
 package com.acme.staticforge;
 
+import com.acme.staticforge.urlregistry.UrlRegistryService;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.ResetScope;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.staticforge.asset.Asset;
@@ -108,6 +111,7 @@ class ReleasedGenerationIntegrationTest {
     @Autowired RecordService recordService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired UrlRegistryService urlRegistryService;
     @Autowired ReleaseService releaseService;
     @Autowired ReleaseFixtures releaseFixtures;
 
@@ -201,6 +205,8 @@ class ReleasedGenerationIntegrationTest {
         assertThat(String.join("\n", files.values())).doesNotContain("pf/about.html");
 
         releaseFixtures.releaseAll(fx.projectId());
+        // The released move takes effect once the page's URL is reset (M32: a registered URL is kept until then).
+        urlRegistryService.reset(fx.projectId(), ResetScope.asset(about, UrlArea.GENERATED), fx.ctx());
         Map<String, String> released = files(fx, generate(fx, GenerationMode.FULL, null));
         // The moved page's old path now redirects (M30.4.2, M30.5.1); the deleted page's path is simply gone.
         assertThat(released).containsKeys("pf/about.html", "about.html").doesNotContainKey("news.html");

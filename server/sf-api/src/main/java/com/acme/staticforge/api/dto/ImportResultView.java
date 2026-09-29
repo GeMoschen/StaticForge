@@ -7,9 +7,12 @@ import java.util.List;
  * locale. M27.8.1: {@code importedScheduleCount} schedules created, {@code updatedScheduleCount} open schedules
  * replaced, and {@code scheduleWarnings} — what happened to the archive's schedules, which can differ from the
  * analysis. M30.4.1: {@code importedRedirectCount} redirects added and {@code redirectWarnings} — the archive's
- * redirects left out ({@code REDIRECT_SOURCE_EXISTS}, {@code REDIRECT_INVALID}).
+ * redirects left out ({@code REDIRECT_SOURCE_EXISTS}, {@code REDIRECT_INVALID}). M32.6: {@code importedUrlCount} URL
+ * registry rows written and {@code urlWarnings} — the rows left out ({@code URL_OVERRIDE_KEPT}, {@code URL_TAKEN},
+ * {@code URL_INVALID}).
  */
 public record ImportResultView(
         String sourceProjectKey, int importedAssetCount, int updatedAssetCount, int importedBlobCount, int releasedCount,
         int importedScheduleCount, int updatedScheduleCount, List<ImportConflictView> scheduleWarnings,
-        int importedRedirectCount, List<ImportConflictView> redirectWarnings) {}
+        int importedRedirectCount, List<ImportConflictView> redirectWarnings, int importedUrlCount,
+        List<ImportConflictView> urlWarnings) {}

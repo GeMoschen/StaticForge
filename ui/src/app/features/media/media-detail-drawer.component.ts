@@ -30,6 +30,7 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { ConflictDrawerComponent } from '../pages/conflict-drawer.component';
 import { SfAssetImpactComponent } from '../generation/insight/sf-asset-impact.component';
+import { SfAssetUrlsComponent } from '../settings/asset-urls.component';
 import type { ConflictInfo } from '../pages/types';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import {
@@ -78,6 +79,7 @@ export type MediaDrawerTab = 'details' | 'source' | 'rendered';
     SfButtonComponent,
     ConflictDrawerComponent,
     SfAssetImpactComponent,
+    SfAssetUrlsComponent,
     SfIconComponent,
     SfFileSizePipe,
     ReleaseBarComponent,

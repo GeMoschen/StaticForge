@@ -1,5 +1,8 @@
 package com.acme.staticforge;
 
+import com.acme.staticforge.urlregistry.UrlRegistryService;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.ResetScope;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -79,6 +82,7 @@ class BuildInsightApiTest {
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationRunRepository runRepository;
     @Autowired GenerationService generationService;
+    @Autowired UrlRegistryService urlRegistryService;
     @Autowired ReleaseFixtures releaseFixtures;
     @Autowired RunPlanStore runPlanStore;
     @Autowired JdbcTemplate jdbc;
@@ -197,6 +201,9 @@ class BuildInsightApiTest {
         Site site = site("bi-redirect");
         startAndAwait(site, "FULL");
         fixtures.rename(site.fx(), site.legal().uuid(), "Imprint");
+        // The rename moves the page once its URL is reset (M32).
+        urlRegistryService.reset(site.fx().projectId(), ResetScope.asset(site.legal().uuid(), UrlArea.GENERATED),
+                site.fx().ctx());
 
         JsonNode plan = body(dryRun(site, site.token(), "INCREMENTAL", "").andExpect(status().isOk()));
         assertThat(plan.path("redirectCandidates")).singleElement().satisfies(candidate -> {

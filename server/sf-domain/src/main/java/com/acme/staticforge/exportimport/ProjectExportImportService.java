@@ -40,14 +40,21 @@ public interface ProjectExportImportService {
      * <p>Bumped to {@code 10} by M30 ({@link #QUALITY_AND_REDIRECTS_PROTOCOL}): a full-project archive carries the
      * redirect registry ({@link ExportedRedirect}, {@code redirects.json}) and the quality rule configuration. An archive
      * of protocol {@code <= 9} imports without either.
+     *
+     * <p>Bumped to {@code 11} by M32 ({@link #URL_REGISTRY_PROTOCOL}): an archive carries the URL registry's
+     * {@code GENERATED} rows of its assets ({@link ExportedUrl}, {@code url-registry.json}). An archive of protocol
+     * {@code <= 10} imports without them.
      */
-    int PROTOCOL_VERSION = 10;
+    int PROTOCOL_VERSION = 11;
 
     /** The first protocol whose archives carry release state (M27.5.1). */
     int RELEASE_STATE_PROTOCOL = 8;
 
     /** The first protocol whose archives carry the redirect registry and the quality rule configuration (M30). */
     int QUALITY_AND_REDIRECTS_PROTOCOL = 10;
+
+    /** The first protocol whose archives carry URL registry rows (M32.6). */
+    int URL_REGISTRY_PROTOCOL = 11;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP

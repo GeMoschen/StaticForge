@@ -195,7 +195,22 @@ public enum ConflictType {
      * An archived redirect doesn't fit the target project (M30.4.1): its channel or language doesn't exist there, or
      * its paths are malformed. It is not imported.
      */
-    REDIRECT_INVALID(ConflictSeverity.WARNING);
+    REDIRECT_INVALID(ConflictSeverity.WARNING),
+
+    /**
+     * An archived URL registry row names an output whose URL the target project set manually (M32.6, import mode
+     * {@code ARCHIVE_WINS}): the target's override is kept, the archive's row is not imported.
+     */
+    URL_OVERRIDE_KEPT(ConflictSeverity.WARNING),
+
+    /** An archived URL registry row's URL belongs to another output in the target project (M32.6). Not imported. */
+    URL_TAKEN(ConflictSeverity.WARNING),
+
+    /**
+     * An archived URL registry row doesn't fit the target project (M32.6): its channel or language doesn't exist there,
+     * or its asset isn't imported. It is not imported.
+     */
+    URL_INVALID(ConflictSeverity.WARNING);
 
     private final ConflictSeverity severity;
     private final boolean rejectsAssetOnly;

@@ -17,10 +17,11 @@ type FolderView = components['schemas']['FolderView'];
  * and contents summary, plus delete — mirroring the media detail drawer's
  * "identity + metadata + delete" shape for the pages tree's folder nodes.
  */
+import { SfAssetUrlsComponent } from '../settings/asset-urls.component';
 @Component({
   selector: 'sf-folder-detail',
   standalone: true,
-  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent],
+  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent, SfAssetUrlsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './folder-detail.component.html',
   styleUrl: './folder-detail.component.scss',

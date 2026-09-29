@@ -54,7 +54,13 @@ final class ReferenceUseCollector {
         for (OctlNode node : nodes) {
             switch (node) {
                 case OctlNode.Value v -> record(v.accessor(), ReferenceUse.VALUE);
-                case OctlNode.Ref r -> record(r.accessor(), ReferenceUse.REF);
+                case OctlNode.Ref r -> {
+                    record(r.accessor(), ReferenceUse.REF);
+                    // An argument path read from another asset (locale=CMS_GLOBAL.site.lang) is a value use.
+                    r.args().stream()
+                            .filter(arg -> arg.expression() != null)
+                            .forEach(arg -> record(arg.expression(), ReferenceUse.VALUE));
+                }
                 case OctlNode.Include i -> record(i.accessor(), ReferenceUse.INCLUDE);
                 case OctlNode.Navigation nav -> {
                     record(nav.accessor(), ReferenceUse.REF);

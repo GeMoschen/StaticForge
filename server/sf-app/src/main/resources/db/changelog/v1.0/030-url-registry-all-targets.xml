@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M32.1: the URL registry covers every output — pages (each page number of a paginated page), media files (each
+         variant and language) and folders without an index page — instead of navigation page references only. Page
+         references and folders with an index page derive their URL from their page and have no rows of their own.
+         Every existing row is dropped (user decision): the next build registers every page at its current path. -->
+    <changeSet id="030-url-registry-clear" author="sf">
+        <comment>Drop every page-reference row before re-keying the table (M32.1).</comment>
+        <delete tableName="url_registry_entry"/>
+    </changeSet>
+
+    <changeSet id="030-url-registry-rekey" author="sf">
+        <comment>Re-key the URL registry by target type, uuid, variant and page number (M32.1).</comment>
+        <dropUniqueConstraint tableName="url_registry_entry" constraintName="uq_url_registry_tuple"/>
+        <dropIndex tableName="url_registry_entry" indexName="idx_url_registry_page_reference"/>
+        <dropColumn tableName="url_registry_entry" columnName="page_reference_uuid"/>
+        <addColumn tableName="url_registry_entry">
+            <column name="target_type" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_uuid" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="variant_key" type="VARCHAR(100)" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+            <column name="page_number" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <addUniqueConstraint tableName="url_registry_entry"
+                columnNames="project_id, channel_key, area, locale_key, target_type, target_uuid, variant_key, page_number"
+                constraintName="uq_url_registry_tuple"/>
+        <!-- One URL, one target: a URL is written by exactly one output per channel, area and language. -->
+        <addUniqueConstraint tableName="url_registry_entry"
+                columnNames="project_id, channel_key, area, locale_key, url"
+                constraintName="uq_url_registry_url"/>
+        <createIndex tableName="url_registry_entry" indexName="idx_url_registry_target">
+            <column name="project_id"/>
+            <column name="target_uuid"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- What changed a registered URL outside a build (an override, a reset, an import): an incremental build re-renders
+         the readers of every target changed since its base build started (M32.5). A wide reset has no target. -->
+    <changeSet id="030-url-registry-change" author="sf">
+        <createTable tableName="url_registry_change">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="project_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="area" type="VARCHAR(20)"/>
+            <column name="target_type" type="VARCHAR(20)"/>
+            <column name="target_uuid" type="UUID"/>
+            <column name="changed_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="url_registry_change" indexName="idx_url_registry_change_project">
+            <column name="project_id"/>
+            <column name="changed_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

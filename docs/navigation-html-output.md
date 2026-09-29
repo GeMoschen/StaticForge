@@ -129,23 +129,21 @@ Both "Section" and "Sub" pick up `trail` because "Leaf One" is active somewhere 
 - Generated output emits hrefs **relative to the page being rendered**: from `pf/pf1/p3.html`, the
   page `p1.html` is linked as `../../p1.html` and `pf/p2.html` as `../p2.html`, so the site works from
   any host path, `file://` or an unpacked ZIP. The URL registry stores the site path (`pf/p2.html`);
-  generation relativizes it per page. A manual registry override that is already absolute (`/…`,
-  `https://…`) is emitted unchanged. The same applies to `$CMS_REF` page, folder and media links.
+  generation relativizes it per page. The same applies to `$CMS_REF` page, folder and media links.
 - The site path follows the channel's output settings (`fileExtension`, `settings.urlStrategy`,
   `trailingSlash`, `indexUid`, `indexFileName`). With `urlStrategy: PRETTY` and `trailingSlash: true`,
   `pf/p2.html` is written as `pf/p2/index.html` and linked as `pf/p2/` (from `pf/pf1/p3/index.html`:
   `../../p2/`); the site-root index is linked as `./`. Changing these settings drops the channel's
   computed registry entries (manual overrides stay) and makes the next incremental generation a full one.
-- A `PAGE_REFERENCE` node's href is resolved through the URL registry (`UrlRegistryService`,
-  `UrlArea.GENERATED`), keyed on the reference's own UUID — stable across regeneration even if
-  the target page's slug changes. A `FOLDER` entry-point node (resolved via its `startNode`
-  chain) resolves directly via `OutputPathResolver` instead.
-  A reference (or `startNode` chain) that ends in a **pages folder** resolves to that folder's index page first —
-  its page with the channel's `indexUid` (M31, spec §17.2) — before the first navigable page.
-  Because the entry is assigned once, a target page that **moves** keeps being linked at its old path
-  until the entry is reset (`POST …/url-registry/reset`) or the channel's output settings change. Since M30
-  that link still works: the build records an automatic redirect from the old path (spec §18.9), and the
-  quality check `SF-CHK-0109` reports the link so the entry can be reset.
+- Since M32 the URL registry holds the URL of **every output** (pages and their page numbers, media files and
+  variants, index-less folders) and decides where the build writes it (spec §18.3). A navigation entry has no URL of
+  its own: its href is the registered URL of the page it resolves to. A reference (or `startNode` chain) that ends in
+  a **pages folder** resolves to that folder's index page first — its page with the channel's `indexUid` (M31, spec
+  §17.2) — before the first navigable page.
+  Because a URL is assigned once, a page that **moves** keeps its file and its links at the registered URL until
+  the row is reset (`POST …/url-registry/reset`), overridden, or the channel's output settings change. The next
+  build after a reset writes the page at its new path, re-renders every page linking it, and records an automatic
+  redirect from the old path (spec §18.9).
 - If a `PAGE_REFERENCE` node's target doesn't resolve to any page at all (deleted target, or an
   empty-subtree folder target), the page's render **fails** with diagnostic `SF-GEN-0411` rather
   than silently emitting the entry as an unlinked `<span>` — a broken nav link is treated as a

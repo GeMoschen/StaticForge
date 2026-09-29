@@ -35,6 +35,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryEntry;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
+import com.acme.staticforge.urlregistry.UrlTarget;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -120,10 +121,11 @@ class ChannelOutputSettingsIntegrationTest {
         Site site = newSite();
         long projectId = site.project().getId();
 
-        // A first (default) run assigns registry URLs; one of them is then overridden manually.
+        // A first (default) run registers every page's URL; p2's is then overridden manually (M32).
         generate(site, GenerationMode.FULL);
-        urlRegistryService.override(site.p2Ref(), "html", UrlArea.GENERATED, "/manual/p2.html", site.ctx());
-        assertThat(registry(projectId)).hasSize(4);
+        urlRegistryService.override(
+                UrlTarget.page(site.p2()), "html", UrlArea.GENERATED, "", "/manual/p2.html", site.ctx());
+        assertThat(registry(projectId)).hasSize(5);
 
         updateHtmlChannel(site, "html", settings("PRETTY", true));
 
@@ -131,31 +133,33 @@ class ChannelOutputSettingsIntegrationTest {
         assertThat(registry(projectId))
                 .singleElement()
                 .satisfies(e -> {
-                    assertThat(e.getPageReferenceUuid()).isEqualTo(site.p2Ref());
+                    assertThat(e.target()).isEqualTo(UrlTarget.page(site.p2()));
+                    assertThat(e.getUrl()).isEqualTo("manual/p2.html");
                     assertThat(e.isOverridden()).isTrue();
                 });
 
         long runId = generate(site, GenerationMode.FULL);
         Map<String, String> pages = pageFiles(site, runId);
 
+        // p2 is written at its manual URL; every other page at its new computed (directory) URL.
         assertThat(pages.keySet()).containsExactly(
-                "about/index.html", "index.html", "pf/p2/index.html", "pf/pf1/deep/index.html", "pf/pf1/p3/index.html");
+                "about/index.html", "index.html", "manual/p2.html", "pf/pf1/deep/index.html", "pf/pf1/p3/index.html");
         // "home" is the channel's indexUid, so it is the site-root index and links as "./" from the root.
-        // p2's href is the manual override, emitted unchanged.
         assertThat(hrefs(pages.get("index.html"))).containsExactly(
-                "about/", "./", "/manual/p2.html", "pf/pf1/p3/", "about/", "pf/pf1/p3/");
+                "about/", "./", "manual/p2.html", "pf/pf1/p3/", "about/", "pf/pf1/p3/");
         assertThat(hrefs(pages.get("pf/pf1/deep/index.html"))).containsExactly(
-                "../../../about/", "../../../", "/manual/p2.html", "../p3/", "../../../about/", "../p3/");
+                "../../../about/", "../../../", "../../../manual/p2.html", "../p3/", "../../../about/", "../p3/");
         assertLinksResolve(site, runId, pages, "index.html");
 
         // No drift: the registry URL (site path) is what generation relativized, and preview uses the same URL.
-        String aboutUrl = urlRegistryService.resolve(site.aboutRef(), "html", UrlArea.GENERATED, site.ctx());
-        String p3Url = urlRegistryService.resolve(site.p3Ref(), "html", UrlArea.GENERATED, site.ctx());
+        String aboutUrl = urlRegistryService.resolvePage(site.about(), 1, "html", UrlArea.GENERATED, null, site.ctx());
+        String p3Url = urlRegistryService.resolvePageReference(site.p3Ref(), "html", UrlArea.GENERATED, null, site.ctx());
         assertThat(aboutUrl).isEqualTo("about/");
         assertThat(p3Url).isEqualTo("pf/pf1/p3/");
         String preview = pageRenderService.renderPage(projectId, site.rootLinker(), null, "html", false);
         assertThat(hrefs(preview)).startsWith(aboutUrl);
-        assertThat(urlRegistryService.resolve(site.aboutRef(), "html", UrlArea.PREVIEW, site.ctx())).isEqualTo(aboutUrl);
+        assertThat(urlRegistryService.resolvePage(site.about(), 1, "html", UrlArea.PREVIEW, null, site.ctx()))
+                .isEqualTo(aboutUrl);
     }
 
     @Test
@@ -200,8 +204,8 @@ class ChannelOutputSettingsIntegrationTest {
 
     /**
      * Resolves every relative href of every page against that page's own location in the build
-     * directory; a directory href must contain the channel's index file. Absolute hrefs (a manual
-     * registry override) are out of the site's control and skipped.
+     * directory; a directory href must contain the channel's index file. Absolute hrefs are out of the site's control
+     * and skipped.
      */
     private void assertLinksResolve(Site site, long runId, Map<String, String> pages, String indexFileName) {
         Path build = buildDir(site, runId);
@@ -299,7 +303,8 @@ class ChannelOutputSettingsIntegrationTest {
     }
 
     private List<UrlRegistryEntry> registry(long projectId) {
-        return urlRegistryService.search(projectId, "html", null, Pageable.unpaged()).getContent();
+        return urlRegistryService.search(projectId,
+                new UrlRegistryService.Filter("html", null, null, null, null, null), Pageable.unpaged()).getContent();
     }
 
     private OutputChannel updateHtmlChannel(Site site, String fileExtension, ObjectNode settings) {
@@ -362,7 +367,8 @@ class ChannelOutputSettingsIntegrationTest {
 
         GenerationTarget target = targetRepository.save(
                 new GenerationTarget(project.getId(), "default", TargetType.FILESYSTEM, mapper.createObjectNode(), true));
-        return new Site(project, user, target, home.uuid(), aboutRef.uuid(), p2Ref.uuid(), p3Ref.uuid());
+        return new Site(project, user, target, home.uuid(), aboutRef.uuid(), p2Ref.uuid(), p3Ref.uuid(), about.uuid(),
+                p2.uuid());
     }
 
     private TemplateView template(Project project, RevisionContext ctx, String name, String source) {
@@ -385,7 +391,9 @@ class ChannelOutputSettingsIntegrationTest {
             java.util.UUID rootLinker,
             java.util.UUID aboutRef,
             java.util.UUID p2Ref,
-            java.util.UUID p3Ref) {
+            java.util.UUID p3Ref,
+            java.util.UUID about,
+            java.util.UUID p2) {
         RevisionContext ctx() {
             return RevisionContext.of(project().getId(), user().getId(), "test");
         }

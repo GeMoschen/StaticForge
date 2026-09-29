@@ -1,11 +1,11 @@
 <div class="registry">
   <header class="registry__header">
     <div>
-      <h1 class="registry__title">Navigation URLs</h1>
+      <h1 class="registry__title">URLs</h1>
       <p class="registry__subtitle">
-        The resolved URL cache for every page reference, per channel and area. Manual
-        overrides persist across regenerations; resets are permanent and free up an entry
-        to be recomputed by the next generation run or navigation preview.
+        The URL of every page, media file and folder, per channel, area and language. A URL is assigned once and
+        decides where a build writes the output — moving or renaming a page keeps its URL until you reset or
+        override it. Navigation entries use the URL of their page.
       </p>
     </div>
   </header>
@@ -18,6 +18,39 @@
           <option [value]="key">{{ key }}</option>
         }
       </select>
+    </sf-field>
+
+    <sf-field label="Type">
+      <select class="select" [value]="filterType()" (change)="onTypeFilterChange($event)">
+        <option value="">All types</option>
+        <option value="PAGE">Pages</option>
+        <option value="MEDIA">Media</option>
+        <option value="FOLDER">Folders</option>
+      </select>
+    </sf-field>
+
+    @if (locales().length > 0) {
+      <sf-field label="Language">
+        <select class="select" [value]="filterLocale() ?? '*'" (change)="onLocaleFilterChange($event)">
+          <option value="*">All languages</option>
+          @for (locale of locales(); track locale.code) {
+            <option [value]="locale.code">{{ locale.label ?? locale.code }}</option>
+          }
+          <option value="">No language</option>
+        </select>
+      </sf-field>
+    }
+
+    <sf-field label="Search">
+      <input
+        class="input"
+        type="search"
+        placeholder="Name or URL"
+        [value]="search()"
+        (input)="onSearchInput($event)"
+        (keydown.enter)="applySearch()"
+        (blur)="applySearch()"
+      />
     </sf-field>
 
     <sf-field label="Area">
@@ -52,15 +85,18 @@
   } @else if (entries().length === 0) {
     <sf-empty-state
       title="No URLs registered"
-      description="Entries appear here once a generation run or navigation preview resolves page references to URLs."
+      description="URLs appear here once a build or a preview assigns them, or when you set one on a page, media file or folder."
     />
   } @else {
     <sf-table>
       <table class="table">
         <thead>
           <tr>
-            <th>Page reference</th>
+            <th>Target</th>
             <th>Channel</th>
+            @if (locales().length > 0) {
+              <th>Language</th>
+            }
             <th>Area</th>
             <th>URL</th>
             <th>Overridden</th>
@@ -71,8 +107,25 @@
         <tbody>
           @for (entry of entries(); track entry.id) {
             <tr>
-              <td>{{ entry.pageReferenceLabel ?? entry.pageReferenceUuid ?? '—' }}</td>
-              <td><code class="mono">{{ entry.channelKey }}</code></td>
+              <td>
+                <span class="target">
+                  <span class="badge badge--type">{{ typeLabel(entry.targetType) }}</span>
+                  <span class="target__name" [title]="entry.targetPath ?? ''">{{ targetText(entry) }}</span>
+                  @if (entry.targetDeleted) {
+                    <span class="badge badge--auto">deleted</span>
+                  }
+                </span>
+              </td>
+              <td>
+                @if (entry.channelKey) {
+                  <code class="mono">{{ entry.channelKey }}</code>
+                } @else {
+                  <span class="muted">all</span>
+                }
+              </td>
+              @if (locales().length > 0) {
+                <td>{{ entry.locale || '—' }}</td>
+              }
               <td>{{ entry.area }}</td>
               <td>
                 @if (editingId() === entry.id) {
@@ -81,7 +134,11 @@
                     type="text"
                     [value]="editUrl()"
                     (input)="onEditUrlInput($event)"
+                    [attr.aria-invalid]="editError() ? true : null"
                   />
+                  @if (editError()) {
+                    <span class="field-error" role="alert">{{ editError() }}</span>
+                  }
                 } @else {
                   <code class="mono url">{{ entry.url }}</code>
                 }
@@ -107,6 +164,14 @@
                 } @else {
                   <sf-button variant="ghost" [disabled]="readOnly()" (click)="startEdit(entry)">Override</sf-button>
                   <sf-button variant="danger" [disabled]="readOnly()" (click)="requestResetEntry(entry)">Reset</sf-button>
+                  <sf-button
+                    variant="ghost"
+                    [disabled]="readOnly()"
+                    title="Reset every URL of this asset"
+                    (click)="requestResetAsset(entry)"
+                  >
+                    Reset asset
+                  </sf-button>
                 }
               </td>
             </tr>

@@ -44,6 +44,12 @@
         (uidChanged)="onUidChanged()"
       />
     </section>
+
+    @if (folder().uuid; as folderUuid) {
+      <section class="folder-detail__section">
+        <sf-asset-urls [projectKey]="projectKey()" [assetUuid]="folderUuid" [refreshKey]="folder().revision" />
+      </section>
+    }
   </div>
 
   <footer class="folder-detail__footer">

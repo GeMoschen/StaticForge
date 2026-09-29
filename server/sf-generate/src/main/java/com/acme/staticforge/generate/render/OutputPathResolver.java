@@ -1,5 +1,7 @@
 package com.acme.staticforge.generate.render;
 
+import com.acme.staticforge.urlregistry.UrlRegistryView;
+import com.acme.staticforge.urlregistry.UrlTarget;
 import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.channel.OutputPathExpander;
 import com.acme.staticforge.common.ProblemFactory;
@@ -37,13 +39,46 @@ public final class OutputPathResolver {
     private final Map<String, ChannelOutputSettings> settingsByChannel;
     private final LocaleConfig locales;
 
+    /** The build's view of the URL registry (M32.3); {@code null} computes every path, as before M32. */
+    private final UrlRegistryView registry;
+
     private volatile Map<String, UUID> collisionOwners = Map.of();
 
     private OutputPathResolver(
-            Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel, LocaleConfig locales) {
+            Snapshot snapshot,
+            Map<String, ChannelOutputSettings> settingsByChannel,
+            LocaleConfig locales,
+            UrlRegistryView registry) {
         this.snapshot = snapshot;
         this.settingsByChannel = Map.copyOf(settingsByChannel);
         this.locales = locales == null ? LocaleConfig.EMPTY : locales;
+        this.registry = registry;
+    }
+
+    /**
+     * This resolver reading the URL registry (M32.3): a page (each page number) is written at its registered URL, and
+     * a page without one at its computed path, which the registry view claims for it. Links, the plan, the manifest and
+     * the post-processors all read paths from here, so they agree with the files.
+     */
+    public OutputPathResolver withRegistry(UrlRegistryView registry) {
+        return new OutputPathResolver(snapshot, settingsByChannel, locales, registry);
+    }
+
+    /** The URL registry this resolver reads; {@code null} when it computes every path. */
+    public UrlRegistryView registry() {
+        return registry;
+    }
+
+    /**
+     * The key a registry row stores for {@code locale}: the canonical tag in a localized project (the default language
+     * for {@code null}), {@code ""} in a project without locales — as {@code UrlRegistryService.localeKey}.
+     */
+    public String localeKey(String locale) {
+        if (!locales.isLocalized()) {
+            return "";
+        }
+        String declared = locale == null ? null : locales.canonicalDeclared(locale);
+        return declared != null ? declared : locales.defaultLocale();
     }
 
     /**
@@ -53,7 +88,7 @@ public final class OutputPathResolver {
      *     {@link ChannelOutputSettings#defaults}
      */
     public static OutputPathResolver forSnapshot(Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel) {
-        return new OutputPathResolver(snapshot, settingsByChannel, LocaleConfig.EMPTY);
+        return new OutputPathResolver(snapshot, settingsByChannel, LocaleConfig.EMPTY, null);
     }
 
     /**
@@ -62,7 +97,7 @@ public final class OutputPathResolver {
      */
     public static OutputPathResolver forSnapshot(
             Snapshot snapshot, Map<String, ChannelOutputSettings> settingsByChannel, LocaleConfig locales) {
-        return new OutputPathResolver(snapshot, settingsByChannel, locales);
+        return new OutputPathResolver(snapshot, settingsByChannel, locales, null);
     }
 
     /** The project's content locales; {@link LocaleConfig#EMPTY} for a single-language project. */
@@ -110,9 +145,33 @@ public final class OutputPathResolver {
         if (page == null) {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }
+        ChannelOutputSettings settings = settingsFor(channel);
+        if (registry == null) {
+            return computedPagePath(page, channel, settings, locale);
+        }
+        String url = registry.url(UrlTarget.page(pageUuid), channel, localeKey(locale),
+                () -> OutputPathExpander.urlForOutput(computedPagePath(page, channel, settings, locale), settings));
+        return OutputFile.normalize(OutputPathExpander.pathForUrl(url, settings));
+    }
+
+    /** The §18.3 path of a page, as if it had no registered URL. */
+    private String computedPagePath(SnapshotAsset page, String channel, ChannelOutputSettings settings, String locale) {
         OutputPathExpander.PageContext context = toPageContext(page);
-        String path = OutputPathExpander.resolvePath(context, channel, settingsFor(channel), localeContext(locale));
-        return OutputFile.normalize(path);
+        return OutputFile.normalize(OutputPathExpander.resolvePath(context, channel, settings, localeContext(locale)));
+    }
+
+    /**
+     * The URL (relative to the site root) a {@code $CMS_REF(folder:…)} to a folder without an index page links
+     * (M32.3): its registered URL, else its directory ({@link OutputPathExpander#folderUrl}), which is claimed.
+     *
+     * @param folderPath the folder's own stored path, e.g. {@code /pages_root/products/}
+     */
+    public String resolveFolderUrl(UUID folderUuid, String folderPath, String channel, String locale) {
+        java.util.function.Supplier<String> computed = () -> OutputPathExpander.folderUrl(folderPath, localeContext(locale));
+        if (registry == null) {
+            return computed.get();
+        }
+        return registry.url(UrlTarget.folder(folderUuid), channel, localeKey(locale), computed);
     }
 
     /**
@@ -155,8 +214,17 @@ public final class OutputPathResolver {
         if (page == null) {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }
-        return OutputFile.normalize(OutputPathExpander.resolvePaginationPath(
-                toPageContext(page), channel, settingsFor(channel), firstPagePath, pageNumber, localeContext(locale)));
+        ChannelOutputSettings settings = settingsFor(channel);
+        java.util.function.Supplier<String> computed = () -> OutputFile.normalize(OutputPathExpander.resolvePaginationPath(
+                toPageContext(page), channel, settings, firstPagePath, pageNumber, localeContext(locale)));
+        if (registry == null) {
+            return computed.get();
+        }
+        // Page N's first assignment is computed next to page 1's registered path (firstPagePath), so a paginated
+        // page's files stay together even while page 1 is frozen at an old path (M32, user decision 14).
+        String url = registry.url(UrlTarget.page(pageUuid, pageNumber), channel, localeKey(locale),
+                () -> OutputPathExpander.urlForOutput(computed.get(), settings));
+        return OutputFile.normalize(OutputPathExpander.pathForUrl(url, settings));
     }
 
     /** The URL (href, relative to the site root) of a pagination page's output path in {@code channel}. */
@@ -176,7 +244,7 @@ public final class OutputPathResolver {
 
     /** As {@link #resolvePageUrl(UUID, String)}, for one language (M24.3.2). */
     public String resolvePageUrl(UUID pageUuid, String channel, String locale) {
-        return OutputPathExpander.urlForPath(resolvePagePath(pageUuid, channel, locale), settingsFor(channel));
+        return OutputPathExpander.urlForOutput(resolvePagePath(pageUuid, channel, locale), settingsFor(channel));
     }
 
     /** First-resolved owner (path → page UUID) of each output path; populated by {@link #findCollisions}. */
@@ -222,6 +290,36 @@ public final class OutputPathResolver {
             }
         }
         return List.copyOf(collisions);
+    }
+
+    /**
+     * The URL registry collisions of this build (M32.3): outputs whose first-time URL another target already holds —
+     * a registered row, or an output of this build that claimed it first. Reported like path collisions
+     * ({@code SF-GEN-0110}).
+     */
+    public List<Collision> registryCollisions() {
+        if (registry == null) {
+            return List.of();
+        }
+        List<Collision> collisions = new ArrayList<>();
+        for (UrlRegistryView.Collision collision : registry.collisions()) {
+            String holder = describe(collision.holder().target());
+            if (collision.holderOverridden()) {
+                holder = holder + " (manual URL override)";
+            }
+            collisions.add(new Collision(collision.url(), holder, describe(collision.claimant().target())));
+        }
+        return List.copyOf(collisions);
+    }
+
+    private String describe(UrlTarget target) {
+        String uid = uidOf(target.uuid());
+        String name = uid.isEmpty() ? target.uuid().toString() : uid;
+        return switch (target.type()) {
+            case PAGE -> target.pageNumber() == 1 ? name : name + " (page " + target.pageNumber() + ")";
+            case MEDIA -> "media " + name + (target.variant().isEmpty() ? "" : " (" + target.variant() + ")");
+            case FOLDER -> "folder " + name;
+        };
     }
 
     /** A single output-path collision between two distinct outputs. */

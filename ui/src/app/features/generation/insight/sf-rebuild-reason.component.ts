@@ -62,7 +62,8 @@ import { chainLines, otherCausesLabel, reasonBadge, type ReasonView } from './in
       .reason__badge[data-kind='ASSET_CHANGED'],
       .reason__badge[data-kind='ASSET_RELEASED'],
       .reason__badge[data-kind='ASSET_UNPUBLISHED'],
-      .reason__badge[data-kind='ASSET_DELETED'] {
+      .reason__badge[data-kind='ASSET_DELETED'],
+      .reason__badge[data-kind='URL_CHANGED'] {
         color: var(--sf-signal);
       }
       .reason__badge[data-kind='INCREMENTAL_FALLBACK_FULL'],

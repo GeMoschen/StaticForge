@@ -59,21 +59,21 @@ class PreviewCompileCacheIntegrationTest {
         AssetVersionView home = page(projectId, ctx, "Home", template.uuid());
         long revisionBeforeEdit = assetService.requireCurrent(projectId, home.uuid()).validFromRevision();
 
-        // Two consecutive renders: one compile. (Unrewritten $CMS_REF renders the target's uid.)
+        // Two consecutive renders: one compile. (Unrewritten $CMS_REF renders the target's registered URL, M32.)
         double before = octlCompiles();
-        assertThat(render(projectId, home.uuid(), null)).isEqualTo("v1[" + target.uid() + "]");
-        assertThat(render(projectId, home.uuid(), null)).isEqualTo("v1[" + target.uid() + "]");
+        assertThat(render(projectId, home.uuid(), null)).isEqualTo("v1[" + target.uid() + ".html]");
+        assertThat(render(projectId, home.uuid(), null)).isEqualTo("v1[" + target.uid() + ".html]");
         assertThat(octlCompiles() - before).isEqualTo(1);
 
         // Editing the channel (a new template version) recompiles.
         TemplateView current = templateService.get(projectId, template.uuid());
         templateService.saveChannel(
                 template.uuid(), "html", "v2[$CMS_REF(page:" + target.uid() + ")$]", current.validFromRevision(), ctx);
-        assertThat(render(projectId, home.uuid(), null)).isEqualTo("v2[" + target.uid() + "]");
+        assertThat(render(projectId, home.uuid(), null)).isEqualTo("v2[" + target.uid() + ".html]");
         assertThat(octlCompiles() - before).isEqualTo(2);
 
         // Time travel to before the edit renders with the template version valid then, not the newer one.
-        assertThat(render(projectId, home.uuid(), revisionBeforeEdit)).isEqualTo("v1[" + target.uid() + "]");
+        assertThat(render(projectId, home.uuid(), revisionBeforeEdit)).isEqualTo("v1[" + target.uid() + ".html]");
 
         // Renaming the referenced page's uid: the cached resolution is stale and must not be used —
         // page:<old uid> no longer resolves, so the reference renders empty.

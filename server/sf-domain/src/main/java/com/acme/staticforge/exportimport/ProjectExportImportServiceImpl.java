@@ -133,6 +133,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private static final String SETTINGS_ENTRY = "settings.json";
     private static final String SCHEDULES_PREFIX = "schedules/";
     private static final String REDIRECTS_ENTRY = "redirects.json";
+    private static final String URL_REGISTRY_ENTRY = "url-registry.json";
     private static final String BLOBS_PREFIX = "blobs/";
     private static final String ROOT_UID = "root";
 
@@ -201,6 +202,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final AssetReleaseRepository releaseRepository;
     private final ScheduleArchive scheduleArchive;
     private final RedirectArchive redirectArchive;
+    private final UrlRegistryArchive urlRegistryArchive;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -221,8 +223,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             ScheduleArchive scheduleArchive,
             RedirectArchive redirectArchive,
             BlobWriter blobWriter,
-            MediaVariantResolver variantResolver) {
+            MediaVariantResolver variantResolver,
+            UrlRegistryArchive urlRegistryArchive) {
         this.projectRepository = projectRepository;
+        this.urlRegistryArchive = urlRegistryArchive;
         this.redirectArchive = redirectArchive;
         this.blobWriter = blobWriter;
         this.variantResolver = variantResolver;
@@ -365,6 +369,12 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // The redirect registry belongs to the whole project (M30.4.1): only a full export carries it.
         List<ExportedRedirect> redirects = full ? redirectArchive.export(projectId) : List.of();
 
+        // The URL registry travels with the outputs it names (M32.6): all of it in a full export, the rows of the
+        // exported assets in a selective one.
+        List<ExportedUrl> urls = urlRegistryArchive.export(projectId, full
+                ? null
+                : exported.stream().map(version -> version.getAsset().getUuid()).collect(Collectors.toSet()));
+
         ExportManifest manifest = new ExportManifest(
                 PROTOCOL_VERSION, project.getKey(), project.getName(), project.getDescription(), Instant.now(),
                 projectLocales.forProject(projectId).codes());
@@ -384,6 +394,9 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 }
                 if (!redirects.isEmpty()) {
                     writeJson(zip, REDIRECTS_ENTRY, redirects);
+                }
+                if (!urls.isEmpty()) {
+                    writeJson(zip, URL_REGISTRY_ENTRY, urls);
                 }
                 for (Map.Entry<String, byte[]> blob : blobs.entrySet()) {
                     zip.putNextEntry(new ZipEntry(BLOBS_PREFIX + blob.getKey()));
@@ -900,8 +913,19 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     uuid -> remap.getOrDefault(uuid.toLowerCase(), UUID.fromString(uuid)));
         }
 
+        UrlRegistryArchive.Result urls = new UrlRegistryArchive.Result(0, List.of());
+        if (!content.urls().isEmpty()) {
+            Set<String> channelKeys = outputChannelRepository.findByProjectIdOrderByPositionAsc(targetProjectId).stream()
+                    .map(OutputChannel::getKey)
+                    .collect(Collectors.toSet());
+            urls = urlRegistryArchive.importAll(targetProjectId, content.urls(), options.urlRegistryMode(), channelKeys,
+                    projectLocales.forProject(targetProjectId),
+                    uuid -> remap.getOrDefault(uuid.toString().toLowerCase(), uuid));
+        }
+
         return new ImportResult(manifest.sourceProjectKey(), created, updated, importedShas.size(), released,
-                schedules.created(), schedules.replaced(), schedules.warnings(), redirects.imported(), redirects.warnings());
+                schedules.created(), schedules.replaced(), schedules.warnings(), redirects.imported(), redirects.warnings(),
+                urls.imported(), urls.warnings());
     }
 
     /** What the settings import does with each archived generation target, decided before it runs. */
@@ -1445,8 +1469,20 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             conflicts.addAll(redirectArchive.analyze(
                     targetProjectId, content.redirects(), channelKeys, effectiveLocales(targetProjectId, content)));
         }
-        return new ConflictReport(
-                conflicts, releaseState, releaseMode, content.schedules().size(), content.redirects().size());
+        if (!content.urls().isEmpty()) {
+            Set<String> channelKeys = new HashSet<>();
+            outputChannelRepository.findByProjectIdOrderByPositionAsc(targetProjectId).forEach(c -> channelKeys.add(c.getKey()));
+            if (content.settings() != null) {
+                content.settings().channels().forEach(c -> channelKeys.add(c.key()));
+            }
+            Set<UUID> archived = new HashSet<>();
+            archiveByUuid.keySet().forEach(uuid -> archived.add(UUID.fromString(uuid)));
+            conflicts.addAll(urlRegistryArchive.analyze(targetProjectId, content.urls(), options.urlRegistryMode(),
+                    channelKeys, effectiveLocales(targetProjectId, content),
+                    uuid -> archived.contains(uuid) || assetRepository.findByProjectIdAndUuid(targetProjectId, uuid).isPresent()));
+        }
+        return new ConflictReport(conflicts, releaseState, releaseMode, content.schedules().size(),
+                content.redirects().size(), content.urls().size());
     }
 
     /** The target as the archive's schedules will find it once the import has run (M27.8.1). */
@@ -2004,6 +2040,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         ExportedSettings settings = null;
         List<ExportedSchedule> schedules = new ArrayList<>();
         List<ExportedRedirect> redirects = List.of();
+        List<ExportedUrl> urls = List.of();
         Map<String, byte[]> blobs = new HashMap<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
             ZipEntry entry;
@@ -2021,6 +2058,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     perFileAssets.add(objectMapper.readValue(zip.readAllBytes(), ExportedAsset.class));
                 } else if (name.startsWith(SCHEDULES_PREFIX)) {
                     schedules.add(objectMapper.readValue(zip.readAllBytes(), ExportedSchedule.class));
+                } else if (URL_REGISTRY_ENTRY.equals(name)) {
+                    urls = List.of(objectMapper.readValue(zip.readAllBytes(), ExportedUrl[].class));
                 } else if (REDIRECTS_ENTRY.equals(name)) {
                     redirects = List.of(objectMapper.readValue(zip.readAllBytes(), ExportedRedirect[].class));
                 } else if (SETTINGS_ENTRY.equals(name)) {
@@ -2056,7 +2095,11 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         if (manifest.protocolVersion() < QUALITY_AND_REDIRECTS_PROTOCOL) {
             redirects = List.of();
         }
-        return new ArchiveContent(manifest, assets, blobs, settings, schedules, redirects);
+        // URL registry rows arrived with protocol 11 (M32.6).
+        if (manifest.protocolVersion() < URL_REGISTRY_PROTOCOL) {
+            urls = List.of();
+        }
+        return new ArchiveContent(manifest, assets, blobs, settings, schedules, redirects, urls);
     }
 
     private static String textOrNull(JsonNode node) {
@@ -2084,7 +2127,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
     private record ArchiveContent(
             ExportManifest manifest, List<ExportedAsset> assets, Map<String, byte[]> blobs,
-            ExportedSettings settings, List<ExportedSchedule> schedules, List<ExportedRedirect> redirects) {
+            ExportedSettings settings, List<ExportedSchedule> schedules, List<ExportedRedirect> redirects,
+            List<ExportedUrl> urls) {
 
         /**
          * The archive as an import in {@code mode} reads it: a {@link ReleaseMode#DRAFT} import leaves out the
@@ -2096,7 +2140,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 return this;
             }
             List<ExportedAsset> drafts = assets.stream().filter(asset -> !asset.isDraftDeleted()).toList();
-            return new ArchiveContent(manifest, drafts, blobs, settings, schedules, redirects);
+            return new ArchiveContent(manifest, drafts, blobs, settings, schedules, redirects, urls);
         }
     }
 

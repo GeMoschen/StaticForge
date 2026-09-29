@@ -22,6 +22,11 @@ public enum RebuildRootKind {
     ASSET_UNPUBLISHED,
     /** The root asset was deleted since the baseline — for a released type: its deletion was released. */
     ASSET_DELETED,
+    /**
+     * The root asset's registered URL changed since the base build (M32.5): an override, a reset or an import of its URL
+     * registry row moved the output, so it and every page linking it render again.
+     */
+    URL_CHANGED,
     /** Nothing it depends on changed, but the base build lacks this output (e.g. the page was held back then). */
     NOT_IN_BASE_BUILD,
     UNKNOWN;
@@ -33,6 +38,7 @@ public enum RebuildRootKind {
 
     /** Whether reasons of this kind start at a change and carry a chain. */
     public boolean changeDriven() {
-        return this == ASSET_CHANGED || this == ASSET_DELETED || this == ASSET_RELEASED || this == ASSET_UNPUBLISHED;
+        return this == ASSET_CHANGED || this == ASSET_DELETED || this == ASSET_RELEASED || this == ASSET_UNPUBLISHED
+                || this == URL_CHANGED;
     }
 }

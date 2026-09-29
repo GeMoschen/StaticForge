@@ -164,8 +164,8 @@ class CrossProjectUuidCollisionTest {
                 new CreatePageReferenceCommand("B Link", navRootB.uuid(), PageReferenceTargetKind.PAGE, sharedUuid, null),
                 b.ctx());
 
-        String previewHrefA = urlRegistryService.resolve(pageRefA.uuid(), "html", UrlArea.PREVIEW, a.ctx());
-        String previewHrefB = urlRegistryService.resolve(pageRefB.uuid(), "html", UrlArea.PREVIEW, b.ctx());
+        String previewHrefA = urlRegistryService.resolvePageReference(pageRefA.uuid(), "html", UrlArea.PREVIEW, null, a.ctx());
+        String previewHrefB = urlRegistryService.resolvePageReference(pageRefB.uuid(), "html", UrlArea.PREVIEW, null, b.ctx());
         assertThat(previewHrefA).isNotBlank();
         assertThat(previewHrefB).isNotBlank();
         assertThat(previewHrefA).isNotEqualTo(previewHrefB);
@@ -185,8 +185,8 @@ class CrossProjectUuidCollisionTest {
         String homeOutputA = Files.readString(buildDir(a, targetA, runIdA).resolve("index.html"));
         String homeOutputB = Files.readString(buildDir(b, targetB, runIdB).resolve("index.html"));
 
-        String generatedHrefA = urlRegistryService.resolve(pageRefA.uuid(), "html", UrlArea.GENERATED, a.ctx());
-        String generatedHrefB = urlRegistryService.resolve(pageRefB.uuid(), "html", UrlArea.GENERATED, b.ctx());
+        String generatedHrefA = urlRegistryService.resolvePageReference(pageRefA.uuid(), "html", UrlArea.GENERATED, null, a.ctx());
+        String generatedHrefB = urlRegistryService.resolvePageReference(pageRefB.uuid(), "html", UrlArea.GENERATED, null, b.ctx());
         assertThat(generatedHrefA).isNotBlank();
         assertThat(generatedHrefB).isNotBlank();
         assertThat(generatedHrefA).isNotEqualTo(generatedHrefB);

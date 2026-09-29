@@ -91,6 +91,7 @@ public class DraftCheckService {
     private final SiteRuleRunner siteRules;
     private final QualityRuleConfigService qualityConfig;
     private final GenerationTargetRepository targets;
+    private final com.acme.staticforge.urlregistry.UrlRegistryService urlRegistryService;
 
     public DraftCheckService(
             SnapshotService snapshots,
@@ -101,7 +102,9 @@ public class DraftCheckService {
             PageRuleRunner pageRules,
             SiteRuleRunner siteRules,
             QualityRuleConfigService qualityConfig,
-            GenerationTargetRepository targets) {
+            GenerationTargetRepository targets,
+            com.acme.staticforge.urlregistry.UrlRegistryService urlRegistryService) {
+        this.urlRegistryService = urlRegistryService;
         this.snapshots = snapshots;
         this.channels = channels;
         this.projectLocales = projectLocales;
@@ -168,7 +171,10 @@ public class DraftCheckService {
             return notChecked(config, channel, locale, 1);
         }
 
-        OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, settings, locales);
+        // The draft's outputs go where the URL registry puts a build's (M32.3); a check registers nothing.
+        OutputPathResolver paths = OutputPathResolver.forSnapshot(snapshot, settings, locales)
+                .withRegistry(urlRegistryService.view(request.projectId(),
+                        com.acme.staticforge.urlregistry.UrlArea.GENERATED));
         BuildPlan plan = planner.plan(
                 snapshot, new PlanRequest(GenerationMode.FULL, null, null, settings.keySet(), null, null), paths);
         PlanEntry entry = entry(plan, request.page(), channel, locale, request.pageNumber());
@@ -189,7 +195,7 @@ public class DraftCheckService {
                 entry.outputPath(), entry.pageUuid(), channel, locale, entry.pagination() == null ? null : entry.pageNumber());
         List<ReferenceEvent> events = EditorPaths.locate(file.references(), page.payload());
         CheckEnvironment environment = new CheckEnvironment(baseUrl, locales,
-                outputs(snapshot, plan, locales, GenerationService.siteFiles(baseUrl, formats)), paths::settingsFor,
+                outputs(snapshot, plan, locales, paths.registry(), GenerationService.siteFiles(baseUrl, formats)), paths::settingsFor,
                 QualityCheckStage.labels(snapshot), Map.of(key.path(), events), QualityCheckStage.noIndex(snapshot));
 
         PageRuleRunner.PageCheck checked = pageRules.check(key, file.bytes(), config, environment);
@@ -271,14 +277,18 @@ public class DraftCheckService {
      * (in every language it is published for) and the target's site files.
      */
     private static Map<String, IndexedOutput> outputs(
-            Snapshot snapshot, BuildPlan plan, LocaleConfig locales, Set<String> siteFiles) {
+            Snapshot snapshot,
+            BuildPlan plan,
+            LocaleConfig locales,
+            com.acme.staticforge.urlregistry.UrlRegistryView registry,
+            Set<String> siteFiles) {
         Map<String, IndexedOutput> outputs = new LinkedHashMap<>();
         for (PlanEntry entry : plan.siteOutputs()) {
             OutputKey key = new OutputKey(entry.outputPath(), entry.pageUuid(), entry.channel(), entry.locale(),
                     entry.pagination() == null ? null : entry.pageNumber());
             outputs.putIfAbsent(key.path(), new IndexedOutput(key, BuildManifest.Kind.PAGE, false));
         }
-        MediaOutputs media = new MediaOutputs(snapshot, locales);
+        MediaOutputs media = new MediaOutputs(snapshot, locales, registry);
         for (SnapshotAsset asset : snapshot.root().assetsOfType(AssetType.MEDIA)) {
             for (MediaOutputs.Output output : media.outputsOf(asset.uuid())) {
                 List<String> files = new ArrayList<>();

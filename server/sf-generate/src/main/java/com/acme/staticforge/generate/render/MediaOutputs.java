@@ -1,5 +1,7 @@
 package com.acme.staticforge.generate.render;
 
+import com.acme.staticforge.urlregistry.UrlRegistryView;
+import com.acme.staticforge.urlregistry.UrlTarget;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.asset.media.MediaPaths;
@@ -9,7 +11,6 @@ import com.acme.staticforge.project.LocaleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -34,10 +35,20 @@ public final class MediaOutputs {
 
     private final Snapshot snapshot;
     private final LocaleConfig locales;
+    private final UrlRegistryView registry;
 
     public MediaOutputs(Snapshot snapshot, LocaleConfig locales) {
+        this(snapshot, locales, null);
+    }
+
+    /**
+     * Media outputs written at their URL registry URLs (M32.3): each file and variant at its registered URL, or at its
+     * computed path, which {@code registry} claims for it. {@code null} computes every path.
+     */
+    public MediaOutputs(Snapshot snapshot, LocaleConfig locales, UrlRegistryView registry) {
         this.snapshot = snapshot.root();
         this.locales = LocaleConfig.orEmpty(locales);
+        this.registry = registry;
     }
 
     /** The snapshot family the outputs are computed from (its root view). */
@@ -56,7 +67,7 @@ public final class MediaOutputs {
             return null;
         }
         if (!locales.isLocalized() || !MediaFiles.isLocalized(media.payload())) {
-            return new Output(new Key(mediaUuid, null), "", media, media.payload());
+            return new Output(new Key(mediaUuid, null), "", media, media.payload(), registry);
         }
         String renderLocale = renderLocale(locale);
         MediaFiles.Resolved resolved = MediaFiles.fileFor(media.payload(), renderLocale, locales.effectiveChain(renderLocale));
@@ -108,7 +119,7 @@ public final class MediaOutputs {
 
     private Output localeOutput(UUID mediaUuid, String locale, SnapshotAsset media) {
         JsonNode payload = MediaFiles.effective(media.payload(), locale, locales.effectiveChain(locale));
-        return new Output(new Key(mediaUuid, locale), MediaPaths.localePrefix(locales, locale), media, payload);
+        return new Output(new Key(mediaUuid, locale), MediaPaths.localePrefix(locales, locale), media, payload, registry);
     }
 
     /** The declared spelling of {@code locale}; the default locale for {@code null} or an undeclared one. */
@@ -135,25 +146,47 @@ public final class MediaOutputs {
      * @param asset the media as the output's locale renders it (its uid names the files)
      * @param payload the payload with the output's file in the top-level fields
      */
-    public record Output(Key key, String prefix, SnapshotAsset asset, JsonNode payload) {
+    public record Output(Key key, String prefix, SnapshotAsset asset, JsonNode payload, UrlRegistryView registry) {
 
-        /** The primary file's path. */
+        /** An output whose paths are computed ({@code registry} {@code null}). */
+        public Output(Key key, String prefix, SnapshotAsset asset, JsonNode payload) {
+            this(key, prefix, asset, payload, null);
+        }
+
+        /** The primary file's path: its registered URL, else its computed path (claimed). */
         public String path() {
-            return MediaPaths.localizedMediaPath(prefix, uid(), MediaPaths.extensionFor(mimeType()));
+            return registered(null, MediaPaths.pathOf(payload, prefix, uid(), null));
         }
 
         /** The path of variant {@code name}, or {@code null} when the file has no such variant. */
         public String variantPath(String name) {
-            JsonNode variants = payload == null ? null : payload.get("variants");
-            if (variants != null && variants.isArray()) {
-                for (JsonNode variant : variants) {
-                    if (name.equals(variant.path("name").asText())) {
-                        return MediaPaths.localizedVariantPath(
-                                prefix, uid(), name, extensionForFormat(variant.path("format").asText(null)));
-                    }
-                }
+            String computed = MediaPaths.pathOf(payload, prefix, uid(), name);
+            return computed == null ? null : registered(name, computed);
+        }
+
+        /**
+         * Where the primary file ({@code variant} {@code null}) or a variant goes, without claiming a URL for it: its
+         * registered URL, else its computed path; {@code null} for a variant the file doesn't have.
+         */
+        public String peekPath(String variant) {
+            String computed = MediaPaths.pathOf(payload, prefix, uid(), variant);
+            if (computed == null || registry == null) {
+                return computed;
             }
-            return null;
+            String registered = registry.registered(UrlTarget.media(asset.uuid(), variant), UrlTarget.NO_CHANNEL, localeKey());
+            return registered != null ? registered : computed;
+        }
+
+        /** The media row's language: the locale the file is written for, {@code ""} for media that isn't localized. */
+        public String localeKey() {
+            return key.locale() == null ? "" : key.locale();
+        }
+
+        private String registered(String variant, String computed) {
+            if (registry == null) {
+                return computed;
+            }
+            return registry.url(UrlTarget.media(asset.uuid(), variant), UrlTarget.NO_CHANNEL, localeKey(), () -> computed);
         }
 
         /** The file's MIME type. */
@@ -174,10 +207,6 @@ public final class MediaOutputs {
 
     /** Variant {@code format} ("jpeg") → file extension ("jpg"). */
     public static String extensionForFormat(String format) {
-        if (format == null || format.isBlank()) {
-            return "bin";
-        }
-        String value = format.toLowerCase(Locale.ROOT);
-        return "jpeg".equals(value) ? "jpg" : value;
+        return MediaPaths.extensionForFormat(format);
     }
 }

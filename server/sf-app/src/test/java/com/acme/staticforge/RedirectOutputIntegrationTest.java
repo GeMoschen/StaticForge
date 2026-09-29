@@ -1,5 +1,8 @@
 package com.acme.staticforge;
 
+import com.acme.staticforge.urlregistry.UrlRegistryService;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.ResetScope;
 import com.acme.staticforge.generate.quality.QualitySeverity;
 
 import com.acme.staticforge.generate.quality.rules.links.RedirectedTargetRule;
@@ -105,6 +108,7 @@ class RedirectOutputIntegrationTest {
     @Autowired FolderService folderService;
     @Autowired GenerationTargetRepository targetRepository;
     @Autowired GenerationService generationService;
+    @Autowired UrlRegistryService urlRegistryService;
     @Autowired ReleaseFixtures releaseFixtures;
     @Autowired RedirectService redirectService;
     @Autowired QualityRuleConfigService configService;
@@ -139,8 +143,14 @@ class RedirectOutputIntegrationTest {
         return new Site(fx, page, about, guides);
     }
 
+    /** Moves the page and resets its URL, which is what moves its output (M32). */
     private void move(Site site) {
         assetService.move(site.about(), site.guides(), site.fx().ctx());
+        resetUrl(site);
+    }
+
+    private void resetUrl(Site site) {
+        urlRegistryService.reset(site.fx().projectId(), ResetScope.asset(site.about(), UrlArea.GENERATED), site.fx().ctx());
     }
 
     // ------------------------------------------------------------------
@@ -204,6 +214,7 @@ class RedirectOutputIntegrationTest {
         move(site);
         build.succeeded(build.generate(site.fx(), target, GenerationMode.INCREMENTAL));
         assetService.move(site.about(), manuals, site.fx().ctx());
+        resetUrl(site);
 
         GenerationRun run = build.succeeded(build.generate(site.fx(), target, GenerationMode.INCREMENTAL));
 

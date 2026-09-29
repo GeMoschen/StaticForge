@@ -18,6 +18,13 @@ export type ReleaseMode = 'KEEP' | 'DRAFT';
 
 // `importSchedules` (M27.8.2): whether an import brings the archive's schedules; the analysis counts them either way.
 
+/**
+ * How an import treats the archive's URL registry rows where the project already has a URL for the same output
+ * (M32.6): `ARCHIVE_WINS` replaces computed URLs but keeps the project's manual ones, `TARGET_WINS` keeps every
+ * existing URL, `REPLACE_ALL` replaces them all.
+ */
+export type UrlRegistryImportMode = 'ARCHIVE_WINS' | 'TARGET_WINS' | 'REPLACE_ALL';
+
 const BASE = '/api/v1';
 
 /**
@@ -42,12 +49,14 @@ export class ImportExportService {
     skipExistingImplicit = false,
     releaseMode: ReleaseMode = 'KEEP',
     importSchedules = true,
+    urlRegistryMode: UrlRegistryImportMode = 'ARCHIVE_WINS',
   ): Observable<ConflictReportView> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('skipExistingImplicit', String(skipExistingImplicit));
     formData.append('releaseMode', releaseMode);
     formData.append('importSchedules', String(importSchedules));
+    formData.append('urlRegistryMode', urlRegistryMode);
     return this.http.post<ConflictReportView>(
       `${BASE}/projects/${projectKey}/import/analyze`,
       formData,
@@ -61,12 +70,14 @@ export class ImportExportService {
     skipExistingImplicit = false,
     releaseMode: ReleaseMode = 'KEEP',
     importSchedules = true,
+    urlRegistryMode: UrlRegistryImportMode = 'ARCHIVE_WINS',
   ): Observable<ImportResultView> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('skipExistingImplicit', String(skipExistingImplicit));
     formData.append('releaseMode', releaseMode);
     formData.append('importSchedules', String(importSchedules));
+    formData.append('urlRegistryMode', urlRegistryMode);
     return this.http.post<ImportResultView>(`${BASE}/projects/${projectKey}/import`, formData, {
       withCredentials: true,
     });

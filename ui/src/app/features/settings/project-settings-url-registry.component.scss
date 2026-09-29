@@ -181,3 +181,30 @@
   padding: var(--sf-4);
   border-top: 1px solid var(--sf-line);
 }
+
+.target {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-2);
+  min-width: 0;
+}
+
+.target__name {
+  overflow-wrap: anywhere;
+}
+
+.badge--type {
+  color: var(--sf-slate);
+  border: 1px solid var(--sf-line);
+}
+
+.muted {
+  color: var(--sf-slate);
+}
+
+.field-error {
+  display: block;
+  margin-top: var(--sf-1);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-rust);
+}

@@ -55,14 +55,18 @@ import com.acme.staticforge.template.render.RenderResult;
 import com.acme.staticforge.template.render.Renderer;
 import com.acme.staticforge.template.render.UrlResolver;
 import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlTarget;
+import com.acme.staticforge.channel.OutputPathExpander;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -410,7 +414,21 @@ public class PageRenderService {
         RenderResult result =
                 budget.withTemplate(page.pageTemplateUuid(), pageTemplate.uid(), () -> renderer.render(compiled, context));
         addWarnings(warnings, result.warnings());
+        registerPreviewUrl(projectId, page, channel, reading, pagination.pageNumber());
         return new PagePreview(result.output(), pagination.pageNumber(), pagination.totalPages(), warnings);
+    }
+
+    /**
+     * Registers the previewed page's own URL in the {@code PREVIEW} area in its language (M32.4): a preview is an output
+     * of the draft. Only the current draft is registered — a time-travel or published preview renders another state.
+     */
+    private void registerPreviewUrl(long projectId, PageView page, String channel, Reading reading, int pageNumber) {
+        if (urlRegistryService == null || page.uuid() == null || reading.revision() != null
+                || reading.view().kind() != ContentView.Kind.DRAFT) {
+            return;
+        }
+        urlRegistryService.resolvePage(page.uuid(), pageNumber, channel, UrlArea.PREVIEW, reading.locale(),
+                RevisionContext.of(projectId, null, "preview"));
     }
 
     /** The preview's page of a paginated page; {@code scope} is {@code null} (page 1 of 1) for any other page. */
@@ -677,21 +695,10 @@ public class PageRenderService {
     }
 
     /**
-     * Href resolution swap point for `M8.2.3`: a {@code PAGE_REFERENCE} node's href is keyed on
-     * the reference's own uuid ({@code node.assetUuid()}, exactly the {@code pageReferenceUuid}
-     * {@link UrlRegistryService#resolve} expects) and resolved through the {@code PREVIEW} area of
-     * the URL registry — but only when {@code rewriteLinks} is {@code false} (a caller inspecting
-     * the registry's stable, published-style URL rather than rendering something a browser will
-     * actually click). When {@code rewriteLinks} is {@code true} (every iframe/srcdoc preview
-     * route — see {@link #urlResolver}'s javadoc), the registry's raw output-relative path (e.g.
-     * {@code "about/index.html"}) is not a route the preview app serves, so it must go through the
-     * same signed-share-token {@link UrlResolver} every other in-preview page link uses, exactly
-     * like a {@code FOLDER} entry-point node already does — otherwise nav links render but cannot
-     * be clicked to navigate inside the preview. A {@code FOLDER} entry-point node (its {@code
-     * resolvedPageUuid} comes from walking a {@code startNode} chain, not from a {@code
-     * PageReference} the folder itself owns) has no {@code PageReference} identity to key a
-     * registry lookup on regardless, so it always resolves directly through the {@link
-     * UrlResolver} — unchanged pre-`M8.2.3` behavior for that node kind.
+     * A navigation entry's href: the URL of the page it resolves to, like any page link ({@link #urlResolver}). Without
+     * {@code rewriteLinks} (a caller inspecting the published-style URLs) that is the page's {@code PREVIEW} registry
+     * URL (M32.4); with it (every iframe/srcdoc preview route) the signed share link, since a registry URL such as
+     * {@code about/index.html} is not a route the preview app serves.
      */
     private String navHref(
             NavTreeNode node,
@@ -705,10 +712,7 @@ public class PageRenderService {
         if (resolvedPageUuid == null) {
             return "";
         }
-        if (!rewriteLinks && node.type() == AssetType.PAGE_REFERENCE && urlRegistryService != null) {
-            RevisionContext ctx = RevisionContext.of(projectId, null, "preview");
-            return urlRegistryService.resolve(node.assetUuid(), channel, UrlArea.PREVIEW, ctx);
-        }
+        // A page reference or navigation folder has no URL of its own: it links its page's (M32.2).
         return urlResolver(projectKey, channel, rewriteLinks, baseUrl, reading).resolve("page", null, resolvedPageUuid, Map.of());
     }
 
@@ -906,19 +910,22 @@ public class PageRenderService {
      */
     private UrlResolver urlResolver(String projectKey, String channel, boolean rewriteLinks, String baseUrl, Reading reading) {
         if (!rewriteLinks) {
-            return (kind, uid, uuid, args) -> uid != null && !uid.isBlank() ? uid : (uuid == null ? "" : uuid.toString());
+            return registryUrls(channel, reading);
         }
         String base = baseUrl == null ? "" : baseUrl;
         ContentView view = reading.view();
+        LinkLocales linkLocales = new LinkLocales(reading);
         return (kind, uid, uuid, args) -> {
             if (uuid == null) {
                 return "";
             }
+            // A page link follows $CMS_REF's locale= into that language; media and folders stay in the preview's.
+            String linkLocale = "page".equals(kind) ? linkLocales.of(args) : reading.locale();
             // The published view shows the site as the next build renders it: a link to a page or media file that
             // isn't released in the language renders empty there too (M27.2.3).
             if (view.kind() == ContentView.Kind.PUBLISHED
                     && ("page".equals(kind) || "media".equals(kind))
-                    && view.resolve(uuid).isEmpty()) {
+                    && linkLocales.view(linkLocale).resolve(uuid).isEmpty()) {
                 return "";
             }
             if ("media".equals(kind)) {
@@ -942,11 +949,125 @@ public class PageRenderService {
                     return "";
                 }
             }
-            // Page links follow the current state, in the preview's view and language, so navigating inside the
-            // frame stays in the same view.
-            String token = previewTokenService.issueShareToken(pageUuid, null, channel, projectKey, reading.locale(), view.kind());
+            // Page links follow the current state, in the preview's view and in the link's language, so navigating
+            // inside the frame stays in the same view.
+            String token = previewTokenService.issueShareToken(pageUuid, null, channel, projectKey, linkLocale, view.kind());
             return base + "/projects/" + projectKey + "/preview/share?t=" + token;
         };
+    }
+
+    /**
+     * Link resolution of a preview that renders the site's own URLs ({@code rewriteLinks} off, M32.4): every page,
+     * media and folder link resolves through the {@code PREVIEW} area of the URL registry in the preview's language —
+     * the stored URL, or the one computed from the drafts, which is stored. A folder with an index page links that
+     * page. Links stay site-root-relative. Other kinds keep naming their target.
+     */
+    private UrlResolver registryUrls(String channel, Reading reading) {
+        if (urlRegistryService == null) {
+            return (kind, uid, uuid, args) -> uid != null && !uid.isBlank() ? uid : (uuid == null ? "" : uuid.toString());
+        }
+        ContentView view = reading.view();
+        long projectId = view.projectId();
+        RevisionContext ctx = RevisionContext.of(projectId, null, "preview");
+        LinkLocales linkLocales = new LinkLocales(reading);
+        return (kind, uid, uuid, args) -> {
+            if (uuid == null) {
+                return uid != null && !uid.isBlank() ? uid : "";
+            }
+            if (!"page".equals(kind) && !"media".equals(kind) && !"folder".equals(kind)) {
+                return uid != null && !uid.isBlank() ? uid : uuid.toString();
+            }
+            String linkLocale = "page".equals(kind) ? linkLocales.of(args) : reading.locale();
+            if (view.kind() == ContentView.Kind.PUBLISHED
+                    && ("page".equals(kind) || "media".equals(kind))
+                    && linkLocales.view(linkLocale).resolve(uuid).isEmpty()) {
+                return "";
+            }
+            if ("media".equals(kind)) {
+                return emptyIfNull(previewMediaUrl(projectId, uuid, args == null ? null : args.get("variant"), reading, ctx));
+            }
+            if ("folder".equals(kind)) {
+                return emptyIfNull(previewFolderUrl(projectId, uuid, channel, reading, ctx));
+            }
+            return emptyIfNull(urlRegistryService.resolvePage(uuid, 1, channel, UrlArea.PREVIEW, linkLocale, ctx));
+        };
+    }
+
+    /**
+     * The language a preview page link resolves in: {@code $CMS_REF}'s {@code locale=} when it names one of the
+     * project's languages (as generation does), else the preview's. A published preview checks a link in another
+     * language against that language's release state, so it opens that language's view once per render.
+     */
+    private final class LinkLocales {
+
+        private final Reading reading;
+        private final com.acme.staticforge.project.LocaleConfig config;
+        private final Map<String, ContentView> views = new HashMap<>();
+
+        LinkLocales(Reading reading) {
+            this.reading = reading;
+            this.config = projectLocales.forProject(reading.view().projectId());
+        }
+
+        String of(Map<String, String> args) {
+            String requested = args == null ? null : args.get("locale");
+            if (requested == null || requested.isBlank() || !config.isLocalized()) {
+                return reading.locale();
+            }
+            String declared = config.canonicalDeclared(requested);
+            return declared != null ? declared : reading.locale();
+        }
+
+        ContentView view(String locale) {
+            if (Objects.equals(locale, reading.locale())) {
+                return reading.view();
+            }
+            return views.computeIfAbsent(locale, key -> contentViews.open(
+                    reading.view().projectId(), reading.revision(), reading.view().kind(), key));
+        }
+    }
+
+    /** A folder link: its index page's URL, else the folder's own (its directory, unless overridden). */
+    private String previewFolderUrl(long projectId, UUID folderUuid, String channel, Reading reading, RevisionContext ctx) {
+        Optional<UUID> index = navigationService.indexPage(projectId, folderUuid, channelNavigation(projectId, channel, reading));
+        if (index.isPresent()) {
+            return urlRegistryService.resolvePage(index.get(), 1, channel, UrlArea.PREVIEW, reading.locale(), ctx);
+        }
+        String localeKey = urlRegistryService.localeKey(projectId, reading.locale());
+        com.acme.staticforge.project.LocaleConfig locales = projectLocales.forProject(projectId);
+        return urlRegistryService.resolve(UrlTarget.folder(folderUuid), channel, UrlArea.PREVIEW, localeKey, () -> {
+            Optional<ContentView.Resolved> folder = reading.view().resolve(folderUuid);
+            if (folder.isEmpty()) {
+                return null;
+            }
+            String segment = com.acme.staticforge.asset.media.MediaPaths.localePrefix(locales, localeKey);
+            OutputPathExpander.LocaleContext locale = localeKey.isEmpty()
+                    ? OutputPathExpander.LocaleContext.NONE
+                    : new OutputPathExpander.LocaleContext(localeKey, segment.isEmpty() ? "" : localeKey);
+            return OutputPathExpander.folderUrl(folder.get().version().getFolderPath(), locale);
+        }, ctx);
+    }
+
+    /**
+     * A media link: the file (or variant) the preview's language shows. Localized media is keyed by that language
+     * and written under its prefix; other media has one URL for every language.
+     */
+    private String previewMediaUrl(long projectId, UUID mediaUuid, String variant, Reading reading, RevisionContext ctx) {
+        Optional<ContentView.Resolved> resolved = reading.view().resolve(mediaUuid);
+        if (resolved.isEmpty() || resolved.get().asset().getAssetType() != AssetType.MEDIA) {
+            return null;
+        }
+        com.acme.staticforge.project.LocaleConfig locales = projectLocales.forProject(projectId);
+        JsonNode payload = resolved.get().version().getPayload();
+        boolean localized = locales.isLocalized() && com.acme.staticforge.asset.media.MediaFiles.isLocalized(payload);
+        String localeKey = localized ? urlRegistryService.localeKey(projectId, reading.locale()) : "";
+        JsonNode file = localized
+                ? com.acme.staticforge.asset.media.MediaFiles.effective(payload, localeKey, locales.effectiveChain(localeKey))
+                : payload;
+        String prefix = localized ? com.acme.staticforge.asset.media.MediaPaths.localePrefix(locales, localeKey) : "";
+        String uid = resolved.get().uid();
+        return urlRegistryService.resolve(UrlTarget.media(mediaUuid, variant), UrlTarget.NO_CHANNEL, UrlArea.PREVIEW,
+                localeKey, () -> com.acme.staticforge.asset.media.MediaPaths.pathOf(file, prefix, uid, variant), ctx);
     }
 
     /** The preview's navigation, with {@code channel}'s {@code indexUid} naming a folder's index page. */

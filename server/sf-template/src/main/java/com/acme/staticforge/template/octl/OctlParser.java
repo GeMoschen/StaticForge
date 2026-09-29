@@ -72,7 +72,7 @@ final class OctlParser {
             case "REF" -> {
                 Cursor c = cursor(token);
                 Accessor accessor = parseAccessor(c);
-                List<NamedArg> args = parseNamedArgs(c);
+                List<NamedArg> args = parseRefArgs(c);
                 out.add(new OctlNode.Ref(accessor, args, line, col));
             }
             case "BODY" -> {
@@ -331,6 +331,40 @@ final class OctlParser {
             c.skipWs();
             String value = c.startsWith("\"") || c.startsWith("'") ? c.readString() : c.readIdent();
             args.add(new NamedArg(name, value));
+        }
+        return args;
+    }
+
+    /**
+     * The named arguments of a {@code $CMS_REF}: a quoted value is literal; an unquoted one is a dotted path evaluated
+     * at render time ({@code locale=l}, {@code locale=l.code}), whose single word falls back to its literal text when it
+     * resolves to nothing ({@link NamedArg#expression()}).
+     */
+    private List<NamedArg> parseRefArgs(Cursor c) {
+        List<NamedArg> args = new ArrayList<>();
+        while (true) {
+            c.skipWs();
+            if (!c.tryConsumeStart(",")) {
+                break;
+            }
+            c.skipWs();
+            String name = c.readIdent();
+            c.skipWs();
+            c.expect('=');
+            c.skipWs();
+            if (c.startsWith("\"") || c.startsWith("'")) {
+                args.add(new NamedArg(name, c.readString()));
+                continue;
+            }
+            List<String> path = new ArrayList<>();
+            path.add(c.readIdent());
+            c.skipWs();
+            while (c.tryConsumeStart(".")) {
+                c.skipWs();
+                path.add(c.readIdent());
+                c.skipWs();
+            }
+            args.add(new NamedArg(name, String.join(".", path), Accessor.scope(path)));
         }
         return args;
     }

@@ -43,6 +43,9 @@ import com.acme.staticforge.redirect.RedirectService.AutoCandidate;
 import com.acme.staticforge.release.ReleaseItem;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.urlregistry.ResetScope;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,7 +71,7 @@ import org.springframework.util.FileSystemUtils;
 
 /**
  * Redirect detection in real builds (M30.4.2, epic decisions 15, 16) on a filesystem target: every way a page's output
- * path changes — a move to another folder, a UID change, a folder rename, a template {@code outputPath} change, a channel
+ * path changes — once its URL registry row is reset (M32: a registered URL is kept until then) — a move to another folder, a UID change, a folder rename, a template {@code outputPath} change, a channel
  * {@code urlStrategy} change — adds {@code AUTO} redirects on the next FULL and INCREMENTAL build; a failed or cancelled
  * build adds none; chains, shadowing, languages, pagination, a promote and the dry run.
  */
@@ -103,6 +106,7 @@ class RedirectDetectionIntegrationTest {
     @Autowired ReleaseService releaseService;
     @Autowired RedirectService redirectService;
     @Autowired RunLatches latches;
+    @Autowired UrlRegistryService urlRegistryService;
 
     private final ObjectMapper mapper = new ObjectMapper();
     private BuildInsightFixtures build;
@@ -209,6 +213,8 @@ class RedirectDetectionIntegrationTest {
         assertThat(redirects(site)).isEmpty();
         assertThat(summary(site.fx(), first).path(PlanInsight.REDIRECTS_ADDED).asInt(-1)).isZero();
         change.accept(site);
+        // A page keeps its registered URL until it is reset (M32): the reset is what moves the output.
+        resetUrls(site.fx());
 
         GenerationRun second = build.succeeded(generate(site, mode));
 
@@ -237,6 +243,7 @@ class RedirectDetectionIntegrationTest {
         Site site = site("rdfail");
         build.succeeded(generate(site, GenerationMode.FULL));
         assetService.changeUid(site.about(), "about_us", site.fx().ctx());
+        resetUrls(site.fx());
         releaseFixtures.releaseAll(site.fx().projectId());
 
         RunLatches.Gate gate = latches.arm(site.fx().projectId(), GenerationRunProbe.PUBLISH);
@@ -262,6 +269,7 @@ class RedirectDetectionIntegrationTest {
         Site site = site("rdcancel");
         build.succeeded(generate(site, GenerationMode.FULL));
         assetService.changeUid(site.about(), "about_us", site.fx().ctx());
+        resetUrls(site.fx());
         releaseFixtures.releaseAll(site.fx().projectId());
 
         RunLatches.Gate gate = latches.arm(site.fx().projectId(), GenerationRunProbe.PUBLISH);
@@ -288,8 +296,10 @@ class RedirectDetectionIntegrationTest {
         Site site = site("rdchain");
         build.succeeded(generate(site, GenerationMode.FULL));
         assetService.changeUid(site.about(), "about_b", site.fx().ctx());
+        resetUrls(site.fx());
         GenerationRun second = build.succeeded(generate(site, GenerationMode.INCREMENTAL));
         assetService.changeUid(site.about(), "about_c", site.fx().ctx());
+        resetUrls(site.fx());
         GenerationRun third = build.succeeded(generate(site, GenerationMode.INCREMENTAL));
 
         assertThat(redirects(site))
@@ -309,6 +319,7 @@ class RedirectDetectionIntegrationTest {
         Site site = site("rdshadow");
         build.succeeded(generate(site, GenerationMode.FULL));
         assetService.changeUid(site.about(), "about_us", site.fx().ctx());
+        resetUrls(site.fx());
         build.succeeded(generate(site, GenerationMode.FULL));
         assertThat(redirects(site)).extracting(RedirectEntry::getFromPath).containsExactly("docs/about.html");
 
@@ -332,9 +343,11 @@ class RedirectDetectionIntegrationTest {
         Site site = site("rdpromote");
         GenerationRun first = build.succeeded(generate(site, GenerationMode.FULL));
         assetService.changeUid(site.about(), "about_b", site.fx().ctx());
+        resetUrls(site.fx());
         build.succeeded(generate(site, GenerationMode.FULL));
         generationService.promote(site.fx().project().getKey(), first.getId(), site.fx().user().getId());
         assetService.changeUid(site.about(), "about_c", site.fx().ctx());
+        resetUrls(site.fx());
 
         GenerationRun third = build.succeeded(generate(site, GenerationMode.FULL));
 
@@ -360,6 +373,7 @@ class RedirectDetectionIntegrationTest {
         assetService.move(site.about(), guides, site.fx().ctx());
         releaseService.release(List.of(ReleaseItem.of(guides), ReleaseItem.of(site.about(), "en")),
                 RevisionContext.of(site.fx().projectId(), null, "release en"));
+        resetUrls(site.fx());
 
         GenerationRun second = build.succeeded(run(site, GenerationMode.INCREMENTAL));
 
@@ -396,6 +410,7 @@ class RedirectDetectionIntegrationTest {
         build.succeeded(build.generate(fx, target, GenerationMode.FULL));
         UUID archive = folderService.create(null, "archive", FolderScope.PAGES, fx.ctx()).uuid();
         assetService.move(blog.uuid(), archive, fx.ctx());
+        resetUrls(fx);
 
         GenerationRun second = build.succeeded(build.generate(fx, target, GenerationMode.INCREMENTAL));
 
@@ -418,6 +433,7 @@ class RedirectDetectionIntegrationTest {
         Site site = site("rddry");
         build.succeeded(generate(site, GenerationMode.FULL));
         assetService.changeUid(site.about(), "about_us", site.fx().ctx());
+        resetUrls(site.fx());
         releaseFixtures.releaseAll(site.fx().projectId());
 
         GenerationService.DryRun dryRun =
@@ -430,9 +446,30 @@ class RedirectDetectionIntegrationTest {
         assertThat(redirects(site)).isEmpty();
     }
 
+    @Test
+    @DisplayName("M32: a page moved without a URL reset keeps its URL — its output stays and no redirect is added")
+    void aMoveWithoutAResetKeepsTheUrl() {
+        for (GenerationMode mode : GenerationMode.values()) {
+            Site site = site("rdkeep");
+            GenerationRun first = build.succeeded(generate(site, GenerationMode.FULL));
+            assetService.changeUid(site.about(), "about_us", site.fx().ctx());
+
+            GenerationRun second = build.succeeded(generate(site, mode));
+
+            assertThat(moved(manifest(site, first), manifest(site, second))).as("mode %s", mode).isEmpty();
+            assertThat(build.files(site.fx(), site.target(), second)).as("mode %s", mode).containsKey("docs/about.html");
+            assertThat(redirects(site)).as("mode %s", mode).isEmpty();
+        }
+    }
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    /** Resets every built URL of the project, so the next build assigns (and moves outputs to) the computed paths. */
+    private void resetUrls(Fixture fx) {
+        urlRegistryService.reset(fx.projectId(), ResetScope.area(UrlArea.GENERATED), fx.ctx());
+    }
 
     private TemplateView template(Fixture fx, String name, String html, String outputPath) {
         return templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,

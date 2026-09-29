@@ -29,6 +29,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlTarget;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -121,7 +122,7 @@ class NavigationUrlRegistryIntegrationTest {
         String href2 = navHrefFromOutput(fx, target, runId2);
 
         assertThat(href2).isEqualTo(href1);
-        assertThat(urlRegistryService.resolve(pageRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
+        assertThat(urlRegistryService.resolvePageReference(pageRef.uuid(), "html", UrlArea.GENERATED, null, fx.ctx()))
                 .isEqualTo(href1);
     }
 
@@ -145,7 +146,8 @@ class NavigationUrlRegistryIntegrationTest {
         assertThat(previewHref).isEqualTo(generatedHref);
 
         // ...but overriding PREVIEW only must not leak into GENERATED.
-        urlRegistryService.override(pageRef.uuid(), "html", UrlArea.PREVIEW, "custom/preview-only.html", fx.ctx());
+        urlRegistryService.override(
+                UrlTarget.page(targetPage.uuid()), "html", UrlArea.PREVIEW, "", "custom/preview-only.html", fx.ctx());
 
         String previewHtmlAfterOverride =
                 pageRenderService.renderPage(fx.project().getId(), homePage.uuid(), null, "html", false);
@@ -154,7 +156,7 @@ class NavigationUrlRegistryIntegrationTest {
         long runId2 = runGenerationToSuccess(fx, target);
         String generatedHrefAfterPreviewOverride = navHrefFromOutput(fx, target, runId2);
         assertThat(generatedHrefAfterPreviewOverride).isEqualTo(generatedHref);
-        assertThat(urlRegistryService.resolve(pageRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
+        assertThat(urlRegistryService.resolvePageReference(pageRef.uuid(), "html", UrlArea.GENERATED, null, fx.ctx()))
                 .isEqualTo(generatedHref);
     }
 

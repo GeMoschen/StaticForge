@@ -27,6 +27,12 @@ import com.acme.staticforge.generate.postprocess.RedirectPostProcessor;
 import com.acme.staticforge.generate.redirect.BuildRedirects;
 import com.acme.staticforge.generate.render.MediaOutputs;
 import com.acme.staticforge.generate.render.OutputPathResolver;
+import com.acme.staticforge.urlregistry.UrlArea;
+import com.acme.staticforge.urlregistry.UrlRegistryChange;
+import com.acme.staticforge.urlregistry.UrlRegistryService;
+import com.acme.staticforge.urlregistry.UrlRegistryView;
+import com.acme.staticforge.urlregistry.UrlTarget;
+import com.acme.staticforge.urlregistry.UrlTargetType;
 import com.acme.staticforge.generate.render.RenderOutcome;
 import com.acme.staticforge.generate.render.RenderPipeline;
 import com.acme.staticforge.generate.snapshot.Snapshot;
@@ -158,6 +164,7 @@ public class GenerationService {
     private final QualityRuleConfigService qualityConfig;
     private final RunFindingStore findingStore;
     private final RedirectService redirectService;
+    private final UrlRegistryService urlRegistryService;
 
     /** A remembered {@code Idempotency-Key}: the run it started and when (M29.2.4). */
     private record IdempotentStart(long runId, Instant at) {}
@@ -184,7 +191,8 @@ public class GenerationService {
             QualityCheckStage qualityCheckStage,
             QualityRuleConfigService qualityConfig,
             RunFindingStore findingStore,
-            RedirectService redirectService) {
+            RedirectService redirectService,
+            UrlRegistryService urlRegistryService) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
@@ -207,6 +215,7 @@ public class GenerationService {
         this.qualityConfig = qualityConfig;
         this.findingStore = findingStore;
         this.redirectService = redirectService;
+        this.urlRegistryService = urlRegistryService;
     }
 
     /**
@@ -479,9 +488,12 @@ public class GenerationService {
         GenerationTarget target = resolveTarget(projectId, request.targetId());
         TargetWriter writer = targetWriterSelector.forTarget(projectKey, target);
         Snapshot snapshot = snapshotService.snapshot(projectId, request.revision(), SnapshotView.RELEASED);
-        // Channel settings are live configuration (not revision-pinned), read once per run.
+        // Channel settings are live configuration (not revision-pinned), read once per run. So is the URL registry
+        // (M32.3): every output goes to its registered URL; first-time URLs are claimed in memory and stored when the
+        // run publishes, so planning (and a dry run) writes nothing.
         OutputPathResolver paths = OutputPathResolver.forSnapshot(
-                snapshot, channelService.outputSettings(projectId), projectLocales.forProject(projectId));
+                        snapshot, channelService.outputSettings(projectId), projectLocales.forProject(projectId))
+                .withRegistry(urlRegistryService.view(projectId, UrlArea.GENERATED));
         Set<String> channels = BuildPlanner.effectiveChannels(request.channels());
         Set<UUID> scopeAssets = scopeAssets(request);
         GenerationMode mode = request.mode() == null ? GenerationMode.FULL : request.mode();
@@ -670,7 +682,40 @@ public class GenerationService {
         if (qualityConfig.qualityRulesChangedSince(projectId, revision) || !quality.fingerprint().equals(checkedUnder)) {
             return BaselineChoice.none(FallbackCause.QUALITY_RULES_CHANGED);
         }
-        return new BaselineChoice(current, new Baseline(revision, manifest.get()), null);
+        return new BaselineChoice(current, new Baseline(revision, manifest.get(), urlChangedSince(projectId, current, snapshot)), null);
+    }
+
+    /**
+     * What the base build's manifest can't show about URL registry changes since that build started (M32.5): the folders
+     * whose URL was overridden, reset or imported, and after a reset of a whole channel, area or project every pages
+     * folder. Pages and media are compared with the manifest by the planner.
+     */
+    private Set<UUID> urlChangedSince(long projectId, long baseRunId, Snapshot snapshot) {
+        Instant since = runs.findById(baseRunId).map(GenerationRun::getStartedAt).orElse(null);
+        if (since == null) {
+            return Set.of();
+        }
+        List<UrlRegistryChange> changes = urlRegistryService.changesSince(projectId, UrlArea.GENERATED, since);
+        if (changes == null || changes.isEmpty()) {
+            return Set.of();
+        }
+        Set<UUID> changed = new LinkedHashSet<>();
+        boolean wide = false;
+        for (UrlRegistryChange change : changes) {
+            if (change.wide()) {
+                wide = true;
+            } else if (change.getTargetType() == null || change.getTargetType() == UrlTargetType.FOLDER) {
+                changed.add(change.getTargetUuid());
+            }
+        }
+        if (wide) {
+            snapshot.root().assetsOfType(com.acme.staticforge.asset.AssetType.FOLDER).stream()
+                    .filter(asset -> !asset.deleted())
+                    .filter(asset -> com.acme.staticforge.asset.folder.FolderScope.fromPayload(asset.payload())
+                            == com.acme.staticforge.asset.folder.FolderScope.PAGES)
+                    .forEach(asset -> changed.add(asset.uuid()));
+        }
+        return changed;
     }
 
     private void executeRun(String projectKey, long runId, GenerationRequest request) {
@@ -741,7 +786,7 @@ public class GenerationService {
             emit(runId, STAGE_ASSETS, "Copying media", 0, 0, 0, null);
             com.acme.staticforge.project.LocaleConfig locales =
                     projectLocales.forProject(build.project().getId());
-            MediaOutputs mediaOutputs = new MediaOutputs(snapshot, locales);
+            MediaOutputs mediaOutputs = new MediaOutputs(snapshot, locales, build.paths().registry());
             AssetCopyResult assets = assetCopyStage.copy(
                     mediaOutputs,
                     mediaReferences(outcome, plan, snapshot),
@@ -855,6 +900,7 @@ public class GenerationService {
             // redirects (M30.4.2): written before the publish, so a failed publish rolls them back with the run.
             int activeRedirects = redirectFormats.isEmpty() ? 0 : redirects.active().size();
             GenerationRun done = control.whileRunning(runId, active -> {
+                        registerUrls(build, planned);
                         findingStore.save(runId, preparedFindings).applyTo(active);
                         RedirectService.AutoResult stored =
                                 redirectService.upsertAuto(active.getProjectId(), runId, redirects.candidates());
@@ -884,6 +930,68 @@ public class GenerationService {
         } catch (Exception e) {
             fail(runId, sample, generationTimer, List.of(), List.of(), e);
         }
+    }
+
+    /**
+     * Stores the URLs this build assigned for the first time and drops the computed rows of outputs that left the site
+     * (M32.3, M32.5) — in the publishing transaction, so a run that isn't published registers nothing. Overrides are
+     * never dropped. A scoped run plans only part of the site, so it drops nothing; a run of some channels drops rows of
+     * those channels only.
+     */
+    private void registerUrls(PlannedBuild build, GenerationRequest request) {
+        UrlRegistryView registry = build.paths().registry();
+        if (registry == null) {
+            return;
+        }
+        long projectId = build.project().getId();
+        List<UrlRegistryView.Claim> rejected = urlRegistryService.register(projectId, UrlArea.GENERATED, registry.claims());
+        if (!rejected.isEmpty()) {
+            log.warn("{} URL(s) of run for project {} were taken meanwhile and not registered, e.g. {}",
+                    rejected.size(), projectId, rejected.get(0));
+        }
+        Set<UUID> scopeAssets = scopeAssets(request);
+        boolean scoped = (request.folderPath() != null && !request.folderPath().isBlank())
+                || (scopeAssets != null && !scopeAssets.isEmpty());
+        if (scoped) {
+            return;
+        }
+        urlRegistryService.deleteComputed(projectId, UrlArea.GENERATED, staleUrlKeys(build, registry));
+    }
+
+    /** The registered rows of outputs no longer in the site: pages (each page number), media and folders. */
+    private List<UrlRegistryView.Key> staleUrlKeys(PlannedBuild build, UrlRegistryView registry) {
+        Set<UrlRegistryView.Key> site = new java.util.HashSet<>();
+        for (com.acme.staticforge.generate.plan.PlanEntry entry : build.plan().siteOutputs()) {
+            site.add(new UrlRegistryView.Key(UrlTarget.page(entry.pageUuid(), entry.pageNumber()), entry.channel(),
+                    build.paths().localeKey(entry.locale())));
+        }
+        Snapshot snapshot = build.snapshot();
+        List<UrlRegistryView.Key> stale = new ArrayList<>();
+        for (UrlRegistryView.Key key : registry.registeredKeys()) {
+            if (registry.isOverridden(key)) {
+                continue;
+            }
+            UUID uuid = key.target().uuid();
+            boolean gone = switch (key.target().type()) {
+                case PAGE -> build.channels().contains(key.channelKey()) && !site.contains(key);
+                case MEDIA -> !presentInAnyView(snapshot, uuid, com.acme.staticforge.asset.AssetType.MEDIA);
+                case FOLDER -> !presentInAnyView(snapshot, uuid, com.acme.staticforge.asset.AssetType.FOLDER);
+            };
+            if (gone) {
+                stale.add(key);
+            }
+        }
+        return stale;
+    }
+
+    private static boolean presentInAnyView(Snapshot snapshot, UUID uuid, com.acme.staticforge.asset.AssetType type) {
+        for (Snapshot view : snapshot.views()) {
+            com.acme.staticforge.generate.snapshot.SnapshotAsset asset = view.assetByUuid(uuid);
+            if (asset != null && !asset.deleted() && asset.type() == type) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -45,6 +45,7 @@
           }
           {{ schedulesSummary(r) }}
           {{ redirectsSummary(r) }}
+          {{ urlsSummary(r) }}
         </span>
       </div>
       @if (r.scheduleWarnings?.length) {
@@ -58,6 +59,23 @@
               <li class="conflict-item">
                 <sf-icon [name]="iconFor(c.type)" />
                 <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+                <span class="conflict-item__detail">{{ c.detail }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+      @if (r.urlWarnings?.length) {
+        <section class="conflict-section conflict-section--warning">
+          <h2 class="conflict-section__title">
+            URLs
+            <span class="badge badge--warning">{{ r.urlWarnings!.length }}</span>
+          </h2>
+          <ul class="conflict-list">
+            @for (c of r.urlWarnings; track $index) {
+              <li class="conflict-item">
+                <sf-icon [name]="iconFor(c.type)" />
+                <span class="conflict-item__label">{{ c.elementLabel ?? 'Unknown' }}</span>
                 <span class="conflict-item__detail">{{ c.detail }}</span>
               </li>
             }
@@ -161,6 +179,51 @@
           <span class="import-option__text">
             <span class="import-option__label">Don't import schedules</span>
             <span class="import-option__hint">Nothing is scheduled here by this import.</span>
+          </span>
+        </label>
+      </fieldset>
+    }
+
+    @if ((archiveUrlCount() ?? 0) > 0) {
+      <fieldset class="import-option" [disabled]="committing()">
+        <legend class="import-option__legend">Existing URLs</legend>
+        <label class="import-option__option">
+          <input
+            type="radio"
+            name="urlRegistryMode"
+            value="ARCHIVE_WINS"
+            [checked]="urlRegistryMode() === 'ARCHIVE_WINS'"
+            (change)="onUrlRegistryModeChange('ARCHIVE_WINS')"
+          />
+          <span class="import-option__text">
+            <span class="import-option__label">Use the archive's {{ archiveUrlCount() }} URL(s), keep manual URLs</span>
+            <span class="import-option__hint">Outputs keep the URLs they had in the archive; URLs someone set by hand here stay.</span>
+          </span>
+        </label>
+        <label class="import-option__option">
+          <input
+            type="radio"
+            name="urlRegistryMode"
+            value="TARGET_WINS"
+            [checked]="urlRegistryMode() === 'TARGET_WINS'"
+            (change)="onUrlRegistryModeChange('TARGET_WINS')"
+          />
+          <span class="import-option__text">
+            <span class="import-option__label">Keep this project's URLs</span>
+            <span class="import-option__hint">The archive only fills in outputs that have no URL here yet.</span>
+          </span>
+        </label>
+        <label class="import-option__option">
+          <input
+            type="radio"
+            name="urlRegistryMode"
+            value="REPLACE_ALL"
+            [checked]="urlRegistryMode() === 'REPLACE_ALL'"
+            (change)="onUrlRegistryModeChange('REPLACE_ALL')"
+          />
+          <span class="import-option__text">
+            <span class="import-option__label">Use the archive's URLs everywhere</span>
+            <span class="import-option__hint">Replaces this project's URLs, manual ones included.</span>
           </span>
         </label>
       </fieldset>

@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v1/projects/{projectKey}/url-registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_1"];
+        put: operations["assign"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/targets/{id}": {
         parameters: {
             query?: never;
@@ -1716,14 +1732,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/url-registry": {
+    "/api/v1/projects/{projectKey}/url-registry/assets/{uuid}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["list_1"];
+        get: operations["forAsset"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2456,6 +2472,41 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        UrlRegistryOverrideRequest: {
+            url?: string;
+            targetType?: string;
+            /** Format: uuid */
+            targetUuid?: string;
+            variant?: string;
+            /** Format: int32 */
+            pageNumber?: number;
+            channelKey?: string;
+            area?: string;
+            locale?: string;
+        };
+        UrlRegistryEntryView: {
+            /** Format: int64 */
+            id?: number;
+            channelKey?: string;
+            area?: string;
+            locale?: string;
+            targetType?: string;
+            /** Format: uuid */
+            targetUuid?: string;
+            targetLabel?: string;
+            targetUid?: string;
+            targetPath?: string;
+            targetDeleted?: boolean;
+            variant?: string;
+            /** Format: int32 */
+            pageNumber?: number;
+            url?: string;
+            overridden?: boolean;
+            /** Format: date-time */
+            assignedAt?: string;
+            /** Format: int64 */
+            assignedRevision?: number;
+        };
         GenerationTargetRequest: {
             name?: string;
             type?: string;
@@ -3212,6 +3263,8 @@ export interface components {
             entryId?: number;
             channelKey?: string;
             area?: string;
+            /** Format: uuid */
+            targetUuid?: string;
         };
         CreateTemplateRequest: {
             displayName?: string;
@@ -3476,6 +3529,9 @@ export interface components {
             /** Format: int32 */
             importedRedirectCount?: number;
             redirectWarnings?: components["schemas"]["ImportConflictView"][];
+            /** Format: int32 */
+            importedUrlCount?: number;
+            urlWarnings?: components["schemas"]["ImportConflictView"][];
         };
         ConflictReportView: {
             conflicts?: components["schemas"]["ImportConflictView"][];
@@ -3487,6 +3543,8 @@ export interface components {
             scheduleCount?: number;
             /** Format: int32 */
             redirectCount?: number;
+            /** Format: int32 */
+            urlCount?: number;
         };
         CreateGlobalSetRequest: {
             /** Format: uuid */
@@ -3884,24 +3942,6 @@ export interface components {
             bytesFreed?: number;
             message?: string;
         };
-        UrlRegistryOverrideRequest: {
-            url?: string;
-        };
-        UrlRegistryEntryView: {
-            /** Format: int64 */
-            id?: number;
-            channelKey?: string;
-            /** Format: uuid */
-            pageReferenceUuid?: string;
-            pageReferenceLabel?: string;
-            area?: string;
-            url?: string;
-            overridden?: boolean;
-            /** Format: date-time */
-            assignedAt?: string;
-            /** Format: int64 */
-            assignedRevision?: number;
-        };
         UpdatePageReferenceRequest: {
             targetKind?: string;
             /** Format: uuid */
@@ -4016,9 +4056,9 @@ export interface components {
             sort?: components["schemas"]["SortObject"][];
             paged?: boolean;
             /** Format: int32 */
-            pageSize?: number;
-            /** Format: int32 */
             pageNumber?: number;
+            /** Format: int32 */
+            pageSize?: number;
             unpaged?: boolean;
         };
         SortObject: {
@@ -4027,6 +4067,19 @@ export interface components {
             ascending?: boolean;
             property?: string;
             ignoreCase?: boolean;
+        };
+        IndexPageView: {
+            channelKey?: string;
+            /** Format: uuid */
+            pageUuid?: string;
+            pageLabel?: string;
+        };
+        UrlRegistryAssetView: {
+            /** Format: uuid */
+            uuid?: string;
+            targetType?: string;
+            indexPages?: components["schemas"]["IndexPageView"][];
+            entries?: components["schemas"]["UrlRegistryEntryView"][];
         };
         LocaleStatusView: {
             locale?: string;
@@ -4168,8 +4221,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            remove?: boolean;
             add?: boolean;
+            remove?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -4578,6 +4631,63 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_1: {
+        parameters: {
+            query?: {
+                channelKey?: string;
+                area?: string;
+                targetType?: string;
+                locale?: string;
+                targetUuid?: string;
+                q?: string;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageUrlRegistryEntryView"];
+                };
+            };
+        };
+    };
+    assign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UrlRegistryOverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UrlRegistryEntryView"];
+                };
+            };
+        };
+    };
     update: {
         parameters: {
             query?: never;
@@ -7130,6 +7240,7 @@ export interface operations {
                 skipExistingImplicit?: boolean;
                 releaseMode?: "KEEP" | "DRAFT";
                 importSchedules?: boolean;
+                urlRegistryMode?: "ARCHIVE_WINS" | "TARGET_WINS" | "REPLACE_ALL";
             };
             header?: never;
             path: {
@@ -7163,6 +7274,7 @@ export interface operations {
                 skipExistingImplicit?: boolean;
                 releaseMode?: "KEEP" | "DRAFT";
                 importSchedules?: boolean;
+                urlRegistryMode?: "ARCHIVE_WINS" | "TARGET_WINS" | "REPLACE_ALL";
             };
             header?: never;
             path: {
@@ -8542,18 +8654,13 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    forAsset: {
         parameters: {
-            query?: {
-                channelKey?: string;
-                area?: string;
-                q?: string;
-                page?: number;
-                size?: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 projectKey: string;
+                uuid: string;
             };
             cookie?: never;
         };
@@ -8565,7 +8672,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageUrlRegistryEntryView"];
+                    "*/*": components["schemas"]["UrlRegistryAssetView"];
                 };
             };
         };
