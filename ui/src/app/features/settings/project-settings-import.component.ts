@@ -48,7 +48,6 @@ const CONFLICT_ICONS: Record<string, string> = {
   SCHEDULE_OWNER_REPLACED: 'person',
   REDIRECT_SOURCE_EXISTS: 'alt_route',
   REDIRECT_INVALID: 'link_off',
-  START_PAGE_NOT_MERGED: 'home',
 };
 
 /**

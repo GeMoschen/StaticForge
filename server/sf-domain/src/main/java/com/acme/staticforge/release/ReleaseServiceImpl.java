@@ -21,7 +21,6 @@ import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
-import com.acme.staticforge.urlregistry.StartPageUrlInvalidation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
@@ -77,7 +76,6 @@ public class ReleaseServiceImpl implements ReleaseService {
     private final RevisionService revisionService;
     private final AssetService assetService;
     private final FolderService folderService;
-    private final StartPageUrlInvalidation startPageUrls;
 
     public ReleaseServiceImpl(
             AssetRepository assetRepository,
@@ -90,8 +88,7 @@ public class ReleaseServiceImpl implements ReleaseService {
             ProjectLocales projectLocales,
             RevisionService revisionService,
             AssetService assetService,
-            FolderService folderService,
-            StartPageUrlInvalidation startPageUrls) {
+            FolderService folderService) {
         this.assetRepository = assetRepository;
         this.versionRepository = versionRepository;
         this.referenceRepository = referenceRepository;
@@ -103,7 +100,6 @@ public class ReleaseServiceImpl implements ReleaseService {
         this.revisionService = revisionService;
         this.assetService = assetService;
         this.folderService = folderService;
-        this.startPageUrls = startPageUrls;
     }
 
     // ------------------------------------------------------------------
@@ -196,12 +192,6 @@ public class ReleaseServiceImpl implements ReleaseService {
         releaseRepository.saveAll(closed);
         releaseRepository.saveAll(opened);
         revisionService.appendSummaries(ctx.projectId(), rev, summary);
-        for (Resolved item : toOpen) {
-            // Builds read the release state: a folder released with another start page moves pages and folder links (M31).
-            AssetVersion released = item.releasedVersion();
-            startPageUrls.payloadChanged(
-                    item.asset(), released == null ? null : released.getPayload(), item.releaseVersion().getPayload());
-        }
         return new ReleaseOutcome(rev, applied, skipped, List.of());
     }
 

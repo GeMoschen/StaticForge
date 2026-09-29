@@ -934,8 +934,8 @@ public class PageRenderService {
             }
             UUID pageUuid = uuid;
             if ("folder".equals(kind)) {
-                // A folder link opens the folder's index page (M31): its start page in the preview's view, else its page
-                // with the channel's indexUid. A folder without one has nothing a preview can show.
+                // A folder link opens the folder's index page: its page with the channel's indexUid in the preview's
+                // view. A folder without one has nothing a preview can show.
                 pageUuid = navigationService.indexPage(view.projectId(), uuid, channelNavigation(view.projectId(), channel, reading))
                         .orElse(null);
                 if (pageUuid == null) {
@@ -949,7 +949,7 @@ public class PageRenderService {
         };
     }
 
-    /** The preview's navigation, with {@code channel}'s {@code indexUid} as the index page of a folder without a start page. */
+    /** The preview's navigation, with {@code channel}'s {@code indexUid} naming a folder's index page. */
     private NavigationLookup channelNavigation(long projectId, String channel, Reading reading) {
         return reading.navigation().withIndexUid(channelService.outputSettings(projectId, channel).indexUid());
     }

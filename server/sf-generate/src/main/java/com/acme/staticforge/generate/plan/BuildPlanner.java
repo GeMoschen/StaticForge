@@ -91,8 +91,7 @@ public class BuildPlanner {
         // One walk per language (M27.2.2): an output is rebuilt when its language's walk reaches its page, so a
         // release in one language rebuilds only that language's outputs.
         RebuildExpansion.Walks walks = expansion.expandSince(
-                snapshot, baseline.revision(), pageUuid -> moved(pageUuid, firstPaths, basePaths), memo, paths.locales(),
-                paths.indexUids(channels));
+                snapshot, baseline.revision(), pageUuid -> moved(pageUuid, firstPaths, basePaths), memo, paths.locales());
 
         Map<UUID, RebuildReason> reasons = new HashMap<>();
         Map<UUID, Set<String>> siteLocales = new HashMap<>();

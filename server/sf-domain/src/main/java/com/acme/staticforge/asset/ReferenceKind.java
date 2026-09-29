@@ -13,11 +13,5 @@ public enum ReferenceKind {
     OCTL_REF,
     OCTL_INCLUDE,
     /** Navigation edge: a {@code PAGE_REFERENCE} → its target page or pages folder. */
-    NAV,
-    /**
-     * A {@code PAGES} folder → its start page (M31, payload {@code startPage}): usages list the folder and releasing
-     * the folder proposes the page. It never blocks deleting the page — the folder then falls back to the channel's
-     * {@code indexUid} rule.
-     */
-    START_PAGE
+    NAV
 }

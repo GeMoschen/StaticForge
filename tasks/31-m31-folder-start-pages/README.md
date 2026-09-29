@@ -1,5 +1,13 @@
 # M31 — Folder start pages (a folder names the page that renders as its index file)
 
+> **Correction (2026-09-29, user).** Start pages for pages-store folders were not intended and have been removed again
+> — for every pages folder, `pages_root` included: no `startPage` payload, no `PATCH /folders/{uuid}`, no
+> `FolderView.startPageUuid`, no `SF-DOM-0111`/`SF-GEN-0112`, no `START_PAGE` edge, no export protocol 11 (back to 10),
+> no start page UI. A folder's index page is again only its page with the channel's `indexUid`. Kept from M31: the
+> Navigation root is selectable (its *Entry page*), `NavigationService.indexPage` / `firstNavigablePage` prefer the
+> `indexUid` page, `$CMS_REF(folder:…)` without `pages_root/`, preview folder links, moved outputs re-render navigation.
+> The UID `index` is no longer reserved, so the default `indexUid` works. The rest of this file is the original plan.
+
 **Spec:** Extends §10.2 (folders; the pages root), §15.2 (channel `indexUid`), §16.4 (folder references), §17
 (navigation folder resolution), §18.2 (planner edge), §18.3 (output paths), §18.9 (redirect causes), §20.2 (REST
 catalogue), §24 (Pages and Navigation screens), §26.5 (export protocol 11), Appendix B. Not part of the original §27

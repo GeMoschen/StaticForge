@@ -21,9 +21,6 @@
       <sf-icon class="page-nav__icon" name="description" />
       <span class="page-nav__name">{{ summary().displayName ?? summary().uid }}</span>
       <span class="page-nav__mono">{{ summary().uid }}</span>
-      @if (isStartPage()) {
-        <span class="page-nav__start" title="Renders as this folder's index file">Start page</span>
-      }
       <sf-release-badge class="page-nav__badge" [release]="summary().release" [scheduled]="summary().scheduled" [compact]="true" />
     </div>
   </div>

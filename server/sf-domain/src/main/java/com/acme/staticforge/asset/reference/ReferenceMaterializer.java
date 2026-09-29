@@ -9,8 +9,6 @@ import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.ReferenceKind;
 import com.acme.staticforge.asset.content.ContentReferenceService;
 import com.acme.staticforge.asset.content.ExtractedReference;
-import com.acme.staticforge.asset.folder.FolderScope;
-import com.acme.staticforge.asset.folder.StartPage;
 import com.acme.staticforge.asset.media.TextMediaCompiler;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.revision.RevisionAware;
@@ -58,7 +56,7 @@ import org.springframework.stereotype.Service;
  *       its set is its parent, not a reference.</li>
  *   <li>{@code DATASET} (M25.2.1): the OCTL references of its per-channel record templates, exactly like a
  *       section template's, with source path {@code channelTemplates.<channel>}; its CDL schema makes none.</li>
- *   <li>{@code FOLDER}: a {@code PAGES} folder's {@code startPage} as {@link ReferenceKind#START_PAGE} (M31).</li>
+ *   <li>{@code FOLDER}: none.</li>
  * </ul>
  *
  * <p>The write is a per-edge diff rather than close-all-then-insert-all: an edge present in both
@@ -133,7 +131,7 @@ public class ReferenceMaterializer {
             case RECORD -> recordReferences(payload);
             case RECORD_SET -> recordSetReferences(payload);
             case MEDIA -> mediaReferences(projectId, payload);
-            case FOLDER -> folderReferences(payload);
+            case FOLDER -> List.of();
         };
         if (found.isEmpty()) {
             return Set.of();
@@ -251,17 +249,6 @@ public class ReferenceMaterializer {
             case REF -> ReferenceKind.OCTL_REF;
             case INCLUDE -> ReferenceKind.OCTL_INCLUDE;
         };
-    }
-
-    /** A pages folder's start page (M31); other folders reference nothing. */
-    private static List<ExtractedReference> folderReferences(JsonNode payload) {
-        if (FolderScope.fromPayload(payload) != FolderScope.PAGES) {
-            return List.of();
-        }
-        UUID startPage = StartPage.fromPayload(payload);
-        return startPage == null
-                ? List.of()
-                : List.of(new ExtractedReference(ReferenceKind.START_PAGE, startPage, StartPage.PAYLOAD_KEY));
     }
 
     private static List<ExtractedReference> navigationReferences(JsonNode payload) {

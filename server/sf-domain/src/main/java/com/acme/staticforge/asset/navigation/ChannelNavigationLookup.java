@@ -5,8 +5,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * A {@link NavigationLookup} resolving for one channel (M31): the assets of {@code delegate}, with the channel's
- * {@code indexUid} as the fallback index page of a folder without a start page. Made by
+ * A {@link NavigationLookup} resolving for one channel: the assets of {@code delegate}, with the channel's
+ * {@code indexUid} naming a folder's index page. Made by
  * {@link NavigationLookup#withIndexUid}.
  */
 record ChannelNavigationLookup(NavigationLookup delegate, String indexUid) implements NavigationLookup {

@@ -60,37 +60,7 @@ class NavigationServiceImplTest {
     }
 
     @Test
-    void aFolderTargetResolvesToTheFoldersStartPageBeforeItsFirstPage() {
-        FakeNavigationLookup lookup = new FakeNavigationLookup();
-        UUID navRoot = lookup.addFolder(null, "Navigation");
-        UUID pagesFolder = lookup.addFolder(null, "Products");
-        lookup.addPage(pagesFolder, "Alpha", 1);
-        UUID overview = lookup.addPage(pagesFolder, "Overview", 9);
-        lookup.setStartPage(pagesFolder, overview);
-        UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
-
-        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(overview);
-        assertThat(service.resolve(1L, ref, lookup.withIndexUid("alpha"))).isEqualTo(overview);
-        assertThat(service.indexPage(1L, pagesFolder, lookup)).contains(overview);
-    }
-
-    @Test
-    void aStaleStartPageDoesNotCount() {
-        FakeNavigationLookup lookup = new FakeNavigationLookup();
-        UUID navRoot = lookup.addFolder(null, "Navigation");
-        UUID pagesFolder = lookup.addFolder(null, "Products");
-        UUID archive = lookup.addFolder(null, "Archive");
-        UUID first = lookup.addPage(pagesFolder, "Alpha", 1);
-        UUID movedAway = lookup.addPage(archive, "Overview", 0); // named, but lives in another folder
-        lookup.setStartPage(pagesFolder, movedAway);
-        UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
-
-        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(first);
-        assertThat(service.indexPage(1L, pagesFolder, lookup)).isEmpty();
-    }
-
-    @Test
-    void withoutAStartPageTheChannelsIndexUidPageIsTheIndexPage() {
+    void theChannelsIndexUidPageIsTheIndexPage() {
         FakeNavigationLookup lookup = new FakeNavigationLookup();
         UUID navRoot = lookup.addFolder(null, "Navigation");
         UUID pagesFolder = lookup.addFolder(null, "Products");
@@ -100,7 +70,7 @@ class NavigationServiceImplTest {
 
         assertThat(service.resolve(1L, ref, lookup.withIndexUid("home"))).isEqualTo(home);
         assertThat(service.indexPage(1L, pagesFolder, lookup.withIndexUid("home"))).contains(home);
-        // A lookup serving no single channel knows start pages only.
+        // A lookup serving no single channel knows no index page.
         assertThat(service.resolve(1L, ref, lookup)).isEqualTo(first);
         assertThat(service.indexPage(1L, pagesFolder, lookup)).isEmpty();
         // Re-wrapping replaces the channel instead of stacking.
@@ -114,29 +84,23 @@ class NavigationServiceImplTest {
         UUID pagesFolder = lookup.addFolder(null, "Products");
         UUID bikes = lookup.addFolder(pagesFolder, "Bikes");
         lookup.addPage(bikes, "Road Bikes", 0);
-        UUID bikesStart = lookup.addPage(bikes, "All bikes", 5);
-        lookup.setStartPage(bikes, bikesStart);
+        UUID bikesIndex = lookup.addPageWithUid(bikes, "home", "All bikes", 5);
         UUID ref = lookup.addPageReferenceToFolder(navRoot, "Products Link", pagesFolder, null);
 
-        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(bikesStart);
-        assertThat(service.firstNavigablePage(1L, pagesFolder, lookup)).contains(bikesStart);
+        assertThat(service.resolve(1L, ref, lookup.withIndexUid("home"))).isEqualTo(bikesIndex);
+        assertThat(service.firstNavigablePage(1L, pagesFolder, lookup.withIndexUid("home"))).contains(bikesIndex);
     }
 
     @Test
-    void aStartPageCountsOnlyOnAPagesFolder() {
+    void onlyAFolderHasAnIndexPage() {
         FakeNavigationLookup lookup = new FakeNavigationLookup();
         UUID folder = lookup.addFolder(null, "Products");
-        UUID page = lookup.addPage(folder, "Overview", 0);
-        lookup.setStartPage(folder, page);
-        assertThat(service.indexPage(1L, folder, lookup)).contains(page);
+        UUID page = lookup.addPageWithUid(folder, "home", "Overview", 0);
+        NavigationLookup channel = lookup.withIndexUid("home");
 
-        UUID navFolder = lookup.addFolder(null, "Nav");
-        UUID stray = lookup.addPage(navFolder, "Stray", 0);
-        lookup.setStartPage(navFolder, stray);
-        lookup.setScope(navFolder, "NAVIGATION");
-        assertThat(service.indexPage(1L, navFolder, lookup)).isEmpty();
-        assertThat(service.indexPage(1L, page, lookup)).as("not a folder").isEmpty();
-        assertThat(service.indexPage(1L, UUID.randomUUID(), lookup)).isEmpty();
+        assertThat(service.indexPage(1L, folder, channel)).contains(page);
+        assertThat(service.indexPage(1L, page, channel)).as("not a folder").isEmpty();
+        assertThat(service.indexPage(1L, UUID.randomUUID(), channel)).isEmpty();
     }
 
     @Test

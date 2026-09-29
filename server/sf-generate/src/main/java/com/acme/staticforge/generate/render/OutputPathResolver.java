@@ -1,8 +1,5 @@
 package com.acme.staticforge.generate.render;
 
-import com.acme.staticforge.asset.AssetType;
-import com.acme.staticforge.asset.folder.FolderScope;
-import com.acme.staticforge.asset.folder.StartPage;
 import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.channel.OutputPathExpander;
 import com.acme.staticforge.common.ProblemFactory;
@@ -14,22 +11,17 @@ import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.LocaleConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.UUID;
 
 /**
  * Resolves each page's output path for a channel by the §18.3 order — page
- * {@code pathOverride}, then — for its folder's start page (M31) — the folder's index path, then the page
- * template's {@code outputPath} expression, then the project default {@code {folder}{uid}.{ext}} — and
- * expands the placeholder set. Whether a page is its folder's start page is decided in the page's language
- * view: a pointer to a page that isn't there, or no longer lives in the folder, doesn't count. A resolver
+ * {@code pathOverride}, then the page template's {@code outputPath} expression, then the
+ * project default {@code {folder}{uid}.{ext}} — and expands the placeholder set. A resolver
  * is stateful per generation run (it caches first-path ownership for collision reporting),
  * so build one via {@link #forSnapshot} for each run rather than as a shared singleton.
  *
@@ -101,16 +93,6 @@ public final class OutputPathResolver {
     }
 
     /**
-     * The {@code indexUid} of each of {@code channels} (M31): a page with one of them holds its folder's index path while
-     * the folder has no start page.
-     */
-    public Set<String> indexUids(Collection<String> channels) {
-        Set<String> uids = new TreeSet<>();
-        channels.forEach(channel -> uids.add(settingsFor(channel).indexUid()));
-        return uids;
-    }
-
-    /**
      * Resolves the relative (no leading slash) output path for a page in a channel.
      *
      * @throws SfException (not-found) when the page is absent from the snapshot
@@ -128,7 +110,7 @@ public final class OutputPathResolver {
         if (page == null) {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }
-        OutputPathExpander.PageContext context = toPageContext(page, locale);
+        OutputPathExpander.PageContext context = toPageContext(page);
         String path = OutputPathExpander.resolvePath(context, channel, settingsFor(channel), localeContext(locale));
         return OutputFile.normalize(path);
     }
@@ -147,54 +129,13 @@ public final class OutputPathResolver {
         if (page == null) {
             return OutputPathExpander.DEFAULT_EXPRESSION;
         }
-        return OutputPathExpander.effectiveExpression(toPageContext(page, locale), channel, locales.isLocalized());
+        return OutputPathExpander.effectiveExpression(toPageContext(page), channel, locales.isLocalized());
     }
 
-    /** The page as {@code locale}'s view sees it, with its folder's start page (M31) in that view. */
-    private OutputPathExpander.PageContext toPageContext(SnapshotAsset page, String locale) {
+    private OutputPathExpander.PageContext toPageContext(SnapshotAsset page) {
         SnapshotAsset template = templateOf(page);
-        UUID startPage = page.folderId() == null ? null : effectiveStartPage(snapshot.in(locale), page.folderId());
         return new OutputPathExpander.PageContext(
-                page.uid(), page.displayName(), page.folderPath(), page.payload(), template == null ? null : template.payload(),
-                page.uuid().equals(startPage), startPage != null);
-    }
-
-    /**
-     * The effective start page (M31) of the folder {@code folderUuid} in {@code locale}'s view: the page its
-     * {@code startPage} names when that page is present in the view and still lives in the folder; {@code null} when
-     * the folder has none, isn't a pages folder, isn't present in the view, or its pointer is stale (the folder then
-     * falls back to the channel's {@code indexUid} rule).
-     */
-    public UUID startPageOf(UUID folderUuid, String locale) {
-        Snapshot view = snapshot.in(locale);
-        SnapshotAsset folder = folderUuid == null ? null : view.assetByUuid(folderUuid);
-        return folder == null ? null : effectiveStartPage(view, folder.assetId());
-    }
-
-    /**
-     * The start page {@code folderUuid}'s payload names in {@code locale}'s view, effective or not; {@code null} when the
-     * folder is absent there or names none. A pointer here without an effective {@link #startPageOf} is stale.
-     */
-    public UUID declaredStartPageOf(UUID folderUuid, String locale) {
-        SnapshotAsset folder = folderUuid == null ? null : snapshot.in(locale).assetByUuid(folderUuid);
-        return isPagesFolder(folder) ? StartPage.fromPayload(folder.payload()) : null;
-    }
-
-    private static UUID effectiveStartPage(Snapshot view, long folderId) {
-        SnapshotAsset folder = view.assetById(folderId);
-        if (!isPagesFolder(folder)) {
-            return null;
-        }
-        UUID pointer = StartPage.fromPayload(folder.payload());
-        SnapshotAsset page = pointer == null ? null : view.assetByUuid(pointer);
-        boolean effective = page != null && !page.deleted() && page.type() == AssetType.PAGE
-                && Objects.equals(page.folderId(), folder.assetId());
-        return effective ? pointer : null;
-    }
-
-    private static boolean isPagesFolder(SnapshotAsset folder) {
-        return folder != null && !folder.deleted() && folder.type() == AssetType.FOLDER
-                && FolderScope.fromPayload(folder.payload()) == FolderScope.PAGES;
+                page.uid(), page.displayName(), page.folderPath(), page.payload(), template == null ? null : template.payload());
     }
 
     /**
@@ -215,7 +156,7 @@ public final class OutputPathResolver {
             throw new SfException(ProblemFactory.notFound("Page not found in snapshot."));
         }
         return OutputFile.normalize(OutputPathExpander.resolvePaginationPath(
-                toPageContext(page, locale), channel, settingsFor(channel), firstPagePath, pageNumber, localeContext(locale)));
+                toPageContext(page), channel, settingsFor(channel), firstPagePath, pageNumber, localeContext(locale)));
     }
 
     /** The URL (href, relative to the site root) of a pagination page's output path in {@code channel}. */

@@ -56,7 +56,6 @@ const EDGE_LABELS: Record<string, string> = {
   RECORD_SET_QUERY: 'reads record set with changed query',
   RECORD_TEMPLATE: 'renders through record template of',
   PAGINATION_SOURCE: 'paginates source containing',
-  START_PAGE: 'takes or leaves the index path of',
 };
 
 const REFERENCE_LABELS: Record<string, string> = {
@@ -67,7 +66,6 @@ const REFERENCE_LABELS: Record<string, string> = {
   OCTL_REF: 'links to',
   OCTL_INCLUDE: 'includes',
   NAV: 'points to',
-  START_PAGE: 'has start page',
 };
 
 export function rootKindLabel(kind: string | undefined): string {

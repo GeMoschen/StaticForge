@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.acme.staticforge.channel.ChannelOutputSettings.UrlStrategy;
 import com.acme.staticforge.channel.OutputPathExpander.PageContext;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -105,89 +104,8 @@ class OutputPathExpanderTest {
     }
 
     // ------------------------------------------------------------------
-    // Folder start pages (M31)
+    // Folder directory URLs
     // ------------------------------------------------------------------
-
-    @Test
-    void aStartPageRendersAtItsFoldersIndexPathIgnoringTheTemplatesOutputPath() {
-        ObjectNode template = JsonNodeFactory.instance.objectNode();
-        template.putObject("outputPath").put("html", "landing/{displayNameSlug}.{ext}");
-        PageContext asOrdinary = new PageContext("homepage", "Homepage", "/pages_root/", payload(), template);
-        PageContext asStartPage = new PageContext("homepage", "Homepage", "/pages_root/", payload(), template, true, true);
-        PageContext inSubfolder = new PageContext("overview", "Overview", "/pages_root/products/", payload(), template, true, true);
-
-        assertThat(OutputPathExpander.resolvePath(asOrdinary, "html", HTML)).isEqualTo("landing/homepage.html");
-        assertThat(OutputPathExpander.resolvePath(asStartPage, "html", HTML)).isEqualTo("index.html");
-        assertThat(OutputPathExpander.resolveUrl(asStartPage, "html", HTML)).isEqualTo("index.html");
-        assertThat(OutputPathExpander.resolvePath(inSubfolder, "html", HTML)).isEqualTo("products/index.html");
-        assertThat(OutputPathExpander.effectiveExpression(asStartPage, "html", false)).isEqualTo(OutputPathExpander.DEFAULT_EXPRESSION);
-    }
-
-    @Test
-    void aPathOverrideStillWinsOverTheStartPage() {
-        ObjectNode payload = payload();
-        payload.putObject("output").putObject("pathOverride").put("html", "welcome/{uid}.{ext}");
-        PageContext startPage = new PageContext("homepage", "Homepage", "/pages_root/", payload, null, true, true);
-
-        // The override decides the path; its {uid} is the index stem, as for today's indexUid page.
-        assertThat(OutputPathExpander.resolvePath(startPage, "html", HTML)).isEqualTo("welcome/index.html");
-    }
-
-    @Test
-    void theIndexUidPageIsAnOrdinaryPageNextToAStartPage() {
-        ChannelOutputSettings home = ChannelOutputSettings.of("html", null, JsonNodeFactory.instance.objectNode().put("indexUid", "home"));
-        PageContext alone = new PageContext("home", "Home", "/pages_root/", payload(), null);
-        PageContext nextToStartPage = new PageContext("home", "Home", "/pages_root/", payload(), null, false, true);
-
-        assertThat(OutputPathExpander.resolvePath(alone, "html", home)).isEqualTo("index.html");
-        assertThat(OutputPathExpander.resolvePath(nextToStartPage, "html", home)).isEqualTo("home.html");
-    }
-
-    @Test
-    void aStartPageImpliesItsFolderHasOne() {
-        PageContext startPage = new PageContext("homepage", "Homepage", "/pages_root/", payload(), null, true, false);
-
-        assertThat(startPage.folderHasStartPage()).isTrue();
-    }
-
-    @Test
-    void aStartPageFollowsTheDirectoryFormAndTheIndexFileName() {
-        ChannelOutputSettings pretty = new ChannelOutputSettings("html", null, null, UrlStrategy.PRETTY, true);
-        ChannelOutputSettings custom = ChannelOutputSettings.of(
-                "html", "htm", JsonNodeFactory.instance.objectNode().put("indexFileName", "default.htm")
-                        .put("urlStrategy", "PRETTY").put("trailingSlash", true));
-        PageContext root = new PageContext("homepage", "Homepage", "/pages_root/", payload(), null, true, true);
-        PageContext products = new PageContext("overview", "Overview", "/pages_root/products/", payload(), null, true, true);
-
-        assertThat(OutputPathExpander.resolvePath(root, "html", pretty)).isEqualTo("index.html");
-        assertThat(OutputPathExpander.resolveUrl(root, "html", pretty)).isEqualTo("./");
-        assertThat(OutputPathExpander.resolvePath(products, "html", pretty)).isEqualTo("products/index.html");
-        assertThat(OutputPathExpander.resolveUrl(products, "html", pretty)).isEqualTo("products/");
-        assertThat(OutputPathExpander.resolvePath(products, "html", custom)).isEqualTo("products/default.htm");
-        assertThat(OutputPathExpander.resolveUrl(products, "html", custom)).isEqualTo("products/");
-    }
-
-    @Test
-    void aLocalizedStartPageGetsItsLanguagePrefixEvenWhenTheTemplatesExpressionHasNone() {
-        ObjectNode template = JsonNodeFactory.instance.objectNode();
-        template.putObject("outputPath").put("html", "{folder}{uid}.{ext}");
-        PageContext startPage = new PageContext("homepage", "Homepage", "/pages_root/", payload(), template, true, true);
-
-        assertThat(OutputPathExpander.resolvePath(startPage, "html", HTML, new OutputPathExpander.LocaleContext("de", "de")))
-                .isEqualTo("de/index.html");
-        assertThat(OutputPathExpander.resolvePath(startPage, "html", HTML, new OutputPathExpander.LocaleContext("en", "")))
-                .isEqualTo("index.html");
-        assertThat(OutputPathExpander.isLocaleDistinct(OutputPathExpander.effectiveExpression(startPage, "html", true))).isTrue();
-    }
-
-    @Test
-    void pageTwoOfAStartPageIsTheIndexFilesSibling() {
-        PageContext startPage = new PageContext("news", "News", "/pages_root/blog/", payload(), null, true, true);
-        String first = OutputPathExpander.resolvePath(startPage, "html", HTML);
-
-        assertThat(first).isEqualTo("blog/index.html");
-        assertThat(OutputPathExpander.resolvePaginationPath(startPage, "html", HTML, first, 2)).isEqualTo("blog/index-2.html");
-    }
 
     @Test
     void aFoldersDirectoryUrlHasNoPagesRootSegment() {
@@ -208,10 +126,6 @@ class OutputPathExpanderTest {
         assertThat(OutputPathExpander.folderUrl("/pages_root/", de)).isEqualTo("de/");
         assertThat(OutputPathExpander.folderUrl("/pages_root/products/", atRoot)).isEqualTo("products/");
         assertThat(OutputPathExpander.folderUrl("/pages_root/", atRoot)).isEqualTo("./");
-    }
-
-    private static ObjectNode payload() {
-        return JsonNodeFactory.instance.objectNode();
     }
 
     private static PageContext page(String folderPath, String uid) {

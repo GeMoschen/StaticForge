@@ -435,23 +435,6 @@ export class ApiClient {
     );
   }
 
-  /**
-   * Sets or clears a pages folder's start page (M31): `{ startPage: <page uuid> | null }`, answering the folder with its
-   * new revision. `409 SF-API-0409` means the folder changed meanwhile, `409 SF-DOM-0111` that another page of the folder
-   * is also written as its index file (`conflictingPageUuid`, `conflictingPageUid`); the caller shows both.
-   */
-  updateFolder(
-    projectKey: string,
-    uuid: string,
-    body: S['UpdateFolderRequest'],
-    etag?: number,
-  ): Observable<S['FolderView']> {
-    return this.http.patch<S['FolderView']>(`${BASE}/projects/${projectKey}/folders/${uuid}`, body, {
-      ...this.mutationOptions(etag),
-      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
-    });
-  }
-
   moveFolder(
     projectKey: string,
     uuid: string,

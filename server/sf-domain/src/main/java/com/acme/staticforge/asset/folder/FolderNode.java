@@ -12,8 +12,7 @@ import java.util.UUID;
  * <p>{@code type} is {@code FOLDER}, or {@code RECORD_SET} for a record set in the Content store (M25):
  * a leaf node whose {@code recordCount} is its live record count (its records are never tree nodes).
  * {@code recordCount} is {@code null} for folders. {@code revision} is the node's current
- * {@code validFromRevision}, the concurrency token a rename sends back as {@code If-Match}. {@code startPage} is a
- * {@code PAGES} folder's start page pointer ({@link StartPage}, M31) as stored in its draft, {@code null} otherwise.
+ * {@code validFromRevision}, the concurrency token a rename sends back as {@code If-Match}.
  */
 public record FolderNode(
         UUID uuid,
@@ -25,5 +24,4 @@ public record FolderNode(
         AssetType type,
         Long recordCount,
         long revision,
-        UUID startPage,
         List<FolderNode> children) {}

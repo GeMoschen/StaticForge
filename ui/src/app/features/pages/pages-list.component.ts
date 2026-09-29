@@ -79,8 +79,7 @@ export class PagesListComponent {
   /** The project's fixed, protected "All Pages" wrapper root (mirrors `NAVIGATION`'s own fixed
    * root) — always the tree's sole top-level entry now, but this screen already has its own
    * "All pages" affordance (the `pages__clear` button below), so it's unwrapped here rather than
-   * rendered a second time as an ordinary folder row. That button selects it: the folder panel
-   * then shows the site root's settings (its start page, M31). */
+   * rendered a second time as an ordinary folder row. */
   protected readonly pagesRoot = computed<FolderView | null>(() => this.tree()[0] ?? null);
   /** The store's real top-level folders — the wrapper root's children. */
   protected readonly topLevelFolders = computed<FolderView[]>(() => this.pagesRoot()?.children ?? []);
@@ -108,26 +107,14 @@ export class PagesListComponent {
     return map;
   });
 
-  /** Whether "All pages" — the site root — is selected. */
-  protected readonly rootSelected = computed(() => {
-    const selected = this.selectedFolder();
-    return selected !== null && selected === this.pagesRoot()?.uuid;
-  });
-
-  /** Where "New page"/"New folder" create: the selected folder, or the project root (`undefined`) for "All pages". */
-  private readonly targetFolderUuid = computed<string | undefined>(() =>
-    this.rootSelected() ? undefined : (this.selectedFolder() ?? undefined),
-  );
-
   /** The currently selected folder's own node, for the metadata panel. */
   protected readonly selectedFolderNode = computed<FolderView | null>(() => {
     const uuid = this.selectedFolder();
     return uuid ? findFolder(this.tree(), uuid) : null;
   });
 
-  /** The pages directly in the selected folder — its start page candidates. */
-  protected readonly selectedFolderPages = computed<AssetSummaryView[]>(
-    () => this.pagesByFolder().get(this.selectedFolderNode()?.path ?? '') ?? [],
+  protected readonly selectedFolderPageCount = computed<number>(
+    () => (this.pagesByFolder().get(this.selectedFolderNode()?.path ?? '') ?? []).length,
   );
 
   protected readonly selectedFolderSubfolderCount = computed<number>(
@@ -209,7 +196,7 @@ export class PagesListComponent {
   }
 
   protected newFolder(): void {
-    this.createFolderUnder(this.targetFolderUuid());
+    this.createFolderUnder(this.selectedFolder() ?? undefined);
   }
 
   private createFolderUnder(parentUuid: string | undefined): void {
@@ -274,7 +261,7 @@ export class PagesListComponent {
         // Read live, at submit time — the folder targeted by the dialog is
         // whichever one is selected right now, not whatever was selected
         // when the dialog first opened.
-        folderUuid: this.targetFolderUuid(),
+        folderUuid: this.selectedFolder() ?? undefined,
       })
       .subscribe({
         next: () => {
@@ -292,11 +279,6 @@ export class PagesListComponent {
 
   protected selectFolder(uuid: string | null): void {
     this.selectedFolder.set(uuid);
-  }
-
-  /** "All pages" opens the site root's folder panel (its start page, M31). */
-  protected selectRoot(): void {
-    this.selectFolder(this.pagesRoot()?.uuid ?? null);
   }
 
   protected onSearch(event: Event): void {
@@ -339,26 +321,22 @@ export class PagesListComponent {
     });
   }
 
-  /** "All pages" is the project's page root — it can't be renamed, deleted, cut, or pasted into, but you can open its
-   * settings (the site's start page) and create pages/subfolders directly in it. */
+  /** "All pages" is the project's page root — it can't be renamed, deleted, cut, or pasted into, but you can create pages/subfolders directly in it. */
   protected onRootContextMenu(event: MouseEvent): void {
-    const items: ContextMenuItem[] = [
-      { label: 'Folder settings…', icon: 'settings', action: () => this.selectRoot() },
-    ];
-    if (!this.readOnly()) {
-      items.push(
-        { label: '', separator: true },
-        {
-          label: 'New page',
-          icon: 'note_add',
-          action: () => {
-            this.selectRoot();
-            this.openNewPage();
-          },
-        },
-        { label: 'New subfolder', icon: 'create_new_folder', action: () => this.createFolderUnder(undefined) },
-      );
+    if (this.readOnly()) {
+      return;
     }
+    const items: ContextMenuItem[] = [
+      {
+        label: 'New page',
+        icon: 'note_add',
+        action: () => {
+          this.selectFolder(null);
+          this.openNewPage();
+        },
+      },
+      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.createFolderUnder(undefined) },
+    ];
     this.menu.open(event, items);
   }
 

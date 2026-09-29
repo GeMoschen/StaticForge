@@ -90,8 +90,7 @@ class RedirectExportImportIntegrationTest {
                 .containsExactly("ext.html", "moved.html", "old-a.html");
         assertThat(archived.get(1).has("createdByUsername")).as("AUTO entries have no creator").isFalse();
         assertThat(archived.get(2).path("createdByUsername").asText()).isEqualTo(src.fx().admin().getUsername());
-        assertThat(mapper.readTree(entry(archive, "manifest.json")).path("protocolVersion").asInt())
-                .isGreaterThanOrEqualTo(ProjectExportImportService.QUALITY_AND_REDIRECTS_PROTOCOL);
+        assertThat(mapper.readTree(entry(archive, "manifest.json")).path("protocolVersion").asInt()).isEqualTo(10);
 
         Fixture dst = fixture("rxd");
         ConflictReport analysis = exportImportService.analyzeImport(dst.id(), archive, ImportOptions.DEFAULT);
