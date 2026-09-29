@@ -8,9 +8,8 @@ import java.util.Locale;
 
 /**
  * Pure §18.3 output-path/URL expansion algorithm — the placeholder-resolution order (page
- * {@code pathOverride}, then — for a folder's start page (M31) — the folder's index path, then the page
- * template's {@code outputPath} expression, then the project default {@code {folder}{uid}.{ext}}) and
- * placeholder expansion, extracted so it can
+ * {@code pathOverride}, then the page template's {@code outputPath} expression, then the
+ * project default {@code {folder}{uid}.{ext}}) and placeholder expansion, extracted so it can
  * be shared by both the generation-time path ({@code OutputPathResolver} in sf-generate, which
  * reads a revision-pinned {@code Snapshot}) and any live-repository-backed caller (sf-domain
  * cannot depend on sf-generate, so this class deliberately takes a small structural
@@ -32,30 +31,9 @@ public final class OutputPathExpander {
      * live-repository-backed page both reduce to this. {@code templatePayload} is the
      * referenced template asset's payload (already resolved by the caller), or {@code null}
      * when the page has no {@code templateRef} or it doesn't resolve.
-     *
-     * <p>{@code startPage} says the page is its folder's effective start page (M31) and
-     * {@code folderHasStartPage} that its folder has one (this page or another), both as the caller's
-     * view sees them: the start page renders at the folder's index path, and next to a start page the
-     * channel's {@code indexUid} page is an ordinary page. A start page implies the folder has one.
      */
     public record PageContext(
-            String uid,
-            String displayName,
-            String folderPath,
-            JsonNode payload,
-            JsonNode templatePayload,
-            boolean startPage,
-            boolean folderHasStartPage) {
-
-        public PageContext {
-            folderHasStartPage = folderHasStartPage || startPage;
-        }
-
-        /** A page whose folder has no start page: the {@code indexUid} rule decides the folder's index. */
-        public PageContext(String uid, String displayName, String folderPath, JsonNode payload, JsonNode templatePayload) {
-            this(uid, displayName, folderPath, payload, templatePayload, false, false);
-        }
-    }
+            String uid, String displayName, String folderPath, JsonNode payload, JsonNode templatePayload) {}
 
     /**
      * Which language an output path is for (M24.3.2).
@@ -92,10 +70,7 @@ public final class OutputPathExpander {
         return expression != null && expression.contains(LOCALE_PLACEHOLDER);
     }
 
-    /**
-     * The path expression that applies to {@code page} in {@code channel} (override, the default expression for a
-     * start page, template, default).
-     */
+    /** The path expression that applies to {@code page} in {@code channel} (override, template, default). */
     public static String effectiveExpression(PageContext page, String channel, boolean localized) {
         return expressionFor(page, channel, localized);
     }
@@ -147,7 +122,7 @@ public final class OutputPathExpander {
     }
 
     /**
-     * The directory URL of a pages folder, relative to the site root (M31): the default expression's
+     * The directory URL of a pages folder, relative to the site root: the default expression's
      * {@code {locale}/{folder}} with a trailing slash — the invisible {@code pages_root/} segment stripped like in every
      * output path — and the site root as {@code ./}. What a folder link names when the folder has no index page.
      *
@@ -229,10 +204,6 @@ public final class OutputPathExpander {
                 return override.asText();
             }
         }
-        if (page.startPage()) {
-            // The folder's index path (M31): the default expression, whose {uid} expands to the index stem.
-            return localized ? DEFAULT_LOCALIZED_EXPRESSION : DEFAULT_EXPRESSION;
-        }
         JsonNode templatePayload = page.templatePayload();
         if (templatePayload != null) {
             JsonNode expression = templatePayload.path("outputPath").path(channel);
@@ -250,7 +221,7 @@ public final class OutputPathExpander {
             ChannelOutputSettings settings,
             LocaleContext locale) {
         String folder = relativeFolder(page.folderPath());
-        String uid = isFolderIndex(page, settings) ? settings.indexStem() : (page.uid() == null ? "" : page.uid());
+        String uid = settings.indexUid().equals(page.uid()) ? settings.indexStem() : (page.uid() == null ? "" : page.uid());
         String ext = settings.extension();
         DateParts date = dateParts(page);
         String expanded = expression
@@ -264,14 +235,6 @@ public final class OutputPathExpander {
                 .replace("{month}", date.month)
                 .replace("{day}", date.day);
         return collapseSlashes(expanded);
-    }
-
-    /**
-     * Whether {@code page} is its folder's index page in a channel: the folder's start page, or — only in a folder
-     * without one — the page whose UID is the channel's {@code indexUid}.
-     */
-    private static boolean isFolderIndex(PageContext page, ChannelOutputSettings settings) {
-        return page.startPage() || (!page.folderHasStartPage() && settings.indexUid().equals(page.uid()));
     }
 
     /**

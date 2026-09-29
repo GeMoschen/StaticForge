@@ -257,41 +257,9 @@ public class RenderPipeline {
         files.sort(Comparator.comparing(RenderedFile::outputPath));
         List<Diagnostic> pageErrors = new ArrayList<>(incomplete.values());
         pageErrors.addAll(batch.pageErrors);
-        List<Diagnostic> warnings = new ArrayList<>(unavailableStartPages(snapshot, plan, paths));
-        warnings.addAll(batch.warnings);
         return new RenderOutcome(
-                List.copyOf(files), List.copyOf(batch.errors), List.copyOf(warnings), List.copyOf(pageErrors));
+                List.copyOf(files), List.copyOf(batch.errors), List.copyOf(batch.warnings), List.copyOf(pageErrors));
 
-    }
-
-    /**
-     * One {@code SF-GEN-0112} warning per folder and language (M31) for the folders holding a page of the plan whose
-     * start page pointer is set but not effective in that language's view (the page is deleted, lives elsewhere, or
-     * isn't released there): the folder's index falls back to the channel's {@code indexUid} rule.
-     */
-    private static List<Diagnostic> unavailableStartPages(Snapshot snapshot, BuildPlan plan, OutputPathResolver paths) {
-        Set<String> seen = new HashSet<>();
-        List<Diagnostic> warnings = new ArrayList<>();
-        for (PlanEntry entry : plan.entries()) {
-            Snapshot view = snapshot.in(entry.locale());
-            SnapshotAsset page = view.assetByUuid(entry.pageUuid());
-            SnapshotAsset folder = page == null || page.folderId() == null ? null : view.assetById(page.folderId());
-            if (folder == null || !seen.add(entry.locale() + ":" + folder.assetId())) {
-                continue;
-            }
-            if (paths.declaredStartPageOf(folder.uuid(), entry.locale()) == null
-                    || paths.startPageOf(folder.uuid(), entry.locale()) != null) {
-                continue;
-            }
-            warnings.add(Diagnostic.warning(
-                    GenerationDiagnosticCodes.GEN_START_PAGE_UNAVAILABLE,
-                    "Start page of folder '" + folder.uid() + "' is not available"
-                            + (entry.locale() == null ? "" : " in " + entry.locale())
-                            + "; the folder falls back to the index UID rule.",
-                    0,
-                    0));
-        }
-        return warnings;
     }
 
     /**

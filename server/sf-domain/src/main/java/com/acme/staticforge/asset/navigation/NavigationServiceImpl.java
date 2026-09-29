@@ -5,7 +5,6 @@ import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.folder.StartNode;
 import com.acme.staticforge.asset.folder.StartNodeKind;
-import com.acme.staticforge.asset.folder.StartPage;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -82,9 +81,7 @@ public class NavigationServiceImpl implements NavigationService {
                 .sorted(PAGE_ORDER)
                 .toList();
         if (!pages.isEmpty()) {
-            UUID index = lookup.byUuid(projectId, folderUuid)
-                    .map(folder -> indexPage(folder, pages, lookup.indexUid()))
-                    .orElse(null);
+            UUID index = indexPage(pages, lookup.indexUid());
             return Optional.of(index != null ? index : pages.get(0).uuid());
         }
 
@@ -112,20 +109,14 @@ public class NavigationServiceImpl implements NavigationService {
         List<NavigationAsset> pages = lookup.childrenOf(projectId, pageStoreFolderUuid).stream()
                 .filter(a -> a.type() == AssetType.PAGE)
                 .toList();
-        return Optional.ofNullable(indexPage(folder, pages, lookup.indexUid()));
+        return Optional.ofNullable(indexPage(pages, lookup.indexUid()));
     }
 
     /**
-     * The folder's index page among its pages in the view: the effective start page, else the page whose UID is
-     * {@code indexUid}; {@code null} when neither is there. A start page counts only on a pages folder, like in the build.
+     * The folder's index page among its pages in the view: the page whose UID is {@code indexUid}, like in the build;
+     * {@code null} when there is none or no {@code indexUid} is known.
      */
-    private static UUID indexPage(NavigationAsset folder, List<NavigationAsset> pages, String indexUid) {
-        UUID startPage = FolderScope.fromPayload(folder.payload()) == FolderScope.PAGES
-                ? StartPage.fromPayload(folder.payload())
-                : null;
-        if (startPage != null && pages.stream().anyMatch(page -> page.uuid().equals(startPage))) {
-            return startPage;
-        }
+    private static UUID indexPage(List<NavigationAsset> pages, String indexUid) {
         if (indexUid == null || indexUid.isBlank()) {
             return null;
         }

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 public class UidGenerator {
 
     private static final Set<String> RESERVED = Set.of(
-            "new", "edit", "index", "api", "preview", "_generated",
+            "new", "edit", "api", "preview", "_generated",
             // M13.1.2: the two fixed, auto-provisioned TEMPLATES-scope root folders — no
             // user-derived uid may ever collide with them.
             FolderScope.PAGE_TEMPLATES_UID, FolderScope.SECTION_TEMPLATES_UID,

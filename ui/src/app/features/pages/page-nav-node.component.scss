@@ -96,15 +96,3 @@
 .page-nav__badge {
   margin-left: var(--sf-1);
 }
-
-.page-nav__start {
-  flex-shrink: 0;
-  margin-left: var(--sf-1);
-  padding: 0 var(--sf-1);
-  border: 1px solid var(--sf-signal);
-  border-radius: var(--sf-radius-sm);
-  font-size: var(--sf-text-xs);
-  line-height: 1.4;
-  color: var(--sf-signal);
-  white-space: nowrap;
-}

@@ -91,14 +91,12 @@ public class ImpactService {
         OutputPathResolver paths = OutputPathResolver.forSnapshot(
                 snapshot, channelService.outputSettings(project.getId()), projectLocales.forProject(project.getId()));
         var memo = compiledTemplates.buildMemo(snapshot.root());
-        Set<String> channels = channels(project.getId(), channel);
         RebuildExpansion.Result walk = expansion.expand(
                 snapshot,
                 RebuildExpansion.Changes.upperBound(asset.assetId()),
                 SnapshotPagination.of(snapshot, memo),
                 memo,
-                paths.locales(),
-                paths.indexUids(channels));
+                paths.locales());
         Set<UUID> pages = new LinkedHashSet<>();
         for (UUID page : walk.pages()) {
             SnapshotAsset reached = snapshot.assetByUuid(page);
@@ -108,7 +106,7 @@ public class ImpactService {
         }
 
         List<PlanEntryRecord> entries = new ArrayList<>();
-        for (PlanEntry output : buildPlanner.outputsOf(snapshot, pages, channels, paths)) {
+        for (PlanEntry output : buildPlanner.outputsOf(snapshot, pages, channels(project.getId(), channel), paths)) {
             SnapshotAsset page = snapshot.asset(output.pageUuid(), output.locale());
             entries.add(new PlanEntryRecord(page.uuid(), page.type().name(), page.uid(), page.displayName(), output.channel(),
                     output.outputPath(), output.pagination() == null ? null : output.pageNumber(),

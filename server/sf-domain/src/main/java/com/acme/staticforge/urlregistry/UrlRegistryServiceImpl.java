@@ -217,7 +217,7 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
     private UrlRegistryEntry computeAndPersist(
             UUID pageReferenceUuid, String channelKey, UrlArea area, String localeKey, RevisionContext ctx) {
         ChannelOutputSettings settings = channelService.outputSettings(ctx.projectId(), channelKey);
-        // A folder target resolves to its index page in this channel (M31): start page, else the indexUid page.
+        // A folder target resolves to its index page in this channel: its indexUid page.
         UUID resolvedPageUuid = navigationService.resolve(
                 ctx.projectId(), pageReferenceUuid, navigationLookup.withIndexUid(settings.indexUid()));
         if (resolvedPageUuid == null) {

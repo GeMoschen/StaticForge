@@ -54,6 +54,15 @@ class UidGeneratorTest {
                 .isEqualTo(FolderScope.NAVIGATION_ROOT_UID + "_1");
     }
 
+    /** {@code index} is the channel's default {@code indexUid}, so a page must be able to take it. */
+    @Test
+    void indexIsNotReserved() {
+        UidGenerator generator = new UidGenerator(emptyRepository());
+        assertThat(generator.deriveUid("Index", 1L, AssetType.PAGE)).isEqualTo("index");
+        assertThat(generator.isReserved("index")).isFalse();
+        assertThat(generator.deriveUid("New", 1L, AssetType.PAGE)).isEqualTo("new_1");
+    }
+
     private static AssetRepository emptyRepository() {
         AssetRepository repo = mock(AssetRepository.class);
         when(repo.findByProjectIdAndAssetTypeAndUid(anyLong(), any(AssetType.class), anyString()))

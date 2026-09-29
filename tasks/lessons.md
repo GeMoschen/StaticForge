@@ -143,3 +143,10 @@
   numbers are unreliable, and never kill a process this session didn't start to get a quiet machine.
 - **Rule:** profile the cold path the benchmark actually measures. A single build in a fresh JVM pays the JIT warm-up of
   every new code path (jsoup + rules: ~0.85 s cold vs ~0.27 s warm here); a warm micro benchmark hides it.
+
+## Scope a feature to what the user asked for, not what generalizes (2026-09-29)
+- **Mistake (M31):** the goal was a site home page ("Homepage" as `index.html`) and a reachable Navigation root; the plan
+  generalized it to a start page for *every* pages folder, with API, planner edge, import protocol and UI — which the
+  user never wanted and had to be removed again.
+- **Rule:** when a plan widens the user's request (every folder instead of the one case, a new setting instead of a fix),
+  name that widening as its own question in the plan and get it confirmed before building it.

@@ -11,11 +11,9 @@ import com.acme.staticforge.asset.ReferenceRow;
 import com.acme.staticforge.asset.dataset.RecordTemplates;
 import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.folder.FolderScope;
-import com.acme.staticforge.asset.folder.StartPage;
 import com.acme.staticforge.asset.reference.ReferenceMaterializer;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.asset.template.TemplateCompileMemo;
-import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.generate.insight.RebuildEdgeKind;
 import com.acme.staticforge.generate.insight.RebuildReason;
 import com.acme.staticforge.generate.insight.RebuildRootKind;
@@ -121,14 +119,6 @@ import org.springframework.stereotype.Service;
  * output moved without changing itself is navigation-visible too: it reaches its page references and pages folders
  * like a changed one.
  *
- * <p><b>Start pages (M31).</b> A pages folder's effective start page decides which page renders at the folder's index
- * path. When it differs from the baseline — the folder's {@code startPage} pointer changed, or the page it names moved
- * into or out of the folder, was deleted, unpublished or released — the folder reaches the page it names now, the one it
- * named at the baseline and its {@code indexUid} pages ({@link RebuildEdgeKind#START_PAGE}), and walks on to every
- * referrer (links to the folder, page references pointing at it, which count as navigation-visible). Their moved
- * outputs walk on to their linkers and navigation as above. The folder's {@code START_PAGE} reference row makes the
- * named page's change reach the folder only in that case: a content edit of a start page doesn't move the index path.
- *
  * <p><b>Reasons.</b> The walk is a breadth-first search seeded in UUID order whose neighbours are visited in a stable
  * order (referrer id, reference kind, source path), and every asset keeps the first edge it was discovered by. So the
  * parent pointers form a shortest-path tree and the chain of every reached asset is deterministic. Every discovered
@@ -186,16 +176,13 @@ public class RebuildExpansion {
      * @param outputMoved whether a page's output path differs from the base build's; always {@code false} without one
      * @param definitions the build's compile memo: the dataset schemas record set queries compile against
      * @param locales the project's languages: a record set query may select a record in any of them
-     * @param indexUids the planned channels' {@code indexUid}s: a folder's page with one of them takes the folder's index
-     *     path while the folder has no start page (M31)
      */
     public Walks expandSince(
             Snapshot snapshot,
             long baselineRevision,
             Predicate<UUID> outputMoved,
             TemplateCompileMemo definitions,
-            LocaleConfig locales,
-            Set<String> indexUids) {
+            LocaleConfig locales) {
         Delta delta = new Delta(snapshot, baselineRevision);
         List<ReferenceRow> rows = rows(snapshot);
         Map<String, Result> walks = new LinkedHashMap<>();
@@ -205,8 +192,7 @@ public class RebuildExpansion {
                             delta.changesIn(view, outputMoved, locales),
                             SnapshotPagination.of(view, definitions),
                             new RecordSetImpact(view, definitions, locales),
-                            rows,
-                            indexUids)
+                            rows)
                     .run());
         }
         return new Walks(walks);
@@ -217,18 +203,14 @@ public class RebuildExpansion {
      *
      * @param definitions the build's compile memo: the dataset schemas record set queries compile against
      * @param locales the project's languages: a record set query may select a record in any of them
-     * @param indexUids the planned channels' {@code indexUid}s (M31)
      */
     public Result expand(
             Snapshot snapshot,
             Changes changes,
             SnapshotPagination pagination,
             TemplateCompileMemo definitions,
-            LocaleConfig locales,
-            Set<String> indexUids) {
-        return new Walk(
-                        snapshot, changes, pagination, new RecordSetImpact(snapshot, definitions, locales), rows(snapshot),
-                        indexUids)
+            LocaleConfig locales) {
+        return new Walk(snapshot, changes, pagination, new RecordSetImpact(snapshot, definitions, locales), rows(snapshot))
                 .run();
     }
 
@@ -798,9 +780,6 @@ public class RebuildExpansion {
         private final DatasetLoopImpact loops = new DatasetLoopImpact();
         private final RecordSetImpact recordSets;
         private final Map<Long, Boolean> everyReader = new HashMap<>();
-        private final Set<String> indexUids;
-        private final Map<Long, Boolean> startPageChanges = new HashMap<>();
-        private final Set<Long> indexPages = new HashSet<>();
 
         private final Deque<Long> queue = new ArrayDeque<>();
         private final Map<Long, Discovery> discoveries = new HashMap<>();
@@ -811,20 +790,17 @@ public class RebuildExpansion {
         private Map<String, SnapshotAsset> foldersByPath;
         private Map<UUID, List<Long>> paginatorsBySource;
         private List<String> navigationVisiblePagePaths;
-        private Map<Long, List<SnapshotAsset>> pagesByFolder;
 
         Walk(
                 Snapshot snapshot,
                 Changes changes,
                 SnapshotPagination pagination,
                 RecordSetImpact recordSets,
-                List<ReferenceRow> rows,
-                Set<String> indexUids) {
+                List<ReferenceRow> rows) {
             this.snapshot = snapshot;
             this.changes = changes;
             this.pagination = pagination;
             this.recordSets = recordSets;
-            this.indexUids = indexUids == null ? Set.of() : Set.copyOf(indexUids);
             for (ReferenceRow row : rows) {
                 referrers.computeIfAbsent(row.toAssetId(), k -> new ArrayList<>()).add(row);
                 if (row.kind() == ReferenceKind.NAV) {
@@ -854,7 +830,7 @@ public class RebuildExpansion {
             switch (asset.type()) {
                 case PAGE -> {
                     pages.add(asset.uuid());
-                    boolean moved = outputMoved(asset);
+                    boolean moved = changes.outputMoved(asset.uuid());
                     if (!changed && !moved) {
                         return;
                     }
@@ -902,11 +878,7 @@ public class RebuildExpansion {
                 }
                 case FOLDER -> {
                     boolean navigation = FolderScope.fromPayload(asset.payload()) == FolderScope.NAVIGATION;
-                    boolean indexChanged = startPageChanged(asset);
-                    if (indexChanged) {
-                        discoverIndexPages(asset);
-                    }
-                    if (!changed && !indexChanged) {
+                    if (!changed) {
                         walkReachedFolder(asset, navigation);
                         return;
                     }
@@ -929,11 +901,6 @@ public class RebuildExpansion {
                 if (dataset && isType(row.fromAssetId(), AssetType.RECORD)) {
                     continue;
                 }
-                // A folder names its start page: the page's change matters to the folder only when it moves the
-                // folder's index path, i.e. the page stops or starts being the folder's effective start page (M31).
-                if (row.kind() == ReferenceKind.START_PAGE && !startPageChanged(snapshot.assetById(row.fromAssetId()))) {
-                    continue;
-                }
                 discoverOver(row, id);
             }
         }
@@ -952,100 +919,6 @@ public class RebuildExpansion {
                     discoverOver(row, folder.assetId());
                 }
             }
-        }
-
-        /**
-         * Whether {@code folder}'s effective start page (M31) differs between the baseline and the snapshot in this
-         * walk's view: its pointer changed, or the page it names moved into or out of the folder, was deleted,
-         * unpublished or released. The folder's index path then belongs to another page — the start page, or its
-         * {@code indexUid} page — so those pages, the links to the folder and the navigation entries pointing at it
-         * render again. For an upper bound, any hypothetical change of the folder or of its start page may do that.
-         */
-        private boolean startPageChanged(SnapshotAsset folder) {
-            if (folder == null || folder.type() != AssetType.FOLDER
-                    || FolderScope.fromPayload(folder.payload()) != FolderScope.PAGES) {
-                return false;
-            }
-            return startPageChanges.computeIfAbsent(folder.assetId(), id -> {
-                UUID now = folder.deleted() ? null : StartPage.fromPayload(folder.payload());
-                if (changes.upperBound) {
-                    SnapshotAsset page = now == null ? null : snapshot.assetByUuid(now);
-                    return changes.isRoot(id) || page != null && changes.isRoot(page.assetId());
-                }
-                UUID then = now;
-                if (changes.isRoot(id)) {
-                    AssetVersion before = changes.before(id);
-                    then = before == null || before.isDeleted() ? null : StartPage.fromPayload(before.getPayload());
-                }
-                return !Objects.equals(effectiveStartPage(folder, now, false), effectiveStartPage(folder, then, true));
-            });
-        }
-
-        /**
-         * {@code pointer} when it names a page of {@code folder} present in the view — at the baseline when
-         * {@code atBaseline} (a changed page as its baseline version, an unchanged one as it is now) — else {@code null}.
-         */
-        private UUID effectiveStartPage(SnapshotAsset folder, UUID pointer, boolean atBaseline) {
-            SnapshotAsset page = pointer == null ? null : snapshot.assetByUuid(pointer);
-            if (page == null || page.type() != AssetType.PAGE) {
-                return null;
-            }
-            if (atBaseline && changes.isRoot(page.assetId())) {
-                AssetVersion before = changes.before(page.assetId());
-                return before != null && !before.isDeleted() && Objects.equals(before.getFolderId(), folder.assetId())
-                        ? pointer
-                        : null;
-            }
-            return !page.deleted() && Objects.equals(page.folderId(), folder.assetId()) ? pointer : null;
-        }
-
-        /**
-         * Queues the pages whose output path the change of {@code folder}'s start page moves
-         * ({@link RebuildEdgeKind#START_PAGE}): the page its pointer names now and the one it named at the baseline,
-         * and the folder's {@code indexUid} pages. Their moved outputs walk on to their linkers and navigation.
-         */
-        private void discoverIndexPages(SnapshotAsset folder) {
-            long folderId = folder.assetId();
-            UUID now = folder.deleted() ? null : StartPage.fromPayload(folder.payload());
-            AssetVersion before = changes.isRoot(folderId) ? changes.before(folderId) : null;
-            UUID then = before == null || before.isDeleted() ? now : StartPage.fromPayload(before.getPayload());
-            for (UUID pointer : new LinkedHashSet<>(java.util.Arrays.asList(now, then))) {
-                SnapshotAsset page = pointer == null ? null : snapshot.assetByUuid(pointer);
-                if (page != null && page.type() == AssetType.PAGE) {
-                    discoverIndexPage(page.assetId(), folderId, StartPage.PAYLOAD_KEY);
-                }
-            }
-            for (SnapshotAsset page : pagesOf(folderId)) {
-                if (page.uid() != null && indexUids.contains(page.uid())) {
-                    discoverIndexPage(page.assetId(), folderId, ChannelOutputSettings.KEY_INDEX_UID);
-                }
-            }
-        }
-
-        private void discoverIndexPage(long pageId, long folderId, String sourcePath) {
-            indexPages.add(pageId);
-            discover(pageId, folderId, RebuildEdgeKind.START_PAGE, null, sourcePath);
-        }
-
-        /**
-         * Whether {@code page}'s output path differs from the base build's. An upper bound has no base build: there a
-         * page whose folder's start page may change is assumed to move.
-         */
-        private boolean outputMoved(SnapshotAsset page) {
-            return changes.outputMoved(page.uuid()) || changes.upperBound && indexPages.contains(page.assetId());
-        }
-
-        /** The pages present in the view whose folder is {@code folderId}, in asset id order. */
-        private List<SnapshotAsset> pagesOf(long folderId) {
-            if (pagesByFolder == null) {
-                Map<Long, List<SnapshotAsset>> index = new HashMap<>();
-                snapshot.pages().stream()
-                        .filter(page -> page.folderId() != null)
-                        .sorted(Comparator.comparingLong(SnapshotAsset::assetId))
-                        .forEach(page -> index.computeIfAbsent(page.folderId(), k -> new ArrayList<>()).add(page));
-                pagesByFolder = index;
-            }
-            return pagesByFolder.getOrDefault(folderId, List.of());
         }
 
         /**
@@ -1200,14 +1073,10 @@ public class RebuildExpansion {
                     continue;
                 }
                 if (target.type() == AssetType.PAGE
-                        && (changes.isRoot(targetId) ? changes.navigationVisible(target) : outputMoved(target))) {
+                        && (changes.isRoot(targetId) ? changes.navigationVisible(target) : changes.outputMoved(target.uuid()))) {
                     return true;
                 }
                 if (target.type() == AssetType.FOLDER) {
-                    // A folder entry links the folder's index page: its start page (M31), else its first navigable page.
-                    if (startPageChanged(target)) {
-                        return true;
-                    }
                     String prefix = normalize(target.folderPath());
                     if (navigationVisiblePagePaths().stream().anyMatch(path -> path.startsWith(prefix))) {
                         return true;
@@ -1232,7 +1101,7 @@ public class RebuildExpansion {
 
         /**
          * The folders of the pages whose change shows in navigation: changed pages that are navigation-visible, and
-         * pages whose output moved without changing themselves (a template {@code outputPath}, a start page, M31).
+         * pages whose output moved without changing themselves (a template {@code outputPath}, say).
          */
         private List<String> navigationVisiblePagePaths() {
             if (navigationVisiblePagePaths == null) {

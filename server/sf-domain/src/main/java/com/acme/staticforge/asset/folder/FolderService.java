@@ -47,16 +47,6 @@ public interface FolderService {
      */
     AssetVersionView updateStartNode(UUID uuid, StartNode startNode, long expectedRevision, RevisionContext ctx);
 
-    /**
-     * Sets or clears a {@code PAGES}-scoped folder's start page (M31, {@link StartPage}): the page that renders as the
-     * folder's index file. {@code pageUuid} {@code null} clears it. The folder may be protected ({@code pages_root},
-     * the site root); the hidden shared root and folders of other stores are refused. A non-null page must be a live
-     * page directly in this folder, and no other live page of the folder may claim the index path (its UID equal to a
-     * channel's index file stem): {@code 409 SF-DOM-0111} names that page. An unchanged value writes nothing (the
-     * revision is still checked).
-     */
-    AssetVersionView updateStartPage(UUID uuid, UUID pageUuid, long expectedRevision, RevisionContext ctx);
-
     /** Moves a folder and rewrites the entire subtree's paths in a single revision. */
     MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx);
 

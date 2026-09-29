@@ -226,48 +226,6 @@ class M8NavigationJourneyIntegrationTest {
                 .isEqualTo(catalogRefHref3);
     }
 
-    /**
-     * M31: a {@code FOLDER}-kind reference resolves to the folder's start page — ahead of the first navigable page — and
-     * an href the registry assigned before the start page was set follows the change, while a manual override stays.
-     */
-    @Test
-    void folderReferenceFollowsTheFoldersStartPage() throws Exception {
-        Fixture fx = newFixture();
-        AssetVersionView catalogFolder = folderService.create(null, "Catalog", FolderScope.PAGES, fx.ctx());
-        createPage(fx, catalogFolder.uuid(), "Page A");
-        createPage(fx, catalogFolder.uuid(), "Page B");
-        AssetVersionView pageC = createPage(fx, catalogFolder.uuid(), "Page C");
-        AssetVersionView navRoot = navRootFolder(fx);
-        AssetVersionView catalogRef = pageReferenceService.create(
-                new CreatePageReferenceCommand(
-                        "catalog-ref", navRoot.uuid(), PageReferenceTargetKind.FOLDER, catalogFolder.uuid(), "Browse Catalog"),
-                fx.ctx());
-        AssetVersionView pageCRef = pageReferenceService.create(
-                new CreatePageReferenceCommand("page-c-ref", navRoot.uuid(), PageReferenceTargetKind.PAGE, pageC.uuid(), "Page C"),
-                fx.ctx());
-        AssetVersionView homePage = createHomePage(fx, navRoot);
-        GenerationTarget target = createTarget(fx);
-
-        String html1 = navHtmlFromOutput(fx, target, runGenerationToSuccess(fx, target));
-        assertThat(hrefFor(html1, "Browse Catalog")).as("first navigable page").isEqualTo("catalog/page-a.html");
-        assertThat(hrefFor(html1, "Page C")).isEqualTo("catalog/page-c.html");
-        urlRegistryService.override(pageCRef.uuid(), "html", UrlArea.PREVIEW, "preview-only/page-c.html", fx.ctx());
-
-        AssetVersionView catalog = assetService.requireCurrent(fx.project().getId(), catalogFolder.uuid());
-        folderService.updateStartPage(catalogFolder.uuid(), pageC.uuid(), catalog.validFromRevision(), fx.ctx());
-
-        String html2 = navHtmlFromOutput(fx, target, runGenerationToSuccess(fx, target));
-        assertThat(hrefFor(html2, "Browse Catalog"))
-                .as("the cached href follows the new start page, now the folder's index file")
-                .isEqualTo("catalog/index.html");
-        assertThat(hrefFor(html2, "Page C")).isEqualTo("catalog/index.html");
-        assertThat(urlRegistryService.resolve(catalogRef.uuid(), "html", UrlArea.GENERATED, fx.ctx()))
-                .isEqualTo("catalog/index.html");
-        String preview = pageRenderService.renderPage(fx.project().getId(), homePage.uuid(), null, "html", false);
-        assertThat(hrefFor(preview, "Browse Catalog")).isEqualTo("catalog/index.html");
-        assertThat(hrefFor(preview, "Page C")).as("a manual override survives").isEqualTo("preview-only/page-c.html");
-    }
-
     // ------------------------------------------------------------------
     // Generation run helpers
     // ------------------------------------------------------------------

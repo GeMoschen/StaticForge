@@ -9,7 +9,6 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
-import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.TemplateContentDefinitions;
 import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.UidGenerator;
@@ -18,7 +17,6 @@ import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.folder.RecordSetContainment;
-import com.acme.staticforge.asset.folder.StartPage;
 import com.acme.staticforge.asset.media.BlobStore;
 import com.acme.staticforge.asset.media.BlobWriter;
 import com.acme.staticforge.asset.media.MediaFiles;
@@ -49,7 +47,6 @@ import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.query.RecordSetQueries;
-import com.acme.staticforge.urlregistry.StartPageUrlInvalidation;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -125,12 +122,6 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><strong>Redirects</strong> (M30.4.1, protocol {@code 10}): a full-project archive carries the redirect registry
  * ({@code redirects.json}); the import adds each redirect whose source path is free in the target, after the settings
  * — see {@link RedirectArchive}. A protocol {@code <= 9} archive imports without redirects.
- *
- * <p><strong>Start pages</strong> (M31, protocol {@code 11}): a pages folder's start page is part of its payload and
- * travels with it (page UUIDs survive the import). The site root {@code pages_root} is a fixed root, which the import
- * never overwrites, so its start page is merged: set on the target's {@code pages_root} when that has none and the page
- * is one of the site root's pages after the import; otherwise the target keeps its own and the report says so
- * ({@link ConflictType#START_PAGE_NOT_MERGED}). A protocol {@code <= 10} archive has no start pages.
  */
 @Service
 @RevisionAware
@@ -210,7 +201,6 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
     private final AssetReleaseRepository releaseRepository;
     private final ScheduleArchive scheduleArchive;
     private final RedirectArchive redirectArchive;
-    private final StartPageUrlInvalidation startPageUrls;
 
     public ProjectExportImportServiceImpl(
             ProjectRepository projectRepository,
@@ -231,10 +221,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             ScheduleArchive scheduleArchive,
             RedirectArchive redirectArchive,
             BlobWriter blobWriter,
-            MediaVariantResolver variantResolver,
-            StartPageUrlInvalidation startPageUrls) {
+            MediaVariantResolver variantResolver) {
         this.projectRepository = projectRepository;
-        this.startPageUrls = startPageUrls;
         this.redirectArchive = redirectArchive;
         this.blobWriter = blobWriter;
         this.variantResolver = variantResolver;
@@ -682,8 +670,6 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                 .collect(Collectors.toSet());
 
         List<ExportedAsset> assets = content.assets();
-        // Decided against the target as it is before the import writes anything (M31).
-        SiteStartPage siteStartPage = siteStartPage(targetProjectId, content, options);
 
         Revision revision = revisionService.allocate(
                 targetProjectId, ChangeType.IMPORT, ctx.comment(), ctx.userId());
@@ -830,17 +816,10 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         List<ImportedDraft> imported = new ArrayList<>();
         // Versions written for released payloads and pinned ones, per asset id and content: identical ones are shared.
         Map<Long, Map<String, AssetVersion>> writtenVersions = new HashMap<>();
-        // The payload each overwritten folder had before the import (M31): its start page may change.
-        Map<Long, JsonNode> folderPayloadsBefore = new HashMap<>();
         for (ExportedAsset asset : order(assets, rootAsset)) {
             String key = asset.uuid().toLowerCase();
             if (asset == rootAsset || skipped.contains(key) || fixedFolderKeys.contains(key) || rejected.contains(key)) {
                 continue;
-            }
-            if (AssetType.FOLDER.name().equals(asset.type()) && overwritten.contains(key)) {
-                assetRepository.findByProjectIdAndUuid(targetProjectId, remap.get(key))
-                        .flatMap(existing -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(existing.getId()))
-                        .ifPresent(current -> folderPayloadsBefore.put(current.getAssetId(), current.getPayload()));
             }
             AssetVersion draft = createImportedAsset(targetProjectId, asset, remap, overwritten, idMaps, manifest,
                     importedAt, revision.getRevisionId(), ctx);
@@ -857,15 +836,6 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // only once all assets exist, since a reference may point at an asset imported later.
         for (AssetVersion version : importedVersions) {
             referenceMaterializer.materialize(version.getAsset(), version);
-        }
-        // A folder whose start page the import set, changed or cleared makes computed navigation hrefs stale (M31),
-        // like any draft write of a folder payload; the NAV edges they are found by exist now.
-        for (AssetVersion version : importedVersions) {
-            startPageUrls.payloadChanged(
-                    version.getAsset(), folderPayloadsBefore.get(version.getAssetId()), version.getPayload());
-        }
-        if (siteStartPage.merge() != null) {
-            mergeSiteStartPage(targetProjectId, siteStartPage.merge(), ctx);
         }
 
         PathRebase paths = PathRebase.of(content.assets(), idMaps);
@@ -932,108 +902,6 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
 
         return new ImportResult(manifest.sourceProjectKey(), created, updated, importedShas.size(), released,
                 schedules.created(), schedules.replaced(), schedules.warnings(), redirects.imported(), redirects.warnings());
-    }
-
-    // ------------------------------------------------------------------
-    // Site start page (M31)
-    // ------------------------------------------------------------------
-
-    /**
-     * What an import does with the start page of the archive's site root: the page it sets on the target's
-     * {@code pages_root} ({@code merge}), or the warning saying why it sets none ({@code conflict}); neither when the
-     * archive names none (every protocol {@code <= 10} archive) or the target already has that one.
-     */
-    private record SiteStartPage(UUID merge, ImportConflict conflict) {
-
-        static final SiteStartPage NONE = new SiteStartPage(null, null);
-    }
-
-    /**
-     * Decides {@link SiteStartPage} against the target as it is before the import: the target's start page counts when
-     * it will still be one of the site root's pages after the import, and the archive's is merged only when the target
-     * has none and it will be one of them.
-     */
-    private SiteStartPage siteStartPage(long targetProjectId, ArchiveContent content, ImportOptions options) {
-        ExportedAsset archiveRoot = findFixedFolderByUid(content.assets(), FolderScope.PAGES_ROOT_UID);
-        if (content.manifest().protocolVersion() < START_PAGE_PROTOCOL || archiveRoot == null) {
-            return SiteStartPage.NONE;
-        }
-        UUID archived = StartPage.fromPayload(archiveRoot.payload());
-        if (archived == null) {
-            return SiteStartPage.NONE;
-        }
-        Map<String, ExportedAsset> archiveByUuid = new HashMap<>();
-        content.assets().forEach(asset -> archiveByUuid.put(asset.uuid().toLowerCase(Locale.ROOT), asset));
-        Optional<Asset> targetRoot = assetRepository.findByProjectIdAndAssetTypeAndUid(
-                targetProjectId, AssetType.FOLDER, FolderScope.PAGES_ROOT_UID);
-        Long targetRootId = targetRoot.map(Asset::getId).orElse(null);
-        UUID current = targetRoot
-                .flatMap(root -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(root.getId()))
-                .map(version -> StartPage.fromPayload(version.getPayload()))
-                .orElse(null);
-        String label = startPageLabel(targetProjectId, archived, archiveByUuid);
-        if (current != null
-                && inSiteRootAfterImport(targetProjectId, current, archiveRoot, targetRootId, archiveByUuid, options)) {
-            return current.equals(archived)
-                    ? SiteStartPage.NONE
-                    : new SiteStartPage(null, ImportConflict.of(ConflictType.START_PAGE_NOT_MERGED, archived.toString(),
-                            label, "The target's site root keeps its start page '"
-                                    + startPageLabel(targetProjectId, current, archiveByUuid)
-                                    + "'; the archive's start page '" + label + "' is not set."));
-        }
-        if (inSiteRootAfterImport(targetProjectId, archived, archiveRoot, targetRootId, archiveByUuid, options)) {
-            return new SiteStartPage(archived, null);
-        }
-        return new SiteStartPage(null, ImportConflict.of(ConflictType.START_PAGE_NOT_MERGED, archived.toString(), label,
-                "The archive's site start page '" + label + "' won't be a page of the site root after the import; "
-                        + "the target's site root gets no start page."));
-    }
-
-    /**
-     * Whether page {@code pageUuid} is a live page of the site root once the import has run: the archive's copy when the
-     * import writes it (its parent is the archive's {@code pages_root}), else the target's own, left as it is.
-     */
-    private boolean inSiteRootAfterImport(
-            long targetProjectId, UUID pageUuid, ExportedAsset archiveRoot, Long targetRootId,
-            Map<String, ExportedAsset> archiveByUuid, ImportOptions options) {
-        ExportedAsset archived = archiveByUuid.get(pageUuid.toString().toLowerCase(Locale.ROOT));
-        Optional<Asset> existing = assetRepository.findByProjectIdAndUuid(targetProjectId, pageUuid);
-        boolean reused = archived != null && existing.isPresent() && options.skipExistingImplicit() && !archived.isExplicit();
-        if (archived != null && !reused) {
-            return AssetType.PAGE.name().equals(archived.type())
-                    && !archived.isDraftDeleted()
-                    && archiveRoot.uuid().equalsIgnoreCase(archived.parentFolderUuid());
-        }
-        return targetRootId != null && existing
-                .filter(asset -> asset.getAssetType() == AssetType.PAGE)
-                .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
-                .filter(version -> !version.isDeleted() && targetRootId.equals(version.getFolderId()))
-                .isPresent();
-    }
-
-    /** A start page as the report names it: its display name (or uid) in the archive, else in the target. */
-    private String startPageLabel(long targetProjectId, UUID pageUuid, Map<String, ExportedAsset> archiveByUuid) {
-        ExportedAsset archived = archiveByUuid.get(pageUuid.toString().toLowerCase(Locale.ROOT));
-        if (archived != null) {
-            return archived.displayName() != null ? archived.displayName() : archived.uid();
-        }
-        return assetRepository.findByProjectIdAndUuid(targetProjectId, pageUuid)
-                .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
-                .map(AssetVersion::getDisplayName)
-                .orElse(pageUuid.toString());
-    }
-
-    /**
-     * Sets {@code startPage} on the target's {@code pages_root} through the regular asset update (a revision of its
-     * own after the import's), with a copy of its payload. Not {@code FolderService.updateStartPage}: its set-time index
-     * claim check would refuse the whole import, while a claim that arises this way is the build's {@code SF-GEN-0110}
-     * collision, like one that arises from any later edit.
-     */
-    private void mergeSiteStartPage(long targetProjectId, UUID startPage, RevisionContext ctx) {
-        AssetVersionView root = assetService.ensurePagesRootFolder(targetProjectId, ctx);
-        ObjectNode payload = JsonUtil.object(root.payload()).deepCopy();
-        payload.put(StartPage.PAYLOAD_KEY, startPage.toString());
-        assetService.update(root.uuid(), new UpdateAssetCommand(root.displayName(), payload), root.validFromRevision(), ctx);
     }
 
     /** What the settings import does with each archived generation target, decided before it runs. */
@@ -1576,10 +1444,6 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
             }
             conflicts.addAll(redirectArchive.analyze(
                     targetProjectId, content.redirects(), channelKeys, effectiveLocales(targetProjectId, content)));
-        }
-        ImportConflict startPage = siteStartPage(targetProjectId, content, options).conflict();
-        if (startPage != null) {
-            conflicts.add(startPage);
         }
         return new ConflictReport(
                 conflicts, releaseState, releaseMode, content.schedules().size(), content.redirects().size());

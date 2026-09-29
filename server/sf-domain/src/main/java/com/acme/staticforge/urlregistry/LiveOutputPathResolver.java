@@ -2,10 +2,7 @@ package com.acme.staticforge.urlregistry;
 
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetVersion;
-import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionRepository;
-import com.acme.staticforge.asset.folder.FolderScope;
-import com.acme.staticforge.asset.folder.StartPage;
 import com.acme.staticforge.channel.ChannelOutputSettings;
 import com.acme.staticforge.channel.OutputPathExpander;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -66,50 +63,13 @@ public class LiveOutputPathResolver {
         }
         return assetRepository
                 .findByProjectIdAndUuid(projectId, pageUuid)
-                .flatMap(asset -> currentVersion(asset.getId()).map(version -> {
-                    UUID startPage = effectiveStartPage(projectId, version.getFolderId());
-                    return new OutputPathExpander.PageContext(
-                            asset.getUid(),
-                            version.getDisplayName(),
-                            version.getFolderPath(),
-                            version.getPayload(),
-                            templatePayload(projectId, version.getPayload()),
-                            pageUuid.equals(startPage),
-                            startPage != null);
-                }));
-    }
-
-    /**
-     * The live effective start page (M31) of the folder {@code folderUuid}: the page its current {@code startPage}
-     * names when that page is live and still lives in the folder; {@code null} when the folder has none, isn't a live
-     * pages folder, or its pointer is stale (the folder then falls back to the channel's {@code indexUid} rule).
-     */
-    public UUID startPageOf(long projectId, UUID folderUuid) {
-        if (folderUuid == null) {
-            return null;
-        }
-        return assetRepository.findByProjectIdAndUuid(projectId, folderUuid)
-                .map(folder -> effectiveStartPage(projectId, folder.getId()))
-                .orElse(null);
-    }
-
-    private UUID effectiveStartPage(long projectId, Long folderId) {
-        if (folderId == null) {
-            return null;
-        }
-        UUID pointer = currentVersion(folderId)
-                .filter(folder -> FolderScope.fromPayload(folder.getPayload()) == FolderScope.PAGES)
-                .map(folder -> StartPage.fromPayload(folder.getPayload()))
-                .orElse(null);
-        if (pointer == null) {
-            return null;
-        }
-        return assetRepository.findByProjectIdAndUuid(projectId, pointer)
-                .filter(page -> page.getAssetType() == AssetType.PAGE)
-                .flatMap(page -> currentVersion(page.getId()))
-                .filter(page -> folderId.equals(page.getFolderId()))
-                .map(page -> pointer)
-                .orElse(null);
+                .flatMap(asset -> currentVersion(asset.getId())
+                        .map(version -> new OutputPathExpander.PageContext(
+                                asset.getUid(),
+                                version.getDisplayName(),
+                                version.getFolderPath(),
+                                version.getPayload(),
+                                templatePayload(projectId, version.getPayload()))));
     }
 
     private JsonNode templatePayload(long projectId, JsonNode payload) {

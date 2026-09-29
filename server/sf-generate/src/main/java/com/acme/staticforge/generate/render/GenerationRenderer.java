@@ -532,8 +532,8 @@ final class GenerationRenderer {
     }
 
     /**
-     * The URL a {@code $CMS_REF(folder:…)} links (M31, spec §16.4): the folder's index page — its start page in the
-     * render language's view, else its page with the channel's {@code indexUid} — like any page link; without one, the
+     * The URL a {@code $CMS_REF(folder:…)} links (spec §16.4): the folder's index page — its page with the channel's
+     * {@code indexUid} in the render language's view — like any page link; without one, the
      * folder's directory ({@code {locale}/{folder}}, the site root as {@code ./}). Relative to the rendering page.
      */
     private String resolveFolder(UUID uuid, String channel, String pagePath, String renderLocale) {
@@ -552,7 +552,7 @@ final class GenerationRenderer {
         return relativeUrl(pagePath, OutputPathExpander.folderUrl(folder.folderPath(), locale));
     }
 
-    /** This view's navigation, with {@code channel}'s {@code indexUid} as the index page of a folder without a start page. */
+    /** This view's navigation, with {@code channel}'s {@code indexUid} naming a folder's index page. */
     private NavigationLookup channelNavigation(String channel) {
         ChannelOutputSettings settings = paths == null ? ChannelOutputSettings.defaults(channel) : paths.settingsFor(channel);
         return navigationLookup.withIndexUid(settings.indexUid());

@@ -33,43 +33,6 @@ Templates are owned by **template developers** (see the [template-developer guid
    the sitemap, and the template adds a robots "noindex" tag — if it doesn't, the build reports it (`SF-CHK-0212`).
    Like every other change, it goes online with the next release and build.
 
-#### Make a page your home page (start pages, M31)
-
-Every folder of the Pages store can have a **start page**: the page published as the folder's `index.html` — the
-page visitors get when they open the folder's address. The start page of **All pages**, the site root, is your site's
-home page. Any page can be the start page, whatever it's called and whatever template it uses.
-
-1. In **Pages**, click **All pages** above the tree (or right-click it → **Folder settings…**). The panel on the right
-   shows the site root's settings. It can't be renamed or deleted, but it has a **Start page** section.
-2. Choose your page, e.g. "Homepage", under **Start page** ("Renders as this folder's index.html"). It is saved at
-   once. Alternatively right-click the page in the tree → **Make start page of All pages** (for a page in a folder:
-   **Make start page of <folder>**). The tree marks the chosen page with a **Start page** badge.
-3. Release the page itself, as usual. The choice on **All pages** needs no release: it takes effect with the next
-   build. For any other folder the choice is part of the folder, so it goes online when the folder is released (per
-   language, like every change); releasing the folder also proposes the page when it isn't released yet.
-4. Build. The page is written as `index.html` (with pretty URLs it's linked as `./`; in a site with languages
-   `de/index.html`, `en/index.html`; a listing page's further pages are `index-2.html`, …). Links to the folder
-   and navigation entries for the folder now lead to it, and the page's old address (`homepage.html`) forwards to
-   it through an automatic redirect (see [Redirects](#redirects-old-urls-keep-working-m30)).
-
-Good to know:
-
-- To go back, choose **— None (index page UID rule) —**. Without a start page, a folder's index file is the page whose
-  UID is the channel's **Index page UID** (Settings → Channels). That setting is `index` by default, and `index` is a
-  reserved UID — a page named "Index" gets the UID `index_1` — so with the default settings a folder only gets an
-  `index.html` from its start page.
-- If another page in the folder already has the index file's name as its UID (possible when a channel's index file is
-  called, say, `home.html` and a page has the UID `home`), the start page is refused and the panel names that page:
-  change its UID first (right-click → Rename) or make that page the start page.
-- You can still delete, unpublish or move the start page. The folder then falls back to the index page UID rule, the
-  panel shows "(page no longer in this folder)", and every build warns `SF-GEN-0112` for that folder and language (the
-  run ends *Partial*) until you choose another start page, clear it, or release the page there.
-- A page's own **output path override** (set by a developer) still wins over the start page.
-- Viewers, time travel and archived projects show the setting read-only.
-- **Start page** is not the same as a navigation folder's **Entry page** (Navigation screen, where **All navigation**
-  now opens the root's settings too): the entry page chooses where a navigation entry links to, the start page
-  chooses which page is written as a folder's `index.html`.
-
 #### Listing pages (pagination)
 
 Some page templates turn a page into a listing spread over several pages, such as a blog index. Such a page has a
@@ -434,7 +397,7 @@ In **Channels**, each channel's form sets how its output files and links are nam
 | **File extension** | derived from the key (`md` for `markdown`) | 1–10 lowercase letters or digits, without the dot |
 | **URL strategy** | `RELATIVE` | `RELATIVE`: pages are files (`about.html`). `PRETTY`: with a trailing slash, pages are folders (`about/index.html`) |
 | **Trailing slash** | off | Only available with `PRETTY`; links to pages end in `/` (`about/`) |
-| **Index page UID** | `index` | The page with this UID becomes its folder's index page, unless the folder has a start page (see [Make a page your home page](#make-a-page-your-home-page-start-pages-m31)). `index` is a reserved UID, so by default only start pages make index files |
+| **Index page UID** | `index` | The page with this UID becomes its folder's index page. A page named "Index" gets the UID `index`, so it becomes your site's `index.html` when it sits in **All pages** |
 | **Index file name** | `index.` + extension | File name of a folder's index page, also used for pretty folder URLs; letters, digits, `.`, `-`, `_`, up to 64 |
 
 An invalid value is rejected with the field named. Changing the extension or URL settings moves every page of the channel: the next generation rebuilds all pages even in incremental mode, and generated URL registry entries are recomputed (manual overrides are kept).
@@ -463,7 +426,6 @@ An incremental run renders only what changed and publishes the complete site: th
 - **After a run.** In the run history each run shows "Incremental · 37 pages (via 2 changes)" or "Full · 5,000 pages". **Details → Rebuilt pages** lists what the run rebuilt and why, with the same filters. Plans of older runs are removed after a while ("Plan details were pruned").
 - **While editing.** The **Impact** panel in the template editor, the media drawer (below **Referenced by**) and the page editor answers "if I change this, what rebuilds?": "Changing this rebuilds 12 pages (24 files)", by kind of dependency, and a table with each page's chain back to this asset (pages link to their editor). It loads when you open it, always reflects the current state (also while viewing an old revision), and reloads after you save. It counts the most a change could rebuild; a small edit may rebuild less. Navigation matters: renaming a page that a navigation lists, or editing the navigation, rebuilds every page showing that navigation.
 - **Record sets.** Editing a record rebuilds the pages showing its set only if the set's query shows that record (before or after the edit); changing the set's query, name or place rebuilds every page showing the set. The reasons read "reads record set containing", "reads record set with changed query" and, after a developer changes how a dataset's records look, "renders through record template of".
-- **Start pages (M31).** Choosing, changing or clearing a folder's start page (once it takes effect) rebuilds the old and the new start page, the page with the index page UID in that folder, the pages linking to them or to the folder, and every page showing a navigation that lists them — nothing else. The reason reads "takes or leaves the index path of".
 
 ### Quality checks and issues (M30)
 
@@ -546,8 +508,7 @@ reload.
 
 **Redirect old URL to…** When you unpublish a page, delete it in the page tree, or release a page's deletion in
 Changes, and the page is online, the dialog offers **Redirect old URL to…** with a page picker (preselected with the
-start page of the page's folder or the nearest folder above — or, in a folder without one, the page with the channel's
-index page UID — when there is one online). It's there for everyone who may unpublish. The
+page that indexes the nearest folder above, when there is one). It's there for everyone who may unpublish. The
 redirect is added after the page went offline; until a build no longer contains the page it shows as *Shadowed*, and
 the confirmation links to the Redirects tab. If adding the redirect fails, the unpublish still stands — add the
 redirect in the Redirects tab.
