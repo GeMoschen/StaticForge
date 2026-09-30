@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   forwardRef,
   inject,
@@ -18,6 +19,8 @@ import { SectionEditorComponent } from '../../pages/section-editor.component';
 import type { SectionInstance } from '../../pages/types';
 import type { components } from '../../../core/api/generated/schema.d.ts';
 import { CatalogCard, CatalogValue, ContentDefinition, EditorDefinition } from '../form.model';
+import { SF_FORM_CONTEXT } from '../form.context';
+import { pathOfControl } from '../rules/rule-form.util';
 
 type TemplateSummary = components['schemas']['TemplateSummary'];
 
@@ -58,6 +61,25 @@ export class SfCatalogEditor {
   readonly definition = input.required<EditorDefinition>();
   readonly control = input.required<FormControl>();
   readonly projectKey = input<string>();
+
+  /** The enclosing form (M33): its rule answers, findings and where this catalog's value sits. */
+  private readonly form = inject(SF_FORM_CONTEXT, { optional: true });
+  protected readonly ruleHub = computed(() => this.form?.ruleHub?.() ?? null);
+  protected readonly findings = computed(() => this.form?.issues?.() ?? []);
+  /** This catalog's content path (`content.teasers`, `bodies.main[0].content.rows[1].cards`); `null`: unknown. */
+  private readonly catalogPath = computed(() => {
+    const form = this.form;
+    if (!form?.formGroup || !form.definition) {
+      return null;
+    }
+    return pathOfControl(form.formGroup(), form.definition().editors ?? [], this.control(), form.issuePrefix?.() ?? '');
+  });
+
+  /** Where card `index`'s fields sit, for its findings and live rules. */
+  protected cardPrefix(index: number): string | null {
+    const path = this.catalogPath();
+    return path === null ? null : `${path}.cards[${index}].content`;
+  }
 
   protected readonly cards = signal<CatalogCard[]>([]);
   protected readonly paletteOpen = signal(false);
@@ -167,6 +189,17 @@ export class SfCatalogEditor {
 
   protected onCardValueChange(instanceId: string, content: Record<string, unknown>): void {
     this.emit(this.cards().map((c) => (c.instanceId === instanceId ? { ...c, content } : c)));
+  }
+
+  /**
+   * A live fill changed a card (M33): the catalog's value follows without an event — not an edit — and the enclosing
+   * form is told, so a section holding this catalog passes its value up the same way.
+   */
+  protected onCardFilled(instanceId: string, content: Record<string, unknown>): void {
+    const cards = this.cards().map((c) => (c.instanceId === instanceId ? { ...c, content } : c));
+    this.cards.set(cards);
+    this.control().setValue({ type: 'CATALOG', cards } satisfies CatalogValue, { emitEvent: false });
+    this.form?.filled?.();
   }
 
   protected onDragStarted(index: number): void {

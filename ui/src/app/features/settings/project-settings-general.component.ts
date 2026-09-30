@@ -8,13 +8,21 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ProjectSettingsCodeHighlightingComponent } from './project-settings-code-highlighting.component';
+import type { components } from '../../core/api/generated/schema.d.ts';
 
-/** General project settings: display name and description. */
+/** General project settings: display name and description, and the code highlighting overrides (M33 follow-up). */
 @Component({
   selector: 'sf-project-settings-general',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, SfButtonComponent, SfFieldComponent, SfSpinnerComponent],
+  imports: [
+    ReactiveFormsModule,
+    SfButtonComponent,
+    SfFieldComponent,
+    SfSpinnerComponent,
+    ProjectSettingsCodeHighlightingComponent,
+  ],
   templateUrl: './project-settings-general.component.html',
   styleUrl: './project-settings-general.component.scss',
 })
@@ -31,6 +39,8 @@ export class ProjectSettingsGeneralComponent implements OnInit {
 
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
+  /** The code highlighting overrides the server holds. */
+  protected readonly codeHighlighting = signal<components['schemas']['CodeHighlightingView'] | null>(null);
 
   protected readonly form = this.fb.nonNullable.group({
     name: ['', Validators.required],
@@ -54,6 +64,7 @@ export class ProjectSettingsGeneralComponent implements OnInit {
         const loaded = { name: project.name ?? '', description: project.description ?? '' };
         this.saved.set({ name: loaded.name.trim(), description: loaded.description.trim() });
         this.form.reset(loaded);
+        this.codeHighlighting.set(project.codeHighlighting ?? null);
         this.loading.set(false);
       },
       error: () => {
@@ -61,6 +72,11 @@ export class ProjectSettingsGeneralComponent implements OnInit {
         this.loading.set(false);
       },
     });
+  }
+
+  /** Code highlighting saved: the editors read the overrides from the project context. */
+  protected onCodeHighlightingSaved(): void {
+    this.store.loadFor(this.projectKey(), true).subscribe();
   }
 
   protected save(): void {

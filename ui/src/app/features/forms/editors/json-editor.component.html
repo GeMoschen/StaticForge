@@ -1,10 +1,13 @@
 <sf-field [label]="definition().label" [hint]="definition().help">
-  <textarea
-    [formControl]="control()"
-    rows="6"
-    [attr.readonly]="definition().readOnly ? '' : null"
+  <sf-code-editor
     class="sf-json"
-  ></textarea>
+    language="json"
+    [label]="definition().label || definition().name"
+    [value]="text()"
+    [readOnly]="readOnly()"
+    [compact]="false"
+    (valueChange)="onInput($event)"
+  />
   @if (message()) {
     <span class="sf-editor__error">{{ message() }}</span>
   }

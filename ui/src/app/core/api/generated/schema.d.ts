@@ -436,6 +436,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/code-highlighting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateCodeHighlighting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{id}/system-role": {
         parameters: {
             query?: never;
@@ -622,6 +638,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["previewTimes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/rules/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["evaluate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2551,7 +2583,7 @@ export interface components {
         };
         Diagnostic: {
             /** @enum {string} */
-            severity?: "ERROR" | "WARNING";
+            severity?: "ERROR" | "WARNING" | "HINT" | "INFO";
             code?: string;
             message?: string;
             /** Format: int32 */
@@ -2741,10 +2773,18 @@ export interface components {
             path?: string;
             code?: string;
             /** @enum {string} */
-            severity?: "ERROR" | "WARNING";
+            severity?: "ERROR" | "WARNING" | "HINT" | "INFO";
             message?: string;
             /** @enum {string} */
             kind?: "STRUCTURAL" | "COMPLETENESS";
+            rule?: string;
+            scopes?: ("EDIT" | "SAVE" | "RELEASE" | "GENERATION")[];
+            messages?: {
+                [key: string]: string;
+            };
+            locale?: string;
+            /** @enum {string} */
+            onGeneration?: "HOLD_BACK" | "FAIL";
         };
         LocaleReleaseView: {
             status?: string;
@@ -2835,7 +2875,7 @@ export interface components {
         RecordSetQueryDiagnostic: {
             field?: string;
             /** @enum {string} */
-            severity?: "ERROR" | "WARNING";
+            severity?: "ERROR" | "WARNING" | "HINT" | "INFO";
             code?: string;
             message?: string;
             /** Format: int32 */
@@ -3022,6 +3062,7 @@ export interface components {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
             scheduled?: components["schemas"]["ScheduledRefView"][];
+            issues?: components["schemas"]["ContentIssue"][];
         };
         UpdateGlobalSetContentRequest: {
             content?: components["schemas"]["JsonNode"];
@@ -3156,6 +3197,14 @@ export interface components {
             description?: string;
             allowedMimeTypes?: string[];
         };
+        CodeHighlightingView: {
+            extensions?: {
+                [key: string]: string;
+            };
+            mimeTypes?: {
+                [key: string]: string;
+            };
+        };
         ProjectDetail: {
             key?: string;
             name?: string;
@@ -3170,6 +3219,7 @@ export interface components {
             permissions?: string[];
             /** Format: int64 */
             compactedThrough?: number;
+            codeHighlighting?: components["schemas"]["CodeHighlightingView"];
         };
         SetMemberRoleRequest: {
             role: string;
@@ -3306,6 +3356,37 @@ export interface components {
             zoneId?: string;
             times?: string[];
         };
+        RuleEvaluationRequest: {
+            kind?: string;
+            /** Format: uuid */
+            assetUuid?: string;
+            templateUid?: string;
+            datasetUid?: string;
+            globalSetUid?: string;
+            content?: components["schemas"]["JsonNode"];
+            bodies?: components["schemas"]["JsonNode"];
+            locale?: string;
+            changedPaths?: string[];
+        };
+        FieldState: {
+            path?: string;
+            locale?: string;
+            required?: boolean;
+            readOnly?: boolean;
+            computed?: boolean;
+        };
+        RuleEvaluationView: {
+            findings?: components["schemas"]["ContentIssue"][];
+            fills?: components["schemas"]["RuleFill"][];
+            fieldStates?: components["schemas"]["FieldState"][];
+        };
+        RuleFill: {
+            path?: string;
+            locale?: string;
+            value?: components["schemas"]["JsonNode"];
+            /** @enum {string} */
+            mode?: "EMPTY" | "ALWAYS";
+        };
         ProjectRestoreRequest: {
             /** Format: int64 */
             toRevision?: number;
@@ -3333,6 +3414,13 @@ export interface components {
             items?: components["schemas"]["Item"][];
             includeDependencies?: components["schemas"]["Item"][];
             comment?: string;
+            acceptWarnings?: boolean;
+        };
+        Incomplete: {
+            /** Format: uuid */
+            uuid?: string;
+            locale?: string;
+            issues?: components["schemas"]["ContentIssue"][];
         };
         ReleaseResultView: {
             /** Format: int64 */
@@ -3340,6 +3428,7 @@ export interface components {
             applied?: components["schemas"]["ReleaseTargetView"][];
             skipped?: components["schemas"]["ReleaseTargetView"][];
             sharedFieldsKept?: components["schemas"]["ReleaseTargetView"][];
+            warnings?: components["schemas"]["Incomplete"][];
         };
         ReleaseTargetView: {
             /** Format: uuid */
@@ -3359,17 +3448,21 @@ export interface components {
             via?: string;
             includedByDefault?: boolean;
         };
-        Incomplete: {
+        Fill: {
             /** Format: uuid */
             uuid?: string;
             locale?: string;
-            issues?: components["schemas"]["ContentIssue"][];
+            path?: string;
+            value?: components["schemas"]["JsonNode"];
         };
         ReleasePlanView: {
             items?: components["schemas"]["ReleaseTargetView"][];
             dependencies?: components["schemas"]["Dependency"][];
             incomplete?: components["schemas"]["Incomplete"][];
             warnings?: string[];
+            warningFindings?: components["schemas"]["Incomplete"][];
+            infoFindings?: components["schemas"]["Incomplete"][];
+            fills?: components["schemas"]["Fill"][];
         };
         RedirectForAssetRequest: {
             /** Format: uuid */
@@ -6036,6 +6129,32 @@ export interface operations {
             };
         };
     };
+    updateCodeHighlighting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeHighlightingView"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProjectDetail"];
+                };
+            };
+        };
+    };
     setSystemRole: {
         parameters: {
             query?: never;
@@ -6422,6 +6541,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PreviewTimesView"];
+                };
+            };
+        };
+    };
+    evaluate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleEvaluationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleEvaluationView"];
                 };
             };
         };

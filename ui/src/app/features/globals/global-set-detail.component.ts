@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   effect,
   inject,
@@ -19,10 +20,14 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfContentFormComponent } from '../forms/sf-content-form.component';
+import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
 import { FormBuilderService } from '../forms/form-builder.service';
 import type { ContentDefinition } from '../forms/form.model';
 import type { EditingLocale } from '../forms/l10n.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { Subscription } from 'rxjs';
+import { ApiClient } from '../../core/api/api.client';
+import { RuleBinding, mergeFindings } from '../forms/rules/rule-binding';
 import { GlobalsService, etagFor, type Diagnostic, type GlobalSetDetailView } from './globals.service';
 import { ReleaseBarComponent } from '../release/release-bar.component';
 import type { ReleaseMode } from '../release/release-choice.util';
@@ -35,6 +40,9 @@ interface ContentIssue {
   path?: string;
   code?: string;
   message?: string;
+  severity?: string;
+  locale?: string;
+  rule?: string;
 }
 
 /**
@@ -53,7 +61,7 @@ interface ContentIssue {
   selector: 'sf-global-set-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
+  imports: [SfCodeEditorComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
   templateUrl: './global-set-detail.component.html',
   styleUrl: './global-set-detail.component.scss',
 })
@@ -67,6 +75,7 @@ export class GlobalSetDetailComponent {
   readonly deleted = output<void>();
 
   private readonly globals = inject(GlobalsService);
+  private readonly api = inject(ApiClient);
   /** The language being edited (M24.4.1); `null` in a project without languages. */
   protected readonly editingLocale = inject(EditingLocaleStore).binding;
 
@@ -102,6 +111,18 @@ export class GlobalSetDetailComponent {
   protected readonly contentDefinition = signal('');
   protected readonly cdlDiagnostics = signal<Diagnostic[]>([]);
   protected readonly valueIssues = signal<ContentIssue[]>([]);
+
+  /** Live editor rules on the values form (M33.8). */
+  protected readonly rules = new RuleBinding((request) => this.api.evaluateRules(this.projectKey(), request));
+  private rulesSub: Subscription | null = null;
+
+  /** What the values form shows: the live findings (or the stored draft's until they arrive) and a rejected save's. */
+  protected readonly shownIssues = computed<ContentIssue[]>(() => {
+    const live = this.rules.evaluated()
+      ? (this.rules.findings() as ContentIssue[])
+      : ((this.detail()?.issues ?? []) as ContentIssue[]);
+    return mergeFindings(live, this.valueIssues());
+  });
   protected readonly copied = signal(false);
 
   private readonly permissions = inject(ProjectPermissionsStore);
@@ -118,6 +139,13 @@ export class GlobalSetDetailComponent {
   });
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      if (this.cdlTimer) {
+        clearTimeout(this.cdlTimer);
+      }
+      this.rulesSub?.unsubscribe();
+      this.rules.dispose();
+    });
     effect(() => {
       const key = this.projectKey();
       const uuid = this.uuid();
@@ -148,6 +176,33 @@ export class GlobalSetDetailComponent {
       rebound.form.disable();
     }
     this.valuesForm.set(rebound.form);
+    this.bindRules(rebound.form);
+  }
+
+  /** Evaluates the set's rules live while its values can be edited (M33.8). */
+  private bindRules(form: FormGroup): void {
+    this.rulesSub?.unsubscribe();
+    this.rulesSub = null;
+    const detail = this.detail();
+    if (!this.canEditValues() || !detail?.uuid || this.timeTravel.activeRevision() != null) {
+      this.rules.unbind();
+      return;
+    }
+    const definition = this.definition();
+    const locale = this.editingLocale()?.locale ?? null;
+    this.rulesSub = form.valueChanges.subscribe(() => this.rules.changed());
+    this.rules.bind({
+      form,
+      editors: definition.editors ?? [],
+      locale,
+      content: () => this.forms.valueOf(definition, form),
+      request: (content) => ({
+        kind: 'GLOBAL_SET',
+        assetUuid: detail.uuid,
+        content: content as never,
+        locale: locale ?? undefined,
+      }),
+    });
   }
 
   protected showValues(): void {
@@ -158,8 +213,33 @@ export class GlobalSetDetailComponent {
     this.tab.set('schema');
   }
 
-  protected onContentDefinitionInput(event: Event): void {
-    this.contentDefinition.set((event.target as HTMLTextAreaElement).value);
+  protected onContentDefinitionInput(source: string): void {
+    this.contentDefinition.set(source);
+    this.scheduleCdlValidation();
+  }
+
+  private cdlTimer: ReturnType<typeof setTimeout> | null = null;
+  private cdlSequence = 0;
+
+  /** Live CDL diagnostics (M33): 500 ms after the last keystroke, silently; only the latest answer counts. */
+  private scheduleCdlValidation(): void {
+    if (this.cdlTimer) {
+      clearTimeout(this.cdlTimer);
+    }
+    this.cdlTimer = setTimeout(() => {
+      this.cdlTimer = null;
+      const id = ++this.cdlSequence;
+      this.globals.validateCdl(this.projectKey(), this.contentDefinition()).subscribe({
+        next: (res) => {
+          if (id === this.cdlSequence) {
+            this.cdlDiagnostics.set(res.diagnostics ?? []);
+          }
+        },
+        error: () => {
+          // Live checks are best effort; Validate and save still report.
+        },
+      });
+    }, 500);
   }
 
   protected copySnippet(): void {
@@ -295,6 +375,7 @@ export class GlobalSetDetailComponent {
       form.disable();
     }
     this.valuesForm.set(form);
+    this.bindRules(form);
   }
 
   /**

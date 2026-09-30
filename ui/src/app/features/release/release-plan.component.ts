@@ -42,8 +42,13 @@ export interface ReleasePlanState {
   ready: boolean;
   /** The ticked dependencies, as request items. */
   includeDependencies: Item[];
-  /** Incomplete items or ticked dependencies: releasing them is refused (`SF-DOM-0150`). */
+  /**
+   * Incomplete items or ticked dependencies: releasing them is refused (`SF-DOM-0150`) — or rule warnings the user
+   * hasn't confirmed (`SF-DOM-0156`, M33.8).
+   */
   blocked: boolean;
+  /** The user confirmed releasing with rule warnings (sent as `acceptWarnings`). */
+  acceptWarnings: boolean;
 }
 
 interface DependencyRow {
@@ -71,6 +76,11 @@ export class ReleasePlanComponent implements OnDestroy {
 
   readonly projectKey = input.required<string>();
   readonly items = input.required<Item[]>();
+  /**
+   * Whether rule warnings need the "Release with warnings" confirmation (the release dialog). A scheduled release
+   * always accepts them and records them with its run (M33.6), so the schedule dialog only shows them.
+   */
+  readonly confirmWarnings = input(true);
 
   readonly stateChange = output<ReleasePlanState>();
   /** An incomplete asset's "Open" link was followed: the dialog closes. */
@@ -156,6 +166,42 @@ export class ReleasePlanComponent implements OnDestroy {
     });
   });
 
+  /** The user's "Release with warnings" tick (M33.8). */
+  protected readonly accepted = signal(false);
+
+  /** Rule findings of one level for the selection, with names and "Open" links (M33.8). */
+  private findingRows(entries: readonly Incomplete[]) {
+    const targets = this.targets();
+    return entries.map((entry) => {
+      const target = entry.uuid ? targets.get(entry.uuid) : undefined;
+      return {
+        entry,
+        name: assetName(target ?? { uuid: entry.uuid }),
+        route: assetRoute(this.projectKey(), { uuid: entry.uuid, type: target?.type }),
+      };
+    });
+  }
+
+  protected readonly ruleWarnings = computed(() => this.findingRows(this.plan()?.warningFindings ?? []));
+  protected readonly ruleInfos = computed(() => this.findingRows(this.plan()?.infoFindings ?? []));
+  /** The values the release fills would write, per asset. */
+  protected readonly fills = computed(() => {
+    const targets = this.targets();
+    return (this.plan()?.fills ?? []).map((fill) => ({
+      fill,
+      name: assetName(targets.get(fill.uuid ?? '') ?? { uuid: fill.uuid }),
+      value: typeof fill.value === 'string' ? fill.value : JSON.stringify(fill.value ?? null),
+    }));
+  });
+  /** How many warnings wait for confirmation. */
+  protected readonly warningCount = computed(() =>
+    this.ruleWarnings().reduce((sum, row) => sum + (row.entry.issues?.length ?? 0), 0),
+  );
+
+  protected onAccept(event: Event): void {
+    this.accepted.set((event.target as HTMLInputElement).checked);
+  }
+
   protected readonly state = computed<ReleasePlanState>(() => {
     const plan = this.plan();
     const ready = plan !== null && !this.loading() && this.error() === null && this.planKey() === this.itemsKey();
@@ -165,7 +211,10 @@ export class ReleasePlanComponent implements OnDestroy {
       includeDependencies: (plan?.dependencies ?? [])
         .filter((dependency) => ticked.has(itemKey(dependency.target?.uuid, dependency.target?.locale)))
         .map((dependency) => toItem(dependency.target?.uuid, dependency.target?.locale)),
-      blocked: this.incomplete().some((row) => row.blocking),
+      blocked:
+        this.incomplete().some((row) => row.blocking) ||
+        (this.confirmWarnings() && this.warningCount() > 0 && !this.accepted()),
+      acceptWarnings: this.accepted() || !this.confirmWarnings(),
     };
   });
 
@@ -220,6 +269,10 @@ export class ReleasePlanComponent implements OnDestroy {
       this.timer = null;
       this.request = this.api.releasePlan(projectKey, { items: this.items() }).subscribe({
         next: (plan) => {
+          if (key !== this.planKey()) {
+            // Another selection: its warnings need their own confirmation.
+            this.accepted.set(false);
+          }
           this.plan.set(plan);
           this.planKey.set(key);
           this.loading.set(false);

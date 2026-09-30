@@ -247,7 +247,7 @@ public class PreviewController {
                         .orElseThrow(() -> new SfException(ProblemFactory.notFound("Page not found at revision " + revision + ".")));
         EffectiveQualityConfig config = qualityConfig.effective(projectId);
         return new DraftCheckView(
-                pageService.contentIssues(projectId, version.payload()),
+                pageService.contentIssues(projectId, uuid, version.payload()),
                 result.findings().stream().map(finding -> finding(finding, config)).toList(),
                 result.channel(),
                 result.locale(),

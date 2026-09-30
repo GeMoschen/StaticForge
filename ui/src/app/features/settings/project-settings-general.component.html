@@ -18,5 +18,10 @@
         </sf-button>
       </div>
     </form>
+    <sf-project-settings-code-highlighting
+      [projectKey]="projectKey()"
+      [overrides]="codeHighlighting()"
+      (saved)="onCodeHighlightingSaved()"
+    />
   }
 </div>

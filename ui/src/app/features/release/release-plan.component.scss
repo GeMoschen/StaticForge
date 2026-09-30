@@ -129,3 +129,21 @@
   font-size: var(--sf-text-xs);
   color: var(--sf-amber);
 }
+
+// Editor rule findings of a release (M33.8).
+.plan__rule-warnings {
+  border-left: 3px solid var(--sf-amber, #9a6700);
+  padding-left: var(--sf-3);
+}
+
+.plan__accept {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  margin-top: var(--sf-2);
+  font-weight: 600;
+}
+
+.plan__infos summary {
+  cursor: pointer;
+}

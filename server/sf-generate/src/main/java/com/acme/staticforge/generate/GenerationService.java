@@ -890,7 +890,8 @@ public class GenerationService {
             long bytes = processed.stream().mapToLong(f -> f.bytes().length).sum();
             // A page or processed media file held back makes the run PARTIAL; the rest is published. Quality findings
             // don't: they are stored apart from the diagnostics (a warning alone leaves the run SUCCESS).
-            boolean partial = !warnings.isEmpty() || !fileErrors.isEmpty();
+            // An editor rule's info (M33.7) is reported but, unlike a warning, doesn't make the run partial.
+            boolean partial = warningCount(warnings) > 0 || !fileErrors.isEmpty();
             JsonNode diagnostics = diagnosticsJson(fileErrors, warnings, check.heldBackPages());
             byte[] sidecar = joined(qualityFacts);
             RunFindingStore.Prepared preparedFindings = joined(findings);
@@ -915,7 +916,7 @@ public class GenerationService {
                         active.setFilesSkipped(assets.filesSkipped());
                         active.setBytesWritten(bytes);
                         active.setErrorCount(fileErrors.size());
-                        active.setWarningCount(warnings.size());
+                        active.setWarningCount(warningCount(warnings));
                         active.setDiagnostics(diagnostics);
                         active.setFinishedAt(Instant.now());
                     })
@@ -1115,6 +1116,13 @@ public class GenerationService {
         return request.assetUuids() == null || request.assetUuids().isEmpty() ? null : Set.copyOf(request.assetUuids());
     }
 
+    /** The warnings a run counts: an editor rule's {@code info} diagnostics (M33.7) are reported, not counted. */
+    private static int warningCount(List<Diagnostic> warnings) {
+        return (int) warnings.stream()
+                .filter(d -> d.severity() != com.acme.staticforge.template.diagnostic.Severity.INFO)
+                .count();
+    }
+
     /**
      * Marks a running run FAILED with the given findings (or an unexpected exception) and closes emitters. A run that
      * is no longer running (cancelled or recovered meanwhile) keeps its status.
@@ -1140,7 +1148,7 @@ public class GenerationService {
             failed = control.whileRunning(runId, run -> {
                 run.setStatus(RunStatus.FAILED);
                 run.setErrorCount(effectiveErrors.size());
-                run.setWarningCount(warnings.size());
+                run.setWarningCount(warningCount(warnings));
                 run.setDiagnostics(diagnostics);
                 run.setFinishedAt(Instant.now());
             });

@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.dataset;
 
+import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.query.SortKey;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -38,6 +39,12 @@ public interface RecordService {
      * stays as it is. The uid never changes.
      */
     RecordWriteResult update(UUID uuid, JsonNode content, long expectedRevision, RevisionContext ctx);
+
+    /**
+     * The findings a record's editor shows for its values {@code payload} ({@code {datasetRef, content}}): the
+     * {@code edit} outcome of its dataset's built-ins and rules (M33.4). Empty when the dataset doesn't resolve.
+     */
+    List<ContentIssue> contentIssues(long projectId, UUID uuid, JsonNode payload);
 
     /** The record as of {@code revision} (current when {@code null}); empty for another asset type. */
     Optional<RecordDetail> find(long projectId, UUID uuid, Long revision);

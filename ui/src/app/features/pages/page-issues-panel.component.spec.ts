@@ -245,4 +245,54 @@ describe('PageIssuesPanelComponent', () => {
 
     expect(text()).toContain('The preview shows the published page; these checks cover the draft.');
   });
+
+  it('orders rule findings by level, lists infos without counting them and leaves hints to the fields (M33.8)', () => {
+    fixture.componentRef.setInput('completeness', [
+      { path: 'content.teaser', code: 'rule', severity: 'INFO', message: 'No teaser yet.', kind: 'COMPLETENESS', rule: 'teaser' },
+      { path: 'content.slug', code: 'rule', severity: 'HINT', message: 'Keep slugs short.', kind: 'COMPLETENESS', rule: 'slug' },
+      { path: 'content.title', code: 'rule', severity: 'WARNING', message: 'Long title.', kind: 'COMPLETENESS', rule: 'short' },
+      ...COMPLETENESS,
+    ]);
+    render();
+    const req = nextCheck();
+    req.flush({ ...RESULT, completeness: undefined, findings: [] });
+    render();
+
+    const labels = items().map((item) => item.querySelector('.issues__severity')?.textContent?.trim());
+    expect(labels).toEqual(['Error', 'Warning', 'Info']);
+    expect(text()).not.toContain('Keep slugs short.');
+    const count = (fixture.nativeElement as HTMLElement).querySelector('.issues__count')?.textContent?.trim();
+    expect(count).toBe('2');
+  });
+
+  it('filters by scope chips, remembers the choice and keeps one chip on (M33)', () => {
+    fixture.componentRef.setInput('completeness', [
+      { path: 'content.slug', code: 'rule', severity: 'ERROR', message: 'Slug taken.', kind: 'COMPLETENESS', scopes: ['SAVE'] },
+      { path: 'content.title', code: 'required', severity: 'ERROR', message: 'Title is required.', kind: 'COMPLETENESS', scopes: ['EDIT', 'RELEASE', 'GENERATION'] },
+    ]);
+    render();
+    nextCheck().flush({ ...RESULT, completeness: undefined });
+    render();
+    const chip = (label: string) =>
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.issues__scope')).find(
+        (button) => button.textContent?.trim() === label,
+      )!;
+    expect(text()).toContain('Slug taken.');
+    expect(text()).toContain('Image without alt attribute');
+
+    chip('Save').click();
+    chip('Generation').click();
+    render();
+    expect(chip('Save').getAttribute('aria-pressed')).toBe('false');
+    expect(text()).not.toContain('Slug taken.');
+    expect(text()).toContain('Title is required.');
+    // Output findings are what a build reports: hidden with the generation scope.
+    expect(text()).not.toContain('Image without alt attribute');
+    expect(JSON.parse(localStorage.getItem('sf-issues-scopes')!)).toEqual(['EDIT', 'RELEASE']);
+
+    chip('Edit').click();
+    chip('Release').click();
+    render();
+    expect(chip('Release').getAttribute('aria-pressed')).toBe('true');
+  });
 });

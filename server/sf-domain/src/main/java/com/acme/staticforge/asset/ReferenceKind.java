@@ -13,5 +13,10 @@ public enum ReferenceKind {
     OCTL_REF,
     OCTL_INCLUDE,
     /** Navigation edge: a {@code PAGE_REFERENCE} → its target page or pages folder. */
-    NAV
+    NAV,
+    /**
+     * A template's, dataset's or property set's editor rules read a property set ({@code global:<uid>}, M33.7); the
+     * source path names the reader ({@code rules.<name>}, {@code states.<path>}, {@code fills.<path>}).
+     */
+    RULE_REFERENCE
 }

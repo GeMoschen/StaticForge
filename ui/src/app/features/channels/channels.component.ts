@@ -19,6 +19,7 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { SfTableComponent } from '../../shared/components/sf-table.component';
+import { CODE_FORMATS, CODE_FORMAT_LABELS } from '../../shared/code-editor/code-format';
 import { ChannelsService } from './channels.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 
@@ -117,7 +118,14 @@ export class ChannelsComponent {
     trailingSlash: [{ value: false, disabled: true }],
     indexUid: [''],
     indexFileName: ['', Validators.pattern(INDEX_FILE_NAME_PATTERN)],
+    highlightAs: ['AUTO'],
   });
+
+  /** "Highlight as" (M33 follow-up): Auto detects; anything else always wins, whatever the extension says. */
+  readonly highlightOptions: readonly { value: string; label: string }[] = [
+    { value: 'AUTO', label: 'Auto' },
+    ...CODE_FORMATS.map((format) => ({ value: format, label: CODE_FORMAT_LABELS[format] })),
+  ];
 
   readonly copyFromOptions = computed<ChannelView[]>(() => {
     const editingKey = this.editing()?.key;
@@ -181,6 +189,7 @@ export class ChannelsComponent {
       trailingSlash: false,
       indexUid: '',
       indexFileName: '',
+      highlightAs: 'AUTO',
     });
     this.syncTrailingSlash('RELATIVE');
     this.form.controls.key.enable();
@@ -207,6 +216,7 @@ export class ChannelsComponent {
       trailingSlash: settings['trailingSlash'] === true,
       indexUid: textOf(settings, 'indexUid'),
       indexFileName: textOf(settings, 'indexFileName'),
+      highlightAs: textOf(settings, 'highlightAs') || 'AUTO',
     });
     this.syncTrailingSlash(urlStrategy);
     this.form.controls.key.disable();
@@ -235,6 +245,7 @@ export class ChannelsComponent {
     }
     setOrDelete(settings, 'indexUid', value.indexUid.trim());
     setOrDelete(settings, 'indexFileName', value.indexFileName.trim());
+    setOrDelete(settings, 'highlightAs', value.highlightAs === 'AUTO' ? '' : value.highlightAs);
     this.submitting.set(true);
     this.error.set(null);
 

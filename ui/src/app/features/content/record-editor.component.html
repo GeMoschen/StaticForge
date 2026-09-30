@@ -67,7 +67,9 @@
                 [definition]="definition()"
                 [formGroup]="group"
                 [projectKey]="projectKey()"
-                [issues]="issues()"
+                [issues]="shownIssues()"
+                [fieldStates]="rules.fieldStates()"
+                [ruleHub]="rules.hub"
                 [editingLocale]="editingLocale()"
                 [storedValue]="storedContent()"
                 [localeLabels]="localeLabels()"
@@ -84,8 +86,8 @@
           <div class="record-editor__tabs" role="tablist">
             <button type="button" role="tab" [attr.aria-selected]="panel() === 'issues'" [class.record-editor__tab--active]="panel() === 'issues'" (click)="showPanel('issues')">
               Checks
-              @if (issues().length > 0) {
-                <span class="record-editor__count">{{ issues().length }}</span>
+              @if (counted().length > 0) {
+                <span class="record-editor__count">{{ counted().length }}</span>
               }
             </button>
             <button type="button" role="tab" [attr.aria-selected]="panel() === 'history'" [class.record-editor__tab--active]="panel() === 'history'" (click)="showPanel('history')">
@@ -102,12 +104,16 @@
           @switch (panel()) {
             @case ('issues') {
               <div role="tabpanel" aria-label="Checks" aria-live="polite">
-                @if (issues().length === 0) {
-                  <p class="record-editor__hint">No problems found in the last save.</p>
+                @if (listed().length === 0) {
+                  <p class="record-editor__hint">No problems found.</p>
                 } @else {
                   <ul class="record-editor__list">
-                    @for (issue of issues(); track $index) {
-                      <li class="record-editor__issue" [class.record-editor__issue--blocking]="issue.kind === 'STRUCTURAL'">
+                    @for (issue of listed(); track $index) {
+                      <li
+                        class="record-editor__issue"
+                        [class.record-editor__issue--blocking]="issue.kind === 'STRUCTURAL' || issue.severity === 'ERROR'"
+                        [attr.data-level]="issue.severity"
+                      >
                         <code>{{ issue.path }}</code>
                         <span>{{ issue.message }}</span>
                       </li>

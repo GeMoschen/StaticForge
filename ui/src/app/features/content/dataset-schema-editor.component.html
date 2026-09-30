@@ -89,6 +89,9 @@
             [value]="activeSource()"
             [diagnostics]="activeDiagnostics()"
             [readOnly]="!canEdit()"
+            [names]="fieldNames()"
+            [format]="activeFormat().format"
+            [svg]="activeFormat().svg"
             (valueChange)="onRecordTemplateInput($event)"
           />
         }
@@ -117,15 +120,17 @@
           label="Record fields (CDL)"
           hint="Editors only — records have no bodies. Rename a field with renamedFrom and every record follows in one revision."
         >
-          <textarea
+          <sf-code-editor
             class="dataset-editor__cdl"
-            spellcheck="false"
+            language="cdl"
+            label="Record fields (CDL)"
             [value]="contentDefinition()"
-            [disabled]="!canEdit()"
-            [attr.aria-invalid]="hasErrors() ? true : null"
+            [diagnostics]="diagnostics()"
+            [readOnly]="!canEdit()"
             aria-describedby="dataset-cdl-diagnostics"
-            (input)="onCdlInput($event)"
-          ></textarea>
+            [invalid]="hasErrors()"
+            (valueChange)="onCdlInput($event)"
+          />
         </sf-field>
 
         <div id="dataset-cdl-diagnostics" class="diagnostics" aria-live="polite">

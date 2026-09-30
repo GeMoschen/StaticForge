@@ -5,25 +5,11 @@
 }
 
 .octl-editor__source {
-  width: 100%;
-  min-height: 9rem;
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-  font-family: var(--sf-font-mono, monospace);
-  font-size: var(--sf-text-sm);
-  line-height: 1.5;
-  resize: vertical;
+  --sf-code-min-height: 9rem;
 }
 
-.octl-editor__source[aria-invalid='true'] {
-  border-color: var(--sf-rust);
-}
-
-.octl-editor__source[readonly] {
-  color: var(--sf-slate);
+.octl-editor__source--invalid {
+  --sf-line: var(--sf-rust);
 }
 
 .diagnostic {

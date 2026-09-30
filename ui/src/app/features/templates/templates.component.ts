@@ -11,6 +11,9 @@ import {
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { declaredPaths } from '../../shared/code-editor/completions';
+import { channelCodeFormat } from '../../shared/code-editor/code-format';
+import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { templateKindOfFolderPath } from '../../shared/asset-route.util';
 import { consumeQueryParam } from '../../shared/deep-link';
@@ -84,6 +87,8 @@ const NEW_CONTENT_DEFINITION = '';
 
 /** How long channel typing pauses before the source is validated against the template's context (M20.4.1). */
 const OCTL_VALIDATE_DEBOUNCE_MS = 300;
+/** How long after the last keystroke the CDL is validated live (M33). */
+const CDL_VALIDATE_DEBOUNCE_MS = 500;
 
 interface OctlValidation {
   key: string;
@@ -109,6 +114,7 @@ const NEW_DATASET_DEFINITION = `content {
     SfEmptyStateComponent,
     SfFieldComponent,
     SfOctlEditorComponent,
+    SfCodeEditorComponent,
     SfSpinnerComponent,
     SfUidRenameComponent,
     TemplateFolderNodeComponent,
@@ -276,6 +282,31 @@ export class TemplatesComponent {
   readonly inheritedGroups = computed(() => inheritedGroups(this.detail()));
 
   private readonly octlValidation = new Subject<OctlValidation>();
+  private readonly cdlValidation = new Subject<{ key: string; source: string }>();
+
+  /**
+   * The editors a channel may use, for completion (M33): the ones the unsaved CDL declares and the inherited ones.
+   */
+  /** How the selected channel's source is highlighted (M33 follow-up): its "Highlight as", else detected. */
+  readonly channelFormat = computed(() =>
+    channelCodeFormat(
+      this.channels().find((channel) => channel.key === this.selectedChannel()),
+      this.store.project()?.codeHighlighting,
+    ),
+  );
+
+  readonly editorNames = computed<string[]>(() => {
+    const names = new Set(declaredPaths(this.contentDefinition()).filter((path) => !path.endsWith('[]')));
+    const collect = (editors: { name?: string; items?: unknown[] }[] | undefined) =>
+      (editors ?? []).forEach((editor) => {
+        if (editor.name) {
+          names.add(editor.name);
+        }
+        collect(editor.items as { name?: string; items?: unknown[] }[] | undefined);
+      });
+    collect((this.detail()?.effectiveDefinition as { editors?: { name?: string; items?: unknown[] }[] } | null)?.editors);
+    return [...names];
+  });
 
   readonly channelKeys = computed<string[]>(() => {
     const templates = this.channelTemplatesOf(this.detail());
@@ -307,6 +338,18 @@ export class TemplatesComponent {
       .subscribe((response) => {
         if (response) {
           this.octlDiagnostics.set(sortDiagnostics(response.diagnostics ?? []) as Diagnostic[]);
+        }
+      });
+
+    this.cdlValidation
+      .pipe(
+        debounceTime(CDL_VALIDATE_DEBOUNCE_MS),
+        switchMap((request) => this.service.validateCdl(request.key, request.source).pipe(catchError(() => of(null)))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((response) => {
+        if (response) {
+          this.cdlDiagnostics.set(sortDiagnostics(response.diagnostics ?? []) as Diagnostic[]);
         }
       });
 
@@ -566,10 +609,19 @@ export class TemplatesComponent {
     this.deprecated.set((event.target as HTMLInputElement).checked);
   }
 
-  onContentDefinitionInput(event: Event): void {
-    this.contentDefinition.set((event.target as HTMLTextAreaElement).value);
+  onContentDefinitionInput(source: string): void {
+    this.contentDefinition.set(source);
     // Unsaved editors change what the channel may use.
     this.requestOctlValidation();
+    this.requestCdlValidation();
+  }
+
+  /** Live CDL diagnostics (M33): debounced, silent (the Validate button still reports with a toast). */
+  private requestCdlValidation(): void {
+    const key = this.projectKey();
+    if (key) {
+      this.cdlValidation.next({ key, source: this.contentDefinition() });
+    }
   }
 
   onPaginationPathInput(channel: string, event: Event): void {

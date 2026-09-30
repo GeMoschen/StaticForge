@@ -30,20 +30,23 @@
 
   @if (expanded()) {
     <div id="set-query-body" class="query-panel__body">
-      <label class="query-panel__field query-panel__field--where">
-        <span class="query-panel__label">Where</span>
-        <textarea
+      <div class="query-panel__field query-panel__field--where">
+        <span class="query-panel__label" aria-hidden="true">Where</span>
+        <sf-code-editor
           class="query-panel__where"
-          rows="2"
-          spellcheck="false"
+          language="where"
+          label="Where"
+          [compact]="true"
           placeholder="e.g. role == 'lead' && joined > '2022-01-01' — empty: every record"
           [value]="draft().where"
-          [disabled]="readOnly()"
-          [attr.aria-invalid]="whereInvalid() ? true : null"
+          [readOnly]="readOnly()"
+          [names]="whereFields()"
+          [diagnostics]="whereDiagnostics()"
           aria-describedby="set-query-diagnostics"
-          (input)="onWhereInput($event)"
-        ></textarea>
-      </label>
+          [invalid]="whereInvalid()"
+          (valueChange)="onWhereInput($event)"
+        />
+      </div>
 
       <div class="query-panel__field">
         <span class="query-panel__label" id="set-query-sort-label">Sort</span>

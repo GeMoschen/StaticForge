@@ -5,6 +5,32 @@ import type { ConflictInfo, ResolveMode, SaveState } from '../../features/pages/
 
 const DEFAULT_DEBOUNCE_MS = 500;
 
+/** A finding of a save the rule gate rejected (`ContentIssue` on the wire). */
+export interface RejectedFinding {
+  path?: string;
+  code?: string;
+  severity?: string;
+  message?: string;
+  kind?: string;
+  rule?: string;
+  locale?: string;
+}
+
+/**
+ * Whether a failed save is the rule gate's refusal (M33.4): a `422` whose `issues` hold a completeness error — a
+ * structural rejection (a malformed value) only carries structural issues and stays an ordinary error.
+ */
+export function rejectedByRules(err: unknown): boolean {
+  if (!(err instanceof HttpErrorResponse) || err.status !== 422) {
+    return false;
+  }
+  const issues = (err.error as { issues?: unknown } | null)?.issues;
+  return (
+    Array.isArray(issues) &&
+    issues.some((issue: RejectedFinding) => issue?.kind === 'COMPLETENESS' && issue?.severity === 'ERROR')
+  );
+}
+
 function clockLabel(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
@@ -27,6 +53,11 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
   readonly lastSavedAt = signal<string | null>(null);
   readonly revision = signal<number | null>(null);
   readonly conflict = signal<ConflictInfo | null>(null);
+  /**
+   * The findings of the last save the rule gate rejected (M33.8): a save-scope error refused it with `422` and every
+   * finding under `issues`. Empty after a successful save.
+   */
+  readonly rejected = signal<RejectedFinding[]>([]);
 
   protected projectKey = '';
   protected uuid = '';
@@ -124,6 +155,7 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
     this.persist(payload, revision ?? undefined).subscribe({
       next: (res) => {
         this.revision.set(res.revision ?? null);
+        this.rejected.set([]);
         this.saveState.set('saved');
         this.lastSavedAt.set(clockLabel(new Date()));
         this.savedHandler?.(res);
@@ -171,6 +203,10 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
         base: body['base'],
         theirs: body['theirs'],
       });
+    } else if (rejectedByRules(err)) {
+      this.rejected.set(((err as HttpErrorResponse).error as { issues: RejectedFinding[] }).issues);
+      this.saveState.set('rejected');
+      return;
     } else {
       this.errorHandler?.(err);
     }

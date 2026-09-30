@@ -100,6 +100,29 @@ public interface ProjectService {
     com.acme.staticforge.project.publish.PublishPolicy updatePublishPolicy(
             String key, com.acme.staticforge.project.publish.PublishPolicy policy, RevisionContext ctx);
 
+    /**
+     * Replaces the code highlighting overrides (M33 follow-up) and returns them normalized. Throws
+     * {@link InvalidCodeHighlightingException} listing every bad entry and {@code 409 SF-DOM-0141} on an archived
+     * project. Identical overrides change nothing; otherwise one {@code UPDATE} revision (summary entry
+     * {@code PROJECT}, field {@code codeHighlighting}).
+     */
+    CodeHighlighting updateCodeHighlighting(String key, CodeHighlighting highlighting, RevisionContext ctx);
+
+    /** Thrown by {@link #updateCodeHighlighting} for entries with a malformed key or an unknown format. */
+    final class InvalidCodeHighlightingException extends RuntimeException {
+
+        private final List<String> errors;
+
+        public InvalidCodeHighlightingException(List<String> errors) {
+            super(String.join(" ", errors));
+            this.errors = List.copyOf(errors);
+        }
+
+        public List<String> errors() {
+            return errors;
+        }
+    }
+
     List<ProjectMember> members(String key);
 
     /** Upserts a membership and records an {@code UPDATE} revision + summary entry. */

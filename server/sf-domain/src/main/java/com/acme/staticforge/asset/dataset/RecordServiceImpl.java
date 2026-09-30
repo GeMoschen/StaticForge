@@ -13,6 +13,9 @@ import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.asset.folder.RecordSetContainment;
 import com.acme.staticforge.asset.page.PageContentValidation;
+import com.acme.staticforge.asset.rules.ContentRules;
+import com.acme.staticforge.asset.rules.RuleEngine;
+import com.acme.staticforge.asset.rules.SaveFindings;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.revision.RevisionAware;
@@ -22,6 +25,7 @@ import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.query.DatasetQuery;
 import com.acme.staticforge.template.query.DatasetQueryEvaluator;
 import com.acme.staticforge.template.query.RecordView;
+import com.acme.staticforge.template.rules.RuleScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -52,6 +56,7 @@ public class RecordServiceImpl implements RecordService {
     private final AssetVersionRepository assetVersionRepository;
     private final PageContentValidation pageContentValidation;
     private final RecordDatasets recordDatasets;
+    private final ContentRules contentRules;
     private final ObjectMapper objectMapper;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
@@ -61,12 +66,14 @@ public class RecordServiceImpl implements RecordService {
             AssetVersionRepository assetVersionRepository,
             PageContentValidation pageContentValidation,
             RecordDatasets recordDatasets,
+            ContentRules contentRules,
             ObjectMapper objectMapper) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.pageContentValidation = pageContentValidation;
         this.recordDatasets = recordDatasets;
+        this.contentRules = contentRules;
         this.objectMapper = objectMapper;
     }
 
@@ -75,20 +82,24 @@ public class RecordServiceImpl implements RecordService {
     public RecordWriteResult create(CreateRecordCommand cmd, RevisionContext ctx) {
         AssetVersion set = requireRecordSet(cmd.projectId(), cmd.recordSetUuid());
         Dataset dataset = requireLiveDataset(cmd.projectId(), RecordValues.datasetRef(set.getPayload()));
-        JsonNode content = contentOrEmpty(cmd.content());
-        List<ContentIssue> issues = validate(cmd.projectId(), dataset, content);
+        JsonNode incoming = contentOrEmpty(cmd.content());
+        validate(cmd.projectId(), dataset, incoming);
 
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("datasetRef", dataset.uuid().toString());
+        UUID uuid = UUID.randomUUID();
+        SaveFindings.Captured<JsonNode> saved = SaveFindings.capture(() -> contentRules.saveContent(
+                cmd.projectId(), null, AssetType.RECORD, dataset.definition(), payload, null, incoming));
+        JsonNode content = saved.value();
         payload.set("content", content);
 
-        UUID uuid = UUID.randomUUID();
         String displayName = titleOf(dataset, content).orElse(uuid.toString());
         AssetVersionView created = assetService.create(
                 new CreateAssetCommand(
                         cmd.projectId(), AssetType.RECORD, displayName, cmd.recordSetUuid(), payload, dataset.uuid(),
                         RecordNaming.uidOf(uuid), uuid),
                 ctx);
+        List<ContentIssue> issues = issues(cmd.projectId(), uuid, dataset, payload, saved.findings());
         return new RecordWriteResult(toDetail(cmd.projectId(), created), issues);
     }
 
@@ -98,12 +109,17 @@ public class RecordServiceImpl implements RecordService {
         AssetVersion current = requireOpenRecord(ctx.projectId(), uuid);
         UUID datasetUuid = RecordValues.datasetRef(current.getPayload());
         Dataset dataset = requireDataset(ctx.projectId(), datasetUuid);
-        JsonNode values = contentOrEmpty(content);
-        List<ContentIssue> issues = validate(ctx.projectId(), dataset, values);
+        JsonNode incoming = contentOrEmpty(content);
+        validate(ctx.projectId(), dataset, incoming);
 
         // datasetRef is immutable: the stored payload keeps it, only the values are replaced.
         ObjectNode payload = current.getPayload().deepCopy();
+        SaveFindings.Captured<JsonNode> saved = SaveFindings.capture(() -> contentRules.saveContent(
+                ctx.projectId(), uuid, AssetType.RECORD, dataset.definition(), current.getPayload(),
+                current.getPayload().get("content"), incoming));
+        JsonNode values = saved.value();
         payload.set("content", values);
+        List<ContentIssue> issues = issues(ctx.projectId(), uuid, dataset, payload, saved.findings());
 
         String name = titleOf(dataset, values).orElse(current.getDisplayName());
         AssetVersionView updated = assetService.update(uuid, new UpdateAssetCommand(name, payload), expectedRevision, ctx);
@@ -147,6 +163,36 @@ public class RecordServiceImpl implements RecordService {
     // ------------------------------------------------------------------
     // Validation
     // ------------------------------------------------------------------
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ContentIssue> contentIssues(long projectId, UUID uuid, JsonNode payload) {
+        UUID datasetUuid = RecordValues.datasetRef(payload);
+        if (datasetUuid == null) {
+            return List.of();
+        }
+        Dataset dataset;
+        try {
+            dataset = requireDataset(projectId, datasetUuid);
+        } catch (SfException e) {
+            return List.of();
+        }
+        return issues(projectId, uuid, dataset, payload, List.of());
+    }
+
+    /**
+     * What a record's editor shows (M33.4): the {@code edit} outcome of its stored values — built-ins and the dataset's
+     * rules — plus the {@code read-only} notes of the save that stored them.
+     */
+    private List<ContentIssue> issues(
+            long projectId, UUID uuid, Dataset dataset, JsonNode payload, List<ContentIssue> saveFindings) {
+        List<ContentIssue> out = new ArrayList<>(saveFindings.stream()
+                .filter(f -> RuleEngine.CODE_READ_ONLY.equals(f.code()))
+                .toList());
+        out.addAll(contentRules.content(projectId, uuid, AssetType.RECORD, dataset.definition(), payload,
+                payload.path("content"), RuleScope.EDIT, null).findings());
+        return out;
+    }
 
     /** Rejects structural findings with {@code 422}; returns completeness findings, which save. */
     private List<ContentIssue> validate(long projectId, Dataset dataset, JsonNode content) {

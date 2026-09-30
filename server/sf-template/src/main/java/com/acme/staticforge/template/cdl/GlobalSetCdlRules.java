@@ -6,6 +6,7 @@ import com.acme.staticforge.template.content.EditorDefinition;
 import com.acme.staticforge.template.content.EditorType;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
+import com.acme.staticforge.template.rules.RuleResolution;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,6 +49,9 @@ public final class GlobalSetCdlRules {
         }
         checkEditors(definition.editors(), diagnostics);
         diagnostics.addAll(PaginationCdlRules.notAllowedIn(definition, "a global property set"));
+        // M33: no inheritance here, so the rules resolve against the definition itself; 'on global' for the whole record.
+        diagnostics.addAll(RuleResolution.check(definition.rules(), definition, definition.rules()));
+        diagnostics.addAll(RuleResolution.checkKind(definition.rules(), "global"));
         return diagnostics;
     }
 

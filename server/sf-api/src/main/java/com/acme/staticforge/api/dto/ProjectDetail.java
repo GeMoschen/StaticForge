@@ -9,6 +9,7 @@ import java.util.List;
  * effective publish permissions, in declaration order — clients show publishing controls from these, never from the
  * role (epic decision 12). {@code compactedThrough} is the newest revision revision compaction has processed (M29.4.3);
  * {@code null} when the project was never compacted — reads at later revisions are never compacted.
+ * {@code codeHighlighting} are the project's code highlighting overrides (M33 follow-up), empty maps when none.
  */
 public record ProjectDetail(
         String key,
@@ -20,4 +21,5 @@ public record ProjectDetail(
         List<String> allowedMimeTypes,
         PublishPolicyView publishPolicy,
         List<String> permissions,
-        Long compactedThrough) {}
+        Long compactedThrough,
+        CodeHighlightingView codeHighlighting) {}

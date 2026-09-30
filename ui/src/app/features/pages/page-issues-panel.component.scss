@@ -193,3 +193,32 @@
 .issues__detail code {
   font-family: var(--sf-font-mono, monospace);
 }
+
+// An editor rule's info (M33.8): listed, quieter, not counted.
+.issues__item--info {
+  opacity: 0.8;
+}
+
+// Scope filter chips (M33).
+.issues__scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-1);
+  margin: var(--sf-2) 0;
+}
+
+.issues__scope {
+  padding: 0 0.6em;
+  border: 1px solid var(--sf-line);
+  border-radius: 999px;
+  background: transparent;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+  cursor: pointer;
+}
+
+.issues__scope--on {
+  background: var(--sf-surface-muted, var(--sf-surface));
+  color: inherit;
+  font-weight: 600;
+}

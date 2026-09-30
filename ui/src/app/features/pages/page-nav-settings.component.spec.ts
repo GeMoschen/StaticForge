@@ -66,6 +66,7 @@ const PAGE: PageView = {
 async function renderEditor(readOnly = false) {
   const api = {
     pageDetail: vi.fn().mockReturnValue(of(PAGE)),
+    evaluateRules: vi.fn().mockReturnValue(of({ findings: [], fills: [], fieldStates: [] })),
     templateDetail: vi.fn().mockReturnValue(of({ uuid: 'tpl-1', effectiveDefinition: { editors: [], bodies: [] } })),
     translationStatus: vi.fn().mockReturnValue(of({ locales: [] })),
     updatePage: vi.fn().mockImplementation((_key: string, _uuid: string, payload: Record<string, unknown>) =>

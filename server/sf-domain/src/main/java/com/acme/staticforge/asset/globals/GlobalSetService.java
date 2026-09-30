@@ -59,6 +59,12 @@ public interface GlobalSetService {
     GlobalSetView updateValues(UUID uuid, JsonNode content, long expectedRevision, RevisionContext ctx);
 
     /**
+     * The findings a set's value form shows for {@code view}'s values: the {@code edit} outcome of its built-ins and
+     * rules (M33.4), over the drafts.
+     */
+    List<com.acme.staticforge.asset.content.ContentIssue> contentIssues(long projectId, GlobalSetView view);
+
+    /**
      * The set as of {@code revision}, or of the current version when {@code revision} is null.
      * Empty when the uuid names an asset of another type; a uuid that doesn't exist in this
      * project raises the generic {@code 404} instead, so neither case leaks existence (§8.4).

@@ -44,8 +44,12 @@ public interface ProjectExportImportService {
      * <p>Bumped to {@code 11} by M32 ({@link #URL_REGISTRY_PROTOCOL}): an archive carries the URL registry's
      * {@code GENERATED} rows of its assets ({@link ExportedUrl}, {@code url-registry.json}). An archive of protocol
      * {@code <= 10} imports without them.
+     *
+     * <p>Bumped to {@code 12} by the M33 follow-up ({@link #CODE_HIGHLIGHTING_PROTOCOL}): the settings carry the
+     * project's code highlighting overrides, and a channel's settings may carry {@code highlightAs}. An archive of
+     * protocol {@code <= 11} imports without overrides, and its channels highlight as {@code AUTO}.
      */
-    int PROTOCOL_VERSION = 11;
+    int PROTOCOL_VERSION = 12;
 
     /** The first protocol whose archives carry release state (M27.5.1). */
     int RELEASE_STATE_PROTOCOL = 8;
@@ -55,6 +59,9 @@ public interface ProjectExportImportService {
 
     /** The first protocol whose archives carry URL registry rows (M32.6). */
     int URL_REGISTRY_PROTOCOL = 11;
+
+    /** The first protocol whose archives carry code highlighting overrides (M33 follow-up). */
+    int CODE_HIGHLIGHTING_PROTOCOL = 12;
 
     /**
      * Serializes every one of the project's current assets and media blobs into a ZIP

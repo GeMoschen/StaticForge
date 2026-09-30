@@ -80,6 +80,17 @@
         </p>
       }
 
+      <sf-field
+        label="Highlight as"
+        hint="How the code editors highlight this channel's templates. Auto uses the project's code highlighting overrides, then the MIME type and file extension; any other choice always applies."
+      >
+        <select class="select" formControlName="highlightAs">
+          @for (option of highlightOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </sf-field>
+
       <sf-field label="Default escaping">
         <select class="select" formControlName="defaultEscaping">
           @for (option of escapingOptions; track option) {

@@ -65,6 +65,9 @@
               [definition]="definition()"
               [formGroup]="form"
               [projectKey]="projectKey()"
+              [issues]="shownIssues()"
+              [fieldStates]="rules.fieldStates()"
+                [ruleHub]="rules.hub"
               [editingLocale]="editingLocale()"
               [storedValue]="storedContent()"
               [localeLabels]="localeLabels()"
@@ -99,12 +102,14 @@
           label="Content definition (CDL)"
           hint="Declares the fields this property set exposes. No bodies and no catalog editors — a set has no page."
         >
-          <textarea
+          <sf-code-editor
+            language="cdl"
+            label="Content definition (CDL)"
             [value]="contentDefinition()"
-            (input)="onContentDefinitionInput($event)"
-            [disabled]="!canEditSchema()"
-            spellcheck="false"
-          ></textarea>
+            [diagnostics]="cdlDiagnostics()"
+            [readOnly]="!canEditSchema()"
+            (valueChange)="onContentDefinitionInput($event)"
+          />
         </sf-field>
         <div class="actions">
           <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>

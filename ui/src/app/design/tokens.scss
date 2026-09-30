@@ -31,12 +31,40 @@
 
   --sf-pour-width: 3px;
   --sf-pour-color: var(--sf-signal);
+
+  // Code editor syntax colors (CDL, OCTL, expressions, JSON).
+  --sf-code-keyword:  #7A3E9D;
+  --sf-code-type:     #1F6F8B;
+  --sf-code-attr:     #8A5A12;
+  --sf-code-atom:     #A33B2E;
+  --sf-code-string:   #3F6E5B;
+  --sf-code-number:   #B0501F;
+  --sf-code-comment:  #8A857C;
+  --sf-code-function: #2F5FA8;
+  --sf-code-special:  #9C3A6B;
+  --sf-code-operator: #57534C;
+  --sf-code-tag:      #C8461E;
+  /* The host format around OCTL (HTML, Markdown, JSON, …): a cooler palette, so instructions stand out. */
+  --sf-code-fmt-tag:      #1B6E9E;
+  --sf-code-fmt-attr:     #0F7C74;
+  --sf-code-fmt-string:   #6A7B1A;
+  --sf-code-fmt-keyword:  #B03A7A;
+  --sf-code-fmt-number:   #A0661A;
+  --sf-code-fmt-comment:  #8C8FA0;
+  --sf-code-fmt-punct:    #6B7280;
 }
 
 [data-theme="dark"] {
   --sf-paper: #17140F; --sf-surface: #201C17; --sf-ink: #EFEAE2;
   --sf-slate: #A69C8D; --sf-line: #332D25; --sf-signal: #E06A3D;
   --sf-amber: #C9A24F; --sf-jade: #5FA98C; --sf-rust: #D96E5C;
+  --sf-code-keyword: #C99BE0; --sf-code-type: #6CC0D9; --sf-code-attr: #E0B062;
+  --sf-code-atom: #EE8A78; --sf-code-string: #8FCBAE; --sf-code-number: #F0A070;
+  --sf-code-comment: #857C70; --sf-code-function: #8DB4F0; --sf-code-special: #E594BD;
+  --sf-code-operator: #B8AEA0; --sf-code-tag: #F08A5D;
+  --sf-code-fmt-tag: #7FB8E8; --sf-code-fmt-attr: #6FD1C4; --sf-code-fmt-string: #C4D67A;
+  --sf-code-fmt-keyword: #EE8FC4; --sf-code-fmt-number: #E8C06A; --sf-code-fmt-comment: #8A90A0;
+  --sf-code-fmt-punct: #9AA3B2;
 }
 
 @media (prefers-reduced-motion: reduce) {

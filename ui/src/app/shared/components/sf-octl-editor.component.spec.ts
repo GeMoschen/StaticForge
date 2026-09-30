@@ -1,6 +1,9 @@
 import '@angular/compiler';
 import { fireEvent, render, screen } from '@testing-library/angular';
+import { forEachDiagnostic } from '@codemirror/lint';
+import type { EditorView } from '@codemirror/view';
 import { describe, expect, it, vi } from 'vitest';
+import { SfCodeEditorComponent } from '../code-editor/code-editor.component';
 import { SfOctlEditorComponent } from './sf-octl-editor.component';
 
 const SOURCE = '<li>\n  $CMS_VALUE(nme)$\n</li>';
@@ -16,42 +19,46 @@ async function setup(inputs: Partial<{ value: string; readOnly: boolean; diagnos
     },
   });
   view.fixture.componentInstance.valueChange.subscribe(valueChange);
-  const area = screen.getByRole('textbox', { name: 'Record template for channel html' }) as HTMLTextAreaElement;
-  return { ...view, area, valueChange };
+  const code = view.fixture.debugElement.query((el) => el.componentInstance instanceof SfCodeEditorComponent)
+    .componentInstance as SfCodeEditorComponent;
+  const editor = code.editorView as EditorView;
+  return { ...view, editor, valueChange };
 }
 
 describe('SfOctlEditorComponent', () => {
-  it('shows the source and emits every edit', async () => {
-    const { area, valueChange } = await setup();
-    expect(area.value).toBe(SOURCE);
-    fireEvent.input(area, { target: { value: 'x' } });
+  it('shows the source under its name and emits every edit', async () => {
+    const { editor, valueChange } = await setup();
+    expect(screen.getByRole('textbox', { name: 'Record template for channel html' })).toBeTruthy();
+    expect(editor.state.doc.toString()).toBe(SOURCE);
+    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: 'x' } });
     expect(valueChange).toHaveBeenCalledWith('x');
   });
 
-  it('lists diagnostics and jumps to a diagnostic position on click', async () => {
-    const { area } = await setup({
+  it('lists diagnostics, underlines them and jumps to a diagnostic position on click', async () => {
+    const { editor } = await setup({
       diagnostics: [{ severity: 'ERROR', code: 'SF-TPL-0103', message: 'Unknown editor name: nme', line: 2, column: 14 }],
     });
-    expect(area.getAttribute('aria-invalid')).toBe('true');
     expect(screen.getByText(/SF-TPL-0103/)).toBeTruthy();
+    const marks: number[] = [];
+    forEachDiagnostic(editor.state, (_d, from) => marks.push(from));
+    expect(marks).toEqual([SOURCE.indexOf('nme')]);
     fireEvent.click(screen.getByRole('button', { name: 'Go to line 2, column 14' }));
-    expect(area.selectionStart).toBe(SOURCE.indexOf('nme'));
-    expect(document.activeElement).toBe(area);
+    expect(editor.state.selection.main.head).toBe(SOURCE.indexOf('nme'));
   });
 
   it('inserts a snippet at the caret and leaves the caret where the snippet says', async () => {
-    const { fixture, area, valueChange } = await setup({ value: '<p></p>' });
-    area.setSelectionRange(3, 3);
+    const { fixture, editor, valueChange } = await setup({ value: '<p></p>' });
+    editor.dispatch({ selection: { anchor: 3 } });
     fixture.componentInstance.insert('$CMS_IF(_first)$$CMS_END_IF$', '$CMS_IF(_first)$'.length);
     expect(valueChange).toHaveBeenCalledWith('<p>$CMS_IF(_first)$$CMS_END_IF$</p>');
-    expect(area.selectionStart).toBe(3 + '$CMS_IF(_first)$'.length);
+    expect(editor.state.selection.main.head).toBe(3 + '$CMS_IF(_first)$'.length);
   });
 
-  it('is read-only on request: no insert, readonly textarea', async () => {
-    const { fixture, area, valueChange } = await setup({ readOnly: true });
-    expect(area.readOnly).toBe(true);
+  it('is read-only on request: no insert, a read-only editor', async () => {
+    const { fixture, editor, valueChange } = await setup({ readOnly: true });
+    expect(editor.state.readOnly).toBe(true);
     fixture.componentInstance.insert('$CMS_VALUE(_uid)$');
     expect(valueChange).not.toHaveBeenCalled();
-    expect(area.value).toBe(SOURCE);
+    expect(editor.state.doc.toString()).toBe(SOURCE);
   });
 });

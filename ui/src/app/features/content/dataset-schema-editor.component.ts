@@ -23,8 +23,12 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfOctlEditorComponent } from '../../shared/components/sf-octl-editor.component';
+import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
+import { declaredPaths } from '../../shared/code-editor/completions';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ChannelsService } from '../channels/channels.service';
+import { ProjectContextStore } from '../../core/project/project-context.store';
+import { channelCodeFormat } from '../../shared/code-editor/code-format';
 import type { ContentDefinition, EditorDefinition } from '../forms/form.model';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { sortDiagnostics } from '../templates/inheritance.util';
@@ -74,7 +78,7 @@ interface RecordTemplateValidation {
   selector: 'sf-dataset-schema-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SfButtonComponent, SfFieldComponent, SfOctlEditorComponent, SfUidRenameComponent],
+  imports: [RouterLink, SfButtonComponent, SfCodeEditorComponent, SfFieldComponent, SfOctlEditorComponent, SfUidRenameComponent],
   templateUrl: './dataset-schema-editor.component.html',
   styleUrl: './dataset-schema-editor.component.scss',
 })
@@ -89,6 +93,7 @@ export class DatasetSchemaEditorComponent {
   private readonly content = inject(ContentService);
   private readonly templates = inject(TemplatesService);
   private readonly channelsService = inject(ChannelsService);
+  private readonly projectContext = inject(ProjectContextStore);
   private readonly toasts = inject(ToastService);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly injector = inject(Injector);
@@ -104,7 +109,16 @@ export class DatasetSchemaEditorComponent {
   protected readonly diagnostics = signal<Diagnostic[]>([]);
   protected readonly saving = signal(false);
   protected readonly validating = signal(false);
+  /** The dataset's fields, for record template completion (M33). */
+  protected readonly fieldNames = computed(() =>
+    declaredPaths(this.contentDefinition()).filter((path) => !path.endsWith('[]')),
+  );
   private validateTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly clearValidateTimer = inject(DestroyRef).onDestroy(() => {
+    if (this.validateTimer) {
+      clearTimeout(this.validateTimer);
+    }
+  });
 
   /** The project's channels (for the record template tabs). */
   private readonly channels = signal<ChannelView[]>([]);
@@ -129,6 +143,14 @@ export class DatasetSchemaEditorComponent {
 
   protected readonly channelTabs = computed<RecordTemplateChannel[]>(() =>
     recordTemplateChannels(this.channels(), this.storedRecordTemplates()),
+  );
+
+  /** How the open channel's record template is highlighted (M33 follow-up): the channel's "Highlight as", else detected. */
+  protected readonly activeFormat = computed(() =>
+    channelCodeFormat(
+      this.channels().find((channel) => channel.key === this.activeChannel()),
+      this.projectContext.project()?.codeHighlighting,
+    ),
   );
 
   /** The open channel tab, or `null` on the schema tab. */
@@ -276,8 +298,8 @@ export class DatasetSchemaEditorComponent {
   }
 
   /** Live validation while typing, debounced; the same restrictions the save enforces. */
-  protected onCdlInput(event: Event): void {
-    this.contentDefinition.set((event.target as HTMLTextAreaElement).value);
+  protected onCdlInput(source: string): void {
+    this.contentDefinition.set(source);
     if (this.validateTimer) {
       clearTimeout(this.validateTimer);
     }

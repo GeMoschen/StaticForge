@@ -13,6 +13,7 @@ import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.asset.content.ContentRenameMigrator.EditorRename;
 import com.acme.staticforge.asset.content.ContentRenameMigrator;
 import com.acme.staticforge.asset.dataset.RecordDatasets;
+import com.acme.staticforge.asset.rules.ContentRules;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -25,6 +26,7 @@ import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.Severity;
+import com.acme.staticforge.template.rules.RuleScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -60,6 +62,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
     private final ObjectMapper objectMapper;
     private final RecordDatasets recordDatasets;
     private final com.acme.staticforge.project.ProjectLocales projectLocales;
+    private final ContentRules contentRules;
     private final CdlCompiler cdlCompiler = new CdlCompiler();
 
     public GlobalSetServiceImpl(
@@ -68,13 +71,15 @@ public class GlobalSetServiceImpl implements GlobalSetService {
             AssetVersionRepository assetVersionRepository,
             ObjectMapper objectMapper,
             RecordDatasets recordDatasets,
-            com.acme.staticforge.project.ProjectLocales projectLocales) {
+            com.acme.staticforge.project.ProjectLocales projectLocales,
+            ContentRules contentRules) {
         this.assetService = assetService;
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.objectMapper = objectMapper;
         this.recordDatasets = recordDatasets;
         this.projectLocales = projectLocales;
+        this.contentRules = contentRules;
     }
 
     @Override
@@ -137,10 +142,27 @@ public class GlobalSetServiceImpl implements GlobalSetService {
         rejectStructural(recordDatasets.validator(ctx.projectId()).validate(definition, content, null, CONTENT_PATH));
 
         ObjectNode payload = (ObjectNode) current.getPayload().deepCopy();
-        payload.set("content", content == null || content.isNull() ? objectMapper.createObjectNode() : content);
+        JsonNode incoming = content == null || content.isNull() ? objectMapper.createObjectNode() : content;
+        payload.set("content", contentRules.saveContent(ctx.projectId(), uuid, AssetType.GLOBAL_SET, definition,
+                current.getPayload(), current.getPayload().get("content"), incoming));
 
         return toView(assetService.update(
                 uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ContentIssue> contentIssues(long projectId, GlobalSetView view) {
+        ContentDefinition definition = cdlCompiler.compile(view.contentDefinition() == null ? "" : view.contentDefinition())
+                .definition();
+        if (definition == null) {
+            return List.of();
+        }
+        ObjectNode payload = objectMapper.createObjectNode();
+        JsonNode content = view.content() == null || !view.content().isObject() ? objectMapper.createObjectNode() : view.content();
+        payload.set("content", content);
+        return contentRules.content(projectId, view.uuid(), AssetType.GLOBAL_SET, definition, payload, content,
+                RuleScope.EDIT, null).findings();
     }
 
     @Override

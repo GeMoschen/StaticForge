@@ -1,5 +1,6 @@
 package com.acme.staticforge.api;
 
+import com.acme.staticforge.api.dto.CodeHighlightingView;
 import com.acme.staticforge.api.dto.ProjectCreateRequest;
 import com.acme.staticforge.api.dto.ProjectDetail;
 import com.acme.staticforge.api.dto.ProjectLocalesRequest;
@@ -12,6 +13,7 @@ import com.acme.staticforge.api.dto.SetMemberRoleRequest;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.project.CodeHighlighting;
 import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectLocale;
@@ -111,6 +113,30 @@ public class ProjectController {
     public ProjectDetail update(@PathVariable("key") String projectKey, @Valid @RequestBody ProjectUpdateRequest body) {
         return toDetail(projectService.update(
                 projectKey, body.name(), body.description(), body.allowedMimeTypes(), ctx(projectKey, null)));
+    }
+
+    /**
+     * Replaces the code highlighting overrides (M33 follow-up). {@code 400 SF-API-0400} with one message per bad entry
+     * under {@code errors}; identical overrides answer {@code 200} and record nothing.
+     */
+    @PutMapping("/{key}/code-highlighting")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ROLE_EXPR + ".PROJECT_ADMIN)")
+    public ProjectDetail updateCodeHighlighting(
+            @PathVariable("key") String projectKey, @RequestBody CodeHighlightingView body) {
+        try {
+            projectService.updateCodeHighlighting(
+                    projectKey, new CodeHighlighting(body.extensions(), body.mimeTypes()), ctx(projectKey, null));
+        } catch (ProjectService.InvalidCodeHighlightingException e) {
+            throw new SfException(Problem.builder()
+                    .type("https://cms.example.com/problems/sf-api-0400")
+                    .title("Bad Request")
+                    .status(400)
+                    .detail("The code highlighting overrides are invalid.")
+                    .property("code", "SF-API-0400")
+                    .property("errors", e.errors())
+                    .build());
+        }
+        return toDetail(projectService.requireByKey(projectKey));
     }
 
     @GetMapping("/{key}/locales")
@@ -262,7 +288,12 @@ public class ProjectController {
                         .map(Enum::name)
                         .toList()),
                 projectAuth.permissions(project.getKey()).stream().map(Enum::name).toList(),
-                project.getCompactedThrough());
+                project.getCompactedThrough(),
+                codeHighlightingView(CodeHighlighting.fromJson(project.getCodeHighlighting())));
+    }
+
+    private static CodeHighlightingView codeHighlightingView(CodeHighlighting highlighting) {
+        return new CodeHighlightingView(highlighting.extensions(), highlighting.mimeTypes());
     }
 
     private static ProjectRole parseRole(String role) {

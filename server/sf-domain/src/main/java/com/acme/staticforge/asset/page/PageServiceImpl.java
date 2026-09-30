@@ -10,12 +10,14 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.content.ContentIssue;
+import com.acme.staticforge.asset.rules.ContentRules;
 import com.acme.staticforge.asset.template.TemplateHierarchies;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.rules.RuleScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
@@ -40,6 +42,7 @@ public class PageServiceImpl implements PageService {
     private final BodyService bodyService;
     private final PageContentValidation contentValidation;
     private final TemplateHierarchies hierarchies;
+    private final ContentRules contentRules;
 
     public PageServiceImpl(
             AssetRepository assetRepository,
@@ -47,13 +50,15 @@ public class PageServiceImpl implements PageService {
             AssetService assetService,
             BodyService bodyService,
             PageContentValidation contentValidation,
-            TemplateHierarchies hierarchies) {
+            TemplateHierarchies hierarchies,
+            ContentRules contentRules) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.bodyService = bodyService;
         this.contentValidation = contentValidation;
         this.hierarchies = hierarchies;
+        this.contentRules = contentRules;
     }
 
     @Override
@@ -73,10 +78,11 @@ public class PageServiceImpl implements PageService {
         nav.put(PageNav.NO_INDEX, false);
         payload.putObject("output");
         payload.putObject("meta");
+        ObjectNode gated = contentRules.savePage(ctx.projectId(), null, null, payload);
 
         return assetService.create(
                 new CreateAssetCommand(
-                        ctx.projectId(), AssetType.PAGE, cmd.displayName(), cmd.folderUuid(), payload, cmd.templateUuid()),
+                        ctx.projectId(), AssetType.PAGE, cmd.displayName(), cmd.folderUuid(), gated, cmd.templateUuid()),
                 ctx);
     }
 
@@ -89,6 +95,7 @@ public class PageServiceImpl implements PageService {
         ObjectNode newPayload = bodyService.mergePatch(null, payload);
         validatePagePayload(newPayload, ctx.projectId());
         contentValidation.requireValidPage(ctx.projectId(), newPayload);
+        newPayload = contentRules.savePage(ctx.projectId(), uuid, current.getPayload(), newPayload);
 
         String displayName = current.getDisplayName();
         return assetService.update(uuid, new UpdateAssetCommand(displayName, newPayload), expectedRevision, ctx);
@@ -109,8 +116,9 @@ public class PageServiceImpl implements PageService {
             mergePatch.get("bodies").fieldNames().forEachRemaining(
                     body -> contentValidation.requireValidBody(ctx.projectId(), newPayload, body));
         }
+        ObjectNode gated = contentRules.savePage(ctx.projectId(), uuid, current.getPayload(), newPayload);
 
-        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedRevision, ctx);
+        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), gated), expectedRevision, ctx);
     }
 
     @Override
@@ -125,8 +133,9 @@ public class PageServiceImpl implements PageService {
         ObjectNode newPayload = bodyService.addSection(current.getPayload(), bodyName, templateUuid, position, instanceId);
         validatePagePayload(newPayload, ctx.projectId());
         contentValidation.requireValidSection(ctx.projectId(), newPayload, bodyName, instanceId);
+        ObjectNode gated = contentRules.savePage(ctx.projectId(), uuid, current.getPayload(), newPayload);
 
-        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedRevision, ctx);
+        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), gated), expectedRevision, ctx);
     }
 
     @Override
@@ -138,8 +147,9 @@ public class PageServiceImpl implements PageService {
 
         ObjectNode newPayload = bodyService.reorder(current.getPayload(), bodyName, instanceIds);
         validatePagePayload(newPayload, ctx.projectId());
+        ObjectNode gated = contentRules.savePage(ctx.projectId(), uuid, current.getPayload(), newPayload);
 
-        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedRevision, ctx);
+        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), gated), expectedRevision, ctx);
     }
 
     @Override
@@ -151,8 +161,9 @@ public class PageServiceImpl implements PageService {
 
         ObjectNode newPayload = bodyService.removeSection(current.getPayload(), bodyName, instanceId);
         validatePagePayload(newPayload, ctx.projectId());
+        ObjectNode gated = contentRules.savePage(ctx.projectId(), uuid, current.getPayload(), newPayload);
 
-        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedRevision, ctx);
+        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), gated), expectedRevision, ctx);
     }
 
     @Override
@@ -178,9 +189,10 @@ public class PageServiceImpl implements PageService {
             ObjectNode newPayload = bodyService.insertSection(withoutSection, targetBody, position, section);
             validatePagePayload(newPayload, ctx.projectId());
             contentValidation.requireValidSection(ctx.projectId(), newPayload, targetBody, instanceId);
+            ObjectNode gated = contentRules.savePage(ctx.projectId(), targetUuid, current.getPayload(), newPayload);
 
             return assetService.update(
-                    targetUuid, new UpdateAssetCommand(current.getDisplayName(), newPayload), expectedTargetRevision, ctx);
+                    targetUuid, new UpdateAssetCommand(current.getDisplayName(), gated), expectedTargetRevision, ctx);
         }
 
         Asset sourcePage = requirePage(sourcePageUuid, ctx.projectId());
@@ -192,6 +204,7 @@ public class PageServiceImpl implements PageService {
         }
         ObjectNode sourceNewPayload = bodyService.removeSection(sourceCurrent.getPayload(), sourceBody, instanceId);
         validatePagePayload(sourceNewPayload, ctx.projectId());
+        sourceNewPayload = contentRules.savePage(ctx.projectId(), sourcePageUuid, sourceCurrent.getPayload(), sourceNewPayload);
         assetService.update(
                 sourcePageUuid,
                 new UpdateAssetCommand(sourceCurrent.getDisplayName(), sourceNewPayload),
@@ -203,6 +216,7 @@ public class PageServiceImpl implements PageService {
         ObjectNode targetNewPayload = bodyService.insertSection(targetCurrent.getPayload(), targetBody, position, section);
         validatePagePayload(targetNewPayload, ctx.projectId());
         contentValidation.requireValidSection(ctx.projectId(), targetNewPayload, targetBody, instanceId);
+        targetNewPayload = contentRules.savePage(ctx.projectId(), targetUuid, targetCurrent.getPayload(), targetNewPayload);
 
         return assetService.update(
                 targetUuid, new UpdateAssetCommand(targetCurrent.getDisplayName(), targetNewPayload), expectedTargetRevision, ctx);
@@ -233,7 +247,14 @@ public class PageServiceImpl implements PageService {
     @Override
     @Transactional(readOnly = true)
     public List<ContentIssue> contentIssues(long projectId, JsonNode payload) {
-        return payload == null ? List.of() : contentValidation.issues(projectId, payload);
+        return contentIssues(projectId, null, payload);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ContentIssue> contentIssues(long projectId, UUID pageUuid, JsonNode payload) {
+        // The edit scope's outcome (M33): built-ins as before, plus the template's rules and states.
+        return payload == null ? List.of() : contentRules.page(projectId, pageUuid, payload, RuleScope.EDIT, null).findings();
     }
 
     @Override

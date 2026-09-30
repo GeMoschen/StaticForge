@@ -18,6 +18,18 @@ public final class GenerationDiagnosticCodes {
     public static final String GEN_CONTENT_INCOMPLETE = "SF-GEN-0120";
 
     /**
+     * An editor rule with {@code onGeneration fail} doesn't hold on a planned page (M33.7): the run fails after
+     * VALIDATE — every failing page, language and rule reported — and nothing is rendered or published.
+     */
+    public static final String GEN_RULE_FAILED = "SF-GEN-0121";
+
+    /**
+     * An editor rule's {@code warning} or {@code info} in the {@code generation} scope (M33.7): a run diagnostic of its
+     * level, naming the rule, page and language; the page publishes. Warnings count in {@code warning_count}.
+     */
+    public static final String GEN_RULE_FINDING = "SF-GEN-0122";
+
+    /**
      * {@code $CMS_REF}, {@code $CMS_INCLUDE} or a body/catalog section resolves to a soft-deleted asset
      * (spec §16.4): tolerated build warning, the reference renders empty. Values read from a deleted
      * target report {@code SF-TPL-0112} instead.

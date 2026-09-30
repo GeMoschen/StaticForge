@@ -9,10 +9,12 @@ import com.acme.staticforge.api.dto.ReorderRequest;
 import com.acme.staticforge.api.dto.ScheduledRefView;
 import com.acme.staticforge.api.dto.TemplateView;
 import com.acme.staticforge.asset.AssetVersionView;
+import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.asset.page.CreatePageCommand;
 import com.acme.staticforge.asset.page.PageQuery;
 import com.acme.staticforge.asset.page.PageService;
 import com.acme.staticforge.asset.page.TemplateRefView;
+import com.acme.staticforge.asset.rules.SaveFindings;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
@@ -75,9 +77,10 @@ public class PageController {
     @PostMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<PageView> create(@PathVariable String projectKey, @RequestBody CreatePageRequest body) {
-        AssetVersionView view = pageService.create(
-                new CreatePageCommand(body.displayName(), body.folderUuid(), body.templateUuid()), ctx(projectKey, "create page"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
+        SaveFindings.Captured<AssetVersionView> saved = SaveFindings.capture(() -> pageService.create(
+                new CreatePageCommand(body.displayName(), body.folderUuid(), body.templateUuid()), ctx(projectKey, "create page")));
+        AssetVersionView view = saved.value();
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }
 
     @GetMapping("/{uuid}")
@@ -94,8 +97,9 @@ public class PageController {
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody JsonNode payload) {
-        AssetVersionView view = pageService.update(uuid, payload, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "update page"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
+        SaveFindings.Captured<AssetVersionView> saved = SaveFindings.capture(() -> pageService.update(uuid, payload, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "update page")));
+        AssetVersionView view = saved.value();
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }
 
     @PatchMapping("/{uuid}/content")
@@ -105,8 +109,9 @@ public class PageController {
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody JsonNode patch) {
-        AssetVersionView view = pageService.patchContent(uuid, patch, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "patch content"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
+        SaveFindings.Captured<AssetVersionView> saved = SaveFindings.capture(() -> pageService.patchContent(uuid, patch, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "patch content")));
+        AssetVersionView view = saved.value();
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }
 
     @PostMapping("/{uuid}/bodies/{body}/sections")
@@ -117,9 +122,10 @@ public class PageController {
             @PathVariable String body,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody AddSectionRequest request) {
-        AssetVersionView view = pageService.addSection(
-                uuid, body, request.templateUuid(), request.position(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "add section"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
+        SaveFindings.Captured<AssetVersionView> saved = SaveFindings.capture(() -> pageService.addSection(
+                uuid, body, request.templateUuid(), request.position(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "add section")));
+        AssetVersionView view = saved.value();
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }
 
     @PutMapping("/{uuid}/bodies/{body}/order")
@@ -130,9 +136,10 @@ public class PageController {
             @PathVariable String body,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody ReorderRequest request) {
-        AssetVersionView view = pageService.reorderSections(
-                uuid, body, request.instanceIds(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "reorder sections"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
+        SaveFindings.Captured<AssetVersionView> saved = SaveFindings.capture(() -> pageService.reorderSections(
+                uuid, body, request.instanceIds(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "reorder sections")));
+        AssetVersionView view = saved.value();
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }
 
     @PostMapping("/{uuid}/bodies/{body}/sections/move")
@@ -143,7 +150,7 @@ public class PageController {
             @PathVariable String body,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody MoveSectionRequest request) {
-        AssetVersionView view = pageService.moveSection(
+        SaveFindings.Captured<AssetVersionView> saved = SaveFindings.capture(() -> pageService.moveSection(
                 request.sourcePageUuid(),
                 request.sourceBody(),
                 request.instanceId(),
@@ -151,8 +158,9 @@ public class PageController {
                 body,
                 request.position(),
                 RevisionHeaders.expectedRevision(ifMatch),
-                ctx(projectKey, "move section"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
+                ctx(projectKey, "move section")));
+        AssetVersionView view = saved.value();
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }
 
     @DeleteMapping("/{uuid}/bodies/{body}/sections/{instanceId}")
@@ -163,9 +171,10 @@ public class PageController {
             @PathVariable String body,
             @PathVariable String instanceId,
             @RequestHeader(value = "If-Match", required = false) String ifMatch) {
-        AssetVersionView view = pageService.deleteSection(
-                uuid, body, instanceId, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "delete section"));
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
+        SaveFindings.Captured<AssetVersionView> saved = SaveFindings.capture(() -> pageService.deleteSection(
+                uuid, body, instanceId, RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "delete section")));
+        AssetVersionView view = saved.value();
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }
 
     @PostMapping("/{uuid}/duplicate")
@@ -184,6 +193,14 @@ public class PageController {
     }
 
     private PageView toPage(long projectId, AssetVersionView v) {
+        return toPage(projectId, v, List.of());
+    }
+
+    /**
+     * The page view; {@code saveFindings} are what the save rule gate reported (M33.4) — its {@code read-only} notes
+     * join the {@code edit} outcome of the stored draft.
+     */
+    private PageView toPage(long projectId, AssetVersionView v, List<ContentIssue> saveFindings) {
         JsonNode payload = v.payload();
         String templateRef = payload != null ? payload.path("templateRef").asText() : "";
         TemplateView template = null;
@@ -198,7 +215,7 @@ public class PageController {
                 payload != null ? payload.get("nav") : null,
                 payload != null ? payload.get("output") : null,
                 payload != null ? payload.get("meta") : null,
-                pageService.contentIssues(projectId, payload),
+                SaveIssues.merge(saveFindings, pageService.contentIssues(projectId, v.uuid(), payload)),
                 releaseBlocks.of(projectId, v.uuid()),
                 releaseBlocks.scheduled(projectId, v.uuid()));
     }

@@ -11,7 +11,10 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Recursive-descent CDL parser (spec §14.2–§14.6). Turns a token stream into an immutable
@@ -65,6 +68,41 @@ final class CdlParser {
         final List<String> features = new ArrayList<>();
         final List<String> allow = new ArrayList<>();
         final List<EditorNode> items = new ArrayList<>();
+        /** Built-in modifiers written after an attribute (M33): built-in name → its modifiers. */
+        final Map<String, ModifierNode> builtinModifiers = new LinkedHashMap<>();
+    }
+
+    /**
+     * The modifiers after a built-in attribute (M33): {@code level warning scope [release] onGeneration fail
+     * message { en "…" }}. Unwritten parts are {@code null}.
+     */
+    static final class ModifierNode {
+        String level;
+        List<String> scopes;
+        String onGeneration;
+        Map<String, String> messages;
+        int line;
+        int column;
+    }
+
+    /** One value of a {@code rules {}} entry key, with its position (M33). */
+    record RuleAttr(String text, List<String> list, Map<String, String> map, int line, int column) {}
+
+    /**
+     * An entry of the {@code rules {}} section (M33): {@code kind} is {@code rule}, {@code state} or {@code fill};
+     * {@code name} is a rule's name, {@code target} the path after {@code on} (rules) or after the keyword (states,
+     * fills), {@code null} when a rule has none. {@code attrs} maps each written key to its value.
+     */
+    static final class RuleEntryNode {
+        String kind;
+        String name;
+        boolean off;
+        String target;
+        int targetLine;
+        int targetColumn;
+        int line;
+        int column;
+        final Map<String, RuleAttr> attrs = new LinkedHashMap<>();
     }
 
     /** A {@code body} declaration inside a {@code bodies} block. */
@@ -82,7 +120,18 @@ final class CdlParser {
     static final class ContentNode {
         final List<EditorNode> editors = new ArrayList<>();
         final List<BodyNode> bodies = new ArrayList<>();
+        final List<RuleEntryNode> rules = new ArrayList<>();
+        boolean rulesSeen;
     }
+
+    /** The keys each rules entry kind accepts (M33, epic decision 1). */
+    private static final Map<String, Set<String>> RULE_KEYS = Map.of(
+            "rule", Set.of("level", "scope", "when", "assert", "message", "locales", "onGeneration"),
+            "state", Set.of("requiredWhen", "readOnlyWhen", "level", "scope", "message"),
+            "fill", Set.of("value", "mode", "on"));
+
+    /** The attributes that take built-in modifiers after their value (M33). */
+    private static final Set<String> MODIFIABLE = Set.of("required", "maxLength", "maxChars", "min", "max", "mimeTypes");
 
     record ParseResult(ContentNode content, List<Diagnostic> diagnostics) {}
 
@@ -101,6 +150,8 @@ final class CdlParser {
                 parseContentBlock(content);
             } else if (peek().isIdent("bodies")) {
                 parseBodiesBlock(content);
+            } else if (peek().isIdent("rules")) {
+                parseRulesBlock(content);
             } else {
                 Token t = next();
                 error(DiagnosticCodes.CDL_SYNTAX, "Unexpected token '" + t.text() + "'", t);
@@ -196,6 +247,9 @@ final class CdlParser {
             }
             next();
             dispatch(attrTok.text(), attrTok, node);
+            if (MODIFIABLE.contains(attrTok.text())) {
+                parseModifiers(node, attrTok.text(), attrTok);
+            }
         }
     }
 
@@ -281,26 +335,319 @@ final class CdlParser {
         if (t.isIdent("pattern")) {
             next();
             node.pattern = expectString(t);
-            if (peek().isIdent("message")) {
+            if (peek().isIdent("message") && !nextIs(TokenType.LBRACE)) {
                 next();
                 node.patternMessage = expectString(t);
             }
+            parseModifiers(node, "pattern", t);
         } else if (t.isIdent("maxLength")) {
             next();
             node.maxLength = expectInt(t);
+            parseModifiers(node, "maxLength", t);
         } else if (t.isIdent("maxChars")) {
             next();
             node.maxChars = expectInt(t);
+            parseModifiers(node, "maxChars", t);
         } else if (t.isIdent("min")) {
             next();
             node.min = expectInt(t);
+            parseModifiers(node, "min", t);
         } else if (t.isIdent("max")) {
             next();
             node.max = expectInt(t);
+            parseModifiers(node, "max", t);
         } else {
             next();
             skipValue();
         }
+    }
+
+    /**
+     * The modifiers after a built-in (M33): any of {@code level <l>}, {@code scope [<s>…]}, {@code onGeneration <g>},
+     * {@code message { <lang> "…" … }} in any order. Values are checked by the validator ({@code SF-CDL-0119}).
+     */
+    private void parseModifiers(EditorNode node, String builtin, Token attrTok) {
+        ModifierNode modifiers = null;
+        while (true) {
+            Token t = peek();
+            if (!(t.isIdent("level") || t.isIdent("scope") || t.isIdent("onGeneration")
+                    || (t.isIdent("message") && nextIs(TokenType.LBRACE)))) {
+                break;
+            }
+            if (modifiers == null) {
+                modifiers = node.builtinModifiers.computeIfAbsent(builtin, k -> new ModifierNode());
+                modifiers.line = attrTok.line();
+                modifiers.column = attrTok.column();
+            }
+            next();
+            switch (t.text()) {
+                case "level" -> modifiers.level = expectRuleWord(t);
+                case "scope" -> modifiers.scopes = expectIdentArray(t);
+                case "onGeneration" -> modifiers.onGeneration = expectRuleWord(t);
+                default -> modifiers.messages = parseMessageMap(t);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // rules { … } (M33)
+    // ------------------------------------------------------------------
+
+    private void parseRulesBlock(ContentNode content) {
+        Token block = next();
+        if (content.rulesSeen) {
+            ruleError("A CDL source has one 'rules' section; merge the entries into the first", block);
+        }
+        content.rulesSeen = true;
+        if (!accept(TokenType.LBRACE)) {
+            ruleError("Expected '{' after 'rules'", peek());
+            return;
+        }
+        while (!atEnd() && !at(TokenType.RBRACE)) {
+            Token t = peek();
+            if (t.isIdent("rule") || t.isIdent("state") || t.isIdent("fill")) {
+                RuleEntryNode entry = parseRuleEntry();
+                if (entry != null) {
+                    content.rules.add(entry);
+                }
+            } else {
+                next();
+                ruleError("Expected 'rule', 'state' or 'fill', found '" + t.text() + "'", t);
+                if (t.type() == TokenType.LBRACE) {
+                    skipBraced();
+                }
+            }
+        }
+        accept(TokenType.RBRACE);
+    }
+
+    private RuleEntryNode parseRuleEntry() {
+        Token kind = next();
+        RuleEntryNode entry = new RuleEntryNode();
+        entry.kind = kind.text();
+        entry.line = kind.line();
+        entry.column = kind.column();
+        if ("rule".equals(entry.kind)) {
+            Token name = peek();
+            if (name.type() != TokenType.STRING) {
+                ruleError("Expected the rule's name as a string, e.g. rule \"title-length\"", name);
+                recoverToEntryEnd();
+                return null;
+            }
+            next();
+            entry.name = name.text();
+            if (peek().isIdent("off")) {
+                next();
+                entry.off = true;
+                return entry;
+            }
+            if (peek().isIdent("on")) {
+                next();
+                parseRuleTarget(entry);
+            }
+        } else {
+            parseRuleTarget(entry);
+        }
+        if (!accept(TokenType.LBRACE)) {
+            ruleError("Expected '{' to open the " + entry.kind + "'s keys", peek());
+            recoverToEntryEnd();
+            return entry;
+        }
+        Set<String> keys = RULE_KEYS.get(entry.kind);
+        while (!atEnd() && !at(TokenType.RBRACE)) {
+            Token key = next();
+            if (key.type() != TokenType.IDENT) {
+                ruleError("Expected a key, found '" + key.text() + "'", key);
+                if (key.type() == TokenType.LBRACE) {
+                    skipBraced();
+                }
+                continue;
+            }
+            if (!keys.contains(key.text())) {
+                ruleError("Unknown key '" + key.text() + "' in a " + entry.kind + "; allowed: "
+                        + String.join(", ", keys.stream().sorted().toList()), key);
+                skipRuleValue();
+                continue;
+            }
+            if (entry.attrs.containsKey(key.text())) {
+                ruleError("Key '" + key.text() + "' is written twice", key);
+            }
+            RuleAttr value = parseRuleValue(key);
+            if (value != null) {
+                entry.attrs.put(key.text(), value);
+            }
+        }
+        accept(TokenType.RBRACE);
+        return entry;
+    }
+
+    /** {@code page} | {@code name[]?(.name[]?)*}; stored as text with its position. */
+    private void parseRuleTarget(RuleEntryNode entry) {
+        Token first = peek();
+        if (first.type() != TokenType.IDENT) {
+            ruleError("Expected a target: an editor path such as title, seo.title or gallery[], or the definition"
+                    + " keyword (page, section, record, global)", first);
+            return;
+        }
+        StringBuilder text = new StringBuilder();
+        entry.targetLine = first.line();
+        entry.targetColumn = first.column();
+        while (true) {
+            Token name = next();
+            if (name.type() != TokenType.IDENT) {
+                ruleError("Expected an editor name in the target path", name);
+                break;
+            }
+            text.append(name.text());
+            if (at(TokenType.LBRACKET) && nextIs(TokenType.RBRACKET)) {
+                next();
+                next();
+                text.append("[]");
+            }
+            if (!at(TokenType.DOT)) {
+                break;
+            }
+            next();
+            text.append('.');
+        }
+        entry.target = text.toString();
+    }
+
+    private RuleAttr parseRuleValue(Token key) {
+        Token t = peek();
+        switch (key.text()) {
+            case "level", "onGeneration", "mode" -> {
+                if (t.type() != TokenType.IDENT) {
+                    ruleError("Expected a keyword after '" + key.text() + "'", t);
+                    skipRuleValue();
+                    return null;
+                }
+                next();
+                return new RuleAttr(t.text(), null, null, t.line(), t.column());
+            }
+            case "scope", "on" -> {
+                if (t.type() != TokenType.LBRACKET) {
+                    ruleError("Expected a list after '" + key.text() + "', e.g. [edit, save]", t);
+                    skipRuleValue();
+                    return null;
+                }
+                return new RuleAttr(null, expectIdentArray(key), null, t.line(), t.column());
+            }
+            case "locales" -> {
+                if (t.type() == TokenType.IDENT) {
+                    next();
+                    return new RuleAttr(t.text(), null, null, t.line(), t.column());
+                }
+                if (t.type() != TokenType.LBRACKET) {
+                    ruleError("Expected 'all' or a list after 'locales', e.g. [default] or [de, en]", t);
+                    skipRuleValue();
+                    return null;
+                }
+                return new RuleAttr(null, expectStringArray(key), null, t.line(), t.column());
+            }
+            case "message" -> {
+                if (t.type() == TokenType.STRING) {
+                    next();
+                    return new RuleAttr(null, null, Map.of("en", t.text()), t.line(), t.column());
+                }
+                return new RuleAttr(null, null, parseMessageMap(key), t.line(), t.column());
+            }
+            default -> {
+                // when, assert, requiredWhen, readOnlyWhen, value: an expression string
+                if (t.type() != TokenType.STRING) {
+                    ruleError("Expected the expression of '" + key.text() + "' as a string", t);
+                    skipRuleValue();
+                    return null;
+                }
+                next();
+                return new RuleAttr(t.text(), null, null, t.line(), t.column());
+            }
+        }
+    }
+
+    /** {@code { en "…" de "…" }} (colons and commas optional), or a single string for English. */
+    private Map<String, String> parseMessageMap(Token keyTok) {
+        Map<String, String> messages = new LinkedHashMap<>();
+        if (at(TokenType.STRING)) {
+            messages.put("en", next().text());
+            return messages;
+        }
+        if (!accept(TokenType.LBRACE)) {
+            ruleError("Expected a message map, e.g. message { en \"…\" de \"…\" }", keyTok);
+            return messages;
+        }
+        while (!atEnd() && !at(TokenType.RBRACE)) {
+            if (accept(TokenType.COMMA)) {
+                continue;
+            }
+            Token lang = next();
+            if (lang.type() != TokenType.IDENT && lang.type() != TokenType.STRING) {
+                ruleError("Expected a language code in the message map, found '" + lang.text() + "'", lang);
+                continue;
+            }
+            accept(TokenType.COLON);
+            Token text = peek();
+            if (text.type() != TokenType.STRING) {
+                ruleError("Expected the message text for '" + lang.text() + "'", text);
+                continue;
+            }
+            next();
+            messages.put(lang.text(), text.text());
+        }
+        accept(TokenType.RBRACE);
+        return messages;
+    }
+
+    private String expectRuleWord(Token keyTok) {
+        Token t = peek();
+        if (t.type() == TokenType.IDENT) {
+            next();
+            return t.text();
+        }
+        error(DiagnosticCodes.CDL_RULE_INVALID_MODIFIER, "Expected a keyword after '" + keyTok.text() + "'", keyTok);
+        return null;
+    }
+
+    private void skipRuleValue() {
+        if (at(TokenType.LBRACE)) {
+            skipBraced();
+        } else {
+            skipValue();
+        }
+    }
+
+    /** Skips a balanced {@code { … }} group. */
+    private void skipBraced() {
+        int depth = at(TokenType.LBRACE) ? 0 : 1;
+        while (!atEnd()) {
+            Token t = next();
+            if (t.type() == TokenType.LBRACE) {
+                depth++;
+            } else if (t.type() == TokenType.RBRACE) {
+                depth--;
+                if (depth <= 0) {
+                    return;
+                }
+            }
+        }
+    }
+
+    /** After a malformed entry head: skip to the entry's closing brace, or to the next entry keyword. */
+    private void recoverToEntryEnd() {
+        while (!atEnd() && !at(TokenType.RBRACE)) {
+            if (peek().isIdent("rule") || peek().isIdent("state") || peek().isIdent("fill")) {
+                return;
+            }
+            if (at(TokenType.LBRACE)) {
+                skipBraced();
+                return;
+            }
+            next();
+        }
+    }
+
+    private void ruleError(String message, Token token) {
+        error(DiagnosticCodes.CDL_RULE_INVALID, message, token);
     }
 
     private List<String> expectStringArray(Token attrTok) {
@@ -511,6 +858,10 @@ final class CdlParser {
                 || t.type() == TokenType.BOOLEAN || t.type() == TokenType.IDENT) {
             next();
         }
+    }
+
+    private boolean nextIs(TokenType type) {
+        return pos + 1 < tokens.size() && tokens.get(pos + 1).type() == type;
     }
 
     private boolean nextIsString() {

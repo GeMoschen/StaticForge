@@ -160,6 +160,13 @@ export class ApiClient {
     });
   }
 
+  /** Replaces the project's code highlighting overrides (M33 follow-up); project admins only. */
+  updateCodeHighlighting(key: string, body: S['CodeHighlightingView']): Observable<S['ProjectDetail']> {
+    return this.http.put<S['ProjectDetail']>(`${BASE}/projects/${key}/code-highlighting`, body, {
+      withCredentials: true,
+    });
+  }
+
   /** The project's content languages (M24). */
   getProjectLocales(key: string): Observable<S['ProjectLocalesView']> {
     return this.http.get<S['ProjectLocalesView']>(`${BASE}/projects/${key}/locales`, {
@@ -546,6 +553,20 @@ export class ApiClient {
   pageDetail(projectKey: string, uuid: string): Observable<S['PageView']> {
     return this.http.get<S['PageView']>(`${BASE}/projects/${projectKey}/pages/${uuid}`, {
       withCredentials: true,
+    });
+  }
+
+  /**
+   * Editor rules on an unsaved value (M33.5): findings, fills and field states of the `edit` scope. Stores nothing;
+   * a failure (a rate limit, a network hiccup) is the caller's to ignore, so no error toast.
+   */
+  evaluateRules(
+    projectKey: string,
+    request: S['RuleEvaluationRequest'],
+  ): Observable<S['RuleEvaluationView']> {
+    return this.http.post<S['RuleEvaluationView']>(`${BASE}/projects/${projectKey}/rules/evaluate`, request, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
     });
   }
 

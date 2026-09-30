@@ -9,10 +9,14 @@ import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.expression.ExpressionEvaluator;
 import com.acme.staticforge.template.query.DatasetQueryParser;
 import com.acme.staticforge.template.query.RecordView;
+import com.acme.staticforge.template.rules.BuiltinRule;
+import com.acme.staticforge.template.rules.RuleMessages;
+import com.acme.staticforge.template.rules.RuleScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +27,12 @@ import java.util.UUID;
  * findings, never mutates and never throws. The caller decides when {@link Severity#ERROR}
  * findings must block a publish as opposed to a save; {@link ContentIssue#kind()} classifies
  * each finding as structural (rejects a save) or completeness (blocks publish only).
+ *
+ * <p>The built-in checks ({@code required}, {@code maxLength}, {@code maxChars}, {@code pattern}, {@code min},
+ * {@code max}, {@code mimeTypes}) are editor rules (M33): an editor's inline overrides
+ * ({@code required level warning scope [release]}) set their severity, scopes, message and
+ * {@code onGeneration}; without overrides they are {@code ERROR} in edit, release and generation, as before.
+ * {@link #withUiLanguage} picks the language of an author's message.
  */
 public final class ContentValidator {
 
@@ -32,6 +42,7 @@ public final class ContentValidator {
     private final RecordDatasetLookup recordDatasets;
     private final PaginationSourceLookup paginationSources;
     private final LocalizationContext localization;
+    private final String uiLanguage;
 
     /** Creates a validator with a fresh expression evaluator. */
     public ContentValidator() {
@@ -73,10 +84,40 @@ public final class ContentValidator {
             RecordDatasetLookup recordDatasets,
             PaginationSourceLookup paginationSources,
             LocalizationContext localization) {
+        this(evaluator, recordDatasets, paginationSources, localization, null);
+    }
+
+    private ContentValidator(
+            ExpressionEvaluator evaluator,
+            RecordDatasetLookup recordDatasets,
+            PaginationSourceLookup paginationSources,
+            LocalizationContext localization,
+            String uiLanguage) {
         this.evaluator = evaluator;
         this.recordDatasets = recordDatasets;
         this.paginationSources = paginationSources;
         this.localization = localization == null ? LocalizationContext.NONE : localization;
+        this.uiLanguage = uiLanguage;
+    }
+
+    /** This validator, resolving author messages for {@code language} (a UI language tag; {@code null}: the first entry). */
+    public ContentValidator withUiLanguage(String language) {
+        return new ContentValidator(evaluator, recordDatasets, paginationSources, localization, language);
+    }
+
+    /** The locales this validator knows about (M24), for the rule engine. */
+    public LocalizationContext localization() {
+        return localization;
+    }
+
+    /** The UI language author messages resolve for; {@code null} for the first entry. */
+    public String uiLanguage() {
+        return uiLanguage;
+    }
+
+    /** The {@code visibleWhen} evaluator, shared with the rule engine so both agree on what is hidden. */
+    public ExpressionEvaluator evaluator() {
+        return evaluator;
     }
 
     /**
@@ -208,9 +249,9 @@ public final class ContentValidator {
             return;
         }
         if (editor.required() && isEmpty(editor.type(), L10nValues.get(value, defaultLocale))) {
-            issues.add(new ContentIssue(
-                    path + ".values." + defaultLocale, "required", Severity.ERROR,
-                    "Required editor '" + editor.name() + "' is empty in the default language."));
+            issues.add(builtin(editor, path + ".values." + defaultLocale, "required",
+                    "Required editor '" + editor.name() + "' is empty in the default language.", Map.of())
+                    .withLocale(defaultLocale));
         }
         if (absent) {
             return;
@@ -223,7 +264,9 @@ public final class ContentValidator {
                         "Editor '" + editor.name() + "' has a value for '" + locale
                                 + "', which this project no longer lists as a language. The value is kept."));
             }
-            validateScalarValue(editor, L10nValues.get(value, locale), localePath, issues);
+            List<ContentIssue> localeIssues = new ArrayList<>();
+            validateScalarValue(editor, L10nValues.get(value, locale), localePath, localeIssues);
+            localeIssues.forEach(issue -> issues.add(issue.withLocale(locale)));
         }
     }
 
@@ -243,7 +286,7 @@ public final class ContentValidator {
 
     private void validateScalar(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
         if (editor.required() && isEmpty(editor.type(), value)) {
-            issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
+            issues.add(builtin(editor, path, "required", "Required editor '" + editor.name() + "' is empty.", Map.of()));
             return;
         }
         validateScalarValue(editor, value, path, issues);
@@ -281,7 +324,7 @@ public final class ContentValidator {
             List<ContentIssue> issues) {
         boolean empty = isEmpty(editor.type(), value);
         if (editor.required() && empty) {
-            issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
+            issues.add(builtin(editor, path, "required", "Required editor '" + editor.name() + "' is empty.", Map.of()));
         }
         if (empty) {
             validateListBounds(editor, 0, path, issues);
@@ -318,7 +361,7 @@ public final class ContentValidator {
             List<ContentIssue> issues) {
         boolean empty = isEmpty(editor.type(), value);
         if (editor.required() && empty) {
-            issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
+            issues.add(builtin(editor, path, "required", "Required editor '" + editor.name() + "' is empty.", Map.of()));
         }
         if (empty) {
             validateListBounds(editor, 0, path, issues);
@@ -353,7 +396,7 @@ public final class ContentValidator {
     private void validatePagination(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
         if (value == null || value.isNull() || value.isMissingNode()) {
             if (editor.required()) {
-                issues.add(new ContentIssue(path, "required", Severity.ERROR, "Required editor '" + editor.name() + "' is empty."));
+                issues.add(builtin(editor, path, "required", "Required editor '" + editor.name() + "' is empty.", Map.of()));
             }
             return;
         }
@@ -441,23 +484,23 @@ public final class ContentValidator {
                 || schema.findEditor(field).map(editor -> DatasetQueryParser.SCALAR_TYPES.contains(editor.type())).orElse(false);
     }
 
-    private static void validateTextConstraints(
+    private void validateTextConstraints(
             EditorDefinition editor, String text, String path, List<ContentIssue> issues) {
         int length = text == null ? 0 : text.length();
         if (editor.maxLength() != null && length > editor.maxLength()) {
-            issues.add(new ContentIssue(
-                    path, "maxLength", Severity.ERROR,
-                    "Editor '" + editor.name() + "' exceeds the maximum length of " + editor.maxLength() + "."));
+            issues.add(builtin(editor, path, "maxLength",
+                    "Editor '" + editor.name() + "' exceeds the maximum length of " + editor.maxLength() + ".",
+                    Map.of("max", String.valueOf(editor.maxLength()), "length", String.valueOf(length), "value", text)));
         }
         if (editor.maxChars() != null && length > editor.maxChars()) {
-            issues.add(new ContentIssue(
-                    path, "maxChars", Severity.ERROR,
-                    "Editor '" + editor.name() + "' exceeds the maximum of " + editor.maxChars() + " characters."));
+            issues.add(builtin(editor, path, "maxChars",
+                    "Editor '" + editor.name() + "' exceeds the maximum of " + editor.maxChars() + " characters.",
+                    Map.of("max", String.valueOf(editor.maxChars()), "length", String.valueOf(length), "value", text)));
         }
         if (editor.pattern() != null) {
             try {
                 if (!text.matches(editor.pattern())) {
-                    issues.add(new ContentIssue(path, "pattern", Severity.ERROR, patternMessage(editor)));
+                    issues.add(builtin(editor, path, "pattern", defaultPatternMessage(editor), Map.of("value", text)));
                 }
             } catch (java.util.regex.PatternSyntaxException e) {
                 issues.add(new ContentIssue(path, "pattern", Severity.WARNING, "Invalid pattern: " + e.getMessage()));
@@ -468,27 +511,23 @@ public final class ContentValidator {
     private void validateNumberBounds(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
         double number = value.asDouble();
         if (editor.min() != null && number < editor.min()) {
-            issues.add(new ContentIssue(
-                    path, "min", Severity.ERROR,
-                    "Editor '" + editor.name() + "' must be at least " + editor.min() + "."));
+            issues.add(builtin(editor, path, "min", "Editor '" + editor.name() + "' must be at least " + editor.min() + ".",
+                    Map.of("min", String.valueOf(editor.min()), "value", value.asText())));
         }
         if (editor.max() != null && number > editor.max()) {
-            issues.add(new ContentIssue(
-                    path, "max", Severity.ERROR,
-                    "Editor '" + editor.name() + "' must be at most " + editor.max() + "."));
+            issues.add(builtin(editor, path, "max", "Editor '" + editor.name() + "' must be at most " + editor.max() + ".",
+                    Map.of("max", String.valueOf(editor.max()), "value", value.asText())));
         }
     }
 
-    private static void validateListBounds(EditorDefinition editor, int count, String path, List<ContentIssue> issues) {
+    private void validateListBounds(EditorDefinition editor, int count, String path, List<ContentIssue> issues) {
         if (editor.min() != null && count < editor.min()) {
-            issues.add(new ContentIssue(
-                    path, "min", Severity.ERROR,
-                    "Editor '" + editor.name() + "' requires at least " + editor.min() + " items."));
+            issues.add(builtin(editor, path, "min", "Editor '" + editor.name() + "' requires at least " + editor.min() + " items.",
+                    Map.of("min", String.valueOf(editor.min()), "length", String.valueOf(count))));
         }
         if (editor.max() != null && count > editor.max()) {
-            issues.add(new ContentIssue(
-                    path, "max", Severity.ERROR,
-                    "Editor '" + editor.name() + "' allows at most " + editor.max() + " items."));
+            issues.add(builtin(editor, path, "max", "Editor '" + editor.name() + "' allows at most " + editor.max() + " items.",
+                    Map.of("max", String.valueOf(editor.max()), "length", String.valueOf(count))));
         }
     }
 
@@ -517,7 +556,7 @@ public final class ContentValidator {
         }
     }
 
-    private static void validateMime(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
+    private void validateMime(EditorDefinition editor, JsonNode value, String path, List<ContentIssue> issues) {
         if (editor.mimeTypes().isEmpty()) {
             return;
         }
@@ -526,9 +565,8 @@ public final class ContentValidator {
             return;
         }
         if (!editor.mimeTypes().contains(mime)) {
-            issues.add(new ContentIssue(
-                    path, "mimeType", Severity.ERROR,
-                    "Editor '" + editor.name() + "' has a mime type '" + mime + "' that is not allowed."));
+            issues.add(builtin(editor, path, "mimeType",
+                    "Editor '" + editor.name() + "' has a mime type '" + mime + "' that is not allowed.", Map.of("value", mime)));
         }
     }
 
@@ -585,11 +623,26 @@ public final class ContentValidator {
         return text != null && text.isTextual() ? text.asText() : "";
     }
 
-    private static String patternMessage(EditorDefinition editor) {
-        if (editor.patternMessage() != null && !editor.patternMessage().isBlank()) {
-            return editor.patternMessage();
-        }
+    private static String defaultPatternMessage(EditorDefinition editor) {
         return "Editor '" + editor.name() + "' does not match the expected pattern.";
+    }
+
+    /**
+     * A built-in completeness finding with the editor's overrides (M33): severity from {@code level} (default
+     * {@code ERROR}), its {@code scopes} (default edit, release, generation), its author message resolved for the UI
+     * language with {@code values} as placeholders (default {@code defaultMessage}), and {@code onGeneration}.
+     *
+     * @param code the finding code; {@code mimeType} is the {@code mimeTypes} built-in
+     */
+    private ContentIssue builtin(
+            EditorDefinition editor, String path, String code, String defaultMessage, Map<String, String> values) {
+        BuiltinRule rule = editor.builtinRule("mimeType".equals(code) ? "mimeTypes" : code);
+        Severity severity = rule.level() != null ? Severity.of(rule.level()) : Severity.ERROR;
+        Set<RuleScope> scopes = rule.scopes() != null ? rule.scopes() : ContentIssue.DEFAULT_SCOPES;
+        RuleMessages messages = rule.messages();
+        String message = messages.isEmpty() ? defaultMessage : RuleMessages.fill(messages.resolve(uiLanguage), values);
+        return new ContentIssue(path, code, severity, message, ContentIssue.Kind.COMPLETENESS, code, scopes,
+                messages.byLanguage(), null, rule.onGeneration());
     }
 
     private static boolean matchesShape(EditorType type, JsonNode value) {
@@ -664,12 +717,17 @@ public final class ContentValidator {
     }
 
     /**
-     * Whether {@code value} counts as "not filled in" for an editor of {@code type}: absent/null,
+     * Whether {@code value} counts as "not filled in" for an editor of {@code type} — the {@code required} check's
+     * notion, shared with the rule engine's {@code requiredWhen} (M33): absent/null,
      * blank text, an empty array or object, or the placeholder the form engine stores for an
      * untouched object editor — a MEDIA/REFERENCE ref without a {@code uuid}, a LINK without a
      * {@code uuid}/{@code url}/{@code anchor} (and no unknown {@code kind}), a RICHTEXT with a blank {@code value}, a CATALOG
      * without cards. A value of the wrong shape is never empty, so it still fails the shape check.
      */
+    public static boolean isEmptyValue(EditorType type, JsonNode value) {
+        return isEmpty(type, value);
+    }
+
     private static boolean isEmpty(EditorType type, JsonNode value) {
         if (value == null || value.isNull() || value.isMissingNode()) {
             return true;

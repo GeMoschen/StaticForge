@@ -2,7 +2,6 @@ import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import {
   ChangeDetectionStrategy,
   Component,
-  ElementRef,
   OnDestroy,
   OnInit,
   computed,
@@ -39,15 +38,16 @@ import {
   VALIDATE_DEBOUNCE_MS,
   diagnosticsOf,
   hasErrors,
-  insertTab,
   lineEndingOf,
-  offsetForPosition,
   positionLabel,
   withLineEnding,
 } from './text-media.util';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
+import { extensionOf, resolveCodeFormat } from '../../shared/code-editor/code-format';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
 import { ReleaseBarComponent } from '../release/release-bar.component';
 import type { ReleaseMode } from '../release/release-choice.util';
@@ -83,6 +83,7 @@ export type MediaDrawerTab = 'details' | 'source' | 'rendered';
     SfIconComponent,
     SfFileSizePipe,
     ReleaseBarComponent,
+    SfCodeEditorComponent,
   ],
   templateUrl: './media-detail-drawer.component.html',
   styleUrl: './media-detail-drawer.component.scss',
@@ -214,7 +215,19 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     () => !this.readOnly() && this.dirty() && !this.sourceSaving() && !this.sourceHasErrors() && !this.tooLarge(),
   );
 
-  private readonly sourceArea = viewChild<ElementRef<HTMLTextAreaElement>>('sourceArea');
+  private readonly sourceEditor = viewChild<SfCodeEditorComponent>('sourceEditor');
+  private readonly projectContext = inject(ProjectContextStore);
+  /**
+   * How the source is highlighted (M33 follow-up): the project's overrides for the file's extension or MIME type,
+   * else detected from them.
+   */
+  protected readonly sourceFormat = computed(() =>
+    resolveCodeFormat({
+      extension: extensionOf(this.media().fileName),
+      mimeType: this.media().mimeType,
+      overrides: this.projectContext.project()?.codeHighlighting,
+    }),
+  );
   private validateTimer: ReturnType<typeof setTimeout> | null = null;
   private validateSequence = 0;
 
@@ -550,35 +563,17 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     });
   }
 
-  onSourceInput(event: Event): void {
-    const value = (event.target as HTMLTextAreaElement).value;
+  /** An edit in the source editor (M33: a code editor — Tab inserts a tab character there). */
+  onSourceInput(value: string): void {
     this.sourceText.set(withLineEnding(value, this.lineEnding()));
-    this.scheduleValidate(VALIDATE_DEBOUNCE_MS);
-  }
-
-  /** Tab inserts a tab character instead of leaving the editor. */
-  onSourceKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'Tab' || event.shiftKey || this.readOnly()) {
-      return;
-    }
-    event.preventDefault();
-    const area = event.target as HTMLTextAreaElement;
-    const next = insertTab(area.value, area.selectionStart, area.selectionEnd);
-    area.value = next.value;
-    area.setSelectionRange(next.caret, next.caret);
-    this.sourceText.set(withLineEnding(next.value, this.lineEnding()));
     this.scheduleValidate(VALIDATE_DEBOUNCE_MS);
   }
 
   /** Moves the caret to a diagnostic's position in the editor. */
   goToDiagnostic(diagnostic: Diagnostic): void {
-    const area = this.sourceArea()?.nativeElement;
-    if (!area || !diagnostic.line) {
-      return;
+    if (diagnostic.line) {
+      this.sourceEditor()?.goTo(diagnostic.line, diagnostic.column ?? 1);
     }
-    const offset = offsetForPosition(area.value, diagnostic.line, diagnostic.column ?? 0);
-    area.focus();
-    area.setSelectionRange(offset, offset);
   }
 
   saveSource(): void {

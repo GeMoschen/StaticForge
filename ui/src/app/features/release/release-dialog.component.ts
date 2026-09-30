@@ -205,6 +205,7 @@ export class ReleaseDialogComponent {
       items: this.items(),
       includeDependencies: mode === 'release' ? (this.planState()?.includeDependencies ?? []) : undefined,
       comment: this.comment().trim() || undefined,
+      acceptWarnings: mode === 'release' && this.planState()?.acceptWarnings ? true : undefined,
     };
     const request =
       mode === 'release'

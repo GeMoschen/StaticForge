@@ -4,6 +4,7 @@ import com.acme.staticforge.template.content.BodyDefinition;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
+import com.acme.staticforge.template.rules.RuleResolution;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,6 +37,9 @@ public final class DatasetCdlRules {
                     0, 0));
         }
         diagnostics.addAll(PaginationCdlRules.notAllowedIn(definition, "a dataset schema"));
+        // M33: no inheritance here, so the rules resolve against the definition itself; 'on record' for the whole record.
+        diagnostics.addAll(RuleResolution.check(definition.rules(), definition, definition.rules()));
+        diagnostics.addAll(RuleResolution.checkKind(definition.rules(), "record"));
         return diagnostics;
     }
 }

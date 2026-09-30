@@ -56,6 +56,13 @@ public interface PageService {
      */
     List<ContentIssue> contentIssues(long projectId, JsonNode payload);
 
+    /**
+     * The findings of page {@code pageUuid}'s {@code payload} in the {@code edit} scope (M33): the built-in checks and the
+     * template's rules, states and fills as the editor shows them. {@code pageUuid} gives the rules the page's meta and
+     * release status; {@code null} for an unsaved page.
+     */
+    List<ContentIssue> contentIssues(long projectId, UUID pageUuid, JsonNode payload);
+
     TemplateRefView resolveTemplate(long projectId, UUID uuid);
 
     List<AssetVersionView> list(long projectId, PageQuery query);

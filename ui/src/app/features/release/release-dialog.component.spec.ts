@@ -129,6 +129,47 @@ describe('ReleaseDialogComponent', () => {
     expect(button('Release').disabled).toBe(true);
   });
 
+  it('needs "Release with warnings" for rule warnings, lists notes and fills, and sends acceptWarnings', () => {
+    open('release');
+    flushPlan({
+      ...PLAN,
+      warningFindings: [
+        {
+          uuid: 'page-1',
+          locale: 'en',
+          issues: [{ path: 'content.title', code: 'rule', severity: 'WARNING', message: 'Long headline', kind: 'COMPLETENESS', rule: 'short' }],
+        },
+      ],
+      infoFindings: [
+        {
+          uuid: 'page-1',
+          locale: 'en',
+          issues: [{ path: 'content.note', code: 'rule', severity: 'INFO', message: 'No note', kind: 'COMPLETENESS', rule: 'note' }],
+        },
+      ],
+      fills: [{ uuid: 'page-1', locale: undefined, path: 'content.stamp', value: 'released' as never }],
+    });
+    // The plan reports its state through an output: one pass for the plan, one for the dialog.
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Long headline');
+    expect(text).toContain('No note');
+    expect(text).toContain('content.stamp');
+    expect(text).toContain('released');
+    expect(button('Release').disabled).toBe(true);
+
+    (fixture.nativeElement.querySelector('.plan__accept input') as HTMLInputElement).click();
+    fixture.detectChanges();
+    fixture.detectChanges();
+    const release = button('Release');
+    expect(release.disabled).toBe(false);
+    release.click();
+    const request = http.expectOne('/api/v1/projects/proj/releases');
+    expect(request.request.body.acceptWarnings).toBe(true);
+    request.flush({ revision: 1235, applied: [], skipped: [], sharedFieldsKept: [], warnings: [] } satisfies ReleaseResultView);
+  });
+
   it('re-plans when another locale is ticked', () => {
     open('release');
     flushPlan();

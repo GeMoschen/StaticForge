@@ -43,6 +43,12 @@ public record ChannelOutputSettings(
     public static final String KEY_URL_STRATEGY = "urlStrategy";
     /** Settings key for {@link #trailingSlash}. */
     public static final String KEY_TRAILING_SLASH = "trailingSlash";
+    /**
+     * Settings key for the format the code editors highlight this channel's templates as (M33 follow-up):
+     * {@code AUTO} (absent) or one of {@link com.acme.staticforge.project.CodeHighlighting#FORMATS}. Not read by
+     * generation.
+     */
+    public static final String KEY_HIGHLIGHT_AS = "highlightAs";
 
     private static final String DEFAULT_INDEX_STEM = "index";
     private static final Pattern EXTENSION_PATTERN = Pattern.compile("[a-z0-9]{1,10}");
@@ -125,6 +131,15 @@ public record ChannelOutputSettings(
         JsonNode trailingSlash = settings.get(KEY_TRAILING_SLASH);
         if (isPresent(trailingSlash) && !trailingSlash.isBoolean()) {
             errors.add(new FieldError("settings." + KEY_TRAILING_SLASH, "must be a boolean"));
+        }
+        JsonNode highlightAs = settings.get(KEY_HIGHLIGHT_AS);
+        if (isPresent(highlightAs)
+                && (!highlightAs.isTextual()
+                        || !(com.acme.staticforge.project.CodeHighlighting.AUTO.equals(highlightAs.asText())
+                                || com.acme.staticforge.project.CodeHighlighting.FORMATS.contains(highlightAs.asText())))) {
+            errors.add(new FieldError(
+                    "settings." + KEY_HIGHLIGHT_AS,
+                    "must be one of AUTO, HTML, MARKDOWN, JSON, XML, CSS, JAVASCRIPT, YAML, PLAIN"));
         }
         return errors;
     }

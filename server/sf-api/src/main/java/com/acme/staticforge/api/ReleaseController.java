@@ -55,7 +55,16 @@ public class ReleaseController {
                 plan.incomplete().stream()
                         .map(i -> new ReleasePlanView.Incomplete(i.assetUuid(), i.locale(), i.issues()))
                         .toList(),
-                plan.warnings());
+                plan.warnings(),
+                plan.warningFindings().stream()
+                        .map(i -> new ReleasePlanView.Incomplete(i.assetUuid(), i.locale(), i.issues()))
+                        .toList(),
+                plan.infoFindings().stream()
+                        .map(i -> new ReleasePlanView.Incomplete(i.assetUuid(), i.locale(), i.issues()))
+                        .toList(),
+                plan.fills().stream()
+                        .map(f -> new ReleasePlanView.Fill(f.assetUuid(), f.locale(), f.path(), f.value()))
+                        .toList());
     }
 
     /** Releases the selection and the kept dependencies, in one revision. */
@@ -64,7 +73,8 @@ public class ReleaseController {
     public ReleaseResultView release(@PathVariable String projectKey, @RequestBody ReleaseRequest body) {
         List<ReleaseItem> items = new ArrayList<>(items(body.items()));
         items.addAll(items(body.includeDependencies()));
-        return view(releaseService.release(items, ctx(projectKey, body.comment(), "release")));
+        return view(releaseService.release(
+                items, Boolean.TRUE.equals(body.acceptWarnings()), ctx(projectKey, body.comment(), "release")));
     }
 
     /** Takes the selection offline; the drafts stay. */
@@ -97,7 +107,10 @@ public class ReleaseController {
                 outcome.revision(),
                 outcome.applied().stream().map(ReleaseController::view).toList(),
                 outcome.skipped().stream().map(ReleaseController::view).toList(),
-                outcome.sharedFieldsKept().stream().map(ReleaseController::view).toList());
+                outcome.sharedFieldsKept().stream().map(ReleaseController::view).toList(),
+                outcome.warnings().stream()
+                        .map(i -> new ReleasePlanView.Incomplete(i.assetUuid(), i.locale(), i.issues()))
+                        .toList());
     }
 
     static ReleaseTargetView view(ReleaseTarget t) {

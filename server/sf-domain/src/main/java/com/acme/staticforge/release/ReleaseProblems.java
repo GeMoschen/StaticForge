@@ -5,13 +5,18 @@ import com.acme.staticforge.common.SfException;
 import java.util.List;
 import java.util.Map;
 
-/** The problem details of release requests and views (M27.1.2, M27.2.3, Appendix B {@code SF-DOM-0150}–{@code 0155}). */
+/** The problem details of release requests and views (M27.1.2, M27.2.3, Appendix B {@code SF-DOM-0150}–{@code 0156}). */
 public final class ReleaseProblems {
 
     private ReleaseProblems() {}
 
     public static SfException incomplete(List<Map<String, Object>> assets) {
         return problem("SF-DOM-0150", "Content incomplete: fill in the required fields before releasing.", "assets", assets);
+    }
+
+    /** {@code 422 SF-DOM-0156}: rule warnings the request didn't accept ({@code acceptWarnings}, M33.6). */
+    public static SfException warnings(List<Map<String, Object>> assets) {
+        return problem("SF-DOM-0156", "The release has warnings: review them and release again accepting them.", "assets", assets);
     }
 
     static SfException unknownItem(String detail) {

@@ -1,0 +1,96 @@
+@use '../../design/forms';
+
+:host {
+  display: block;
+  margin-top: var(--sf-6);
+}
+
+.code-highlighting__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-md);
+  color: var(--sf-ink);
+}
+
+.code-highlighting__hint,
+.code-highlighting__empty {
+  margin: var(--sf-1) 0 var(--sf-3);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.code-highlighting__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sf-text-sm);
+
+  th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--sf-slate);
+    padding: var(--sf-1) var(--sf-2);
+    border-bottom: 1px solid var(--sf-line);
+  }
+
+  td {
+    padding: var(--sf-1) var(--sf-2);
+    vertical-align: top;
+  }
+}
+
+.input,
+.select {
+  @include forms.sf-form-control;
+}
+
+.code-highlighting__problem {
+  display: block;
+  margin-top: var(--sf-1);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-rust);
+}
+
+.code-highlighting__remove {
+  border: 0;
+  background: none;
+  padding: var(--sf-1) var(--sf-2);
+  font: inherit;
+  color: var(--sf-slate);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--sf-rust);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+}
+
+.code-highlighting__errors {
+  margin: var(--sf-2) 0 0;
+  padding-left: var(--sf-4);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-rust);
+}
+
+.code-highlighting__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-2);
+  margin-top: var(--sf-3);
+}
+
+.code-highlighting__spacer {
+  flex: 1;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -1,3 +1,61 @@
+# M33 — Editor rules (branch `claude/sleepy-shannon-4u1kao`)
+
+Spec: `tasks/33-m33-editor-rules/`. User decisions (2026-09-29) and binding decisions there. Templates (page, section),
+dataset schemas and global sets get a `rules {}` section: validation rules, `requiredWhen`/`readOnlyWhen` states and
+fills, each with scopes `edit`/`save`/`release`/`generation` and levels `hint`/`info`/`warning`/`error`; existing
+attributes become built-in rules with inline level/scope overrides. One server-side rule engine for every scope.
+
+- [x] M33.1 expression language v2 (functions, arithmetic, value results, context, v1 mode for `visibleWhen`)
+- [x] M33.2 CDL `rules {}`, built-in modifiers, inheritance merge, `SF-CDL-0113`–`0119`
+- [x] M33.3 rule engine + finding model (`HINT`/`INFO`, rule/scopes/messages on `ContentIssue`)
+- [x] M33.4 save scope (fills, read-only enforcement, rejection incl. autosave)
+- [x] M33.5 edit scope `POST /projects/{p}/rules/evaluate`
+- [x] M33.6 release scope (fills in the release revision, `acceptWarnings` / `SF-DOM-0156`)
+- [x] M33.7 generation scope (`holdBack`/`fail`, `SF-GEN-0121`, `SF-GEN-0122`, `RULE_REFERENCE` edge, L10N fix)
+- [x] M33.8 UI (see deviations)
+- [x] M33.9 spec + docs
+- [ ] Benchmark: 5,000-page full build with ~10 rules per template (+10 % budget) — not run
+- [ ] Manual check in the running app — not done
+
+## Review
+
+Verification (2026-09-29): `./gradlew test` — sf-common 19, sf-template 369, sf-domain 439, sf-generate 177, sf-api 22,
+sf-app 962 (6 skipped) green except the known Linux-only `GenerationIntegrationTest.fullGenerationReachesSuccessAndPublishesOutput`
+(`current` is a symlink); `spotlessCheck` and `DocsGoldenSnippetsTest` green; `npx vitest run` 126 files / 851 tests;
+`npx ng build` green (only pre-existing style budget warnings). New integration suites: `SaveRuleGateIntegrationTest`,
+`RuleEvaluationApiIntegrationTest` (typical page median < 50 ms), `ReleaseRuleCheckIntegrationTest`,
+`GenerationRulesIntegrationTest`; the release query-count test is unchanged (no per-item reads without rules).
+
+Deviations from the plan:
+- `RULE_REFERENCE` edges are materialized statically from a CDL's `global:` reads (reference rows on save); `ref()`
+  targets are editor values that are already reference rows, so a referenced asset's change rebuilds via `REFERENCE`.
+  No build-fact persistence of runtime `ref` targets.
+- Rule warnings at generation (`SF-GEN-0122`) make the run `PARTIAL` like every other build warning; infos don't count.
+  Rule findings are run diagnostics, not a `RULE` type in the findings API.
+- Plan view fields are `warningFindings` / `infoFindings` / `fills` (the existing `warnings` strings stay). Release fills
+  aren't applied to pinned versions.
+- ~~UI not done: `rules {}` highlighting/completion, live fills/states inside section instances, Issues-panel scope
+  filter~~ — built in the follow-up below.
+
+## Follow-up (2026-09-30, user)
+
+- [x] Engine: section-template rules run for catalog cards (pages, sections, records, property sets; groups, list rows,
+      nested catalogs) in every scope; an empty `mode empty` fill writes nothing
+- [x] Live fills and field states in body sections and catalog cards (`RuleHub`, `NestedRules`)
+- [x] Issues panel scope chips (Edit · Save · Release · Generation, remembered per browser)
+- [x] Code editors on CodeMirror 6 (user decisions: CodeMirror; CDL and OCTL plus text-media source, record-set
+      `where`, JSON; completion on Ctrl+Space only — keywords/values, editor paths, functions; expression strings
+      highlighted inside CDL; squiggles + list; line numbers, brackets, folding, search; Tab indents, Esc+Tab leaves;
+      live CDL validation); lazy chunk (118 kB gzipped), initial bundle 1.66 MB
+- [x] Format highlighting in OCTL editors (user decisions: HTML with CSS/JS inside, Markdown, JSON, XML/SVG/RSS, CSS,
+      JavaScript, YAML; channel "Highlight as" Auto + formats, any choice wins; applies to channel and record templates
+      and processed text media; text media from MIME type/extension with project overrides by extension and MIME type
+      on the General tab, extension before MIME, also for Auto channels; export protocol 12; completion for HTML, CSS,
+      JavaScript, XML closing tags and SVG names, none for JSON/Markdown/YAML). OCTL over the format via `parseMixed`
+      overlay; each grammar a lazy chunk; `PUT /projects/{key}/code-highlighting` (PROJECT_ADMIN)
+
+---
+
 # M32 — Complete URL registry (branch `m32-complete-url-registry`)
 
 Spec: `tasks/32-m32-complete-url-registry/`. User decisions (2026-09-29) and binding decisions there. Every page,

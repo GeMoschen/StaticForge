@@ -37,6 +37,11 @@ public enum RebuildEdgeKind {
      * (M25.2.3); the source path is the set's uid.
      */
     RECORD_TEMPLATE,
+    /**
+     * A template's (or dataset's, property set's) editor rules read the changed property set (M33.7): its pages are
+     * validated again. The source path names the rule, state or fill.
+     */
+    RULE_REFERENCE,
     UNKNOWN;
 
     /** The kind named {@code name}; {@link #UNKNOWN} for {@code null} or a name this build doesn't know. */

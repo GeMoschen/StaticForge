@@ -109,7 +109,7 @@ public class GlobalsController {
                 ctx(projectKey, comment(body.comment(), "create property set")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
-                .body(toDetail(projectKey, view));
+                .body(toDetail(projectKey, view, java.util.List.of()));
     }
 
     @PutMapping("/{uuid}/schema")
@@ -136,12 +136,13 @@ public class GlobalsController {
             @PathVariable UUID uuid,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody UpdateGlobalSetContentRequest body) {
-        GlobalSetView view = globalSetService.updateValues(
-                uuid,
-                body.content(),
-                RevisionHeaders.expectedRevision(ifMatch),
-                ctx(projectKey, comment(body.comment(), "update property set values")));
-        return ok(projectKey, view);
+        com.acme.staticforge.asset.rules.SaveFindings.Captured<GlobalSetView> saved =
+                com.acme.staticforge.asset.rules.SaveFindings.capture(() -> globalSetService.updateValues(
+                        uuid,
+                        body.content(),
+                        RevisionHeaders.expectedRevision(ifMatch),
+                        ctx(projectKey, comment(body.comment(), "update property set values"))));
+        return ok(projectKey, saved.value(), saved.findings());
     }
 
     @DeleteMapping("/{uuid}")
@@ -157,12 +158,18 @@ public class GlobalsController {
     }
 
     private ResponseEntity<GlobalSetDetailView> ok(String projectKey, GlobalSetView view) {
-        return ResponseEntity.ok()
-                .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
-                .body(toDetail(projectKey, view));
+        return ok(projectKey, view, java.util.List.of());
     }
 
-    private GlobalSetDetailView toDetail(String projectKey, GlobalSetView v) {
+    private ResponseEntity<GlobalSetDetailView> ok(
+            String projectKey, GlobalSetView view, java.util.List<com.acme.staticforge.asset.content.ContentIssue> saveFindings) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
+                .body(toDetail(projectKey, view, saveFindings));
+    }
+
+    private GlobalSetDetailView toDetail(
+            String projectKey, GlobalSetView v, java.util.List<com.acme.staticforge.asset.content.ContentIssue> saveFindings) {
         return new GlobalSetDetailView(
                 v.uuid(),
                 v.uid(),
@@ -173,7 +180,8 @@ public class GlobalsController {
                 v.content(),
                 v.revision(),
                 releaseBlocks.of(projectId(projectKey), v.uuid()),
-                releaseBlocks.scheduled(projectId(projectKey), v.uuid()));
+                releaseBlocks.scheduled(projectId(projectKey), v.uuid()),
+                SaveIssues.merge(saveFindings, globalSetService.contentIssues(projectId(projectKey), v)));
     }
 
     private static String comment(String supplied, String fallback) {
