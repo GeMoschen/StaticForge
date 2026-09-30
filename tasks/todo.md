@@ -1,3 +1,43 @@
+# M35 — UI/UX overhaul
+
+Spec: `tasks/35-m35-ui-ux-overhaul/`. User decisions (2026-09-30) and planning findings there. New professional,
+clean, enterprise-dense visual identity (Inter, blue accent, light/dark/system, compact/comfortable), top bar + rail
+frame, role-adaptive (permissions + developer mode), keyboard-first, per-user server preferences, one design system on
+every screen. Screen migration starts only after the style guide (M35.9) is signed off.
+
+- [ ] M35.1 functional bugs from the UX run
+- [ ] M35.2 decompose large components (behaviour-preserving)
+- [ ] M35.3 user preferences API + client store
+- [ ] M35.4 Transloco setup + string extraction rules
+- [ ] M35.5 design tokens v2, theme (light/dark/system), density
+- [ ] M35.6 base components and form controls
+- [ ] M35.7 overlays: dialog, confirm, drawer, popover, menu, toast
+- [ ] M35.8 data table, tree, splitter
+- [ ] M35.9 style guide + **design gate (user sign-off)**
+- [ ] M35.10 app frame: top bar, rail, developer mode, titles
+- [ ] M35.11 IA: Publishing area, Settings side menu + split
+- [ ] M35.12 history drawer, full history, time-travel banner (spine removed)
+- [ ] M35.13 save UX, unsaved guards, confirm + undo
+- [ ] M35.14 keyboard-first: shortcut registry, palette actions, `?` sheet
+- [ ] M35.15 recents and favorites
+- [ ] M35.16 login, account, admin
+- [ ] M35.17 content form and editors
+- [ ] M35.18 pages
+- [ ] M35.19 media
+- [ ] M35.20 content: record sets and records
+- [ ] M35.21 templates IDE
+- [ ] M35.22 navigation and globals
+- [ ] M35.23 changes, schedules, release dialogs
+- [ ] M35.24 publishing, quality, redirects, URL registry
+- [ ] M35.25 settings sub-pages, members, import/export
+- [ ] M35.26 search page
+- [ ] M35.27 tablet layout and review mode
+- [ ] M35.28 dashboard 2.0 and project home
+- [ ] M35.29 preview upgrades
+- [ ] M35.30 visual regression baselines
+- [ ] M35.31 journeys on the new UI
+- [ ] M35.32 spec §23/§24 and docs
+
 # M34 — CDL tabs and one save
 
 Spec: `tasks/34-m34-cdl-tabs-one-save/`. User decisions (2026-09-30) there. The CDL of templates, datasets and global

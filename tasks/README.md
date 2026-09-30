@@ -84,7 +84,7 @@ Rules of thumb:
 | 06 | [m6-revision-ux](06-m6-revision-ux/README.md) | 17, 24 | Journeys 5–8 pass |
 | 07 | [m7-hardening](07-m7-hardening/README.md) | 2, 25, 26 | Quality gates (§25.7) met; pen-test findings closed |
 
-### Post-roadmap feature epics (M16–M34)
+### Post-roadmap feature epics (M16–M35)
 
 Inserted after the §27 roadmap the same way `M8`–`M15` were. Decisions and the binding
 feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M24").
@@ -110,6 +110,7 @@ feature/task ID skeleton live in [`todo.md`](todo.md) ("Feature roadmap M16–M2
 | 32 | [m32-complete-url-registry](32-m32-complete-url-registry/README.md) | 15, 16.4, 17, 18, 19.2, 20.2, 21, 24, 26.5 | Every page, paginated page, media file and folder URL is assigned once in the URL registry, drives the output and every link |
 | 33 | [m33-editor-rules](33-m33-editor-rules/README.md) | 5.5, 10.5, 13.3, 14, 18.2, 18.5, 19.4, 20.2, 23.5, 24.5 | Templates define rules (validate, required/readOnly states, fills) per editor with scopes edit/save/release/generation and levels hint/info/warning/error |
 | 34 | [m34-cdl-tabs-one-save](34-m34-cdl-tabs-one-save/README.md) | 12, 13, 14, 20.2, 23.7, 24.5 | CDL stored and edited as Content/Bodies/Rules sections in tabs; OCTL tabbed per channel; one Save writes everything as one revision |
+| 35 | [m35-ui-ux-overhaul](35-m35-ui-ux-overhaul/README.md) | 20, 23, 24 | New visual identity, app frame and shared design system on every screen; role-adaptive, keyboard-first, preferences per user; style guide signed off, visual baselines and journeys green |
 
 Epics are sequential **hard** dependencies. Within an epic, features and tasks declare
 their own `depends` graph; anything with no dependencies can be parallelised across
