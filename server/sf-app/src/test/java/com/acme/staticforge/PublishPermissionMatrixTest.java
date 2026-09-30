@@ -32,6 +32,7 @@ import com.acme.staticforge.project.publish.PublishPolicy;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.scheduler.ScheduledAction;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.AppUserRepository;
 import com.acme.staticforge.user.SystemRole;
@@ -170,7 +171,7 @@ class PublishPermissionMatrixTest {
         admin = users.create("pmx-admin" + n, "pmx-admin" + n + "@example.com", "Matrix admin", "secret-password");
         project = projects.create(new CreateProjectRequest("pmx" + n, "pmx " + n, null, "permission matrix"), admin.getId());
         ctx = RevisionContext.of(project.getId(), admin.getId(), "permission matrix");
-        TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CDL,
+        TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(CDL),
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of()), ctx);
         page = pages.create(new CreatePageCommand("home", null, template.uuid()), ctx).uuid();
         primary = targets.save(new GenerationTarget(project.getId(), "primary", TargetType.FILESYSTEM,

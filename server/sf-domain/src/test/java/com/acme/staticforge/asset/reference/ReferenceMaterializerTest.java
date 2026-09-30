@@ -118,7 +118,7 @@ class ReferenceMaterializerTest {
         when(assets.findByProjectIdAndAssetTypeAndUid(PROJECT, AssetType.PAGE, "about"))
                 .thenReturn(java.util.Optional.of(about));
         JsonNode payload = JsonUtil.parse("""
-                { "contentDefinition": "content { editor text name { label \\"Name\\" } }",
+                { "contentCdl": "editor text name { label \\"Name\\" }",
                   "channelTemplates": {
                     "html": { "source": "<a href=\\"$CMS_REF(page:about)$\\">$CMS_VALUE(name)$</a>" },
                     "md": { "source": "$CMS_VALUE(page:about.title)$" }
@@ -128,7 +128,7 @@ class ReferenceMaterializerTest {
         assertThat(materializer.extract(PROJECT, AssetType.DATASET, payload)).containsExactlyInAnyOrder(
                 new ReferenceEdge(14L, ReferenceKind.OCTL_REF, "channelTemplates.html"),
                 new ReferenceEdge(14L, ReferenceKind.OCTL_VALUE, "channelTemplates.md"));
-        assertThat(materializer.extract(PROJECT, AssetType.DATASET, JsonUtil.parse("{\"contentDefinition\":\"\"}")))
+        assertThat(materializer.extract(PROJECT, AssetType.DATASET, JsonUtil.parse("{\"contentCdl\":\"\"}")))
                 .as("a dataset without record templates has no edges")
                 .isEmpty();
     }

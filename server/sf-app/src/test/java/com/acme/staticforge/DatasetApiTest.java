@@ -24,6 +24,7 @@ import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -139,7 +140,7 @@ class DatasetApiTest {
     @Test
     void recordTemplatesRoundTripWithPerChannelDiagnostics() throws Exception {
         Fixture fx = newFixture();
-        ObjectNode create = objectMapper.createObjectNode().put("displayName", "Team").put("contentDefinition", TEAM_CDL);
+        ObjectNode create = withCdl(objectMapper.createObjectNode().put("displayName", "Team"), TEAM_CDL);
         create.putObject("channelTemplates").put("html", "<b>$CMS_VALUE(name|raw)$</b> $CMS_VALUE(_index)$");
 
         JsonNode dataset = json(mvc.perform(post(datasets(fx))
@@ -156,7 +157,7 @@ class DatasetApiTest {
                 .andExpect(jsonPath("$.channelTemplates.html.compiledHash").isString())
                 .andExpect(jsonPath("$.recordTemplateDiagnostics").isEmpty());
 
-        ObjectNode broken = objectMapper.createObjectNode().put("displayName", "Team").put("contentDefinition", TEAM_CDL);
+        ObjectNode broken = withCdl(objectMapper.createObjectNode().put("displayName", "Team"), TEAM_CDL);
         broken.putObject("channelTemplates").put("html", "<div>\n$CMS_BODY(x)$</div>");
         mvc.perform(put(datasets(fx) + "/" + uuid)
                         .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
@@ -222,7 +223,9 @@ class DatasetApiTest {
             throws Exception {
         ObjectNode body = objectMapper.createObjectNode().put("source", source).put("channelKey", "html");
         body.put("datasetUuid", datasetUuid);
-        body.put("contentDefinition", cdl);
+        if (cdl != null) {
+            withCdl(body, cdl);
+        }
         body.put("templateUuid", templateUuid);
         return mvc.perform(post(project(fx) + "/octl/validate")
                 .header(HttpHeaders.AUTHORIZATION, bearer(token))
@@ -266,18 +269,27 @@ class DatasetApiTest {
     @Test
     void schemaErrorsAre422WithDiagnosticsAndTheValidateEndpointAgrees() throws Exception {
         Fixture fx = newFixture();
-        String bodies = "content { editor text name { label \"Name\" } }\nbodies { body main { label \"Main\" allow [\"*\"] } }";
+        String paginated = "content { editor text name { label \"Name\" } editor pagination posts { sources [\"nav\"] } }";
 
         mvc.perform(post(datasets(fx))
                         .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(datasetBody("Bodies", bodies, null)))
+                        .content(datasetBody("Paginated", paginated, null)))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.CDL_NOT_ALLOWED_IN_DATASET));
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.CDL_PAGINATION_PLACEMENT))
+                .andExpect(jsonPath("$.diagnostics[0].field").value("content"));
         mvc.perform(post(project(fx) + "/cdl/validate?kind=DATASET")
                         .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(objectMapper.createObjectNode().put("source", bodies))))
+                        .content(objectMapper.writeValueAsString(withCdl(objectMapper.createObjectNode(), paginated))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.CDL_PAGINATION_PLACEMENT));
+        // A dataset has no bodies tab; the check still reports a bodies section sent to the validate endpoint.
+        String bodies = "content { editor text name { label \"Name\" } }\nbodies { body main { label \"Main\" allow [\"*\"] } }";
+        mvc.perform(post(project(fx) + "/cdl/validate?kind=DATASET")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(withCdl(objectMapper.createObjectNode(), bodies))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.CDL_NOT_ALLOWED_IN_DATASET));
     }
@@ -493,11 +505,11 @@ class DatasetApiTest {
 
     private DatasetView team(Fixture fx) {
         return datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null), fx.ctx());
     }
 
     private String datasetBody(String displayName, String cdl, String titleEditor) throws Exception {
-        ObjectNode body = objectMapper.createObjectNode().put("displayName", displayName).put("contentDefinition", cdl);
+        ObjectNode body = withCdl(objectMapper.createObjectNode().put("displayName", displayName), cdl);
         if (titleEditor != null) {
             body.put("titleEditor", titleEditor);
         }
@@ -577,5 +589,11 @@ class DatasetApiTest {
         String viewerToken() {
             return jwtService.issueAccessToken(viewer);
         }
+    }
+
+    /** {@code node} with the CDL sections (M34) of a whole CDL text. */
+    private static ObjectNode withCdl(ObjectNode node, String cdl) {
+        CdlSources sections = CdlSources.split(cdl);
+        return node.put("contentCdl", sections.content()).put("bodiesCdl", sections.bodies()).put("rulesCdl", sections.rules());
     }
 }

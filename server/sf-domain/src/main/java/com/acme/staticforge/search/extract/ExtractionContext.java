@@ -1,5 +1,6 @@
 package com.acme.staticforge.search.extract;
 
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,7 +25,7 @@ public interface ExtractionContext {
     Optional<String> datasetName(UUID dataset);
 
     /** The definition compiled from {@code cdlSource}, owned by the asset version {@code (owner, revision)}. */
-    ContentDefinition definition(UUID owner, long revision, String cdlSource);
+    ContentDefinition definition(UUID owner, long revision, CdlSources cdlSource);
 
     /** A stored blob decoded as UTF-8 (malformed bytes replaced), at most {@link #maxTextChars()}; empty if missing. */
     Optional<String> blobText(String sha256);

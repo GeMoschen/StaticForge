@@ -24,6 +24,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -94,7 +95,7 @@ class GlobalSetIntegrationTest {
         assertThat(touchedAssetUuids(fx, site.revision())).containsExactly(site.uuid());
         assertThat(site.uid()).isEqualTo("site");
         assertThat(site.folderPath()).isEqualTo("/" + FolderScope.GLOBALS_ROOT_UID + "/");
-        assertThat(site.contentDefinition()).isEqualTo(SITE_CDL);
+        assertThat(site.cdl()).isEqualTo(CdlSources.split(SITE_CDL));
         assertThat(site.compiledDefinition().path("editors")).isNotEmpty();
         // Only editors that actually declare a default are seeded: `logo` has none, so it stays
         // absent rather than becoming an empty placeholder the validator would have to tolerate.
@@ -168,7 +169,7 @@ class GlobalSetIntegrationTest {
         assertThat(saved.content().path("title").asText()).isEqualTo("Acme Outdoor");
         assertThat(saved.content().path("showBanner").asBoolean()).isTrue();
         // The schema rides along untouched — values and schema share one asset, not one operation.
-        assertThat(saved.contentDefinition()).isEqualTo(site.contentDefinition());
+        assertThat(saved.cdl()).isEqualTo(site.cdl());
 
         ObjectNode wrongType = MAPPER.createObjectNode();
         wrongType.putObject("title").put("nope", 1);
@@ -236,13 +237,13 @@ class GlobalSetIntegrationTest {
 
         GlobalSetView renamed = globalSetService.updateSchema(
                 site.uuid(),
-                """
+                CdlSources.split("""
                 content {
                   editor text siteTitle { label "Site title" required renamedFrom "title" }
                   editor media logo { label "Logo" }
                   editor boolean showBanner { label "Show banner" default false }
                 }
-                """,
+                """),
                 valued.revision(),
                 fx.ctx());
 
@@ -256,7 +257,7 @@ class GlobalSetIntegrationTest {
         // old schema together with the old value.
         GlobalSetView before = globalSetService.find(fx.project().getId(), site.uuid(), valued.revision()).orElseThrow();
         assertThat(before.content().path("title").asText()).isEqualTo("Acme Outdoor");
-        assertThat(before.contentDefinition()).doesNotContain("siteTitle");
+        assertThat(before.cdl().content()).doesNotContain("siteTitle");
     }
 
     /**
@@ -273,7 +274,7 @@ class GlobalSetIntegrationTest {
 
         GlobalSetView shrunk = globalSetService.updateSchema(
                 site.uuid(),
-                "content { editor text title { label \"Site title\" required } }",
+                CdlSources.split("content { editor text title { label \"Site title\" required } }"),
                 valued.revision(),
                 fx.ctx());
 
@@ -299,7 +300,7 @@ class GlobalSetIntegrationTest {
                     assertThat(ex.getProblem().getExtensions().get("theirs")).isInstanceOf(JsonNode.class);
                 });
 
-        assertThatThrownBy(() -> globalSetService.updateSchema(site.uuid(), SITE_CDL, stale, fx.ctx()))
+        assertThatThrownBy(() -> globalSetService.updateSchema(site.uuid(), CdlSources.split(SITE_CDL), stale, fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
     }
 
@@ -315,11 +316,11 @@ class GlobalSetIntegrationTest {
         AssetVersionView globalsFolder = folderService.create(null, "Branding", FolderScope.GLOBALS, fx.ctx());
 
         assertThatThrownBy(() -> globalSetService.create(
-                new CreateGlobalSetCommand(fx.project().getId(), pagesFolder.uuid(), "Site", SITE_CDL), fx.ctx()))
+                new CreateGlobalSetCommand(fx.project().getId(), pagesFolder.uuid(), "Site", CdlSources.split(SITE_CDL)), fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(422));
 
         GlobalSetView site = globalSetService.create(
-                new CreateGlobalSetCommand(fx.project().getId(), globalsFolder.uuid(), "Site", SITE_CDL), fx.ctx());
+                new CreateGlobalSetCommand(fx.project().getId(), globalsFolder.uuid(), "Site", CdlSources.split(SITE_CDL)), fx.ctx());
         assertThat(site.folderPath()).startsWith("/" + FolderScope.GLOBALS_ROOT_UID + "/");
 
         assertThatThrownBy(() -> assetService.move(site.uuid(), pagesFolder.uuid(), fx.ctx()))
@@ -361,7 +362,7 @@ class GlobalSetIntegrationTest {
 
     private GlobalSetView create(Fixture fx, String displayName, String cdl) {
         return globalSetService.create(
-                new CreateGlobalSetCommand(fx.project().getId(), null, displayName, cdl), fx.ctx());
+                new CreateGlobalSetCommand(fx.project().getId(), null, displayName, CdlSources.split(cdl)), fx.ctx());
     }
 
     private AssetVersionView media(Fixture fx, String displayName) {

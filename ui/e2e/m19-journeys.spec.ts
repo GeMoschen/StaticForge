@@ -1,4 +1,5 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
+import { cdl } from './cdl';
 
 /**
  * M19 Content store journeys (feature `docs-e2e`, `M19.5.2`):
@@ -80,7 +81,7 @@ class Api {
   }
 
   dataset(displayName: string, contentDefinition: string, titleEditor?: string): Promise<Json> {
-    return this.post('/datasets', { displayName, contentDefinition, titleEditor });
+    return this.post('/datasets', { displayName, ...cdl(contentDefinition), titleEditor });
   }
 
   /** A record set of the dataset (M25): records can only be created inside one. */
@@ -98,7 +99,7 @@ class Api {
   }
 
   pageTemplate(displayName: string, contentDefinition: string, source: string): Promise<Json> {
-    return this.post('/page-templates', { displayName, contentDefinition, channelSources: { html: source } });
+    return this.post('/page-templates', { displayName, ...cdl(contentDefinition), channelSources: { html: source } });
   }
 
   page(displayName: string, templateUuid: string): Promise<Json> {
@@ -160,20 +161,22 @@ test('journey 1: a developer defines a dataset in the Templates store', async ({
 
     const editor = page.locator('sf-dataset-schema-editor');
     await expect(editor.locator('h3')).toHaveText('Team');
-    const cdl = editor.locator('textarea.dataset-editor__cdl');
-    await cdl.fill(`${TEAM_CDL}bodies { body main { label "Main" allow ["*"] } }\n`);
-    await expect(editor.locator('#dataset-cdl-diagnostics')).toContainText('SF-CDL-0108', { timeout: 10_000 });
-    await snap(page, 'j1-body-rejected');
+    // The Content tab (M34): a pagination editor is a page's, not a record's — flagged live, nothing saved.
+    const fields = editor.getByRole('textbox', { name: 'Record fields (CDL) — Content' });
+    await fields.fill(`${cdl(TEAM_CDL).contentCdl}\neditor pagination posts { sources ["nav"] }\n`);
+    await expect(editor.locator('sf-cdl-sections-editor')).toContainText('SF-CDL-0110', { timeout: 10_000 });
+    await snap(page, 'j1-pagination-rejected');
 
-    await cdl.fill(TEAM_CDL);
+    await fields.fill(cdl(TEAM_CDL).contentCdl);
+    await expect(editor.locator('sf-cdl-sections-editor .diagnostic')).toHaveCount(0, { timeout: 10_000 });
     await editor.getByRole('button', { name: 'Save dataset' }).click();
-    await expect(editor.locator('#dataset-cdl-diagnostics .diagnostic')).toHaveCount(0);
+    await expect(editor.getByRole('button', { name: 'Save dataset' })).toBeDisabled({ timeout: 10_000 });
     await expect(editor.getByText('0 records')).toBeVisible();
 
     const datasets = await api.get('/datasets');
     expect(datasets).toHaveLength(1);
     const saved = await api.get(`/datasets/${datasets[0].uuid}`);
-    expect(saved.contentDefinition).toContain('editor number level');
+    expect(saved.contentCdl).toContain('editor number level');
     expect(saved.folderPath).toBe('/templates_root/datasets/');
   } finally {
     await api.dispose();

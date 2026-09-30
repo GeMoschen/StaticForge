@@ -11,6 +11,7 @@ import com.acme.staticforge.asset.template.TemplateView;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,7 +54,9 @@ abstract class AbstractTemplateController {
                 v.kind().name(),
                 v.displayName(),
                 v.validFromRevision(),
-                payload.path("contentDefinition").asText(),
+                CdlSources.of(payload).content(),
+                CdlSources.of(payload).bodies(),
+                CdlSources.of(payload).rules(),
                 payload.get("compiledDefinition"),
                 payload.get("channelTemplates"),
                 payload.path("category").asText(),

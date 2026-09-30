@@ -24,6 +24,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -133,7 +134,7 @@ class GenerationIntegrationTest {
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "nav:root generation test");
 
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Nav Template", "",
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Nav Template", CdlSources.split(""),
                         Map.of("html", "<nav>$CMS_NAVIGATION(nav:root)$</nav>"), null, false, null, null),
                 ctx);
         ObjectNode pagePayload = mapper.createObjectNode();
@@ -163,7 +164,7 @@ class GenerationIntegrationTest {
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "nav scope test");
 
         assertThatThrownBy(() -> templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Bad Nav", "",
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Bad Nav", CdlSources.split(""),
                         Map.of("html", "$CMS_NAVIGATION(nav:pages_root)$"), null, false, null, null),
                 ctx))
                 .isInstanceOf(SfException.class);

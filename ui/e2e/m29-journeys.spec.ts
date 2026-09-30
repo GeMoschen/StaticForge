@@ -2,6 +2,7 @@ import { test, expect, request as playwrightRequest, APIRequestContext, Browser,
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
+import { cdl } from './cdl';
 
 /**
  * M29 housekeeping journey (feature `docs-e2e`, `M29.6.2`) — an instance admin looks after the instance, every step as
@@ -331,7 +332,7 @@ test.describe('M29 housekeeping journey', () => {
     // ── Seed A: a small project whose page has three edits 40 days ago and one today ──
     const api = await Api.signIn(KEY);
     await api.post('/api/v1/projects', { key: KEY, name: PROJECT_NAME });
-    const template = await api.post('/page-templates', { displayName: 'Article', contentDefinition: CDL, channelSources: { html: LIGHT_HTML } });
+    const template = await api.post('/page-templates', { displayName: 'Article', ...cdl(CDL), channelSources: { html: LIGHT_HTML } });
     const story = await api.post('/pages', { displayName: 'Story', templateUuid: template.uuid });
     const firstEdit = await api.patchContent(story.uuid, { headline: 'Morning draft' });
     await api.patchContent(story.uuid, { headline: 'Noon draft' });
@@ -343,7 +344,7 @@ test.describe('M29 housekeeping journey', () => {
     // ── Seed B: a large site with a first published build, and a developer ──
     const big = api.forProject(BIG_KEY);
     await big.post('/api/v1/projects', { key: BIG_KEY, name: BIG_NAME });
-    const bigTemplate = await big.post('/page-templates', { displayName: 'Heavy', contentDefinition: CDL, channelSources: { html: LIGHT_HTML } });
+    const bigTemplate = await big.post('/page-templates', { displayName: 'Heavy', ...cdl(CDL), channelSources: { html: LIGHT_HTML } });
     const bigPages: string[] = [];
     for (let i = 0; i < BIG_PAGES; i++) {
       bigPages.push((await big.post('/pages', { displayName: `Page ${i}`, templateUuid: bigTemplate.uuid })).uuid);

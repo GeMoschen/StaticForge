@@ -12,7 +12,7 @@ import {
   output,
   signal,
   untracked,
-  viewChild,
+  viewChildren,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
@@ -23,7 +23,17 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfOctlEditorComponent } from '../../shared/components/sf-octl-editor.component';
-import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
+import {
+  EMPTY_SECTIONS,
+  firstSectionWithErrors,
+  isSaveShortcut,
+  sectionsEqual,
+  sectionsOf,
+  type CdlSection,
+  type CdlSections,
+} from '../../shared/code-editor/cdl-sections';
+import { SfCdlSectionsEditorComponent } from '../../shared/components/sf-cdl-sections-editor.component';
+import { SfTabsComponent, type SfTab } from '../../shared/components/sf-tabs.component';
 import { declaredPaths } from '../../shared/code-editor/completions';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ChannelsService } from '../channels/channels.service';
@@ -59,14 +69,17 @@ interface RecordTemplateValidation {
   datasetUuid: string;
   channel: string;
   source: string;
-  contentDefinition: string;
+  sections: CdlSections;
 }
 
+/** A dataset's CDL tabs: records have no bodies. */
+const DATASET_SECTIONS: readonly CdlSection[] = ['content', 'rules'];
+
 /**
- * A dataset in the Templates store (M19.4.1, M25.5.2): the CDL declaring every record's fields, with live
- * validation (`kind=DATASET`, so a `body` is flagged exactly as the save would reject it), the optional title
+ * A dataset in the Templates store (M19.4.1, M25.5.2): the CDL declaring every record's fields — a Content and a
+ * Rules tab (M34) — with live validation (`kind=DATASET`, the restrictions the save enforces), the optional title
  * editor naming records, a description, the dataset's record count with a link to its records — and one
- * **record template** tab per channel: the OCTL one record renders with wherever a record set is rendered
+ * **record template** tab per channel beside it: the OCTL one record renders with wherever a record set is rendered
  * (`$CMS_VALUE(recordset:…)$`, a reference editor pointing at a set).
  *
  * <p>Schema and record templates save together, as one revision, so a renamed field and the template reading it
@@ -78,7 +91,15 @@ interface RecordTemplateValidation {
   selector: 'sf-dataset-schema-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SfButtonComponent, SfCodeEditorComponent, SfFieldComponent, SfOctlEditorComponent, SfUidRenameComponent],
+  imports: [
+    RouterLink,
+    SfButtonComponent,
+    SfCdlSectionsEditorComponent,
+    SfFieldComponent,
+    SfOctlEditorComponent,
+    SfTabsComponent,
+    SfUidRenameComponent,
+  ],
   templateUrl: './dataset-schema-editor.component.html',
   styleUrl: './dataset-schema-editor.component.scss',
 })
@@ -99,19 +120,37 @@ export class DatasetSchemaEditorComponent {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
 
-  private readonly octlEditor = viewChild(SfOctlEditorComponent);
+  private readonly octlEditors = viewChildren(SfOctlEditorComponent);
+
+  /** The open channel's record template editor: one exists per channel that shows an editor, in tab order. */
+  private octlEditor(): SfOctlEditorComponent | undefined {
+    const shown = this.channelTabs().filter((tab) => this.canEdit() || this.sourceOf(tab.key).trim());
+    const index = shown.findIndex((tab) => tab.key === this.activeChannel());
+    return index < 0 ? undefined : this.octlEditors()[index];
+  }
 
   protected readonly detail = signal<DatasetDetailView | null>(null);
   protected readonly displayName = signal('');
   protected readonly description = signal('');
-  protected readonly contentDefinition = signal('');
+  /** The CDL as edited (M34): content and rules; a dataset has no bodies. */
+  protected readonly sections = signal<CdlSections>(EMPTY_SECTIONS);
+  protected readonly savedSections = computed<CdlSections | null>(() => {
+    const detail = this.detail();
+    return detail ? sectionsOf(detail) : null;
+  });
+  protected readonly cdlTabs = DATASET_SECTIONS;
+  protected readonly cdlTab = signal<CdlSection>('content');
+  protected readonly cdlHints: Partial<Record<CdlSection, string>> = {
+    content: 'Editors only — records have no bodies. Rename a field with renamedFrom and every record follows in one revision.',
+    rules: 'Checks, required/read-only states and fills on the record fields: rule, state and fill entries.',
+  };
   protected readonly titleEditor = signal('');
   protected readonly diagnostics = signal<Diagnostic[]>([]);
   protected readonly saving = signal(false);
   protected readonly validating = signal(false);
   /** The dataset's fields, for record template completion (M33). */
   protected readonly fieldNames = computed(() =>
-    declaredPaths(this.contentDefinition()).filter((path) => !path.endsWith('[]')),
+    declaredPaths(this.sections().content).filter((path) => !path.endsWith('[]')),
   );
   private validateTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly clearValidateTimer = inject(DestroyRef).onDestroy(() => {
@@ -128,8 +167,14 @@ export class DatasetSchemaEditorComponent {
   protected readonly recordTemplateDiagnostics = signal<Record<string, Diagnostic[]>>({});
   /** Sets whose stored query the last save left invalid (`brokenRecordSets`); dismissible. */
   protected readonly brokenRecordSets = signal<BrokenRecordSet[]>([]);
-  /** The open tab: `null` is the schema, otherwise a channel key. */
-  protected readonly activeChannel = signal<string | null>(null);
+  /** The open record template tab; `null` until the channels are known. */
+  protected readonly selectedChannel = signal<string | null>(null);
+  /** The open channel: the selected one while it has a tab, else the first. */
+  protected readonly activeChannel = computed<string | null>(() => {
+    const keys = this.channelTabs().map((c) => c.key);
+    const selected = this.selectedChannel();
+    return selected != null && keys.includes(selected) ? selected : (keys[0] ?? null);
+  });
 
   /** Typed sources to check; `null` drops a pending check (a save answers with the full diagnostics). */
   private readonly recordTemplateValidation = new Subject<RecordTemplateValidation | null>();
@@ -145,29 +190,26 @@ export class DatasetSchemaEditorComponent {
     recordTemplateChannels(this.channels(), this.storedRecordTemplates()),
   );
 
-  /** How the open channel's record template is highlighted (M33 follow-up): the channel's "Highlight as", else detected. */
-  protected readonly activeFormat = computed(() =>
-    channelCodeFormat(
-      this.channels().find((channel) => channel.key === this.activeChannel()),
-      this.projectContext.project()?.codeHighlighting,
-    ),
-  );
-
-  /** The open channel tab, or `null` on the schema tab. */
-  protected readonly activeChannelTab = computed(() => {
-    const key = this.activeChannel();
-    return key == null ? null : (this.channelTabs().find((c) => c.key === key) ?? null);
+  /** How each channel's record template is highlighted (M33 follow-up): the channel's "Highlight as", else detected. */
+  protected readonly formats = computed(() => {
+    const highlighting = this.projectContext.project()?.codeHighlighting;
+    return Object.fromEntries(
+      this.channelTabs().map((tab) => [
+        tab.key,
+        channelCodeFormat(this.channels().find((channel) => channel.key === tab.key), highlighting),
+      ]),
+    );
   });
 
-  protected readonly activeSource = computed(() => {
-    const key = this.activeChannel();
-    return key == null ? '' : (this.recordTemplates()[key] ?? '');
-  });
+  /** A channel's record template as edited. */
+  protected sourceOf(channel: string): string {
+    return this.recordTemplates()[channel] ?? '';
+  }
 
-  protected readonly activeDiagnostics = computed(() => {
-    const key = this.activeChannel();
-    return key == null ? [] : (this.recordTemplateDiagnostics()[key] ?? []);
-  });
+  /** A channel's record template diagnostics; none until it has been checked. */
+  protected diagnosticsOf(channel: string): Diagnostic[] {
+    return this.recordTemplateDiagnostics()[channel] ?? [];
+  }
 
   /** Whether the schema tab's fields differ from the stored dataset. */
   protected readonly schemaDirty = computed(() => {
@@ -176,7 +218,7 @@ export class DatasetSchemaEditorComponent {
       !!d &&
       (this.displayName() !== (d.displayName ?? '') ||
         this.description() !== (d.description ?? '') ||
-        this.contentDefinition() !== (d.contentDefinition ?? '') ||
+        !sectionsEqual(this.sections(), sectionsOf(d)) ||
         this.titleEditor() !== (d.titleEditor ?? ''))
     );
   });
@@ -195,13 +237,17 @@ export class DatasetSchemaEditorComponent {
   /** Anything to save: schema fields or any record template. */
   protected readonly dirty = computed(() => this.schemaDirty() || this.dirtyChannels().size > 0);
 
-  /** Error counts per channel, for the tab badges. */
-  protected readonly errorCounts = computed(() => {
-    const out: Record<string, number> = {};
-    for (const [channel, list] of Object.entries(this.recordTemplateDiagnostics())) {
-      out[channel] = list.filter((d) => d.severity === 'ERROR').length;
-    }
-    return out;
+  /** One tab per channel, with its error count, unsaved dot and "disabled" note. */
+  protected readonly recordTemplateTabs = computed<SfTab[]>(() => {
+    const diagnostics = this.recordTemplateDiagnostics();
+    const dirty = this.dirtyChannels();
+    return this.channelTabs().map((tab) => ({
+      id: tab.key,
+      label: tab.key,
+      note: tab.enabled ? undefined : 'disabled',
+      errors: (diagnostics[tab.key] ?? []).filter((d) => d.severity === 'ERROR').length,
+      dirty: dirty.has(tab.key),
+    }));
   });
 
   /** The title editor options: the stored schema's text editors (groups flattened). */
@@ -221,7 +267,7 @@ export class DatasetSchemaEditorComponent {
   });
 
   /** Click-to-insert: the fields of the schema as edited, then the record meta names. */
-  protected readonly fieldHelpers = computed(() => recordTemplateFields(this.contentDefinition(), this.savedEditors()));
+  protected readonly fieldHelpers = computed(() => recordTemplateFields(this.sections().content, this.savedEditors()));
   protected readonly metaHelpers: readonly RecordTemplateHelper[] = recordTemplateMetaHelpers();
 
   protected readonly loopSnippet = computed(() => {
@@ -232,8 +278,8 @@ export class DatasetSchemaEditorComponent {
 
   constructor() {
     // Live check of the open record template: debounced, a newer keystroke cancels the one in flight. The
-    // server compiles it as this dataset's record template against the CDL as edited (`datasetUuid` +
-    // `contentDefinition`), so an undeclared field (SF-TPL-0103) or SF-TPL-0122 shows while typing — the
+    // server compiles it as this dataset's record template against the CDL as edited (`datasetUuid` + the
+    // sections), so an undeclared field (SF-TPL-0103) or SF-TPL-0122 shows while typing — the
     // diagnostics a save would report.
     this.recordTemplateValidation
       .pipe(
@@ -245,7 +291,8 @@ export class DatasetSchemaEditorComponent {
                   source: request.source,
                   channelKey: request.channel,
                   datasetUuid: request.datasetUuid,
-                  contentDefinition: request.contentDefinition,
+                  contentCdl: request.sections.content,
+                  rulesCdl: request.sections.rules,
                 })
                 .pipe(
                   catchError(() => of(null)),
@@ -259,7 +306,7 @@ export class DatasetSchemaEditorComponent {
       .subscribe(({ request, response }) => {
         const current =
           (this.recordTemplates()[request.channel] ?? '') === request.source &&
-          this.contentDefinition() === request.contentDefinition;
+          sectionsEqual(this.sections(), request.sections);
         if (response && current) {
           this.recordTemplateDiagnostics.update((all) => ({
             ...all,
@@ -273,7 +320,8 @@ export class DatasetSchemaEditorComponent {
       const uuid = this.uuid();
       const revision = this.timeTravel.activeRevision();
       untracked(() => {
-        this.activeChannel.set(null);
+        this.selectedChannel.set(null);
+        this.cdlTab.set('content');
         this.brokenRecordSets.set([]);
         this.load(key, uuid, revision);
       });
@@ -298,38 +346,45 @@ export class DatasetSchemaEditorComponent {
   }
 
   /** Live validation while typing, debounced; the same restrictions the save enforces. */
-  protected onCdlInput(source: string): void {
-    this.contentDefinition.set(source);
+  protected onSectionInput(change: { section: CdlSection; value: string }): void {
+    this.sections.update((sections) => ({ ...sections, [change.section]: change.value }));
     if (this.validateTimer) {
       clearTimeout(this.validateTimer);
     }
     this.validateTimer = setTimeout(() => this.validate(), 400);
   }
 
+  /** Ctrl+S / ⌘S saves the dataset (M34). */
+  protected onKeydown(event: KeyboardEvent): void {
+    if (isSaveShortcut(event)) {
+      event.preventDefault();
+      this.save();
+    }
+  }
+
   protected validate(): void {
     this.validating.set(true);
-    this.content.validateCdl(this.projectKey(), this.contentDefinition()).subscribe({
+    this.content.validateCdl(this.projectKey(), this.sections()).subscribe({
       next: (res) => {
         this.validating.set(false);
-        this.diagnostics.set(res.diagnostics ?? []);
+        this.diagnostics.set(sortDiagnostics(res.diagnostics ?? []) as Diagnostic[]);
       },
       error: () => this.validating.set(false),
     });
   }
 
-  /** Opens the schema tab (`null`) or a channel's record template tab. */
-  selectTab(channel: string | null): void {
+  /** Opens a channel's record template tab. */
+  selectTab(channel: string): void {
     const previous = this.activeChannel();
-    this.activeChannel.set(channel);
-    // Opening a template re-checks it: the schema may have changed on the CDL tab since it was last checked.
-    if (channel != null && channel !== previous && (this.recordTemplates()[channel] ?? '').trim() !== '') {
+    this.selectedChannel.set(channel);
+    // Opening a template re-checks it: the schema may have changed since it was last checked.
+    if (channel !== previous && (this.recordTemplates()[channel] ?? '').trim() !== '') {
       this.checkRecordTemplate(channel, this.recordTemplates()[channel]);
     }
   }
 
-  /** An edit of the open record template. */
-  onRecordTemplateInput(source: string): void {
-    const channel = this.activeChannel();
+  /** An edit of a channel's record template (the open one unless named). */
+  onRecordTemplateInput(source: string, channel: string | null = this.activeChannel()): void {
     if (channel == null || !this.canEdit()) {
       return;
     }
@@ -348,7 +403,7 @@ export class DatasetSchemaEditorComponent {
       datasetUuid,
       channel,
       source,
-      contentDefinition: this.contentDefinition(),
+      sections: this.sections(),
     });
   }
 
@@ -375,7 +430,8 @@ export class DatasetSchemaEditorComponent {
         current.uuid,
         {
           displayName: this.displayName(),
-          contentDefinition: this.contentDefinition(),
+          contentCdl: this.sections().content,
+          rulesCdl: this.sections().rules,
           titleEditor: this.titleEditor() || undefined,
           description: this.description(),
           channelTemplates: recordTemplatesForSave(this.recordTemplates()),
@@ -436,7 +492,7 @@ export class DatasetSchemaEditorComponent {
 
   /**
    * A rejected save keeps every edit. Record template errors (`422` with `channel`) open the first failing
-   * channel and put the caret on the error; schema errors show under the CDL.
+   * channel and put the caret on the error; schema errors show on their CDL tab, which opens.
    */
   private showSaveError(err: unknown, uuid: string): void {
     if (!(err instanceof HttpErrorResponse)) {
@@ -447,16 +503,19 @@ export class DatasetSchemaEditorComponent {
     if (templateErrors) {
       this.diagnostics.set([]);
       this.recordTemplateDiagnostics.update((all) => ({ ...all, ...templateErrors.byChannel }));
-      this.activeChannel.set(templateErrors.channel);
+      this.selectedChannel.set(templateErrors.channel);
       this.revealFirstDiagnostic(templateErrors.byChannel[templateErrors.channel] ?? []);
       this.toasts.show(`The ${templateErrors.channel} record template has errors — nothing was saved.`, 'error');
       return;
     }
     const body = (err.error ?? {}) as { diagnostics?: Diagnostic[]; detail?: string };
     if (Array.isArray(body.diagnostics) && body.diagnostics.length > 0) {
-      this.diagnostics.set(body.diagnostics);
-      this.activeChannel.set(null);
-      this.toasts.show('The schema has errors — see the diagnostics below.', 'error');
+      this.diagnostics.set(sortDiagnostics(body.diagnostics) as Diagnostic[]);
+      const section = firstSectionWithErrors(body.diagnostics, DATASET_SECTIONS);
+      if (section) {
+        this.cdlTab.set(section);
+      }
+      this.toasts.show(`The schema has errors — see the ${section ?? 'content'} tab.`, 'error');
       return;
     }
     if (err.status === 409) {
@@ -501,7 +560,7 @@ export class DatasetSchemaEditorComponent {
     this.detail.set(detail);
     this.displayName.set(detail.displayName ?? '');
     this.description.set(detail.description ?? '');
-    this.contentDefinition.set(detail.contentDefinition ?? '');
+    this.sections.set(sectionsOf(detail));
     this.titleEditor.set(detail.titleEditor ?? '');
     this.recordTemplates.set(readRecordTemplateSources(detail.channelTemplates));
     this.diagnostics.set([]);

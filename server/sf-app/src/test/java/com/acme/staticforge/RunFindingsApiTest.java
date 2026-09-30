@@ -30,6 +30,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -102,7 +103,7 @@ class RunFindingsApiTest {
     void findingsArePagedFilteredAndNameTheirPageAsItIsNow() throws Exception {
         Fixture fx = fixture("rf");
         TemplateView template = templates.create(new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE,
-                "Plain", "", Map.of("html", "<p>x</p>"), null, false, null), fx.ctx());
+                "Plain", CdlSources.split(""), Map.of("html", "<p>x</p>"), null, false, null), fx.ctx());
         com.fasterxml.jackson.databind.node.ObjectNode payload = mapper.createObjectNode();
         payload.put("templateRef", template.uuid().toString());
         payload.putObject("content");

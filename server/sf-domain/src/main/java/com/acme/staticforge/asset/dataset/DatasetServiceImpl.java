@@ -23,6 +23,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.cdl.DatasetCdlRules;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorType;
@@ -107,7 +108,7 @@ public class DatasetServiceImpl implements DatasetService {
     @Override
     @Transactional
     public DatasetView create(CreateDatasetCommand cmd, RevisionContext ctx) {
-        ContentDefinition definition = compile(cmd.contentDefinition());
+        ContentDefinition definition = compile(cmd.cdl());
         String titleEditor = validTitleEditor(definition, cmd.titleEditor());
         CompiledRecordTemplates templates = compileRecordTemplates(cmd.projectId(), null, cmd.channelTemplates(), definition);
         // A project created before M19 has no `datasets` folder yet: provisioning it joins this
@@ -123,7 +124,7 @@ public class DatasetServiceImpl implements DatasetService {
                         AssetType.DATASET,
                         cmd.displayName(),
                         parent,
-                        payload(cmd.contentDefinition(), definition, titleEditor, cmd.description(), templates),
+                        payload(cmd.cdl(), definition, titleEditor, cmd.description(), templates),
                         null),
                 writeCtx);
         return toView(cmd.projectId(), created).withRecordTemplateDiagnostics(templates.warnings());
@@ -141,7 +142,7 @@ public class DatasetServiceImpl implements DatasetService {
             UUID uuid, UpdateDatasetCommand cmd, long expectedRevision, boolean confirmDiscard, RevisionContext ctx) {
         Asset dataset = requireDataset(ctx.projectId(), uuid);
         requireLive(dataset);
-        ContentDefinition definition = compile(cmd.contentDefinition());
+        ContentDefinition definition = compile(cmd.cdl());
         String titleEditor = validTitleEditor(definition, cmd.titleEditor());
         Map<String, String> templateSources = cmd.channelTemplates() != null
                 ? cmd.channelTemplates()
@@ -149,7 +150,7 @@ public class DatasetServiceImpl implements DatasetService {
                         .map(version -> RecordTemplates.sources(version.getPayload()))
                         .orElse(Map.of());
         CompiledRecordTemplates templates = compileRecordTemplates(ctx.projectId(), uuid, templateSources, definition);
-        ObjectNode payload = payload(cmd.contentDefinition(), definition, titleEditor, cmd.description(), templates);
+        ObjectNode payload = payload(cmd.cdl(), definition, titleEditor, cmd.description(), templates);
         boolean localizationChanged = localizableFlagsChanged(dataset, definition);
 
         List<EditorRename> renames = ContentRenameMigrator.collect(definition);
@@ -184,13 +185,13 @@ public class DatasetServiceImpl implements DatasetService {
     @Override
     @Transactional(readOnly = true)
     public List<Diagnostic> validateRecordTemplate(
-            long projectId, UUID uuid, String channelKey, String source, String cdlSource) {
+            long projectId, UUID uuid, String channelKey, String source, CdlSources cdlSource) {
         Asset dataset = requireDataset(projectId, uuid);
-        String cdl = cdlSource != null
+        CdlSources cdl = cdlSource != null
                 ? cdlSource
                 : assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(dataset.getId())
-                        .map(version -> version.getPayload().path("contentDefinition").asText(""))
-                        .orElse("");
+                        .map(version -> CdlSources.of(version.getPayload()))
+                        .orElse(CdlSources.EMPTY);
         ContentDefinition definition = cdlCompiler.compile(cdl).definition();
         String channel = channelKey == null || channelKey.isBlank() ? "html" : channelKey;
         return octlCompiler
@@ -202,7 +203,7 @@ public class DatasetServiceImpl implements DatasetService {
     private boolean localizableFlagsChanged(Asset dataset, ContentDefinition proposed) {
         return assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(dataset.getId())
                 .map(version -> !com.acme.staticforge.asset.content.LocalizationMigrator
-                        .localizableLeaves(compile(version.getPayload().path("contentDefinition").asText("")))
+                        .localizableLeaves(compile(CdlSources.of(version.getPayload())))
                         .equals(com.acme.staticforge.asset.content.LocalizationMigrator.localizableLeaves(proposed)))
                 .orElse(false);
     }
@@ -282,10 +283,10 @@ public class DatasetServiceImpl implements DatasetService {
     // ------------------------------------------------------------------
 
     /** Compiles a schema with the dataset restrictions; throws before any revision is allocated. */
-    private ContentDefinition compile(String source) {
+    private ContentDefinition compile(CdlSources source) {
         CdlResult result = cdlCompiler.compile(source);
         List<Diagnostic> diagnostics = new ArrayList<>(result.diagnostics());
-        diagnostics.addAll(DatasetCdlRules.check(result.definition()));
+        DatasetCdlRules.check(result.definition()).forEach(d -> diagnostics.add(d.inField(CdlSources.CONTENT)));
         if (diagnostics.stream().anyMatch(d -> d.severity() == Severity.ERROR)) {
             throw new SfException(Problem.builder()
                     .type(PROBLEM_TYPE_422)
@@ -350,7 +351,7 @@ public class DatasetServiceImpl implements DatasetService {
             OctlResult result = octlCompiler.compileRecordTemplate(source, channel, references, definition);
             results.put(channel, result);
             if (result.hasErrors()) {
-                errors.put(channel, result.diagnostics());
+                errors.put(channel, result.diagnostics().stream().map(d -> d.inField("channel:" + channel)).toList());
             }
         });
         if (!errors.isEmpty()) {
@@ -417,13 +418,13 @@ public class DatasetServiceImpl implements DatasetService {
      * dataset without any keeps the M19 payload shape.
      */
     private ObjectNode payload(
-            String source,
+            CdlSources source,
             ContentDefinition definition,
             String titleEditor,
             String description,
             CompiledRecordTemplates templates) {
         ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("contentDefinition", source == null ? "" : source);
+        (source == null ? CdlSources.EMPTY : source).writeTo(payload);
         payload.set("compiledDefinition", objectMapper.valueToTree(definition));
         if (titleEditor == null) {
             payload.putNull("titleEditor");
@@ -476,7 +477,7 @@ public class DatasetServiceImpl implements DatasetService {
                 view.displayName(),
                 folderUuid,
                 view.folderPath(),
-                payload == null ? "" : payload.path("contentDefinition").asText(""),
+                CdlSources.of(payload),
                 payload == null ? null : payload.path("compiledDefinition"),
                 titleEditor == null || !titleEditor.isTextual() ? null : titleEditor.asText(),
                 payload == null ? "" : payload.path("description").asText(""),

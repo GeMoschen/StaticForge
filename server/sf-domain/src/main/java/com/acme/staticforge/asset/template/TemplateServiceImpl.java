@@ -34,6 +34,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.cdl.PaginationCdlRules;
 import com.acme.staticforge.template.cdl.TemplateRuleCdlRules;
 import com.acme.staticforge.template.content.BodyDefinition;
@@ -146,12 +147,12 @@ public class TemplateServiceImpl implements TemplateService {
         ensureFoldersAndMigrate(cmd.projectId(), ctx);
         UUID parentFolderUuid = resolveTemplateParentFolder(cmd, ctx);
 
-        ContentDefinition definition = compileDefinition(cmd.contentDefinition(), cmd.kind());
+        ContentDefinition definition = compileDefinition(cmd.cdl(), cmd.kind());
         CompiledChannels compiled = compileChannels(
                 cmd.projectId(), cmd.kind(), null, null, cmd.channelSources(), cmd.channelSources().keySet(), definition,
                 hierarchies.live(cmd.projectId()));
         ObjectNode payload = buildPayload(
-                cmd.kind(), cmd.contentDefinition(), compiled, cmd.category(), cmd.deprecated(), cmd.outputPath(), definition,
+                cmd.kind(), cmd.cdl(), compiled, cmd.category(), cmd.deprecated(), cmd.outputPath(), definition,
                 cmd.abstractTemplate(), cmd.paginationPath());
 
         AssetVersionView created = assetService.create(
@@ -199,13 +200,13 @@ public class TemplateServiceImpl implements TemplateService {
     public TemplateView update(
             UUID uuid, UpdateTemplateCommand cmd, long expectedRevision, boolean confirmDiscard, RevisionContext ctx) {
         Asset template = requireTemplate(ctx.projectId(), uuid);
-        ContentDefinition definition = compileDefinition(cmd.contentDefinition(), template.getAssetType());
+        ContentDefinition definition = compileDefinition(cmd.cdl(), template.getAssetType());
         boolean localizationChanged = localizableFlagsChanged(template, definition);
         CompiledChannels compiled = compileChannels(
                 template.getProjectId(), template.getAssetType(), uuid, template.getUid(), cmd.channelSources(),
                 cmd.channelSources().keySet(), definition, hierarchies.live(template.getProjectId()));
         ObjectNode payload = buildPayload(
-                template.getAssetType(), cmd.contentDefinition(), compiled, cmd.category(), cmd.deprecated(), cmd.outputPath(),
+                template.getAssetType(), cmd.cdl(), compiled, cmd.category(), cmd.deprecated(), cmd.outputPath(),
                 definition, cmd.abstractTemplate(), cmd.paginationPath());
 
         if (template.getAssetType() == AssetType.SECTION_TEMPLATE) {
@@ -263,7 +264,7 @@ public class TemplateServiceImpl implements TemplateService {
         if (current == null) {
             return false;
         }
-        ContentDefinition before = compileDefinition(current.getPayload().path("contentDefinition").asText(""));
+        ContentDefinition before = compileDefinition(CdlSources.of(current.getPayload()));
         return !LocalizationMigrator.localizableLeaves(before).equals(LocalizationMigrator.localizableLeaves(proposed));
     }
 
@@ -300,7 +301,7 @@ public class TemplateServiceImpl implements TemplateService {
         Asset template = requireTemplate(ctx.projectId(), uuid);
         AssetVersion current = requireOpen(template.getId());
 
-        ContentDefinition definition = compileDefinition(current.getPayload().path("contentDefinition").asText(""));
+        ContentDefinition definition = compileDefinition(CdlSources.of(current.getPayload()));
         Map<String, String> sources = storedSources(current.getPayload());
         sources.put(channelKey, octlSource);
         CompiledChannels compiled = compileChannels(
@@ -332,7 +333,7 @@ public class TemplateServiceImpl implements TemplateService {
         payload.withObject("channelTemplates").remove(channelKey);
         List<DescendantIssue> warnings = List.of();
         if (template.getAssetType() == AssetType.PAGE_TEMPLATE) {
-            ContentDefinition definition = compileDefinition(payload.path("contentDefinition").asText(""));
+            ContentDefinition definition = compileDefinition(CdlSources.of(payload));
             setParent(payload, derivedParent(template.getProjectId(), storedSources(payload)));
             warnings = validateDescendants(template, payload, definition, descendants(template));
         }
@@ -371,10 +372,10 @@ public class TemplateServiceImpl implements TemplateService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Diagnostic> validateChannel(long projectId, UUID uuid, String channelKey, String source, String cdlSource) {
+    public List<Diagnostic> validateChannel(long projectId, UUID uuid, String channelKey, String source, CdlSources cdlSource) {
         Asset template = requireTemplate(projectId, uuid);
         AssetVersion current = requireOpen(template.getId());
-        String cdl = cdlSource != null ? cdlSource : current.getPayload().path("contentDefinition").asText("");
+        CdlSources cdl = cdlSource != null ? cdlSource : CdlSources.of(current.getPayload());
         // CDL errors have their own live validation; names are checked against the best-effort definition.
         ContentDefinition definition = cdlCompiler.compile(cdl).definition();
         ReferenceResolver references = referenceResolver(projectId);
@@ -402,7 +403,7 @@ public class TemplateServiceImpl implements TemplateService {
     // Compile-on-save
     // ------------------------------------------------------------------
 
-    private ContentDefinition compileDefinition(String source) {
+    private ContentDefinition compileDefinition(CdlSources source) {
         CdlResult result = cdlCompiler.compile(source);
         if (result.hasErrors()) {
             throw diagnosticsError("CDL", result.diagnostics());
@@ -410,12 +411,20 @@ public class TemplateServiceImpl implements TemplateService {
         return result.definition();
     }
 
-    /** Compiles a definition being saved: a section template also rejects a pagination editor (M21.1.1). */
-    private ContentDefinition compileDefinition(String source, AssetType kind) {
+    /**
+     * Compiles a definition being saved: a section template also rejects a pagination editor (M21.1.1) and a bodies
+     * section (M34: section templates have no bodies).
+     */
+    private ContentDefinition compileDefinition(CdlSources source, AssetType kind) {
+        if (kind == AssetType.SECTION_TEMPLATE && !source.bodies().isBlank()) {
+            throw diagnosticsError("CDL", List.of(new Diagnostic(Severity.ERROR, DiagnosticCodes.CDL_SYNTAX,
+                    "A section template has no bodies; bodies belong to a page template.", 1, 0, CdlSources.BODIES)));
+        }
         ContentDefinition definition = compileDefinition(source);
         List<Diagnostic> overlay = new ArrayList<>();
         if (kind == AssetType.SECTION_TEMPLATE) {
-            overlay.addAll(PaginationCdlRules.notAllowedIn(definition, "a section template"));
+            PaginationCdlRules.notAllowedIn(definition, "a section template")
+                    .forEach(d -> overlay.add(d.inField(CdlSources.CONTENT)));
             overlay.addAll(TemplateRuleCdlRules.sectionTemplate(definition));
         } else {
             // A page template's rule names resolve against its chain when its channels compile (M33).
@@ -453,7 +462,7 @@ public class TemplateServiceImpl implements TemplateService {
                 OctlResult result = octlCompiler.compile(sources.get(channel), channel, references, definition);
                 List<Diagnostic> diagnostics = sectionDiagnostics(result);
                 if (diagnostics.stream().anyMatch(d -> d.severity() == Severity.ERROR)) {
-                    throw diagnosticsError("OCTL", diagnostics);
+                    throw diagnosticsError("OCTL", inChannel(channel, diagnostics));
                 }
                 results.put(channel, result);
             }
@@ -466,11 +475,16 @@ public class TemplateServiceImpl implements TemplateService {
             OctlResult result = hierarchy.compile(
                     octlCompiler, references, uuid, uid, channel, sources.get(channel), definition, parent, memo);
             if (result.hasErrors()) {
-                throw diagnosticsError("OCTL", result.diagnostics());
+                throw diagnosticsError("OCTL", inChannel(channel, result.diagnostics()));
             }
             results.put(channel, result);
         }
         return new CompiledChannels(sources, results, parent);
+    }
+
+    /** A channel's findings, each naming the channel as its field (M34) unless it points into a CDL section. */
+    private static List<Diagnostic> inChannel(String channel, List<Diagnostic> diagnostics) {
+        return diagnostics.stream().map(d -> d.inField("channel:" + channel)).toList();
     }
 
     /**
@@ -539,7 +553,7 @@ public class TemplateServiceImpl implements TemplateService {
 
     private ObjectNode buildPayload(
             AssetType kind,
-            String contentDefinition,
+            CdlSources cdl,
             CompiledChannels compiled,
             String category,
             boolean deprecated,
@@ -548,7 +562,7 @@ public class TemplateServiceImpl implements TemplateService {
             boolean abstractTemplate,
             Map<String, String> paginationPath) {
         ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("contentDefinition", contentDefinition == null ? "" : contentDefinition);
+        cdl.writeTo(payload);
         payload.set("compiledDefinition", objectMapper.valueToTree(definition));
 
         ObjectNode channelTemplates = payload.putObject("channelTemplates");
@@ -968,7 +982,7 @@ public class TemplateServiceImpl implements TemplateService {
                     .filter(version -> version.versionKey() == view.validFromRevision())
                     .orElseGet(() -> new TemplateHierarchy.TemplateVersion(
                             view.uuid(), view.uid(), view.payload(),
-                            cdlCompiler.compile(view.payload().path("contentDefinition").asText("")).definition(),
+                            cdlCompiler.compile(CdlSources.of(view.payload())).definition(),
                             view.validFromRevision()));
             effective = hierarchy.effectiveDefinition(self);
             ancestors = hierarchy.ancestors(view.uuid(), self.parentTemplateRef()).stream()

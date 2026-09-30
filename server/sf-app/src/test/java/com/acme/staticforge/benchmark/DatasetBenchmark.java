@@ -29,6 +29,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -104,7 +105,7 @@ class DatasetBenchmark {
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "dataset benchmark");
 
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(project.getId(), null, "Team", SCHEMA, "name", null), ctx);
+                new CreateDatasetCommand(project.getId(), null, "Team", CdlSources.split(SCHEMA), "name", null), ctx);
         UUID members = new RecordSetFixtures(recordSetService).setFor(project.getId(), team.uuid(), null, ctx);
         long start = System.nanoTime();
         com.acme.staticforge.asset.dataset.RecordDetail first = null;
@@ -139,7 +140,7 @@ class DatasetBenchmark {
 
         TemplateView template = templateService.create(
                 new CreateTemplateCommand(
-                        project.getId(), AssetType.PAGE_TEMPLATE, "Team Page", "",
+                        project.getId(), AssetType.PAGE_TEMPLATE, "Team Page", CdlSources.split(""),
                         Map.of("html", "<ul>$CMS_FOR(m : dataset:team, where=\"m.role == 'lead'\", sort=\"-level,name\", limit=20)$"
                                 + "<li>$CMS_VALUE(m.name)$</li>$CMS_END_FOR$</ul>"),
                         null, false, Map.of("html", "{displayNameSlug}.{ext}")),
@@ -169,8 +170,8 @@ class DatasetBenchmark {
         DatasetView current = datasetService.find(project.getId(), team.uuid(), null).orElseThrow();
         datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", SCHEMA.replace("editor text role { label \"Role\"",
-                        "editor text position { label \"Position\" renamedFrom \"role\""), "name", null),
+                new UpdateDatasetCommand("Team", CdlSources.split(SCHEMA.replace("editor text role { label \"Role\"",
+                        "editor text position { label \"Position\" renamedFrom \"role\"")), "name", null),
                 current.revision(),
                 ctx);
         long renameMs = millisSince(start);
@@ -209,7 +210,7 @@ class DatasetBenchmark {
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "record set benchmark");
 
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(project.getId(), null, "Team", SCHEMA, "name", null,
+                new CreateDatasetCommand(project.getId(), null, "Team", CdlSources.split(SCHEMA), "name", null,
                         Map.of("html", "<li>$CMS_VALUE(name)$ ($CMS_VALUE(level)$)</li>")),
                 ctx);
         List<UUID> setUuids = new ArrayList<>(sets);
@@ -240,10 +241,10 @@ class DatasetBenchmark {
         List<TemplateView> templates = new ArrayList<>(2 * sets);
         for (int k = 0; k < sets; k++) {
             templates.add(templateService.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE,
-                    "Set " + k + " value", "", Map.of("html", "<ul>$CMS_VALUE(recordset:set" + k + ")$</ul>"), null, false,
+                    "Set " + k + " value", CdlSources.split(""), Map.of("html", "<ul>$CMS_VALUE(recordset:set" + k + ")$</ul>"), null, false,
                     Map.of("html", "{displayNameSlug}.{ext}")), ctx));
             templates.add(templateService.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE,
-                    "Set " + k + " loop", "", Map.of("html", "<ol>$CMS_FOR(m : recordset:set" + k + ", where=\"m.level > 2\")$"
+                    "Set " + k + " loop", CdlSources.split(""), Map.of("html", "<ol>$CMS_FOR(m : recordset:set" + k + ", where=\"m.level > 2\")$"
                             + "<li>$CMS_VALUE(m.name)$</li>$CMS_END_FOR$</ol>"), null, false,
                     Map.of("html", "{displayNameSlug}.{ext}")), ctx));
         }
@@ -269,7 +270,7 @@ class DatasetBenchmark {
         long unselectedMs = millisSince(start);
 
         DatasetView current = datasetService.find(project.getId(), team.uuid(), null).orElseThrow();
-        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", SCHEMA, "name", null,
+        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(SCHEMA), "name", null,
                 Map.of("html", "<li class=\"member\">$CMS_VALUE(name)$</li>")), current.revision(), ctx);
         start = System.nanoTime();
         GenerationRun recordTemplate = generate(project, target, user, GenerationMode.INCREMENTAL);

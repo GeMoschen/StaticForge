@@ -8,6 +8,7 @@ import com.acme.staticforge.asset.dataset.RecordValues;
 import com.acme.staticforge.asset.folder.AssetReferencePrefixes;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.template.cdl.CdlCompiler;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import java.util.Optional;
@@ -60,7 +61,7 @@ public class ProjectReferenceResolver {
                         .filter(asset -> asset.getAssetType() == AssetType.DATASET)
                         .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
                         .filter(version -> !version.isDeleted())
-                        .map(version -> cdlCompiler.compile(version.getPayload().path("contentDefinition").asText(""))
+                        .map(version -> cdlCompiler.compile(CdlSources.of(version.getPayload()))
                                 .definition());
             }
 

@@ -1,6 +1,7 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { cdl } from './cdl';
 
 /**
  * M22 build insight journey (feature `docs-e2e`, `M22.5.1`) — "why is this rebuilding?":
@@ -164,18 +165,18 @@ test('journey: why is this rebuilding?', async ({ page }) => {
     const hero = await api.uploadText('hero.txt', 'HERO');
     const teaser = await api.post('/section-templates', {
       displayName: 'Teaser',
-      contentDefinition: '',
+      ...cdl(''),
       channelSources: { html: '<p>teaser v1</p>' },
     });
     const article = await api.post('/page-templates', {
       displayName: 'Article',
-      contentDefinition: 'bodies { body main { label "Main" allow ["*"] } }',
+      ...cdl('bodies { body main { label "Main" allow ["*"] } }'),
       channelSources: { html: '<main>$CMS_BODY(main)$</main>' },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });
     const withHero = await api.post('/page-templates', {
       displayName: 'With hero',
-      contentDefinition: 'content { editor media hero { label "Hero" } }',
+      ...cdl('content { editor media hero { label "Hero" } }'),
       channelSources: { html: '<img src="$CMS_REF(hero)$">' },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });

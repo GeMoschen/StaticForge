@@ -35,6 +35,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -373,7 +374,7 @@ class SaveRuleGateIntegrationTest {
                 new CreateProjectRequest("saverules_" + n, "Save Rules " + n, null, null), admin.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), admin.getId(), "test");
         TemplateView pageTemplate = templateService.create(new CreateTemplateCommand(
-                project.getId(), AssetType.PAGE_TEMPLATE, "Page " + n, CDL,
+                project.getId(), AssetType.PAGE_TEMPLATE, "Page " + n, CdlSources.split(CDL),
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, null), ctx);
         return new Fixture(project, admin, ctx, pageTemplate);
     }
@@ -406,12 +407,12 @@ class SaveRuleGateIntegrationTest {
 
         DatasetView dataset() {
             return datasetService.create(
-                    new CreateDatasetCommand(project.getId(), null, "Items " + SEQ.incrementAndGet(), CDL, null, null), ctx);
+                    new CreateDatasetCommand(project.getId(), null, "Items " + SEQ.incrementAndGet(), CdlSources.split(CDL), null, null), ctx);
         }
 
         GlobalSetView globalSet() {
             AssetVersionView folder = folderService.create(null, "Branding " + SEQ.incrementAndGet(), FolderScope.GLOBALS, ctx);
-            return globalSetService.create(new CreateGlobalSetCommand(project.getId(), folder.uuid(), "Site", CDL), ctx);
+            return globalSetService.create(new CreateGlobalSetCommand(project.getId(), folder.uuid(), "Site", CdlSources.split(CDL)), ctx);
         }
 
         String token() {

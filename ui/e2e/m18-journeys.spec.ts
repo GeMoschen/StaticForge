@@ -1,6 +1,7 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { cdl } from './cdl';
 
 /**
  * M18 processed text media journeys (feature `docs-e2e`, `M18.5.1`):
@@ -93,7 +94,7 @@ class Api {
   pageTemplate(displayName: string, source: string): Promise<Json> {
     return this.post('/page-templates', {
       displayName,
-      contentDefinition: '',
+      ...cdl(''),
       channelSources: { html: source },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });
@@ -104,7 +105,7 @@ class Api {
   }
 
   async globalSet(displayName: string, contentDefinition: string, content: Json): Promise<Json> {
-    const set = await this.post('/globals', { displayName, contentDefinition });
+    const set = await this.post('/globals', { displayName, ...cdl(contentDefinition) });
     return this.put(`/globals/${set.uuid}/content`, { content }, { 'If-Match': `"rev-${set.revision}"` });
   }
 

@@ -42,6 +42,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -99,7 +100,7 @@ class RecordSetIncrementalPlanIntegrationTest {
     void recordSetAndRecordTemplateChangesRebuildExactlyTheReadingPages() {
         Fixture fx = newFixture();
         DatasetView team = datasetService.create(new CreateDatasetCommand(
-                fx.projectId(), null, "Team", TEAM_CDL, "name", null, Map.of("html", "<li>$CMS_VALUE(name)$</li>")), fx.ctx());
+                fx.projectId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null, Map.of("html", "<li>$CMS_VALUE(name)$</li>")), fx.ctx());
         AssetVersionView folder = folderService.create(null, "Team", FolderScope.CONTENT, fx.ctx());
         RecordSetView leads = recordSetService.create(new CreateRecordSetCommand(fx.projectId(), folder.uuid(), team.uuid(),
                 "leads", "Leads", new RecordSetQuery("role == 'lead'", null, null, null)), fx.ctx());
@@ -189,7 +190,7 @@ class RecordSetIncrementalPlanIntegrationTest {
         // Change the html record template: only the pages rendering a set's records through it.
         baseline = head(fx);
         DatasetView current = datasetService.find(fx.projectId(), team.uuid(), null).orElseThrow();
-        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", TEAM_CDL, "name", null,
+        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL), "name", null,
                 Map.of("html", "<li class=\"member\">$CMS_VALUE(name)$</li>")), current.revision(), fx.ctx());
         plan = plan(fx, baseline);
         assertThat(pages(plan)).containsExactlyInAnyOrder(p1, p3);
@@ -202,7 +203,7 @@ class RecordSetIncrementalPlanIntegrationTest {
         // A record change in the same window as a record template change still reaches its loop readers.
         baseline = head(fx);
         current = datasetService.find(fx.projectId(), team.uuid(), null).orElseThrow();
-        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", TEAM_CDL, "name", null,
+        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL), "name", null,
                 Map.of("html", "<li>$CMS_VALUE(name)$</li>")), current.revision(), fx.ctx());
         update(fx, eve, "{\"name\":\"Eve\",\"role\":\"dev\"}");
         assertThat(pages(plan(fx, baseline))).containsExactlyInAnyOrder(p1, p3, p4);
@@ -210,7 +211,7 @@ class RecordSetIncrementalPlanIntegrationTest {
         // A schema change: every reader of the dataset and of all its sets.
         baseline = head(fx);
         current = datasetService.find(fx.projectId(), team.uuid(), null).orElseThrow();
-        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", TEAM_CDL.replace("\"Role\"", "\"Team role\""),
+        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("\"Role\"", "\"Team role\"")),
                 "name", null), current.revision(), fx.ctx());
         assertThat(pages(plan(fx, baseline))).containsExactlyInAnyOrder(p1, p2, p3, p4).doesNotContain(p5);
     }
@@ -224,10 +225,10 @@ class RecordSetIncrementalPlanIntegrationTest {
     void aSetRenderedThroughARecordsReferenceEditorOrARecordTemplateLoopIsFollowed() {
         Fixture fx = newFixture();
         DatasetView team = datasetService.create(new CreateDatasetCommand(
-                fx.projectId(), null, "Team", TEAM_CDL, "name", null, Map.of("html", "<i>$CMS_VALUE(name)$</i>")), fx.ctx());
+                fx.projectId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null, Map.of("html", "<i>$CMS_VALUE(name)$</i>")), fx.ctx());
         DatasetView groups = datasetService.create(new CreateDatasetCommand(fx.projectId(), null, "Groups",
-                "content { editor text name { label \"Name\" }"
-                        + " editor reference members { label \"Members\" assetTypes [RECORD_SET] dataset \"team\" } }",
+                CdlSources.split("content { editor text name { label \"Name\" }"
+                        + " editor reference members { label \"Members\" assetTypes [RECORD_SET] dataset \"team\" } }"),
                 "name", null,
                 Map.of("html", "<h2>$CMS_VALUE(name)$</h2>$CMS_VALUE(members)$"
                         + "|$CMS_FOR(m : dataset:team, where=\"m.role == 'lead'\")$$CMS_VALUE(m.name)$$CMS_END_FOR$")),
@@ -280,7 +281,7 @@ class RecordSetIncrementalPlanIntegrationTest {
         // Team's record template renders the members inside every group: P6, not the alumni loop.
         baseline = head(fx);
         DatasetView current = datasetService.find(fx.projectId(), team.uuid(), null).orElseThrow();
-        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", TEAM_CDL, "name", null,
+        datasetService.update(team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL), "name", null,
                 Map.of("html", "<b>$CMS_VALUE(name)$</b>")), current.revision(), fx.ctx());
         plan = plan(fx, baseline);
         assertThat(pages(plan)).containsExactly(p6);
@@ -347,7 +348,7 @@ class RecordSetIncrementalPlanIntegrationTest {
 
     private TemplateView pageTemplate(Fixture fx, String name, String cdl, String html) {
         return templateService.create(
-                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, cdl,
+                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl),
                         Map.of("html", html), null, false, Map.of("html", "{displayNameSlug}.{ext}")),
                 fx.ctx());
     }

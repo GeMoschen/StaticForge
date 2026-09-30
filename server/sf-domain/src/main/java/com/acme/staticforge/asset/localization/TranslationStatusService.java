@@ -12,6 +12,7 @@ import com.acme.staticforge.asset.template.TemplateHierarchies;
 import com.acme.staticforge.common.L10nValues;
 import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.ProjectLocales;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -182,7 +183,7 @@ public class TranslationStatusService {
                             .map(effective -> effective.definition())
                             .orElse(null));
         }
-        if (payload.has("contentDefinition") || payload.has("compiledDefinition")) {
+        if (CdlSources.presentIn(payload) || payload.has("compiledDefinition")) {
             return TemplateContentDefinitions.of(payload);
         }
         UUID dataset = parse(payload.path("datasetRef").asText(null));

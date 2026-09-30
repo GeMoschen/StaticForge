@@ -39,6 +39,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.compaction.CompactionResult;
 import com.acme.staticforge.revision.compaction.RevisionCompactor;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -120,7 +121,7 @@ class RevisionCompactionBuildIntegrationTest {
     @DisplayName("full builds at a released and at a retained-build revision are byte-identical after compaction; incremental plans match")
     void buildsStayExact() throws Exception {
         Fx fx = fixture("cmpbld");
-        TemplateView template = templates.create(new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", PAGE_CDL,
+        TemplateView template = templates.create(new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(PAGE_CDL),
                 Map.of("html", PAGE_HTML), null, false, Map.of("html", "{folder}{uid}.{ext}")), fx.ctx());
         UUID about = page(fx, template, "about", "About 1");
         UUID news = page(fx, template, "news", "News 1");
@@ -171,7 +172,7 @@ class RevisionCompactionBuildIntegrationTest {
     @DisplayName("after generation-run-retention ran, compaction keeps the retained build's revision exact and incremental builds keep their baseline")
     void retentionThenCompaction() throws Exception {
         Fx fx = fixture("cmpret");
-        TemplateView template = templates.create(new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", PAGE_CDL,
+        TemplateView template = templates.create(new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(PAGE_CDL),
                 Map.of("html", PAGE_HTML), null, false, Map.of("html", "{folder}{uid}.{ext}")), fx.ctx());
         UUID about = page(fx, template, "about", "About 1");
         reference(fx, "About", about);

@@ -17,6 +17,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.search.SearchIndexer;
 import com.acme.staticforge.search.SearchService;
 import com.acme.staticforge.search.SearchStatus;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -124,11 +125,11 @@ class SearchBenchmark {
                 new CreateProjectRequest("searchbench", "Search Benchmark", null, "search benchmark"), user.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "search benchmark");
         TemplateView template = templateService.create(new CreateTemplateCommand(
-                project.getId(), AssetType.PAGE_TEMPLATE, "Article", PAGE_CDL,
+                project.getId(), AssetType.PAGE_TEMPLATE, "Article", CdlSources.split(PAGE_CDL),
                 Map.of("html", "<main>$CMS_VALUE(intro)$ $CMS_VALUE(body)$ $CMS_BODY(main)$</main>"), null, false,
                 Map.of("html", "{displayNameSlug}.{ext}")), ctx);
         TemplateView section = templateService.create(new CreateTemplateCommand(
-                project.getId(), AssetType.SECTION_TEMPLATE, "Teaser", SECTION_CDL,
+                project.getId(), AssetType.SECTION_TEMPLATE, "Teaser", CdlSources.split(SECTION_CDL),
                 Map.of("html", "<h2>$CMS_VALUE(headline)$</h2><p>$CMS_VALUE(blurb)$</p>"), null, false, null), ctx);
 
         long fixtureStart = System.nanoTime();

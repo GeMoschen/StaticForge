@@ -22,6 +22,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -120,7 +121,7 @@ class IncludeCycleGenerationIntegrationTest {
 
     private TemplateView template(Project project, RevisionContext ctx, AssetType type, String name, String html) {
         return templateService.create(
-                new CreateTemplateCommand(project.getId(), type, name, "", Map.of("html", html), null, false, null, null),
+                new CreateTemplateCommand(project.getId(), type, name, CdlSources.split(""), Map.of("html", html), null, false, null, null),
                 ctx);
     }
 

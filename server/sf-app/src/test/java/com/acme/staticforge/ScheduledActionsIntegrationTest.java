@@ -43,6 +43,7 @@ import com.acme.staticforge.scheduler.SchedulerEngine;
 import com.acme.staticforge.scheduler.actions.ReleaseActionHandler;
 import com.acme.staticforge.scheduler.actions.ScheduleDrift;
 import com.acme.staticforge.scheduler.actions.UnpublishActionHandler;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.generate.schedule.GenerationActionHandler;
 import com.acme.staticforge.generate.schedule.RecurringGenerationActionHandler;
 import com.acme.staticforge.user.AppUser;
@@ -484,7 +485,7 @@ class ScheduledActionsIntegrationTest {
         GenerationTarget target = targets.save(new GenerationTarget(project.getId(), "default", TargetType.FILESYSTEM, config(), true));
         RevisionContext ctx = RevisionContext.of(project.getId(), owner.getId(), "fixture");
         TemplateView template = templateService.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page",
-                CDL, Map.of("html", HTML), null, false, Map.of("html", "{folder}{uid}.{ext}")), ctx);
+                CdlSources.split(CDL), Map.of("html", HTML), null, false, Map.of("html", "{folder}{uid}.{ext}")), ctx);
         projects.add(project.getId());
         return new Fixture(project, owner, target, template);
     }

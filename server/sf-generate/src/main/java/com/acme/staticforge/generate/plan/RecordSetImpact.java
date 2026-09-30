@@ -6,6 +6,7 @@ import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.LocaleConfig;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.RecordSetReads;
@@ -146,7 +147,7 @@ final class RecordSetImpact {
             SnapshotAsset dataset = datasetUuid == null ? null : snapshot.assetByUuid(datasetUuid);
             ContentDefinition definition = dataset == null || dataset.payload() == null
                     ? null
-                    : definitions.definition(datasetUuid, dataset.payload().path("contentDefinition").asText(""));
+                    : definitions.definition(datasetUuid, CdlSources.of(dataset.payload()));
             return RecordSetQueries.compile(
                     RecordSetQuery.fromJson(payload == null ? null : payload.get("query")), definition);
         });

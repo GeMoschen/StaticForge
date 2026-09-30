@@ -32,6 +32,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.release.ReleaseItem;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -368,7 +369,7 @@ class GoldenQualityFixtureIntegrationTest {
     private TemplateView template(
             Fixture fx, String name, String cdl, String html, String md, boolean abstractTemplate,
             Map<String, String> paginationPath) {
-        return templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, cdl,
+        return templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl),
                 Map.of("html", source(html), "md", source(md)), null, false,
                 Map.of("html", PATTERN, "md", PATTERN), null, abstractTemplate, paginationPath), fx.ctx());
     }

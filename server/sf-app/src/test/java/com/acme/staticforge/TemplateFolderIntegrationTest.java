@@ -34,6 +34,7 @@ import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -341,7 +342,7 @@ class TemplateFolderIntegrationTest {
         TemplateView updated = templateService.update(
                 legacy.uuid(),
                 new UpdateTemplateCommand(
-                        "Legacy Card", "content { editor text headline {} }", Map.of("html", "<span>x</span>"), null, false, null),
+                        "Legacy Card", CdlSources.split("content { editor text headline {} }"), Map.of("html", "<span>x</span>"), null, false, null),
                 legacy.validFromRevision(),
                 fx.ctx());
         TemplateView withChannel = templateService.saveChannel(
@@ -360,7 +361,7 @@ class TemplateFolderIntegrationTest {
 
         // Content/channel data is untouched by the reparent — only folderId/folderPath changed.
         assertThat(migrated.payload().path("channelTemplates").has("markdown")).isTrue();
-        assertThat(migrated.payload().path("contentDefinition").asText()).contains("headline");
+        assertThat(migrated.payload().path("contentCdl").asText()).contains("headline");
 
         // Revision history is intact: one extra (MOVE) version, prior versions still queryable.
         assertThat(assetService.history(fx.project().getId(), legacy.uuid())).hasSize(historyLengthBefore + 1);
@@ -510,13 +511,13 @@ class TemplateFolderIntegrationTest {
         TemplateView rev2 = templateService.update(
                 legacySection1.uuid(),
                 new UpdateTemplateCommand(
-                        "Legacy Card", "content { editor text headline {} }", Map.of("html", "<span>v2</span>"), null, false, null),
+                        "Legacy Card", CdlSources.split("content { editor text headline {} }"), Map.of("html", "<span>v2</span>"), null, false, null),
                 legacySection1.validFromRevision(),
                 fx.ctx());
         TemplateView rev3 = templateService.update(
                 rev2.uuid(),
                 new UpdateTemplateCommand(
-                        "Legacy Card v3", "content { editor text headline {} }", Map.of("html", "<span>v3</span>"), null, false, null),
+                        "Legacy Card v3", CdlSources.split("content { editor text headline {} }"), Map.of("html", "<span>v3</span>"), null, false, null),
                 rev2.validFromRevision(),
                 fx.ctx());
         // ...plus a channel-template edit.
@@ -566,7 +567,7 @@ class TemplateFolderIntegrationTest {
         assertThat(migratedCurrent.folderId()).isEqualTo(sectionTemplatesFolderId);
         assertThat(migratedCurrent.payload().path("channelTemplates").path("markdown").path("source").asText())
                 .isEqualTo("# static card");
-        assertThat(migratedCurrent.payload().path("contentDefinition").asText()).contains("headline");
+        assertThat(migratedCurrent.payload().path("contentCdl").asText()).contains("headline");
         // Only folderId/folderPath differ from the pre-migration current payload — everything else identical.
         assertThat(migratedCurrent.payload()).isEqualTo(withChannel.payload());
 
@@ -641,7 +642,7 @@ class TemplateFolderIntegrationTest {
                         fx.project().getId(),
                         AssetType.SECTION_TEMPLATE,
                         name,
-                        "content { editor text headline {} }",
+                        CdlSources.split("content { editor text headline {} }"),
                         Map.of("html", "<h2>$CMS_VALUE(headline)$</h2>"),
                         null,
                         false,
@@ -656,7 +657,7 @@ class TemplateFolderIntegrationTest {
                         fx.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         name,
-                        "content { editor text title {} }",
+                        CdlSources.split("content { editor text title {} }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -670,7 +671,7 @@ class TemplateFolderIntegrationTest {
      * at the project's hidden root ({@code parentFolderUuid == null}). */
     private AssetVersionView createLegacyRootedSectionTemplate(Fixture fx, String name) {
         ObjectNode payload = MAPPER.createObjectNode();
-        payload.put("contentDefinition", "content { editor text headline {} }");
+        payload.put("contentCdl", "editor text headline {}");
         payload.putObject("channelTemplates");
         payload.put("category", "");
         payload.put("deprecated", false);
@@ -685,12 +686,12 @@ class TemplateFolderIntegrationTest {
     private AssetVersionView createLegacyRootedTemplate(Fixture fx, AssetType kind, String name) {
         ObjectNode payload = MAPPER.createObjectNode();
         if (kind == AssetType.SECTION_TEMPLATE) {
-            payload.put("contentDefinition", "content { editor text headline {} }");
+            payload.put("contentCdl", "editor text headline {}");
             payload.putObject("channelTemplates");
             payload.put("category", "");
             payload.put("deprecated", false);
         } else {
-            payload.put("contentDefinition", "content { editor text title {} }");
+            payload.put("contentCdl", "editor text title {}");
             payload.putObject("channelTemplates");
             payload.put("category", "");
             payload.putArray("bodies");

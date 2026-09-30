@@ -31,6 +31,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -121,19 +122,19 @@ final class BuildInsightFixtures {
 
     TemplateView pageTemplate(Fixture fx, String name, String cdl, String html) {
         return templates.create(new CreateTemplateCommand(
-                fx.projectId(), AssetType.PAGE_TEMPLATE, name, cdl, Map.of("html", html), null, false,
+                fx.projectId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl), Map.of("html", html), null, false,
                 Map.of("html", "{displayNameSlug}.{ext}")), fx.ctx());
     }
 
     TemplateView sectionTemplate(Fixture fx, String name, String cdl, String html) {
         return templates.create(new CreateTemplateCommand(
-                fx.projectId(), AssetType.SECTION_TEMPLATE, name, cdl, Map.of("html", html), null, false, null), fx.ctx());
+                fx.projectId(), AssetType.SECTION_TEMPLATE, name, CdlSources.split(cdl), Map.of("html", html), null, false, null), fx.ctx());
     }
 
     /** Saves a template's html channel source and output path pattern. */
     TemplateView updateTemplate(Fixture fx, UUID uuid, String html, String outputPath) {
         TemplateView now = templates.get(fx.projectId(), uuid);
-        String cdl = now.payload().path("contentDefinition").asText("");
+        CdlSources cdl = CdlSources.of(now.payload());
         Map<String, String> paths = outputPath == null ? Map.of() : Map.of("html", outputPath);
         return templates.update(uuid, new UpdateTemplateCommand(now.displayName(), cdl, Map.of("html", html), null, false,
                 paths, false, Map.of()), now.validFromRevision(), fx.ctx());

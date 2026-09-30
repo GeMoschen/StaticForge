@@ -32,6 +32,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryEntry;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
@@ -373,7 +374,7 @@ class ChannelOutputSettingsIntegrationTest {
 
     private TemplateView template(Project project, RevisionContext ctx, String name, String source) {
         return templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, name, "",
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(""),
                         Map.of("html", source), null, false, null, null),
                 ctx);
     }

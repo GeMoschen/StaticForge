@@ -1,6 +1,7 @@
 package com.acme.staticforge.asset.globals;
 
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Optional;
@@ -11,7 +12,7 @@ import java.util.UUID;
  * declares in CDL and whose values an editor fills in.
  *
  * <p>Schema and values live in <em>one</em> asset
- * ({@code {contentDefinition, compiledDefinition, content}}), so a schema change and the value
+ * ({@code {contentCdl, bodiesCdl, rulesCdl, compiledDefinition, content}}), so a schema change and the value
  * migration it causes are the same asset in the same revision — there is no cross-asset cascade
  * like a section template's fan-out into pages. The two are still separate <em>operations</em>
  * because they carry different permissions (schema = {@code DEVELOPER}, values = {@code EDITOR}),
@@ -39,15 +40,17 @@ public interface GlobalSetService {
      * migrated values are validated against the new definition, and a structural violation rejects
      * the save with {@code 422} and field-level issues.
      */
-    GlobalSetView updateSchema(UUID uuid, String contentDefinition, long expectedRevision, RevisionContext ctx);
+    GlobalSetView updateSchema(UUID uuid, CdlSources cdl, long expectedRevision, RevisionContext ctx);
 
     /**
      * Updates the schema; {@code confirmDiscard} authorizes a change that takes {@code localizable}
      * off an editor whose value carries translations, which are then reduced to the default
-     * language (M24.2.2). Without it, such a save is rejected with a {@code 409}.
+     * language (M24.2.2). Without it, such a save is rejected with a {@code 409}. {@code content} (M34, nullable)
+     * saves values edited against the stored schema in the same version: they are saved as {@link #updateValues}
+     * would, then migrated into the new schema — the editor's one Save for schema and values is one revision.
      */
     GlobalSetView updateSchema(
-            UUID uuid, String contentDefinition, long expectedRevision, boolean confirmDiscard, RevisionContext ctx);
+            UUID uuid, CdlSources cdl, JsonNode content, long expectedRevision, boolean confirmDiscard, RevisionContext ctx);
 
     /**
      * Replaces the set's values, validated against the stored compiled definition. Structural

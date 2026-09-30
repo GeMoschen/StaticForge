@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.globals;
 
+import com.acme.staticforge.template.cdl.CdlSources;
 import java.util.UUID;
 
 /**
@@ -8,4 +9,4 @@ import java.util.UUID;
  * is provisioned lazily if the project predates M17.
  */
 public record CreateGlobalSetCommand(
-        long projectId, UUID parentFolderUuid, String displayName, String contentDefinition) {}
+        long projectId, UUID parentFolderUuid, String displayName, CdlSources cdl) {}

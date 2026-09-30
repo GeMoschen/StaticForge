@@ -149,8 +149,8 @@ Site-wide values — the site title, the logo, the social links, the footer copy
 
 1. Open **Globals** from the nav. Like Navigation, the folder tree is on the left and the selected item on the right. Folders are only for keeping things tidy; they don't change where a value shows up.
 2. The store holds **property sets**, each a named group of fields such as `site` or `social`. Select one to open it.
-3. The **Values** tab is a form, like a page's fields. Fill it in and choose **Save values**. Globals don't autosave: a property set is shown on many pages at once, so nothing reaches a preview until you save. The set's schema may carry rules like a template's: findings show at the fields, and an error on save keeps the values unsaved until it is fixed.
-4. The **Schema** tab shows which fields the set has. Developers declare them; editors can read the schema but not change it.
+3. The **Values** tab is a form, like a page's fields. Fill it in and choose **Save** in the header (or press `Ctrl+S` / `⌘S`). Globals don't autosave: a property set is shown on many pages at once, so nothing reaches a preview until you save. The set's schema may carry rules like a template's: findings show at the fields, and an error on save keeps the values unsaved until it is fixed.
+4. The **Schema** tab shows which fields the set has, on a **Content** tab (the fields) and a **Rules** tab (checks on them). Developers declare them; editors can read the schema but not change it. A developer who changes both the schema and the values saves them together with the one **Save** — one revision. A tab with unsaved changes shows a dot.
 5. Every save is a revision, so a property set has history, a diff and restore like everything else. If someone else saved the same set since you opened it, your save is refused and the set reloads with their version — re-apply your change and save again.
 6. The header shows the set's UID and a snippet such as `$CMS_VALUE(CMS_GLOBAL.site.title)$` — hand that to a developer if a template should show this value.
 
@@ -676,7 +676,7 @@ XML (SVG too) `Ctrl+Space` also completes tags, attributes, properties and closi
 In **Changes**, `↑`/`↓` move between rows, `Space` ticks a row and `Enter` shows its changes; the preview's
 **Draft | Published** switch is a radio group (arrow keys switch).
 
-In the Globals tree and the other store trees, `Tab` reaches each item, `Enter` or `Space` opens it, and `→`/`←` expand and collapse a folder. The Values and Schema tabs are ordinary buttons you can `Tab` to.
+In the Globals tree and the other store trees, `Tab` reaches each item, `Enter` or `Space` opens it, and `→`/`←` expand and collapse a folder. The Values and Schema tabs are ordinary buttons you can `Tab` to; in a row of tabs such as Content / Rules, `←`/`→` move between them.
 
 ## Roles in detail
 

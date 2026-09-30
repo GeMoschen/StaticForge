@@ -36,6 +36,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
 import com.acme.staticforge.scheduler.ScheduledAction;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserAdministrationService;
 import com.acme.staticforge.user.UserService;
@@ -407,7 +408,7 @@ class PublishPolicyApiTest {
     }
 
     private UUID page(Fixture fx, String name) {
-        TemplateView template = templates.create(new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page " + name, CDL,
+        TemplateView template = templates.create(new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page " + name, CdlSources.split(CDL),
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of()), fx.ctx());
         return pages.create(new CreatePageCommand(name, null, template.uuid()), fx.ctx()).uuid();
     }

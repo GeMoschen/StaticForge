@@ -45,6 +45,7 @@ import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.release.ReleaseStatus;
 import com.acme.staticforge.release.ReleaseStatusService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -191,7 +192,7 @@ class ReleaseStateExportImportIntegrationTest {
         AssetVersionView two = mediaService.upload(fx.id(), null, "two.txt", null, bytes("TWO"), fx.ctx());
         TemplateView template = templateService.create(
                 new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Card",
-                        "content { editor media photo { label \"Photo\" } }", Map.of("html", "card"), null, false,
+                        CdlSources.split("content { editor media photo { label \"Photo\" } }"), Map.of("html", "card"), null, false,
                         Map.of("html", "{folder}{uid}.{ext}")),
                 fx.ctx());
         UUID card = pageService.create(new CreatePageCommand("card", null, template.uuid()), fx.ctx()).uuid();
@@ -312,7 +313,7 @@ class ReleaseStateExportImportIntegrationTest {
     void archiveWithoutLanguagesReleasesTheDefaultLanguage() throws Exception {
         Fixture fx = newFixture("rnoloc", false);
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Plain", "", Map.of("html", "plain"), null,
+                new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Plain", CdlSources.split(""), Map.of("html", "plain"), null,
                         false, Map.of("html", "{folder}{uid}.{ext}")),
                 fx.ctx());
         UUID page = pageService.create(new CreatePageCommand("plain", null, template.uuid()), fx.ctx()).uuid();
@@ -368,7 +369,7 @@ class ReleaseStateExportImportIntegrationTest {
         shot = mediaService.setLocalized(shot.uuid(), true, false, shot.validFromRevision(), fx.ctx());
         mediaService.putLocaleFile(shot.uuid(), "en", "shot-en.txt", null, bytes("EN v1"), fx.ctx());
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", CDL,
+                new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(CDL),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1><img src=\"$CMS_REF(media:" + shot.uid() + ")$\">"), null,
                         false, Map.of("html", "{locale}/{folder}{uid}.{ext}")),
                 fx.ctx());
@@ -392,7 +393,7 @@ class ReleaseStateExportImportIntegrationTest {
 
     private UUID localizedTemplate(Fixture fx) {
         return templateService.create(
-                        new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", CDL, Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
+                        new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(CDL), Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                                 null, false, Map.of("html", "{locale}/{folder}{uid}.{ext}")),
                         fx.ctx())
                 .uuid();

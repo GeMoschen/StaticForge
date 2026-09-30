@@ -1,3 +1,32 @@
+# M34 — CDL tabs and one save
+
+Spec: `tasks/34-m34-cdl-tabs-one-save/`. User decisions (2026-09-30) there. The CDL of templates, datasets and global
+sets is stored and edited as its sections (`contentCdl`, `bodiesCdl`, `rulesCdl`), one tab each; channel templates
+are tabs beside it; one Save writes a holder's CDL, channels (or values) as one revision.
+
+- [x] M34.1 CDL sections in the compiler (`CdlSources`, `compile(CdlSources)`, `Diagnostic.field`)
+- [x] M34.2 payload, API and domain on sections (no migration: no real data yet)
+- [x] M34.3 global set: schema and values in one save
+- [x] M34.4 UI: `sf-tabs`, `sf-cdl-sections-editor`, split view, staged channels, one Save, `Ctrl/Cmd+S`
+- [x] M34.5 spec + docs + journeys
+
+## Review
+
+Verification (2026-09-30): `./gradlew test` green except the known Linux-only
+`GenerationIntegrationTest.fullGenerationReachesSuccessAndPublishesOutput` (`current` is a symlink); `spotlessCheck`
+could not run (Maven Central answered 429 for the formatter), its rules (unused imports, trailing whitespace, final
+newline) checked by script; `npx vitest run` green; `npx ng build` green (only pre-existing warnings); OpenAPI
+regenerated, matching the hand-edited UI types. Journeys against a dev backend: m17 (4/4), m19 (4/4) green; m20 and m21
+pass every template step and then fail reading generated files — those journeys predate M27 and never release their
+pages, so a build renders nothing (same for the output checks of m16, m27, m29). m18, m22, m24 and m25 fail in areas
+M34 doesn't touch (text-media editor, generation dialog, page autosave, a dialog's layout at 1280 px).
+
+Found on the way:
+- The reload after a template save overwrote edits typed while it was in flight (fixed: it keeps them).
+- Switching channels reused one code editor, so undo could restore another channel's text and its accessible name
+  stayed the first channel's (fixed: one editor per channel; the code editor now follows its `label`).
+- m17 journey 3 demoted the instance admin to editor, which the UI ignores (fixed: it signs in as an editor account).
+
 # M33 — Editor rules (branch `claude/sleepy-shannon-4u1kao`)
 
 Spec: `tasks/33-m33-editor-rules/`. User decisions (2026-09-29) and binding decisions there. Templates (page, section),

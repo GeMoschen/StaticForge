@@ -34,6 +34,7 @@ import com.acme.staticforge.scheduler.ScheduledAction;
 import com.acme.staticforge.scheduler.ScheduledActionExecution;
 import com.acme.staticforge.scheduler.SchedulerEngine;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserAdministrationService;
 import com.acme.staticforge.user.UserService;
@@ -281,7 +282,7 @@ class EditorReleaseAndScheduleIntegrationTest {
         Project project = projects.create(new CreateProjectRequest(prefix.replace("-", "") + n, prefix + n, null, "editor publishing"),
                 admin.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), admin.getId(), "editor publishing");
-        TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CDL,
+        TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(CDL),
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of()), ctx);
         created.add(project.getId());
         return new Fixture(project, admin, ctx, template, target(project, "primary", true), target(project, "second", false));

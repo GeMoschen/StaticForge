@@ -46,6 +46,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.redirect.RedirectEntry;
 import com.acme.staticforge.redirect.RedirectKind;
 import com.acme.staticforge.redirect.RedirectService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -373,7 +374,7 @@ class RedirectOutputIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String html, String outputPath) {
         return templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,
-                name + " " + SEQ.incrementAndGet(), "", Map.of("html", html), null, false, Map.of("html", outputPath)),
+                name + " " + SEQ.incrementAndGet(), CdlSources.split(""), Map.of("html", html), null, false, Map.of("html", outputPath)),
                 fx.ctx());
     }
 

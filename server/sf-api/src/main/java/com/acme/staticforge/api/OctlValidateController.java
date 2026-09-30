@@ -65,7 +65,7 @@ public class OctlValidateController {
             UUID datasetUuid = uuid(body.datasetUuid(), "datasetUuid");
             long projectId = projectService.requireByKey(projectKey).getId();
             return new OctlValidateResponse(datasetService.validateRecordTemplate(
-                    projectId, datasetUuid, body.channelKey(), body.source(), body.contentDefinition()));
+                    projectId, datasetUuid, body.channelKey(), body.source(), body.cdl()));
         }
         if (!template) {
             OctlResult result = octlCompiler.compile(body.source(), body.channelKey(), null);
@@ -74,7 +74,7 @@ public class OctlValidateController {
         UUID templateUuid = uuid(body.templateUuid(), "templateUuid");
         long projectId = projectService.requireByKey(projectKey).getId();
         return new OctlValidateResponse(templateService.validateChannel(
-                projectId, templateUuid, body.channelKey(), body.source(), body.contentDefinition()));
+                projectId, templateUuid, body.channelKey(), body.source(), body.cdl()));
     }
 
     private static boolean isBlank(String value) {

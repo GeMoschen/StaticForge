@@ -36,6 +36,7 @@ import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.release.ContentView;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryEntry;
 import com.acme.staticforge.urlregistry.UrlRegistryRepository;
@@ -291,7 +292,7 @@ class FolderIndexPageConsumersIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String html, Map<String, String> outputPath) {
         return templateService.create(new CreateTemplateCommand(
-                fx.id(), AssetType.PAGE_TEMPLATE, name, CDL, Map.of("html", html), null, false, outputPath), fx.ctx());
+                fx.id(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(CDL), Map.of("html", html), null, false, outputPath), fx.ctx());
     }
 
     private UUID page(Fixture fx, TemplateView template, String name, UUID folder, String title) {

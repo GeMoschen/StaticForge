@@ -31,6 +31,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.octl.ReferenceResolver;
@@ -91,7 +92,7 @@ class DatasetRecordTemplateIntegrationTest {
         home(fx);
 
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(fx.projectId(), null, "Team", TEAM_CDL, "name", null, Map.of("html", HTML, "md", MD)),
+                new CreateDatasetCommand(fx.projectId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null, Map.of("html", HTML, "md", MD)),
                 fx.ctx());
 
         assertThat(team.channelTemplates().path("html").path("source").asText()).isEqualTo(HTML);
@@ -108,7 +109,7 @@ class DatasetRecordTemplateIntegrationTest {
 
         DatasetView updated = datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", TEAM_CDL, "name", null, Map.of("html", HTML.replace("<li", "<li id=\"m\""))),
+                new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL), "name", null, Map.of("html", HTML.replace("<li", "<li id=\"m\""))),
                 team.revision(),
                 fx.ctx());
         assertThat(updated.channelTemplates().has("md")).as("a map replaces every record template").isFalse();
@@ -122,7 +123,7 @@ class DatasetRecordTemplateIntegrationTest {
         int revisions = revisionCount(fx);
 
         assertThatThrownBy(() -> datasetService.create(
-                        new CreateDatasetCommand(fx.projectId(), null, "Team", TEAM_CDL, null, null,
+                        new CreateDatasetCommand(fx.projectId(), null, "Team", CdlSources.split(TEAM_CDL), null, null,
                                 Map.of("html", "<li>$CMS_VALUE(name)$</li>", "md", "- $CMS_VALUE(name)$\n  $CMS_VALUE(email)$")),
                         fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> {
@@ -151,7 +152,7 @@ class DatasetRecordTemplateIntegrationTest {
                 "$CMS_EXTENDS(page_template:base)$",
                 "$CMS_BLOCK(card)$$CMS_VALUE(name)$$CMS_END_BLOCK$")) {
             assertThatThrownBy(() -> datasetService.update(
-                            team.uuid(), new UpdateDatasetCommand("Team", TEAM_CDL, null, null, Map.of("html", source)),
+                            team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL), null, null, Map.of("html", source)),
                             team.revision(), fx.ctx()))
                     .as(source)
                     .isInstanceOfSatisfying(SfException.class, ex -> {
@@ -209,7 +210,7 @@ class DatasetRecordTemplateIntegrationTest {
 
         // Dropping the templates closes the rows; the revision before still has them (time travel).
         DatasetView cleared = datasetService.update(
-                team.uuid(), new UpdateDatasetCommand("Team", TEAM_CDL, null, null, Map.of()), team.revision(), fx.ctx());
+                team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL), null, null, Map.of()), team.revision(), fx.ctx());
         assertThat(cleared.channelTemplates().isEmpty()).isTrue();
         assertThat(assetService.usages(fx.projectId(), home.uuid())).noneMatch(u -> u.fromUuid().equals(team.uuid()));
         assertThat(assetService.usagesAt(fx.projectId(), home.uuid(), team.revision()))
@@ -217,7 +218,7 @@ class DatasetRecordTemplateIntegrationTest {
 
         // The uid-literal scan of a uid change lists the dataset's record template like a template's channel.
         DatasetView again = datasetService.update(
-                team.uuid(), new UpdateDatasetCommand("Team", TEAM_CDL, null, null, Map.of("html", HTML)),
+                team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL), null, null, Map.of("html", HTML)),
                 cleared.revision(), fx.ctx());
         List<UidLiteralReference> literals = assetService.changeUid(home.uuid(), "start", fx.ctx()).affectedTemplates();
         assertThat(literals).anyMatch(ref -> ref.assetUuid().equals(again.uuid()) && ref.assetType() == AssetType.DATASET);
@@ -232,16 +233,16 @@ class DatasetRecordTemplateIntegrationTest {
                 .isFalse();
         assertThat(plain.channelTemplates().isEmpty()).isTrue();
         DatasetView plainUpdated = datasetService.update(
-                plain.uuid(), new UpdateDatasetCommand("Team", TEAM_CDL, "name", "People"), plain.revision(), fx.ctx());
+                plain.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL), "name", "People"), plain.revision(), fx.ctx());
         assertThat(assetService.requireCurrent(fx.projectId(), plain.uuid()).payload().has(RecordTemplates.PAYLOAD_FIELD))
                 .isFalse();
         assertThat(plainUpdated.description()).isEqualTo("People");
 
         DatasetView withTemplate = datasetService.create(
-                new CreateDatasetCommand(fx.projectId(), null, "Crew", TEAM_CDL, null, null, Map.of("html", "$CMS_VALUE(name)$")),
+                new CreateDatasetCommand(fx.projectId(), null, "Crew", CdlSources.split(TEAM_CDL), null, null, Map.of("html", "$CMS_VALUE(name)$")),
                 fx.ctx());
         DatasetView kept = datasetService.update(
-                withTemplate.uuid(), new UpdateDatasetCommand("Crew", TEAM_CDL, null, "kept"), withTemplate.revision(),
+                withTemplate.uuid(), new UpdateDatasetCommand("Crew", CdlSources.split(TEAM_CDL), null, "kept"), withTemplate.revision(),
                 fx.ctx());
         assertThat(kept.channelTemplates().path("html").path("source").asText()).isEqualTo("$CMS_VALUE(name)$");
     }
@@ -255,7 +256,7 @@ class DatasetRecordTemplateIntegrationTest {
 
         // Stored templates are recompiled against the new schema even when the request leaves them out.
         assertThatThrownBy(() -> datasetService.update(
-                        team.uuid(), new UpdateDatasetCommand("Team", renamed, null, null), team.revision(), fx.ctx()))
+                        team.uuid(), new UpdateDatasetCommand("Team", CdlSources.split(renamed), null, null), team.revision(), fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> {
                     assertThat(ex.getStatus()).isEqualTo(422);
                     Diagnostic diagnostic = diagnostics(ex).getFirst();
@@ -266,7 +267,7 @@ class DatasetRecordTemplateIntegrationTest {
 
         DatasetView fixed = datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", renamed, null, null, Map.of("html", "<li>\n  $CMS_VALUE(position)$\n</li>")),
+                new UpdateDatasetCommand("Team", CdlSources.split(renamed), null, null, Map.of("html", "<li>\n  $CMS_VALUE(position)$\n</li>")),
                 team.revision(),
                 fx.ctx());
         assertThat(fixed.channelTemplates().path("html").path("source").asText()).contains("position");
@@ -280,7 +281,7 @@ class DatasetRecordTemplateIntegrationTest {
 
         assertThatThrownBy(() -> datasetService.update(
                         team.uuid(),
-                        new UpdateDatasetCommand("Team", withLevel2, null, null,
+                        new UpdateDatasetCommand("Team", CdlSources.split(withLevel2), null, null,
                                 Map.of("html", "$CMS_FOR(m : dataset:team, where=\"m.level > 1\")$$CMS_VALUE(m.name)$$CMS_END_FOR$")),
                         team.revision(), fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(diagnostics(ex)).extracting(Diagnostic::code)
@@ -293,7 +294,7 @@ class DatasetRecordTemplateIntegrationTest {
         AssetVersionView home = home(fx);
         DatasetView team = team(fx, Map.of("html", HTML));
         AssetVersionView version = assetService.requireCurrent(fx.projectId(), team.uuid());
-        String cdl = version.payload().path("contentDefinition").asText();
+        CdlSources cdl = CdlSources.of(version.payload());
         String source = RecordTemplates.source(version.payload(), "html").orElseThrow();
         ReferenceResolver resolver = projectReferences.forProject(fx.projectId());
 
@@ -333,7 +334,7 @@ class DatasetRecordTemplateIntegrationTest {
 
     private DatasetView team(Fixture fx, Map<String, String> templates) {
         return datasetService.create(
-                new CreateDatasetCommand(fx.projectId(), null, "Team", TEAM_CDL, null, null, templates), fx.ctx());
+                new CreateDatasetCommand(fx.projectId(), null, "Team", CdlSources.split(TEAM_CDL), null, null, templates), fx.ctx());
     }
 
     private void addMarkdownChannel(Fixture fx) {
@@ -345,7 +346,7 @@ class DatasetRecordTemplateIntegrationTest {
     /** A page with uid {@code home}. */
     private AssetVersionView home(Fixture fx) {
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, "Plain", "content { editor text title { } }",
+                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, "Plain", CdlSources.split("content { editor text title { } }"),
                         Map.of("html", "$CMS_VALUE(title)$"), null, false, Map.of("html", "{displayNameSlug}.{ext}")),
                 fx.ctx());
         AssetVersionView home = pageService.create(new CreatePageCommand("Home", null, template.uuid()), fx.ctx());

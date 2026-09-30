@@ -1,6 +1,7 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { cdl } from './cdl';
 
 /**
  * M21 pagination journey (feature `docs-e2e`, `M21.5.1`) — "one page, N listing pages":
@@ -189,19 +190,15 @@ test('journey: one page generates a paginated listing', async ({ page }) => {
     await page.locator('sf-create-asset-dialog input').first().fill('Blog index');
     await page.locator('sf-create-asset-dialog').getByRole('button', { name: /create/i }).click();
     await expect(screen.locator('.detail__head h3')).toHaveText('Blog index');
-    await screen.getByLabel('Content definition (CDL)').fill(BLOG_CDL);
+    await screen.getByRole('textbox', { name: 'Content definition (CDL) — Content' }).fill(cdl(BLOG_CDL).contentCdl);
+    // The channel is staged; the one Save writes it with the definition (M34).
+    await screen.getByRole('combobox', { name: 'Add channel' }).selectOption('html');
+    const channel = screen.getByRole('textbox', { name: 'OCTL source for channel html' });
+    await channel.fill(BLOG_HTML);
     const savedDefinition = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/page-templates/'));
     await screen.getByRole('button', { name: 'Save template', exact: true }).click();
-    expect((await savedDefinition).status()).toBe(200);
-    const addedChannel = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/channels/html'));
-    await screen.getByRole('combobox', { name: 'Add channel' }).selectOption('html');
-    expect((await addedChannel).status()).toBe(200);
-    const channel = screen.getByRole('textbox', { name: /^OCTL source for channel / });
-    await channel.fill(BLOG_HTML);
-    const savedChannel = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/channels/html'));
-    await screen.getByRole('button', { name: 'Save channel', exact: true }).click();
-    const channelResponse = await savedChannel;
-    expect(channelResponse.status(), await channelResponse.text()).toBe(200);
+    const definitionResponse = await savedDefinition;
+    expect(definitionResponse.status(), await definitionResponse.text()).toBe(200);
 
     // The template's pagination path: a pattern without {pageNumber} is flagged, a valid one is saved.
     const paths = screen.getByRole('group', { name: 'Pagination paths' });
@@ -223,7 +220,7 @@ test('journey: one page generates a paginated listing', async ({ page }) => {
     // 2. Five posts listed by a navigation folder (reference names fix the order).
     const postTemplate = await api.post('/page-templates', {
       displayName: 'Post',
-      contentDefinition: '',
+      ...cdl(''),
       channelSources: { html: '<html><body><article>post</article></body></html>' },
       outputPath: { html: 'posts/{displayNameSlug}.{ext}' },
     });

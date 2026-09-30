@@ -1,4 +1,5 @@
 import { HttpClient } from '@angular/common/http';
+import type { CdlSections } from '../../shared/code-editor/cdl-sections';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -51,15 +52,20 @@ export class GlobalsService {
     });
   }
 
+  /**
+   * Saves the schema's sections (M34). `content`, when given, saves the values edited against the stored schema in the
+   * same revision — the detail's one Save; they are migrated into the new schema with it.
+   */
   updateSchema(
     projectKey: string,
     uuid: string,
-    contentDefinition: string,
+    sections: CdlSections,
+    content?: Record<string, unknown>,
     etag?: string,
   ): Observable<GlobalSetDetailView> {
     return this.http.put<GlobalSetDetailView>(
       `${BASE}/projects/${projectKey}/globals/${uuid}/schema`,
-      { contentDefinition },
+      { contentCdl: sections.content, rulesCdl: sections.rules, ...(content ? { content } : {}) },
       this.mutationOptions(etag),
     );
   }
@@ -87,10 +93,10 @@ export class GlobalsService {
    * Validates draft CDL. `kind=GLOBAL_SET` adds the property-set restrictions (no `body`, no
    * `catalog`) the save will enforce, so the editor never shows a green light the server rejects.
    */
-  validateCdl(projectKey: string, source: string): Observable<{ diagnostics: Diagnostic[] }> {
+  validateCdl(projectKey: string, sections: CdlSections): Observable<{ diagnostics: Diagnostic[] }> {
     return this.http.post<{ diagnostics: Diagnostic[] }>(
       `${BASE}/projects/${projectKey}/cdl/validate`,
-      { source },
+      { contentCdl: sections.content, rulesCdl: sections.rules },
       { withCredentials: true, params: { kind: 'GLOBAL_SET' } },
     );
   }

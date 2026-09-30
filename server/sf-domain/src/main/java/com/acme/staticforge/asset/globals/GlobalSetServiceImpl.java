@@ -21,6 +21,7 @@ import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.cdl.GlobalSetCdlRules;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EditorDefinition;
@@ -85,10 +86,10 @@ public class GlobalSetServiceImpl implements GlobalSetService {
     @Override
     @Transactional
     public GlobalSetView create(CreateGlobalSetCommand cmd, RevisionContext ctx) {
-        ContentDefinition definition = compile(cmd.contentDefinition());
+        ContentDefinition definition = compile(cmd.cdl());
 
         ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("contentDefinition", cmd.contentDefinition() == null ? "" : cmd.contentDefinition());
+        (cmd.cdl() == null ? CdlSources.EMPTY : cmd.cdl()).writeTo(payload);
         payload.set("compiledDefinition", objectMapper.valueToTree(definition));
         payload.set("content", seedDefaults(definition));
 
@@ -101,33 +102,48 @@ public class GlobalSetServiceImpl implements GlobalSetService {
 
     @Override
     @Transactional
-    public GlobalSetView updateSchema(
-            UUID uuid, String contentDefinition, long expectedRevision, RevisionContext ctx) {
-        return updateSchema(uuid, contentDefinition, expectedRevision, false, ctx);
+    public GlobalSetView updateSchema(UUID uuid, CdlSources cdl, long expectedRevision, RevisionContext ctx) {
+        return saveSchema(uuid, cdl, null, expectedRevision, false, ctx);
     }
 
     @Override
     @Transactional
     public GlobalSetView updateSchema(
-            UUID uuid, String contentDefinition, long expectedRevision, boolean confirmDiscard, RevisionContext ctx) {
+            UUID uuid, CdlSources cdl, JsonNode content, long expectedRevision, boolean confirmDiscard, RevisionContext ctx) {
+        return saveSchema(uuid, cdl, content, expectedRevision, confirmDiscard, ctx);
+    }
+
+    /**
+     * The schema save. With {@code content} (M34: the editor's one Save), the values edited against the stored schema
+     * are saved first, exactly as {@link #updateValues} would, and then migrated into the new schema with it — one
+     * version, one revision.
+     */
+    private GlobalSetView saveSchema(
+            UUID uuid, CdlSources cdl, JsonNode content, long expectedRevision, boolean confirmDiscard, RevisionContext ctx) {
         AssetVersion current = requireOpenSet(ctx.projectId(), uuid);
-        ContentDefinition definition = compile(contentDefinition);
+        ContentDefinition definition = compile(cdl);
 
         ObjectNode payload = (ObjectNode) current.getPayload().deepCopy();
-        payload.put("contentDefinition", contentDefinition == null ? "" : contentDefinition);
+        if (content != null && !content.isNull()) {
+            ContentDefinition stored = definitionOf(current.getPayload());
+            rejectStructural(recordDatasets.validator(ctx.projectId()).validate(stored, content, null, CONTENT_PATH));
+            payload.set("content", contentRules.saveContent(ctx.projectId(), uuid, AssetType.GLOBAL_SET, stored,
+                    current.getPayload(), current.getPayload().get("content"), content));
+        }
+        (cdl == null ? CdlSources.EMPTY : cdl).writeTo(payload);
         payload.set("compiledDefinition", objectMapper.valueToTree(definition));
 
         // The schema change and the value migration it causes are the same asset, so they are the
         // same version write and therefore the same revision — no cross-asset cascade (§12.3 only
         // needs one because a section template's renames fan out into every page using it).
-        ObjectNode content = contentOf(payload);
+        ObjectNode migrated = contentOf(payload);
         List<EditorRename> renames = ContentRenameMigrator.collect(definition);
-        ContentRenameMigrator.apply(content, renames);
-        ContentRenameMigrator.pruneUnknown(content, definition);
-        migrateLocalization(ctx.projectId(), content, definition, confirmDiscard);
-        payload.set("content", content);
+        ContentRenameMigrator.apply(migrated, renames);
+        ContentRenameMigrator.pruneUnknown(migrated, definition);
+        migrateLocalization(ctx.projectId(), migrated, definition, confirmDiscard);
+        payload.set("content", migrated);
 
-        rejectStructural(recordDatasets.validator(ctx.projectId()).validate(definition, content, null, CONTENT_PATH));
+        rejectStructural(recordDatasets.validator(ctx.projectId()).validate(definition, migrated, null, CONTENT_PATH));
 
         return toView(assetService.update(
                 uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx));
@@ -153,7 +169,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
     @Override
     @Transactional(readOnly = true)
     public List<ContentIssue> contentIssues(long projectId, GlobalSetView view) {
-        ContentDefinition definition = cdlCompiler.compile(view.contentDefinition() == null ? "" : view.contentDefinition())
+        ContentDefinition definition = cdlCompiler.compile(view.cdl())
                 .definition();
         if (definition == null) {
             return List.of();
@@ -193,7 +209,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
                     asset.getUid(),
                     version.getDisplayName(),
                     version.getFolderPath(),
-                    version.getPayload().path("contentDefinition").asText(""),
+                    CdlSources.of(version.getPayload()),
                     version.getPayload().path("compiledDefinition"),
                     version.getPayload().path("content"),
                     version.getValidFromRevision(),
@@ -211,10 +227,10 @@ public class GlobalSetServiceImpl implements GlobalSetService {
      * Compiles a set's CDL, applying the property-set restrictions on top of the language rules.
      * Throws before any revision is allocated, so invalid CDL never leaves a gap in the counter.
      */
-    private ContentDefinition compile(String source) {
+    private ContentDefinition compile(CdlSources source) {
         CdlResult result = cdlCompiler.compile(source);
         List<Diagnostic> diagnostics = new ArrayList<>(result.diagnostics());
-        diagnostics.addAll(GlobalSetCdlRules.check(result.definition()));
+        GlobalSetCdlRules.check(result.definition()).forEach(d -> diagnostics.add(d.inField(CdlSources.CONTENT)));
         if (diagnostics.stream().anyMatch(d -> d.severity() == Severity.ERROR)) {
             throw new SfException(Problem.builder()
                     .type(PROBLEM_TYPE_422)
@@ -267,7 +283,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
     }
 
     private ContentDefinition definitionOf(JsonNode payload) {
-        return cdlCompiler.compile(payload.path("contentDefinition").asText("")).definition();
+        return cdlCompiler.compile(CdlSources.of(payload)).definition();
     }
 
     private ObjectNode contentOf(JsonNode payload) {
@@ -300,7 +316,7 @@ public class GlobalSetServiceImpl implements GlobalSetService {
                 view.uid(),
                 view.displayName(),
                 view.folderPath(),
-                payload == null ? "" : payload.path("contentDefinition").asText(""),
+                CdlSources.of(payload),
                 payload == null ? null : payload.path("compiledDefinition"),
                 payload == null ? null : payload.path("content"),
                 view.validFromRevision(),

@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.template;
 
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.octl.ChainCompileMemo;
 import com.acme.staticforge.template.octl.OctlResult;
@@ -46,7 +47,7 @@ public final class TemplateCompileMemo {
      * @param resolver the build's snapshot-backed {@code assetType:uid} resolver
      */
     public CompiledChannel compile(
-            UUID templateUuid, String channel, String cdlSource, String octlSource, ReferenceResolver resolver) {
+            UUID templateUuid, String channel, CdlSources cdlSource, String octlSource, ReferenceResolver resolver) {
         return channels.computeIfAbsent(new ChannelKey(templateUuid, channel), key -> {
             ContentDefinition definition = definition(templateUuid, cdlSource);
             return new CompiledChannel(compiler.channel(octlSource, channel, resolver, definition), definition);
@@ -58,12 +59,12 @@ public final class TemplateCompileMemo {
      * for this dataset and channel in this build; every record of every set of the dataset renders with the one
      * result. The dataset's CDL (its schema) is compiled once and shared with {@link #definition}.
      *
-     * @param cdlSource the dataset's {@code contentDefinition}
+     * @param cdlSource the dataset's CDL sections
      * @param octlSource the dataset's {@code channelTemplates.<channel>.source}
      * @param resolver the build's snapshot-backed {@code assetType:uid} resolver
      */
     public CompiledChannel compileRecordTemplate(
-            UUID datasetUuid, String channel, String cdlSource, String octlSource, ReferenceResolver resolver) {
+            UUID datasetUuid, String channel, CdlSources cdlSource, String octlSource, ReferenceResolver resolver) {
         return channels.computeIfAbsent(new ChannelKey(datasetUuid, channel), key -> {
             ContentDefinition definition = definition(datasetUuid, cdlSource);
             return new CompiledChannel(compiler.recordTemplate(octlSource, channel, resolver, definition), definition);
@@ -82,7 +83,7 @@ public final class TemplateCompileMemo {
             UUID templateUuid,
             String templateUid,
             String channel,
-            String cdlSource,
+            CdlSources cdlSource,
             String octlSource,
             ReferenceResolver resolver,
             TemplateHierarchy hierarchy,
@@ -113,7 +114,7 @@ public final class TemplateCompileMemo {
      * Returns the template's compiled CDL definition, compiling it only on the first request for
      * this template in this build (shared with {@link #compile}).
      */
-    public ContentDefinition definition(UUID templateUuid, String cdlSource) {
+    public ContentDefinition definition(UUID templateUuid, CdlSources cdlSource) {
         return definitions.computeIfAbsent(templateUuid, uuid -> compiler.definition(cdlSource));
     }
 

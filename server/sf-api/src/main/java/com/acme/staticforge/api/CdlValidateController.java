@@ -4,6 +4,7 @@ import com.acme.staticforge.api.dto.CdlValidateRequest;
 import com.acme.staticforge.api.dto.CdlValidateResponse;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.cdl.DatasetCdlRules;
 import com.acme.staticforge.template.cdl.GlobalSetCdlRules;
 import com.acme.staticforge.template.cdl.PaginationCdlRules;
@@ -21,9 +22,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * CDL validation endpoint (spec §14.7, §20.2). Compiles arbitrary CDL and returns positioned
- * diagnostics so Monaco can render squiggles while typing; template saves re-run the same
- * compiler server-side.
+ * CDL validation endpoint (spec §14.7, §20.2). Compiles arbitrary CDL, sent as its sections (M34), and returns
+ * positioned diagnostics, each naming its section in {@code field}, so the editor can render squiggles while
+ * typing; template saves re-run the same compiler server-side.
  *
  * <p>{@code kind=GLOBAL_SET} additionally applies the property-set restrictions (M17.2.1), so the
  * Globals schema editor gets exactly the diagnostics its save will enforce. {@code kind=DATASET}
@@ -50,15 +51,17 @@ public class CdlValidateController {
             @PathVariable("projectKey") String projectKey,
             @RequestParam(value = "kind", required = false) String kind,
             @RequestBody CdlValidateRequest body) {
-        CdlResult result = cdlCompiler.compile(body.source());
+        CdlResult result = cdlCompiler.compile(new CdlSources(body.contentCdl(), body.bodiesCdl(), body.rulesCdl()));
         String requested = kind == null ? "" : kind.trim();
         List<Diagnostic> diagnostics = new ArrayList<>(result.diagnostics());
+        // Whole-definition checks without a position report on the content tab (M34).
         if (GLOBAL_SET_KIND.equalsIgnoreCase(requested)) {
-            diagnostics.addAll(GlobalSetCdlRules.check(result.definition()));
+            GlobalSetCdlRules.check(result.definition()).forEach(d -> diagnostics.add(d.inField(CdlSources.CONTENT)));
         } else if (DATASET_KIND.equalsIgnoreCase(requested)) {
-            diagnostics.addAll(DatasetCdlRules.check(result.definition()));
+            DatasetCdlRules.check(result.definition()).forEach(d -> diagnostics.add(d.inField(CdlSources.CONTENT)));
         } else if (SECTION_TEMPLATE_KIND.equalsIgnoreCase(requested)) {
-            diagnostics.addAll(PaginationCdlRules.notAllowedIn(result.definition(), "a section template"));
+            PaginationCdlRules.notAllowedIn(result.definition(), "a section template")
+                    .forEach(d -> diagnostics.add(d.inField(CdlSources.CONTENT)));
             diagnostics.addAll(TemplateRuleCdlRules.sectionTemplate(result.definition()));
         } else {
             // A page template (M33): its rules may target inherited editors, which this check can't see.

@@ -25,6 +25,7 @@ import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -210,7 +211,7 @@ class ProcessedMediaPreviewIntegrationTest {
 
     private GlobalSetView siteSet(Fixture fx, String brandColor) {
         GlobalSetView site = globalSetService.create(new CreateGlobalSetCommand(fx.project().getId(), null, "Site",
-                "content { editor text brandColor { label \"Brand color\" } }"), fx.ctx());
+                CdlSources.split("content { editor text brandColor { label \"Brand color\" } }")), fx.ctx());
         return globalSetService.updateValues(
                 site.uuid(), mapper.createObjectNode().put("brandColor", brandColor), site.revision(), fx.ctx());
     }
@@ -225,7 +226,7 @@ class ProcessedMediaPreviewIntegrationTest {
 
     private AssetVersionView page(Fixture fx, String html) {
         TemplateView template = templateService.create(new CreateTemplateCommand(
-                fx.project().getId(), AssetType.PAGE_TEMPLATE, "Home Template", "", Map.of("html", html), null, false,
+                fx.project().getId(), AssetType.PAGE_TEMPLATE, "Home Template", CdlSources.split(""), Map.of("html", html), null, false,
                 Map.of("html", "{displayNameSlug}.{ext}")), fx.ctx());
         return pageService.create(new CreatePageCommand("Home", null, template.uuid()), fx.ctx());
     }

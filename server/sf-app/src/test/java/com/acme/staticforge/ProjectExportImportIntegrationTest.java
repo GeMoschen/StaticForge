@@ -61,6 +61,7 @@ import com.acme.staticforge.revision.DiffService;
 import com.acme.staticforge.revision.FieldChange;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionDiff;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -168,7 +169,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.SECTION_TEMPLATE,
                         "Teaser",
-                        "content { editor text headline { required } }",
+                        CdlSources.split("content { editor text headline { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null,
                         false,
@@ -179,7 +180,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -270,7 +271,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -320,7 +321,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -447,7 +448,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -657,7 +658,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -746,7 +747,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -790,7 +791,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -916,7 +917,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -950,7 +951,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -1004,7 +1005,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -1423,7 +1424,7 @@ class ProjectExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Landing",
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -1988,7 +1989,7 @@ class ProjectExportImportIntegrationTest {
                 source.project().getId(), null, "logo.png", "image/png", solidPng(32, 32, Color.BLUE), source.ctx());
 
         GlobalSetView site = globalSetService.create(
-                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", CdlSources.split(GLOBAL_SET_CDL)), source.ctx());
         ObjectNode siteValues = MAPPER.createObjectNode();
         siteValues.put("title", "Acme Outdoor");
         siteValues.putObject("logo").put("type", "MEDIA_REF").put("uuid", logo.uuid().toString());
@@ -1997,7 +1998,7 @@ class ProjectExportImportIntegrationTest {
         GlobalSetView theme = globalSetService.create(
                 new CreateGlobalSetCommand(
                         source.project().getId(), branding.uuid(), "Theme",
-                        "content { editor text accent { label \"Accent\" } }"),
+                        CdlSources.split("content { editor text accent { label \"Accent\" } }")),
                 source.ctx());
         globalSetService.updateValues(
                 theme.uuid(), MAPPER.createObjectNode().put("accent", "#ff6600"), theme.revision(), source.ctx());
@@ -2024,7 +2025,7 @@ class ProjectExportImportIntegrationTest {
         GlobalSetView importedSite =
                 globalSetService.find(target.project().getId(), site.uuid(), null).orElseThrow();
         assertThat(importedSite.uid()).isEqualTo("site");
-        assertThat(importedSite.contentDefinition()).isEqualTo(GLOBAL_SET_CDL);
+        assertThat(importedSite.cdl()).isEqualTo(CdlSources.split(GLOBAL_SET_CDL));
         assertThat(importedSite.content().path("title").asText()).isEqualTo("Acme Outdoor");
         assertThat(importedSite.content().path("logo").path("uuid").asText()).isEqualTo(logo.uuid().toString());
         assertThat(importedSite.folderPath()).isEqualTo("/" + FolderScope.GLOBALS_ROOT_UID + "/");
@@ -2047,7 +2048,7 @@ class ProjectExportImportIntegrationTest {
                 .containsExactlyInAnyOrder("site", "theme");
         GlobalSetView reimportedSite =
                 globalSetService.find(source.project().getId(), site.uuid(), null).orElseThrow();
-        assertThat(reimportedSite.contentDefinition()).isEqualTo(GLOBAL_SET_CDL);
+        assertThat(reimportedSite.cdl()).isEqualTo(CdlSources.split(GLOBAL_SET_CDL));
         assertThat(reimportedSite.content().path("title").asText()).isEqualTo("Acme Outdoor");
         assertThat(reimportedSite.folderPath()).isEqualTo("/" + FolderScope.GLOBALS_ROOT_UID + "/");
     }
@@ -2072,7 +2073,7 @@ class ProjectExportImportIntegrationTest {
         Fixture source = newFixture("m19_content", "M19 Content Source");
         com.acme.staticforge.asset.dataset.DatasetView team = datasetService.create(
                 new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
-                        source.project().getId(), null, "Team", TEAM_CDL, "name", "People"),
+                        source.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), "name", "People"),
                 source.ctx());
         AssetVersionView people = folderService.create(null, "People", FolderScope.CONTENT, source.ctx());
         AssetVersionView leads = folderService.create(people.uuid(), "Leads", FolderScope.CONTENT, source.ctx());
@@ -2130,7 +2131,7 @@ class ProjectExportImportIntegrationTest {
     void aSingleRecordExportCarriesItsSetAndDatasetImplicitly() {
         Fixture source = newFixture("m19_single", "M19 Single Record Source");
         var team = datasetService.create(
-                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), null, null),
                 source.ctx());
         var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
 
@@ -2173,7 +2174,7 @@ class ProjectExportImportIntegrationTest {
     void aRecordAndItsSetWithoutTheirDatasetAreBlockingConflicts() {
         Fixture source = newFixture("m19_missing", "M19 Missing Dataset Source");
         var team = datasetService.create(
-                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), null, null),
                 source.ctx());
         var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
         byte[] archive = withoutEntry(
@@ -2215,7 +2216,7 @@ class ProjectExportImportIntegrationTest {
     void recordAndDatasetDiffsShowTheChangedFields() {
         Fixture source = newFixture("m19_diff", "M19 Diff");
         var team = datasetService.create(
-                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), null, null),
                 source.ctx());
         var ada = createRecord(source, team, null, "{\"name\":\"Ada\",\"role\":\"dev\"}");
         var updated = recordService.update(ada.uuid(), json("{\"name\":\"Ada\",\"role\":\"lead\"}"), ada.revision(), source.ctx()).record();
@@ -2225,11 +2226,11 @@ class ProjectExportImportIntegrationTest {
         assertThat(recordDiff.changes()).extracting(FieldChange::path).containsExactly("content.role");
 
         var retyped = datasetService.update(team.uuid(),
-                new com.acme.staticforge.asset.dataset.UpdateDatasetCommand("Team", TEAM_CDL.replace("\"Role\"", "\"Position\""), null, null),
+                new com.acme.staticforge.asset.dataset.UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("\"Role\"", "\"Position\"")), null, null),
                 team.revision(), source.ctx());
         AssetDiff datasetDiff = onlyAssetDiff(diffService.diff(source.project().getId(), retyped.revision()));
         assertThat(datasetDiff.type()).isEqualTo("DATASET");
-        assertThat(datasetDiff.changes()).extracting(FieldChange::path).contains("contentDefinition");
+        assertThat(datasetDiff.changes()).extracting(FieldChange::path).contains("contentCdl");
     }
 
     // ------------------------------------------------------------------
@@ -2363,7 +2364,7 @@ class ProjectExportImportIntegrationTest {
     void aRecordWhoseSetIsMissingIsABlockingConflictUnlessTheTargetHasTheSet() {
         Fixture source = newFixture("m25_noset", "M25 Missing Set");
         var team = datasetService.create(
-                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", TEAM_CDL, null, null),
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(source.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), null, null),
                 source.ctx());
         var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
         byte[] archive = ArchiveFixtures.withoutEntry(
@@ -2404,10 +2405,10 @@ class ProjectExportImportIntegrationTest {
         Fixture source = newFixture("m25_mismatch", "M25 Dataset Mismatch");
         long sourceId = source.project().getId();
         var team = datasetService.create(
-                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(sourceId, null, "Team", TEAM_CDL, null, null), source.ctx());
+                new com.acme.staticforge.asset.dataset.CreateDatasetCommand(sourceId, null, "Team", CdlSources.split(TEAM_CDL), null, null), source.ctx());
         var faq = datasetService.create(
                 new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
-                        sourceId, null, "FAQ", "content { editor text name { label \"Question\" } }", null, null),
+                        sourceId, null, "FAQ", CdlSources.split("content { editor text name { label \"Question\" } }"), null, null),
                 source.ctx());
         var ada = createRecord(source, team, null, "{\"name\":\"Ada\"}");
         byte[] archive = exportImportService.exportSelection(
@@ -2461,7 +2462,7 @@ class ProjectExportImportIntegrationTest {
         long targetId = target.project().getId();
         var faq = datasetService.create(
                 new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
-                        targetId, null, "FAQ", "content { editor text name { label \"Question\" } }", null, null),
+                        targetId, null, "FAQ", CdlSources.split("content { editor text name { label \"Question\" } }"), null, null),
                 target.ctx());
         var theirs = recordSetService.create(new com.acme.staticforge.asset.dataset.CreateRecordSetCommand(
                         targetId, null, faq.uuid(), "leads", "Leads", com.acme.staticforge.template.query.RecordSetQuery.ALL),
@@ -2515,7 +2516,7 @@ class ProjectExportImportIntegrationTest {
         var team = datasetService.find(sourceId, site.team(), null).orElseThrow();
         datasetService.update(site.team(),
                 new com.acme.staticforge.asset.dataset.UpdateDatasetCommand(
-                        "Team", SET_TEAM_CDL.replace("editor date joined { label \"Joined\" }", ""), "name", null),
+                        "Team", CdlSources.split(SET_TEAM_CDL.replace("editor date joined { label \"Joined\" }", "")), "name", null),
                 team.revision(), source.ctx());
         ImportOptions skip = new ImportOptions(true);
         assertThat(exportImportService.analyzeImport(sourceId, archive, skip).conflicts())
@@ -2575,7 +2576,7 @@ class ProjectExportImportIntegrationTest {
                 new CreateChannelRequest("md", "Markdown", "md", "text/markdown", "MARKDOWN", true, false, 1, null, null), fx.ctx());
         var team = datasetService.create(
                 new com.acme.staticforge.asset.dataset.CreateDatasetCommand(
-                        projectId, null, "Team", SET_TEAM_CDL, "name", null, Map.of("html", SET_RECORD_HTML, "md", SET_RECORD_MD)),
+                        projectId, null, "Team", CdlSources.split(SET_TEAM_CDL), "name", null, Map.of("html", SET_RECORD_HTML, "md", SET_RECORD_MD)),
                 fx.ctx());
         AssetVersionView people = folderService.create(null, "People", FolderScope.CONTENT, fx.ctx());
         AssetVersionView leadsFolder = folderService.create(people.uuid(), "Leads", FolderScope.CONTENT, fx.ctx());
@@ -2597,7 +2598,7 @@ class ProjectExportImportIntegrationTest {
                 setRecord(fx, staff, "{\"name\":\"Cy\",\"role\":\"dev\",\"joined\":\"2022-11-30\"}"));
 
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Team Page", SET_PAGE_CDL,
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Team Page", CdlSources.split(SET_PAGE_CDL),
                         Map.of("html", SET_PAGE_HTML, "md", SET_PAGE_MD), null, false,
                         Map.of("html", "{displayNameSlug}.{ext}", "md", "{displayNameSlug}.{ext}")),
                 fx.ctx());
@@ -2707,7 +2708,7 @@ class ProjectExportImportIntegrationTest {
                 source.project().getId(), null, "logo.png", "image/png", solidPng(32, 32, Color.BLUE), source.ctx());
 
         GlobalSetView site = globalSetService.create(
-                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", CdlSources.split(GLOBAL_SET_CDL)), source.ctx());
         ObjectNode siteValues = MAPPER.createObjectNode();
         siteValues.put("title", "Acme Outdoor");
         siteValues.putObject("logo").put("type", "MEDIA_REF").put("uuid", media.uuid().toString());
@@ -2756,7 +2757,7 @@ class ProjectExportImportIntegrationTest {
     /**
      * Revision diffs of a set (`M17.1.3`). {@code DiffServiceImpl} is type-agnostic, so this is a
      * verification rather than a feature: a values change must show up as {@code content.*} field
-     * changes, and a {@code renamedFrom} schema change must show the {@code contentDefinition} text
+     * changes, and a {@code renamedFrom} schema change must show the {@code contentCdl} text
      * change <em>and</em> the value migration it caused in the same revision — the reviewable
      * evidence that the two really are one write.
      */
@@ -2764,7 +2765,7 @@ class ProjectExportImportIntegrationTest {
     void revisionDiffShowsValueChangesAndASchemaChangeWithItsMigrationInOneRevision() {
         Fixture source = newFixture("glb_diff", "Globals Diff Source");
         GlobalSetView site = globalSetService.create(
-                new CreateGlobalSetCommand(source.project().getId(), null, "Site", GLOBAL_SET_CDL), source.ctx());
+                new CreateGlobalSetCommand(source.project().getId(), null, "Site", CdlSources.split(GLOBAL_SET_CDL)), source.ctx());
         GlobalSetView valued = globalSetService.updateValues(
                 site.uuid(), MAPPER.createObjectNode().put("title", "Acme Outdoor"), site.revision(), source.ctx());
 
@@ -2773,25 +2774,25 @@ class ProjectExportImportIntegrationTest {
         assertThat(valuesDiff.type()).isEqualTo(AssetType.GLOBAL_SET.name());
         assertThat(valuesDiff.changes()).extracting(FieldChange::path)
                 .contains("content.title")
-                .doesNotContain("contentDefinition");
+                .doesNotContain("contentCdl");
         assertThat(valuesDiff.changes()).filteredOn(c -> c.path().equals("content.title")).singleElement()
                 .satisfies(change -> assertThat(change.after().asText()).isEqualTo("Acme Outdoor"));
 
         GlobalSetView renamed = globalSetService.updateSchema(
                 site.uuid(),
-                """
+                CdlSources.split("""
                 content {
                   editor text siteTitle { label "Site title" required renamedFrom "title" }
                   editor media logo { label "Logo" }
                 }
-                """,
+                """),
                 valued.revision(),
                 source.ctx());
 
         AssetDiff schemaDiff = onlyAssetDiff(diffService.diff(source.project().getId(), renamed.revision()));
         assertThat(schemaDiff.changes()).extracting(FieldChange::path)
                 .as("the CDL text and the value migration it caused are the same revision")
-                .contains("contentDefinition", "content.title", "content.siteTitle");
+                .contains("contentCdl", "content.title", "content.siteTitle");
         assertThat(schemaDiff.changes()).filteredOn(c -> c.path().equals("content.title")).singleElement()
                 .satisfies(change -> assertThat(change.isRemove()).isTrue());
         assertThat(schemaDiff.changes()).filteredOn(c -> c.path().equals("content.siteTitle")).singleElement()
@@ -2906,7 +2907,7 @@ class ProjectExportImportIntegrationTest {
                         fixture.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         name,
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,
@@ -2921,7 +2922,7 @@ class ProjectExportImportIntegrationTest {
                         fixture.project().getId(),
                         AssetType.SECTION_TEMPLATE,
                         name,
-                        "content { editor text headline { required } }",
+                        CdlSources.split("content { editor text headline { required } }"),
                         Map.of("html", "<h2>$CMS_VALUE(headline)$</h2>"),
                         null,
                         false,

@@ -39,6 +39,7 @@ import com.acme.staticforge.release.ContentView;
 import com.acme.staticforge.release.ContentViews;
 import com.acme.staticforge.release.ReleaseProblems;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
@@ -524,7 +525,7 @@ public class PageRenderService {
                         template.uuid(),
                         template.validFromRevision(),
                         channel,
-                        templatePayload.path("contentDefinition").asText(""),
+                        CdlSources.of(templatePayload),
                         channelNode.path("source").asText(),
                         referenceResolver(projectId),
                         version == null ? null : hierarchy,
@@ -551,7 +552,7 @@ public class PageRenderService {
                         template.uuid(),
                         template.validFromRevision(),
                         channel,
-                        templatePayload.path("contentDefinition").asText(""),
+                        CdlSources.of(templatePayload),
                         channelNode.path("source").asText(),
                         referenceResolver(projectId))
                 .template();
@@ -836,7 +837,7 @@ public class PageRenderService {
                                         datasetUuid,
                                         version.validFromRevision(),
                                         channel,
-                                        version.payload().path("contentDefinition").asText(""),
+                                        CdlSources.of(version.payload()),
                                         source,
                                         referenceResolver(projectId))
                                 .template()))

@@ -1,6 +1,7 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { cdl as cdlFields } from './cdl';
 
 /**
  * M16 foundations regression journeys (feature `e2e-verification`, `M16.6.1`):
@@ -91,11 +92,11 @@ class Api {
   }
 
   pageTemplate(displayName: string, source: string, cdl = ''): Promise<Json> {
-    return this.post('/page-templates', { displayName, contentDefinition: cdl, channelSources: { html: source } });
+    return this.post('/page-templates', { displayName, ...cdlFields(cdl), channelSources: { html: source } });
   }
 
   sectionTemplate(displayName: string, source: string): Promise<Json> {
-    return this.post('/section-templates', { displayName, contentDefinition: '', channelSources: { html: source } });
+    return this.post('/section-templates', { displayName, ...cdlFields(''), channelSources: { html: source } });
   }
 
   async saveChannelSource(kind: 'section-templates' | 'page-templates', uuid: string, source: string): Promise<Json> {

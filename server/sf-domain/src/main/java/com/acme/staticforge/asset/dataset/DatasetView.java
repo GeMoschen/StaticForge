@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.dataset;
 
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Collections;
@@ -28,7 +29,7 @@ public record DatasetView(
         String displayName,
         UUID folderUuid,
         String folderPath,
-        String contentDefinition,
+        CdlSources cdl,
         JsonNode compiledDefinition,
         String titleEditor,
         String description,
@@ -49,14 +50,14 @@ public record DatasetView(
     /** This view with the save's {@code brokenRecordSets} warning. */
     public DatasetView withBrokenRecordSets(List<BrokenRecordSet> sets) {
         return new DatasetView(
-                uuid, uid, displayName, folderUuid, folderPath, contentDefinition, compiledDefinition, titleEditor,
+                uuid, uid, displayName, folderUuid, folderPath, cdl, compiledDefinition, titleEditor,
                 description, channelTemplates, recordCount, revision, deleted, sets, recordTemplateDiagnostics);
     }
 
     /** This view with the save's record template compile warnings, by channel. */
     public DatasetView withRecordTemplateDiagnostics(Map<String, List<Diagnostic>> diagnostics) {
         return new DatasetView(
-                uuid, uid, displayName, folderUuid, folderPath, contentDefinition, compiledDefinition, titleEditor,
+                uuid, uid, displayName, folderUuid, folderPath, cdl, compiledDefinition, titleEditor,
                 description, channelTemplates, recordCount, revision, deleted, brokenRecordSets, diagnostics);
     }
 }

@@ -25,6 +25,7 @@ import com.acme.staticforge.release.ReleasePlan;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.release.ReleaseStatus;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -101,7 +102,7 @@ class ReleaseBenchmark {
             cdl = "content { editor text title { label \"Title\" required localizable } editor media image { label \"Image\" } }";
         }
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Bench", cdl,
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Bench", CdlSources.split(cdl),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of("html", "{folder}{uid}.{ext}")),
                 ctx);
         AssetVersionView media = mediaService.upload(

@@ -103,9 +103,9 @@ export function recordTemplateChannels(
 
 /**
  * The top-level names a record template can read, from the CDL being edited (so a field added in the same save
- * is offered at once): every `editor <type> <name>` directly in `content { … }` or in a `group "…" { … }` wrapper,
- * in source order. Editors inside another editor's body (a `list`'s `item { … }`) are not record fields. Labels
- * come from the saved schema's compiled editors where the name matches.
+ * is offered at once): every `editor <type> <name>` at the top level of the Content tab (or of `content { … }`) or
+ * in a `group "…" { … }` wrapper, in source order. Editors inside another editor's body (a `list`'s `item { … }`)
+ * are not record fields. Labels come from the saved schema's compiled editors where the name matches.
  */
 export function recordTemplateFields(
   cdl: string,
@@ -207,7 +207,8 @@ function topLevelEditors(cdl: string): EditorDeclaration[] {
       pending = true;
       i++;
     } else if (token === 'editor' && i + 2 < tokens.length && isWord(tokens[i + 1]) && isWord(tokens[i + 2])) {
-      if (transparent() && frames.length > 0) {
+      // M34: the Content tab holds the editors without `content { … }`, so the top level counts too.
+      if (transparent()) {
         out.push({ type: tokens[i + 1].toLowerCase(), name: tokens[i + 2] });
       }
       pending = false;

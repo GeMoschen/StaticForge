@@ -31,6 +31,7 @@ import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.pagination.PaginationItem;
 import com.acme.staticforge.pagination.PaginationScope;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.OctlResult;
@@ -388,7 +389,7 @@ final class GenerationRenderer {
                     template.uuid(),
                     template.uid(),
                     channel,
-                    payload.path("contentDefinition").asText(""),
+                    CdlSources.of(payload),
                     payload.path("channelTemplates").path(channel).path("source").asText(),
                     referenceResolver(),
                     SnapshotTemplateHierarchy.of(snapshot, compiledTemplates),
@@ -397,7 +398,7 @@ final class GenerationRenderer {
         return compiledTemplates.compile(
                 template.uuid(),
                 channel,
-                payload.path("contentDefinition").asText(""),
+                CdlSources.of(payload),
                 payload.path("channelTemplates").path(channel).path("source").asText(),
                 referenceResolver());
     }
@@ -652,7 +653,7 @@ final class GenerationRenderer {
                         .compileRecordTemplate(
                                 datasetUuid,
                                 channel,
-                                dataset.payload().path("contentDefinition").asText(""),
+                                CdlSources.of(dataset.payload()),
                                 source,
                                 referenceResolver())
                         .template())

@@ -45,6 +45,7 @@ import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -124,10 +125,10 @@ class PreviewViewIntegrationTest {
     void draftAndPublishedViews() throws Exception {
         Fixture fx = newFixture("pvviews");
         GlobalSetView site = globalSetService.create(
-                new CreateGlobalSetCommand(fx.projectId(), null, "Site", "content { editor text title { label \"T\" } }"), fx.ctx());
+                new CreateGlobalSetCommand(fx.projectId(), null, "Site", CdlSources.split("content { editor text title { label \"T\" } }")), fx.ctx());
         site = globalSetService.updateValues(site.uuid(), mapper.readTree("{\"title\":\"Acme\"}"), site.revision(), fx.ctx());
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(fx.projectId(), null, "Team", "content { editor text name { label \"Name\" } }", "name", null),
+                new CreateDatasetCommand(fx.projectId(), null, "Team", CdlSources.split("content { editor text name { label \"Name\" } }"), "name", null),
                 fx.ctx());
         AssetVersionView folder = folderService.create(null, "Team", FolderScope.CONTENT, fx.ctx());
         UUID set = recordSetService.create(new CreateRecordSetCommand(
@@ -254,7 +255,7 @@ class PreviewViewIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String cdl, String html) {
         return templateService.create(
-                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, cdl, Map.of("html", html), null, false,
+                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl), Map.of("html", html), null, false,
                         Map.of("html", "{folder}{uid}.{ext}")),
                 fx.ctx());
     }

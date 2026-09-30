@@ -39,6 +39,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
@@ -160,7 +161,7 @@ class DatasetRecordIntegrationTest {
         assertThatThrownBy(() -> sets().create(fx.project().getId(), team.uuid(), pageFolder.uuid(), "Docs set", fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(422));
         assertThatThrownBy(() -> datasetService.create(
-                        new CreateDatasetCommand(fx.project().getId(), sectionTemplates.getAsset().getUuid(), "Other", TEAM_CDL, null, null),
+                        new CreateDatasetCommand(fx.project().getId(), sectionTemplates.getAsset().getUuid(), "Other", CdlSources.split(TEAM_CDL), null, null),
                         fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(422));
     }
@@ -183,7 +184,7 @@ class DatasetRecordIntegrationTest {
         Fixture fx = newFixture();
         DatasetView team = team(fx);
         DatasetView other = datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Products", "content { editor text sku { label \"SKU\" } }", null, null),
+                new CreateDatasetCommand(fx.project().getId(), null, "Products", CdlSources.split("content { editor text sku { label \"SKU\" } }"), null, null),
                 fx.ctx());
         RecordDetail ada = record(fx, team, null, "{\"name\":\"Ada\"}").record();
         record(fx, other, null, "{\"sku\":\"x-1\"}");
@@ -213,7 +214,7 @@ class DatasetRecordIntegrationTest {
         Fixture fx = newFixture();
 
         assertThatThrownBy(() -> datasetService.create(
-                        new CreateDatasetCommand(fx.project().getId(), null, "Broken", "content { editor wat x { } }", null, null),
+                        new CreateDatasetCommand(fx.project().getId(), null, "Broken", CdlSources.split("content { editor wat x { } }"), null, null),
                         fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> {
                     assertThat(ex.getStatus()).isEqualTo(422);
@@ -222,7 +223,7 @@ class DatasetRecordIntegrationTest {
         assertThatThrownBy(() -> datasetService.create(
                         new CreateDatasetCommand(
                                 fx.project().getId(), null, "Bodies",
-                                "content { editor text name { label \"Name\" } }\nbodies { body main { label \"Main\" allow [\"*\"] } }",
+                                CdlSources.split("content { editor text name { label \"Name\" } }\nbodies { body main { label \"Main\" allow [\"*\"] } }"),
                                 null, null),
                         fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> {
@@ -230,7 +231,7 @@ class DatasetRecordIntegrationTest {
                     assertThat(diagnosticCodes(ex)).containsExactly(DiagnosticCodes.CDL_NOT_ALLOWED_IN_DATASET);
                 });
         assertThatThrownBy(() -> datasetService.create(
-                        new CreateDatasetCommand(fx.project().getId(), null, "Title", TEAM_CDL, "level", null), fx.ctx()))
+                        new CreateDatasetCommand(fx.project().getId(), null, "Title", CdlSources.split(TEAM_CDL), "level", null), fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(422));
         assertThat(datasetService.list(fx.project().getId())).isEmpty();
     }
@@ -244,15 +245,15 @@ class DatasetRecordIntegrationTest {
                 record(fx, team, null, "{\"name\":\"Bob\",\"role\":\"dev\"}").record(),
                 record(fx, team, null, "{\"name\":\"Cy\"}").record());
         DatasetView products = datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Products", "content { editor text role { label \"R\" } }", null, null),
+                new CreateDatasetCommand(fx.project().getId(), null, "Products", CdlSources.split("content { editor text role { label \"R\" } }"), null, null),
                 fx.ctx());
         RecordDetail product = record(fx, products, null, "{\"role\":\"untouched\"}").record();
         long before = revisionCount(fx);
 
         DatasetView renamed = datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", TEAM_CDL.replace("editor select role { label \"Role\"",
-                        "editor select position { label \"Position\" renamedFrom \"role\""), null, "The team"),
+                new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("editor select role { label \"Role\"",
+                        "editor select position { label \"Position\" renamedFrom \"role\"")), null, "The team"),
                 datasetService.find(fx.project().getId(), team.uuid(), null).orElseThrow().revision(),
                 fx.ctx());
 
@@ -276,8 +277,8 @@ class DatasetRecordIntegrationTest {
 
         datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", TEAM_CDL.replace("editor select role { label \"Role\"",
-                        "editor select position { label \"Position\" renamedFrom \"role\""), null, null),
+                new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("editor select role { label \"Role\"",
+                        "editor select position { label \"Position\" renamedFrom \"role\"")), null, null),
                 team.revision(),
                 fx.ctx());
 
@@ -296,8 +297,8 @@ class DatasetRecordIntegrationTest {
 
         assertThatThrownBy(() -> datasetService.update(
                         team.uuid(),
-                        new UpdateDatasetCommand("Team", TEAM_CDL.replace("editor select role { label \"Role\"",
-                                "editor select position { label \"Position\" renamedFrom \"role\""), null, null),
+                        new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("editor select role { label \"Role\"",
+                                "editor select position { label \"Position\" renamedFrom \"role\"")), null, null),
                         team.revision() - 1,
                         fx.ctx()))
                 .isInstanceOfSatisfying(SfException.class, ex -> assertThat(ex.getStatus()).isEqualTo(409));
@@ -342,7 +343,7 @@ class DatasetRecordIntegrationTest {
         Fixture fx = newFixture();
         DatasetView team = team(fx);
         DatasetView products = datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Products", "content { editor text sku { label \"SKU\" } }", null, null),
+                new CreateDatasetCommand(fx.project().getId(), null, "Products", CdlSources.split("content { editor text sku { label \"SKU\" } }"), null, null),
                 fx.ctx());
         RecordDetail ada = record(fx, team, null, "{\"name\":\"Ada\"}").record();
         RecordDetail widget = record(fx, products, null, "{\"sku\":\"w\"}").record();
@@ -408,7 +409,7 @@ class DatasetRecordIntegrationTest {
     void aRecordIsNamedByItsTitleFieldElseItsUuidAndItsUidIsItsUuid() {
         Fixture fx = newFixture();
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null), fx.ctx());
 
         RecordDetail jane = recordService.create(
                         new CreateRecordCommand(fx.project().getId(), set(fx, team), content("{\"name\":\"Jane Doe\"}")),
@@ -495,7 +496,7 @@ class DatasetRecordIntegrationTest {
         TemplateView single = sectionTemplate(fx, "$CMS_VALUE(record:" + ada.uid() + ".name)$");
         TemplateView pageTemplate = templateService.create(
                 new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Profile",
-                        "content { editor reference person { label \"Person\" dataset \"team\" } }",
+                        CdlSources.split("content { editor reference person { label \"Person\" dataset \"team\" } }"),
                         Map.of("html", "$CMS_VALUE(person.name)$"), null, false, Map.of("html", "{displayNameSlug}.{ext}")),
                 fx.ctx());
         AssetVersionView page = pageService.create(new CreatePageCommand("Profile", null, pageTemplate.uuid()), fx.ctx());
@@ -521,7 +522,7 @@ class DatasetRecordIntegrationTest {
 
     private DatasetView team(Fixture fx) {
         return datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, null, "People"), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), null, "People"), fx.ctx());
     }
 
     /** Creates a record in the record set of {@code dataset} in {@code folder} ({@code null}: the store root). */
@@ -547,7 +548,7 @@ class DatasetRecordIntegrationTest {
     private TemplateView sectionTemplate(Fixture fx, String html) {
         return templateService.create(
                 new CreateTemplateCommand(fx.project().getId(), AssetType.SECTION_TEMPLATE, "Section " + SEQ.incrementAndGet(),
-                        "", Map.of("html", html), null, false, Map.of()),
+                        CdlSources.split(""), Map.of("html", html), null, false, Map.of()),
                 fx.ctx());
     }
 
