@@ -11,6 +11,7 @@ import com.acme.staticforge.template.content.PaginationOptions;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.expression.ExpressionEvaluator;
+import com.acme.staticforge.template.rules.RuleSet;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -60,7 +61,8 @@ final class CdlValidator {
         checkPaginationPlacement(content.editors, diagnostics);
         List<EditorDefinition> editors = buildEditors(content.editors, diagnostics);
         List<BodyDefinition> bodies = buildBodies(content.bodies, diagnostics);
-        return new Result(new ContentDefinition(editors, bodies), diagnostics);
+        RuleSet rules = RulesCompiler.compile(content.rules, diagnostics);
+        return new Result(new ContentDefinition(editors, bodies, rules), diagnostics);
     }
 
     private void checkNames(List<EditorNode> nodes, Set<String> seen, List<Diagnostic> diagnostics) {
@@ -143,7 +145,8 @@ final class CdlValidator {
                 localizable,
                 items,
                 node.dataset,
-                pagination);
+                pagination,
+                RulesCompiler.builtins(node, diagnostics));
     }
 
     /**

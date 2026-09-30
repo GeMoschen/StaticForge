@@ -85,7 +85,10 @@ export class PageIssuesPanelComponent {
   /** The expanded issue, by `content:<index>` or `output:<index>`. */
   protected readonly expanded = signal<string | null>(null);
 
-  protected readonly content = computed(() => bySeverity(this.completeness()));
+  /** The content findings, most severe first; hints only show at their field (M33.8). */
+  protected readonly content = computed(() =>
+    bySeverity(this.completeness().filter((issue) => issue.severity !== 'HINT')),
+  );
   protected readonly findings = computed<DraftFindingView[]>(() => {
     const state = this.state();
     return state.kind === 'checked' ? bySeverity(state.result.findings ?? []) : [];
@@ -94,7 +97,10 @@ export class PageIssuesPanelComponent {
     const state = this.state();
     return state.kind === 'checked' ? (state.result.skippedRules ?? []) : [];
   });
-  protected readonly count = computed(() => this.content().length + this.findings().length);
+  /** Infos are listed, not counted (M33.8). */
+  protected readonly count = computed(
+    () => this.content().filter((issue) => issue.severity !== 'INFO').length + this.findings().length,
+  );
   protected readonly errors = computed(() => errorCount(this.content()) + errorCount(this.findings()));
   protected readonly status = computed(() => {
     const state = this.state();

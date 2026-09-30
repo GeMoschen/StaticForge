@@ -118,5 +118,19 @@ public final class DiagnosticCodes {
      * The M24 task file proposed {@code SF-CDL-0107}, which M17 had already taken.
      */
     public static final String CDL_CONTAINER_NOT_LOCALIZABLE = "SF-CDL-0112";
+    /** M33: an invalid {@code rules {}} entry — syntax, unknown key, bad keyword value, target or placeholder. */
+    public static final String CDL_RULE_INVALID = "SF-CDL-0113";
+    /** M33: a rule without {@code level}, {@code scope}, {@code assert} or {@code message}; a fill without {@code value}/{@code on}. */
+    public static final String CDL_RULE_MISSING_KEY = "SF-CDL-0114";
+    /** M33: a rule, state or fill target, or an expression identifier, that names no editor. */
+    public static final String CDL_RULE_UNKNOWN_PATH = "SF-CDL-0115";
+    /** M33: a rule expression that doesn't compile (syntax, unknown function, arity, non-boolean literal condition). */
+    public static final String CDL_RULE_EXPRESSION = "SF-CDL-0116";
+    /** M33: a duplicate rule name, state or fill path, or a cycle among fills. */
+    public static final String CDL_RULE_DUPLICATE = "SF-CDL-0117";
+    /** M33: {@code rule "x" off} for a rule no ancestor defines. */
+    public static final String CDL_RULE_UNKNOWN_OVERRIDE = "SF-CDL-0118";
+    /** M33: an invalid built-in modifier or {@code onGeneration}, or a rule named like a built-in. */
+    public static final String CDL_RULE_INVALID_MODIFIER = "SF-CDL-0119";
     public static final String CDL_SYNTAX = "SF-CDL-0200";
 }

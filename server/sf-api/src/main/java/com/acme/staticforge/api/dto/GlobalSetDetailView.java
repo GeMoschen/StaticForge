@@ -18,4 +18,5 @@ public record GlobalSetDetailView(
         JsonNode content,
         long revision,
         java.util.Map<String, LocaleReleaseView> release,
-        java.util.List<ScheduledRefView> scheduled) {}
+        java.util.List<ScheduledRefView> scheduled,
+        java.util.List<com.acme.staticforge.asset.content.ContentIssue> issues) {}

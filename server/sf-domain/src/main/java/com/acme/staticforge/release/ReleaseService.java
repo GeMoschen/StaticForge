@@ -14,7 +14,8 @@ import java.util.List;
  *   <li>{@code 422 SF-DOM-0151} — an unknown asset or locale, or a type that has no release state;
  *   <li>{@code 422 SF-DOM-0152} — discarding an item with nothing released to go back to;
  *   <li>{@code 422 SF-DOM-0153} — an empty selection;
- *   <li>{@code 422 SF-DOM-0154} — a pinned version that isn't a version of its asset.
+ *   <li>{@code 422 SF-DOM-0154} — a pinned version that isn't a version of its asset;
+ *   <li>{@code 422 SF-DOM-0156} — an item to release has rule warnings and the call didn't accept them (M33.6).
  * </ul>
  */
 public interface ReleaseService {
@@ -26,7 +27,16 @@ public interface ReleaseService {
      * Points each item's pointer at its draft (or pinned version). An item already published is skipped; releasing a
      * {@link ReleaseStatus#DELETION_PENDING deleted} item takes it offline.
      */
-    ReleaseOutcome release(List<ReleaseItem> items, RevisionContext ctx);
+    default ReleaseOutcome release(List<ReleaseItem> items, RevisionContext ctx) {
+        return release(items, false, ctx);
+    }
+
+    /**
+     * As {@link #release(List, RevisionContext)}; {@code acceptWarnings} releases despite rule warnings, which the
+     * outcome then lists. {@code release} fills that change a value store a new draft version in the release's own
+     * revision and release that version (M33.6); a pinned version is released as it is.
+     */
+    ReleaseOutcome release(List<ReleaseItem> items, boolean acceptWarnings, RevisionContext ctx);
 
     /** Closes each item's pointer; the drafts stay. Items not released are skipped. */
     ReleaseOutcome unpublish(List<ReleaseItem> items, RevisionContext ctx);

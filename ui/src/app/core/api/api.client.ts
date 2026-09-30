@@ -549,6 +549,20 @@ export class ApiClient {
     });
   }
 
+  /**
+   * Editor rules on an unsaved value (M33.5): findings, fills and field states of the `edit` scope. Stores nothing;
+   * a failure (a rate limit, a network hiccup) is the caller's to ignore, so no error toast.
+   */
+  evaluateRules(
+    projectKey: string,
+    request: S['RuleEvaluationRequest'],
+  ): Observable<S['RuleEvaluationView']> {
+    return this.http.post<S['RuleEvaluationView']>(`${BASE}/projects/${projectKey}/rules/evaluate`, request, {
+      withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
   updatePage(
     projectKey: string,
     uuid: string,

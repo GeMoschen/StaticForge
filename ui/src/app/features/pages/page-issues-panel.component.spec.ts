@@ -245,4 +245,23 @@ describe('PageIssuesPanelComponent', () => {
 
     expect(text()).toContain('The preview shows the published page; these checks cover the draft.');
   });
+
+  it('orders rule findings by level, lists infos without counting them and leaves hints to the fields (M33.8)', () => {
+    fixture.componentRef.setInput('completeness', [
+      { path: 'content.teaser', code: 'rule', severity: 'INFO', message: 'No teaser yet.', kind: 'COMPLETENESS', rule: 'teaser' },
+      { path: 'content.slug', code: 'rule', severity: 'HINT', message: 'Keep slugs short.', kind: 'COMPLETENESS', rule: 'slug' },
+      { path: 'content.title', code: 'rule', severity: 'WARNING', message: 'Long title.', kind: 'COMPLETENESS', rule: 'short' },
+      ...COMPLETENESS,
+    ]);
+    render();
+    const req = nextCheck();
+    req.flush({ ...RESULT, completeness: undefined, findings: [] });
+    render();
+
+    const labels = items().map((item) => item.querySelector('.issues__severity')?.textContent?.trim());
+    expect(labels).toEqual(['Error', 'Warning', 'Info']);
+    expect(text()).not.toContain('Keep slugs short.');
+    const count = (fixture.nativeElement as HTMLElement).querySelector('.issues__count')?.textContent?.trim();
+    expect(count).toBe('2');
+  });
 });

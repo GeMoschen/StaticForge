@@ -1,6 +1,6 @@
 # StaticForge CMS — API reference
 
-Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (139 paths as of M28; M30 adds `quality-rules`, `generations/{runId}/findings`, `redirects` and the draft-check endpoint `preview/pages/{uuid}/checks`), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
+Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (139 paths as of M28; M30 adds `quality-rules`, `generations/{runId}/findings`, `redirects` and the draft-check endpoint `preview/pages/{uuid}/checks`; M33 adds `rules/evaluate`), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
 
 ## 1. Conventions
 
@@ -316,6 +316,63 @@ until the deletion is released.
 a non-boolean value is `422`. A `noIndex` page leaves `sitemap.xml` and is `$CMS_META(noIndex)$` to its templates
 (spec §10.3).
 
+### 5.1 Content findings and editor rules (M33)
+
+Every save of a page — `PUT` (autosave is the same `PUT`), `PATCH …/content`, section add, reorder, move and delete —
+and of a record or property-set values runs, after the structural check: read-only enforcement (a field whose
+`readOnlyWhen` holds on the stored version keeps its stored value; a changed value is ignored with an `info` finding
+`read-only`), then the `save` fills (`mode empty` into empty fields, `mode always` overwriting — a differing typed value
+gets a `read-only` info), then the `save`-scope rules and built-ins. Any `error` with scope `save` rejects the request
+with `422 SF-API-0422` and every finding under `issues`, autosave included; nothing is stored. Otherwise the stored
+content is the filled and enforced one and comes back in the response. Imports run no save rules. `PageView.issues`,
+`RecordDetailView.issues` (also on `GET` of the current record) and `GlobalSetDetailView.issues` are the `edit`-scope
+outcome of the stored draft; in a save response the save's `read-only` notes come first.
+
+A finding (`ContentIssue`):
+
+```json
+{ "path": "gallery[1]", "code": "rule", "severity": "ERROR", "message": "Image 2 needs a caption", "kind": "COMPLETENESS",
+  "rule": "caption-per-image", "scopes": ["RELEASE", "GENERATION"], "messages": {"en": "Image 2 needs a caption"},
+  "locale": null, "onGeneration": "HOLD_BACK" }
+```
+
+`severity` is `ERROR`, `WARNING`, `INFO` or `HINT`. `kind` is `STRUCTURAL` (`type`, `option`, `allow`, `template`,
+`dataset`, `pagination`: always rejects a save) or `COMPLETENESS`. `code` is the built-in's code (`required`, `min`,
+`max`, `maxLength`, `maxChars`, `pattern`, `mimeType`), `rule` for a template rule, `rule-eval` (an expression that
+failed or hit a limit, a `WARNING`; the rule counts as passed) or `read-only`. `rule` is the rule's name, or the
+built-in's code. `scopes` are the scopes the finding applies in (`EDIT`, `SAVE`, `RELEASE`, `GENERATION`); a finding
+blocks a scope's action iff it is an `ERROR` and the scope is listed. `messages` is the author's map per UI language,
+`message` the entry for the request's `Accept-Language` (else the first). `locale` is the language the finding is
+about (`null` when not language-specific); `onGeneration` is `HOLD_BACK` or `FAIL`.
+
+**Live evaluation.** `POST /projects/{projectKey}/rules/evaluate` (`VIEWER`; stores nothing, allowed on archived
+projects) runs the `edit` scope on an unsaved value, reading drafts:
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| `POST` | `/projects/{projectKey}/rules/evaluate` | `VIEWER` | `{kind, assetUuid?, templateUid?, datasetUid?, globalSetUid?, content, bodies?, locale?, changedPaths?}` → `{findings, fills: [{path, locale, value, mode}], fieldStates: [{path, locale, required, readOnly, computed}]}` |
+
+```http
+POST /api/v1/projects/acme/rules/evaluate
+Accept-Language: de
+{ "kind": "PAGE", "assetUuid": "0190…", "content": { "title": "Herbst-Sale", "slug": "" }, "bodies": { "main": [] }, "locale": "de" }
+```
+
+```json
+{ "findings": [],
+  "fills": [ {"path": "slug", "locale": null, "value": "herbst-sale", "mode": "EMPTY"} ],
+  "fieldStates": [ {"path": "teaser", "locale": null, "required": false, "readOnly": false, "computed": false} ] }
+```
+
+`kind` is `PAGE`, `SECTION`, `RECORD` or `GLOBAL_SET`; missing or anything else is `400`. The definition is the
+template, dataset or property set named by `templateUid` / `datasetUid` / `globalSetUid`, else that of the stored asset
+`assetUuid`; an unknown one is `404`. `PAGE` evaluates `content` and `bodies`, section rules included; `SECTION`
+evaluates a section template on its own (no `section.page`). `locale` restricts the evaluation to that language and
+the default one (a language the project doesn't declare is `400`); omitted, every project language. `changedPaths` is
+accepted; the whole value is evaluated. `computed` in a field state means read-only because of a `mode always` fill.
+Rate limited per user on the draft-check budget (`sf.preview.rate-limit.checks-per-minute`, default 60, then
+`429 SF-API-0429`). Messages come in the `Accept-Language` UI language.
+
 ## 6. Folders
 
 | Method | Path |
@@ -336,7 +393,7 @@ Global property sets. Schema and values are separate endpoints because they need
 | `GET` | `/projects/{projectKey}/globals/{uuid}` | `VIEWER` | `?revision=` reads the version valid at that revision (time travel) |
 | `POST` | `/projects/{projectKey}/globals` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, comment?}` → `201` |
 | `PUT` | `/projects/{projectKey}/globals/{uuid}/schema` | `DEVELOPER` | `{contentDefinition, comment?}`; applies `renamedFrom` and drops values of removed editors in the same revision |
-| `PUT` | `/projects/{projectKey}/globals/{uuid}/content` | `EDITOR` | `{content, comment?}`; malformed values → `422` with `issues` |
+| `PUT` | `/projects/{projectKey}/globals/{uuid}/content` | `EDITOR` | `{content, comment?}`; malformed values, or a save-scope rule `error` (M33, §5.1) → `422` with `issues`; the detail view carries `issues` (the `edit` findings of the stored values) |
 | `DELETE` | `/projects/{projectKey}/globals/{uuid}` | `DEVELOPER` | refused while a template or page reads the set |
 
 A uuid that belongs to another project or isn't a property set is `404`. CDL errors are `422` with `diagnostics` (`SF-CDL-*`, including `SF-CDL-0107` for a `body` or `catalog`).
@@ -369,7 +426,7 @@ A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder
 
 A malformed `where` is `400` with `column` (1-based, inside the expression); an unknown field in `where` or `sort`, a sort by a list/rich text/media/reference field, or a malformed `sort` parameter is `400` too.
 
-**Validation.** Structural findings (wrong value shape, an option outside `options`, a `reference` with `dataset "uid"` pointing outside that dataset — code `dataset`) are `422 SF-API-0422` with `issues`. Completeness findings (`required`, `min`, …) don't block the save; they come back in the response's `issues`. A record doesn't publish anything itself, so they don't hold a page back.
+**Validation.** Structural findings (wrong value shape, an option outside `options`, a `reference` with `dataset "uid"` pointing outside that dataset — code `dataset`) are `422 SF-API-0422` with `issues`. Completeness findings (`required`, `min`, …) don't block the save unless the schema makes them — or one of its `rules {}` — an `error` in the `save` scope (M33, §5.1); they come back in the response's `issues` (also on `GET` of the current record). A record doesn't publish anything itself, so they don't hold a page back; its `release`-scope errors block releasing the record.
 
 Everything else is generic (§4): delete, restore, move, uid change, history and usages of a record are under `/assets/{uuid}`; a record's usages are the pages and templates that read it, a dataset's usages are the templates that loop it (not its own records). Validate draft CDL with `POST /cdl/validate?kind=DATASET`.
 
@@ -761,12 +818,14 @@ The other types, `runAt` for one-off and `cron` + `zoneId` for recurring:
 `missedPolicy` is `RUN_LATE` (default) or `SKIP_IF_LATER_THAN` with `maxLateness` as an ISO-8601 duration. Errors:
 `422 SF-DOM-0160` unknown type, `0161` params that don't fit (`field` names the offender), `0164` `runAt` in the past,
 `0165` invalid cron or zone, `0166` a timing form that doesn't fit the type, the release codes (`SF-DOM-0150` a pinned
-version is incomplete, `0151`, `0153`), `409 SF-DOM-0167` while the schedule executes, `409 SF-DOM-0141` in an
+version has rule errors — warnings are not refused here —, `0151`, `0153`), `409 SF-DOM-0167` while the schedule executes, `409 SF-DOM-0141` in an
 archived project.
 
 An execution is `{id, scheduledFor, startedAt, finishedAt, outcome, lateByMs, message, detail, revisionId,
 generationRunId, executedAsUserId}`, `outcome` one of `SUCCEEDED`, `PARTIAL`, `FAILED`, `SKIPPED` (`null` while it
-runs). For releases `detail.items` lists `{assetUuid, locale, result: APPLIED|UNCHANGED|SKIPPED, reason?}`;
+runs). For releases `detail.items` lists `{assetUuid, locale, result: APPLIED|UNCHANGED|SKIPPED, reason?, warnings?}`
+— a scheduled release always accepts rule warnings and records them as `warnings: [{path, code, rule, message,
+locale}]` (M33); rule errors skip the item as before;
 `detail.waitingForRun` names the run a busy project waits for; a failure carries `detail.code` (`SF-DOM-0162` target
 gone, `0163` owner no longer permitted — the schedule is paused until taken over; the message names what is missing,
 e.g. "Owner no longer permitted (SCHEDULE_RELEASE): 'bob' is EDITOR without SCHEDULE_RELEASE in the project's
@@ -801,7 +860,7 @@ and their intervals absorbed by the last version of the day. Reads say so; proje
 Saving writes a draft; a release makes the draft of chosen languages the version builds render (spec §5.5). Each
 action is one revision (`RELEASE`, `UNPUBLISH`, `DISCARD`) and starts no build. Request body of all four:
 `{items: [{assetUuid, locale?}], includeDependencies?: [{assetUuid, locale?}], comment?}` — an item without `locale`
-means every language the asset has.
+means every language the asset has. `POST /releases` also takes `acceptWarnings` (default `false`, M33).
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
@@ -826,13 +885,19 @@ POST /api/v1/projects/acme/releases/plan
     { "target": {"uuid": "0191…", "type": "MEDIA", "uid": "hero", "displayName": "Hero", "locale": "en", "status": "NEW", "versionId": 5790},
       "reason": "REFERENCE", "via": "0190…", "includedByDefault": true } ],
   "incomplete": [],
-  "warnings": [] }
+  "warnings": [],
+  "warningFindings": [ {"uuid": "0190…", "locale": "en", "issues": [ {"path": "title", "code": "rule", "rule": "title-length", "severity": "WARNING", "…": "…"} ]} ],
+  "infoFindings": [],
+  "fills": [ {"uuid": "0190…", "locale": null, "path": "publishDate", "value": "2026-09-29"} ] }
 ```
 
 `reason` is `REFERENCE` (the selection's drafts reference it), `CONTAINER` (an unreleased folder or record set the
 selection sits in), `SET_MEMBER` (an unreleased record of a selected set) or `DESCENDANT` (a changed descendant of a
-selected changed folder, `includedByDefault: false`). `incomplete` lists items with blocking completeness findings
-(`{uuid, locale, issues}`); releasing them is refused.
+selected changed folder, `includedByDefault: false`). `incomplete` lists items with `release`-scope errors
+(`{uuid, locale, issues}`); releasing them is refused. Since M33 the plan runs the editor rules as the release will
+(spec §5.5): `warningFindings` (same shape) must be accepted with `acceptWarnings: true`, `infoFindings` never block,
+and `fills` are the values the `release` fills would write. `warnings` stays the list of pinned-version notes. A
+built-in finding concerns every released language of the asset, a template rule's finding only its own language.
 
 ```http
 POST /api/v1/projects/acme/releases
@@ -844,12 +909,16 @@ POST /api/v1/projects/acme/releases
 { "revision": 1902,
   "applied": [ {"uuid": "0190…", "type": "PAGE", "uid": "about", "locale": "en", "status": "PUBLISHED", "versionId": 5812, "…": "…"},
                {"uuid": "0191…", "type": "MEDIA", "uid": "hero", "locale": "en", "status": "PUBLISHED", "versionId": 5790, "…": "…"} ],
-  "skipped": [], "sharedFieldsKept": [] }
+  "skipped": [], "sharedFieldsKept": [], "warnings": [] }
 ```
 
 `revision` is `null` when every item was already live (nothing is written); `skipped` lists those. A discard lists in
 `sharedFieldsKept` the items whose shared (not per-language) fields stayed, because other languages have unreleased
-changes on them. Errors: `422 SF-DOM-0150` content incomplete (`assets[]` with the findings), `0151` unknown asset or
+changes on them. `warnings` (M33) lists the rule warnings the release accepted, `{uuid, locale, issues}`. When a
+`release` fill changes a value of a draft being released, the release stores a new draft version with the filled
+values (optimistically locked like a save) and releases that version, in the same revision; a pinned older version is
+released as it is. Errors: `422 SF-DOM-0150` rule errors (`assets[{uuid, locale, issues}]`), `422 SF-DOM-0156` rule
+warnings without `acceptWarnings: true` (same shape), `0151` unknown asset or
 language or a live type (templates have no release state), `0152` discard of something never released (`assets[]`),
 `0153` empty selection; `403 SF-API-0403` with `permission: "RELEASE"` without the publish permission (developers
 always hold it, editors when the policy opens it, M28); `409 SF-DOM-0141` in an archived project.
@@ -876,7 +945,7 @@ projection (`path` like `payload.content.headline`).
 | `GET` | `/projects/{projectKey}/preview/pages/{uuid}` (`?revision=`, `?channel=`, `?page=`, `?locale=`) — page preview by identity; the server resolves content/bodies/meta from the database, the client never sends rendered data. `page` (M21) renders that page of a paginated page, clamped to its page count; the response carries `X-SF-Total-Pages` and `X-SF-Page`. `locale` (M24) renders one content language; without it, the project's default. `view=draft` (default) or `published` (M27): the draft renders the page's draft and the drafts of everything it reads, `published` what the next build publishes; `X-SF-View` names the view, a draft preview carries `X-SF-Release-Status` (the page's status in the language), a page not released in the language is `404 SF-DOM-0155` in the published view, anything but `draft`/`published` is `400` |
 | `POST` | `/projects/{projectKey}/preview/section` |
 | `GET` | `/projects/{projectKey}/preview/pages/{uuid}/share` (`?locale=`, `?view=`, issue a share link; the language and the view are bound into the token) |
-| `POST` | `/projects/{projectKey}/preview/pages/{uuid}/checks` (`?channel=` default `html`, `?locale=`, `?page=`, `?revision=` for time travel) — M30 draft checks: renders the page's draft as a build of the drafts would write it (link rewriting off, section markers on) and runs the enabled page rules and the link rules against the draft's planned output paths; stores nothing → `{completeness, findings: [{code, name, category, severity, fixHint, message, selector, sectionInstanceId, editorPath}], checkedChannel, checkedLocale, checkedPage, skippedRules}` (page rules' findings first; `checkedPage` after clamping). `VIEWER`, read-only, allowed on archived projects. `skippedRules` lists the enabled rules not run on a draft — `SF-CHK-0103`, `0109`, `0205`, `0206`, `0210` — and `0107`, which checks same-page fragments only; a non-HTML channel (or a page writing nothing in it) answers `findings: []` with every enabled rule skipped. `404` unknown page, `400` unknown channel or language, `422` with the template's code when it doesn't compile or hits a render limit. Rate limited per user: `sf.preview.rate-limit.checks-per-minute` (default 60) in any sliding minute, then `429 SF-API-0429`; the preview `GET` above is not limited (spec §19.4) |
+| `POST` | `/projects/{projectKey}/preview/pages/{uuid}/checks` (`?channel=` default `html`, `?locale=`, `?page=`, `?revision=` for time travel) — M30 draft checks: renders the page's draft as a build of the drafts would write it (link rewriting off, section markers on) and runs the enabled page rules and the link rules against the draft's planned output paths; stores nothing → `{completeness, findings: [{code, name, category, severity, fixHint, message, selector, sectionInstanceId, editorPath}], checkedChannel, checkedLocale, checkedPage, skippedRules}` (page rules' findings first; `checkedPage` after clamping). `completeness` is the editor rules' `edit`-scope outcome for the stored draft (M33, §5.1). `VIEWER`, read-only, allowed on archived projects. `skippedRules` lists the enabled rules not run on a draft — `SF-CHK-0103`, `0109`, `0205`, `0206`, `0210` — and `0107`, which checks same-page fragments only; a non-HTML channel (or a page writing nothing in it) answers `findings: []` with every enabled rule skipped. `404` unknown page, `400` unknown channel or language, `422` with the template's code when it doesn't compile or hits a render limit. Rate limited per user: `sf.preview.rate-limit.checks-per-minute` (default 60) in any sliding minute, then `429 SF-API-0429`; the preview `GET` above is not limited (spec §19.4) |
 | `GET` | `/projects/{projectKey}/preview/share` (`?t=`, render via a share token; `?page=` as above, not part of the token — the language is) |
 | `GET` | `/projects/{projectKey}/pagination/count` (`?kind=NAV\|DATASET&source=uuid`) — M21: `{itemCount, skipped}` of a pagination source now, counted like generation does; `404` when the source isn't a live Navigation folder or dataset, `422` for another `kind` |
 
@@ -1026,7 +1095,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-API-0412` | 412 | `If-Match` missing on a mutating request |
 | `SF-API-0413` | 413 | upload exceeds configured limit (§11.5) |
 | `SF-API-0415` | 415 | MIME type not allowed (Tika sniff, §11.4) |
-| `SF-API-0422` | 422 | CDL validation failed (field-level details); structural page content findings on save carry an `issues` array — `PageContentValidation` |
+| `SF-API-0422` | 422 | CDL validation failed (field-level details); structural content findings, and since M33 a save-scope rule `error`, reject a save with every finding in `issues` — `PageContentValidation`, `ContentRules` |
 | `SF-API-0423` | 423 | account locked (login lockout, §9.5) — *implemented addition* |
 | `SF-API-0428` | 428 | password change required (forced change pending, spec §8.2) — `PasswordChangeRequiredFilter` |
 | `SF-API-0429` | 429 | rate limit exceeded (login; draft checks, M30) |
@@ -1052,12 +1121,13 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0132` | 409 | an admin can't disable, delete or demote themselves — `UserAdministrationService` |
 | `SF-DOM-0140` | 409 | project key already exists — *implemented addition* |
 | `SF-DOM-0141` | 409 | project is archived: every write is refused (M26) — `ArchivedProjectInterceptor`, `RevisionService.allocate`, `ProjectWriteGuard` |
-| `SF-DOM-0150` | 422 | content incomplete: releasing (or pinning a scheduled release of) content with `ERROR` completeness findings; `assets[]` with the findings (M27) — `ReleaseProblems`, `ReleaseServiceImpl`, `ReleaseActionHandler` |
+| `SF-DOM-0150` | 422 | content incomplete: releasing (or pinning a scheduled release of) content with `release`-scope `error` findings — built-ins and editor rules (M33); `assets[{uuid, locale, issues}]` (M27) — `ReleaseProblems`, `ReleaseServiceImpl`, `ReleaseActionHandler` |
 | `SF-DOM-0151` | 422 | release item can't be resolved: unknown asset, a language the asset doesn't have, or a live type (M27) — `ReleaseServiceImpl` |
 | `SF-DOM-0152` | 422 | discard of something never released; `assets[]` (M27) — `ReleaseServiceImpl.discard` |
 | `SF-DOM-0153` | 422 | empty release selection (M27) — `ReleaseServiceImpl` |
 | `SF-DOM-0154` | 422 | a pinned version that isn't the asset's, or is a deletion (M27) — `ReleaseServiceImpl` |
 | `SF-DOM-0155` | 404 | published preview of a page not released in the language (M27) — `ReleaseProblems.notPublished` |
+| `SF-DOM-0156` | 422 | a release whose items have editor-rule warnings, without `acceptWarnings: true`; `assets[{uuid, locale, issues}]` (M33) — `ReleaseProblems.warnings` |
 | `SF-DOM-0160` | 422 | unknown schedule type; also a paused execution's `detail.code` (M27) — `SchedulerProblems` |
 | `SF-DOM-0161` | 422 | schedule params don't fit the type, `field` names the offender; also an execution failure when a channel was disabled since (M27) — handlers' `validate` |
 | `SF-DOM-0162` | — | execution failure: the generation target is gone; a recurring schedule pauses (M27) — `ScheduledGenerations` |
@@ -1095,7 +1165,7 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 Defined in `template.diagnostic.DiagnosticCodes` (see [template-developer guide](template-developer-guide.md) for the full table):
 
 - OCTL (`SF-TPL-01xx` / `02xx` / `03xx`) — compile errors and warnings per §16.11.
-- CDL (`SF-CDL-01xx` / `02xx`) — CDL compile/validation errors; these are not enumerated in the spec but are stable, machine-readable codes.
+- CDL (`SF-CDL-01xx` / `02xx`) — CDL compile/validation errors; stable, machine-readable codes. `SF-CDL-0113`–`0119` (M33) are the `rules {}` and built-in modifier errors, listed in spec Appendix B and §14.7.
 
 ### Quality checks (`SF-CHK-*`, M30)
 
@@ -1120,7 +1190,9 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 |---|---|---|---|
 | `SF-GEN-0110` | error | output path collision | `RenderPipeline` (`COLLISION_CODE`) |
 | `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several content languages, so two languages would write the same file (M24) | `RenderPipeline` (`NOT_LOCALE_DISTINCT_CODE`) |
-| `SF-GEN-0120` | error (per page) | content incomplete; page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.incompletePages`) |
+| `SF-GEN-0120` | error (per page) | content incomplete (a built-in or an editor rule `error` with `onGeneration holdBack`, M33); page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.validateContent`) |
+| `SF-GEN-0121` | error | an editor rule with `onGeneration fail` doesn't hold: one per page, language and rule, every page validated first; run `FAILED`, nothing rendered or published (M33) | `GenerationDiagnosticCodes.GEN_RULE_FAILED` (`RenderPipeline.validateContent`) |
+| `SF-GEN-0122` | warning / info | an editor rule's `warning` or `info` in the `generation` scope, naming rule, page and language; the page publishes; warnings count (and make the run `PARTIAL`), infos don't (M33) | `GenerationDiagnosticCodes.GEN_RULE_FINDING` |
 | `SF-GEN-0125` | error (per page) | quality check failed: a rule configured `ERROR` found something on the page; all its outputs in that channel and language held back, run `PARTIAL`; the message lists the codes (M30) | `QualityCodes.GEN_QUALITY_CHECK_FAILED` (`QualityCheckStage`) |
 | `SF-GEN-0210` | warning | no channel template for enabled channel | `GenerationDiagnosticCodes` |
 | `SF-GEN-0220` | warning | reference to a deleted asset (`$CMS_REF`, `$CMS_INCLUDE`, body section); renders empty | `GenerationRenderer` |

@@ -35,6 +35,7 @@ import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.template.cdl.CdlCompiler;
 import com.acme.staticforge.template.cdl.CdlResult;
 import com.acme.staticforge.template.cdl.PaginationCdlRules;
+import com.acme.staticforge.template.cdl.TemplateRuleCdlRules;
 import com.acme.staticforge.template.content.BodyDefinition;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EffectiveDefinition;
@@ -412,11 +413,17 @@ public class TemplateServiceImpl implements TemplateService {
     /** Compiles a definition being saved: a section template also rejects a pagination editor (M21.1.1). */
     private ContentDefinition compileDefinition(String source, AssetType kind) {
         ContentDefinition definition = compileDefinition(source);
+        List<Diagnostic> overlay = new ArrayList<>();
         if (kind == AssetType.SECTION_TEMPLATE) {
-            List<Diagnostic> placement = PaginationCdlRules.notAllowedIn(definition, "a section template");
-            if (!placement.isEmpty()) {
-                throw diagnosticsError("CDL", placement);
-            }
+            overlay.addAll(PaginationCdlRules.notAllowedIn(definition, "a section template"));
+            overlay.addAll(TemplateRuleCdlRules.sectionTemplate(definition));
+        } else {
+            // A page template's rule names resolve against its chain when its channels compile (M33).
+            overlay.addAll(TemplateRuleCdlRules.pageTemplate(definition));
+        }
+        List<Diagnostic> errors = overlay.stream().filter(d -> d.severity() == Severity.ERROR).toList();
+        if (!errors.isEmpty()) {
+            throw diagnosticsError("CDL", errors);
         }
         return definition;
     }

@@ -2,6 +2,8 @@ package com.acme.staticforge.template.content;
 
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
+import com.acme.staticforge.template.rules.RuleResolution;
+import com.acme.staticforge.template.rules.RuleSet;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -19,6 +21,11 @@ import java.util.Map;
  * layer already declares is an {@code SF-CDL-0109} error naming the ancestor, and the later
  * declaration is left out: the inherited one wins, so a descendant can never silently change what its
  * ancestor's pages store.
+ *
+ * <p>Rules (M33) merge differently: a layer's rule of the same name, state or fill of the same path replaces the
+ * ancestor's, and {@code rule "x" off} removes an inherited rule ({@code SF-CDL-0118} when no ancestor has it). The
+ * template's own rules are checked against the effective editors, so they may target inherited ones
+ * ({@code SF-CDL-0115} for names that resolve nowhere).
  *
  * @param definition the merged definition
  * @param editorsInheritedFrom top-level editor name → uid of the ancestor declaring it (own editors absent)
@@ -65,12 +72,14 @@ public record EffectiveDefinition(
         Map<String, String> bodiesInheritedFrom = new LinkedHashMap<>();
         List<Diagnostic> diagnostics = new ArrayList<>();
         String paginationOwner = null;
+        List<RuleSet> ruleLayers = new ArrayList<>();
 
         int last = rootFirst.size() - 1;
         for (int index = 0; index <= last; index++) {
             Layer layer = rootFirst.get(index);
             boolean own = index == last;
             ContentDefinition definition = layer.own() == null ? empty() : layer.own();
+            ruleLayers.add(definition.rules());
             for (EditorDefinition editor : definition.editors()) {
                 List<String> names = new ArrayList<>();
                 collectNames(editor, names);
@@ -124,11 +133,16 @@ public record EffectiveDefinition(
                 }
             }
         }
-        return new EffectiveDefinition(
-                new ContentDefinition(List.copyOf(editors), List.copyOf(bodies)),
-                editorsInheritedFrom,
-                bodiesInheritedFrom,
-                diagnostics);
+        List<String> unknownOverrides = new ArrayList<>();
+        RuleSet rules = RuleSet.merge(ruleLayers, unknownOverrides);
+        for (String name : unknownOverrides) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_RULE_UNKNOWN_OVERRIDE,
+                    "rule \"" + name + "\" off: no ancestor template defines a rule of that name", 0, 0));
+        }
+        ContentDefinition merged = new ContentDefinition(List.copyOf(editors), List.copyOf(bodies), rules);
+        diagnostics.addAll(RuleResolution.check(ruleLayers.get(ruleLayers.size() - 1), merged, rules));
+        return new EffectiveDefinition(merged, editorsInheritedFrom, bodiesInheritedFrom, diagnostics);
     }
 
     /** The editor names an editor occupies: its own (unless a synthetic group wrapper) and its group items'. */
@@ -154,7 +168,7 @@ public record EffectiveDefinition(
                 editor.defaultValue(), editor.min(), editor.max(), editor.maxLength(), editor.maxChars(), editor.pattern(),
                 editor.patternMessage(), editor.mimeTypes(), editor.assetTypes(), editor.options(), editor.features(),
                 editor.allow(), editor.visibleWhen(), editor.renamedFrom(), editor.localizable(), items,
-                editor.dataset(), editor.pagination());
+                editor.dataset(), editor.pagination(), editor.builtinRules());
     }
 
     private static ContentDefinition empty() {

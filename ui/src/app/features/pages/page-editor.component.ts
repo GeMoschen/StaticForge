@@ -3,6 +3,7 @@ import { LocalesStore } from '../../core/project/locales.store';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   computed,
   effect,
@@ -43,6 +44,7 @@ import { SfPreviewFrameComponent } from '../preview';
 import { readStoredView } from '../preview/preview-view.util';
 import type { PreviewView } from '../../core/api/api.client';
 import { PageIssuesPanelComponent } from './page-issues-panel.component';
+import { RuleBinding, mergeFindings } from '../forms/rules/rule-binding';
 import {
   issueDestination,
   issueFocusTarget,
@@ -148,6 +150,18 @@ export class PageEditorComponent {
 
   private fieldsSub: { unsubscribe(): void } | null = null;
 
+  /**
+   * Live editor rules on the page (M33.8): the whole payload — fields and sections — is evaluated; fills and states
+   * apply to the page's own fields, findings show at their field wherever it is.
+   */
+  protected readonly rules = new RuleBinding((request) => this.api.evaluateRules(this.projectKey(), request));
+
+  /** What the editor shows: the live findings (or the last save's until they arrive) and a rejected save's. */
+  protected readonly shownIssues = computed<ContentIssue[]>(() => {
+    const live = this.rules.evaluated() ? (this.rules.findings() as ContentIssue[]) : this.issues();
+    return mergeFindings(live, this.autosave.rejected() as ContentIssue[]);
+  });
+
   protected readonly splitRatio = signal(this.readSplitRatio());
 
   protected readonly centreFlex = computed(() => `${this.splitRatio()} 1 0%`);
@@ -179,12 +193,17 @@ export class PageEditorComponent {
         return 'Saved ' + (this.autosave.lastSavedAt() ?? '');
       case 'error':
         return 'Save failed';
+      case 'rejected': {
+        const errors = this.autosave.rejected().filter((f) => f.severity === 'ERROR').length;
+        return `Not saved — fix ${errors} error${errors === 1 ? '' : 's'}`;
+      }
       default:
         return '';
     }
   });
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => this.rules.dispose());
     effect(() => {
       const key = this.projectKey();
       if (!key) {
@@ -533,13 +552,42 @@ export class PageEditorComponent {
     if (form) {
       this.fieldsSub = form.valueChanges.subscribe(() => {
         this.autosave.markDirty();
+        this.rules.changed();
       });
+      this.bindRules(form);
     }
+  }
+
+  /** Evaluates the page's rules live on its fields form (M33.8). */
+  private bindRules(form: FormGroup): void {
+    const def = this.contentDefinition();
+    if (!def || this.readOnly()) {
+      this.rules.unbind();
+      return;
+    }
+    const locale = this.editingLocale()?.locale ?? null;
+    this.rules.bind({
+      form,
+      editors: def.editors ?? [],
+      locale,
+      content: () => this.fb.valueOf(def, form),
+      request: (content) => {
+        const payload = this.composePayload();
+        return {
+          kind: 'PAGE',
+          assetUuid: this.uuid(),
+          content: content as never,
+          bodies: (payload.bodies ?? {}) as never,
+          locale: locale ?? undefined,
+        };
+      },
+    });
   }
 
   private unwireFields(): void {
     this.fieldsSub?.unsubscribe();
     this.fieldsSub = null;
+    this.rules.unbind();
   }
 
   private loadSectionDefs(key: string, page: PageView): void {
@@ -861,6 +909,7 @@ export class PageEditorComponent {
     if (!p) {
       return;
     }
+    this.rules.changed();
     const bodies = { ...((p.bodies ?? {}) as unknown as BodiesMap) };
     const arr = bodies[bodyName] ?? [];
     const idx = arr.findIndex((s) => s.instanceId === instanceId);

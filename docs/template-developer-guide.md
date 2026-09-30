@@ -23,6 +23,193 @@ editor text ctaLabel { label "Button label" visibleWhen "showCta == true" }
 
 Grammar is deliberately tiny: `identifier (== | != | > | < | >= | <= | in) literal` with `&&`, `||`, `!`, parentheses. Evaluated by `ExpressionEvaluator` (backend) and the Angular form engine from one shared fixture file, so it behaves identically everywhere.
 
+### 1.1 Editor rules (M33)
+
+Attributes like `required` or `maxLength` check one field. **Rules** check anything the content can express — one field against another, every row of a list, the sections of a page, the image a field points at — and decide **when** the check runs and **how much it matters**. They also fill values and switch fields to required or read-only. Rules live in a top-level `rules { … }` section of the same CDL source, next to `content {}` (and `bodies {}`); page templates, section templates, dataset schemas and property sets all accept one. The server evaluates every rule, including live while an editor types. Normative reference: spec §10.5, §14.4, §14.8.
+
+**Levels and scopes.** Every rule has a **level** — `hint`, `info`, `warning`, `error` — and the **scopes** it runs in — `edit` (live in the form), `save` (every save, autosave included), `release`, `generation`. A rule runs only in the scopes it names. What a level does depends on the scope:
+
+| Level | `edit` | `save` | `release` | `generation` |
+|---|---|---|---|---|
+| `error` | shown at the field | save refused (`422 SF-API-0422`) | release refused (`SF-DOM-0150`) | page language held back (`SF-GEN-0120`, `onGeneration holdBack`, default) or run failed (`SF-GEN-0121`, `onGeneration fail`) |
+| `warning` | shown | saved | the release needs "Release with warnings" (`SF-DOM-0156` otherwise) | build warning `SF-GEN-0122`, run `PARTIAL` |
+| `info` | shown, not counted | saved | listed as a note | listed (`SF-GEN-0122`), not counted |
+| `hint` | shown only at the field | — | — | — |
+
+An `error` in `save` blocks autosave too: the editor keeps the unsaved text and shows "Not saved — fix N errors". Use `save` errors for things an editor can fix on the spot, and `release` for "not finished yet" — a draft is allowed to be incomplete.
+
+**A rule.** `level`, `scope`, `assert` and `message` are required (`SF-CDL-0114`); there are no defaults. `when` is an optional precondition. `assert` must be `true` for the content to pass. Cross-field example — an event's end can't be before its start, checked once both dates are set:
+
+```
+content {
+  editor date startDate { label "Starts" }
+  editor date endDate   { label "Ends" }
+}
+rules {
+  rule "end-after-start" on endDate {
+    level error
+    scope [edit, save]
+    when "!isEmpty(startDate) and !isEmpty(endDate)"
+    assert "daysBetween(startDate, endDate) >= 0"
+    message { en "The event can't end before it starts" de "Das Ende liegt vor dem Beginn" }
+  }
+}
+```
+
+`on` names the field the finding is shown at; `value` is that field's value, and every other editor is readable by its name (group members by their own name). Messages are a map per UI language — the editor's `Accept-Language` picks one, else the first — and may use `{value}`, `{length}`, `{min}`, `{max}`, `{index}` and `{locale}`. `//` and `/* */` comments are allowed anywhere in CDL.
+
+**The expression language.** Rules use expression language v2: strings, numbers, booleans, `null`, lists, objects, dates; `+ - * / %` (`+` joins strings), `== != < <= > >=`, `and`/`or`/`not` (or `&&`/`||`/`!`), `in`, `c ? a : b`, `??` (the right side when the left is `null`), list literals `[a, b]`, and the functions `length`, `isEmpty`, `matches(s, re)`, `lower`, `upper`, `trim`, `substring`, `concat`, `slugify`, `stripTags`, `wordCount`, `now`, `today`, `date`, `daysBetween`, `count`, `min`, `max`, `sum`, `any(list, expr)`, `all(list, expr)` (the element is `it`), `sections(body, templateUid?)` and `ref(value)`. Besides the editors you can read `locale`, `defaultLocale`, `release.status` (the language's `ReleaseStatus`: `NEW`, `PUBLISHED`, `CHANGED`, …), `page` (`uid`, `uuid`, `name`, `path`, `template`) — `section`, `record` (with `dataset`) or `global` in the other kinds — and `global:<set>.<field>`. A single `=` is an error here. `visibleWhen` keeps the small grammar above; v2 syntax there is `SF-CDL-0105`. A condition that doesn't come out `true`/`false` at run time, or an expression that fails (a wrong value type, a limit), is reported as a `warning` with code `rule-eval` and the rule counts as passed — so guard against empty values with `when` or `??`. Evaluation is bounded (200,000 steps and 200 ms per definition, 200 `ref` lookups, regular expressions with a bounded matcher).
+
+**Rows of a list.** `on gallery[]` runs the rule once per row with `item` (the row), `index` (0-based) and, in nested lists, `parent`; `{index}` in the message is the 1-based row number. `gallery[].caption` targets a field of each row.
+
+```
+content {
+  editor list gallery {
+    item {
+      editor media picture { label "Picture" }
+      editor text  caption { label "Caption" }
+    }
+  }
+}
+rules {
+  rule "caption-per-image" on gallery[] {
+    level error  scope [edit, release, generation]
+    when "item.picture.uuid != null"
+    assert "!isEmpty(item.caption)"
+    message { en "Image {index} needs a caption" de "Bild {index} braucht eine Bildunterschrift" }
+  }
+}
+```
+
+**The whole page and its sections.** `on page` (in a page template) targets the whole definition; `body.<name>` is the list of the body's section instances, each with `template` (the section template's uid) and `content`, and `sections(body, templateUid)` filters it:
+
+```
+content { editor text title { label "Title" required } }
+bodies  { body main { label "Main" allow ["hero", "text"] } }
+rules {
+  rule "one-hero" on page {
+    level error  scope [save, release]
+    assert "count(sections(body.main, 'hero')) == 1"
+    message { en "Exactly one hero section" }
+  }
+  rule "hero-has-headline" on page {
+    level warning  scope [release]
+    assert "all(sections(body.main, 'hero'), !isEmpty(it.content.headline))"
+    message { en "Every hero needs a headline" }
+  }
+}
+```
+
+The keyword must match the kind: `page` in page templates, `section` in section templates, `record` in datasets, `global` in property sets (`SF-CDL-0113` otherwise); a rule without `on` also targets the whole definition. A section template's rules run for each instance when the page is saved, released or built, and can read the page as `section.page` (`section.page.content.title`); when the section is evaluated on its own there is no `section.page`.
+
+**Referenced assets.** `ref(value)` looks at what a `media`, `link` or `reference` field points to: `uid`, `name`, `path`, `type`, `content`, `meta` (for media its descriptive fields and `alt`, the alt text; for a page its meta), `mimeType` (media) and `release.status`.
+
+```
+content { editor media image { label "Image" } }
+rules {
+  rule "alt-text" on image {
+    level warning  scope [edit, release]
+    when "value.uuid != null"
+    assert "!isEmpty(ref(value).meta.alt)"
+    message { en "The selected image has no alt text" de "Das gewählte Bild hat keinen Alternativtext" }
+  }
+}
+```
+
+While editing and saving, `ref` reads the target's **draft**; at release it reads the released state (an asset released in the same release counts as released); a build reads the build's snapshot. A change to the image re-validates the page in the next incremental build, because the field is already a reference edge.
+
+**Languages.** A rule that reads a language-dependent (`localizable`) value, `locale`, `release`, `body`, `section`, `global:` or `ref` runs once per language, with the values resolved along that language's fallback chain; its findings carry the `locale` and show only while that language is edited. `locales` restricts it: `all` (default), `[default]` (the project's default language only) or `[de, en]`. The built-in `required` checks only the default language (§2.12); to require a translation in every language, write a rule:
+
+```
+content { editor text title { label "Title" localizable required } }
+rules {
+  rule "title-translated" on title {
+    level error  scope [release, generation]
+    assert "!isEmpty(value)"
+    message { en "The title is missing in {locale}" de "Der Titel fehlt in {locale}" }
+    locales all
+  }
+}
+```
+
+A release checks the languages it releases, a build the language it renders; a finding in German neither blocks releasing nor holds back the English page.
+
+**Fills.** A `fill` computes a value. `mode empty` (default) writes only into an empty field; `mode always` overwrites, and the form shows the field read-only with a "computed" marker. `on` says when: `edit` (proposed live in the form), `save` (written by the server on every save), `release` (written when the release runs) — never `generation`.
+
+```
+content {
+  editor text title         { label "Title" required }
+  editor text slug          { label "Slug" }
+  editor text canonicalPath { label "Canonical path" }
+  editor date publishDate   { label "Published on" }
+}
+rules {
+  fill slug          { value "slugify(title)"                       mode empty   on [edit, save] }
+  fill canonicalPath { value "concat(page.path, '/', slug, '.html')" mode always  on [edit, save] }
+  fill publishDate   { value "today()"                              mode empty   on [release] }
+}
+```
+
+In the form the slug follows the title until the editor types their own; a save fills it anyway if it is still empty. A value typed into a `mode always` field is ignored on save with an `info` finding `read-only`. A release fill that changes a draft stores a new version with the filled value and releases it in the same revision, so draft and released version stay equal; a scheduled release of a pinned older version doesn't fill. Fills run in dependency order before the rules, so rules see filled values. Two fills of one field, or fills that read each other in a cycle, are `SF-CDL-0117`.
+
+**States.** `state <field>` makes a field required or read-only on a condition:
+
+```
+content {
+  editor select category { label "Category" options [ { value "news" label "News" }, { value "page" label "Page" } ] }
+  editor text teaser      { label "Teaser" }
+  editor text articleId   { label "Article id" }
+}
+rules {
+  state teaser    { requiredWhen "category == 'news'"  level warning  scope [edit, release] }
+  state articleId { readOnlyWhen "release.status == 'PUBLISHED'" }
+}
+```
+
+`requiredWhen` produces a `required` finding while it holds, with the state's `level` and `scope` (default: those of the field's own `required` built-in). `readOnlyWhen` disables the field in the form; on save it is judged on the **stored** version, and a changed value is ignored with an `info` finding `read-only` — the save itself never fails for it.
+
+**Built-in modifiers.** The attributes `required`, `maxLength`, `maxChars`, `min`, `max`, `mimeTypes` and `validate …` are built-in rules. Without modifiers they behave as before: `level error scope [edit, release, generation] onGeneration holdBack` — shown while typing, blocking release, holding the page back at build, never blocking a save. Change that inline, after the attribute:
+
+```
+content {
+  editor text title {
+    label "Title"
+    required level warning scope [edit, release]
+    maxLength 160 level info scope [edit]
+    validate pattern "^[A-Z]" message { en "Start with a capital" de "Mit Großbuchstaben beginnen" } level hint
+  }
+  editor list tags { label "Tags" min 1 scope [edit, save] max 5 }
+}
+```
+
+Modifiers are `level`, `scope`, `onGeneration` and `message`, in any order; they apply to the attribute they follow (here `min 1` blocks saves, `max 5` keeps the defaults). An invalid one is `SF-CDL-0119`. Structural checks — a wrong value type, an option outside `options`, a section outside `allow`, an unknown template or dataset, a malformed pagination value — are not rules: they always refuse the save.
+
+**Failing the build.** `onGeneration fail` (only with `level error` and `generation` in the scope) turns a failed rule from "hold this page back" into "stop the build": every page is still validated, so one run reports all failures (`SF-GEN-0121`, one per page, language and rule), then the run ends `FAILED` and nothing is published. Use it for mistakes that would make the whole site wrong, not for an unfinished page.
+
+**Inheritance.** A child page template inherits its ancestors' rules, states and fills (§2.10). A child `rule` with an inherited name replaces it; a child `state`/`fill` on an inherited path replaces that one; `rule "<name>" off` switches an inherited rule off.
+
+```
+rules {
+  rule "title-length" on title {
+    level error  scope [edit, save]
+    assert "length(value) <= 60"
+    message { en "At most 60 characters ({length})" }
+  }
+  rule "legacy-teaser-check" off
+  rule "subtitle-set" on subtitle {
+    level hint  scope [edit]
+    assert "!isEmpty(value)"
+    message { en "A subtitle helps readers" }
+  }
+}
+```
+
+Switching off a name no ancestor defines is `SF-CDL-0118`. A child can target inherited editors, but can't change an inherited editor's built-ins (the modifiers belong to the declaration; redeclaring the editor is `SF-CDL-0109`) or name a rule after a built-in (`SF-CDL-0119`). The template IDE's live check (`/cdl/validate`) doesn't know the parent chain, so a target it can't see is only a warning `SF-CDL-0115` there; the save checks it against the chain.
+
+**Property sets in rules.** A rule may read `global:<set>.<field>`. Saving the template (or dataset, section template, property set) records the sets its rules read as `RULE_REFERENCE` references: the set then counts as used by the template (it can't be deleted while used), and a change to it rebuilds the template's pages in the next incremental build — the rebuild reason reads "has editor rules reading".
+
+**Diagnostics.** `SF-CDL-0113`–`0119` (§3.2) while editing the CDL; at runtime findings with codes `rule` (your rules), the built-in codes (`required`, `maxLength`, …), `rule-eval` and `read-only`; at build `SF-GEN-0120`–`0122` (§3.3). The CDL editor shows `rules {}` as plain text — no highlighting or completion for it yet.
+
 ## Part 2 — OCTL (output channel template language)
 
 OCTL renders content into a channel. One template per (template asset, channel). Design principles (§16.1): **text-first** (paste HTML and it works), **unmistakable `$CMS_…$` delimiters**, **safe by default** (channel escaping), **no arbitrary code** (total language).
@@ -161,7 +348,7 @@ A **property set** is a named group of site-wide values — the site title, the 
 - no `bodies { … }` — a body holds page sections, and a set has no page;
 - no `catalog` editors — catalog cards render through the current page, which a set has none of.
 
-Everything else works: text, media, booleans, lists, groups, `renamedFrom`, `visibleWhen`, validation attributes. Validate a draft with `POST /projects/{p}/cdl/validate?kind=GLOBAL_SET`, which applies the restrictions; without `kind` the same CDL validates as a template.
+Everything else works: text, media, booleans, lists, groups, `renamedFrom`, `visibleWhen`, validation attributes, and a `rules {}` section (M33, §1.1) whose whole-set target is `on global`. The set's editor runs them live, a save of the values runs the `save` scope, and releasing the set the `release` scope. Validate a draft with `POST /projects/{p}/cdl/validate?kind=GLOBAL_SET`, which applies the restrictions; without `kind` the same CDL validates as a template.
 
 **Reading a set.** Two spellings, which are exactly the same reference — the compiler turns the first into the second, so they resolve, record usages and render identically:
 
@@ -341,6 +528,12 @@ that key in every record of the dataset, and the schema change plus all rewritte
 revision**. Removed fields keep their stored values, exactly as on pages. Validate a draft with
 `POST /projects/{p}/cdl/validate?kind=DATASET`. A schema can name a **title field** (a `text` editor):
 a record's display name then follows that field.
+
+**Rules on records (M33).** A schema may carry a `rules {}` section (§1.1); its whole-record target is `on record`,
+and `record.uid`, `record.name`, `record.path` and `record.dataset` are readable. Record create and update run the
+`save` scope (a save-scope `error` is `422 SF-API-0422` with `issues`), the record editor runs `edit` live, a release
+runs `release`. Records are not pages, so a record's rules don't run at generation; a page that reads a record doesn't
+inherit them. `RecordDetailView.issues` carries the `edit` findings of the stored record.
 
 **Looping a dataset.**
 
@@ -839,7 +1032,10 @@ abstract or not.
 **Editors and bodies are inherited.** A template's *effective* content definition is its ancestors' editors
 and bodies followed by its own. The page form, content validation and the editor-name checks all use it, so an
 article's channel source can read `$CMS_VALUE(title)$` that only the layout declares. Declaring an editor or
-body with a name an ancestor already uses is `SF-CDL-0109`. The template screen lists inherited editors
+body with a name an ancestor already uses is `SF-CDL-0109`. **Rules are inherited too** (M33, §1.1): a child adds
+rules, replaces an inherited `rule` by name (or a `state`/`fill` by path) and switches one off with
+`rule "<name>" off` (`SF-CDL-0118` for a name no ancestor defines). A child can't change the built-in modifiers of an
+inherited editor — put `required level warning` on the ancestor that declares the editor. The template screen lists inherited editors
 read-only, grouped by the ancestor that declares them; change them on that ancestor.
 
 **Channels.** Every channel is its own chain: if `article`'s `html` source extends `docs_layout`, then
@@ -995,7 +1191,9 @@ Its stored value becomes one value per language:
 
 Page structure is shared by every language, so `group`, `list`, `catalog` and `pagination` reject the attribute
 (`SF-CDL-0112`) — mark the leaf editors *inside* them instead. `required` is checked in the default language only;
-every other language may be empty and falls back.
+every other language may be empty and falls back. To require every translation, write a rule with `locales all` (§1.1):
+rules run per language, a finding belongs to its language, and a build or release of one language ignores the
+findings of another. Since M33 the build checks localizable editors per language exactly as a release does.
 
 Templates never see the wrapper. A value is resolved once, when the template reads it, through the render language's
 fallback chain (the language, its declared fallbacks, then the default language), so filters, `$CMS_IF`, loops and
@@ -1146,6 +1344,15 @@ channels and targets render at the build revision as they are. So:
 - **Tolerant values.** A released version written before a field became `localizable` holds a plain value; a
   `CHANGED` language may keep that shape until released. Values resolve by their stored shape, not by the current CDL,
   so both read correctly.
+- **Rules gate the release (M33, §1.1).** Releasing runs the `release` fills and rules of each released version and
+  language against the *current* template. `error` findings refuse the release (`SF-DOM-0150`); `warning` findings
+  refuse it (`SF-DOM-0156`) unless the editor ticks "Release with warnings" (`acceptWarnings: true`); `info` is listed.
+  A release fill that changes a draft writes a new version and releases it in the same revision. `ref` and `global:`
+  read what is released, counting what the same release releases. Scheduled releases accept warnings and record them.
+- **A new rule applies to released pages at the next build.** Templates are live, so a `generation`-scope rule you add
+  checks every released page in the next build — an `error` holds pages back (or fails the run with
+  `onGeneration fail`) until editors fix and re-release them. Add such rules with `scope [edit, save, release]` first,
+  or as `warning`, and tighten them once content is clean.
 
 #### Localized media
 
@@ -1324,6 +1531,13 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-CDL-0110` | error | a `pagination` editor inside a `list` or `group`, or in a section template, property set or dataset schema (§2.11) |
 | `SF-CDL-0111` | error | more than one `pagination` editor in a page template, counting inherited ones (§2.11) |
 | `SF-CDL-0112` | error | `localizable` on a `group`, `list`, `catalog` or `pagination` editor — structure is shared by all languages, so mark the leaf editors inside it instead (§2.12) |
+| `SF-CDL-0113` | error | an invalid `rules {}` entry: syntax, an unknown key, a bad `level`/`scope`/`mode`/`locales` value, a fill `on` outside `edit`/`save`/`release`, an invalid target, an unknown message placeholder, or a whole-definition target (`on page`/`section`/`record`/`global`) that doesn't match the definition's kind (M33) |
+| `SF-CDL-0114` | error | a `rule` without `level`, `scope`, `assert` or `message`; a `fill` without `value` or `on`; a `state` without `requiredWhen` or `readOnlyWhen` (M33) |
+| `SF-CDL-0115` | error | a rule, state or fill target, or an identifier an expression reads, that names no editor (checked against the effective definition, so inherited editors count; a warning in a page template's live check, which can't see the parent chain); `item`/`index`/`parent` outside a rule on list rows (M33) |
+| `SF-CDL-0116` | error | a rule expression that doesn't compile: syntax, an unknown function, a wrong number of arguments, a single `=`, or a condition that is a constant other than `true`/`false` (M33) |
+| `SF-CDL-0117` | error | a rule name, state path or fill path declared twice in one source, or fills that read each other in a cycle (M33) |
+| `SF-CDL-0118` | error | `rule "x" off` for a rule no ancestor template defines (M33) |
+| `SF-CDL-0119` | error | an invalid built-in modifier (`level`, `scope`, `onGeneration`, `message` after `required`, `maxLength`, …), `onGeneration` without level `error` and scope `generation`, or a custom rule named like a built-in (M33) |
 | `SF-CDL-0200` | error | CDL syntax error |
 
 ### 3.3 Generation (`SF-GEN-*`) — `generate.GenerationDiagnosticCodes` + `generate.GenerationService`
@@ -1331,7 +1545,9 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | Code | Severity | Meaning |
 |---|---|---|
 | `SF-GEN-0110` | error | output path collision |
-| `SF-GEN-0120` | error (per page) | content incomplete: the page has `ERROR` completeness findings (an empty required editor, a count or length out of bounds) and is not published; the message lists `path (message)`, other pages are written and the run ends `PARTIAL` |
+| `SF-GEN-0120` | error (per page) | content incomplete: the page has `ERROR` completeness findings (an empty required editor, a count or length out of bounds, an editor rule `error` with `onGeneration holdBack`) and is not published; the message lists `path (message)`, other pages are written and the run ends `PARTIAL` |
+| `SF-GEN-0121` | error | an editor rule with `onGeneration fail` doesn't hold: one diagnostic per page, language and rule; every page is validated first, then the run ends `FAILED` and nothing is published |
+| `SF-GEN-0122` | warning / info | an editor rule's `warning` or `info` in the `generation` scope; the page publishes; a warning makes the run `PARTIAL`, an info doesn't |
 | `SF-GEN-0125` | error (per page) | quality check failed: a quality rule configured *Error* found something on the page (M30, §2.14); all its outputs in that channel and language are held back, the message lists the rule codes, other pages are written and the run ends `PARTIAL` |
 | `SF-GEN-0210` | warning | no channel template for an enabled channel |
 | `SF-GEN-0220` | warning | reference to a deleted asset: a `$CMS_REF`, `$CMS_INCLUDE` or body section target is soft-deleted and renders empty |
@@ -1343,6 +1559,13 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-GEN-0411` | error | `$CMS_NAVIGATION` tree contains a dangling `PAGE_REFERENCE` (target missing/deleted, or an empty folder subtree) |
 | `SF-GEN-0412` | warning | a paginated page's navigation source holds a `PAGE_REFERENCE` that resolves to no page; the item is skipped and the page still renders (§2.11) |
 | `SF-GEN-0500` | 409 | a generation run is already active |
+
+**Editor rules at build (M33, §1.1).** The VALIDATE stage runs every `generation`-scope rule and built-in per page and
+language on what the build renders (released versions, or drafts in a draft build — then `release.status` is `NEW` for
+an unreleased page). An `error` holds that page language back (`SF-GEN-0120`, run `PARTIAL`) unless the rule says
+`onGeneration fail`: then every page is still validated, the run ends `FAILED` with one `SF-GEN-0121` per page,
+language and rule, and nothing is rendered or published. `warning` and `info` findings are `SF-GEN-0122` diagnostics
+naming rule, page and language; warnings count and make the run `PARTIAL`, infos don't.
 
 ### 3.4 Errors carry the fix
 

@@ -23,8 +23,8 @@ Templates are owned by **template developers** (see the [template-developer guid
    - Not every page template is offered. Templates marked **Abstract** (shown with an *Abstract* badge in the Templates store) are layouts that other templates build on, so no page can use them directly. Pick a template that extends the layout instead, or ask a developer to make one.
 3. Open the page editor — a split view: page fields on the left, live preview on the right.
 4. Fill the template's editors. Save is ambient: the header shows `Saved 12:04` with a revision link. There is no blocking save spinner (§24.6).
-   - A half-filled page always saves: an empty required field, too few list items or text that is too long doesn't stop the save. These are checked when you release the page instead: the release dialog lists each problem with its field and refuses to release until it's fixed (see [Publishing](#publishing-draft-release-unpublish-m27)). Generation keeps checking too: a page with such a problem isn't published, the generation log lists it under `SF-GEN-0120`, and the other pages are still published.
-   - A save is rejected only when a value has the wrong shape for its field (for example text in a number field, a value that isn't one of the field's options, or a section whose template isn't allowed in that body). Nothing is stored, and the error lists each offending field path.
+   - A half-filled page saves unless a template rule says otherwise: by default an empty required field, too few list items or text that is too long doesn't stop the save. These are checked when you release the page instead: the release dialog lists each problem with its field and refuses to release until it's fixed (see [Publishing](#publishing-draft-release-unpublish-m27)). Generation keeps checking too: a page with such a problem isn't published, the generation log lists it under `SF-GEN-0120`, and the other pages are still published.
+   - A save is rejected when a value has the wrong shape for its field (for example text in a number field, a value that isn't one of the field's options, or a section whose template isn't allowed in that body), or when one of the template's rules is an error on save (M33, see [Template rules](#template-rules-levels-blocked-saves-and-computed-fields-m33)). Nothing is stored, and the error lists each offending field path.
    - A page often also shows values from **Globals** (below), such as the site title. Those aren't fields of the page — change them in Globals.
 5. Preview updates live as you type (debounced), and the viewport switcher (mobile / tablet / desktop) resizes the preview.
 6. Saving doesn't put anything online: your page is a **draft** until someone releases it (see [Publishing](#publishing-draft-release-unpublish-m27)).
@@ -52,6 +52,34 @@ skipped, with a warning in the generation log.
 
 When the page has more than one page, the preview toolbar shows **‹ Page n of N ›**: switch pages there, or click a
 pagination link inside the preview. The selector also works in time travel, where the field itself is read-only.
+
+### Template rules: levels, blocked saves and computed fields (M33)
+
+Templates (and datasets and property sets) can carry **rules** written by the developer: checks across several
+fields, per list row or over the page's sections, values that fill themselves in, and fields that become required or
+read-only on a condition. The server checks your content while you type, so what you see in the form is what a save,
+a release or a build will say.
+
+**Levels.** Every finding has one of four levels, shown at its field:
+
+| Level | What it means for you |
+|---|---|
+| **Error** | must be fixed before the step the rule is about: saving, releasing or building |
+| **Warning** | worth fixing; a release asks you to confirm it ("Release with warnings") |
+| **Info** | a note; never blocks anything and isn't counted in the Issues badge |
+| **Hint** | a tip, shown only at the field (muted) |
+
+Findings are shown for the language you are editing; a missing German translation doesn't show while you edit English.
+
+**Blocked saves.** Most errors only stop a release. A rule can also be an error **on save**: then the page (or
+record, or property set) isn't saved — autosave included — the header reads **Not saved — fix N errors**, and the
+problems show at their fields. Your edits stay in the form; fix them and the next change saves again.
+
+**Filled-in and computed fields.** Some fields fill themselves in: a slug that follows the title until you type your
+own, a date set when the page is released. A field marked **computed** is always calculated from other fields and
+can't be edited. A field can also become **read-only** or **required** because of another value — for example, an id
+that is locked once the page is published. If you change a read-only or computed value anyway (for example through
+the API), the save keeps the stored value and tells you with a note.
 
 ### Sections
 
@@ -120,7 +148,7 @@ Site-wide values — the site title, the logo, the social links, the footer copy
 
 1. Open **Globals** from the nav. Like Navigation, the folder tree is on the left and the selected item on the right. Folders are only for keeping things tidy; they don't change where a value shows up.
 2. The store holds **property sets**, each a named group of fields such as `site` or `social`. Select one to open it.
-3. The **Values** tab is a form, like a page's fields. Fill it in and choose **Save values**. Globals don't autosave: a property set is shown on many pages at once, so nothing reaches a preview until you save.
+3. The **Values** tab is a form, like a page's fields. Fill it in and choose **Save values**. Globals don't autosave: a property set is shown on many pages at once, so nothing reaches a preview until you save. The set's schema may carry rules like a template's: findings show at the fields, and an error on save keeps the values unsaved until it is fixed.
 4. The **Schema** tab shows which fields the set has. Developers declare them; editors can read the schema but not change it.
 5. Every save is a revision, so a property set has history, a diff and restore like everything else. If someone else saved the same set since you opened it, your save is refused and the set reloads with their version — re-apply your change and save again.
 6. The header shows the set's UID and a snippet such as `$CMS_VALUE(CMS_GLOBAL.site.title)$` — hand that to a developer if a template should show this value.
@@ -164,7 +192,7 @@ While you type, the panel checks the query and says what it would do: "4 of 9 re
 
 **Search by name** filters as you type. For more precise filters, type an expression such as `role == 'lead'` and choose **Apply** — a mistake is shown with its column. Click a column header to sort (again to reverse, Shift+click to add a second sort); **Columns** hides columns you don't need (the dataset's title field starts hidden — its value is already the record's name in the first column). These filters only change what the grid shows. **Use as set query** copies them into the set query, where you can check and save them. Below the grid, the snippet (`$CMS_VALUE(recordset:leadership)$`) is what a developer puts in a template to show the set.
 
-**Records.** The panel beside a record's form has **Checks** (empty required fields and similar findings — they don't block saving), **History** (every save is a revision, with restore) and **Usages** (the pages and templates that show this record). **Move…** moves the record into another record set of the same dataset. **Delete** asks first, and says how many pages or templates still show the record; a deleted record disappears from every list on the next preview or publish, and can be restored from its history.
+**Records.** The panel beside a record's form has **Checks** (empty required fields and similar findings — they don't block saving unless a dataset rule is an error on save, see [Template rules](#template-rules-levels-blocked-saves-and-computed-fields-m33)), **History** (every save is a revision, with restore) and **Usages** (the pages and templates that show this record). **Move…** moves the record into another record set of the same dataset. **Delete** asks first, and says how many pages or templates still show the record; a deleted record disappears from every list on the next preview or publish, and can be restored from its history.
 
 **Deleting a set** asks first and names how many records go with it; the set and its records are deleted together, and restoring the set from its history brings them all back.
 
@@ -241,7 +269,9 @@ structure (bodies, section order, list rows, catalog cards) is shared by every l
 - A field you haven't translated shows what the page will actually render — *"Not translated — shows “Über uns” from
   Deutsch"* — with a **Copy from Deutsch** button to start from that text.
 - Fields that are the same in every language are marked **All languages**; changing one changes them all.
-- A required field is required in the **default** language only; the others may stay empty and fall back.
+- A required field is required in the **default** language only; the others may stay empty and fall back — unless the
+  template has a rule that asks for every translation. Such a finding belongs to its language: it blocks releasing that
+  language only.
 
 **Finding what's left.** The page, record and property-set editors show how many fields the current language still
 owes (`en: 3 of 12 missing`), and the pages list can filter to **missing in en**. A value inherited through a
@@ -284,7 +314,12 @@ choose **Release…**:
    the folders it sits in, a set's new records, grouped by reason and ticked. Untick anything you don't want to
    release now — it will simply be missing from the page (the generation log warns with `SF-GEN-0221`). A folder
    whose name or place changed offers its changed contents unticked.
-3. Missing required fields block the release: each is listed with its field and an **Open** link.
+3. Errors — missing required fields and the template rules' errors — block the release: each is listed with its
+   field and an **Open** link. **Warnings** are listed too; to release anyway tick **Release with warnings**.
+   **Notes** (infos) sit in a collapsed list and never block. Values the template fills in on release (a publish
+   date, say) are listed under **Filled in on release**: the release saves them as a new version of the draft and
+   releases that. A **scheduled** release shows the warnings without a checkbox — they are accepted and recorded when
+   the release runs.
 4. Add a comment if you like, and **Release**. "Released in r1902 — goes online with the next build."
 
 **Per language.** Each language is released on its own. Editing only the English headline leaves German
@@ -408,6 +443,12 @@ A build publishes what is **released** (see [Publishing](#publishing-draft-relea
    some pages) and a comment — then start. Editors see only what their project allows (see
    [Publishing as an editor](#publishing-as-an-editor-m28)).
 2. A live log shows per-stage progress (M30: including **Checking output**), error/warning grouping by code, and a file count. Errors link to the offending template line (§24.5). A build also checks what it wrote and adds redirects for moved pages — see [Quality checks and issues](#quality-checks-and-issues-m30) and [Redirects](#redirects-old-urls-keep-working-m30).
+   Template rules are checked again for every page and language before anything is written. A page with an error
+   is normally **held back**: it isn't published, the log lists it under `SF-GEN-0120`, the rest of the site goes
+   online and the run is **Partial**. A rule the developer marked to **fail** the build stops the whole run instead:
+   every page is still checked, the log lists each failing page, language and rule under `SF-GEN-0121`, the run is
+   **Failed** and nothing goes online. Rule warnings and notes show as `SF-GEN-0122`; a warning makes the run
+   **Partial**, a note doesn't.
 3. Roll back to a previous build with **Promote** on a past run (the last few published builds are retained;
    developers only). Failed or cancelled runs can't be promoted, and don't push published builds out of the list.
 
@@ -438,7 +479,8 @@ internet.
 
 **While you edit.** At the foot of the page editor, below the fields and sections, the **Issues** panel shows a
 count in its header (marked when it includes errors). *Content* lists what the release would refuse or warn about —
-an empty required field, too many items — and the same problems show on their fields. *Output* lists what the checks
+an empty required field, too many items, a template rule — ordered errors, warnings, notes; notes aren't counted in
+the badge and hints show only at their fields (M33). The same problems show on their fields. *Output* lists what the checks
 find on the page's **draft** as it would be built (the HTML channel): each with the rule, severity, message and where
 it is usually fixed ("Fix in content", "Fix in template", "Fix in content or template"); errors come first. The panel
 checks again shortly after each save, when you switch language and when you look at an older revision ("checked at

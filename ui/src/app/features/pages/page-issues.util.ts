@@ -60,9 +60,11 @@ export function fixHintLabel(hint: string | null | undefined): string | null {
   }
 }
 
-/** Errors first, then warnings; the server's order within each. */
+const SEVERITY_RANK: Record<string, number> = { ERROR: 0, WARNING: 1, INFO: 2, HINT: 3 };
+
+/** Errors first, then warnings, infos and hints (M33.8); the server's order within each. */
 export function bySeverity<T extends { severity?: string | null }>(items: readonly T[]): T[] {
-  const rank = (item: T) => (item.severity === 'ERROR' ? 0 : 1);
+  const rank = (item: T) => SEVERITY_RANK[item.severity ?? ''] ?? 1;
   return items
     .map((item, index) => ({ item, index }))
     .sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index)
@@ -74,9 +76,18 @@ export function errorCount(items: readonly { severity?: string | null }[]): numb
   return items.filter((item) => item.severity === 'ERROR').length;
 }
 
-/** The label of a severity: "Error", "Warning". */
+/** The label of a severity: "Error", "Warning", "Info", "Hint". */
 export function severityLabel(severity: string | null | undefined): string {
-  return severity === 'ERROR' ? 'Error' : 'Warning';
+  switch (severity) {
+    case 'ERROR':
+      return 'Error';
+    case 'INFO':
+      return 'Info';
+    case 'HINT':
+      return 'Hint';
+    default:
+      return 'Warning';
+  }
 }
 
 /** "checked at 14:05". */

@@ -35,6 +35,7 @@
               type="button"
               class="issues__item"
               [class.issues__item--error]="issue.severity === 'ERROR'"
+              [class.issues__item--info]="issue.severity === 'INFO'"
               [attr.aria-expanded]="isExpanded('content:' + i)"
               (click)="selectContent(issue, i)"
             >

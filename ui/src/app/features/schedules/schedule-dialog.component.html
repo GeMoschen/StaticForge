@@ -228,7 +228,7 @@
     </fieldset>
 
     @if (showPlan()) {
-      <sf-release-plan [projectKey]="projectKey()" [items]="items()" (stateChange)="planState.set($event)" (navigated)="closed.emit()" />
+      <sf-release-plan [projectKey]="projectKey()" [items]="items()" [confirmWarnings]="false" (stateChange)="planState.set($event)" (navigated)="closed.emit()" />
       @if (planState()?.blocked && pinPolicy() === 'LATEST') {
         <p class="sched__note">Incomplete items are skipped at run time unless they are completed by then.</p>
       }

@@ -1199,8 +1199,14 @@ public class RebuildExpansion {
         }
     }
 
-    /** {@code TEMPLATE} rows are named by where they are spelled; every other row is a generic reference. */
+    /**
+     * {@code TEMPLATE} rows are named by where they are spelled, {@code RULE_REFERENCE} rows as such (M33.7); every other
+     * row is a generic reference.
+     */
     static RebuildEdgeKind edgeOf(ReferenceRow row, SnapshotAsset from) {
+        if (row.kind() == ReferenceKind.RULE_REFERENCE) {
+            return RebuildEdgeKind.RULE_REFERENCE;
+        }
         if (row.kind() != ReferenceKind.TEMPLATE || row.sourcePath() == null) {
             return RebuildEdgeKind.REFERENCE;
         }

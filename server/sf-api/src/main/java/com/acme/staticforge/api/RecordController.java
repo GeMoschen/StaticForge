@@ -145,7 +145,7 @@ public class RecordController {
         return compactedReads.mark(
                 ResponseEntity.ok()
                         .header(HttpHeaders.ETAG, RevisionHeaders.etag(record.revision()))
-                        .body(toDetail(projectKey, record, List.of())),
+                        .body(toDetail(projectKey, record, revision == null ? storedIssues(projectId, record) : List.of())),
                 projectId,
                 uuid,
                 revision);
@@ -210,6 +210,15 @@ public class RecordController {
             keys.add(direction.equals("desc") ? SortKey.desc(field) : SortKey.asc(field));
         }
         return keys;
+    }
+
+    /** The {@code edit} outcome of a record's current values (M33.4), as its editor shows it after a reload. */
+    private List<ContentIssue> storedIssues(long projectId, RecordDetail record) {
+        com.fasterxml.jackson.databind.node.ObjectNode payload =
+                com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        payload.put("datasetRef", record.datasetUuid() == null ? null : record.datasetUuid().toString());
+        payload.set("content", record.content());
+        return recordService.contentIssues(projectId, record.uuid(), payload);
     }
 
     private RecordDetailView toDetail(String projectKey, RecordDetail r, List<ContentIssue> issues) {

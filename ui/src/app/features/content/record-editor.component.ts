@@ -26,6 +26,8 @@ import { FormBuilderService } from '../forms/form-builder.service';
 import type { ContentDefinition } from '../forms/form.model';
 import type { EditingLocale } from '../forms/l10n.util';
 import { SfContentFormComponent } from '../forms/sf-content-form.component';
+import { RuleBinding, mergeFindings } from '../forms/rules/rule-binding';
+import { byLevel } from '../forms/rules/rule-form.util';
 import { ConflictDrawerComponent } from '../pages/conflict-drawer.component';
 import { diffFields, mergePayload } from '../pages/conflict-util';
 import type { FieldResolveEvent, ResolveMode } from '../pages/types';
@@ -50,6 +52,9 @@ interface ContentIssue {
   code?: string;
   message?: string;
   kind?: string;
+  severity?: string;
+  locale?: string;
+  rule?: string;
 }
 
 /**
@@ -129,6 +134,22 @@ export class RecordEditorComponent implements OnDestroy {
 
   private formSubscription: Subscription | null = null;
 
+  /** Live editor rules on the form (M33.8): findings, fills and field states of the `edit` scope. */
+  protected readonly rules = new RuleBinding((request) => this.api.evaluateRules(this.projectKey(), request));
+
+  /** The Checks panel (M33.8): errors, warnings and infos, most severe first; hints only show at their field. */
+  protected readonly listed = computed(() => byLevel(this.shownIssues().filter((issue) => issue.severity !== 'HINT')));
+  /** The Checks tab counts errors and warnings; infos are listed, not counted. */
+  protected readonly counted = computed(() =>
+    this.listed().filter((issue) => issue.severity !== 'INFO' && issue.severity !== 'HINT'),
+  );
+
+  /** What the form shows: the live findings (or the last save's until they arrive) and a rejected save's. */
+  protected readonly shownIssues = computed<ContentIssue[]>(() => {
+    const live = this.rules.evaluated() ? this.rules.findings() : this.issues();
+    return mergeFindings(live, this.autosave.rejected()) as ContentIssue[];
+  });
+
   private readonly canEditContent = inject(ProjectPermissionsStore).canEditContent;
   protected readonly readOnly = computed(() => this.timeTravelling() || !this.canEditContent());
   /** The field that names the record; without one the record keeps its uuid as its name (M25). */
@@ -147,6 +168,10 @@ export class RecordEditorComponent implements OnDestroy {
         return 'Saved ' + (this.autosave.lastSavedAt() ?? '');
       case 'error':
         return 'Save failed';
+      case 'rejected': {
+        const errors = this.autosave.rejected().filter((f) => f.severity === 'ERROR').length;
+        return `Not saved — fix ${errors} error${errors === 1 ? '' : 's'}`;
+      }
       default:
         return '';
     }
@@ -202,14 +227,16 @@ export class RecordEditorComponent implements OnDestroy {
     if (this.readOnly() || this.record()?.deleted === true) {
       rebound.form.disable();
     } else {
-      this.formSubscription = rebound.form.valueChanges.subscribe(() => this.autosave.markDirty());
+      this.formSubscription = rebound.form.valueChanges.subscribe(() => this.onFormChanged());
     }
     this.form.set(rebound.form);
+    this.bindRules(rebound.form);
   }
 
   ngOnDestroy(): void {
     this.autosave.flush();
     this.formSubscription?.unsubscribe();
+    this.rules.dispose();
   }
 
   protected saveNow(): void {
@@ -404,9 +431,40 @@ export class RecordEditorComponent implements OnDestroy {
     if (this.readOnly() || deleted) {
       form.disable();
     } else {
-      this.formSubscription = form.valueChanges.subscribe(() => this.autosave.markDirty());
+      this.formSubscription = form.valueChanges.subscribe(() => this.onFormChanged());
     }
     this.form.set(form);
+    this.bindRules(form);
+  }
+
+  private onFormChanged(): void {
+    this.autosave.markDirty();
+    this.rules.changed();
+  }
+
+  /** Evaluates the record's rules live while it can be edited (M33.8). */
+  private bindRules(form: FormGroup): void {
+    const record = this.record();
+    const dataset = this.dataset();
+    if (this.readOnly() || record?.deleted === true || !record?.uuid || !dataset?.uid) {
+      this.rules.unbind();
+      return;
+    }
+    const definition = this.definition();
+    const locale = this.editingLocale()?.locale ?? null;
+    this.rules.bind({
+      form,
+      editors: definition.editors ?? [],
+      locale,
+      content: () => this.forms.valueOf(definition, form),
+      request: (content) => ({
+        kind: 'RECORD',
+        assetUuid: record.uuid,
+        datasetUid: dataset.uid,
+        content: content as never,
+        locale: locale ?? undefined,
+      }),
+    });
   }
 
   private onSaved(view: RecordDetailView): void {

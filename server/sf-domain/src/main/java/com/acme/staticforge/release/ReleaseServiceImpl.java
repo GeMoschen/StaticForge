@@ -9,7 +9,6 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.UpdateAssetCommand;
-import com.acme.staticforge.asset.content.ContentIssue;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.asset.media.MediaFiles;
 import com.acme.staticforge.common.SfException;
@@ -53,7 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p><strong>Large selections</strong> (M27.1.4): resolving a selection, checking completeness and releasing cost a
  * fixed number of reads however many items there are — assets, drafts, pointers and versions are loaded in bulk
- * ({@link Chunks}), the completeness gate shares one {@link ReleaseCompleteness.Checker} per call, and the plan's
+ * ({@link Chunks}), the rule gate shares one {@link ReleaseRuleCheck.Checker} per call, and the plan's
  * dependency walk queries edges and drafts once per breadth-first layer. Besides the round trips this matters for
  * the write paths: every query in a read-write transaction first auto-flushes, and Hibernate dirty-checks every
  * entity the transaction holds to do so — per-item queries made a 10,000-item release quadratic.
@@ -70,7 +69,7 @@ public class ReleaseServiceImpl implements ReleaseService {
     private final AssetReferenceRepository referenceRepository;
     private final AssetReleaseRepository releaseRepository;
     private final ReleaseStatusService statusService;
-    private final ReleaseCompleteness completeness;
+    private final ReleaseRuleCheck ruleCheck;
     private final ReleasePermissionCheck permissions;
     private final ProjectLocales projectLocales;
     private final RevisionService revisionService;
@@ -83,7 +82,7 @@ public class ReleaseServiceImpl implements ReleaseService {
             AssetReferenceRepository referenceRepository,
             AssetReleaseRepository releaseRepository,
             ReleaseStatusService statusService,
-            ReleaseCompleteness completeness,
+            ReleaseRuleCheck ruleCheck,
             ReleasePermissionCheck permissions,
             ProjectLocales projectLocales,
             RevisionService revisionService,
@@ -94,7 +93,7 @@ public class ReleaseServiceImpl implements ReleaseService {
         this.referenceRepository = referenceRepository;
         this.releaseRepository = releaseRepository;
         this.statusService = statusService;
-        this.completeness = completeness;
+        this.ruleCheck = ruleCheck;
         this.permissions = permissions;
         this.projectLocales = projectLocales;
         this.revisionService = revisionService;
@@ -112,14 +111,23 @@ public class ReleaseServiceImpl implements ReleaseService {
     @Transactional(readOnly = true, noRollbackFor = SfException.class)
     public ReleasePlan plan(long projectId, List<ReleaseItem> items) {
         Resolution resolution = resolve(projectId, items);
-        ReleaseCompleteness.Checker checker = completeness.checker(projectId);
+        Checked checked = check(projectId, resolution);
         List<ReleasePlan.Incomplete> incomplete = new ArrayList<>();
+        List<ReleasePlan.Incomplete> warningFindings = new ArrayList<>();
+        List<ReleasePlan.Incomplete> infoFindings = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         for (Resolved item : resolution.items()) {
             if (needsRelease(item)) {
-                List<ContentIssue> issues = blocking(checker, item);
-                if (!issues.isEmpty()) {
-                    incomplete.add(new ReleasePlan.Incomplete(item.asset().getUuid(), item.key(), issues));
+                ReleaseRuleCheck.Findings findings = checked.findings(item);
+                UUID uuid = item.asset().getUuid();
+                if (!findings.errors().isEmpty()) {
+                    incomplete.add(new ReleasePlan.Incomplete(uuid, item.key(), findings.errors()));
+                }
+                if (!findings.warnings().isEmpty()) {
+                    warningFindings.add(new ReleasePlan.Incomplete(uuid, item.key(), findings.warnings()));
+                }
+                if (!findings.infos().isEmpty()) {
+                    infoFindings.add(new ReleasePlan.Incomplete(uuid, item.key(), findings.infos()));
                 }
             }
             if (item.pinned() != null && !item.pinned().getId().equals(item.draft().getId())) {
@@ -127,8 +135,15 @@ public class ReleaseServiceImpl implements ReleaseService {
             }
         }
         List<ReleasePlan.Dependency> dependencies = new Dependencies(projectId, resolution).propose();
-        return new ReleasePlan(
-                resolution.items().stream().map(Resolved::target).toList(), dependencies, incomplete, warnings);
+        List<ReleasePlan.PlannedFill> fills = new ArrayList<>();
+        for (Group group : checked.groups()) {
+            if (group.fillsDraft()) {
+                group.result().fills().forEach(fill -> fills.add(new ReleasePlan.PlannedFill(
+                        group.asset().getUuid(), fill.locale(), fill.path(), fill.value())));
+            }
+        }
+        return new ReleasePlan(resolution.items().stream().map(Resolved::target).toList(), dependencies, incomplete,
+                warnings, warningFindings, infoFindings, fills);
     }
 
     // ------------------------------------------------------------------
@@ -137,22 +152,30 @@ public class ReleaseServiceImpl implements ReleaseService {
 
     @Override
     @Transactional
-    public ReleaseOutcome release(List<ReleaseItem> items, RevisionContext ctx) {
+    public ReleaseOutcome release(List<ReleaseItem> items, boolean acceptWarnings, RevisionContext ctx) {
         permissions.requireRelease(ctx);
         Resolution resolution = resolve(ctx.projectId(), items);
-        ReleaseCompleteness.Checker checker = completeness.checker(ctx.projectId());
+        Checked checked = check(ctx.projectId(), resolution);
 
         List<Resolved> toOpen = new ArrayList<>();
         List<Resolved> toClose = new ArrayList<>();
         List<ReleaseTarget> skipped = new ArrayList<>();
         List<Map<String, Object>> incomplete = new ArrayList<>();
+        List<Map<String, Object>> warned = new ArrayList<>();
+        List<ReleasePlan.Incomplete> accepted = new ArrayList<>();
         for (Resolved item : resolution.items()) {
             if (item.status() == ReleaseStatus.DELETION_PENDING) {
                 toClose.add(item);
             } else if (needsRelease(item)) {
-                List<ContentIssue> issues = blocking(checker, item);
-                if (!issues.isEmpty()) {
-                    incomplete.add(Map.of("uuid", item.asset().getUuid().toString(), "locale", item.key(), "issues", issues));
+                ReleaseRuleCheck.Findings findings = checked.findings(item);
+                if (!findings.errors().isEmpty()) {
+                    incomplete.add(Map.of(
+                            "uuid", item.asset().getUuid().toString(), "locale", item.key(), "issues", findings.errors()));
+                }
+                if (!findings.warnings().isEmpty()) {
+                    warned.add(Map.of(
+                            "uuid", item.asset().getUuid().toString(), "locale", item.key(), "issues", findings.warnings()));
+                    accepted.add(new ReleasePlan.Incomplete(item.asset().getUuid(), item.key(), findings.warnings()));
                 }
                 toOpen.add(item);
             } else {
@@ -162,12 +185,16 @@ public class ReleaseServiceImpl implements ReleaseService {
         if (!incomplete.isEmpty()) {
             throw ReleaseProblems.incomplete(incomplete);
         }
+        if (!warned.isEmpty() && !acceptWarnings) {
+            throw ReleaseProblems.warnings(warned);
+        }
         if (toOpen.isEmpty() && toClose.isEmpty()) {
             return new ReleaseOutcome(null, List.of(), skipped, List.of());
         }
 
         Revision revision = revisionService.beginBatch(ctx.projectId(), ChangeType.RELEASE, ctx.comment(), ctx.userId());
         long rev = revision.getRevisionId();
+        Map<Long, AssetVersion> filled = writeFills(checked, RevisionContext.joining(revision, ctx.userId(), ctx.comment()));
         Instant now = Instant.now();
         List<AssetRelease> closed = new ArrayList<>();
         List<AssetRelease> opened = new ArrayList<>();
@@ -176,6 +203,9 @@ public class ReleaseServiceImpl implements ReleaseService {
         for (Resolved item : toOpen) {
             close(item.pointer(), rev, closed);
             AssetVersion version = item.releaseVersion();
+            if (filled.containsKey(item.asset().getId()) && version.getId().equals(item.draft().getId())) {
+                version = filled.get(item.asset().getId());
+            }
             opened.add(new AssetRelease(
                     ctx.projectId(), item.asset().getId(), item.key(), version.getId(), item.asset().getUid(), rev,
                     ctx.userId(), now));
@@ -192,7 +222,73 @@ public class ReleaseServiceImpl implements ReleaseService {
         releaseRepository.saveAll(closed);
         releaseRepository.saveAll(opened);
         revisionService.appendSummaries(ctx.projectId(), rev, summary);
-        return new ReleaseOutcome(rev, applied, skipped, List.of());
+        return new ReleaseOutcome(rev, applied, skipped, List.of(), accepted);
+    }
+
+    // ------------------------------------------------------------------
+    // Rule gate (M33.6)
+    // ------------------------------------------------------------------
+
+    /** The items of one asset released at one version: checked together, the fills applied once. */
+    private record Group(Asset asset, AssetVersion version, ReleaseRuleCheck.Result result, boolean fillsDraft) {}
+
+    /** Each released item's findings, and the check of each asset version. */
+    private record Checked(Map<Resolved, ReleaseRuleCheck.Findings> byItem, List<Group> groups) {
+
+        ReleaseRuleCheck.Findings findings(Resolved item) {
+            return byItem.getOrDefault(item, ReleaseRuleCheck.Findings.NONE);
+        }
+    }
+
+    /**
+     * Checks every item the call releases, one evaluation per asset version for all its released languages. The
+     * versions released count as released for the rules' {@code ref} and {@code global:} (user decision 20).
+     */
+    private Checked check(long projectId, Resolution resolution) {
+        Map<String, List<Resolved>> grouped = new LinkedHashMap<>();
+        Map<UUID, AssetVersion> releasing = new HashMap<>();
+        for (Resolved item : resolution.items()) {
+            if (needsRelease(item)) {
+                grouped.computeIfAbsent(item.asset().getId() + "|" + item.releaseVersion().getId(), k -> new ArrayList<>())
+                        .add(item);
+                releasing.putIfAbsent(item.asset().getUuid(), item.releaseVersion());
+            }
+        }
+        Map<Resolved, ReleaseRuleCheck.Findings> byItem = new java.util.IdentityHashMap<>();
+        List<Group> groups = new ArrayList<>();
+        ReleaseRuleCheck.Checker checker = ruleCheck.checker(projectId, releasing);
+        for (List<Resolved> items : grouped.values()) {
+            Resolved first = items.get(0);
+            AssetVersion version = first.releaseVersion();
+            Set<String> keys = new LinkedHashSet<>();
+            items.forEach(item -> keys.add(item.key()));
+            ReleaseRuleCheck.Result result = checker.check(first.asset(), version, keys,
+                    resolution.statuses().getOrDefault(first.asset().getId(), Map.of()));
+            items.forEach(item -> byItem.put(item, result.forKey(item.key())));
+            groups.add(new Group(first.asset(), version, result,
+                    result.filled() != null && version.getId().equals(first.draft().getId())));
+        }
+        return new Checked(byItem, groups);
+    }
+
+    /**
+     * Stores the release fills of every draft being released as a new draft version, in the release's revision, and
+     * returns those versions by asset id — released instead of the drafts, so draft == released afterwards. The update
+     * takes the version lock like a save. A pinned version is released as it is: its fills are not applied.
+     */
+    private Map<Long, AssetVersion> writeFills(Checked checked, RevisionContext batch) {
+        Map<Long, AssetVersion> filled = new HashMap<>();
+        for (Group group : checked.groups()) {
+            if (!group.fillsDraft()) {
+                continue;
+            }
+            Asset asset = group.asset();
+            assetService.update(asset.getUuid(),
+                    new UpdateAssetCommand(group.version().getDisplayName(), group.result().filled()),
+                    group.version().getValidFromRevision(), batch);
+            filled.put(asset.getId(), versionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()).orElseThrow());
+        }
+        return filled;
     }
 
     // ------------------------------------------------------------------
@@ -517,10 +613,6 @@ public class ReleaseServiceImpl implements ReleaseService {
             return true;
         }
         return item.pinned() != null && !item.pinned().getId().equals(item.pointer().getReleasedVersionId());
-    }
-
-    private static List<ContentIssue> blocking(ReleaseCompleteness.Checker checker, Resolved item) {
-        return checker.blockingIssues(item.asset().getAssetType(), item.releaseVersion());
     }
 
     /** Closes {@code pointer} at {@code revision} when it is open, collecting it for one {@code saveAll}. */

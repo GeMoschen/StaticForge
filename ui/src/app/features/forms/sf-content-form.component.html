@@ -14,6 +14,21 @@
         </p>
       }
 
+      @if (statesFor(editor); as states) {
+        @if (states.required || states.readOnly || states.computed) {
+          <p class="sf-content-form__states">
+            @if (states.required) {
+              <span class="sf-content-form__state sf-content-form__state--required">Required</span>
+            }
+            @if (states.computed) {
+              <span class="sf-content-form__state" title="Filled in from other fields">Computed</span>
+            } @else if (states.readOnly) {
+              <span class="sf-content-form__state" title="A rule makes this field read-only">Read-only</span>
+            }
+          </p>
+        }
+      }
+
       <sf-editor-outlet [definition]="editor" [control]="controlFor(editor)" />
 
       @if (fallbackFor(editor); as fallback) {
@@ -31,8 +46,12 @@
         </p>
       }
 
-      @for (message of issuesFor(editor); track $index) {
-        <p class="sf-content-form__issue" role="alert">{{ message }}</p>
+      @for (finding of findingsFor(editor); track $index) {
+        <p
+          [class]="'sf-content-form__issue sf-content-form__issue--' + finding.level.toLowerCase()"
+          [attr.role]="finding.level === 'ERROR' ? 'alert' : null"
+          [attr.data-level]="finding.level"
+        >{{ finding.message }}</p>
       }
     </div>
   }

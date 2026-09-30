@@ -193,3 +193,8 @@
 .issues__detail code {
   font-family: var(--sf-font-mono, monospace);
 }
+
+// An editor rule's info (M33.8): listed, quieter, not counted.
+.issues__item--info {
+  opacity: 0.8;
+}

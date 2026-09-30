@@ -12,6 +12,25 @@ import { ContentDefinition, EditorDefinition } from './form.model';
 import { SfEditorOutlet } from './editor-outlet.component';
 import { SF_FORM_CONTEXT, SfFormContext } from './form.context';
 import { EditingLocale, resolve, resolvedLocale } from './l10n.util';
+import { FindingLevel, byLevel, levelOf } from './rules/rule-form.util';
+
+/** A finding a form shows under its editor (`ContentIssue` on the wire). */
+export interface FormFinding {
+  path?: string;
+  message?: string;
+  severity?: string;
+  locale?: string;
+  rule?: string;
+}
+
+/** A field state a form marks (`FieldState` on the wire). */
+export interface FormFieldState {
+  path?: string;
+  locale?: string;
+  required?: boolean;
+  readOnly?: boolean;
+  computed?: boolean;
+}
 
 /**
  * Host component of the CDL-driven dynamic form engine. Renders the top-level
@@ -50,7 +69,13 @@ export class SfContentFormComponent {
    * rooted at `issuePrefix` (`content.name`, `content.links[0].target`); a finding inside a list row
    * or a group member is shown under its top-level editor.
    */
-  readonly issues = input<ReadonlyArray<{ path?: string; message?: string }>>([]);
+  readonly issues = input<ReadonlyArray<FormFinding>>([]);
+  /**
+   * The field states the editor rules computed (M33.8): `required` (a `requiredWhen` that holds), `readOnly` (a
+   * `readOnlyWhen`, or `computed` by a `mode always` fill). Paths are rooted at `issuePrefix`; a top-level editor
+   * shows its markers, the form's controls are disabled by the host's rule binding.
+   */
+  readonly fieldStates = input<ReadonlyArray<FormFieldState>>([]);
   readonly issuePrefix = input<string>('content');
   /**
    * The language being edited (M24.4.1), or `null` in a project without languages — which is what
@@ -80,8 +105,40 @@ export class SfContentFormComponent {
     );
   }
 
+  /**
+   * The findings under `editor` (or, for a group, under any of its members), most severe first: errors, warnings,
+   * infos and hints (M33.8); a finding of another language than the one edited doesn't show.
+   */
+  findingsFor(editor: EditorDefinition): { message: string; level: FindingLevel; locale: string | null }[] {
+    const locale = this.editingLocale()?.locale ?? null;
+    return byLevel(this.matching(editor, this.issues()))
+      .filter((issue) => !locale || !issue.locale || issue.locale === locale)
+      .map((issue) => ({ message: issue.message ?? '', level: levelOf(issue), locale: issue.locale ?? null }));
+  }
+
+  /** The rule markers of a top-level editor: required by a rule, read-only, computed. */
+  statesFor(editor: EditorDefinition): { required: boolean; readOnly: boolean; computed: boolean } {
+    const locale = this.editingLocale()?.locale ?? null;
+    const prefix = this.issuePrefix() ? `${this.issuePrefix()}.` : '';
+    const path = prefix + editor.name;
+    const out = { required: false, readOnly: false, computed: false };
+    for (const state of this.fieldStates()) {
+      if (state.path !== path || (locale && state.locale && state.locale !== locale)) {
+        continue;
+      }
+      out.required ||= !!state.required;
+      out.computed ||= !!state.computed;
+      out.readOnly ||= !!state.readOnly && !state.computed;
+    }
+    return out;
+  }
+
   /** The messages of every issue under `editor` (or, for a group, under any of its members). */
   issuesFor(editor: EditorDefinition): string[] {
+    return this.findingsFor(editor).map((finding) => finding.message);
+  }
+
+  private matching(editor: EditorDefinition, issues: ReadonlyArray<FormFinding>): FormFinding[] {
     const names = new Set<string>();
     const collect = (e: EditorDefinition) => {
       names.add(e.name);
@@ -91,16 +148,14 @@ export class SfContentFormComponent {
     };
     collect(editor);
     const prefix = this.issuePrefix() ? `${this.issuePrefix()}.` : '';
-    return this.issues()
-      .filter((issue) => {
-        const path = issue.path ?? '';
-        if (!path.startsWith(prefix)) {
-          return false;
-        }
-        const head = path.slice(prefix.length).split(/[.[]/)[0];
-        return names.has(head);
-      })
-      .map((issue) => issue.message ?? '');
+    return issues.filter((issue) => {
+      const path = issue.path ?? '';
+      if (!path.startsWith(prefix)) {
+        return false;
+      }
+      const head = path.slice(prefix.length).split(/[.[]/)[0];
+      return names.has(head);
+    });
   }
 
   controlFor(editor: EditorDefinition): FormControl | FormGroup | FormArray {

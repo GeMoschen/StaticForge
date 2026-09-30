@@ -7,6 +7,7 @@ import com.acme.staticforge.template.cdl.CdlResult;
 import com.acme.staticforge.template.cdl.DatasetCdlRules;
 import com.acme.staticforge.template.cdl.GlobalSetCdlRules;
 import com.acme.staticforge.template.cdl.PaginationCdlRules;
+import com.acme.staticforge.template.cdl.TemplateRuleCdlRules;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +59,10 @@ public class CdlValidateController {
             diagnostics.addAll(DatasetCdlRules.check(result.definition()));
         } else if (SECTION_TEMPLATE_KIND.equalsIgnoreCase(requested)) {
             diagnostics.addAll(PaginationCdlRules.notAllowedIn(result.definition(), "a section template"));
+            diagnostics.addAll(TemplateRuleCdlRules.sectionTemplate(result.definition()));
+        } else {
+            // A page template (M33): its rules may target inherited editors, which this check can't see.
+            diagnostics.addAll(TemplateRuleCdlRules.pageTemplateWithoutChain(result.definition()));
         }
         return new CdlValidateResponse(diagnostics);
     }

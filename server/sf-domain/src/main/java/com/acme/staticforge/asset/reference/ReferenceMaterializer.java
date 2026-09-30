@@ -12,11 +12,14 @@ import com.acme.staticforge.asset.content.ExtractedReference;
 import com.acme.staticforge.asset.media.TextMediaCompiler;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.revision.RevisionAware;
+import com.acme.staticforge.template.cdl.CdlCompiler;
+import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.OctlCompiler;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
 import com.acme.staticforge.template.octl.ReferenceUse;
+import com.acme.staticforge.template.rules.RuleSet;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -80,6 +83,7 @@ public class ReferenceMaterializer {
     private final ProjectReferenceResolver projectReferences;
     private final TextMediaCompiler textMediaCompiler;
     private final OctlCompiler octlCompiler = new OctlCompiler();
+    private final CdlCompiler cdlCompiler = new CdlCompiler();
 
     public ReferenceMaterializer(
             AssetReferenceRepository references,
@@ -127,7 +131,11 @@ public class ReferenceMaterializer {
             case PAGE -> pageReferences(payload);
             case PAGE_REFERENCE -> navigationReferences(payload);
             case PAGE_TEMPLATE, SECTION_TEMPLATE, DATASET -> templateReferences(projectId, payload);
-            case GLOBAL_SET -> contentReferences.extract(payload.get("content"), "content");
+            case GLOBAL_SET -> {
+                List<ExtractedReference> refs = new ArrayList<>(contentReferences.extract(payload.get("content"), "content"));
+                refs.addAll(ruleReferences(projectId, payload));
+                yield refs;
+            }
             case RECORD -> recordReferences(payload);
             case RECORD_SET -> recordSetReferences(payload);
             case MEDIA -> mediaReferences(projectId, payload);
@@ -203,12 +211,12 @@ public class ReferenceMaterializer {
      * {@code channelTemplates.<channel>}. Unresolvable references are simply absent.
      */
     private List<ExtractedReference> templateReferences(long projectId, JsonNode payload) {
+        List<ExtractedReference> found = new ArrayList<>(ruleReferences(projectId, payload));
         JsonNode channels = payload.get("channelTemplates");
         if (channels == null || !channels.isObject()) {
-            return List.of();
+            return found;
         }
         ReferenceResolver resolver = projectReferences.forProject(projectId);
-        List<ExtractedReference> found = new ArrayList<>();
         addTemplate(found, payload.get("parentTemplateRef"), "parentTemplateRef");
         channels.fields().forEachRemaining(channel -> {
             JsonNode source = channel.getValue() == null ? null : channel.getValue().get("source");
@@ -218,6 +226,28 @@ public class ReferenceMaterializer {
             CompiledTemplate compiled = octlCompiler.compile(source.asText(), channel.getKey(), resolver).template();
             addOctlReferences(found, compiled, "channelTemplates." + channel.getKey());
         });
+        return found;
+    }
+
+    /**
+     * {@code RULE_REFERENCE} edges (M33.7): the property sets the CDL's editor rules read ({@code global:<uid>}), one
+     * per set and reader. Only this layer's own rules: an inherited rule's reads are the parent template's edges, and
+     * the planner walks {@code parentTemplateRef} to its children.
+     */
+    private List<ExtractedReference> ruleReferences(long projectId, JsonNode payload) {
+        String cdl = payload.path("contentDefinition").asText("");
+        if (!cdl.contains("global:")) {
+            return List.of();
+        }
+        ContentDefinition definition = cdlCompiler.compile(cdl).definition();
+        if (definition == null) {
+            return List.of();
+        }
+        List<ExtractedReference> found = new ArrayList<>();
+        for (RuleSet.GlobalRead read : definition.rules().globalReads()) {
+            assets.findByProjectIdAndAssetTypeAndUid(projectId, AssetType.GLOBAL_SET, read.setUid())
+                    .ifPresent(set -> found.add(new ExtractedReference(ReferenceKind.RULE_REFERENCE, set.getUuid(), read.source())));
+        }
         return found;
     }
 

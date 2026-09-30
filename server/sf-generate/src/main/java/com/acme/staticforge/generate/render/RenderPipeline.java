@@ -2,9 +2,12 @@ package com.acme.staticforge.generate.render;
 
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.content.ContentIssue;
-import com.acme.staticforge.asset.content.PageContentValidator;
+import com.acme.staticforge.asset.content.ContentValidator;
+import com.acme.staticforge.asset.content.LocalizationContext;
 import com.acme.staticforge.asset.content.SectionTemplateLookup;
 import com.acme.staticforge.asset.content.SectionTemplateLookup.SectionTemplate;
+import com.acme.staticforge.asset.rules.RuleEngine;
+import com.acme.staticforge.asset.rules.RuleOutcome;
 import com.acme.staticforge.asset.template.CompiledTemplateCache;
 import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.channel.ChannelService;
@@ -19,13 +22,17 @@ import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
+import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.Severity;
+import com.acme.staticforge.template.expression.ExpressionEvaluator;
 import com.acme.staticforge.template.render.RenderLimitException;
+import com.acme.staticforge.template.rules.OnGeneration;
+import com.acme.staticforge.template.rules.RuleScope;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
@@ -66,8 +73,6 @@ public class RenderPipeline {
 
     /** A page whose output path expression has no {@code {locale}} segment in a localized project (M24.3.2). */
     private static final String NOT_LOCALE_DISTINCT_CODE = "SF-GEN-0111";
-
-    private final PageContentValidator contentValidator = new PageContentValidator();
 
     private final GenerationProperties properties;
     private final ProjectRepository projects;
@@ -121,18 +126,38 @@ public class RenderPipeline {
     }
 
     /**
-     * Completeness validation per planned page (spec §10.5, VALIDATE): validates each page's
-     * content, bodies and sections against its snapshot templates and returns one
-     * {@code SF-GEN-0120} per page with ERROR-severity completeness findings (listing their paths),
-     * keyed by page UUID and language: each language renders its own version of the page (M27.2.1), so a German
-     * version gone incomplete under a changed template holds back only the German outputs. Those outputs are not
-     * rendered; the rest of the plan still is. Structural findings are the save path's concern
-     * ({@code PageContentValidation}) and don't block here.
+     * What VALIDATE found (M33.7): the page languages held back with their {@code SF-GEN-0120}, the {@code fail}
+     * errors that end the run ({@code SF-GEN-0121}), and the rule warnings and infos ({@code SF-GEN-0122}).
      */
-    private Map<PageLocale, Diagnostic> incompletePages(Snapshot snapshot, BuildPlan plan) {
+    private record Validation(
+            Map<PageLocale, Diagnostic> heldBack, List<Diagnostic> failures, List<Diagnostic> findings) {}
+
+    /**
+     * Content validation per planned page and language (spec §10.5, VALIDATE; M33.7): the editor rules engine in the
+     * {@code generation} scope — built-ins and the templates' rules, section instances with their section templates'
+     * — on the snapshot, with the project's languages (so a localizable editor is checked per language, as at
+     * release). Each language renders its own version of the page (M27.2.1), so only findings of the validated
+     * language (or of no language) count for it.
+     *
+     * <ul>
+     *   <li>an {@code error} with {@code onGeneration holdBack} (every built-in) holds back that page language: one
+     *       {@code SF-GEN-0120} listing the findings; the rest of the plan still renders;
+     *   <li>an {@code error} with {@code onGeneration fail} fails the run: one {@code SF-GEN-0121} per page, language
+     *       and rule, every page validated first; nothing renders or publishes;
+     *   <li>a {@code warning} or {@code info} is a run diagnostic ({@code SF-GEN-0122}); only warnings count.
+     * </ul>
+     *
+     * Structural findings are the save path's concern ({@code PageContentValidation}) and don't block here.
+     */
+    private Validation validateContent(Snapshot snapshot, BuildPlan plan, LocaleConfig locales) {
         TemplateCompileMemo memo = compiledTemplates.buildMemo(snapshot.root());
         SectionTemplateLookup sections = snapshotSectionTemplates(snapshot, memo);
-        Map<PageLocale, Diagnostic> incomplete = new LinkedHashMap<>();
+        LocalizationContext localization = locales == null ? LocalizationContext.NONE : LocalizationContext.of(locales);
+        RuleEngine engine = new RuleEngine(new ContentValidator(new ExpressionEvaluator(), null, null, localization));
+        SnapshotRuleContexts contexts = new SnapshotRuleContexts(snapshot, localization);
+        Map<PageLocale, Diagnostic> heldBack = new LinkedHashMap<>();
+        List<Diagnostic> failures = new ArrayList<>();
+        List<Diagnostic> findings = new ArrayList<>();
         Set<PageLocale> seen = new HashSet<>();
         for (PlanEntry entry : plan.entries()) {
             if (!seen.add(PageLocale.of(entry))) {
@@ -145,23 +170,41 @@ public class RenderPipeline {
                 continue;
             }
             ContentDefinition definition = definitionOf(memo, template, snapshot);
-            List<ContentIssue> blocking = contentValidator.validatePage(definition, page.payload(), sections).stream()
-                    .filter(issue -> issue.kind() == ContentIssue.Kind.COMPLETENESS)
-                    .filter(issue -> issue.severity() == Severity.ERROR)
-                    .toList();
-            if (!blocking.isEmpty()) {
-                String findings = blocking.stream()
+            String locale = localization.localized() ? entry.locale() : null;
+            RuleOutcome outcome = engine.evaluatePage(definition, page.payload(), sections, new RuleEngine.Request(
+                    RuleScope.GENERATION, locale == null ? null : List.of(locale), contexts.of(page, template)));
+            String pageName = "page '" + (page.uid() != null ? page.uid() : page.uuid()) + "'"
+                    + (entry.locale() == null ? "" : " (" + entry.locale() + ")");
+            List<ContentIssue> holding = new ArrayList<>();
+            for (ContentIssue issue : outcome.findings()) {
+                if (issue.kind() != ContentIssue.Kind.COMPLETENESS
+                        || locale != null && issue.locale() != null && !issue.locale().equals(locale)) {
+                    continue;
+                }
+                String where = issue.path().isEmpty() ? "" : issue.path() + ": ";
+                String rule = issue.rule() == null ? "" : "Rule '" + issue.rule() + "' on ";
+                if (issue.severity() == Severity.ERROR && issue.onGeneration() == OnGeneration.FAIL) {
+                    failures.add(Diagnostic.error(GenerationDiagnosticCodes.GEN_RULE_FAILED,
+                            rule + pageName + " failed: " + where + issue.message(), 0, 0));
+                } else if (issue.severity() == Severity.ERROR) {
+                    holding.add(issue);
+                } else if (issue.severity() == Severity.WARNING || issue.severity() == Severity.INFO) {
+                    findings.add(new Diagnostic(issue.severity(), GenerationDiagnosticCodes.GEN_RULE_FINDING,
+                            rule + pageName + ": " + where + issue.message(), 0, 0));
+                }
+            }
+            if (!holding.isEmpty()) {
+                String listed = holding.stream()
                         .map(issue -> issue.path() + " (" + issue.message() + ")")
                         .collect(Collectors.joining("; "));
-                incomplete.put(PageLocale.of(entry), Diagnostic.error(
+                heldBack.put(PageLocale.of(entry), Diagnostic.error(
                         GenerationDiagnosticCodes.GEN_CONTENT_INCOMPLETE,
-                        "Content incomplete for page '" + (page.uid() != null ? page.uid() : page.uuid()) + "'"
-                                + (entry.locale() == null ? "" : " (" + entry.locale() + ")") + ": " + findings,
+                        "Content incomplete for " + pageName + ": " + listed,
                         0,
                         0));
             }
         }
-        return incomplete;
+        return new Validation(heldBack, failures, findings);
     }
 
     /** One language of a page — what completeness holds back (M27.2.1); {@code locale} is null without locales. */
@@ -247,7 +290,13 @@ public class RenderPipeline {
         String projectKey = projects.findById(snapshot.projectId()).map(Project::getKey).orElse("");
         Renderers renderers = new Renderers(snapshot, paths, projectKey, userId);
 
-        Map<PageLocale, Diagnostic> incomplete = incompletePages(snapshot, plan);
+        Validation validation = validateContent(snapshot, plan, paths.locales());
+        if (!validation.failures().isEmpty()) {
+            // An onGeneration fail rule: the run fails before anything renders, every failing page reported (M33.7).
+            return new RenderOutcome(List.of(), validation.failures(), validation.findings(),
+                    List.copyOf(validation.heldBack().values()));
+        }
+        Map<PageLocale, Diagnostic> incomplete = validation.heldBack();
         BuildPlan publishable = incomplete.isEmpty()
                 ? plan
                 : plan.withEntries(plan.entries().stream().filter(e -> !incomplete.containsKey(PageLocale.of(e))).toList());
@@ -257,8 +306,10 @@ public class RenderPipeline {
         files.sort(Comparator.comparing(RenderedFile::outputPath));
         List<Diagnostic> pageErrors = new ArrayList<>(incomplete.values());
         pageErrors.addAll(batch.pageErrors);
+        List<Diagnostic> warnings = new ArrayList<>(validation.findings());
+        warnings.addAll(batch.warnings);
         return new RenderOutcome(
-                List.copyOf(files), List.copyOf(batch.errors), List.copyOf(batch.warnings), List.copyOf(pageErrors));
+                List.copyOf(files), List.copyOf(batch.errors), List.copyOf(warnings), List.copyOf(pageErrors));
 
     }
 

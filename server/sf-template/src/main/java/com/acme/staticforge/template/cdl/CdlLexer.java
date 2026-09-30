@@ -7,7 +7,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Hand-written, dependency-free CDL lexer (spec §14.7). Produces a position-tracked token
+ * Hand-written, dependency-free CDL lexer (spec §14.7), with {@code //} line and {@code /* … *}{@code /} block comments
+ * (M33). Produces a position-tracked token
  * stream together with any lexical diagnostics (unterminated string, illegal character).
  * Keywords are emitted as {@link TokenType#IDENT} tokens; the parser recognizes them via
  * {@link #KEYWORDS}. Line/column are 1-based.
@@ -20,10 +21,13 @@ final class CdlLexer {
             "readOnly", "hidden", "visibleWhen", "validate", "pattern", "message", "min",
             "max", "maxLength", "maxChars", "mimeTypes", "assetTypes", "folder", "options",
             "format", "features", "renamedFrom", "bodies", "body", "allow", "dataset",
-            "sources", "pageSize", "maxPageSize", "sort");
+            "sources", "pageSize", "maxPageSize", "sort",
+            // M33: the rules {} section and the built-in modifiers.
+            "rules", "rule", "state", "fill", "off", "on", "level", "scope", "when", "assert", "locales",
+            "onGeneration", "requiredWhen", "readOnlyWhen", "value", "mode");
 
     enum TokenType {
-        LBRACE, RBRACE, LBRACKET, RBRACKET, COLON, COMMA, IDENT, STRING, NUMBER, BOOLEAN, EOF
+        LBRACE, RBRACE, LBRACKET, RBRACKET, COLON, COMMA, DOT, IDENT, STRING, NUMBER, BOOLEAN, EOF
     }
 
     record Token(TokenType type, String text, int line, int column) {
@@ -53,6 +57,37 @@ final class CdlLexer {
             } else if (Character.isWhitespace(c)) {
                 i++;
                 col++;
+            } else if (c == '/' && i + 1 < n && source.charAt(i + 1) == '/') {
+                // M33: line comments, to the end of the line.
+                while (i < n && source.charAt(i) != '\n') {
+                    i++;
+                    col++;
+                }
+            } else if (c == '/' && i + 1 < n && source.charAt(i + 1) == '*') {
+                // M33: block comments.
+                int sl = line;
+                int sc = col;
+                i += 2;
+                col += 2;
+                boolean closed = false;
+                while (i < n) {
+                    if (source.charAt(i) == '*' && i + 1 < n && source.charAt(i + 1) == '/') {
+                        i += 2;
+                        col += 2;
+                        closed = true;
+                        break;
+                    }
+                    if (source.charAt(i) == '\n') {
+                        line++;
+                        col = 1;
+                    } else {
+                        col++;
+                    }
+                    i++;
+                }
+                if (!closed) {
+                    diagnostics.add(Diagnostic.error(DiagnosticCodes.CDL_SYNTAX, "Unterminated comment", sl, sc));
+                }
             } else {
                 int sl = line;
                 int sc = col;
@@ -84,6 +119,12 @@ final class CdlLexer {
                     }
                     case ',' -> {
                         tokens.add(new Token(TokenType.COMMA, ",", sl, sc));
+                        i++;
+                        col++;
+                    }
+                    case '.' -> {
+                        // M33: rule target paths (seo.title, gallery[].caption).
+                        tokens.add(new Token(TokenType.DOT, ".", sl, sc));
                         i++;
                         col++;
                     }

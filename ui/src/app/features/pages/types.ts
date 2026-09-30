@@ -13,7 +13,11 @@ export interface SectionInstance {
 export type BodiesMap = Record<string, SectionInstance[]>;
 
 /** Autosave lifecycle state. */
-export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+/**
+ * `rejected`: the save rule gate refused the save (M33.8, `422` with rule `issues`) — the edits stay local, the
+ * findings are in {@link AutosaveService.rejected}, and the next change saves again.
+ */
+export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'rejected';
 
 /** Reconciliation mode for the conflict drawer. */
 export type ResolveMode = 'mine' | 'theirs';

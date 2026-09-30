@@ -217,16 +217,38 @@ public class ReleaseActionHandler extends ReleaseStateActionHandler {
             ObjectNode progress = JSON.objectNode();
             Long revision = null;
             if (!releasable.isEmpty()) {
+                // A scheduled release accepts rule warnings (M33.6) and records them with each item's result.
                 ReleaseOutcome outcome = releases.release(
                         releasable.stream().map(requested::get).toList(),
+                        true,
                         RevisionContext.of(spec.projectId(), ctx.ownerUserId(), comment));
                 revision = outcome.revision();
                 Set<String> applied = new HashSet<>();
                 outcome.applied().forEach(t -> applied.add(key(t.assetUuid(), t.locale())));
+                Map<String, List<com.acme.staticforge.asset.content.ContentIssue>> warned = new HashMap<>();
+                // An item stored without a locale released every locale key of its asset: it collects them all.
+                outcome.warnings().forEach(w -> {
+                    warned.computeIfAbsent(key(w.assetUuid(), w.locale()), k -> new ArrayList<>()).addAll(w.issues());
+                    if (w.locale() != null && !w.locale().isEmpty()) {
+                        warned.computeIfAbsent(key(w.assetUuid(), null), k -> new ArrayList<>()).addAll(w.issues());
+                    }
+                });
                 for (int i : releasable) {
                     StoredItem item = stored.get(i);
                     boolean changed = applied.contains(key(item.assetUuid(), item.locale()));
-                    results.put(i, itemResult(item, changed ? APPLIED : UNCHANGED, changed ? null : "Already published."));
+                    ObjectNode result = itemResult(item, changed ? APPLIED : UNCHANGED, changed ? null : "Already published.");
+                    List<com.acme.staticforge.asset.content.ContentIssue> warnings =
+                            warned.get(key(item.assetUuid(), item.locale()));
+                    if (warnings != null && !warnings.isEmpty()) {
+                        ArrayNode list = result.putArray("warnings");
+                        warnings.forEach(w -> list.addObject()
+                                .put("path", w.path())
+                                .put("code", w.code())
+                                .put("rule", w.rule())
+                                .put("message", w.message())
+                                .put("locale", w.locale()));
+                    }
+                    results.put(i, result);
                 }
             }
             ArrayNode items = progress.putArray("items");
