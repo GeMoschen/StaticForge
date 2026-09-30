@@ -923,6 +923,27 @@ export class PageEditorComponent {
     this.autosave.markDirty();
   }
 
+  /**
+   * A live fill changed a section (M33): the page's bodies follow without counting it as an edit — the next save
+   * carries it.
+   */
+  protected onSectionFilled(bodyName: string, instanceId: string, value: Record<string, unknown>): void {
+    const p = this.page();
+    if (!p || this.readOnly()) {
+      return;
+    }
+    const bodies = { ...((p.bodies ?? {}) as unknown as BodiesMap) };
+    const arr = bodies[bodyName] ?? [];
+    const idx = arr.findIndex((s) => s.instanceId === instanceId);
+    if (idx < 0) {
+      return;
+    }
+    const next = [...arr];
+    next[idx] = { ...next[idx], content: value };
+    bodies[bodyName] = next;
+    this.page.set({ ...p, bodies } as unknown as PageView);
+  }
+
   protected onResolve(mode: ResolveMode): void {
     this.autosave.resolveConflict(mode);
   }

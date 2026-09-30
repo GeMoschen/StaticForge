@@ -10,6 +10,7 @@ import {
   RuleFinding,
   RULE_EVALUATION_DEBOUNCE_MS,
 } from './rule-evaluator';
+import { RuleHub } from './rule-hub';
 import { FillTracker, applyFieldStates } from './rule-form.util';
 
 /** The form a {@link RuleBinding} evaluates, and how to ask the server about it. */
@@ -32,6 +33,9 @@ export interface RuleTarget {
 export class RuleBinding {
   private readonly evaluator: RuleEvaluator;
   private target: RuleTarget | null = null;
+
+  /** Where the forms nested in this asset (body sections, catalog cards) read the answers from. */
+  readonly hub = new RuleHub();
   private fills = new FillTracker();
   private disabled = new Set<string>();
 
@@ -51,6 +55,7 @@ export class RuleBinding {
   /** Binds a (new) form and evaluates it right away. */
   bind(target: RuleTarget): void {
     this.evaluator.reset();
+    this.hub.view.set(null);
     this.target = target;
     this.fills = new FillTracker();
     this.disabled = new Set();
@@ -60,6 +65,7 @@ export class RuleBinding {
   /** Stops evaluating (a read-only form, time travel). */
   unbind(): void {
     this.evaluator.reset();
+    this.hub.view.set(null);
     this.target = null;
   }
 
@@ -80,7 +86,17 @@ export class RuleBinding {
     if (!target) {
       return null;
     }
-    return target.request(this.fills.prepare(target.content(), target.form, target.editors));
+    const request = target.request(this.fills.prepare(target.content(), target.form, target.editors));
+    if (!request) {
+      return null;
+    }
+    // The nested forms blank their own last live fills, in copies: the request must not share the editor's objects.
+    const root: Record<string, unknown> = {
+      content: request.content === undefined ? undefined : structuredClone(request.content),
+      bodies: request.bodies === undefined ? undefined : structuredClone(request.bodies),
+    };
+    this.hub.prepare(root);
+    return { ...request, content: root['content'] as never, bodies: root['bodies'] as never };
   }
 
   private apply(view: RuleEvaluationView): void {
@@ -90,6 +106,7 @@ export class RuleBinding {
     }
     this.fills.apply(view.fills ?? [], target.form, target.editors, target.locale);
     this.disabled = applyFieldStates(view.fieldStates ?? [], target.form, target.editors, this.disabled, target.locale);
+    this.hub.view.set(view);
   }
 }
 

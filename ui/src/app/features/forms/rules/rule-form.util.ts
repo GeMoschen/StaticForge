@@ -135,7 +135,7 @@ function same(a: unknown, b: unknown): boolean {
 export class FillTracker {
   private readonly filled = new Map<string, unknown>();
 
-  constructor(private readonly prefix = 'content') {}
+  constructor(readonly prefix = 'content') {}
 
   /** A copy of the request `content` with every field still holding its last live fill blanked. */
   prepare(
@@ -159,6 +159,25 @@ export class FillTracker {
       }
     }
     return copy;
+  }
+
+  /**
+   * Blanks, in a request `root` whose keys are the path roots (`{content, bodies}`), every field of this form that
+   * still holds its last live fill — as {@link prepare} does for a content object, for forms nested deeper in the
+   * request (a body section, a catalog card).
+   */
+  blankFilled(root: Record<string, unknown>, form: FormGroup, editors: readonly EditorDefinition[]): void {
+    for (const [path, value] of this.filled) {
+      const control = controlAt(form, editors, path, this.prefix);
+      if (!control || !same(control.value, value)) {
+        this.filled.delete(path);
+        continue;
+      }
+      const steps = pathSteps(path, '');
+      if (steps) {
+        blank(root, steps);
+      }
+    }
   }
 
   /**
@@ -270,6 +289,48 @@ export function applyFieldStates(
     }
   }
   return disabled;
+}
+
+/**
+ * The content path of `target` inside `form` built from `editors`, under `prefix` — how a nested editor (a catalog)
+ * learns where its value sits (`content.rows[2].cards`). Groups are transparent; `null` when it isn't in the form.
+ */
+export function pathOfControl(
+  form: FormGroup,
+  editors: readonly EditorDefinition[],
+  target: AbstractControl,
+  prefix: string,
+): string | null {
+  const visit = (group: FormGroup, level: readonly EditorDefinition[], base: string): string | null => {
+    for (const editor of level) {
+      const control = group.get(editor.name);
+      if (!control) {
+        continue;
+      }
+      if (editor.type === 'GROUP') {
+        const inner = control instanceof FormGroup ? visit(control, editor.items ?? [], base) : null;
+        if (inner) {
+          return inner;
+        }
+        continue;
+      }
+      const path = base ? `${base}.${editor.name}` : editor.name;
+      if (control === target) {
+        return path;
+      }
+      if (editor.type === 'LIST' && control instanceof FormArray) {
+        for (let i = 0; i < control.length; i++) {
+          const row = control.at(i);
+          const found = row instanceof FormGroup ? visit(row, editor.items ?? [], `${path}[${i}]`) : null;
+          if (found) {
+            return found;
+          }
+        }
+      }
+    }
+    return null;
+  };
+  return visit(form, editors, prefix);
 }
 
 /** The levels a finding can have, most severe first; hints only show in the editor. */

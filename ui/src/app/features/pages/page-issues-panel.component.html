@@ -24,6 +24,20 @@
       <p class="issues__note">The preview shows the published page; these checks cover the draft.</p>
     }
 
+    <div class="issues__scopes" role="group" aria-label="Show findings of">
+      @for (chip of scopeChips; track chip.scope) {
+        <button
+          type="button"
+          class="issues__scope"
+          [class.issues__scope--on]="isScopeOn(chip.scope)"
+          [attr.aria-pressed]="isScopeOn(chip.scope)"
+          (click)="toggleScope(chip.scope)"
+        >
+          {{ chip.label }}
+        </button>
+      }
+    </div>
+
     <h4 class="issues__group">Content</h4>
     @if (content().length === 0) {
       <p class="issues__empty">No content issues.</p>

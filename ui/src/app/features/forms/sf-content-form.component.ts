@@ -5,6 +5,7 @@ import {
   forwardRef,
   inject,
   input,
+  output,
   signal,
 } from '@angular/core';
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
@@ -13,6 +14,7 @@ import { SfEditorOutlet } from './editor-outlet.component';
 import { SF_FORM_CONTEXT, SfFormContext } from './form.context';
 import { EditingLocale, resolve, resolvedLocale } from './l10n.util';
 import { FindingLevel, byLevel, levelOf } from './rules/rule-form.util';
+import { RuleHub } from './rules/rule-hub';
 
 /** A finding a form shows under its editor (`ContentIssue` on the wire). */
 export interface FormFinding {
@@ -53,6 +55,12 @@ export interface FormFieldState {
         return {
           formValue: host.formValue,
           projectKey: host.projectKey,
+          ruleHub: host.ruleHub,
+          issues: host.issues,
+          issuePrefix: host.issuePrefix,
+          definition: host.definition,
+          formGroup: host.formGroup,
+          filled: () => host.filled.emit(),
         } satisfies SfFormContext;
       },
     },
@@ -76,6 +84,13 @@ export class SfContentFormComponent {
    * shows its markers, the form's controls are disabled by the host's rule binding.
    */
   readonly fieldStates = input<ReadonlyArray<FormFieldState>>([]);
+  /**
+   * The editor-rules answers of the asset this form belongs to (M33): catalog cards inside the form apply their
+   * fills and field states from it. `null`: no live rules.
+   */
+  readonly ruleHub = input<RuleHub | null>(null);
+  /** A live fill changed a nested form's value (a catalog card) without an event; the host may pass it on. */
+  readonly filled = output<void>();
   readonly issuePrefix = input<string>('content');
   /**
    * The language being edited (M24.4.1), or `null` in a project without languages — which is what

@@ -9,6 +9,7 @@ import {
   input,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { FormGroup } from '@angular/forms';
 // Imported from their own files, not the `../forms` barrel: that barrel re-exports
@@ -18,7 +19,9 @@ import { FormGroup } from '@angular/forms';
 // "Cannot read properties of undefined (reading 'ɵcmp')" crash the first time a card renders).
 import { ContentDefinition } from '../forms/form.model';
 import { FormBuilderService } from '../forms/form-builder.service';
-import { SfContentFormComponent } from '../forms/sf-content-form.component';
+import { FormFinding, SfContentFormComponent } from '../forms/sf-content-form.component';
+import { NestedRules } from '../forms/rules/nested-rules';
+import { RuleHub } from '../forms/rules/rule-hub';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { SectionInstance } from './types';
 
@@ -68,12 +71,35 @@ export class SectionEditorComponent {
    * The page's content findings (`PageView.issues`, M30.3.2); the form shows the ones under this section
    * (`bodies.<body>[<index>].content.…`) at their fields.
    */
-  readonly issues = input<ReadonlyArray<{ path?: string; message?: string }>>([]);
+  readonly issues = input<ReadonlyArray<FormFinding>>([]);
+  /**
+   * The editor-rules answers of the asset this section or card sits in (M33): its fills and field states apply to
+   * this form, under {@link fieldsPrefix}. `null`: no live rules (read-only, time travel).
+   */
+  readonly rules = input<RuleHub | null>(null);
+  /**
+   * Where this form's fields sit in the evaluated content when it isn't a page body section — a catalog card:
+   * `content.teasers.cards[1].content`. `null`: the body section's `bodies.<body>[<index>].content`.
+   */
+  readonly rulePrefix = input<string | null>(null);
 
   /** Where this section's fields sit in the page's content, as the findings' paths spell it. */
-  protected readonly issuePrefix = computed(() => `bodies.${this.bodyName()}[${this.index()}].content`);
+  protected readonly issuePrefix = computed(
+    () => this.rulePrefix() ?? `bodies.${this.bodyName()}[${this.index()}].content`,
+  );
+
+  /** The field states under this form (required, read-only, computed markers). */
+  protected readonly fieldStates = computed(() => this.rules()?.view()?.fieldStates ?? []);
+
+  /** Live rules applied to this form. */
+  private readonly nested = new NestedRules();
 
   readonly valueChange = output<Record<string, unknown>>();
+  /**
+   * A live fill (M33) changed this form's value — the host takes it without counting it as an edit (the next save
+   * carries it).
+   */
+  readonly filled = output<Record<string, unknown>>();
   readonly remove = output<void>();
   readonly moveUp = output<void>();
   readonly moveDown = output<void>();
@@ -128,6 +154,27 @@ export class SectionEditorComponent {
       },
     );
 
+    // Live rules (M33): attach under the current prefix, then apply every answer to the current form.
+    effect(() => {
+      const hub = this.readOnly() ? null : this.rules();
+      const prefix = this.issuePrefix();
+      untracked(() =>
+        this.nested.attach(hub, prefix, () => this.fieldForm(), () => this.contentDefinition().editors ?? []),
+      );
+    });
+    effect(() => {
+      const view = this.readOnly() ? null : (this.rules()?.view() ?? null);
+      const form = this.fieldForm();
+      const definition = this.contentDefinition();
+      this.issuePrefix();
+      const locale = this.editingLocale()?.locale ?? null;
+      untracked(() => {
+        if (this.nested.apply(view, form, definition.editors ?? [], locale)) {
+          this.filled.emit(this.fb.valueOf(definition, form));
+        }
+      });
+    });
+
     effect(
       () => {
         const section = this.section();
@@ -144,6 +191,12 @@ export class SectionEditorComponent {
 
   ngOnDestroy(): void {
     this.valueSub?.unsubscribe();
+    this.nested.detach();
+  }
+
+  /** A nested form (a catalog card inside this section) was filled: pass this section's value up the same way. */
+  protected onInnerFilled(): void {
+    this.filled.emit(this.fb.valueOf(this.contentDefinition(), this.fieldForm()));
   }
 
   protected toggleCollapsed(event?: MouseEvent): void {

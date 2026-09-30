@@ -78,6 +78,9 @@ public final class RuleEngine {
 
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
 
+    /** How deep catalogs nest before the engine stops looking into cards (a card placing a card placing …). */
+    private static final int MAX_CARD_DEPTH = 8;
+
     private final ContentValidator validator;
     private final PageContentValidator pageValidator;
 
@@ -128,6 +131,7 @@ public final class RuleEngine {
         ObjectNode working = content != null && content.isObject() ? ((ObjectNode) content).deepCopy() : JSON.objectNode();
         if (definition != null && (content == null || content.isNull() || content.isMissingNode() || content.isObject())) {
             run.content(definition, working, kind, pathPrefix, pathPrefix, Map.of());
+            run.cards(definition, working, pathPrefix, sections, working);
         }
         JsonNode checked = content != null && !content.isObject() && !content.isNull() && !content.isMissingNode()
                 ? content
@@ -150,6 +154,7 @@ public final class RuleEngine {
             Map<String, Function<String, JsonNode>> pageRoots = new HashMap<>();
             pageRoots.put("body", locale -> run.bodies(working, sections, locale));
             run.content(pageDefinition, content, "page", "content", "", pageRoots);
+            run.cards(pageDefinition, content, "content", sections, content);
             JsonNode bodies = working.get("bodies");
             if (bodies != null && bodies.isObject() && sections != null) {
                 bodies.fieldNames().forEachRemaining(bodyName -> {
@@ -164,7 +169,7 @@ public final class RuleEngine {
                         }
                         Optional<SectionTemplateLookup.SectionTemplate> template =
                                 sections.find(instance.path("templateRef").asText(""));
-                        if (template.isEmpty() || template.get().definition().rules().isEmpty()) {
+                        if (template.isEmpty()) {
                             continue;
                         }
                         int index = i;
@@ -178,8 +183,10 @@ public final class RuleEngine {
                             section.put("template", template.get().uid());
                             return section;
                         });
-                        run.content(template.get().definition(), objectField((ObjectNode) instance, "content"),
+                        ObjectNode instanceContent = objectField((ObjectNode) instance, "content");
+                        run.content(template.get().definition(), instanceContent,
                                 "section", instancePath + ".content", instancePath, sectionRoots);
+                        run.cards(template.get().definition(), instanceContent, instancePath + ".content", sections, content);
                     }
                 });
             }
@@ -301,6 +308,105 @@ public final class RuleEngine {
             }
         }
 
+        /**
+         * The section-template rules of every catalog card under {@code root} (M33): each card's content is evaluated
+         * with its template's fills, states and rules — paths {@code <catalog>.cards[i].content.<field>} under
+         * {@code pathPrefix}, the whole card at {@code <catalog>.cards[i]} — through groups, list rows and nested
+         * catalogs. {@code section} reads {@code page} (the enclosing top-level content), {@code catalog},
+         * {@code index} and {@code template}. Cards of an editor hidden by {@code visibleWhen} are skipped.
+         * {@code sections} {@code null}: cards aren't looked into.
+         */
+        void cards(
+                ContentDefinition definition, ObjectNode root, String pathPrefix, SectionTemplateLookup sections, JsonNode page) {
+            if (definition == null || sections == null) {
+                return;
+            }
+            walkCards(definition.editors(), root, pathPrefix, sections, page, visibility(root), 0);
+        }
+
+        private JsonNode visibility(JsonNode root) {
+            return localization.localized() ? L10nValues.resolveDeep(root, List.of(localization.defaultLocale())) : root;
+        }
+
+        private void walkCards(
+                List<EditorDefinition> editors,
+                ObjectNode object,
+                String prefix,
+                SectionTemplateLookup sections,
+                JsonNode page,
+                JsonNode visibility,
+                int depth) {
+            if (editors == null || depth > MAX_CARD_DEPTH) {
+                return;
+            }
+            for (EditorDefinition editor : editors) {
+                if (!visibleIn(editor, visibility)) {
+                    continue;
+                }
+                String path = prefix.isEmpty() ? editor.name() : prefix + "." + editor.name();
+                switch (editor.type()) {
+                    case GROUP -> walkCards(editor.items(), object, prefix, sections, page, visibility, depth);
+                    case LIST -> {
+                        JsonNode rows = object.get(editor.name());
+                        if (rows != null && rows.isArray()) {
+                            for (int i = 0; i < rows.size(); i++) {
+                                if (rows.get(i) instanceof ObjectNode row) {
+                                    walkCards(editor.items(), row, path + "[" + i + "]", sections, page, visibility, depth);
+                                }
+                            }
+                        }
+                    }
+                    case CATALOG -> {
+                        JsonNode cards = object.path(editor.name()).path("cards");
+                        if (!cards.isArray()) {
+                            continue;
+                        }
+                        for (int i = 0; i < cards.size(); i++) {
+                            if (!(cards.get(i) instanceof ObjectNode card)) {
+                                continue;
+                            }
+                            Optional<SectionTemplateLookup.SectionTemplate> template =
+                                    sections.find(card.path("templateRef").asText(""));
+                            if (template.isEmpty()) {
+                                continue;
+                            }
+                            String cardPath = path + ".cards[" + i + "]";
+                            ObjectNode cardContent = objectField(card, "content");
+                            int index = i;
+                            String catalog = editor.name();
+                            String uid = template.get().uid();
+                            Map<String, Function<String, JsonNode>> roots = new HashMap<>();
+                            roots.put("section", locale -> {
+                                ObjectNode section = JSON.objectNode();
+                                section.set("page", resolve(page, locale));
+                                section.put("catalog", catalog);
+                                section.put("index", index);
+                                section.put("template", uid);
+                                return section;
+                            });
+                            ContentDefinition cardDefinition = template.get().definition();
+                            content(cardDefinition, cardContent, "section", cardPath + ".content", cardPath, roots);
+                            walkCards(cardDefinition.editors(), cardContent, cardPath + ".content", sections, page,
+                                    visibility(cardContent), depth + 1);
+                        }
+                    }
+                    default -> { }
+                }
+            }
+        }
+
+        private boolean visibleIn(EditorDefinition editor, JsonNode scope) {
+            String expression = editor.visibleWhen();
+            if (expression == null || expression.isBlank()) {
+                return true;
+            }
+            try {
+                return validator.evaluator().evaluate(expression, scope);
+            } catch (IllegalArgumentException e) {
+                return true;
+            }
+        }
+
         void builtins(List<ContentIssue> issues) {
             for (ContentIssue issue : issues) {
                 if (issue.appliesIn(scope)) {
@@ -339,8 +445,8 @@ public final class RuleEngine {
                     if (fill.mode() == FillMode.EMPTY && !isEmpty(instance.editor(), current)) {
                         continue;
                     }
-                    if (fill.mode() == FillMode.EMPTY && ExpressionValues.isNull(computed)) {
-                        continue;
+                    if (fill.mode() == FillMode.EMPTY && ExpressionValues.isEmpty(computed)) {
+                        continue; // nothing to fill in: an empty field stays as it is
                     }
                     if (fill.mode() == FillMode.ALWAYS) {
                         state(ctx.path(instance), localizable ? locale : null, false, true, true);

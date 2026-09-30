@@ -417,6 +417,86 @@ class RuleEngineTest {
     }
 
     @Nested
+    class CatalogCards {
+
+        private final ContentDefinition card = definition("""
+                content { editor text title { } editor text slug { } }
+                rules {
+                  fill slug { value "slugify(title)" mode empty on [edit, save] }
+                  state slug { readOnlyWhen "section.page.locked == 'yes'" }
+                  rule "card-title" on title { level error scope [save] assert "!isEmpty(value)"
+                    message { en "A card needs a title" } }
+                }
+                """);
+
+        private final UUID cardUuid = UUID.randomUUID();
+
+        private final SectionTemplateLookup sections = ref -> ref.equals(cardUuid.toString())
+                ? Optional.of(new SectionTemplateLookup.SectionTemplate("card", card))
+                : Optional.empty();
+
+        private String catalog(String... titles) {
+            StringBuilder cards = new StringBuilder();
+            for (int i = 0; i < titles.length; i++) {
+                cards.append(i == 0 ? "" : ",").append("{\"instanceId\":\"c").append(i).append("\",\"templateRef\":\"")
+                        .append(cardUuid).append("\",\"content\":{\"title\":\"").append(titles[i]).append("\"}}");
+            }
+            return "{\"type\":\"CATALOG\",\"cards\":[" + cards + "]}";
+        }
+
+        @Test
+        void cardRulesRunForPageCatalogsWithSectionPage() {
+            ContentDefinition page = definition("content { editor text locked { } editor catalog teasers { } }");
+            JsonNode payload = JsonUtil.parse("{\"content\":{\"locked\":\"yes\",\"teasers\":" + catalog("Hello World", "") + "}}");
+
+            RuleOutcome edit = engine().evaluatePage(page, payload, sections, RuleEngine.Request.of(RuleScope.EDIT));
+            assertThat(edit.fills()).extracting(RuleFill::path)
+                    .containsExactly("content.teasers.cards[0].content.slug");
+            assertThat(edit.content().at("/content/teasers/cards/0/content/slug").asText()).isEqualTo("hello-world");
+            assertThat(edit.fieldStates()).extracting(FieldState::path, FieldState::readOnly).contains(
+                    org.assertj.core.groups.Tuple.tuple("content.teasers.cards[0].content.slug", true),
+                    org.assertj.core.groups.Tuple.tuple("content.teasers.cards[1].content.slug", true));
+
+            RuleOutcome save = engine().evaluatePage(page, payload, sections, RuleEngine.Request.of(RuleScope.SAVE));
+            assertThat(save.findings()).filteredOn(f -> "card-title".equals(f.rule()))
+                    .extracting(ContentIssue::path, ContentIssue::message)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                            "content.teasers.cards[1].content.title", "A card needs a title"));
+        }
+
+        @Test
+        void cardRulesRunInBodySectionsAndListRowsOfRecords() {
+            ContentDefinition holder = definition("content { editor catalog more { } }");
+            UUID holderUuid = UUID.randomUUID();
+            SectionTemplateLookup both = ref -> ref.equals(holderUuid.toString())
+                    ? Optional.of(new SectionTemplateLookup.SectionTemplate("holder", holder))
+                    : sections.find(ref);
+            ContentDefinition page = definition("content { editor text title { } } bodies { body main { } }");
+            JsonNode payload = JsonUtil.parse("{\"content\":{},\"bodies\":{\"main\":[{\"instanceId\":\"s0\",\"templateRef\":\""
+                    + holderUuid + "\",\"content\":{\"more\":" + catalog("A b") + "}}]}}");
+            RuleOutcome inBody = engine().evaluatePage(page, payload, both, RuleEngine.Request.of(RuleScope.EDIT));
+            assertThat(inBody.fills()).extracting(RuleFill::path)
+                    .containsExactly("bodies.main[0].content.more.cards[0].content.slug");
+
+            ContentDefinition record = definition("content { editor list rows { item { editor catalog cards { } } } }");
+            JsonNode content = JsonUtil.parse("{\"rows\":[{\"cards\":" + catalog("X y") + "}]}");
+            RuleOutcome inRecord = engine().evaluate(record, content, "record", "content", sections,
+                    RuleEngine.Request.of(RuleScope.EDIT));
+            assertThat(inRecord.fills()).extracting(RuleFill::path)
+                    .containsExactly("content.rows[0].cards.cards[0].content.slug");
+        }
+
+        @Test
+        void cardsOfAHiddenCatalogAreSkipped() {
+            ContentDefinition page = definition(
+                    "content { editor text mode { } editor catalog teasers { visibleWhen \"mode == 'on'\" } }");
+            JsonNode payload = JsonUtil.parse("{\"content\":{\"mode\":\"off\",\"teasers\":" + catalog("") + "}}");
+            RuleOutcome save = engine().evaluatePage(page, payload, sections, RuleEngine.Request.of(RuleScope.SAVE));
+            assertThat(save.findings()).noneMatch(f -> "card-title".equals(f.rule()));
+        }
+    }
+
+    @Nested
     class ReferencesAndLimits {
 
         private final ContentDefinition def = definition("""
