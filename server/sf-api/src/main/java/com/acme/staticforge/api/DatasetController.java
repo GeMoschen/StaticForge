@@ -15,6 +15,7 @@ import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.template.cdl.CdlSources;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
@@ -93,7 +94,7 @@ public class DatasetController {
                         projectId(projectKey),
                         body.parentFolderUuid(),
                         body.displayName(),
-                        body.contentDefinition(),
+                        new CdlSources(body.contentCdl(), "", body.rulesCdl()),
                         body.titleEditor(),
                         body.description(),
                         body.channelTemplates()),
@@ -115,7 +116,7 @@ public class DatasetController {
         DatasetView view = datasetService.update(
                 uuid,
                 new UpdateDatasetCommand(
-                        body.displayName(), body.contentDefinition(), body.titleEditor(), body.description(),
+                        body.displayName(), new CdlSources(body.contentCdl(), "", body.rulesCdl()), body.titleEditor(), body.description(),
                         body.channelTemplates()),
                 expected,
                 confirmDiscard,
@@ -161,7 +162,8 @@ public class DatasetController {
                 v.displayName(),
                 v.folderUuid(),
                 v.folderPath(),
-                v.contentDefinition(),
+                v.cdl().content(),
+                v.cdl().rules(),
                 v.compiledDefinition(),
                 v.titleEditor(),
                 v.description(),

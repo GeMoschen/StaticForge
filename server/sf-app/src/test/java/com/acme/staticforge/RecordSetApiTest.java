@@ -28,6 +28,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.user.AppUser;
@@ -377,7 +378,7 @@ class RecordSetApiTest {
         Fixture fx = newFixture();
         DatasetView team = team(fx);
         DatasetView other = datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Other", TEAM_CDL, null, null), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Other", CdlSources.split(TEAM_CDL), null, null), fx.ctx());
         RecordSetView leads = set(fx, team, "Leads", RecordSetQuery.ALL);
         RecordSetView staff = set(fx, team, "Staff", RecordSetQuery.ALL);
         RecordSetView foreign = set(fx, other, "Foreign", RecordSetQuery.ALL);
@@ -480,7 +481,7 @@ class RecordSetApiTest {
 
     private DatasetView team(Fixture fx) {
         return datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null), fx.ctx());
     }
 
     private RecordSetView set(Fixture fx, DatasetView dataset, String name, RecordSetQuery query) {

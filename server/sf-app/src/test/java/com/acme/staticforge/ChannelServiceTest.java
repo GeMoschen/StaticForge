@@ -21,6 +21,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.render.Escaping;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -107,7 +108,7 @@ class ChannelServiceTest {
                         fx.project().getId(),
                         AssetType.SECTION_TEMPLATE,
                         "Teaser",
-                        "content { editor text headline { required } }",
+                        CdlSources.split("content { editor text headline { required } }"),
                         Map.of("markdown", "# $CMS_VALUE(headline)$"),
                         null,
                         false,
@@ -137,7 +138,7 @@ class ChannelServiceTest {
                         fx.project().getId(),
                         AssetType.SECTION_TEMPLATE,
                         "Hero",
-                        "content { editor text headline { required } }",
+                        CdlSources.split("content { editor text headline { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null,
                         false,

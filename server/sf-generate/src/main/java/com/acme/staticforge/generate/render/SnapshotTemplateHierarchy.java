@@ -4,6 +4,7 @@ import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.generate.snapshot.Snapshot;
+import com.acme.staticforge.template.cdl.CdlSources;
 import java.util.Optional;
 
 /**
@@ -22,7 +23,7 @@ final class SnapshotTemplateHierarchy {
                         asset.uuid(),
                         asset.uid(),
                         asset.payload(),
-                        memo.definition(asset.uuid(), asset.payload().path("contentDefinition").asText("")),
+                        memo.definition(asset.uuid(), CdlSources.of(asset.payload())),
                         0))));
     }
 }

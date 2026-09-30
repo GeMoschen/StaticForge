@@ -1,4 +1,5 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
+import { cdl } from './cdl';
 
 /**
  * M17 Globals store journeys (feature `docs-e2e`, `M17.5.2`):
@@ -83,7 +84,7 @@ class Api {
   }
 
   pageTemplate(displayName: string, source: string): Promise<Json> {
-    return this.post('/page-templates', { displayName, contentDefinition: '', channelSources: { html: source } });
+    return this.post('/page-templates', { displayName, ...cdl(''), channelSources: { html: source } });
   }
 
   page(displayName: string, templateUuid: string): Promise<Json> {
@@ -91,7 +92,7 @@ class Api {
   }
 
   globalSet(displayName: string, contentDefinition: string): Promise<Json> {
-    return this.post('/globals', { displayName, contentDefinition });
+    return this.post('/globals', { displayName, ...cdl(contentDefinition) });
   }
 
   async setValues(uuid: string, content: Json): Promise<Json> {
@@ -103,9 +104,22 @@ class Api {
     return this.get('/revisions');
   }
 
-  async demoteSelfTo(role: string): Promise<void> {
-    const me = await this.get('/api/v1/auth/me');
-    await this.put(`/api/v1/projects/${this.projectKey}/members/${me.id}`, { role });
+  /**
+   * A new account with `role` in this project. An instance admin is a project admin in every project whatever its
+   * membership says, so a journey about another role signs in as a user created for it.
+   */
+  async member(role: string): Promise<{ username: string; password: string }> {
+    const username = `${role.toLowerCase()}${Date.now()}`;
+    const password = `${username}-Secret1`;
+    await this.post('/api/v1/admin/users', {
+      username,
+      email: `${username}@example.com`,
+      displayName: username,
+      password,
+      mustChangePassword: false,
+      memberships: [{ projectKey: this.projectKey, role }],
+    });
+    return { username, password };
   }
 
   async dispose(): Promise<void> {
@@ -113,10 +127,10 @@ class Api {
   }
 }
 
-async function login(page: Page): Promise<void> {
+async function login(page: Page, user = USER, password = PASSWORD): Promise<void> {
   await page.goto('/login');
-  await page.locator('sf-login input[formControlName="username"]').fill(USER);
-  await page.locator('sf-login input[formControlName="password"]').fill(PASSWORD);
+  await page.locator('sf-login input[formControlName="username"]').fill(user);
+  await page.locator('sf-login input[formControlName="password"]').fill(password);
   await page.locator('sf-login button[type="submit"]').click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 }
@@ -150,7 +164,7 @@ async function saveAndStatus(page: Page, button: string, path: 'content' | 'sche
   const response = page.waitForResponse(
     (r) => r.request().method() === 'PUT' && r.url().includes('/globals/') && r.url().endsWith(`/${path}`),
   );
-  await detail(page).getByRole('button', { name: button }).click();
+  await detail(page).getByRole('button', { name: button, exact: true }).click();
   const res = await response;
   if (res.status() >= 300) {
     console.log(`PUT ${path} -> ${res.status()} ${await res.text()} body=${res.request().postData()}`);
@@ -178,23 +192,23 @@ test('journey 1: a developer creates a property set, fixes a CDL error and fills
     await expect(globalsTree(page).getByText('Site')).toBeVisible();
     await expect(detail(page).locator('.global-detail__uid')).toHaveText('site');
 
-    // Schema: a body is not allowed in a property set — the diagnostic appears inline and nothing saves.
-    await detail(page).getByRole('tab', { name: 'Schema' }).click();
-    const cdl = detail(page).locator('textarea');
-    await cdl.fill(`${SITE_CDL}bodies { body main { label "Main" allow ["*"] } }\n`);
-    await detail(page).getByRole('button', { name: 'Save schema' }).click();
-    await expect(detail(page).locator('.diagnostics')).toContainText('SF-CDL-0107');
+    // Schema: a catalog editor is not allowed in a property set — the diagnostic appears inline and nothing saves.
+    await detail(page).getByRole('tab', { name: /^Schema/ }).click();
+    const content = detail(page).getByRole('textbox', { name: 'Content definition (CDL) — Content' });
+    await content.fill(`${cdl(SITE_CDL).contentCdl}\neditor catalog cards { label "Cards" }\n`);
+    expect(await saveAndStatus(page, 'Save', 'schema')).toBe(422);
+    await expect(detail(page).locator('sf-cdl-sections-editor .diagnostic')).toContainText('SF-CDL-0107');
     await snap(page, 'j1-cdl-diagnostic');
 
     // Fix it and save.
-    await cdl.fill(SITE_CDL);
-    await detail(page).getByRole('button', { name: 'Save schema' }).click();
-    await expect(detail(page).locator('.diagnostics')).toHaveCount(0);
+    await content.fill(cdl(SITE_CDL).contentCdl);
+    expect(await saveAndStatus(page, 'Save', 'schema')).toBe(200);
+    await expect(detail(page).locator('sf-cdl-sections-editor .diagnostic')).toHaveCount(0);
 
     // Values: the rebuilt form shows the new fields.
-    await detail(page).getByRole('tab', { name: 'Values' }).click();
+    await detail(page).getByRole('tab', { name: /^Values/ }).click();
     await detail(page).locator('sf-content-form input').first().fill('Acme Outdoor');
-    expect(await saveAndStatus(page, 'Save values', 'content')).toBe(200);
+    expect(await saveAndStatus(page, 'Save', 'content')).toBe(200);
     await snap(page, 'j1-values-saved');
 
     const sets = await api.get('/globals');
@@ -230,7 +244,7 @@ test('journey 2: a page preview shows the property-set value and follows an edit
     await navigate(page, `/p/${api.projectKey}/globals`);
     await globalsTree(page).getByText('Site').click();
     await detail(page).locator('sf-content-form input').first().fill('Acme Outdoor Co.');
-    expect(await saveAndStatus(page, 'Save values', 'content')).toBe(200);
+    expect(await saveAndStatus(page, 'Save', 'content')).toBe(200);
 
     await navigate(page, `/p/${api.projectKey}/pages/${home.uuid}`);
     await page.locator('sf-page-editor sf-preview-frame').getByRole('button', { name: 'Refresh' }).click();
@@ -245,16 +259,22 @@ test('journey 3: for an editor the Schema tab is read-only and the Values tab is
   const api = await Api.forNewProject('m17c');
   try {
     const site = await api.globalSet('Site', SITE_CDL);
-    await api.demoteSelfTo('EDITOR');
+    const editor = await api.member('EDITOR');
 
-    await login(page);
+    await login(page, editor.username, editor.password);
     await navigate(page, `/p/${api.projectKey}/globals`);
     await globalsTree(page).getByText('Site').click();
 
-    await expect(detail(page).getByRole('button', { name: 'Save values' })).toBeEnabled();
-    await detail(page).getByRole('tab', { name: 'Schema' }).click();
-    await expect(detail(page).locator('textarea')).toBeDisabled();
-    await expect(detail(page).getByRole('button', { name: 'Save schema' })).toBeDisabled();
+    // Nothing to save until a value changes; the value form is editable.
+    await expect(detail(page).getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    await detail(page).locator('sf-content-form input').first().fill('Acme Indoor');
+    await expect(detail(page).getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    await detail(page).getByRole('tab', { name: /^Schema/ }).click();
+    await expect(detail(page).getByRole('textbox', { name: 'Content definition (CDL) — Content' })).toHaveAttribute(
+      'contenteditable',
+      'false',
+    );
+    await expect(detail(page).getByRole('button', { name: 'Delete property set' })).toBeDisabled();
     await expect(detail(page).getByText('You need the developer role to change this schema.')).toBeVisible();
     await snap(page, 'j3-editor-schema-read-only');
     expect(site.uuid).toBeTruthy();
@@ -288,7 +308,7 @@ test('journey 4: time travel makes the Globals screen read-only and shows the ol
 
     await expect(detail(page).getByText(/read-only until you leave time travel/)).toBeVisible();
     await expect(detail(page).locator('sf-content-form input').first()).toHaveValue('Old title');
-    await expect(detail(page).getByRole('button', { name: 'Save values' })).toBeDisabled();
+    await expect(detail(page).getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'New property set' })).toBeDisabled();
     await snap(page, 'j4-time-travel-read-only');
   } finally {

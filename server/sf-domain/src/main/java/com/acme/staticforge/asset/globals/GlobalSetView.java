@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.globals;
 
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.UUID;
 
@@ -16,7 +17,7 @@ public record GlobalSetView(
         String uid,
         String displayName,
         String folderPath,
-        String contentDefinition,
+        CdlSources cdl,
         JsonNode compiledDefinition,
         JsonNode content,
         long revision,

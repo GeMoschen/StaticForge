@@ -7,14 +7,16 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Full section/page template representation, surfaced from the asset version payload.
- * {@code folderUuid}/{@code folderPath} mirror {@code PageView}'s shape (spec M13.1.3).
+ * Full section/page template representation, surfaced from the asset version payload. {@code folderUuid}/{@code
+ * folderPath} mirror {@code PageView}'s shape (spec M13.1.3). The CDL comes as its three sections (M34): {@code
+ * contentCdl}, {@code bodiesCdl} and {@code rulesCdl}, each the text inside its {@code content}/{@code bodies}/{@code
+ * rules} braces.
  *
- * <p>Page templates (M20): {@code abstract}; the derived {@code parentTemplateRef}; {@code ancestors} (parent
- * first); {@code effectiveDefinition}, the own and inherited editors and bodies a page form uses, with
- * {@code inheritedFrom} naming the ancestor of each inherited one; {@code descendantWarnings} from the save that
- * returned this representation. {@code compiledDefinition} stays the template's own definition.
- * {@code paginationPath} (M21.2.1): per-channel path patterns of pages 2..N of a paginated page.
+ * <p>Page templates (M20): {@code abstract}; the derived {@code parentTemplateRef}; {@code ancestors} (parent first);
+ * {@code effectiveDefinition}, the own and inherited editors and bodies a page form uses, with {@code inheritedFrom}
+ * naming the ancestor of each inherited one; {@code descendantWarnings} from the save that returned this
+ * representation. {@code compiledDefinition} stays the template's own definition. {@code paginationPath} (M21.2.1):
+ * per-channel path patterns of pages 2..N of a paginated page.
  */
 public record TemplateDetail(
         UUID uuid,
@@ -22,7 +24,9 @@ public record TemplateDetail(
         String assetType,
         String displayName,
         long revision,
-        String contentDefinition,
+        String contentCdl,
+        String bodiesCdl,
+        String rulesCdl,
         JsonNode compiledDefinition,
         JsonNode channelTemplates,
         String category,

@@ -48,6 +48,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -138,7 +139,7 @@ class M19ContentStoreJourneyIntegrationTest {
 
         // 1. Schema, four records in two folders, one photo reached only through a record.
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(projectId, null, "Team", TEAM_CDL, "name", "Our people"), fx.ctx());
+                new CreateDatasetCommand(projectId, null, "Team", CdlSources.split(TEAM_CDL), "name", "Our people"), fx.ctx());
         AssetVersionView ada = mediaService.upload(projectId, null, "ada.png", "image/png", solidPng(Color.RED), fx.ctx());
         AssetVersionView staff = folderService.create(null, "Staff", FolderScope.CONTENT, fx.ctx());
         AssetVersionView alumni = folderService.create(null, "Alumni", FolderScope.CONTENT, fx.ctx());
@@ -151,7 +152,7 @@ class M19ContentStoreJourneyIntegrationTest {
         // 2. A section looping the leads, a page including it, a profile page referencing a record,
         //    and an unrelated page.
         TemplateView leadsSection = templateService.create(
-                new CreateTemplateCommand(projectId, AssetType.SECTION_TEMPLATE, "Leads", "",
+                new CreateTemplateCommand(projectId, AssetType.SECTION_TEMPLATE, "Leads", CdlSources.split(""),
                         Map.of("html", leadsSource("role")), null, false, Map.of()),
                 fx.ctx());
         TemplateView teamTemplate = pageTemplate(fx, "Team Page", "", "<main>$CMS_INCLUDE(section_template:leads)$</main>");
@@ -206,8 +207,8 @@ class M19ContentStoreJourneyIntegrationTest {
         long revisionsBefore = revisionCount(fx.project());
         DatasetView renamed = datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", TEAM_CDL.replace("editor select role { label \"Role\"",
-                        "editor select position { label \"Position\" renamedFrom \"role\""), "name", "Our people"),
+                new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("editor select role { label \"Role\"",
+                        "editor select position { label \"Position\" renamedFrom \"role\"")), "name", "Our people"),
                 datasetService.find(projectId, team.uuid(), null).orElseThrow().revision(),
                 fx.ctx());
         assertThat(revisionCount(fx.project())).isEqualTo(revisionsBefore + 1);
@@ -264,7 +265,7 @@ class M19ContentStoreJourneyIntegrationTest {
 
     private TemplateView pageTemplate(Fixture fx, String name, String cdl, String html) {
         return templateService.create(
-                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, name, cdl,
+                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl),
                         Map.of("html", html), null, false, Map.of("html", "{displayNameSlug}.{ext}")),
                 fx.ctx());
     }

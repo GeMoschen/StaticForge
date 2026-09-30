@@ -23,6 +23,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -92,7 +93,7 @@ class LocalizedExportImportIntegrationTest {
                         fx.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Article",
-                        CDL,
+                        CdlSources.split(CDL),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null,
                         false,
@@ -209,7 +210,7 @@ class LocalizedExportImportIntegrationTest {
                         source.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Plain",
-                        "content { editor text headline { label \"Headline\" } }",
+                        CdlSources.split("content { editor text headline { label \"Headline\" } }"),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null,
                         false,

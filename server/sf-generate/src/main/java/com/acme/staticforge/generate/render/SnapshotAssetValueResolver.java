@@ -9,6 +9,7 @@ import com.acme.staticforge.asset.template.TemplateCompileMemo;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.LocaleConfig;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.query.RecordSetQueries;
 import com.acme.staticforge.template.query.RecordSetQuery;
@@ -98,7 +99,7 @@ final class SnapshotAssetValueResolver implements AssetValueResolver {
         SnapshotAsset dataset = datasetUuid == null ? null : snapshot.assetByUuid(datasetUuid);
         ContentDefinition definition = dataset == null || dataset.payload() == null
                 ? null
-                : definitions.definition(datasetUuid, dataset.payload().path("contentDefinition").asText(""));
+                : definitions.definition(datasetUuid, CdlSources.of(dataset.payload()));
         JsonNode query = set.payload() == null ? null : set.payload().get("query");
         return Optional.of(new RecordSetSource(
                 setUuid,

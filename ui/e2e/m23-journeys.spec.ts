@@ -1,4 +1,5 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
+import { cdl } from './cdl';
 
 /**
  * M23 global search journeys (feature `docs-e2e`, `M23.5.1`).
@@ -162,7 +163,7 @@ test('journey: find and fix', async ({ page }) => {
     // 1–2. A page whose rich text holds the term; a media file that mentions it too, for the facets.
     const article = await api.post('/page-templates', {
       displayName: 'Article',
-      contentDefinition: 'content { editor richtext body { label "Body" } }',
+      ...cdl('content { editor richtext body { label "Body" } }'),
       channelSources: { html: '<main>$CMS_VALUE(body)$</main>' },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });
@@ -305,12 +306,12 @@ test('journey: every result opens its asset', async ({ page }) => {
   try {
     const teaser = await api.post('/section-templates', {
       displayName: 'Coast teaser',
-      contentDefinition: '',
+      ...cdl(''),
       channelSources: { html: `<h2>${term} teaser</h2>` },
     });
     const article = await api.post('/page-templates', {
       displayName: 'Article',
-      contentDefinition: '',
+      ...cdl(''),
       channelSources: { html: '<main></main>' },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });
@@ -323,7 +324,7 @@ test('journey: every result opens its asset', async ({ page }) => {
       targetAssetUuid: target.uuid,
       label: `See the ${term} cliffs`,
     });
-    await api.post('/globals', { displayName: `Seabird ${term} settings`, contentDefinition: '' });
+    await api.post('/globals', { displayName: `Seabird ${term} settings`, ...cdl('') });
     const pagesRoot = (await api.get('/folders?scope=PAGES&depth=1'))[0];
     await api.post('/folders', { displayName: `Colony ${term}`, parentFolderUuid: pagesRoot.uuid, scope: 'PAGES' });
     await api.awaitIndexed();
@@ -375,7 +376,7 @@ test('journey: time travel note and narrow search page', async ({ page }) => {
   try {
     const article = await api.post('/page-templates', {
       displayName: 'Article',
-      contentDefinition: 'content { editor richtext body { label "Body" } }',
+      ...cdl('content { editor richtext body { label "Body" } }'),
       channelSources: { html: '<main>$CMS_VALUE(body)$</main>' },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });

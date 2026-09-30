@@ -1,6 +1,7 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { cdl } from './cdl';
 
 /**
  * M32 complete URL registry journey (`M32.8`):
@@ -129,14 +130,14 @@ test('journey: a page keeps its URL until it is overridden, and the next build m
     });
     const plain = await api.post('/page-templates', {
       displayName: 'Plain',
-      contentDefinition: '',
+      ...cdl(''),
       channelSources: { html: '<p>plain</p>' },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });
     const about = await api.post('/pages', { displayName: 'About', templateUuid: plain.uuid });
     const linker = await api.post('/page-templates', {
       displayName: 'Linker',
-      contentDefinition: '',
+      ...cdl(''),
       channelSources: { html: `<a id="about" href="$CMS_REF(page:${about.uid})$">about</a>` },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });

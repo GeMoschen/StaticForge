@@ -20,6 +20,7 @@ import com.acme.staticforge.search.extract.ExtractionContext;
 import com.acme.staticforge.search.extract.IndexableAsset;
 import com.acme.staticforge.search.extract.LiveExtractionContexts;
 import com.acme.staticforge.search.extract.SearchTextExtractorRegistry;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -603,7 +604,7 @@ public class SearchIndexer implements DisposableBean {
         JsonNode a = before.get().getPayload();
         JsonNode b = now.get().getPayload();
         return before.get().isDeleted() != now.get().isDeleted()
-                || !Objects.equals(a.path("contentDefinition").asText(""), b.path("contentDefinition").asText(""))
+                || !Objects.equals(CdlSources.of(a), CdlSources.of(b))
                 || !Objects.equals(a.path("parentTemplateRef").asText(""), b.path("parentTemplateRef").asText(""));
     }
 

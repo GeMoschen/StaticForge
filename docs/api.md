@@ -392,12 +392,12 @@ Global property sets. Schema and values are separate endpoints because they need
 |---|---|---|---|
 | `GET` | `/projects/{projectKey}/globals` | `VIEWER` | `?folder=<uuid>` restricts to one folder |
 | `GET` | `/projects/{projectKey}/globals/{uuid}` | `VIEWER` | `?revision=` reads the version valid at that revision (time travel) |
-| `POST` | `/projects/{projectKey}/globals` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, comment?}` → `201` |
-| `PUT` | `/projects/{projectKey}/globals/{uuid}/schema` | `DEVELOPER` | `{contentDefinition, comment?}`; applies `renamedFrom` and drops values of removed editors in the same revision |
+| `POST` | `/projects/{projectKey}/globals` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentCdl, rulesCdl?, comment?}` → `201` |
+| `PUT` | `/projects/{projectKey}/globals/{uuid}/schema` | `DEVELOPER` | `{contentCdl, rulesCdl?, content?, comment?}`; applies `renamedFrom` and drops values of removed editors in the same revision. `content` (M34) saves values edited against the stored schema in the same version — validated and saved as `PUT …/content` would, then migrated into the new schema — so the detail's one Save is one revision |
 | `PUT` | `/projects/{projectKey}/globals/{uuid}/content` | `EDITOR` | `{content, comment?}`; malformed values, or a save-scope rule `error` (M33, §5.1) → `422` with `issues`; the detail view carries `issues` (the `edit` findings of the stored values) |
 | `DELETE` | `/projects/{projectKey}/globals/{uuid}` | `DEVELOPER` | refused while a template or page reads the set |
 
-A uuid that belongs to another project or isn't a property set is `404`. CDL errors are `422` with `diagnostics` (`SF-CDL-*`, including `SF-CDL-0107` for a `body` or `catalog`).
+A uuid that belongs to another project or isn't a property set is `404`. CDL errors are `422` with `diagnostics` (`SF-CDL-*`, including `SF-CDL-0107` for a `catalog` editor), each naming its section in `field`. The CDL is sent and returned as sections (M34, spec §14.9): `contentCdl` and `rulesCdl`, each the text inside the section's braces; a property set has no bodies.
 
 Everything that isn't specific to property sets uses the generic endpoints: folders are `/folders` with `scope=GLOBALS`; moving a set is `POST /assets/{uuid}/move`; its uid, usages, history and restore are under `/assets/{uuid}` (§4). Validate draft CDL with `POST /cdl/validate?kind=GLOBAL_SET`, which adds the property-set restrictions.
 
@@ -408,9 +408,9 @@ A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | `GET` | `/projects/{projectKey}/datasets` | `VIEWER` | summaries with `titleEditor`, `description` and live `recordCount` |
-| `GET` | `/projects/{projectKey}/datasets/{uuid}` | `VIEWER` | adds `contentDefinition`, `compiledDefinition`, `channelTemplates` (record templates, `{<channel>: {source, compiledHash}}`, M25), `deleted`; `?revision=` for time travel |
-| `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentDefinition, titleEditor?, description?, channelTemplates?, comment?}` → `201`; the parent defaults to `datasets`. Record templates compile against the schema: an unknown channel key is `422` with `field`, compile errors `422 SF-API-0422` with `channel`, `diagnostics` and `channelDiagnostics`; warnings come back in `recordTemplateDiagnostics` |
-| `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentDefinition, titleEditor?, description?, channelTemplates?, comment?}`; `renamedFrom` rewrites the key in every record and every record set query, in the same revision (never in record templates: a template still reading the old name fails the save). Without `channelTemplates` the stored record templates are kept and recompiled. The response adds `recordTemplateDiagnostics` (warnings by channel) and `brokenRecordSets` — `[{uuid, uid, displayName, diagnostics}]`, the sets whose stored query no longer validates against the saved schema (a removed or retyped field; the save succeeds, those sets render nothing until fixed). Both are empty on reads |
+| `GET` | `/projects/{projectKey}/datasets/{uuid}` | `VIEWER` | adds `contentCdl`, `rulesCdl` (M34), `compiledDefinition`, `channelTemplates` (record templates, `{<channel>: {source, compiledHash}}`, M25), `deleted`; `?revision=` for time travel |
+| `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentCdl, rulesCdl?, titleEditor?, description?, channelTemplates?, comment?}` → `201`; the parent defaults to `datasets`. Record templates compile against the schema: an unknown channel key is `422` with `field`, compile errors `422 SF-API-0422` with `channel`, `diagnostics` and `channelDiagnostics`; warnings come back in `recordTemplateDiagnostics` |
+| `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentCdl, rulesCdl?, titleEditor?, description?, channelTemplates?, comment?}`; `renamedFrom` rewrites the key in every record and every record set query, in the same revision (never in record templates: a template still reading the old name fails the save). Without `channelTemplates` the stored record templates are kept and recompiled. The response adds `recordTemplateDiagnostics` (warnings by channel) and `brokenRecordSets` — `[{uuid, uid, displayName, diagnostics}]`, the sets whose stored query no longer validates against the saved schema (a removed or retyped field; the save succeeds, those sets render nothing until fixed). Both are empty on reads |
 | `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount`/`setCount` while it has live records or record sets, even with `?force=true` |
 | `POST` | `/projects/{projectKey}/datasets/{uuid}/restore` | `DEVELOPER` | |
 | `GET` | `/projects/{projectKey}/datasets/{uuid}/records` | `VIEWER` | paged listing of every record of the dataset across all of its record sets (set queries are not applied), see below |
@@ -516,18 +516,20 @@ language renders; a text write for a language that falls back gives it its own f
 
 ## 8. Templates (section, page) & structures
 
+The CDL of a template is sent and returned as its sections (M34, spec §14.9): `contentCdl`, `bodiesCdl` (page templates; a section template's must be empty) and `rulesCdl`, each the text inside the section's braces. A save's `422` diagnostics each name their source in `field` — `content`, `bodies`, `rules` or `channel:<key>` — with `line`/`column` inside it. The Templates UI saves everything with one `PUT /{templateKind}/{uuid}`: the CDL and every channel's source in `channelSources` (added, edited, a removed channel left out), one revision.
+
 | Method | Path |
 |---|---|
 | `GET`/`POST` | `/projects/{projectKey}/section-templates` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/section-templates/{uuid}` |
 | `GET`/`POST` | `/projects/{projectKey}/page-templates` (list items carry `abstract` and `parentTemplateRef`; create accepts `abstract` and `paginationPath`, a channel → pattern map for pages 2..N of a paginated page that must contain `{pageNumber}`) |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/page-templates/{uuid}` (M20: `abstract` on read and update; read-only `parentTemplateRef`, `ancestors`, `effectiveDefinition`, `inheritedFrom`; a save returns `descendantWarnings`; `422 SF-DOM-0122` making a used template abstract, `422 SF-DOM-0124` with `descendants[]` when descendants would break) |
-| `PUT`/`DELETE` | `/projects/{projectKey}/{templateKind}/{uuid}/channels/{channelKey}` |
+| `PUT`/`DELETE` | `/projects/{projectKey}/{templateKind}/{uuid}/channels/{channelKey}` (one channel on its own; the UI uses the template `PUT` instead) |
 | `GET`/`POST` | `/projects/{projectKey}/structures` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/structures/{uuid}` |
 | `GET` | `/projects/{projectKey}/structures/{uuid}/preview` |
-| `POST` | `/projects/{projectKey}/cdl/validate` (`?kind=GLOBAL_SET` adds the property-set restrictions, `?kind=DATASET` the dataset-schema ones) |
-| `POST` | `/projects/{projectKey}/octl/validate` (body `source`, `channelKey`; with `templateUuid` and optional unsaved `contentDefinition` it returns the diagnostics a save of that template's channel would: references, inheritance chain, effective-definition names; with `datasetUuid` (M25) and optional unsaved dataset `contentDefinition` it checks the source as that dataset's record template — record fields and meta names in scope, so an undeclared field is `SF-TPL-0103` and `$CMS_BODY`/`$CMS_EXTENDS`/`$CMS_BLOCK`/`$CMS_PARENT` are `SF-TPL-0122`, as on save. `templateUuid` with `datasetUuid` is `422`; an unknown dataset `404`) |
+| `POST` | `/projects/{projectKey}/cdl/validate` (body `{contentCdl, bodiesCdl?, rulesCdl?}`; each diagnostic names its section in `field`; `?kind=GLOBAL_SET` adds the property-set restrictions, `?kind=DATASET` the dataset-schema ones, `?kind=SECTION_TEMPLATE` the section-template ones) |
+| `POST` | `/projects/{projectKey}/octl/validate` (body `source`, `channelKey`; with `templateUuid` and the optional unsaved CDL sections (`contentCdl`, `bodiesCdl`, `rulesCdl`) it returns the diagnostics a save of that template's channel would: references, inheritance chain, effective-definition names; with `datasetUuid` (M25) and the optional unsaved dataset sections it checks the source as that dataset's record template — record fields and meta names in scope, so an undeclared field is `SF-TPL-0103` and `$CMS_BODY`/`$CMS_EXTENDS`/`$CMS_BLOCK`/`$CMS_PARENT` are `SF-TPL-0122`, as on save. `templateUuid` with `datasetUuid` is `422`; an unknown dataset `404`) |
 
 **Language-dependent editors (M24).** A CDL leaf editor may be `localizable`; a container (`group`, `list`,
 `catalog`, `pagination`) may not (`SF-CDL-0112`). Adding the flag migrates every stored value of that editor into

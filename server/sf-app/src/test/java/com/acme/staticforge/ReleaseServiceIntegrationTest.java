@@ -44,6 +44,7 @@ import com.acme.staticforge.revision.ProjectRestoreService;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -265,7 +266,7 @@ class ReleaseServiceIntegrationTest {
 
         // Record sets propose their unreleased records.
         DatasetView dataset = datasetService.create(
-                new CreateDatasetCommand(fx.id(), null, "Team", "content { editor text name { label \"Name\" } }", "name", "People"),
+                new CreateDatasetCommand(fx.id(), null, "Team", CdlSources.split("content { editor text name { label \"Name\" } }"), "name", "People"),
                 fx.ctx());
         UUID set = new RecordSetFixtures(recordSetService).setFor(fx.id(), dataset.uuid(), null, fx.ctx());
         UUID ada = recordService.create(new CreateRecordCommand(fx.id(), set, mapper.readTree("{\"name\": \"Ada\"}")), fx.ctx())
@@ -414,7 +415,7 @@ class ReleaseServiceIntegrationTest {
 
         templateService.update(
                 template.uuid(),
-                new UpdateTemplateCommand("Article", CDL.replace("label \"Headline\" required", "label \"Headline\" required localizable"),
+                new UpdateTemplateCommand("Article", CdlSources.split(CDL.replace("label \"Headline\" required", "label \"Headline\" required localizable")),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"), null, false, null, false, null),
                 assetService.requireCurrent(fx.id(), template.uuid()).validFromRevision(),
                 fx.ctx());
@@ -468,7 +469,7 @@ class ReleaseServiceIntegrationTest {
     private TemplateView template(Fixture fx, String cdl) {
         return templateService.create(
                 new CreateTemplateCommand(
-                        fx.id(), AssetType.PAGE_TEMPLATE, "Article" + SEQ.incrementAndGet(), cdl,
+                        fx.id(), AssetType.PAGE_TEMPLATE, "Article" + SEQ.incrementAndGet(), CdlSources.split(cdl),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"), null, false, Map.of()),
                 fx.ctx());
     }

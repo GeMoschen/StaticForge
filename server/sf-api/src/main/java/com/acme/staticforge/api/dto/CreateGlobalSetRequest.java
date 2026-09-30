@@ -7,4 +7,4 @@ import java.util.UUID;
  * the set lands in the project's fixed {@code globals_root} folder.
  */
 public record CreateGlobalSetRequest(
-        UUID parentFolderUuid, String displayName, String contentDefinition, String comment) {}
+        UUID parentFolderUuid, String displayName, String contentCdl, String rulesCdl, String comment) {}

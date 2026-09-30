@@ -31,6 +31,7 @@ import com.acme.staticforge.revision.RevisionDiff;
 import com.acme.staticforge.revision.RevisionService;
 import com.acme.staticforge.revision.compaction.RevisionCompactor;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -337,7 +338,7 @@ class CompactedHistoryApiTest {
         Project project = projects.create(new CreateProjectRequest(prefix + n, prefix + n, null, "compacted"), user.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "compacted reads");
         TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page",
-                CDL, Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of()), ctx);
+                CdlSources.split(CDL), Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of()), ctx);
         return new Fx(project, user, jwt.issueAccessToken(users.findById(user.getId()).orElseThrow()), template);
     }
 
@@ -362,7 +363,7 @@ class CompactedHistoryApiTest {
 
     private void template(Fx fx, String html) {
         TemplateView now = templates.get(fx.id(), fx.template().uuid());
-        templates.update(fx.template().uuid(), new UpdateTemplateCommand(now.displayName(), CDL, Map.of("html", html), null,
+        templates.update(fx.template().uuid(), new UpdateTemplateCommand(now.displayName(), CdlSources.split(CDL), Map.of("html", html), null,
                 false, Map.of(), false, Map.of()), now.validFromRevision(), fx.ctx());
     }
 

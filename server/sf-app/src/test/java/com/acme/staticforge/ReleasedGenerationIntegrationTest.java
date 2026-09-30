@@ -48,6 +48,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.release.ReleaseItem;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -237,7 +238,7 @@ class ReleasedGenerationIntegrationTest {
     void recordsRenderTheirReleasedState() throws Exception {
         Fixture fx = newFixture("relrec");
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(fx.projectId(), null, "Team", "content { editor text name { label \"Name\" } }", "name", null),
+                new CreateDatasetCommand(fx.projectId(), null, "Team", CdlSources.split("content { editor text name { label \"Name\" } }"), "name", null),
                 fx.ctx());
         AssetVersionView folder = folderService.create(null, "Team", FolderScope.CONTENT, fx.ctx());
         UUID all = recordSetService.create(new CreateRecordSetCommand(
@@ -339,7 +340,7 @@ class ReleasedGenerationIntegrationTest {
         templateService.update(
                 template.uuid(),
                 new com.acme.staticforge.asset.template.UpdateTemplateCommand(
-                        "Article", "content { editor text title { label \"Title\" localizable } }",
+                        "Article", CdlSources.split("content { editor text title { label \"Title\" localizable } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false,
                         Map.of("html", "{locale}/{folder}{uid}.{ext}"), false, Map.of()),
                 templateService.get(fx.projectId(), template.uuid()).validFromRevision(),
@@ -368,7 +369,7 @@ class ReleasedGenerationIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String cdl, String html, String outputPath) {
         return templateService.create(
-                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, cdl, Map.of("html", html), null, false,
+                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl), Map.of("html", html), null, false,
                         Map.of("html", outputPath)),
                 fx.ctx());
     }

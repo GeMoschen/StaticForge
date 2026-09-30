@@ -12,6 +12,7 @@ import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.ProjectRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -102,7 +103,7 @@ class RenderPipelineCompileCacheTest {
 
     private UUID template(AssetType type, String uid, String cdl, String html) {
         ObjectNode payload = MAPPER.createObjectNode();
-        payload.put("contentDefinition", cdl);
+        CdlSources.split(cdl).writeTo(payload);
         payload.putObject("channelTemplates").putObject("html").put("source", html);
         return add(type, uid, payload);
     }

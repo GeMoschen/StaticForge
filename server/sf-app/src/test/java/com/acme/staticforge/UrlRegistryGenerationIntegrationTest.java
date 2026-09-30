@@ -41,6 +41,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.redirect.RedirectEntry;
 import com.acme.staticforge.redirect.RedirectService;
 import com.acme.staticforge.release.ContentView;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.urlregistry.ResetScope;
 import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryEntry;
@@ -294,7 +295,7 @@ class UrlRegistryGenerationIntegrationTest {
             references.add(build.pageReference(fx, "0" + i + " post", nav, page).uuid());
         }
         TemplateView blogTemplate = templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,
-                "Blog", "content { editor pagination posts { label \"Posts\" sources [\"nav\"] pageSize 1 } }",
+                "Blog", CdlSources.split("content { editor pagination posts { label \"Posts\" sources [\"nav\"] pageSize 1 } }"),
                 Map.of("html", "<h1>$CMS_META(pageNumber)$</h1>"), null, false, Map.of("html", DEFAULT_PATH)), fx.ctx());
         UUID news = folderService.create(null, "news", FolderScope.PAGES, fx.ctx()).uuid();
         AssetVersionView blog = pageService.create(new CreatePageCommand("blog", news, blogTemplate.uuid()), fx.ctx());
@@ -389,10 +390,10 @@ class UrlRegistryGenerationIntegrationTest {
                 List.of(new ProjectLocale("de", "Deutsch"), new ProjectLocale("en", "English")), "de", Map.of(), false),
                 true, fx.ctx());
         TemplateView plain = templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,
-                "Plain", "", Map.of("html", "<p>plain</p>"), null, false, Map.of("html", "{locale}/" + DEFAULT_PATH)), fx.ctx());
+                "Plain", CdlSources.split(""), Map.of("html", "<p>plain</p>"), null, false, Map.of("html", "{locale}/" + DEFAULT_PATH)), fx.ctx());
         UUID about = pageService.create(new CreatePageCommand("about", null, plain.uuid()), fx.ctx()).uuid();
         TemplateView linker = templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,
-                "Linker", "", Map.of("html", "<a id=\"about\" href=\"$CMS_REF(page:about)$\">about</a>"), null, false,
+                "Linker", CdlSources.split(""), Map.of("html", "<a id=\"about\" href=\"$CMS_REF(page:about)$\">about</a>"), null, false,
                 Map.of("html", "{locale}/" + DEFAULT_PATH)), fx.ctx());
         UUID home = pageService.create(new CreatePageCommand("home", null, linker.uuid()), fx.ctx()).uuid();
 
@@ -415,7 +416,7 @@ class UrlRegistryGenerationIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String html) {
         return templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,
-                name + " " + SEQ.incrementAndGet(), "", Map.of("html", html), null, false, Map.of("html", DEFAULT_PATH)),
+                name + " " + SEQ.incrementAndGet(), CdlSources.split(""), Map.of("html", html), null, false, Map.of("html", DEFAULT_PATH)),
                 fx.ctx());
     }
 

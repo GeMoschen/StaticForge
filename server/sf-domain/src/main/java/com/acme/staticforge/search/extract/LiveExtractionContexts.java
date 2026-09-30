@@ -9,6 +9,7 @@ import com.acme.staticforge.asset.template.TemplateHierarchies;
 import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.search.SearchProperties;
 import com.acme.staticforge.search.TextCap;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EffectiveDefinition;
 import java.nio.charset.StandardCharsets;
@@ -97,8 +98,8 @@ public class LiveExtractionContexts {
         }
 
         @Override
-        public ContentDefinition definition(UUID owner, long revision, String cdlSource) {
-            return compiledTemplates.definition(projectId, owner, revision, cdlSource == null ? "" : cdlSource);
+        public ContentDefinition definition(UUID owner, long revision, CdlSources cdlSource) {
+            return compiledTemplates.definition(projectId, owner, revision, cdlSource == null ? CdlSources.EMPTY : cdlSource);
         }
 
         @Override
@@ -125,7 +126,7 @@ public class LiveExtractionContexts {
                             .map(version -> definition(
                                     uuid,
                                     version.getValidFromRevision(),
-                                    version.getPayload().path("contentDefinition").asText(""))));
+                                    CdlSources.of(version.getPayload()))));
         }
     }
 }

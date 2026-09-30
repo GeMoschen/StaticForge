@@ -13,6 +13,7 @@ import com.acme.staticforge.asset.template.TemplateView;
 import com.acme.staticforge.asset.template.UpdateTemplateCommand;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -61,7 +62,7 @@ public class PageTemplateController extends AbstractTemplateController {
                         projectId(projectKey),
                         AssetType.PAGE_TEMPLATE,
                         body.displayName(),
-                        body.contentDefinition(),
+                        new CdlSources(body.contentCdl(), body.bodiesCdl(), body.rulesCdl()),
                         body.channelSources(),
                         body.category(),
                         Boolean.TRUE.equals(body.deprecated()),
@@ -96,7 +97,7 @@ public class PageTemplateController extends AbstractTemplateController {
                 uuid,
                 new UpdateTemplateCommand(
                         body.displayName(),
-                        body.contentDefinition(),
+                        new CdlSources(body.contentCdl(), body.bodiesCdl(), body.rulesCdl()),
                         body.channelSources(),
                         body.category(),
                         Boolean.TRUE.equals(body.deprecated()),

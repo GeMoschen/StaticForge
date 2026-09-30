@@ -1,4 +1,5 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
+import { cdl as cdlFields } from './cdl';
 
 /**
  * M24 multi-language journey (feature `docs-e2e`, `M24.6.1`).
@@ -93,7 +94,7 @@ class Api {
   async createPageTemplate(displayName: string, cdl: string): Promise<Json> {
     return this.post('/page-templates', {
       displayName,
-      contentDefinition: cdl,
+      ...cdlFields(cdl),
       channelSources: { html: PAGE_HTML },
       outputPath: { html: '{locale}/{folder}{uid}.{ext}' },
     });
@@ -201,7 +202,7 @@ test('journey: configure languages, translate, preview, generate and rebuild one
     `/page-templates/${template.uuid}`,
     {
       displayName: 'Article',
-      contentDefinition: PAGE_CDL_LOCALIZED,
+      ...cdlFields(PAGE_CDL_LOCALIZED),
       channelSources: { html: PAGE_HTML },
       outputPath: { html: '{locale}/{folder}{uid}.{ext}' },
     },

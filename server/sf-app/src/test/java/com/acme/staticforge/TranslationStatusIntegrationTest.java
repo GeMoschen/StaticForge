@@ -19,6 +19,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -86,7 +87,7 @@ class TranslationStatusIntegrationTest {
                         fx.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Article" + SEQ.incrementAndGet(),
-                        CDL,
+                        CdlSources.split(CDL),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null,
                         false,
@@ -168,13 +169,13 @@ class TranslationStatusIntegrationTest {
         TemplateView section = templateService.create(
                 new CreateTemplateCommand(
                         fx.project().getId(), AssetType.SECTION_TEMPLATE, "Teaser",
-                        "content { editor text headline { label \"Headline\" localizable } }",
+                        CdlSources.split("content { editor text headline { label \"Headline\" localizable } }"),
                         Map.of("html", "<p>$CMS_VALUE(headline)$</p>"), null, false, Map.of()),
                 fx.ctx());
         TemplateView pageTemplate = templateService.create(
                 new CreateTemplateCommand(
                         fx.project().getId(), AssetType.PAGE_TEMPLATE, "WithBody",
-                        "content { }\nbodies { body main { label \"Main\" allow [\"*\"] } }",
+                        CdlSources.split("content { }\nbodies { body main { label \"Main\" allow [\"*\"] } }"),
                         Map.of("html", "$CMS_BODY(main)$"), null, false, Map.of()),
                 fx.ctx());
         AssetVersionView page = pageService.create(new CreatePageCommand("Host", null, pageTemplate.uuid()), fx.ctx());

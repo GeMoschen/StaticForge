@@ -1,6 +1,7 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { cdl } from './cdl';
 
 /**
  * M20 template inheritance journey (feature `docs-e2e`, `M20.5.1`) — "a layout change re-renders every descendant
@@ -162,7 +163,7 @@ function templates(page: Page) {
 async function createTemplateInUi(
   page: Page,
   name: string,
-  cdl: string,
+  definition: string,
   abstractTemplate: boolean,
   htmlSource: string,
 ): Promise<void> {
@@ -172,25 +173,30 @@ async function createTemplateInUi(
   await page.locator('sf-create-asset-dialog').getByRole('button', { name: /create/i }).click();
   await expect(screen.locator('.detail__head h3')).toHaveText(name);
 
-  await screen.getByLabel('Content definition (CDL)').fill(cdl);
+  // One tab per CDL section (M34).
+  const sections = cdl(definition);
+  await screen.getByRole('textbox', { name: 'Content definition (CDL) — Content' }).fill(sections.contentCdl);
+  if (sections.bodiesCdl) {
+    await screen.getByRole('tab', { name: /^Bodies/ }).click();
+    await screen.getByRole('textbox', { name: 'Content definition (CDL) — Bodies' }).fill(sections.bodiesCdl);
+    await screen.getByRole('tab', { name: /^Content/ }).click();
+  }
   if (abstractTemplate) {
     await screen.getByRole('checkbox', { name: 'Abstract' }).check();
   }
-  const savedDefinition = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/page-templates/'));
-  await screen.getByRole('button', { name: 'Save template', exact: true }).click();
-  expect((await savedDefinition).status()).toBe(200);
 
-  const addedChannel = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/channels/html'));
+  // Adding a channel only stages it; the one Save writes the definition and the channel in one request.
   await screen.getByRole('combobox', { name: 'Add channel' }).selectOption('html');
-  expect((await addedChannel).status()).toBe(200);
-
-  const channel = screen.getByRole('textbox', { name: /^OCTL source for channel / });
+  const channel = screen.getByRole('textbox', { name: 'OCTL source for channel html' });
   await expect(channel).toBeVisible();
   await channel.fill(htmlSource);
-  const savedChannel = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/channels/html'));
-  await screen.getByRole('button', { name: 'Save channel', exact: true }).click();
-  const channelResponse = await savedChannel;
-  expect(channelResponse.status(), await channelResponse.text()).toBe(200);
+  await expect(screen.getByRole('tab', { name: /^html/ })).toContainText('(unsaved)');
+  const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/page-templates/'));
+  await screen.getByRole('button', { name: 'Save template', exact: true }).click();
+  const response = await saved;
+  expect(response.status(), await response.text()).toBe(200);
+  expect(JSON.parse(response.request().postData() ?? '{}').channelSources).toEqual({ html: htmlSource });
+  await expect(screen.getByRole('button', { name: 'Save template', exact: true })).toBeDisabled();
 }
 
 test.beforeEach(() => {
@@ -213,10 +219,10 @@ test('journey: a layout change re-renders every descendant page', async ({ page 
 
     await createTemplateInUi(page, 'Article', ARTICLE_CDL, false, ARTICLE_HTML);
     await expect(screen.getByRole('navigation', { name: 'Inheritance chain' })).toHaveText(/base\s*›\s*docs_layout\s*›\s*article/);
-    await expect(screen.getByRole('region', { name: 'Inherited editors and bodies' })).toContainText('title');
+    await expect(screen.getByRole('region', { name: 'Inherited editors' })).toContainText('title');
 
     // A typo'd block name warns live, with a suggestion; fixing it clears the warning.
-    const channel = screen.getByRole('textbox', { name: /^OCTL source for channel / });
+    const channel = screen.getByRole('textbox', { name: 'OCTL source for channel html' });
     await channel.fill(ARTICLE_HTML.replace('$CMS_BLOCK(content)$', '$CMS_BLOCK(contnet)$'));
     await expect(screen.locator('sf-octl-editor .octl-editor__diagnostics')).toContainText('SF-TPL-0157', { timeout: 10_000 });
     await expect(screen.locator('sf-octl-editor .octl-editor__diagnostics')).toContainText("did you mean 'content'");
@@ -278,7 +284,9 @@ test('journey: a layout change re-renders every descendant page', async ({ page 
       `/page-templates/${current.uuid}`,
       {
         displayName: current.displayName,
-        contentDefinition: current.contentDefinition,
+        contentCdl: current.contentCdl,
+        bodiesCdl: current.bodiesCdl,
+        rulesCdl: current.rulesCdl,
         channelSources: { html: BASE_HTML.replace('footer v1', 'footer v2') },
         outputPath: current.outputPath,
         abstract: true,
@@ -295,9 +303,9 @@ test('journey: a layout change re-renders every descendant page', async ({ page 
     await navigate(page, `/p/${api.projectKey}/templates`);
     await screen.getByRole('treeitem', { name: /Base/ }).first().click();
     await expect(screen.locator('.detail__head h3')).toHaveText('Base');
-    await screen.getByLabel('Content definition (CDL)').fill(
-      'content {\n  editor text title { label "Title" }\n  editor text summary { label "Summary" }\n}\n',
-    );
+    await screen
+      .getByRole('textbox', { name: 'Content definition (CDL) — Content' })
+      .fill('editor text title { label "Title" }\neditor text summary { label "Summary" }\n');
     const rejected = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/page-templates/'));
     await screen.getByRole('button', { name: 'Save template', exact: true }).click();
     expect((await rejected).status()).toBe(422);
@@ -305,7 +313,7 @@ test('journey: a layout change re-renders every descendant page', async ({ page 
     await expect(notice).toContainText('article');
     await expect(notice).toContainText('SF-CDL-0109');
     await snap(page, 'j6-descendant-rejected');
-    expect((await api.templateByUid('base')).contentDefinition).not.toContain('summary');
+    expect((await api.templateByUid('base')).contentCdl).not.toContain('summary');
   } finally {
     await api.dispose();
   }

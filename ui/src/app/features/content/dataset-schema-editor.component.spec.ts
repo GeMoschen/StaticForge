@@ -17,10 +17,9 @@ import { provideProjectPermissions } from '../../core/project/testing/project-pe
 import { codeOf, codeView, typeCode } from '../../shared/code-editor/code-editor.testing';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 
-const CDL = `content {
-  editor text name { label "Name" required }
-  editor text role { label "Role" }
-}
+/** The dataset's Content section (M34): the editors, without `content { … }`. */
+const CDL = `editor text name { label "Name" required }
+editor text role { label "Role" }
 `;
 
 const HTML_TEMPLATE = '<li>\n  $CMS_VALUE(name)$\n</li>';
@@ -31,7 +30,8 @@ const DATASET = {
   uid: 'team',
   displayName: 'Team',
   description: '',
-  contentDefinition: CDL,
+  contentCdl: CDL,
+  rulesCdl: '',
   compiledDefinition: {
     editors: [
       { name: 'name', type: 'TEXT', label: 'Name' },
@@ -86,7 +86,7 @@ async function setup(options: { role?: string; revision?: number } = {}) {
   });
   // Part of the application's view tree, as in the app: after-render hooks then run after this view rendered.
   TestBed.inject(ApplicationRef).attachView(view.fixture.componentRef.hostView);
-  await screen.findByRole('tab', { name: /Schema \(CDL\)/ });
+  await screen.findByRole('tab', { name: /^Content/ });
   return { ...view, content, templates };
 }
 
@@ -103,6 +103,10 @@ async function openTab(name: RegExp): Promise<void> {
   await screen.findByRole('tabpanel', { name: /Record template/ });
 }
 
+function cdlEditor(section = 'Content'): HTMLElement {
+  return screen.getByRole('textbox', { name: `Record fields (CDL) — ${section}` });
+}
+
 function editor(channel: string): HTMLElement {
   return screen.getByRole('textbox', { name: `Record template for channel ${channel}` });
 }
@@ -110,31 +114,30 @@ function editor(channel: string): HTMLElement {
 describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('shows the schema tab and one record template tab per enabled channel, plus a disabled one holding a template', async () => {
+  it('shows Content and Rules tabs beside one record template tab per enabled channel, plus a disabled one holding a template', async () => {
     await setup();
-    expect(tabNames()).toEqual([
-      'Schema (CDL)',
-      'Record template (html)',
-      'Record template (md)',
-      'Record template (rss) disabled',
-    ]);
-    expect(screen.getByRole('tab', { name: /Schema/ }).getAttribute('aria-selected')).toBe('true');
+    expect(tabNames()).toEqual(['Content', 'Rules', 'html', 'md', 'rss disabled']);
+    expect(screen.getByRole('tab', { name: /^Content/ }).getAttribute('aria-selected')).toBe('true');
+    // The first channel is open next to the schema: both panels show at once (M34).
+    expect(screen.getByRole('tab', { name: /^html/ }).getAttribute('aria-selected')).toBe('true');
+    expect(codeOf(cdlEditor())).toBe(CDL);
 
-    await openTab(/Record template \(html\)/);
+    await openTab(/^html/);
     expect(codeOf(editor('html'))).toBe(HTML_TEMPLATE);
-    expect(screen.getByRole('tab', { name: /Record template \(html\)/ }).getAttribute('aria-selected')).toBe('true');
     // Highlighted as the channel's format (M33 follow-up): detected from the key, or the channel's own choice.
-    expect(document.querySelector('[data-format]')?.getAttribute('data-format')).toBe('HTML');
-    await openTab(/Record template \(md\)/);
-    expect(document.querySelector('[data-format]')?.getAttribute('data-format')).toBe('PLAIN');
+    const formatIn = (channel: string) =>
+      screen.getByRole('tabpanel', { name: `Record template (${channel})` }).querySelector('[data-format]')?.getAttribute('data-format');
+    expect(formatIn('html')).toBe('HTML');
+    await openTab(/^md/);
+    expect(formatIn('md')).toBe('PLAIN');
 
-    await openTab(/Record template \(rss\)/);
+    await openTab(/^rss/);
     expect(screen.getByText(/channel is disabled/)).toBeTruthy();
   });
 
   it('explains a channel without a template: record sets render nothing there', async () => {
     await setup();
-    await openTab(/Record template \(md\)/);
+    await openTab(/^md/);
     expect(screen.getByText('No record template for md')).toBeTruthy();
     expect(screen.getByRole('note').textContent).toContain('$CMS_VALUE(recordset:…)$');
     expect(codeOf(editor('md'))).toBe('');
@@ -144,26 +147,28 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     const { content } = await setup();
     expect(saveButton().disabled).toBe(true);
 
-    await openTab(/Record template \(md\)/);
+    await openTab(/^md/);
     typeCode(editor('md'), '- $CMS_VALUE(name)$');
     await waitFor(() => expect(saveButton().disabled).toBe(false));
-    expect(screen.getByRole('tab', { name: /Record template \(md\)/ }).textContent).toContain('(unsaved)');
+    expect(screen.getByRole('tab', { name: /^md/ }).textContent).toContain('(unsaved)');
 
     // Back to its stored (empty) state: nothing to save again.
     typeCode(editor('md'), '  ');
     await waitFor(() => expect(saveButton().disabled).toBe(true));
 
     typeCode(editor('md'), '- $CMS_VALUE(name)$');
-    fireEvent.click(screen.getByRole('tab', { name: /Schema/ }));
-    const cdl = await screen.findByRole('textbox', { name: /Record fields/ });
-    typeCode(cdl, CDL.replace('role', 'title'));
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Schema/ }).textContent).toContain('(unsaved)'));
+    typeCode(cdlEditor(), CDL.replace('role', 'title'));
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Content/ }).textContent).toContain('(unsaved)'));
+    fireEvent.click(screen.getByRole('tab', { name: /^Rules/ }));
+    typeCode(cdlEditor('Rules'), 'state title requiredWhen "true"');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Rules/ }).textContent).toContain('(unsaved)'));
 
     content.updateDataset.mockReturnValue(
       of({
         ...DATASET,
         revision: 8,
-        contentDefinition: CDL.replace('role', 'title'),
+        contentCdl: CDL.replace('role', 'title'),
+        rulesCdl: 'state title requiredWhen "true"',
         channelTemplates: { html: { source: HTML_TEMPLATE }, md: { source: '- $CMS_VALUE(name)$' }, rss: { source: '<item/>' } },
         recordTemplateDiagnostics: {},
         brokenRecordSets: [],
@@ -174,7 +179,8 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     expect(content.updateDataset).toHaveBeenCalledTimes(1);
     const [, , body, etag] = content.updateDataset.mock.calls[0];
     expect(body).toMatchObject({
-      contentDefinition: CDL.replace('role', 'title'),
+      contentCdl: CDL.replace('role', 'title'),
+      rulesCdl: 'state title requiredWhen "true"',
       channelTemplates: { html: HTML_TEMPLATE, md: '- $CMS_VALUE(name)$', rss: '<item/>' },
     });
     expect(etag).toBe(etagFor(7));
@@ -184,7 +190,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
 
   it('keeps the edited template after a rejected save and shows the diagnostic at its line', async () => {
     const { content } = await setup();
-    await openTab(/Record template \(html\)/);
+    await openTab(/^html/);
     const broken = '<li>\n  $CMS_VALUE(nme)$\n</li>';
     typeCode(editor('html'), broken);
     const diagnostic = { severity: 'ERROR', code: 'SF-TPL-0103', message: 'Unknown editor name: nme', line: 2, column: 14 };
@@ -198,15 +204,15 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
       ),
     );
 
-    // Save from the schema tab: the failing channel's tab opens.
-    fireEvent.click(screen.getByRole('tab', { name: /Schema/ }));
+    // Save with another channel open: the failing channel's tab opens.
+    fireEvent.click(screen.getByRole('tab', { name: /^md/ }));
     fireEvent.click(saveButton());
 
     const area = await screen.findByRole('textbox', { name: 'Record template for channel html' });
     expect(codeOf(area)).toBe(broken);
     expect(screen.getByText(/SF-TPL-0103/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Go to line 2, column 14' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Record template \(html\)/ }).textContent).toMatch(/1\s*errors/);
+    expect(screen.getByRole('tab', { name: /^html/ }).textContent).toMatch(/1\s*error/);
     // The caret moves once the tab switch has rendered (an after-render hook of the application tick).
     await waitFor(() => expect(codeView(area).state.selection.main.head).toBe(broken.indexOf('nme')));
     expect(document.activeElement).toBe(area);
@@ -214,27 +220,31 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     expect(saveButton().disabled).toBe(false);
   });
 
-  it('shows schema errors of a rejected save under the CDL, not in a template tab', async () => {
+  it('shows schema errors of a rejected save on the failing CDL tab, not in a template tab', async () => {
     const { content } = await setup();
-    await openTab(/Record template \(html\)/);
+    await openTab(/^html/);
     typeCode(editor('html'), '<p/>');
     content.updateDataset.mockReturnValue(
       throwError(
         () =>
           new HttpErrorResponse({
             status: 422,
-            error: { diagnostics: [{ severity: 'ERROR', code: 'SF-CDL-0001', message: 'Syntax', line: 1, column: 1 }] },
+            error: {
+              diagnostics: [{ severity: 'ERROR', code: 'SF-CDL-0001', message: 'Syntax', line: 1, column: 1, field: 'rules' }],
+            },
           }),
       ),
     );
     fireEvent.click(saveButton());
-    await screen.findByRole('textbox', { name: /Record fields/ });
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Rules/ }).getAttribute('aria-selected')).toBe('true'));
+    expect(screen.getByRole('tab', { name: /^Rules/ }).textContent).toMatch(/1\s*error/);
     expect(screen.getByText(/SF-CDL-0001/)).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^html/ }).textContent).not.toMatch(/error/);
   });
 
   it('lists the record sets a save broke, each linking to its set, and shows template warnings', async () => {
     const { content } = await setup();
-    await openTab(/Record template \(html\)/);
+    await openTab(/^html/);
     typeCode(editor('html'), '<li>$CMS_VALUE(role)$</li>');
     content.updateDataset.mockReturnValue(
       of({
@@ -267,7 +277,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
 
   it('inserts fields of the schema as edited and the meta names at the caret', async () => {
     await setup();
-    await openTab(/Record template \(md\)/);
+    await openTab(/^md/);
     fireEvent.click(screen.getByRole('button', { name: 'role' }));
     await waitFor(() => expect(codeOf(editor('md'))).toBe('$CMS_VALUE(role)$'));
     fireEvent.click(screen.getByRole('button', { name: '_first' }));
@@ -281,7 +291,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     vi.useFakeTimers();
     try {
       const { templates, fixture } = await setup();
-      fireEvent.click(screen.getByRole('tab', { name: /Record template \(md\)/ }));
+      fireEvent.click(screen.getByRole('tab', { name: /^md/ }));
       fixture.detectChanges();
       templates.validateOctl.mockReturnValue(
         of({ diagnostics: [{ severity: 'ERROR', code: 'SF-TPL-0001', message: 'Unclosed', line: 1, column: 1 }] }),
@@ -293,7 +303,8 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
         source: '$CMS_IF(x)$',
         channelKey: 'md',
         datasetUuid: 'ds-team',
-        contentDefinition: CDL,
+        contentCdl: CDL,
+        rulesCdl: '',
       });
       expect(screen.getByText(/SF-TPL-0001/)).toBeTruthy();
     } finally {
@@ -310,20 +321,20 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
         diagnostics: [{ severity: 'ERROR', code: 'SF-TPL-0103', message: 'Unknown editor: squad', line: 1, column: 1 }],
       };
       templates.validateOctl.mockReturnValue(of(unknownSquad));
-      fireEvent.click(screen.getByRole('tab', { name: /Record template \(html\)/ }));
+      fireEvent.click(screen.getByRole('tab', { name: /^html/ }));
       fixture.detectChanges();
       typeCode(editor('html'), '$CMS_VALUE(squad)$');
       vi.advanceTimersByTime(350);
       fixture.detectChanges();
       expect(screen.getByText(/Unknown editor: squad/)).toBeTruthy();
 
-      // Declare the field on the schema tab, then come back: the template is checked against the new CDL.
-      const withSquad = CDL.replace('content {', 'content {\n  editor text squad { label "Squad" }');
-      fireEvent.click(screen.getByRole('tab', { name: /Schema \(CDL\)/ }));
+      // Declare the field, then come back to the template: it is checked against the new CDL.
+      const withSquad = `editor text squad { label "Squad" }\n${CDL}`;
+      fireEvent.click(screen.getByRole('tab', { name: /^md/ }));
       fixture.detectChanges();
-      typeCode(screen.getByLabelText(/Record fields \(CDL\)/), withSquad);
+      typeCode(cdlEditor(), withSquad);
       templates.validateOctl.mockReturnValue(of({ diagnostics: [] }));
-      fireEvent.click(screen.getByRole('tab', { name: /Record template \(html\)/ }));
+      fireEvent.click(screen.getByRole('tab', { name: /^html/ }));
       vi.advanceTimersByTime(350);
       fixture.detectChanges();
 
@@ -331,7 +342,8 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
         source: '$CMS_VALUE(squad)$',
         channelKey: 'html',
         datasetUuid: 'ds-team',
-        contentDefinition: withSquad,
+        contentCdl: withSquad,
+        rulesCdl: '',
       });
       expect(screen.queryByText(/Unknown editor: squad/)).toBeNull();
     } finally {
@@ -342,13 +354,13 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
   it('is read-only for an editor: templates shown but not editable, no helpers, no save', async () => {
     const { templates } = await setup({ role: 'EDITOR' });
     expect(screen.getByText(/Only a developer can change/)).toBeTruthy();
-    await openTab(/Record template \(html\)/);
+    await openTab(/^html/);
     expect(codeView(editor('html')).state.readOnly).toBe(true);
     expect(screen.queryByRole('group', { name: /Insert/ })).toBeNull();
     expect(saveButton().disabled).toBe(true);
 
     // A channel without a template shows only the explanation.
-    await openTab(/Record template \(md\)/);
+    await openTab(/^md/);
     expect(screen.getByText('No record template for md')).toBeTruthy();
     expect(screen.queryByRole('textbox', { name: 'Record template for channel md' })).toBeNull();
     expect(templates.validateOctl).not.toHaveBeenCalled();
@@ -357,7 +369,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
   it('is read-only in time travel and reads the dataset at the revision', async () => {
     const { content } = await setup({ revision: 4 });
     expect(content.getDataset).toHaveBeenCalledWith('proj', 'ds-team', 4);
-    await openTab(/Record template \(html\)/);
+    await openTab(/^html/);
     expect(codeView(editor('html')).state.readOnly).toBe(true);
     expect(screen.queryByRole('group', { name: /Insert/ })).toBeNull();
     expect(saveButton().disabled).toBe(true);

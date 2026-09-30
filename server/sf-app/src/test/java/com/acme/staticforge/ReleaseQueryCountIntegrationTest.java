@@ -22,6 +22,7 @@ import com.acme.staticforge.release.ReleaseItem;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -76,7 +77,7 @@ class ReleaseQueryCountIntegrationTest {
         Project project = projectService.create(new CreateProjectRequest("relq" + n, "relq" + n, null, "release queries"), user.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "release queries");
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CDL,
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(CDL),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of("html", "{folder}{uid}.{ext}")),
                 ctx);
         AssetVersionView media = mediaService.upload(

@@ -48,6 +48,7 @@ import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -140,11 +141,11 @@ class ReleaseStateIntegrationTest {
         AssetVersionView mediaFolder = folderService.create(null, "Images", FolderScope.MEDIA, fx.ctx());
         AssetVersionView media = mediaService.upload(fx.id(), mediaFolder.uuid(), "hero.png", "image/png", png(), fx.ctx());
         UUID global = globalSetService
-                .create(new CreateGlobalSetCommand(fx.id(), null, "Site", "content { editor text title { label \"Title\" } }"),
+                .create(new CreateGlobalSetCommand(fx.id(), null, "Site", CdlSources.split("content { editor text title { label \"Title\" } }")),
                         fx.ctx())
                 .uuid();
         DatasetView dataset = datasetService.create(
-                new CreateDatasetCommand(fx.id(), null, "Team", "content { editor text name { label \"Name\" } }", "name", "People"),
+                new CreateDatasetCommand(fx.id(), null, "Team", CdlSources.split("content { editor text name { label \"Name\" } }"), "name", "People"),
                 fx.ctx());
         AssetVersionView contentFolder = folderService.create(null, "Staff", FolderScope.CONTENT, fx.ctx());
         UUID set = new RecordSetFixtures(recordSetService).setFor(fx.id(), dataset.uuid(), contentFolder.uuid(), fx.ctx());
@@ -343,7 +344,7 @@ class ReleaseStateIntegrationTest {
 
         templateService.update(
                 template.uuid(),
-                new UpdateTemplateCommand("Article", LOCALIZED_CDL, Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
+                new UpdateTemplateCommand("Article", CdlSources.split(LOCALIZED_CDL), Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null, false, null, false, null),
                 assetService.requireCurrent(fx.id(), template.uuid()).validFromRevision(),
                 fx.ctx());
@@ -468,7 +469,7 @@ class ReleaseStateIntegrationTest {
     private TemplateView template(Fixture fx, String cdl) {
         return templateService.create(
                 new CreateTemplateCommand(
-                        fx.id(), AssetType.PAGE_TEMPLATE, "Article" + SEQ.incrementAndGet(), cdl,
+                        fx.id(), AssetType.PAGE_TEMPLATE, "Article" + SEQ.incrementAndGet(), CdlSources.split(cdl),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"), null, false, Map.of()),
                 fx.ctx());
     }

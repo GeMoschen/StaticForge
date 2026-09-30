@@ -55,7 +55,7 @@ class AssetValueProjectionTest {
         assertThat(reference.has("target")).isFalse();
 
         JsonNode template = AssetValueProjection.project(
-                AssetType.SECTION_TEMPLATE, "teaser", "Teaser", MAPPER.readTree("{\"contentDefinition\":\"x\"}"), false);
+                AssetType.SECTION_TEMPLATE, "teaser", "Teaser", MAPPER.readTree("{\"contentCdl\":\"x\"}"), false);
         assertThat(template.fieldNames()).toIterable().containsExactly("_meta");
         assertThat(AssetValueProjection.project(AssetType.FOLDER, "f", "F", null, false).fieldNames())
                 .toIterable().containsExactly("_meta");
@@ -68,7 +68,7 @@ class AssetValueProjectionTest {
     @Test
     void globalSetExposesItsValuesButNeverItsSchema() throws Exception {
         JsonNode payload = MAPPER.readTree(
-                "{\"contentDefinition\":\"content { editor text title { label \\\"T\\\" } }\","
+                "{\"contentCdl\":\"editor text title { label \\\"T\\\" }\","
                         + "\"compiledDefinition\":{\"editors\":[]},"
                         + "\"content\":{\"title\":\"Acme Outdoor\",\"showBanner\":true}}");
 
@@ -77,7 +77,7 @@ class AssetValueProjectionTest {
         assertThat(root.path("title").asText()).isEqualTo("Acme Outdoor");
         assertThat(root.path("showBanner").asBoolean()).isTrue();
         assertThat(root.path("_meta").path("uid").asText()).isEqualTo("site");
-        assertThat(root.has("contentDefinition") || root.has("compiledDefinition")).isFalse();
+        assertThat(root.has("contentCdl") || root.has("compiledDefinition")).isFalse();
     }
 
     @Test

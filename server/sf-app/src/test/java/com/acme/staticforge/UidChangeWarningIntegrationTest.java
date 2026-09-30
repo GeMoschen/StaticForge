@@ -13,6 +13,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import java.util.Map;
@@ -44,13 +45,13 @@ class UidChangeWarningIntegrationTest {
         TemplateView card = templateService.create(
                 new CreateTemplateCommand(
                         fx.project().getId(), AssetType.SECTION_TEMPLATE, "Card",
-                        "content { editor text title { } }",
+                        CdlSources.split("content { editor text title { } }"),
                         Map.of("html", "<p>$CMS_VALUE(title)$</p>"), null, false, null),
                 fx.ctx());
         TemplateView teaser = templateService.create(
                 new CreateTemplateCommand(
                         fx.project().getId(), AssetType.SECTION_TEMPLATE, "Teaser",
-                        "content { editor text headline { } }",
+                        CdlSources.split("content { editor text headline { } }"),
                         Map.of("html", "<div>$CMS_INCLUDE(section_template:card)$</div>"), null, false, null),
                 fx.ctx());
 

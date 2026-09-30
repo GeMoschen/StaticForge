@@ -5,6 +5,7 @@ import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -47,7 +48,7 @@ public class TemplateHierarchies {
     }
 
     private TemplateHierarchy.TemplateVersion toVersion(long projectId, Asset asset, AssetVersion version) {
-        String cdl = version.getPayload().path("contentDefinition").asText("");
+        CdlSources cdl = CdlSources.of(version.getPayload());
         return new TemplateHierarchy.TemplateVersion(
                 asset.getUuid(),
                 asset.getUid(),

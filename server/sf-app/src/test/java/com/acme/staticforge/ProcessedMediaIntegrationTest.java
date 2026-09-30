@@ -26,6 +26,7 @@ import com.acme.staticforge.revision.DiffService;
 import com.acme.staticforge.revision.FieldChange;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
@@ -415,12 +416,12 @@ class ProcessedMediaIntegrationTest {
     }
 
     private GlobalSetView siteSet(Fixture fx) {
-        GlobalSetView site = globalSetService.create(new CreateGlobalSetCommand(fx.project().getId(), null, "Site", """
+        GlobalSetView site = globalSetService.create(new CreateGlobalSetCommand(fx.project().getId(), null, "Site", CdlSources.split("""
                 content {
                   editor text brandColor { label "Brand color" default "#c00" }
                   editor text title { label "Title" default "Acme" }
                 }
-                """), fx.ctx());
+                """)), fx.ctx());
         assertThat(site.uid()).isEqualTo("site");
         return site;
     }

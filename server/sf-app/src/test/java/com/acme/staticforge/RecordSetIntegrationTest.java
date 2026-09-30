@@ -40,6 +40,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -341,7 +342,7 @@ class RecordSetIntegrationTest {
         // A set's usages are the pages that reference it.
         TemplateView template = templateService.create(
                 new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Team page",
-                        "content { editor reference featured { label \"Featured\" } }",
+                        CdlSources.split("content { editor reference featured { label \"Featured\" } }"),
                         Map.of("html", "<p>team</p>"), null, false, Map.of("html", "{displayNameSlug}.{ext}")),
                 fx.ctx());
         AssetVersionView page = pageService.create(new CreatePageCommand("Team", null, template.uuid()), fx.ctx());
@@ -401,7 +402,7 @@ class RecordSetIntegrationTest {
         record(fx, set(fx, team, null, "Leads"), "Ada");
         record(fx, set(fx, team, null, "Staff"), "Bob");
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Team page", "",
+                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Team page", CdlSources.split(""),
                         Map.of("html", "$CMS_FOR(m : dataset:team, where=\"m._recordSet == 'staff'\")$"
                                 + "$CMS_VALUE(m.name)$@$CMS_VALUE(m._recordSet)$$CMS_END_FOR$"),
                         null, false, Map.of("html", "{displayNameSlug}.{ext}")),
@@ -425,7 +426,7 @@ class RecordSetIntegrationTest {
     }
 
     private DatasetView dataset(Fixture fx, String name, String cdl) {
-        return datasetService.create(new CreateDatasetCommand(fx.project().getId(), null, name, cdl, null, null), fx.ctx());
+        return datasetService.create(new CreateDatasetCommand(fx.project().getId(), null, name, CdlSources.split(cdl), null, null), fx.ctx());
     }
 
     private RecordSetView set(Fixture fx, DatasetView dataset, UUID folder, String name) {

@@ -27,7 +27,7 @@
     </div>
   </aside>
 
-  <section class="templates__detail">
+  <section class="templates__detail" (keydown)="onKeydown($event)">
     <div class="templates__toolbar">
       @if (readOnly()) {
         <span class="templates__toolbar-readonly">{{ readOnlyLabel() }}</span>
@@ -78,6 +78,12 @@
             }
           </div>
           <div class="actions">
+            @if (dirty() && !readOnly()) {
+              <span class="detail__unsaved" role="status">Unsaved changes — the definition and every channel save together.</span>
+            }
+            <sf-button variant="primary" [disabled]="saving() || readOnly() || !dirty()" (click)="saveTemplate()">
+              Save template
+            </sf-button>
             <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete()">Delete</sf-button>
           </div>
         </div>
@@ -139,6 +145,37 @@
             [uid]="d.uid ?? ''"
             (uidChanged)="onUidChanged()"
           />
+          @if (showPaginationPaths()) {
+            <fieldset class="pagination-paths" aria-describedby="pagination-paths-help">
+              <legend class="pagination-paths__legend">Pagination paths</legend>
+              <p id="pagination-paths-help" class="detail__meta pagination-paths__help">
+                Where pages 2, 3, … of a paginated page are written, per channel. Leave blank to write them next to the
+                first page (<code>blog.html</code> → <code>blog-2.html</code>). Placeholders: <code>{{ '{' }}pageNumber{{ '}' }}</code>
+                (required), <code>{{ '{' }}pagePath{{ '}' }}</code> (the first page's path without extension),
+                <code>{{ '{' }}folder{{ '}' }}</code>, <code>{{ '{' }}uid{{ '}' }}</code>, <code>{{ '{' }}ext{{ '}' }}</code>.
+              </p>
+              @for (key of channelKeys(); track key) {
+                <label class="pagination-paths__row">
+                  <span class="pagination-paths__channel">{{ key }}</span>
+                  <input
+                    type="text"
+                    spellcheck="false"
+                    [attr.aria-label]="'Pagination path for channel ' + key"
+                    [attr.aria-invalid]="paginationPathErrors()[key] ? 'true' : null"
+                    [placeholder]="defaultPaginationPath"
+                    [value]="paginationPaths()[key] ?? ''"
+                    [disabled]="readOnly()"
+                    (input)="onPaginationPathInput(key, $event)"
+                  />
+                </label>
+                @if (paginationPathErrors()[key]; as error) {
+                  <span class="diagnostic diagnostic--error" role="alert">{{ key }}: {{ error }}</span>
+                }
+              } @empty {
+                <p class="detail__meta">Add a channel to set its pagination path.</p>
+              }
+            </fieldset>
+          }
         </div>
 
         @if (descendantProblems().length > 0) {
@@ -177,153 +214,119 @@
           </div>
         }
 
-        <div class="panel">
-          @if (inheritedGroups().length > 0) {
-            <section class="inheritance__inherited" aria-label="Inherited editors and bodies">
-              <h4>Inherited (read-only — edit them on the template that declares them)</h4>
-              @for (group of inheritedGroups(); track group.uid) {
-                <div class="inheritance__group">
-                  <span class="inheritance__from">from
-                    @if (group.uuid) {
-                      <button type="button" class="inheritance__crumb" (click)="openTemplate(group.uuid)">{{ group.uid }}</button>
-                    } @else {
-                      <span>{{ group.uid }}</span>
-                    }
-                  </span>
-                  @if (group.editors.length > 0) {
-                    <span>Editors: <code>{{ group.editors.join(', ') }}</code></span>
-                  }
-                  @if (group.bodies.length > 0) {
-                    <span>Bodies: <code>{{ group.bodies.join(', ') }}</code></span>
-                  }
-                </div>
-              }
-            </section>
-          }
-          <sf-field
-            label="Content definition (CDL)"
-            hint="Declares the editors this template exposes."
-          >
-            <sf-code-editor
-              language="cdl"
+        <div class="editors">
+          <section class="panel editors__panel" aria-labelledby="cdl-heading">
+            <h4 id="cdl-heading" class="editors__heading">Content definition (CDL)</h4>
+            <sf-cdl-sections-editor
               label="Content definition (CDL)"
-              [value]="contentDefinition()"
+              [value]="sections()"
+              [saved]="savedSections()"
+              [sections]="cdlTabs()"
+              [selected]="cdlTab()"
               [diagnostics]="cdlDiagnostics()"
               [readOnly]="readOnly()"
               [names]="editorNames()"
-              (valueChange)="onContentDefinitionInput($event)"
-            />
-          </sf-field>
-          @if (showPaginationPaths()) {
-            <fieldset class="pagination-paths" aria-describedby="pagination-paths-help">
-              <legend class="pagination-paths__legend">Pagination paths</legend>
-              <p id="pagination-paths-help" class="detail__meta pagination-paths__help">
-                Where pages 2, 3, … of a paginated page are written, per channel. Leave blank to write them next to the
-                first page (<code>blog.html</code> → <code>blog-2.html</code>). Placeholders: <code>{{ '{' }}pageNumber{{ '}' }}</code>
-                (required), <code>{{ '{' }}pagePath{{ '}' }}</code> (the first page's path without extension),
-                <code>{{ '{' }}folder{{ '}' }}</code>, <code>{{ '{' }}uid{{ '}' }}</code>, <code>{{ '{' }}ext{{ '}' }}</code>.
-              </p>
-              @for (key of channelKeys(); track key) {
-                <label class="pagination-paths__row">
-                  <span class="pagination-paths__channel">{{ key }}</span>
-                  <input
-                    type="text"
-                    spellcheck="false"
-                    [attr.aria-label]="'Pagination path for channel ' + key"
-                    [attr.aria-invalid]="paginationPathErrors()[key] ? 'true' : null"
-                    [placeholder]="defaultPaginationPath"
-                    [value]="paginationPaths()[key] ?? ''"
-                    [disabled]="readOnly()"
-                    (input)="onPaginationPathInput(key, $event)"
-                  />
-                </label>
-                @if (paginationPathErrors()[key]; as error) {
-                  <span class="diagnostic diagnostic--error" role="alert">{{ key }}: {{ error }}</span>
-                }
-              } @empty {
-                <p class="detail__meta">Add a channel to set its pagination path.</p>
+              [hints]="cdlHints"
+              (selectedChange)="cdlTab.set($event)"
+              (sectionChange)="onSectionInput($event)"
+            >
+              @if (inheritedEditorGroups().length > 0) {
+                <section sfCdlContent class="inheritance__inherited" aria-label="Inherited editors">
+                  <h5>Inherited editors (read-only — edit them on the template that declares them)</h5>
+                  @for (group of inheritedEditorGroups(); track group.uid) {
+                    <div class="inheritance__group">
+                      <span class="inheritance__from">from
+                        @if (group.uuid) {
+                          <button type="button" class="inheritance__crumb" (click)="openTemplate(group.uuid)">{{ group.uid }}</button>
+                        } @else {
+                          <span>{{ group.uid }}</span>
+                        }
+                      </span>
+                      <code>{{ group.editors.join(', ') }}</code>
+                    </div>
+                  }
+                </section>
               }
-            </fieldset>
-          }
-          <div class="actions">
-            <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>
-            <sf-button variant="primary" [disabled]="saving() || readOnly()" (click)="saveDefinition()">
-              Save template
-            </sf-button>
-          </div>
-        </div>
+              @if (inheritedBodyGroups().length > 0) {
+                <section sfCdlBodies class="inheritance__inherited" aria-label="Inherited bodies">
+                  <h5>Inherited bodies (read-only — edit them on the template that declares them)</h5>
+                  @for (group of inheritedBodyGroups(); track group.uid) {
+                    <div class="inheritance__group">
+                      <span class="inheritance__from">from
+                        @if (group.uuid) {
+                          <button type="button" class="inheritance__crumb" (click)="openTemplate(group.uuid)">{{ group.uid }}</button>
+                        } @else {
+                          <span>{{ group.uid }}</span>
+                        }
+                      </span>
+                      <code>{{ group.bodies.join(', ') }}</code>
+                    </div>
+                  }
+                </section>
+              }
+            </sf-cdl-sections-editor>
+            <div class="actions">
+              <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>
+            </div>
+          </section>
 
-        @if (cdlDiagnostics().length > 0) {
-          <div class="diagnostics" aria-live="polite">
-            @for (diag of cdlDiagnostics(); track $index) {
-              <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
-                {{ diag.severity }} {{ diag.code }} @if (diag.line != null) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
-              </div>
-            }
-          </div>
-        }
-
-        <div class="panel">
-          <!-- Not an sf-field: its <label> would forward a click in the editor to the first channel tab. -->
-          <div class="channels" role="group" aria-labelledby="channels-label">
-            <span id="channels-label" class="channels__label">Channel templates (OCTL)</span>
-            <span class="channels__hint">Per-channel rendering source.</span>
-            @if (channelKeys().length > 0) {
-              <div class="channels__tabs">
-                @for (key of channelKeys(); track key) {
-                  <button
-                    type="button"
-                    class="channels__tab"
-                    [class.channels__tab--active]="key === selectedChannel()"
-                    (click)="selectChannel(key)"
-                  >
-                    {{ key }}
-                  </button>
-                }
-              </div>
-              <sf-octl-editor
-                [label]="'OCTL source for channel ' + selectedChannel()"
-                [value]="channelSource()"
-                [diagnostics]="octlDiagnostics()"
-                [readOnly]="readOnly()"
-                [names]="editorNames()"
-                [format]="channelFormat().format"
-                [svg]="channelFormat().svg"
-                (valueChange)="onChannelInput($event)"
-              />
-              <div class="actions">
-                <sf-button
-                  variant="primary"
-                  [disabled]="channelSaving() || readOnly()"
-                  (click)="saveChannel()"
+          <section class="panel editors__panel" aria-labelledby="channels-heading">
+            <h4 id="channels-heading" class="editors__heading">Channel templates (OCTL)</h4>
+            <sf-tabs
+              label="Channel templates (OCTL)"
+              [tabs]="channelTabs()"
+              [selected]="selectedChannel()"
+              (selectTab)="selectChannel($event)"
+            >
+              @if (availableChannels().length > 0) {
+                <select
+                  class="channels__select"
+                  aria-label="Add channel"
+                  [disabled]="readOnly()"
+                  (change)="onAddChannel($event)"
                 >
-                  Save channel
-                </sf-button>
-                <sf-button variant="ghost" [disabled]="channelSaving() || readOnly()" (click)="deleteChannel()">
-                  Remove channel
-                </sf-button>
+                  <option value="">+ Add channel…</option>
+                  @for (channel of availableChannels(); track channel.key) {
+                    <option [value]="channel.key">{{ channel.name ?? channel.key }}</option>
+                  }
+                </select>
+              }
+            </sf-tabs>
+            <!-- One editor per channel, kept while another shows: its undo history never crosses channels. -->
+            @for (key of channelKeys(); track key) {
+              <div class="channels" role="tabpanel" [attr.aria-label]="'Channel ' + key" [hidden]="key !== selectedChannel()">
+                <span class="channels__hint">How this template renders in the {{ key }} channel.</span>
+                <sf-octl-editor
+                  [label]="'OCTL source for channel ' + key"
+                  [value]="channelSources()[key]"
+                  [diagnostics]="channelDiagnostics(key)"
+                  [readOnly]="readOnly()"
+                  [names]="editorNames()"
+                  [format]="channelFormats()[key].format"
+                  [svg]="channelFormats()[key].svg"
+                  (valueChange)="onChannelInput($event, key)"
+                />
+                <div class="actions">
+                  <sf-button variant="ghost" [disabled]="readOnly()" (click)="removeChannel()">
+                    Remove channel
+                  </sf-button>
+                </div>
               </div>
-            } @else {
+            } @empty {
               <p class="detail__meta">No channels configured.</p>
             }
-          </div>
-
-          @if (availableChannels().length > 0) {
-            <div class="inline">
-              <select
-                class="channels__select"
-                aria-label="Add channel"
-                [disabled]="readOnly()"
-                (change)="onAddChannel($event)"
-                [value]="''"
-              >
-                <option value="">Add channel…</option>
-                @for (channel of availableChannels(); track channel.key) {
-                  <option [value]="channel.key">{{ channel.name ?? channel.key }}</option>
+            @if (removedChannels().length > 0) {
+              <p class="channels__removed" role="status">
+                Removed when you save:
+                @for (channel of removedChannels(); track channel) {
+                  <span class="channels__removed-item">
+                    <code>{{ channel }}</code>
+                    <button type="button" class="inheritance__crumb" [disabled]="readOnly()" (click)="restoreChannel(channel)">Undo</button>
+                  </span>
                 }
-              </select>
-            </div>
-          }
+              </p>
+            }
+          </section>
         </div>
 
         @if (d.uuid; as templateUuid) {

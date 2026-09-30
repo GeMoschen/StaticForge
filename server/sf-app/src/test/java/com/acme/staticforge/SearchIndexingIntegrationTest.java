@@ -34,6 +34,7 @@ import com.acme.staticforge.search.extract.ExtractionContext;
 import com.acme.staticforge.search.extract.IndexableAsset;
 import com.acme.staticforge.search.extract.PageTextExtractor;
 import com.acme.staticforge.search.extract.SearchTextExtractor;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.UserService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
@@ -259,7 +260,7 @@ class SearchIndexingIntegrationTest {
     void templateRenameCascadeKeepsMigratedValuesSearchable() {
         SearchFixtures.Fixture fx = fixtures.project("rename");
         TemplateView template = templates.create(new com.acme.staticforge.asset.template.CreateTemplateCommand(
-                fx.projectId(), AssetType.PAGE_TEMPLATE, "Story", "content { editor text title { label \"Title\" } }",
+                fx.projectId(), AssetType.PAGE_TEMPLATE, "Story", CdlSources.split("content { editor text title { label \"Title\" } }"),
                 java.util.Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false,
                 java.util.Map.of("html", "{displayNameSlug}.{ext}")), fx.ctx());
         AssetVersionView created = pages.create(new CreatePageCommand("Tale", null, template.uuid()), fx.ctx());

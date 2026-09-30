@@ -18,6 +18,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -59,7 +60,7 @@ class TemplateServiceTest {
                         fx.project().getId(),
                         AssetType.SECTION_TEMPLATE,
                         "Teaser",
-                        "content { editor text headline { required } }",
+                        CdlSources.split("content { editor text headline { required } }"),
                         Map.of("html", "<h2>$CMS_VALUE(headline)$</h2>"),
                         "Hero",
                         false,
@@ -72,7 +73,7 @@ class TemplateServiceTest {
         AssetVersionView current = assetService.requireCurrent(fx.project().getId(), created.uuid());
         String compiledHash = current.payload().path("channelTemplates").path("html").path("compiledHash").asText();
         assertThat(compiledHash).isNotEmpty();
-        assertThat(current.payload().path("contentDefinition").asText()).contains("headline");
+        assertThat(current.payload().path("contentCdl").asText()).contains("headline");
     }
 
     @Test
@@ -84,7 +85,7 @@ class TemplateServiceTest {
                                 fx.project().getId(),
                                 AssetType.SECTION_TEMPLATE,
                                 "Broken",
-                                "content { editor text headline { required } }",
+                                CdlSources.split("content { editor text headline { required } }"),
                                 Map.of("html", "$CMS_VALUE(missing)$"),
                                 null,
                                 false,
@@ -102,7 +103,7 @@ class TemplateServiceTest {
                         fx.project().getId(),
                         AssetType.SECTION_TEMPLATE,
                         "Teaser",
-                        "content { editor text headline { required } }",
+                        CdlSources.split("content { editor text headline { required } }"),
                         Map.of("html", "<h2>$CMS_VALUE(headline)$</h2>"),
                         null,
                         false,
@@ -128,7 +129,7 @@ class TemplateServiceTest {
                         fx.project().getId(),
                         AssetType.SECTION_TEMPLATE,
                         "Card",
-                        "content { editor text headline {} }",
+                        CdlSources.split("content { editor text headline {} }"),
                         Map.of(),
                         null,
                         false,
@@ -144,7 +145,7 @@ class TemplateServiceTest {
                 section.uuid(),
                 new UpdateTemplateCommand(
                         "Card",
-                        "content { editor text title { renamedFrom \"headline\" } }",
+                        CdlSources.split("content { editor text title { renamedFrom \"headline\" } }"),
                         Map.of(),
                         null,
                         false,

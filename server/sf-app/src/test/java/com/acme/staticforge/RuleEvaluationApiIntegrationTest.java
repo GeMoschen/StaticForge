@@ -22,6 +22,7 @@ import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -210,10 +211,10 @@ class RuleEvaluationApiIntegrationTest {
         Fixture fx = newFixture(false);
         TemplateView section = templateService.create(new CreateTemplateCommand(
                 fx.project().getId(), AssetType.SECTION_TEMPLATE, "Teaser " + SEQ.incrementAndGet(),
-                """
+                CdlSources.split("""
                 content { editor text headline { } }
                 rules { rule "headline" on headline { level warning scope [edit] assert "!isEmpty(value)" message { en "Headline!" } } }
-                """,
+                """),
                 Map.of("html", "<div>$CMS_VALUE(headline)$</div>"), null, false, null), fx.ctx());
 
         ObjectNode request = objectMapper.createObjectNode();
@@ -358,7 +359,7 @@ class RuleEvaluationApiIntegrationTest {
                     "de", Map.of(), false), true, ctx);
         }
         TemplateView pageTemplate = templateService.create(new CreateTemplateCommand(
-                project.getId(), AssetType.PAGE_TEMPLATE, "Page " + n, CDL,
+                project.getId(), AssetType.PAGE_TEMPLATE, "Page " + n, CdlSources.split(CDL),
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, null), ctx);
         return new Fixture(project, admin, ctx, pageTemplate);
     }

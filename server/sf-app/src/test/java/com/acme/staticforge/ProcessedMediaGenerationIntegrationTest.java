@@ -36,6 +36,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -257,12 +258,12 @@ class ProcessedMediaGenerationIntegrationTest {
     // ------------------------------------------------------------------
 
     private GlobalSetView siteSet(Fixture fx, String brandColor, String title) {
-        GlobalSetView site = globalSetService.create(new CreateGlobalSetCommand(fx.project().getId(), null, "Site", """
+        GlobalSetView site = globalSetService.create(new CreateGlobalSetCommand(fx.project().getId(), null, "Site", CdlSources.split("""
                 content {
                   editor text brandColor { label "Brand color" }
                   editor text title { label "Title" }
                 }
-                """), fx.ctx());
+                """)), fx.ctx());
         ObjectNode values = mapper.createObjectNode().put("brandColor", brandColor).put("title", title);
         return globalSetService.updateValues(site.uuid(), values, site.revision(), fx.ctx());
     }
@@ -277,7 +278,7 @@ class ProcessedMediaGenerationIntegrationTest {
 
     private AssetVersionView page(Fixture fx, String name, String html) {
         TemplateView template = templateService.create(new CreateTemplateCommand(
-                fx.project().getId(), AssetType.PAGE_TEMPLATE, name + " Template", "", Map.of("html", html), null, false,
+                fx.project().getId(), AssetType.PAGE_TEMPLATE, name + " Template", CdlSources.split(""), Map.of("html", html), null, false,
                 Map.of("html", "{displayNameSlug}.{ext}")), fx.ctx());
         return pageService.create(new CreatePageCommand(name, null, template.uuid()), fx.ctx());
     }

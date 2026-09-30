@@ -28,6 +28,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.revision.ProjectRestoreService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -220,7 +221,7 @@ class ReferenceMaterializationIntegrationTest {
         AssetVersionView media = media(fx, "hero");
         TemplateView section = templateService.create(
                 new CreateTemplateCommand(fx.project().getId(), AssetType.SECTION_TEMPLATE, "Card",
-                        "content { editor text image {} }", Map.of(), null, false, null),
+                        CdlSources.split("content { editor text image {} }"), Map.of(), null, false, null),
                 fx.ctx());
         List<AssetVersionView> pages = List.of(
                 createPage(fx, pageWithImageSection(template.uuid(), section.uuid(), media.uuid())),
@@ -228,7 +229,7 @@ class ReferenceMaterializationIntegrationTest {
 
         TemplateView renamed = templateService.update(
                 section.uuid(),
-                new UpdateTemplateCommand("Card", "content { editor text hero { renamedFrom \"image\" } }",
+                new UpdateTemplateCommand("Card", CdlSources.split("content { editor text hero { renamedFrom \"image\" } }"),
                         Map.of("html", "$CMS_REF(page:" + pages.get(0).uid() + ")$"), null, false, null),
                 section.validFromRevision(),
                 fx.ctx());
@@ -261,13 +262,13 @@ class ReferenceMaterializationIntegrationTest {
     void templateSaveWritesOctlEdgesPerChannelAndClosesRemovedOnes() {
         Fixture fx = newFixture();
         TemplateView teaser = templateService.create(
-                new CreateTemplateCommand(fx.project().getId(), AssetType.SECTION_TEMPLATE, "Teaser", "",
+                new CreateTemplateCommand(fx.project().getId(), AssetType.SECTION_TEMPLATE, "Teaser", CdlSources.split(""),
                         Map.of("html", "<p>teaser</p>"), null, false, null),
                 fx.ctx());
         AssetVersionView about = createPage(fx, pagePayload(pageTemplate(fx).uuid()));
 
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Landing", "",
+                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Landing", CdlSources.split(""),
                         Map.of(
                                 "html", "<main>$CMS_INCLUDE(section_template:" + teaser.uid() + ")$</main>",
                                 "markdown", "[About]($CMS_REF(page:" + about.uid() + ")$)"),
@@ -292,7 +293,7 @@ class ReferenceMaterializationIntegrationTest {
     void navRootReferenceWritesAnOctlRefToTheNavigationRoot() {
         Fixture fx = newFixture();
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Nav", "",
+                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, "Nav", CdlSources.split(""),
                         Map.of("html", "<nav>$CMS_NAVIGATION(nav:root)$</nav>"), null, false, null),
                 fx.ctx());
 

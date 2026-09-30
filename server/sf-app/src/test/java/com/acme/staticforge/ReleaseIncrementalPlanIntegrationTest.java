@@ -49,6 +49,7 @@ import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.release.ReleaseStateMigration;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -298,7 +299,7 @@ class ReleaseIncrementalPlanIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String cdl, String html, String outputPath) {
         return templateService.create(
-                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, cdl, Map.of("html", html), null, false,
+                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl), Map.of("html", html), null, false,
                         Map.of("html", outputPath)),
                 fx.ctx());
     }

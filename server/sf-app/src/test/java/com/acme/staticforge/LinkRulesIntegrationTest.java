@@ -43,6 +43,7 @@ import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.user.UserService;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -272,7 +273,7 @@ class LinkRulesIntegrationTest {
         releaseFixtures.releaseAll(fx.projectId());
         // Templates are live: making the title required leaves the released article incomplete (SF-GEN-0120).
         templateService.update(article.uuid(), new UpdateTemplateCommand("Article",
-                "content { editor text title { required } }", Map.of("html", articleHtml), null, false,
+                CdlSources.split("content { editor text title { required } }"), Map.of("html", articleHtml), null, false,
                 Map.of("html", "{displayNameSlug}.{ext}"), false, Map.of()),
                 templateService.get(fx.projectId(), article.uuid()).validFromRevision(), fx.ctx());
         q.configure(fx, Map.of(HeldBackTargetRule.CODE, QualitySeverity.ERROR));

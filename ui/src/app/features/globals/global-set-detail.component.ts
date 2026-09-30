@@ -20,7 +20,17 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfContentFormComponent } from '../forms/sf-content-form.component';
-import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
+import {
+  EMPTY_SECTIONS,
+  firstSectionWithErrors,
+  isSaveShortcut,
+  sectionsEqual,
+  sectionsOf,
+  type CdlSection,
+  type CdlSections,
+} from '../../shared/code-editor/cdl-sections';
+import { SfCdlSectionsEditorComponent } from '../../shared/components/sf-cdl-sections-editor.component';
+import { declaredPaths } from '../../shared/code-editor/completions';
 import { FormBuilderService } from '../forms/form-builder.service';
 import type { ContentDefinition } from '../forms/form.model';
 import type { EditingLocale } from '../forms/l10n.util';
@@ -34,6 +44,9 @@ import type { ReleaseMode } from '../release/release-choice.util';
 import { isOnline } from '../release/release-status.util';
 
 const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
+
+/** A property set's CDL tabs: a set has no page, so no bodies. */
+const SET_SECTIONS: readonly CdlSection[] = ['content', 'rules'];
 
 /** A field-level validation finding from a rejected save (`ContentIssue` on the wire). */
 interface ContentIssue {
@@ -49,19 +62,20 @@ interface ContentIssue {
  * One global property set, in two tabs.
  *
  * <p><b>Values</b> renders the set's `compiledDefinition` through the same dynamic form engine the
- * page editor uses, and saves explicitly (not autosave — a set is read by every page that
- * references it, so a half-typed title should not reach a preview). <b>Schema</b> edits the CDL
- * with live diagnostics, mirroring the templates screen.
+ * page editor uses. <b>Schema</b> edits the CDL — a Content and a Rules tab (M34) — with live
+ * diagnostics, mirroring the templates screen.
  *
- * <p>The split is a permission boundary, not a layout choice: declaring fields is a `DEVELOPER`
- * act, filling them in an `EDITOR` one, and the server enforces exactly that per endpoint. The
- * disabled controls here are the immediate feedback; the 403 is the real guard.
+ * <p>One Save writes both (M34): not autosave — a set is read by every page that references it, so a
+ * half-typed title should not reach a preview. Values alone go to the values endpoint; a schema change
+ * sends the edited values along, so schema and values are one revision. Declaring fields is still a
+ * `DEVELOPER` act and filling them in an `EDITOR` one, which the server enforces per endpoint; the
+ * disabled controls here are the immediate feedback, the 403 the real guard.
  */
 @Component({
   selector: 'sf-global-set-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfCodeEditorComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
+  imports: [SfCdlSectionsEditorComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
   templateUrl: './global-set-detail.component.html',
   styleUrl: './global-set-detail.component.scss',
 })
@@ -96,8 +110,7 @@ export class GlobalSetDetailComponent {
 
   protected readonly tab = signal<'values' | 'schema'>('values');
   protected readonly loading = signal(false);
-  protected readonly savingValues = signal(false);
-  protected readonly savingSchema = signal(false);
+  protected readonly saving = signal(false);
 
   protected readonly detail = signal<GlobalSetDetailView | null>(null);
   protected readonly definition = signal<ContentDefinition>(EMPTY_DEF);
@@ -108,8 +121,32 @@ export class GlobalSetDetailComponent {
    * one language; the fallback hint needs the others (M24.4.1).
    */
   protected readonly storedContent = signal<Record<string, unknown>>({});
-  protected readonly contentDefinition = signal('');
+  /** The schema as edited (M34): content and rules. */
+  protected readonly sections = signal<CdlSections>(EMPTY_SECTIONS);
+  protected readonly savedSections = computed<CdlSections | null>(() => {
+    const detail = this.detail();
+    return detail ? sectionsOf(detail) : null;
+  });
+  protected readonly cdlTabs = SET_SECTIONS;
+  protected readonly cdlTab = signal<CdlSection>('content');
   protected readonly cdlDiagnostics = signal<Diagnostic[]>([]);
+  /** Whether the values form holds edits the last save or load didn't write. */
+  protected readonly valuesDirty = signal(false);
+  private valuesSub: Subscription | null = null;
+
+  /** The fields the Content tab declares, for completion on the Rules tab. */
+  protected readonly declaredNames = computed(() =>
+    declaredPaths(this.sections().content).filter((path) => !path.endsWith('[]')),
+  );
+
+  protected readonly schemaDirty = computed(() => {
+    const saved = this.savedSections();
+    return saved !== null && !sectionsEqual(this.sections(), saved);
+  });
+  /** Anything this user may save: values need `EDITOR`, the schema `DEVELOPER`. */
+  protected readonly dirty = computed(
+    () => (this.valuesDirty() && this.canEditValues()) || (this.schemaDirty() && this.canEditSchema()),
+  );
   protected readonly valueIssues = signal<ContentIssue[]>([]);
 
   /** Live editor rules on the values form (M33.8). */
@@ -144,6 +181,7 @@ export class GlobalSetDetailComponent {
         clearTimeout(this.cdlTimer);
       }
       this.rulesSub?.unsubscribe();
+      this.valuesSub?.unsubscribe();
       this.rules.dispose();
     });
     effect(() => {
@@ -176,7 +214,15 @@ export class GlobalSetDetailComponent {
       rebound.form.disable();
     }
     this.valuesForm.set(rebound.form);
+    this.trackValues(rebound.form, this.valuesDirty());
     this.bindRules(rebound.form);
+  }
+
+  /** Follows the values form's dirty state; `dirty` carries edits kept across a re-bind. */
+  private trackValues(form: FormGroup, dirty: boolean): void {
+    this.valuesSub?.unsubscribe();
+    this.valuesDirty.set(dirty);
+    this.valuesSub = form.valueChanges.subscribe(() => this.valuesDirty.set(dirty || form.dirty));
   }
 
   /** Evaluates the set's rules live while its values can be edited (M33.8). */
@@ -213,9 +259,17 @@ export class GlobalSetDetailComponent {
     this.tab.set('schema');
   }
 
-  protected onContentDefinitionInput(source: string): void {
-    this.contentDefinition.set(source);
+  protected onSectionInput(change: { section: CdlSection; value: string }): void {
+    this.sections.update((sections) => ({ ...sections, [change.section]: change.value }));
     this.scheduleCdlValidation();
+  }
+
+  /** Ctrl+S / ⌘S saves the set (M34). */
+  protected onKeydown(event: KeyboardEvent): void {
+    if (isSaveShortcut(event)) {
+      event.preventDefault();
+      this.save();
+    }
   }
 
   private cdlTimer: ReturnType<typeof setTimeout> | null = null;
@@ -229,7 +283,7 @@ export class GlobalSetDetailComponent {
     this.cdlTimer = setTimeout(() => {
       this.cdlTimer = null;
       const id = ++this.cdlSequence;
-      this.globals.validateCdl(this.projectKey(), this.contentDefinition()).subscribe({
+      this.globals.validateCdl(this.projectKey(), this.sections()).subscribe({
         next: (res) => {
           if (id === this.cdlSequence) {
             this.cdlDiagnostics.set(res.diagnostics ?? []);
@@ -252,52 +306,40 @@ export class GlobalSetDetailComponent {
     );
   }
 
-  protected saveValues(): void {
+  /**
+   * The one Save (M34). A schema change goes to the schema endpoint with the edited values along (when this user may
+   * edit them), so both are one revision; values alone go to the values endpoint.
+   */
+  protected save(): void {
+    const current = this.detail();
     const form = this.valuesForm();
-    const current = this.detail();
-    if (!form || !current?.uuid || !this.canEditValues()) {
+    if (!current?.uuid || !this.dirty() || this.saving() || this.timeTravelling()) {
       return;
     }
-    const content = this.forms.valueOf(this.definition(), form);
-    this.savingValues.set(true);
+    const withValues = this.valuesDirty() && this.canEditValues() && form !== null;
+    const content = withValues ? this.forms.valueOf(this.definition(), form) : undefined;
+    const schema = this.schemaDirty() && this.canEditSchema();
+    this.saving.set(true);
     this.valueIssues.set([]);
-    this.globals
-      .updateContent(this.projectKey(), current.uuid, content, etagFor(current.revision ?? 0))
-      .subscribe({
-        next: (saved) => {
-          this.savingValues.set(false);
-          this.apply(saved);
-          this.toasts.show('Values saved', 'success');
-          this.changed.emit();
-        },
-        error: (err) => this.onSaveError(err, 'values'),
-      });
-  }
-
-  protected saveSchema(): void {
-    const current = this.detail();
-    if (!current?.uuid || !this.canEditSchema()) {
-      return;
-    }
-    this.savingSchema.set(true);
-    this.globals
-      .updateSchema(this.projectKey(), current.uuid, this.contentDefinition(), etagFor(current.revision ?? 0))
-      .subscribe({
-        next: (saved) => {
-          this.savingSchema.set(false);
-          this.cdlDiagnostics.set([]);
-          // The definition changed, so the values form is rebuilt from scratch below — reusing the
-          // FormGroup would leave controls behind for editors the new schema no longer declares.
-          this.apply(saved);
-          this.toasts.show('Schema saved', 'success');
-          this.changed.emit();
-        },
-        error: (err) => this.onSaveError(err, 'schema'),
-      });
+    const request = schema
+      ? this.globals.updateSchema(this.projectKey(), current.uuid, this.sections(), content, etagFor(current.revision ?? 0))
+      : this.globals.updateContent(this.projectKey(), current.uuid, content ?? {}, etagFor(current.revision ?? 0));
+    request.subscribe({
+      next: (saved) => {
+        this.saving.set(false);
+        this.cdlDiagnostics.set([]);
+        // A schema change rebuilds the values form from scratch below — reusing the FormGroup would leave
+        // controls behind for editors the new schema no longer declares.
+        this.apply(saved);
+        this.toasts.show(schema && withValues ? 'Schema and values saved' : schema ? 'Schema saved' : 'Values saved', 'success');
+        this.changed.emit();
+      },
+      error: (err) => this.onSaveError(err),
+    });
   }
 
   protected validateCdl(): void {
-    this.globals.validateCdl(this.projectKey(), this.contentDefinition()).subscribe({
+    this.globals.validateCdl(this.projectKey(), this.sections()).subscribe({
       next: (res) => {
         const diagnostics = res.diagnostics ?? [];
         this.cdlDiagnostics.set(diagnostics);
@@ -366,7 +408,7 @@ export class GlobalSetDetailComponent {
 
   private apply(detail: GlobalSetDetailView): void {
     this.detail.set(detail);
-    this.contentDefinition.set(detail.contentDefinition ?? '');
+    this.sections.set(sectionsOf(detail));
     const definition = toDefinition(detail.compiledDefinition);
     this.definition.set(definition);
     this.storedContent.set((detail.content ?? {}) as Record<string, unknown>);
@@ -375,17 +417,18 @@ export class GlobalSetDetailComponent {
       form.disable();
     }
     this.valuesForm.set(form);
+    this.trackValues(form, false);
     this.bindRules(form);
   }
 
   /**
    * A rejected save. A `409` means someone else wrote a newer version: the set is reloaded so the
    * screen shows what is actually stored rather than silently retrying over a stranger's edit. A
-   * `422` carries either CDL diagnostics (schema) or field-level `issues` (values).
+   * `422` carries either CDL diagnostics (the schema tab and the failing section open) or field-level `issues`
+   * (the values tab opens). Every edit is kept.
    */
-  private onSaveError(err: unknown, what: 'values' | 'schema'): void {
-    this.savingValues.set(false);
-    this.savingSchema.set(false);
+  private onSaveError(err: unknown): void {
+    this.saving.set(false);
     if (!(err instanceof HttpErrorResponse)) {
       this.toasts.show('Could not save — try again in a moment.', 'error');
       return;
@@ -396,19 +439,25 @@ export class GlobalSetDetailComponent {
       return;
     }
     const body = (err.error ?? {}) as { diagnostics?: Diagnostic[]; issues?: ContentIssue[] };
-    if (what === 'schema' && Array.isArray(body.diagnostics) && body.diagnostics.length > 0) {
+    if (Array.isArray(body.diagnostics) && body.diagnostics.length > 0) {
       this.cdlDiagnostics.set(body.diagnostics);
-      this.toasts.show('CDL has compile errors — see the diagnostics below.', 'error');
+      this.tab.set('schema');
+      const section = firstSectionWithErrors(body.diagnostics, SET_SECTIONS);
+      if (section) {
+        this.cdlTab.set(section);
+      }
+      this.toasts.show(`The schema has compile errors — see the ${section ?? 'content'} tab.`, 'error');
       return;
     }
     if (Array.isArray(body.issues) && body.issues.length > 0) {
       this.valueIssues.set(body.issues);
+      this.tab.set('values');
       this.toasts.show('Some values are invalid — see the messages on the fields below.', 'error');
       return;
     }
     if (err.status === 403) {
       this.toasts.show(
-        what === 'schema'
+        this.schemaDirty()
           ? 'Only a developer can change a property set’s schema.'
           : 'You do not have permission to change these values.',
         'error',

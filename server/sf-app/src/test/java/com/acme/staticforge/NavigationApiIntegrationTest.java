@@ -25,6 +25,7 @@ import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -260,7 +261,7 @@ class NavigationApiIntegrationTest {
                         fx.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         name + " Template " + SEQ.incrementAndGet(),
-                        "content { editor text title { required } }",
+                        CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"),
                         null,
                         false,

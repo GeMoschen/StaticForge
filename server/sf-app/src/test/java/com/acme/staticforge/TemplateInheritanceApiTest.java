@@ -17,6 +17,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -88,7 +89,8 @@ class TemplateInheritanceApiTest {
 
         String body = objectMapper.writeValueAsString(Map.of(
                 "displayName", "Base",
-                "contentDefinition", BASE_CDL,
+                "contentCdl", CdlSources.split(BASE_CDL).content(),
+                "bodiesCdl", CdlSources.split(BASE_CDL).bodies(),
                 "channelSources", Map.of("html", "$CMS_VALUE(title)$$CMS_BODY(main)$"),
                 "abstract", true));
         mvc.perform(put(url(fx, "/page-templates/" + base.uuid()))
@@ -106,7 +108,7 @@ class TemplateInheritanceApiTest {
                         .header("Authorization", fx.bearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "displayName", "Layout", "contentDefinition", "", "channelSources", Map.of(), "abstract", true))))
+                                "displayName", "Layout", "contentCdl", "", "channelSources", Map.of(), "abstract", true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.abstract").value(true))
                 .andReturn().getResponse().getContentAsString();
@@ -162,7 +164,12 @@ class TemplateInheritanceApiTest {
         body.put("source", source);
         body.put("channelKey", "html");
         body.put("templateUuid", templateUuid);
-        body.put("contentDefinition", cdl);
+        if (cdl != null) {
+            CdlSources sections = CdlSources.split(cdl);
+            body.put("contentCdl", sections.content());
+            body.put("bodiesCdl", sections.bodies());
+            body.put("rulesCdl", sections.rules());
+        }
         return mvc.perform(post(url(fx, "/octl/validate"))
                 .header("Authorization", fx.bearer())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -171,7 +178,7 @@ class TemplateInheritanceApiTest {
 
     private TemplateView template(Fixture fx, String name, String cdl, String html, boolean abstractTemplate) {
         return templateService.create(new CreateTemplateCommand(
-                fx.project().getId(), AssetType.PAGE_TEMPLATE, name, cdl, Map.of("html", html), null, false, null, null,
+                fx.project().getId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl), Map.of("html", html), null, false, null, null,
                 abstractTemplate), fx.ctx());
     }
 

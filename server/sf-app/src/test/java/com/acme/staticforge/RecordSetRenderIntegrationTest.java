@@ -42,6 +42,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.diagnostic.Severity;
@@ -170,7 +171,7 @@ class RecordSetRenderIntegrationTest {
         DatasetView team = datasetService.find(fx.projectId(), site.team().uuid(), null).orElseThrow();
         DatasetView broken = datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", TEAM_CDL.replace("editor date joined { label \"Joined\" }", ""), "name", null),
+                new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("editor date joined { label \"Joined\" }", "")), "name", null),
                 team.revision(),
                 fx.ctx());
         assertThat(broken.brokenRecordSets()).extracting(b -> b.uid()).containsExactly("leads");
@@ -196,7 +197,7 @@ class RecordSetRenderIntegrationTest {
         Fixture fx = newFixture();
         DatasetView projects = datasetService.create(
                 new CreateDatasetCommand(fx.projectId(), null, "Project",
-                        "content { editor text name { label \"Name\" } editor link store { label \"Store\" } }", "name", null),
+                        CdlSources.split("content { editor text name { label \"Name\" } editor link store { label \"Store\" } }"), "name", null),
                 fx.ctx());
         UUID set = recordSetService.create(new CreateRecordSetCommand(fx.projectId(), null, projects.uuid(), "projects",
                         "Projects", RecordSetQuery.ALL), fx.ctx())
@@ -244,7 +245,7 @@ class RecordSetRenderIntegrationTest {
                         .containsExactly(DiagnosticCodes.CDL_INVALID_ATTRIBUTE));
 
         DatasetView faq = datasetService.create(
-                new CreateDatasetCommand(fx.projectId(), null, "FAQ", "content { editor text q { label \"Q\" } }", null, null),
+                new CreateDatasetCommand(fx.projectId(), null, "FAQ", CdlSources.split("content { editor text q { label \"Q\" } }"), null, null),
                 fx.ctx());
         RecordSetView questions = recordSetService.create(
                 new CreateRecordSetCommand(fx.projectId(), null, faq.uuid(), "questions", "Questions", RecordSetQuery.ALL), fx.ctx());
@@ -274,7 +275,7 @@ class RecordSetRenderIntegrationTest {
      */
     private Site site(Fixture fx) {
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(fx.projectId(), null, "Team", TEAM_CDL, "name", null, Map.of("html", RECORD_TEMPLATE)),
+                new CreateDatasetCommand(fx.projectId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null, Map.of("html", RECORD_TEMPLATE)),
                 fx.ctx());
         AssetVersionView folder = folderService.create(null, "Team", FolderScope.CONTENT, fx.ctx());
         UUID leads = recordSetService.create(new CreateRecordSetCommand(fx.projectId(), folder.uuid(), team.uuid(), "leads",
@@ -309,14 +310,14 @@ class RecordSetRenderIntegrationTest {
 
     private TemplateView pageTemplate(Fixture fx, String name, String cdl, String html) {
         return templateService.create(
-                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, cdl,
+                new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl),
                         Map.of("html", html), null, false, Map.of("html", "{displayNameSlug}.{ext}")),
                 fx.ctx());
     }
 
     private TemplateView section(Fixture fx, String html) {
         return templateService.create(
-                new CreateTemplateCommand(fx.projectId(), AssetType.SECTION_TEMPLATE, "Section " + SEQ.incrementAndGet(), "",
+                new CreateTemplateCommand(fx.projectId(), AssetType.SECTION_TEMPLATE, "Section " + SEQ.incrementAndGet(), CdlSources.split(""),
                         Map.of("html", html), null, false, Map.of()),
                 fx.ctx());
     }

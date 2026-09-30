@@ -1,4 +1,3 @@
-@use '../../design/interactive';
 @use '../../design/forms';
 @use '../../design/table';
 
@@ -48,25 +47,6 @@
   color: var(--sf-amber-700, #92400e);
 }
 
-.channels__tab {
-  padding: var(--sf-1) var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: transparent;
-  color: var(--sf-slate);
-  font-family: var(--sf-font-mono, monospace);
-  font-size: var(--sf-text-xs);
-  cursor: pointer;
-  @include interactive.sf-interactive;
-}
-
-.channels__tab--active {
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-  border-color: var(--sf-signal);
-  @include interactive.sf-pour-under;
-}
-
 .templates__detail {
   flex: 1;
   min-width: 0;
@@ -110,8 +90,7 @@
 }
 
 .panel input[type='text'],
-.panel textarea,
-.channels__select {
+.panel textarea {
   width: 100%;
   padding: var(--sf-2) var(--sf-3);
   border: 1px solid var(--sf-line);
@@ -153,12 +132,6 @@
 .inline sf-field {
   flex: 1;
   min-width: 12rem;
-}
-
-.channels__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sf-1);
 }
 
 .actions {
@@ -281,3 +254,4 @@ sf-octl-editor {
   --sf-octl-min-height: 14rem;
   --sf-octl-max-height: 32rem;
 }
+

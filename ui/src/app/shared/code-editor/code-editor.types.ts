@@ -38,6 +38,8 @@ export interface CodeEditorController {
   readonly view: EditorView;
   setValue(value: string): void;
   setReadOnly(readOnly: boolean): void;
+  /** Renames the editor for assistive technology (`aria-label`). */
+  setLabel(label: string): void;
   setPlaceholder(text: string): void;
   setDiagnostics(diagnostics: readonly CodeDiagnostic[]): void;
   setInvalid(invalid: boolean): void;

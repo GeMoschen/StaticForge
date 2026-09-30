@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.template;
 
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.octl.OctlResult;
 import com.acme.staticforge.template.octl.ReferenceResolver;
@@ -89,7 +90,7 @@ public class CompiledTemplateCache {
     }
 
     /** The compiled CDL of one template version, cached by {@code (projectId, templateUuid, validFromRevision)}. */
-    public ContentDefinition definition(long projectId, UUID templateUuid, long templateValidFromRevision, String cdlSource) {
+    public ContentDefinition definition(long projectId, UUID templateUuid, long templateValidFromRevision, CdlSources cdlSource) {
         return definitions.get(
                 new DefinitionKey(projectId, templateUuid, templateValidFromRevision, cdlSource),
                 key -> compiler.definition(cdlSource));
@@ -101,7 +102,7 @@ public class CompiledTemplateCache {
             UUID templateUuid,
             long templateValidFromRevision,
             String channel,
-            String cdlSource,
+            CdlSources cdlSource,
             String octlSource,
             ReferenceResolver resolver) {
         return compile(projectId, templateUuid, templateValidFromRevision, channel, cdlSource, octlSource, resolver, null, null);
@@ -123,7 +124,7 @@ public class CompiledTemplateCache {
             UUID templateUuid,
             long templateValidFromRevision,
             String channel,
-            String cdlSource,
+            CdlSources cdlSource,
             String octlSource,
             ReferenceResolver resolver,
             TemplateHierarchy hierarchy,
@@ -147,7 +148,7 @@ public class CompiledTemplateCache {
      * the template's scope.
      *
      * @param datasetValidFromRevision the {@code validFromRevision} of the dataset version whose sources are passed
-     * @param cdlSource the dataset's {@code contentDefinition}
+     * @param cdlSource the dataset's CDL sections
      * @param octlSource the dataset's {@code channelTemplates.<channel>.source}
      */
     public CompiledChannel compileRecordTemplate(
@@ -155,7 +156,7 @@ public class CompiledTemplateCache {
             UUID datasetUuid,
             long datasetValidFromRevision,
             String channel,
-            String cdlSource,
+            CdlSources cdlSource,
             String octlSource,
             ReferenceResolver resolver) {
         ContentDefinition definition = definition(projectId, datasetUuid, datasetValidFromRevision, cdlSource);
@@ -208,10 +209,10 @@ public class CompiledTemplateCache {
         return fresh.compiled;
     }
 
-    private record DefinitionKey(long projectId, UUID templateUuid, long validFromRevision, String cdlSource) {}
+    private record DefinitionKey(long projectId, UUID templateUuid, long validFromRevision, CdlSources cdlSource) {}
 
     private record ChannelKey(
-            long projectId, UUID assetUuid, long validFromRevision, String channel, String cdlSource, String octlSource) {}
+            long projectId, UUID assetUuid, long validFromRevision, String channel, CdlSources cdlSource, String octlSource) {}
 
     private record TextMediaKey(long projectId, UUID mediaUuid, String blobSha256, String channel) {}
 

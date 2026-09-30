@@ -36,6 +36,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -86,7 +87,7 @@ class DatasetIncrementalPlanIntegrationTest {
     void recordAndSchemaChangesRebuildExactlyTheDependentPages() {
         Fixture fx = newFixture();
         DatasetView team = datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null), fx.ctx());
         RecordDetail jane = record(fx, team, "{\"name\":\"Jane\",\"role\":\"lead\"}");
         RecordDetail joe = record(fx, team, "{\"name\":\"Joe\",\"role\":\"dev\"}");
 
@@ -137,7 +138,7 @@ class DatasetIncrementalPlanIntegrationTest {
         baseline = head(fx);
         DatasetView current = datasetService.find(fx.project().getId(), team.uuid(), null).orElseThrow();
         datasetService.update(team.uuid(),
-                new UpdateDatasetCommand("Team", TEAM_CDL.replace("\"Role\"", "\"Team role\""), "name", null),
+                new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("\"Role\"", "\"Team role\"")), "name", null),
                 current.revision(), fx.ctx());
         assertThat(planned(fx, baseline)).containsExactlyInAnyOrder(leads, everyone, scoped);
 
@@ -171,12 +172,12 @@ class DatasetIncrementalPlanIntegrationTest {
     void aChangeReachesALoopThroughTheReferencesOfTheRecordsItSelects() {
         Fixture fx = newFixture();
         DatasetView mentors = datasetService.create(
-                new CreateDatasetCommand(fx.project().getId(), null, "Mentors", TEAM_CDL, "name", null), fx.ctx());
+                new CreateDatasetCommand(fx.project().getId(), null, "Mentors", CdlSources.split(TEAM_CDL), "name", null), fx.ctx());
         RecordDetail ada = record(fx, mentors, "{\"name\":\"Ada\",\"role\":\"mentor\"}");
         DatasetView team = datasetService.create(
                 new CreateDatasetCommand(fx.project().getId(), null, "Team",
-                        "content { editor text name { label \"Name\" } editor text role { label \"Role\" }"
-                                + " editor reference mentor { label \"Mentor\" dataset \"mentors\" } }",
+                        CdlSources.split("content { editor text name { label \"Name\" } editor text role { label \"Role\" }"
+                                + " editor reference mentor { label \"Mentor\" dataset \"mentors\" } }"),
                         "name", null),
                 fx.ctx());
         String mentoredBy = ",\"mentor\":{\"type\":\"ASSET_REF\",\"uuid\":\"" + ada.uuid() + "\",\"assetType\":\"RECORD\"}}";
@@ -234,7 +235,7 @@ class DatasetIncrementalPlanIntegrationTest {
 
     private TemplateView pageTemplate(Fixture fx, String name, String cdl, String html) {
         return templateService.create(
-                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, name, cdl,
+                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl),
                         Map.of("html", html), null, false, Map.of("html", "{displayNameSlug}.{ext}")),
                 fx.ctx());
     }

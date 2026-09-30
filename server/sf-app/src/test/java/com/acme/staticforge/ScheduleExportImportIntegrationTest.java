@@ -43,6 +43,7 @@ import com.acme.staticforge.scheduler.PinPolicy;
 import com.acme.staticforge.scheduler.ScheduleService;
 import com.acme.staticforge.scheduler.ScheduledAction;
 import com.acme.staticforge.scheduler.ScheduledActionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -492,7 +493,7 @@ class ScheduleExportImportIntegrationTest {
                 ? null
                 : targetRepository.save(new GenerationTarget(project.getId(), targetName, TargetType.FILESYSTEM, config(), true));
         TemplateView template = templateService.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE,
-                "Page", localized ? LOCALIZED_CDL : CDL, Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false,
+                "Page", CdlSources.split(localized ? LOCALIZED_CDL : CDL), Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false,
                 Map.of("html", localized ? "{locale}/{folder}{uid}.{ext}" : "{folder}{uid}.{ext}")), ctx);
         projects.add(project.getId());
         return new Fixture(project, admin, owner, template, target);

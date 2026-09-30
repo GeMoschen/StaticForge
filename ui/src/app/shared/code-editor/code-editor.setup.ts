@@ -144,6 +144,7 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
   const editable = new Compartment();
   const placeholders = new Compartment();
   const languages = new Compartment();
+  const attributes = new Compartment();
   let destroyed = false;
   let wanted = `${config.format}:${config.svg}`;
   const readOnlyExtension = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
@@ -156,7 +157,7 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
         languages.of(languageExtensions(config, loadedFormat(config.format, config.svg))),
         editable.of(readOnlyExtension(config.readOnly)),
         placeholders.of(config.placeholder ? placeholderExtension(config.placeholder) : []),
-        EditorView.contentAttributes.of({ 'aria-label': config.label, spellcheck: 'false' }),
+        attributes.of(EditorView.contentAttributes.of({ 'aria-label': config.label, spellcheck: 'false' })),
         EditorView.updateListener.of((update) => {
           // Only edits are reported: text the host put in (`value`) is its own already.
           if (update.docChanged && !update.transactions.some((tr) => tr.annotation(fromHost))) {
@@ -175,6 +176,11 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
     },
     setReadOnly(readOnly) {
       view.dispatch({ effects: editable.reconfigure(readOnlyExtension(readOnly)) });
+    },
+    setLabel(label) {
+      view.dispatch({
+        effects: attributes.reconfigure(EditorView.contentAttributes.of({ 'aria-label': label, spellcheck: 'false' })),
+      });
     },
     setPlaceholder(text) {
       view.dispatch({ effects: placeholders.reconfigure(text ? placeholderExtension(text) : []) });

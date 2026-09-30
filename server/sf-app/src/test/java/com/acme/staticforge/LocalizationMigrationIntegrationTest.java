@@ -30,6 +30,7 @@ import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -128,7 +129,7 @@ class LocalizationMigrationIntegrationTest {
                         fx.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Article" + SEQ.incrementAndGet(),
-                        cdl,
+                        CdlSources.split(cdl),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null,
                         false,
@@ -158,7 +159,7 @@ class LocalizationMigrationIntegrationTest {
         templateService.update(
                 template.uuid(),
                 new UpdateTemplateCommand(
-                        "Article", LOCALIZED_CDL, Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
+                        "Article", CdlSources.split(LOCALIZED_CDL), Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null, false, null, false, null),
                 assetService.requireCurrent(fx.project().getId(), template.uuid()).validFromRevision(),
                 fx.ctx());
@@ -191,7 +192,7 @@ class LocalizationMigrationIntegrationTest {
         templateService.update(
                 template.uuid(),
                 new UpdateTemplateCommand(
-                        "Article", LOCALIZED_CDL, Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
+                        "Article", CdlSources.split(LOCALIZED_CDL), Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null, false, null, false, null),
                 assetService.requireCurrent(fx.project().getId(), template.uuid()).validFromRevision(),
                 fx.ctx());
@@ -224,7 +225,7 @@ class LocalizationMigrationIntegrationTest {
         long expectedRevision =
                 assetService.requireCurrent(fx.project().getId(), template.uuid()).validFromRevision();
         UpdateTemplateCommand plain = new UpdateTemplateCommand(
-                "Article", PLAIN_CDL, Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"), null, false, null, false, null);
+                "Article", CdlSources.split(PLAIN_CDL), Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"), null, false, null, false, null);
 
         assertThatThrownBy(() -> templateService.update(template.uuid(), plain, expectedRevision, fx.ctx()))
                 .isInstanceOf(SfException.class)
@@ -331,12 +332,12 @@ class LocalizationMigrationIntegrationTest {
         TemplateView section = templateService.create(
                 new CreateTemplateCommand(
                         fx.project().getId(), AssetType.SECTION_TEMPLATE, "Teaser",
-                        PLAIN_CDL, Map.of("html", "<p>$CMS_VALUE(headline)$</p>"), null, false, null),
+                        CdlSources.split(PLAIN_CDL), Map.of("html", "<p>$CMS_VALUE(headline)$</p>"), null, false, null),
                 fx.ctx());
         TemplateView pageTemplate = templateService.create(
                 new CreateTemplateCommand(
                         fx.project().getId(), AssetType.PAGE_TEMPLATE, "WithBody",
-                        BODY_CDL, Map.of("html", "$CMS_BODY(main)$"), null, false, null),
+                        CdlSources.split(BODY_CDL), Map.of("html", "$CMS_BODY(main)$"), null, false, null),
                 fx.ctx());
         AssetVersionView page = pageService.create(new CreatePageCommand("Host", null, pageTemplate.uuid()), fx.ctx());
         ObjectNode payload = (ObjectNode) page.payload().deepCopy();
@@ -349,7 +350,7 @@ class LocalizationMigrationIntegrationTest {
         templateService.update(
                 section.uuid(),
                 new UpdateTemplateCommand(
-                        "Teaser", LOCALIZED_CDL, Map.of("html", "<p>$CMS_VALUE(headline)$</p>"), null, false, null),
+                        "Teaser", CdlSources.split(LOCALIZED_CDL), Map.of("html", "<p>$CMS_VALUE(headline)$</p>"), null, false, null),
                 assetService.requireCurrent(fx.project().getId(), section.uuid()).validFromRevision(),
                 fx.ctx());
 
