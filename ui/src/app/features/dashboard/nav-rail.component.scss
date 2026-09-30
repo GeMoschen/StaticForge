@@ -168,3 +168,9 @@
   align-items: center;
   justify-content: center;
 }
+
+.rail__divider {
+  margin: var(--sf-2) var(--sf-3);
+  border-top: 1px solid var(--sf-line);
+  list-style: none;
+}

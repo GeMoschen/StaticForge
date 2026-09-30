@@ -30,6 +30,8 @@ interface NavItem {
   count?: number;
   /** What the count means, for its accessible name. */
   countLabel?: string;
+  /** Draws a divider above the entry, separating the content group from the project group. */
+  dividerBefore?: boolean;
 }
 
 @Component({
@@ -74,9 +76,10 @@ export class NavRailComponent {
     return [
       { label: 'Search', icon: 'search', route: `${base}/search`, hint: 'Search (Ctrl K)' },
       { label: 'Pages', icon: 'description', route: `${base}/pages` },
-      { label: 'Content', icon: 'dataset', route: `${base}/content` },
       { label: 'Media', icon: 'perm_media', route: `${base}/media` },
+      { label: 'Content', icon: 'dataset', route: `${base}/content` },
       { label: 'Navigation', icon: 'account_tree', route: `${base}/navigation` },
+      { label: 'Templates', icon: 'dashboard_customize', route: `${base}/templates` },
       { label: 'Globals', icon: 'tune', route: `${base}/globals` },
       {
         label: 'Changes',
@@ -84,9 +87,9 @@ export class NavRailComponent {
         route: `${base}/changes`,
         count: this.changesCount(),
         countLabel: this.changesCount() === 1 ? 'unreleased change' : 'unreleased changes',
+        dividerBefore: true,
       },
       { label: 'Schedules', icon: 'schedule', route: `${base}/schedules` },
-      { label: 'Templates', icon: 'dashboard_customize', route: `${base}/templates` },
       { label: 'Settings', icon: 'settings', route: `${base}/settings` },
     ];
   });

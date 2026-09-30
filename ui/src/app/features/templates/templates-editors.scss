@@ -39,9 +39,17 @@
   gap: var(--sf-1);
 }
 
-sf-cdl-sections-editor {
+/* The code tabs of both columns share one height: at least 14rem, otherwise the page height less the chrome around them. */
+.editors {
+  --sf-code-height: max(14rem, calc(100dvh - 24rem));
+}
+
+.editors sf-cdl-sections-editor,
+.editors sf-octl-editor {
   --sf-cdl-min-height: 14rem;
-  --sf-cdl-max-height: 32rem;
+  --sf-cdl-max-height: none;
+  --sf-octl-min-height: 14rem;
+  --sf-octl-max-height: none;
 }
 
 .channels__select {

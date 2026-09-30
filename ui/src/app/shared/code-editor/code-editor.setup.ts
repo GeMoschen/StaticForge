@@ -110,6 +110,8 @@ const theme = EditorView.theme({
     // styles: its encapsulation would need the attribute Angular never puts on CodeMirror's elements.
     minHeight: 'var(--sf-code-min-height, 12rem)',
     maxHeight: 'var(--sf-code-max-height, 36rem)',
+    // A host that wants a fixed height (the template editors side by side) sets it; otherwise the editor grows with its text.
+    height: 'var(--sf-code-height, auto)',
   },
   '&.cm-focused': { outline: '2px solid var(--sf-signal)', outlineOffset: '-1px' },
   '.cm-content': { caretColor: 'var(--sf-ink)', fontFamily: 'var(--sf-font-mono)' },

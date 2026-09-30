@@ -12,6 +12,9 @@
 
   <ul class="rail__items">
     @for (item of navItems(); track item.route) {
+      @if (item.dividerBefore) {
+        <li class="rail__divider" role="separator"></li>
+      }
       <li class="rail__item-wrap">
         <a
           class="rail__item"
