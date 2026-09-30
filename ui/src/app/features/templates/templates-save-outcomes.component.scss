@@ -1,0 +1,23 @@
+// The host adds no box of its own: the notices stay direct children of `.detail__scroll`.
+:host {
+  display: contents;
+}
+
+.diagnostic {
+  display: flex;
+  gap: var(--sf-2);
+  padding: var(--sf-1) var(--sf-2);
+  margin-bottom: var(--sf-1);
+  border-radius: var(--sf-radius-sm);
+  font-size: var(--sf-text-xs);
+}
+
+.diagnostic--error {
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+}
+
+.diagnostic--warning {
+  background: color-mix(in srgb, var(--sf-amber, #9c7a2e) 14%, transparent);
+  color: var(--sf-ink);
+}

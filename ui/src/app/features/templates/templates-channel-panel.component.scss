@@ -1,0 +1,64 @@
+// The host adds no box of its own: the panel stays a grid item of `.editors`.
+:host {
+  display: contents;
+}
+
+.channels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+}
+
+.channels__hint {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.channels__warning {
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-amber, #9c7a2e) 14%, transparent);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+}
+
+/* The channel editors: tall enough to work in, sharing the height of the CDL tabs (`--sf-code-height` on `.editors`). */
+sf-octl-editor {
+  --sf-code-min-height: 14rem;
+  --sf-code-max-height: 32rem;
+  --sf-cdl-min-height: 14rem;
+  --sf-cdl-max-height: none;
+  --sf-octl-min-height: 14rem;
+  --sf-octl-max-height: none;
+}
+
+.channels__removed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-2);
+  margin: 0;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.channels__removed-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+}
+
+.channels__select {
+  margin-left: auto;
+  padding: var(--sf-1) var(--sf-2);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-xs);
+}
+
+.channels[hidden] {
+  display: none;
+}

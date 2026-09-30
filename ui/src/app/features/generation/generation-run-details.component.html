@@ -1,0 +1,112 @@
+@let current = run();
+@let tab = store.visibleTab(current);
+<div class="tabs" role="tablist" aria-label="Run details">
+  @for (option of store.detailsTabsOf(current); track option) {
+    <button
+      type="button"
+      role="tab"
+      class="tabs__tab"
+      [id]="'run-' + current.id + '-' + option + '-tab'"
+      [attr.aria-selected]="tab === option"
+      [attr.aria-controls]="'run-' + current.id + '-panel'"
+      [attr.tabindex]="tab === option ? 0 : -1"
+      (click)="store.selectTab(current, option)"
+      (keydown.arrowRight)="store.stepTab(current, 1)"
+      (keydown.arrowLeft)="store.stepTab(current, -1)"
+    >
+      @switch (option) {
+        @case ('summary') { Summary }
+        @case ('pages') { Rebuilt pages }
+        @case ('findings') { Findings }
+      }
+    </button>
+  }
+</div>
+<div
+  role="tabpanel"
+  [id]="'run-' + current.id + '-panel'"
+  [attr.aria-labelledby]="'run-' + current.id + '-' + tab + '-tab'"
+>
+@if (tab === 'findings') {
+  <sf-run-findings [projectKey]="store.projectKey()" [run]="current" />
+} @else if (tab === 'pages') {
+  @if (!current.planSummary) {
+    <p class="details__empty">No plan is stored for this run.</p>
+  } @else if (!current.planSummary.planAvailable) {
+    <p class="details__empty">Plan details were pruned (retention). {{ planLine() }}.</p>
+  } @else {
+    <p class="details__plan">{{ planLine() }}</p>
+    <sf-plan-entries-table
+      [fetch]="runPlanFetch()"
+      [projectKey]="store.projectKey()"
+      [rootKinds]="rootKinds()"
+      [channels]="current.planSummary.channels ?? []"
+      emptyText="This run rebuilt nothing."
+    />
+  }
+} @else {
+<dl class="details">
+  <dt>Started</dt>
+  <dd>{{ current.startedAt ? (current.startedAt | date: 'medium') : '—' }}</dd>
+  <dt>Started by</dt>
+  <dd>{{ current.startedBy?.displayName ?? '—' }}</dd>
+  <dt>Comment</dt>
+  <dd>{{ current.comment ?? '—' }}</dd>
+  <dt>Finished</dt>
+  <dd>{{ current.finishedAt ? (current.finishedAt | date: 'medium') : '—' }}</dd>
+  <dt>Channels</dt>
+  <dd>{{ current.channels?.length ? current.channels!.join(', ') : 'All enabled' }}</dd>
+  <dt>Target</dt>
+  <dd>{{ store.targetLabel(current) }}</dd>
+  <dt>Revision</dt>
+  <dd>{{ current.revisionId ?? '—' }}</dd>
+  <dt>Output</dt>
+  <dd>
+    {{ current.filesWritten ?? 0 }} written, {{ current.filesSkipped ?? 0 }} skipped,
+    {{ current.bytesWritten ?? 0 }} bytes
+  </dd>
+  @if (redirectsText(); as redirects) {
+    <dt>Redirects</dt>
+    <dd>{{ redirects }}</dd>
+  }
+  @if (current.findingCounts) {
+    <dt>Findings</dt>
+    <dd>
+      <button type="button" class="link-button" (click)="store.showFindings(current)">{{ findingsLine() }}</button>
+    </dd>
+  }
+</dl>
+@let groups = diagnostics();
+@let heldBack = heldBackOf(groups);
+@if (groups.length === 0) {
+  <p class="details__empty">No errors or warnings.</p>
+} @else {
+  <ul class="diagnostics">
+    @for (group of groups; track $index) {
+      @for (message of group.messages; track $index; let messageIndex = $index) {
+        <li class="diagnostic" [class.diagnostic--error]="group.severity === 'error'">
+          <span class="diagnostic__code">{{ group.code }}</span>{{ message }}
+          @if (group.code === heldBackCode && heldBack[messageIndex]; as page) {
+            <button type="button" class="link-button diagnostic__link" (click)="showHeldBack(page)">
+              Show findings
+            </button>
+          }
+        </li>
+      }
+      @if (group.pages?.length) {
+        <li class="diagnostic-pages" [class.diagnostic-pages--error]="group.severity === 'error'">
+          <span class="diagnostic-pages__label">Pages:</span>
+          @for (page of group.pages; track page.uuid) {
+            @if (store.pageExists(page.uuid)) {
+              <a class="diagnostic-pages__page" [routerLink]="pageRoute(page)">{{ pageLabel(page) }}</a>
+            } @else {
+              <span class="diagnostic-pages__page">{{ pageLabel(page) }}</span>
+            }
+          }
+        </li>
+      }
+    }
+  </ul>
+}
+}
+</div>

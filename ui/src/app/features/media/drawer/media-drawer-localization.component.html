@@ -1,0 +1,91 @@
+<section class="section localization" aria-label="Files per language">
+  <label class="switch">
+    <input
+      type="checkbox"
+      role="switch"
+      [checked]="core.localized()"
+      [disabled]="core.readOnly() || files.togglingLocalized()"
+      (change)="files.onLocalizedToggle($event)"
+    />
+    <span>Different file per language</span>
+  </label>
+  @if (files.discardPrompt(); as discarded) {
+    <div class="discard-prompt" role="alertdialog" aria-label="Discard language files">
+      <p>
+        Only the default language's file is kept.
+        @if (discarded.length > 0) {
+          These files will be discarded: {{ files.discardPromptText() }}.
+        }
+      </p>
+      <div class="discard-prompt__actions">
+        <sf-button variant="ghost" (click)="files.cancelUnlocalize()">Cancel</sf-button>
+        <sf-button variant="danger" [disabled]="files.togglingLocalized()" (click)="files.confirmUnlocalize()">
+          Discard files
+        </sf-button>
+      </div>
+    </div>
+  }
+  @if (files.fileRows().length > 0) {
+    <h3 class="section__title">Files</h3>
+    <ul class="locale-files">
+      @for (row of files.fileRows(); track row.locale) {
+        <li
+          class="locale-file"
+          [class.locale-file--drop]="files.dragLocale() === row.locale"
+          [attr.data-locale]="row.locale"
+          (dragover)="files.onLocaleDragOver(row.locale, $event)"
+          (dragleave)="files.onLocaleDragLeave(row.locale)"
+          (drop)="files.onLocaleDrop(row.locale, $event)"
+        >
+          <div class="locale-file__thumb">
+            @if (row.own && files.localeThumbs()[row.locale]; as thumbUrl) {
+              <img [src]="thumbUrl" alt="" />
+            } @else {
+              <sf-icon [name]="row.own ? 'draft' : 'subdirectory_arrow_right'" />
+            }
+          </div>
+          <div class="locale-file__info">
+            <span class="locale-file__label">
+              {{ row.label }}
+              @if (row.isDefault) {
+                <span class="muted">· default</span>
+              }
+            </span>
+            @if (row.own) {
+              <span class="locale-file__name">{{ row.fileName }} · {{ row.sizeBytes | sfFileSize }}</span>
+            } @else {
+              <span class="muted locale-file__fallback">{{ row.fallbackText }}</span>
+            }
+          </div>
+          <div class="locale-file__actions">
+            @if (files.busyLocale() === row.locale) {
+              <span class="muted">Saving…</span>
+            } @else {
+              <label class="link-button" [class.link-button--disabled]="core.readOnly()">
+                {{ row.own ? 'Replace' : 'Upload' }}
+                <input
+                  class="sf-sr-only"
+                  type="file"
+                  [disabled]="core.readOnly() || files.busyLocale() !== null"
+                  [attr.aria-label]="(row.own ? 'Replace ' : 'Upload ') + row.label + ' file'"
+                  (change)="files.onLocaleFileInput(row.locale, $event)"
+                />
+              </label>
+              @if (row.own && !row.isDefault) {
+                <button
+                  type="button"
+                  class="link-button"
+                  [disabled]="core.readOnly() || files.busyLocale() !== null"
+                  (click)="files.removeLocaleFile(row)"
+                >
+                  Remove
+                </button>
+              }
+            }
+          </div>
+        </li>
+      }
+    </ul>
+    <p class="hint">Drop a file on a language to upload it for that language.</p>
+  }
+</section>

@@ -1,0 +1,32 @@
+:host {
+  display: contents;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-3);
+  flex-shrink: 0;
+}
+
+input[type='text'],
+input[type='number'] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--sf-2) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+}
+
+.error {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-rust);
+}
+
+.focal {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sf-2);
+}

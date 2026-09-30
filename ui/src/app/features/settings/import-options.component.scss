@@ -1,0 +1,67 @@
+:host {
+  display: contents;
+}
+
+.import-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3) var(--sf-3);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  min-width: 0;
+}
+
+.import-option__legend {
+  padding: 0 var(--sf-1);
+  font-size: var(--sf-text-sm);
+  font-weight: 600;
+  color: var(--sf-ink);
+}
+
+.import-option__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-2);
+  cursor: pointer;
+}
+
+.import-option__option input {
+  margin-top: 0.2em;
+}
+
+.import-option__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.import-option__label {
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+}
+
+.import-option__hint {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.import-option__note {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.import__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+  cursor: pointer;
+}

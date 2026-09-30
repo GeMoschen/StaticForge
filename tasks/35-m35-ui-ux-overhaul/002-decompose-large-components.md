@@ -1,6 +1,6 @@
 ---
 id: M35.2
-status: todo
+status: done
 depends: [M35.1]
 epic: m35-ui-ux-overhaul
 feature: groundwork
@@ -41,12 +41,12 @@ User decision 22. The largest components (ts + html + scss, in lines):
 
 ## Acceptance criteria
 
-- [ ] No component (ts) above ~400 lines, and no template above ~200 lines, among the ten above. Document any
+- [x] No component (ts) above ~400 lines, and no template above ~200 lines, among the ten above. Document any
       justified exception.
-- [ ] No behaviour change: the existing vitest specs pass unchanged (spec files may be split and moved, but no
+- [x] No behaviour change: the existing vitest specs pass unchanged (spec files may be split and moved, but no
       assertion is weakened).
 - [ ] Journeys m17, m19, m20 and m28 still pass their UI steps. Note known pre-existing failures as in M34.
-- [ ] `npx ng build` green.
+- [x] `npx ng build` green.
 
 ## Out of scope
 
@@ -57,3 +57,19 @@ User decision 22. The largest components (ts + html + scss, in lines):
 - Keep public selectors and `data-sf-*` hooks the journeys use (`data-sf-editor`, `data-sf-section`, …).
 - Beware of changing effect order when moving signals across components. The UI is zoneless (see
   `tasks/lessons.md`).
+
+## Review (2026-09-30)
+
+- All ten components split into sub-components plus feature-scoped signal stores/services (media drawer and library,
+  templates incl. `templates-save.coordinator` and `TemplatesStore`, page editor incl. `section-palette.*`, export and
+  import, changes, generation, record editor, dataset schema editor). Every ts <= ~400 lines (one at 403:
+  `record-editor.component.ts`) and every html < 200 among the ten. Effects stay in the shell constructors, same order.
+- Dead code removed: `features/design/design-demo.*`, `.site-header*` in `app.component.scss`, all `.visually-hidden`
+  duplicates (now `.sf-sr-only`).
+- Specs: 144 files / 946 tests green. Spec edits: `templates.component.spec.ts` reaches members via the new services
+  (22 expects before and after), `page-editor-meta.spec.ts` and `page-nav-settings.component.spec.ts` import the real
+  header component. `npx ng build` green (only pre-existing NG8102 warnings).
+- Not done: journeys m17/m19/m20/m28 (need a dev backend). The page-editor scope/issues/preview/palette templates are
+  not rendered by any unit spec, so the journeys are their real check.
+- Noticed, pre-existing, not fixed: the media library grid's infinite-scroll observer attaches at `ngAfterViewInit`
+  but the sentinel sits in an `@else` branch, so later pages may never auto-load.

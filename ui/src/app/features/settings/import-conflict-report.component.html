@@ -1,0 +1,84 @@
+@if (sess.commitError()) {
+  <p class="import__error" role="alert">{{ sess.commitError() }}</p>
+}
+
+@if (sess.noConflicts()) {
+  <sf-empty-state
+    icon="check_circle"
+    title="No conflicts found"
+    description="This archive is clean and ready to import."
+  />
+} @else {
+  @if (sess.blocking().length > 0) {
+    <section class="conflict-section conflict-section--blocking">
+      <h2 class="conflict-section__title">
+        Blocking issues
+        <span class="badge badge--blocking">{{ sess.blocking().length }}</span>
+      </h2>
+      <ul class="conflict-list">
+        @for (c of sess.blocking(); track $index) {
+          <li class="conflict-item">
+            <sf-icon [name]="iconFor(c.type)" />
+            <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+            <span class="badge" [class.badge--implicit]="c.explicit === false" [class.badge--explicit]="c.explicit !== false">
+              {{ c.explicit === false ? 'implicit' : 'explicit' }}
+            </span>
+            <span class="conflict-item__detail">{{ c.detail }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (sess.rejected().length > 0) {
+    <section class="conflict-section conflict-section--rejected">
+      <h2 class="conflict-section__title">
+        Not imported
+        <span class="badge badge--warning">{{ sess.rejected().length }}</span>
+      </h2>
+      <p class="conflict-section__note">
+        These assets are left out. Everything else in the archive can still be imported.
+      </p>
+      <ul class="conflict-list">
+        @for (c of sess.rejected(); track $index) {
+          <li class="conflict-item">
+            <sf-icon [name]="iconFor(c.type)" />
+            <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+            <span class="badge badge--blocking">{{ notImportedLabel(c.type) }}</span>
+            <span class="conflict-item__detail">{{ c.detail }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (sess.warnings().length > 0) {
+    <section class="conflict-section conflict-section--warning">
+      <h2 class="conflict-section__title">
+        Warnings
+        <span class="badge badge--warning">{{ sess.warnings().length }}</span>
+      </h2>
+      <ul class="conflict-list">
+        @for (c of sess.warnings(); track $index) {
+          <li class="conflict-item">
+            <sf-icon [name]="iconFor(c.type)" />
+            <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
+            @if (hasProvenance(c)) {
+              <span class="badge" [class.badge--implicit]="c.explicit === false" [class.badge--explicit]="c.explicit !== false">
+                {{ c.explicit === false ? 'implicit' : 'explicit' }}
+              </span>
+            }
+            <span class="conflict-item__detail">{{ c.detail }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+}
+
+<div class="import__actions">
+  <sf-button variant="ghost" (click)="cancelled.emit()">Cancel</sf-button>
+  <sf-button variant="primary" [disabled]="sess.blocksImport() || sess.committing() || sess.readOnly()" (click)="confirmed.emit()">
+    {{ sess.committing() ? 'Importing…' : 'Import' }}
+  </sf-button>
+</div>

@@ -14,6 +14,7 @@ import { ProjectContextStore } from '../../core/project/project-context.store';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { PageEditorComponent } from './page-editor.component';
+import { PageEditorHeaderComponent } from './page-editor-header.component';
 import { PageNavSettingsComponent } from './page-nav-settings.component';
 
 type PageView = components['schemas']['PageView'];
@@ -75,6 +76,9 @@ async function renderEditor(readOnly = false) {
   };
   // The editor's heavy children (preview, release bar, impact, forms) are out of scope here.
   TestBed.overrideComponent(PageEditorComponent, {
+    set: { imports: [PageEditorHeaderComponent], schemas: [NO_ERRORS_SCHEMA] },
+  });
+  TestBed.overrideComponent(PageEditorHeaderComponent, {
     set: { imports: [PageNavSettingsComponent, SfButtonComponent], schemas: [NO_ERRORS_SCHEMA] },
   });
   await render(PageEditorComponent, {

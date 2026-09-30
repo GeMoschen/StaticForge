@@ -1,0 +1,35 @@
+@if (store.descendantProblems().length > 0) {
+  <div class="inheritance__notice inheritance__notice--error" role="alert">
+    <p>Not saved: this change would break {{ store.descendantProblems().length === 1 ? 'a template that extends' : 'templates that extend' }} this one.</p>
+    @for (problem of store.descendantProblems(); track $index) {
+      <div class="inheritance__descendant">
+        <button type="button" class="inheritance__crumb" (click)="store.openTemplate(problem.uuid)">{{ problem.uid }}</button>
+        <span class="detail__meta inheritance__where">{{ problem.channel ? 'channel ' + problem.channel : 'content definition' }}</span>
+        @for (diag of problem.diagnostics; track $index) {
+          <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+            {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
+@if (store.descendantWarnings().length > 0) {
+  <div class="inheritance__notice" role="status">
+    <div class="inheritance__notice-head">
+      <p>Saved. Templates that extend this one have warnings:</p>
+      <sf-button variant="ghost" (click)="store.dismissDescendantWarnings()">Dismiss</sf-button>
+    </div>
+    @for (warning of store.descendantWarnings(); track $index) {
+      <div class="inheritance__descendant">
+        <button type="button" class="inheritance__crumb" (click)="store.openTemplate(warning.uuid)">{{ warning.uid }}</button>
+        <span class="detail__meta inheritance__where">{{ warning.channel ? 'channel ' + warning.channel : 'content definition' }}</span>
+        @for (diag of warning.diagnostics; track $index) {
+          <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
+            {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
+          </div>
+        }
+      </div>
+    }
+  </div>
+}

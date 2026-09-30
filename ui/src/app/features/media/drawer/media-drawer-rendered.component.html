@@ -1,0 +1,23 @@
+<section class="rendered" aria-label="Rendered output">
+  <div class="rendered__toolbar">
+    <span class="muted">The saved file rendered as preview serves it, with media links as preview URLs.</span>
+    <sf-button variant="ghost" [disabled]="text.renderedLoading()" (click)="text.loadRendered()">Refresh</sf-button>
+  </div>
+  @if (text.renderedLoading()) {
+    <span class="muted">Rendering…</span>
+  } @else if (text.renderedDiagnostics().length > 0) {
+    <div class="diagnostics" aria-live="polite">
+      @for (diag of text.renderedDiagnostics(); track $index) {
+        <div class="diagnostic diagnostic--error">
+          <span class="diagnostic__code">{{ diag.code }}</span>
+          @if (positionLabel(diag); as position) {
+            <span class="diagnostic__position">{{ position }}</span>
+          }
+          <span>{{ diag.message }}</span>
+        </div>
+      }
+    </div>
+  } @else if (text.renderedText() !== null) {
+    <pre class="rendered__output">{{ text.renderedText() }}</pre>
+  }
+</section>

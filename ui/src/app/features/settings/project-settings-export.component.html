@@ -16,287 +16,61 @@
     <sf-spinner label="Loading project…" />
   } @else {
     <div class="trees">
-      <section class="tree-section">
-        <div class="tree-section__header">
-          <h2 class="tree-section__title">Pages</h2>
-          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('PAGE')">
-            <sf-icon [name]="isStoreFull('PAGE') ? 'check_box' : 'check_box_outline_blank'" />
-            Select all pages
-          </button>
-        </div>
-        @if (isLoadingAssets()) {
-          <sf-spinner label="Loading…" />
-        } @else if (topLevelFolders('PAGE').length === 0 && rootAssets('PAGE').length === 0) {
-          <sf-empty-state title="No page folders" description="This project has no page folders yet." />
-        } @else {
-          <div class="tree" role="tree">
-            <ng-container *ngTemplateOutlet="rootSection; context: { scope: 'PAGE' }"></ng-container>
-          </div>
-        }
-      </section>
-
-      <section class="tree-section">
-        <div class="tree-section__header">
-          <h2 class="tree-section__title">Media</h2>
-          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('MEDIA')">
-            <sf-icon [name]="isStoreFull('MEDIA') ? 'check_box' : 'check_box_outline_blank'" />
-            Select all media
-          </button>
-        </div>
-        @if (isLoadingAssets()) {
-          <sf-spinner label="Loading…" />
-        } @else if (topLevelFolders('MEDIA').length === 0 && rootAssets('MEDIA').length === 0) {
-          <sf-empty-state title="No media folders" description="This project has no media folders yet." />
-        } @else {
-          <div class="tree" role="tree">
-            <ng-container *ngTemplateOutlet="rootSection; context: { scope: 'MEDIA' }"></ng-container>
-          </div>
-        }
-      </section>
-
-      <section class="tree-section">
-        <div class="tree-section__header">
-          <h2 class="tree-section__title">Navigation</h2>
-          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('PAGE_REFERENCE')">
-            <sf-icon [name]="isStoreFull('PAGE_REFERENCE') ? 'check_box' : 'check_box_outline_blank'" />
-            Select all navigation
-          </button>
-        </div>
-        @if (isLoadingAssets()) {
-          <sf-spinner label="Loading…" />
-        } @else if (topLevelFolders('PAGE_REFERENCE').length === 0 && rootAssets('PAGE_REFERENCE').length === 0) {
-          <sf-empty-state title="No navigation folders" description="This project has no navigation folders yet." />
-        } @else {
-          <div class="tree" role="tree">
-            <ng-container *ngTemplateOutlet="rootSection; context: { scope: 'PAGE_REFERENCE' }"></ng-container>
-          </div>
-        }
-      </section>
-
-      <section class="tree-section">
-        <div class="tree-section__header">
-          <h2 class="tree-section__title">Templates</h2>
-          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('TEMPLATES')">
-            <sf-icon [name]="isStoreFull('TEMPLATES') ? 'check_box' : 'check_box_outline_blank'" />
-            Select all templates
-          </button>
-        </div>
-        @if (isLoadingAssets()) {
-          <sf-spinner label="Loading…" />
-        } @else if (topLevelFolders('TEMPLATES').length === 0 && rootAssets('TEMPLATES').length === 0) {
-          <sf-empty-state title="No template folders" description="This project has no template folders yet." />
-        } @else {
-          <div class="tree" role="tree">
-            <ng-container *ngTemplateOutlet="rootSection; context: { scope: 'TEMPLATES' }"></ng-container>
-          </div>
-        }
-      </section>
-
-      <section class="tree-section">
-        <div class="tree-section__header">
-          <h2 class="tree-section__title">Globals</h2>
-          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('GLOBAL_SET')">
-            <sf-icon [name]="isStoreFull('GLOBAL_SET') ? 'check_box' : 'check_box_outline_blank'" />
-            Select all globals
-          </button>
-        </div>
-        @if (isLoadingAssets()) {
-          <sf-spinner label="Loading…" />
-        } @else if (topLevelFolders('GLOBAL_SET').length === 0 && rootAssets('GLOBAL_SET').length === 0) {
-          <sf-empty-state title="No property sets" description="This project has no global property sets yet." />
-        } @else {
-          <div class="tree" role="tree">
-            <ng-container *ngTemplateOutlet="rootSection; context: { scope: 'GLOBAL_SET' }"></ng-container>
-          </div>
-        }
-      </section>
-
-      <section class="tree-section">
-        <div class="tree-section__header">
-          <h2 class="tree-section__title">Content</h2>
-          <button type="button" class="tree-section__select-all" (click)="toggleFullStore('RECORD_SET')">
-            <sf-icon [name]="isStoreFull('RECORD_SET') ? 'check_box' : 'check_box_outline_blank'" />
-            Select all content
-          </button>
-        </div>
-        <p class="tree-section__hint">A record set is exported with its records and its dataset.</p>
-        @if (isLoadingAssets()) {
-          <sf-spinner label="Loading…" />
-        } @else if (topLevelFolders('RECORD_SET').length === 0 && rootAssets('RECORD_SET').length === 0) {
-          <sf-empty-state title="No record sets" description="This project has no record sets yet." />
-        } @else {
-          <div class="tree" role="tree">
-            <ng-container *ngTemplateOutlet="rootSection; context: { scope: 'RECORD_SET' }"></ng-container>
-          </div>
-        }
-      </section>
+      <sf-export-tree-section
+        scope="PAGE"
+        heading="Pages"
+        selectAllLabel="Select all pages"
+        emptyTitle="No page folders"
+        emptyDescription="This project has no page folders yet."
+      />
+      <sf-export-tree-section
+        scope="MEDIA"
+        heading="Media"
+        selectAllLabel="Select all media"
+        emptyTitle="No media folders"
+        emptyDescription="This project has no media folders yet."
+      />
+      <sf-export-tree-section
+        scope="PAGE_REFERENCE"
+        heading="Navigation"
+        selectAllLabel="Select all navigation"
+        emptyTitle="No navigation folders"
+        emptyDescription="This project has no navigation folders yet."
+      />
+      <sf-export-tree-section
+        scope="TEMPLATES"
+        heading="Templates"
+        selectAllLabel="Select all templates"
+        emptyTitle="No template folders"
+        emptyDescription="This project has no template folders yet."
+      />
+      <sf-export-tree-section
+        scope="GLOBAL_SET"
+        heading="Globals"
+        selectAllLabel="Select all globals"
+        emptyTitle="No property sets"
+        emptyDescription="This project has no global property sets yet."
+      />
+      <sf-export-tree-section
+        scope="RECORD_SET"
+        heading="Content"
+        selectAllLabel="Select all content"
+        emptyTitle="No record sets"
+        emptyDescription="This project has no record sets yet."
+        hint="A record set is exported with its records and its dataset."
+      />
     </div>
   }
 
-  <section class="options">
-    <h2 class="options__title">Additional data</h2>
-    <label class="options__toggle">
-      <input type="checkbox" [checked]="includeChannels()" (change)="onToggleChannels($event)" />
-      Include output channels
-    </label>
-    <label class="options__toggle">
-      <input
-        type="checkbox"
-        [checked]="includeGenerationTargets()"
-        (change)="onToggleGenerationTargets($event)"
-      />
-      Include generation targets
-    </label>
-    <label class="options__toggle">
-      <input type="checkbox" [checked]="includeSchedules()" (change)="onToggleSchedules($event)" />
-      <span class="options__text">
-        Include schedules
-        <span class="options__hint">
-          Pending and paused schedules. A scheduled release or unpublish is included only when all its assets are
-          selected; include the generation targets so scheduled builds find theirs.
-        </span>
-      </span>
-    </label>
-  </section>
+  <sf-export-options />
 
   @if (exportError()) {
     <p class="export__error" role="alert">{{ exportError() }}</p>
   }
 
   <div class="export__actions">
-    <sf-button variant="primary" [disabled]="exportDisabled() || exporting()" (click)="exportNow()">
+    <sf-button variant="primary" [disabled]="sel.exportDisabled() || exporting()" (click)="exportNow()">
       {{ exporting() ? 'Exporting…' : 'Export' }}
     </sf-button>
   </div>
 </div>
-
-<ng-template #folderNode let-node let-scope="scope" let-ancestorChecked="ancestorChecked" let-depth="depth">
-  <div
-    class="tree-row"
-    [style.padding-left.px]="depth * 14"
-    role="treeitem"
-    [class.tree-row--implicit]="folderState(node, scope, ancestorChecked) === 'implicit'"
-  >
-    <button
-      type="button"
-      class="tree-row__toggle"
-      [class.tree-row__toggle--leaf]="isLeafOnly(node, scope)"
-      (click)="toggleExpand(node)"
-      [attr.aria-label]="isExpanded(node) ? 'Collapse folder' : 'Expand folder'"
-    >
-      <sf-icon [name]="isExpanded(node) ? 'expand_more' : 'chevron_right'" />
-    </button>
-    <input
-      type="checkbox"
-      class="tree-row__checkbox"
-      [id]="'export-node-' + nodeKey(node)"
-      [checked]="folderState(node, scope, ancestorChecked) === 'explicit'"
-      [disabled]="ancestorChecked"
-      (change)="toggleFolder(node, scope, ancestorChecked)"
-    />
-    <sf-icon class="tree-row__icon" [name]="folderIcon(node, scope)" />
-    <label class="tree-row__name" [for]="'export-node-' + nodeKey(node)">
-      {{ node.displayName ?? node.uid ?? node.path }}
-    </label>
-    @if (folderState(node, scope, ancestorChecked) === 'implicit') {
-      <sf-icon
-        class="tree-row__implicit-icon"
-        name="subdirectory_arrow_right"
-        title="Included automatically — contains a selected item"
-      />
-    }
-  </div>
-
-  @if (isExpanded(node)) {
-    @for (child of node.children ?? []; track nodeKey(child)) {
-      <ng-container
-        *ngTemplateOutlet="
-          folderNode;
-          context: {
-            $implicit: child,
-            scope: scope,
-            ancestorChecked: childAncestorChecked(node, scope, ancestorChecked),
-            depth: depth + 1,
-          }
-        "
-      ></ng-container>
-    }
-
-    @for (asset of folderAssets(node, scope); track asset.uuid) {
-      <ng-container
-        *ngTemplateOutlet="
-          leafRow;
-          context: {
-            $implicit: asset,
-            scope: scope,
-            ancestorChecked: childAncestorChecked(node, scope, ancestorChecked),
-            depth: depth + 1,
-          }
-        "
-      ></ng-container>
-    }
-  }
-</ng-template>
-
-<ng-template #rootSection let-scope="scope">
-  <div class="tree-row" role="treeitem">
-    <button
-      type="button"
-      class="tree-row__toggle"
-      (click)="toggleRootExpand(scope)"
-      [attr.aria-label]="isRootExpanded(scope) ? 'Collapse folder' : 'Expand folder'"
-    >
-      <sf-icon [name]="isRootExpanded(scope) ? 'expand_more' : 'chevron_right'" />
-    </button>
-    <input
-      type="checkbox"
-      class="tree-row__checkbox"
-      [id]="'export-root-' + scope"
-      [checked]="isStoreFull(scope)"
-      (change)="toggleFullStore(scope)"
-    />
-    <sf-icon class="tree-row__icon" [name]="isRootExpanded(scope) ? 'folder_open' : 'folder'" />
-    <label class="tree-row__name" [for]="'export-root-' + scope">/</label>
-    <span class="tree-row__root-badge">root</span>
-  </div>
-
-  @if (isRootExpanded(scope)) {
-    @for (node of topLevelFolders(scope); track nodeKey(node)) {
-      <ng-container
-        *ngTemplateOutlet="
-          folderNode;
-          context: { $implicit: node, scope: scope, ancestorChecked: false, depth: 1 }
-        "
-      ></ng-container>
-    }
-    @for (asset of rootAssets(scope); track asset.uuid) {
-      <ng-container
-        *ngTemplateOutlet="
-          leafRow;
-          context: { $implicit: asset, scope: scope, ancestorChecked: isStoreFull(scope), depth: 1 }
-        "
-      ></ng-container>
-    }
-  }
-</ng-template>
-
-<ng-template #leafRow let-asset let-scope="scope" let-ancestorChecked="ancestorChecked" let-depth="depth">
-  <div class="tree-row tree-row--leaf" [style.padding-left.px]="depth * 14" role="treeitem">
-    <span class="tree-row__toggle tree-row__toggle--leaf"></span>
-    <input
-      type="checkbox"
-      class="tree-row__checkbox"
-      [id]="'export-asset-' + asset.uuid"
-      [checked]="assetChecked(asset, scope, ancestorChecked)"
-      [disabled]="ancestorChecked"
-      (change)="toggleAsset(asset, scope, ancestorChecked)"
-    />
-    <sf-icon class="tree-row__icon" [name]="leafIcon(scope)" />
-    <label class="tree-row__name" [for]="'export-asset-' + asset.uuid">
-      {{ asset.displayName ?? asset.uid ?? asset.uuid }}
-    </label>
-    @if (asset.uid) {
-      <span class="tree-row__mono">{{ asset.uid }}</span>
-    }
-  </div>
-</ng-template>

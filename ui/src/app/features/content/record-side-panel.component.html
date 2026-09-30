@@ -1,0 +1,85 @@
+<aside class="record-editor__side">
+  <div class="record-editor__tabs" role="tablist">
+    <button type="button" role="tab" [attr.aria-selected]="panel() === 'issues'" [class.record-editor__tab--active]="panel() === 'issues'" (click)="panel.set('issues')">
+      Checks
+      @if (counted().length > 0) {
+        <span class="record-editor__count">{{ counted().length }}</span>
+      }
+    </button>
+    <button type="button" role="tab" [attr.aria-selected]="panel() === 'history'" [class.record-editor__tab--active]="panel() === 'history'" (click)="panel.set('history')">
+      History
+    </button>
+    <button type="button" role="tab" [attr.aria-selected]="panel() === 'usages'" [class.record-editor__tab--active]="panel() === 'usages'" (click)="panel.set('usages')">
+      Used by
+      @if (usages().length > 0) {
+        <span class="record-editor__count">{{ usages().length }}</span>
+      }
+    </button>
+  </div>
+
+  @switch (panel()) {
+    @case ('issues') {
+      <div role="tabpanel" aria-label="Checks" aria-live="polite">
+        @if (listed().length === 0) {
+          <p class="record-editor__hint">No problems found.</p>
+        } @else {
+          <ul class="record-editor__list">
+            @for (issue of listed(); track $index) {
+              <li
+                class="record-editor__issue"
+                [class.record-editor__issue--blocking]="issue.kind === 'STRUCTURAL' || issue.severity === 'ERROR'"
+                [attr.data-level]="issue.severity"
+              >
+                <code>{{ issue.path }}</code>
+                <span>{{ issue.message }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+    @case ('history') {
+      <div role="tabpanel" aria-label="History">
+        <ul class="record-editor__list">
+          @for (entry of history(); track entry.revision) {
+            <li>
+              <button
+                type="button"
+                class="record-editor__revision"
+                [class.record-editor__revision--current]="entry.revision === revision()"
+                (click)="viewRevision(entry.revision)"
+              >
+                <span>rev {{ entry.revision }}</span>
+                <span>{{ entry.displayName }}@if (entry.deleted) { (deleted) }</span>
+                <span class="record-editor__muted">{{ entry.changedAt | sfRelativeTime }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+    @case ('usages') {
+      <div role="tabpanel" aria-label="Used by">
+        @if (usages().length === 0) {
+          <p class="record-editor__hint">No page, template or record references this record.</p>
+        } @else {
+          <ul class="record-editor__list">
+            @for (usage of usages(); track $index) {
+              <li class="record-editor__usage">
+                <span class="record-editor__badge">{{ usage.fromType }}</span>
+                @if (usage.fromType === 'PAGE') {
+                  <a [routerLink]="['/p', projectKey(), 'pages', usage.fromUuid]">{{ usage.fromUid }}</a>
+                } @else if (usage.fromType === 'RECORD') {
+                  <a [routerLink]="['/p', projectKey(), 'content', 'records', usage.fromUuid]">{{ usage.fromUid }}</a>
+                } @else {
+                  <span>{{ usage.fromUid }}</span>
+                }
+                <code class="record-editor__muted">{{ usage.sourcePath }}</code>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+  }
+</aside>

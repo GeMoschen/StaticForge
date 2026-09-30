@@ -1,0 +1,28 @@
+// Blocks shared by the parts of the template detail pane: a titled panel, the meta line and a row of actions.
+.detail__meta {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+}
+
+.editors__panel {
+  min-width: 0;
+}
+
+.editors__heading {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  font-weight: 600;
+  color: var(--sf-ink);
+}

@@ -1,0 +1,55 @@
+:host {
+  display: contents;
+}
+
+// The scope's sections stack in the centre pane like its other children.
+.page-editor__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--sf-3);
+}
+
+.page-editor__body-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sf-3);
+}
+
+.page-editor__body-title {
+  font-weight: 600;
+  font-size: var(--sf-text-md);
+  color: var(--sf-ink);
+}
+
+.page-editor__body-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-2);
+  margin-bottom: var(--sf-3);
+}
+
+.page-editor__body-chip {
+  padding: var(--sf-1) var(--sf-2);
+  background: var(--sf-surface);
+  border: 1px dashed var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  color: var(--sf-slate);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-text-xs);
+  cursor: pointer;
+}
+
+.page-editor__body-chip:hover {
+  border-color: var(--sf-signal);
+  color: var(--sf-signal);
+}
+
+.page-editor__impact {
+  margin-top: var(--sf-4);
+  padding-top: var(--sf-3);
+  border-top: 1px solid var(--sf-line);
+  min-width: 0;
+}

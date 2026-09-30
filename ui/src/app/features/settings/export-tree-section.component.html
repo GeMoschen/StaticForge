@@ -1,0 +1,152 @@
+<section class="tree-section">
+  <div class="tree-section__header">
+    <h2 class="tree-section__title">{{ heading() }}</h2>
+    <button type="button" class="tree-section__select-all" (click)="sel.toggleFullStore(scope())">
+      <sf-icon [name]="sel.isStoreFull(scope()) ? 'check_box' : 'check_box_outline_blank'" />
+      {{ selectAllLabel() }}
+    </button>
+  </div>
+  @if (hint()) {
+    <p class="tree-section__hint">{{ hint() }}</p>
+  }
+  @if (data.loadingAssets()) {
+    <sf-spinner label="Loading…" />
+  } @else if (data.topLevelFolders(scope()).length === 0 && data.rootAssets(scope()).length === 0) {
+    <sf-empty-state [title]="emptyTitle()" [description]="emptyDescription()" />
+  } @else {
+    <div class="tree" role="tree">
+      <ng-container *ngTemplateOutlet="rootSection; context: { scope: scope() }"></ng-container>
+    </div>
+  }
+</section>
+
+<ng-template #folderNode let-node let-scope="scope" let-ancestorChecked="ancestorChecked" let-depth="depth">
+  <div
+    class="tree-row"
+    [style.padding-left.px]="depth * 14"
+    role="treeitem"
+    [class.tree-row--implicit]="sel.folderState(node, scope, ancestorChecked) === 'implicit'"
+  >
+    <button
+      type="button"
+      class="tree-row__toggle"
+      [class.tree-row__toggle--leaf]="data.isLeafOnly(node, scope)"
+      (click)="sel.toggleExpand(node)"
+      [attr.aria-label]="sel.isExpanded(node) ? 'Collapse folder' : 'Expand folder'"
+    >
+      <sf-icon [name]="sel.isExpanded(node) ? 'expand_more' : 'chevron_right'" />
+    </button>
+    <input
+      type="checkbox"
+      class="tree-row__checkbox"
+      [id]="'export-node-' + data.nodeKey(node)"
+      [checked]="sel.folderState(node, scope, ancestorChecked) === 'explicit'"
+      [disabled]="ancestorChecked"
+      (change)="sel.toggleFolder(node, scope, ancestorChecked)"
+    />
+    <sf-icon class="tree-row__icon" [name]="sel.folderIcon(node, scope)" />
+    <label class="tree-row__name" [for]="'export-node-' + data.nodeKey(node)">
+      {{ node.displayName ?? node.uid ?? node.path }}
+    </label>
+    @if (sel.folderState(node, scope, ancestorChecked) === 'implicit') {
+      <sf-icon
+        class="tree-row__implicit-icon"
+        name="subdirectory_arrow_right"
+        title="Included automatically — contains a selected item"
+      />
+    }
+  </div>
+
+  @if (sel.isExpanded(node)) {
+    @for (child of node.children ?? []; track data.nodeKey(child)) {
+      <ng-container
+        *ngTemplateOutlet="
+          folderNode;
+          context: {
+            $implicit: child,
+            scope: scope,
+            ancestorChecked: sel.childAncestorChecked(node, scope, ancestorChecked),
+            depth: depth + 1,
+          }
+        "
+      ></ng-container>
+    }
+
+    @for (asset of data.folderAssets(node, scope); track asset.uuid) {
+      <ng-container
+        *ngTemplateOutlet="
+          leafRow;
+          context: {
+            $implicit: asset,
+            scope: scope,
+            ancestorChecked: sel.childAncestorChecked(node, scope, ancestorChecked),
+            depth: depth + 1,
+          }
+        "
+      ></ng-container>
+    }
+  }
+</ng-template>
+
+<ng-template #rootSection let-scope="scope">
+  <div class="tree-row" role="treeitem">
+    <button
+      type="button"
+      class="tree-row__toggle"
+      (click)="sel.toggleRootExpand(scope)"
+      [attr.aria-label]="sel.isRootExpanded(scope) ? 'Collapse folder' : 'Expand folder'"
+    >
+      <sf-icon [name]="sel.isRootExpanded(scope) ? 'expand_more' : 'chevron_right'" />
+    </button>
+    <input
+      type="checkbox"
+      class="tree-row__checkbox"
+      [id]="'export-root-' + scope"
+      [checked]="sel.isStoreFull(scope)"
+      (change)="sel.toggleFullStore(scope)"
+    />
+    <sf-icon class="tree-row__icon" [name]="sel.isRootExpanded(scope) ? 'folder_open' : 'folder'" />
+    <label class="tree-row__name" [for]="'export-root-' + scope">/</label>
+    <span class="tree-row__root-badge">root</span>
+  </div>
+
+  @if (sel.isRootExpanded(scope)) {
+    @for (node of data.topLevelFolders(scope); track data.nodeKey(node)) {
+      <ng-container
+        *ngTemplateOutlet="
+          folderNode;
+          context: { $implicit: node, scope: scope, ancestorChecked: false, depth: 1 }
+        "
+      ></ng-container>
+    }
+    @for (asset of data.rootAssets(scope); track asset.uuid) {
+      <ng-container
+        *ngTemplateOutlet="
+          leafRow;
+          context: { $implicit: asset, scope: scope, ancestorChecked: sel.isStoreFull(scope), depth: 1 }
+        "
+      ></ng-container>
+    }
+  }
+</ng-template>
+
+<ng-template #leafRow let-asset let-scope="scope" let-ancestorChecked="ancestorChecked" let-depth="depth">
+  <div class="tree-row tree-row--leaf" [style.padding-left.px]="depth * 14" role="treeitem">
+    <span class="tree-row__toggle tree-row__toggle--leaf"></span>
+    <input
+      type="checkbox"
+      class="tree-row__checkbox"
+      [id]="'export-asset-' + asset.uuid"
+      [checked]="sel.assetChecked(asset, scope, ancestorChecked)"
+      [disabled]="ancestorChecked"
+      (change)="sel.toggleAsset(asset, scope, ancestorChecked)"
+    />
+    <sf-icon class="tree-row__icon" [name]="sel.leafIcon(scope)" />
+    <label class="tree-row__name" [for]="'export-asset-' + asset.uuid">
+      {{ asset.displayName ?? asset.uid ?? asset.uuid }}
+    </label>
+    @if (asset.uid) {
+      <span class="tree-row__mono">{{ asset.uid }}</span>
+    }
+  </div>
+</ng-template>

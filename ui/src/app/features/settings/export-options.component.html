@@ -1,0 +1,25 @@
+<section class="options">
+  <h2 class="options__title">Additional data</h2>
+  <label class="options__toggle">
+    <input type="checkbox" [checked]="sel.includeChannels()" (change)="sel.onToggleChannels($event)" />
+    Include output channels
+  </label>
+  <label class="options__toggle">
+    <input
+      type="checkbox"
+      [checked]="sel.includeGenerationTargets()"
+      (change)="sel.onToggleGenerationTargets($event)"
+    />
+    Include generation targets
+  </label>
+  <label class="options__toggle">
+    <input type="checkbox" [checked]="sel.includeSchedules()" (change)="sel.onToggleSchedules($event)" />
+    <span class="options__text">
+      Include schedules
+      <span class="options__hint">
+        Pending and paused schedules. A scheduled release or unpublish is included only when all its assets are
+        selected; include the generation targets so scheduled builds find theirs.
+      </span>
+    </span>
+  </label>
+</section>

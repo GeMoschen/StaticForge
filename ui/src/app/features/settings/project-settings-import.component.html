@@ -8,7 +8,7 @@
     </p>
   </header>
 
-  @if (!file()) {
+  @if (!sess.file()) {
     <div
       class="dropzone"
       [class.dropzone--active]="dragActive()"
@@ -19,303 +19,34 @@
     >
       <sf-icon name="upload_file" size="2.5rem" />
       <p class="dropzone__label">Drag a `.zip` archive here, or</p>
-      <sf-button variant="secondary" [disabled]="readOnly()" (click)="fileInput.click()">Choose file…</sf-button>
+      <sf-button variant="secondary" [disabled]="sess.readOnly()" (click)="fileInput.click()">Choose file…</sf-button>
       <input
         #fileInput
         type="file"
         accept=".zip"
         hidden
-        [disabled]="readOnly()"
+        [disabled]="sess.readOnly()"
         (change)="onFileInput($event)"
       />
     </div>
 
-    @if (pickError()) {
-      <p class="import__error" role="alert">{{ pickError() }}</p>
+    @if (sess.pickError()) {
+      <p class="import__error" role="alert">{{ sess.pickError() }}</p>
     }
 
-    @if (result(); as r) {
-      <div class="result-summary" role="status">
-        <sf-icon name="check_circle" />
-        <span>
-          Imported {{ r.importedAssetCount ?? 0 }} asset(s), {{ r.importedBlobCount ?? 0 }}
-          blob(s) from "{{ r.sourceProjectKey }}".
-          @if ((r.releasedCount ?? 0) > 0) {
-            Kept {{ r.releasedCount }} release(s).
-          }
-          {{ schedulesSummary(r) }}
-          {{ redirectsSummary(r) }}
-          {{ urlsSummary(r) }}
-        </span>
-      </div>
-      @if (r.scheduleWarnings?.length) {
-        <section class="conflict-section conflict-section--warning">
-          <h2 class="conflict-section__title">
-            Schedules
-            <span class="badge badge--warning">{{ r.scheduleWarnings!.length }}</span>
-          </h2>
-          <ul class="conflict-list">
-            @for (c of r.scheduleWarnings; track $index) {
-              <li class="conflict-item">
-                <sf-icon [name]="iconFor(c.type)" />
-                <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
-                <span class="conflict-item__detail">{{ c.detail }}</span>
-              </li>
-            }
-          </ul>
-        </section>
-      }
-      @if (r.urlWarnings?.length) {
-        <section class="conflict-section conflict-section--warning">
-          <h2 class="conflict-section__title">
-            URLs
-            <span class="badge badge--warning">{{ r.urlWarnings!.length }}</span>
-          </h2>
-          <ul class="conflict-list">
-            @for (c of r.urlWarnings; track $index) {
-              <li class="conflict-item">
-                <sf-icon [name]="iconFor(c.type)" />
-                <span class="conflict-item__label">{{ c.elementLabel ?? 'Unknown' }}</span>
-                <span class="conflict-item__detail">{{ c.detail }}</span>
-              </li>
-            }
-          </ul>
-        </section>
-      }
-      @if (r.redirectWarnings?.length) {
-        <section class="conflict-section conflict-section--warning">
-          <h2 class="conflict-section__title">
-            Redirects
-            <span class="badge badge--warning">{{ r.redirectWarnings!.length }}</span>
-          </h2>
-          <ul class="conflict-list">
-            @for (c of r.redirectWarnings; track $index) {
-              <li class="conflict-item">
-                <sf-icon [name]="iconFor(c.type)" />
-                <span class="conflict-item__label">{{ c.elementLabel ?? 'Unknown' }}</span>
-                <span class="conflict-item__detail">{{ c.detail }}</span>
-              </li>
-            }
-          </ul>
-        </section>
-      }
-    }
+    <sf-import-result />
   } @else {
     <div class="archive-bar">
       <sf-icon name="folder_zip" />
-      <span class="archive-bar__name">{{ file()?.name }}</span>
+      <span class="archive-bar__name">{{ sess.file()?.name }}</span>
     </div>
 
-    <label class="import__toggle">
-      <input
-        type="checkbox"
-        [checked]="skipExistingImplicit()"
-        (change)="onToggleSkipExistingImplicit($event)"
-      />
-      Skip ancestor folders that already exist
-    </label>
+    <sf-import-options />
 
-    @if (archiveHasReleaseState() === true) {
-      <fieldset class="import-option" [disabled]="committing()">
-        <legend class="import-option__legend">Release state</legend>
-        <label class="import-option__option">
-          <input
-            type="radio"
-            name="releaseMode"
-            value="KEEP"
-            [checked]="releaseMode() === 'KEEP'"
-            (change)="onReleaseModeChange('KEEP')"
-          />
-          <span class="import-option__text">
-            <span class="import-option__label">Keep release state from the archive</span>
-            <span class="import-option__hint">What was released when the archive was made is released here too.</span>
-          </span>
-        </label>
-        <label class="import-option__option">
-          <input
-            type="radio"
-            name="releaseMode"
-            value="DRAFT"
-            [checked]="releaseMode() === 'DRAFT'"
-            (change)="onReleaseModeChange('DRAFT')"
-          />
-          <span class="import-option__text">
-            <span class="import-option__label">Import everything as draft</span>
-            <span class="import-option__hint">Nothing goes live until you release it; overwritten assets keep their release state.</span>
-          </span>
-        </label>
-      </fieldset>
-    } @else if (archiveHasReleaseState() === false) {
-      <p class="import-option__note" role="note">
-        <sf-icon name="info" />
-        This archive has no release state — everything is imported as draft.
-      </p>
-    }
-
-    @if ((archiveScheduleCount() ?? 0) > 0) {
-      <fieldset class="import-option" [disabled]="committing()">
-        <legend class="import-option__legend">Schedules</legend>
-        <label class="import-option__option">
-          <input
-            type="radio"
-            name="importSchedules"
-            value="true"
-            [checked]="importSchedules()"
-            (change)="onImportSchedulesChange(true)"
-          />
-          <span class="import-option__text">
-            <span class="import-option__label">Import the archive's {{ archiveScheduleCount() }} schedule(s)</span>
-            <span class="import-option__hint">Pending and paused schedules come in as they are; the warnings list any that can't.</span>
-          </span>
-        </label>
-        <label class="import-option__option">
-          <input
-            type="radio"
-            name="importSchedules"
-            value="false"
-            [checked]="!importSchedules()"
-            (change)="onImportSchedulesChange(false)"
-          />
-          <span class="import-option__text">
-            <span class="import-option__label">Don't import schedules</span>
-            <span class="import-option__hint">Nothing is scheduled here by this import.</span>
-          </span>
-        </label>
-      </fieldset>
-    }
-
-    @if ((archiveUrlCount() ?? 0) > 0) {
-      <fieldset class="import-option" [disabled]="committing()">
-        <legend class="import-option__legend">Existing URLs</legend>
-        <label class="import-option__option">
-          <input
-            type="radio"
-            name="urlRegistryMode"
-            value="ARCHIVE_WINS"
-            [checked]="urlRegistryMode() === 'ARCHIVE_WINS'"
-            (change)="onUrlRegistryModeChange('ARCHIVE_WINS')"
-          />
-          <span class="import-option__text">
-            <span class="import-option__label">Use the archive's {{ archiveUrlCount() }} URL(s), keep manual URLs</span>
-            <span class="import-option__hint">Outputs keep the URLs they had in the archive; URLs someone set by hand here stay.</span>
-          </span>
-        </label>
-        <label class="import-option__option">
-          <input
-            type="radio"
-            name="urlRegistryMode"
-            value="TARGET_WINS"
-            [checked]="urlRegistryMode() === 'TARGET_WINS'"
-            (change)="onUrlRegistryModeChange('TARGET_WINS')"
-          />
-          <span class="import-option__text">
-            <span class="import-option__label">Keep this project's URLs</span>
-            <span class="import-option__hint">The archive only fills in outputs that have no URL here yet.</span>
-          </span>
-        </label>
-        <label class="import-option__option">
-          <input
-            type="radio"
-            name="urlRegistryMode"
-            value="REPLACE_ALL"
-            [checked]="urlRegistryMode() === 'REPLACE_ALL'"
-            (change)="onUrlRegistryModeChange('REPLACE_ALL')"
-          />
-          <span class="import-option__text">
-            <span class="import-option__label">Use the archive's URLs everywhere</span>
-            <span class="import-option__hint">Replaces this project's URLs, manual ones included.</span>
-          </span>
-        </label>
-      </fieldset>
-    }
-
-    @if (analyzing()) {
+    @if (sess.analyzing()) {
       <sf-spinner label="Checking archive…" />
-    } @else if (report()) {
-      @if (commitError()) {
-        <p class="import__error" role="alert">{{ commitError() }}</p>
-      }
-
-      @if (noConflicts()) {
-        <sf-empty-state
-          icon="check_circle"
-          title="No conflicts found"
-          description="This archive is clean and ready to import."
-        />
-      } @else {
-        @if (blocking().length > 0) {
-          <section class="conflict-section conflict-section--blocking">
-            <h2 class="conflict-section__title">
-              Blocking issues
-              <span class="badge badge--blocking">{{ blocking().length }}</span>
-            </h2>
-            <ul class="conflict-list">
-              @for (c of blocking(); track $index) {
-                <li class="conflict-item">
-                  <sf-icon [name]="iconFor(c.type)" />
-                  <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
-                  <span class="badge" [class.badge--implicit]="c.explicit === false" [class.badge--explicit]="c.explicit !== false">
-                    {{ c.explicit === false ? 'implicit' : 'explicit' }}
-                  </span>
-                  <span class="conflict-item__detail">{{ c.detail }}</span>
-                </li>
-              }
-            </ul>
-          </section>
-        }
-
-        @if (rejected().length > 0) {
-          <section class="conflict-section conflict-section--rejected">
-            <h2 class="conflict-section__title">
-              Not imported
-              <span class="badge badge--warning">{{ rejected().length }}</span>
-            </h2>
-            <p class="conflict-section__note">
-              These assets are left out. Everything else in the archive can still be imported.
-            </p>
-            <ul class="conflict-list">
-              @for (c of rejected(); track $index) {
-                <li class="conflict-item">
-                  <sf-icon [name]="iconFor(c.type)" />
-                  <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
-                  <span class="badge badge--blocking">{{ notImportedLabel(c.type) }}</span>
-                  <span class="conflict-item__detail">{{ c.detail }}</span>
-                </li>
-              }
-            </ul>
-          </section>
-        }
-
-        @if (warnings().length > 0) {
-          <section class="conflict-section conflict-section--warning">
-            <h2 class="conflict-section__title">
-              Warnings
-              <span class="badge badge--warning">{{ warnings().length }}</span>
-            </h2>
-            <ul class="conflict-list">
-              @for (c of warnings(); track $index) {
-                <li class="conflict-item">
-                  <sf-icon [name]="iconFor(c.type)" />
-                  <span class="conflict-item__label">{{ c.elementLabel ?? c.elementUuid ?? 'Unknown' }}</span>
-                  @if (hasProvenance(c)) {
-                    <span class="badge" [class.badge--implicit]="c.explicit === false" [class.badge--explicit]="c.explicit !== false">
-                      {{ c.explicit === false ? 'implicit' : 'explicit' }}
-                    </span>
-                  }
-                  <span class="conflict-item__detail">{{ c.detail }}</span>
-                </li>
-              }
-            </ul>
-          </section>
-        }
-      }
-
-      <div class="import__actions">
-        <sf-button variant="ghost" (click)="cancel()">Cancel</sf-button>
-        <sf-button variant="primary" [disabled]="blocksImport() || committing() || readOnly()" (click)="commit()">
-          {{ committing() ? 'Importing…' : 'Import' }}
-        </sf-button>
-      </div>
+    } @else if (sess.report()) {
+      <sf-import-conflict-report (cancelled)="cancel()" (confirmed)="commit()" />
     }
   }
 </div>

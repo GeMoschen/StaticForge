@@ -1,0 +1,16 @@
+@if (store.uploads().length > 0) {
+  <div class="uploads">
+    @for (upload of store.uploads(); track upload.id) {
+      <div class="upload">
+        <span>{{ upload.fileName }}</span>
+        @if (upload.status === 'uploading') {
+          <span>Uploading…</span>
+        } @else if (upload.status === 'done') {
+          <span>Done</span>
+        } @else {
+          <span class="upload__err">{{ upload.message ?? 'Failed' }}</span>
+        }
+      </div>
+    }
+  </div>
+}

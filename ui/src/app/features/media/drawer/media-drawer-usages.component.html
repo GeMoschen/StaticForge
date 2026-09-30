@@ -1,0 +1,20 @@
+<section class="section">
+  <h3 class="section__title">Referenced by</h3>
+  @if (store.usagesLoading()) {
+    <span class="muted">Loading…</span>
+  } @else if (store.usages().length === 0) {
+    <span class="muted">Not referenced by any asset.</span>
+  } @else {
+    <ul class="usages">
+      @for (usage of store.usages(); track usage.fromUuid) {
+        <li>
+          <code>{{ usage.fromUid }}</code>
+          <span>{{ usage.fromType }}</span>
+          @if (usage.sourcePath) {
+            <span class="muted">{{ usage.sourcePath }}</span>
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>

@@ -20,42 +20,29 @@ import { ApiClient } from '../../core/api/api.client';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfIconComponent } from '../../shared/components/sf-icon.component';
-import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
 import { FormBuilderService } from '../forms/form-builder.service';
 import type { ContentDefinition } from '../forms/form.model';
 import type { EditingLocale } from '../forms/l10n.util';
 import { SfContentFormComponent } from '../forms/sf-content-form.component';
 import { RuleBinding, mergeFindings } from '../forms/rules/rule-binding';
-import { byLevel } from '../forms/rules/rule-form.util';
 import { ConflictDrawerComponent } from '../pages/conflict-drawer.component';
 import { diffFields, mergePayload } from '../pages/conflict-util';
 import type { FieldResolveEvent, ResolveMode } from '../pages/types';
 import { TimeTravelStore } from '../revisions/time-travel.store';
-import { recordMoveTargets, storeFolderPath, type MoveTarget } from './content-tree.util';
+import { storeFolderPath } from './content-tree.util';
 import { ContentStoreRefresh } from './content-store-refresh.service';
 import { ContentService, type DatasetDetailView, type RecordDetailView } from './content.service';
 import { MoveTargetDialogComponent } from './move-target-dialog.component';
 import { RecordAutosaveService, type RecordPayload } from './record-autosave.service';
 import { ReleaseBarComponent } from '../release/release-bar.component';
 import type { ReleaseMode } from '../release/release-choice.util';
-import { deleteQuestion } from '../release/release-status.util';
+import { RecordActionsService } from './record-actions.service';
+import { RecordSidePanelComponent, type ContentIssue, type RecordSidePanelTab } from './record-side-panel.component';
 
 type AssetHistoryEntry = components['schemas']['AssetHistoryEntry'];
 type UsageDto = components['schemas']['UsageDto'];
 
 const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
-
-/** A content validation finding (`ContentIssue` on the wire). */
-interface ContentIssue {
-  path?: string;
-  code?: string;
-  message?: string;
-  kind?: string;
-  severity?: string;
-  locale?: string;
-  rule?: string;
-}
 
 /**
  * One dataset record (M19.4.2): the dataset schema rendered through the dynamic form engine, with the
@@ -74,14 +61,13 @@ interface ContentIssue {
   imports: [
     RouterLink,
     SfButtonComponent,
-    SfIconComponent,
-    SfRelativeTimePipe,
+    RecordSidePanelComponent,
     SfContentFormComponent,
     ConflictDrawerComponent,
     MoveTargetDialogComponent,
     ReleaseBarComponent,
   ],
-  providers: [RecordAutosaveService],
+  providers: [RecordAutosaveService, RecordActionsService],
   templateUrl: './record-editor.component.html',
   styleUrl: './record-editor.component.scss',
 })
@@ -108,6 +94,7 @@ export class RecordEditorComponent implements OnDestroy {
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly refresh = inject(ContentStoreRefresh, { optional: true });
   protected readonly autosave = inject(RecordAutosaveService);
+  protected readonly actions = inject(RecordActionsService);
 
   protected readonly timeTravelling = this.timeTravel.isTimeTravel;
   protected readonly loading = signal(false);
@@ -124,10 +111,7 @@ export class RecordEditorComponent implements OnDestroy {
   protected readonly issues = signal<ContentIssue[]>([]);
   protected readonly history = signal<AssetHistoryEntry[]>([]);
   protected readonly usages = signal<UsageDto[]>([]);
-  protected readonly panel = signal<'issues' | 'history' | 'usages'>('issues');
-  protected readonly moveOpen = signal(false);
-  protected readonly moving = signal(false);
-  protected readonly moveTargets = signal<MoveTarget[]>([]);
+  protected readonly panel = signal<RecordSidePanelTab>('issues');
 
   /** The record's Content folder, store-relative, for the breadcrumb (`/` at the store root). */
   protected readonly folderPath = computed(() => storeFolderPath(this.record()?.folderPath));
@@ -136,13 +120,6 @@ export class RecordEditorComponent implements OnDestroy {
 
   /** Live editor rules on the form (M33.8): findings, fills and field states of the `edit` scope. */
   protected readonly rules = new RuleBinding((request) => this.api.evaluateRules(this.projectKey(), request));
-
-  /** The Checks panel (M33.8): errors, warnings and infos, most severe first; hints only show at their field. */
-  protected readonly listed = computed(() => byLevel(this.shownIssues().filter((issue) => issue.severity !== 'HINT')));
-  /** The Checks tab counts errors and warnings; infos are listed, not counted. */
-  protected readonly counted = computed(() =>
-    this.listed().filter((issue) => issue.severity !== 'INFO' && issue.severity !== 'HINT'),
-  );
 
   /** What the form shows: the live findings (or the last save's until they arrive) and a rejected save's. */
   protected readonly shownIssues = computed<ContentIssue[]>(() => {
@@ -191,6 +168,14 @@ export class RecordEditorComponent implements OnDestroy {
   });
 
   constructor() {
+    this.actions.bind({
+      projectKey: this.projectKey,
+      record: this.record,
+      readOnly: this.readOnly,
+      history: this.history,
+      usages: this.usages,
+      reload: (uuid) => this.load(this.projectKey(), uuid, null),
+    });
     this.autosave.setPayloadProvider(() => this.payload());
     this.autosave.setRefetchHandler((view, mode) => this.onRefetched(view, mode));
     this.autosave.setSavedHandler((view) => this.onSaved(view));
@@ -243,16 +228,6 @@ export class RecordEditorComponent implements OnDestroy {
     this.autosave.flush();
   }
 
-  protected showPanel(panel: 'issues' | 'history' | 'usages'): void {
-    this.panel.set(panel);
-  }
-
-  protected viewRevision(revision: number | undefined): void {
-    if (revision != null) {
-      this.timeTravel.enter(revision);
-    }
-  }
-
   /** Re-reads the release bar whenever the record was saved (M27.6.1). */
   protected readonly releaseRefresh = computed(
     () => `${this.autosave.revision() ?? ''}|${this.record()?.revision ?? ''}|${this.record()?.deleted ?? ''}`,
@@ -269,86 +244,6 @@ export class RecordEditorComponent implements OnDestroy {
 
   protected leaveTimeTravel(): void {
     this.timeTravel.exit();
-  }
-
-  protected deleteRecord(): void {
-    const record = this.record();
-    if (!record?.uuid || this.readOnly()) {
-      return;
-    }
-    const name = record.displayName ?? record.uid ?? 'this record';
-    const referenced = this.usages().length > 0;
-    const question = referenced
-      ? `"${name}" is used by ${this.usages().length} page(s) or template(s). Delete it anyway?`
-      : `Delete "${name}"? You can restore it from its history.`;
-    if (!window.confirm(deleteQuestion(question, record.release))) {
-      return;
-    }
-    this.api.deleteAsset(this.projectKey(), record.uuid, referenced).subscribe({
-      next: () => {
-        this.toasts.show('Record deleted', 'success');
-        this.refresh?.notify();
-        this.load(this.projectKey(), record.uuid!, null);
-      },
-      error: () => this.toasts.show('Could not delete the record — try again in a moment.', 'error'),
-    });
-  }
-
-  protected restoreRecord(): void {
-    const record = this.record();
-    const lastLive = this.history().find((entry) => !entry.deleted);
-    if (!record?.uuid || lastLive?.revision == null || this.timeTravelling()) {
-      return;
-    }
-    this.api.restoreAsset(this.projectKey(), record.uuid, { fromRevision: lastLive.revision }).subscribe({
-      next: () => {
-        this.toasts.show('Record restored', 'success');
-        this.refresh?.notify();
-        this.load(this.projectKey(), record.uuid!, null);
-      },
-      error: () => this.toasts.show('Could not restore the record — try again in a moment.', 'error'),
-    });
-  }
-
-  /** "Move…": the other live sets of this record's dataset, loaded when the dialog opens. */
-  protected openMove(): void {
-    const record = this.record();
-    if (!record?.datasetUuid || this.readOnly() || record.deleted) {
-      return;
-    }
-    this.content.listRecordSets(this.projectKey(), record.datasetUuid).subscribe({
-      next: (sets) => {
-        this.moveTargets.set(recordMoveTargets(sets ?? [], record.datasetUuid, record.recordSet?.uuid));
-        this.moveOpen.set(true);
-      },
-      error: () => this.toasts.show('Could not load the record sets — try again in a moment.', 'error'),
-    });
-  }
-
-  protected closeMove(): void {
-    this.moveOpen.set(false);
-  }
-
-  protected moveTo(setUuid: string | null): void {
-    const record = this.record();
-    if (!record?.uuid || !setUuid || this.readOnly()) {
-      return;
-    }
-    this.autosave.flush();
-    this.moving.set(true);
-    this.content.moveAsset(this.projectKey(), record.uuid, setUuid).subscribe({
-      next: () => {
-        this.moving.set(false);
-        this.moveOpen.set(false);
-        this.toasts.show('Record moved', 'success');
-        this.refresh?.notify();
-        this.load(this.projectKey(), record.uuid!, null);
-      },
-      error: () => {
-        this.moving.set(false);
-        this.toasts.show('Could not move the record — try again in a moment.', 'error');
-      },
-    });
   }
 
   protected onResolve(mode: ResolveMode): void {

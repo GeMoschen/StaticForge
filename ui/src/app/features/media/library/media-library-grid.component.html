@@ -1,0 +1,80 @@
+@if (library.loading() && library.items().length === 0 && library.currentFolderChildren().length === 0) {
+  <sf-spinner label="Loading media…" />
+} @else if (library.items().length === 0 && library.currentFolderChildren().length === 0) {
+  <sf-empty-state
+    title="No media yet"
+    description="Drop files anywhere in this window or click Upload to add media."
+  />
+} @else {
+  <div class="grid">
+    @for (folder of library.currentFolderChildren(); track folder.uuid) {
+      <div
+        class="cell cell--folder"
+        draggable="true"
+        (click)="folders.onFolderCardClick(folder)"
+        (dragstart)="folders.onFolderCardDragStart(folder, $event)"
+        (dragover)="folders.onFolderCardDragOver($event)"
+        (drop)="folders.onFolderCardDrop(folder, $event)"
+        (contextmenu)="folders.onFolderCardContextMenu(folder, $event)"
+      >
+        <div class="cell__body">
+          <div class="cell__icon cell__icon--folder">
+            <sf-icon name="folder" />
+          </div>
+          <span class="cell__name">
+            {{ folder.displayName ?? folder.uid }}
+            <sf-release-badge [release]="folder.release" [compact]="true" />
+          </span>
+        </div>
+      </div>
+    }
+    @for (item of library.items(); track item.uuid) {
+      <div
+        class="cell"
+        [class.cell--selected]="library.isSelected(item.uuid)"
+        draggable="true"
+        (dragstart)="items.onItemDragStart(item.uuid, $event)"
+        (contextmenu)="items.onItemContextMenu(item, $event)"
+      >
+        <input
+          class="cell__check"
+          type="checkbox"
+          [checked]="library.isSelected(item.uuid)"
+          (click)="$event.stopPropagation()"
+          (change)="library.toggle(item.uuid)"
+        />
+        <button class="cell__body" type="button" (click)="library.openDetail(item.uuid)">
+          @if (thumbs.thumb(item); as thumbUrl) {
+            <img
+              class="cell__img"
+              [src]="thumbUrl"
+              [alt]="item.altText ?? item.displayName ?? ''"
+              loading="lazy"
+            />
+          } @else {
+            <div class="cell__icon">
+              <sf-icon [name]="mediaIconFor(item.mimeType)" />
+            </div>
+          }
+          <span class="cell__name">
+            {{ item.displayName }}
+            @if (item.processCms) {
+              <span class="cell__badge" title="CMS syntax is processed when the site is generated">CMS</span>
+            }
+            @if (item.localized) {
+              <span class="cell__localized" title="Different file per language">
+                <sf-icon name="translate" />
+                <span class="sf-sr-only">Different file per language</span>
+              </span>
+            }
+            <sf-release-badge [release]="item.release" [scheduled]="item.scheduled" [compact]="true" />
+          </span>
+          <span class="cell__meta">
+            {{ item.mimeType }} · {{ item.sizeBytes | sfFileSize }}
+          </span>
+        </button>
+      </div>
+    }
+  </div>
+  <div #sentinel class="sentinel" aria-hidden="true"></div>
+}

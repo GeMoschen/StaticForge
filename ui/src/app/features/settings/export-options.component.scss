@@ -1,0 +1,50 @@
+:host {
+  display: contents;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sf-2);
+  padding: var(--sf-3) var(--sf-4);
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-lg);
+}
+
+.options__title {
+  margin: 0;
+  font-family: var(--sf-font-display);
+  font-size: var(--sf-text-md);
+  color: var(--sf-ink);
+}
+
+.options__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-ink);
+  cursor: pointer;
+}
+
+/* A toggle with a hint under its label: the box aligns with the label's first line. */
+.options__toggle:has(.options__hint) {
+  align-items: flex-start;
+}
+
+.options__toggle:has(.options__hint) input {
+  margin-top: 0.2em;
+}
+
+.options__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.options__hint {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}

@@ -1,0 +1,60 @@
+<section class="panel editors__panel" aria-labelledby="channels-heading">
+  <h4 id="channels-heading" class="editors__heading">Channel templates (OCTL)</h4>
+  <sf-tabs
+    label="Channel templates (OCTL)"
+    [tabs]="store.channelTabs()"
+    [selected]="store.selectedChannel()"
+    (selectTab)="editing.selectChannel($event)"
+  >
+    @if (store.availableChannels().length > 0) {
+      <select
+        class="channels__select"
+        aria-label="Add channel"
+        [disabled]="store.readOnly()"
+        (change)="onAddChannel($event)"
+      >
+        <option value="">+ Add channel…</option>
+        @for (channel of store.availableChannels(); track channel.key) {
+          <option [value]="channel.key">{{ channel.name ?? channel.key }}</option>
+        }
+      </select>
+    }
+  </sf-tabs>
+  <!-- One editor per channel, kept while another shows: its undo history never crosses channels. -->
+  @for (key of store.channelKeys(); track key) {
+    <div class="channels" role="tabpanel" [attr.aria-label]="'Channel ' + key" [hidden]="key !== store.selectedChannel()">
+      <span class="channels__hint">How this template renders in the {{ key }} channel.</span>
+      @for (warning of store.outputPathWarningsOf(key); track $index) {
+        <p class="channels__warning" role="status" data-sf-output-path-warning>{{ warning.message }}</p>
+      }
+      <sf-octl-editor
+        [label]="'OCTL source for channel ' + key"
+        [value]="store.channelSources()[key]"
+        [diagnostics]="store.channelDiagnostics(key)"
+        [readOnly]="store.readOnly()"
+        [names]="store.editorNames()"
+        [format]="store.channelFormats()[key].format"
+        [svg]="store.channelFormats()[key].svg"
+        (valueChange)="editing.onChannelInput($event, key)"
+      />
+      <div class="actions">
+        <sf-button variant="ghost" [disabled]="store.readOnly()" (click)="editing.removeChannel()">
+          Remove channel
+        </sf-button>
+      </div>
+    </div>
+  } @empty {
+    <p class="detail__meta">No channels configured.</p>
+  }
+  @if (store.removedChannels().length > 0) {
+    <p class="channels__removed" role="status">
+      Removed when you save:
+      @for (channel of store.removedChannels(); track channel) {
+        <span class="channels__removed-item">
+          <code>{{ channel }}</code>
+          <button type="button" class="inheritance__crumb" [disabled]="store.readOnly()" (click)="editing.restoreChannel(channel)">Undo</button>
+        </span>
+      }
+    </p>
+  }
+</section>

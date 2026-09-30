@@ -1,0 +1,33 @@
+<section class="process" aria-label="CMS processing">
+  <label class="switch">
+    <input
+      type="checkbox"
+      role="switch"
+      [checked]="core.processCms()"
+      [disabled]="core.readOnly() || text.togglingProcess()"
+      (change)="text.onProcessToggle($event)"
+    />
+    <span>Process CMS syntax</span>
+  </label>
+  <p class="hint">
+    When on, <code>$CMS_…$</code> instructions in this file are rendered when the site is generated
+    and in preview, and <code>$$</code> is output as a single <code>$</code>.
+  </p>
+  @if (core.processDiagnostics().length > 0) {
+    <div class="diagnostics" aria-live="polite">
+      @for (diag of core.processDiagnostics(); track $index) {
+        <div
+          class="diagnostic"
+          [class.diagnostic--error]="diag.severity === 'ERROR'"
+          [class.diagnostic--warning]="diag.severity !== 'ERROR'"
+        >
+          <span class="diagnostic__code">{{ diag.code }}</span>
+          @if (positionLabel(diag); as position) {
+            <span class="diagnostic__position">{{ position }}</span>
+          }
+          <span>{{ diag.message }}</span>
+        </div>
+      }
+    </div>
+  }
+</section>

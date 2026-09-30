@@ -1,0 +1,44 @@
+<div class="toolbar">
+  <input
+    class="search"
+    type="search"
+    placeholder="Search media"
+    aria-label="Search media"
+    [value]="library.search()"
+    (input)="onSearchInput($event)"
+  />
+
+  <select
+    [value]="library.mimeFilter()"
+    (change)="onMimeChange($event)"
+    aria-label="Filter by media type"
+  >
+    <option value="">All types</option>
+    <option value="image/">Images</option>
+    <option value="video/">Videos</option>
+    <option value="audio/">Audio</option>
+    <option value="application/">Documents</option>
+  </select>
+
+  @if (library.selected().length > 0) {
+    <sf-button variant="danger" [disabled]="library.readOnly()" (click)="items.deleteSelection()">
+      Delete ({{ library.selected().length }})
+    </sf-button>
+  }
+
+  <span class="toolbar__spacer"></span>
+
+  @if (library.readOnly()) {
+    <span class="toolbar__readonly">{{ library.readOnlyLabel() }}</span>
+  }
+
+  <sf-button variant="secondary" [disabled]="library.readOnly()" (click)="fileInput.click()">Upload</sf-button>
+  <input
+    #fileInput
+    class="sf-sr-only"
+    type="file"
+    multiple
+    [disabled]="library.readOnly()"
+    (change)="uploads.onFileInput($event)"
+  />
+</div>

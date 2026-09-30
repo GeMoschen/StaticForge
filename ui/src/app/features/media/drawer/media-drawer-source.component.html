@@ -1,0 +1,81 @@
+<section class="source" aria-label="Source">
+  @if (text.tooLarge()) {
+    <div class="banner banner--warning">
+      This file is too large to edit here. Download it, edit it locally and use Replace file.
+    </div>
+  } @else if (text.sourceLoading()) {
+    <span class="muted">Loading…</span>
+  } @else {
+    @if (!text.sourceUtf8()) {
+      <div class="banner banner--warning">
+        This file is not valid UTF-8. Unreadable characters are shown as �, and saving stores the
+        file as UTF-8.
+      </div>
+    }
+    @if (text.textLocale() !== null) {
+      <label class="text-locale">
+        <span>Language</span>
+        <select [value]="text.textLocale()" (change)="text.onTextLocaleChange($event)" aria-label="Language of the file">
+          @for (locale of core.locales.locales(); track locale.code) {
+            <option [value]="locale.code" [selected]="locale.code === text.textLocale()">
+              {{ locale.label ?? locale.code }} ({{ (locale.code ?? '').toUpperCase() }})
+            </option>
+          }
+        </select>
+      </label>
+    }
+    @if (text.lineEnding() === 'MIXED') {
+      <div class="banner banner--warning">
+        This file mixes line endings; saving stores LF line endings.
+      </div>
+    }
+    <sf-code-editor
+      #sourceEditor
+      class="source__editor"
+      language="octl"
+      label="File source"
+      [value]="text.editorSeed()"
+      [readOnly]="core.readOnly()"
+      [diagnostics]="text.sourceDiagnostics()"
+      [indentWithTabs]="true"
+      [format]="sourceFormat().format"
+      [svg]="sourceFormat().svg"
+      (valueChange)="text.onSourceInput($event)"
+    />
+
+    @if (text.sourceDiagnostics().length > 0) {
+      <div class="diagnostics" aria-live="polite">
+        @for (diag of text.sourceDiagnostics(); track $index) {
+          <button
+            type="button"
+            class="diagnostic diagnostic--button"
+            [class.diagnostic--error]="diag.severity === 'ERROR'"
+            [class.diagnostic--warning]="diag.severity !== 'ERROR'"
+            (click)="goToDiagnostic(diag)"
+          >
+            <span class="diagnostic__code">{{ diag.code }}</span>
+            @if (positionLabel(diag); as position) {
+              <span class="diagnostic__position">{{ position }}</span>
+            }
+            <span>{{ diag.message }}</span>
+          </button>
+        }
+      </div>
+    }
+
+    <div class="source__actions">
+      <sf-button variant="primary" [disabled]="!text.canSaveSource()" (click)="text.saveSource()">
+        {{ text.sourceSaving() ? 'Saving…' : 'Save' }}
+      </sf-button>
+      <span class="muted">
+        @if (text.sourceHasErrors()) {
+          Fix the errors to save.
+        } @else if (text.dirty()) {
+          Unsaved changes — saving creates a revision.
+        } @else {
+          Every save creates a revision.
+        }
+      </span>
+    </div>
+  }
+</section>

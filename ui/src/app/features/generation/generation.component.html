@@ -1,9 +1,9 @@
 @if (dialogOpen()) {
   <sf-generation-dialog
     [projectKey]="projectKey()"
-    [targets]="targets()"
+    [targets]="store.targets()"
     [fullBuild]="permissions.canFullBuild()"
-    [defaultTargetId]="defaultTargetId()"
+    [defaultTargetId]="store.defaultTargetId()"
     (started)="onStarted($event)"
     (cancelled)="onDialogCancelled()"
   />
@@ -13,8 +13,8 @@
   <div class="toolbar">
     <h2 class="toolbar__title">Generation</h2>
     @if (permissions.canIncrementalBuild()) {
-      <sf-button variant="primary" [disabled]="targets().length === 0" (click)="openDialog()">New generation</sf-button>
-      @if (targetsLoaded() && targets().length === 0) {
+      <sf-button variant="primary" [disabled]="store.targets().length === 0" (click)="openDialog()">New generation</sf-button>
+      @if (store.targetsLoaded() && store.targets().length === 0) {
         <p class="toolbar__note">This project has no generation target yet — create one under Settings › Targets.</p>
       }
     } @else if (!readOnly()) {
@@ -22,9 +22,9 @@
     }
   </div>
 
-  @if (loading()) {
+  @if (store.loading()) {
     <sf-spinner label="Loading generation runs…" />
-  } @else if (runs().length === 0) {
+  } @else if (store.runs().length === 0) {
     <sf-empty-state
       title="No generation runs yet"
       description="Start a generation to render your content to its export target."
@@ -47,7 +47,7 @@
         </tr>
       </thead>
       <tbody>
-        @for (run of runs(); track trackRun($index, run)) {
+        @for (run of store.runs(); track trackRun($index, run)) {
           <tr>
             <td class="num">#{{ run.id }}</td>
             <td>
@@ -82,7 +82,7 @@
             </td>
             <td>
               @if (run.findingCounts; as counts) {
-                <sf-finding-counts [counts]="counts" (pick)="showFindings(run, { severity: $event })" />
+                <sf-finding-counts [counts]="counts" (pick)="store.showFindings(run, { severity: $event })" />
               } @else {
                 <span class="muted">—</span>
               }
@@ -92,13 +92,13 @@
               <div class="cell-actions">
                 <sf-button
                   variant="ghost"
-                  [attr.aria-expanded]="expandedRunId() === run.id"
-                  (click)="toggleDetails(run)"
+                  [attr.aria-expanded]="store.expandedRunId() === run.id"
+                  (click)="store.toggleDetails(run)"
                 >
-                  {{ expandedRunId() === run.id ? 'Hide details' : 'Details' }}
+                  {{ store.expandedRunId() === run.id ? 'Hide details' : 'Details' }}
                 </sf-button>
                 @if (run.status === 'QUEUED' || run.status === 'RUNNING') {
-                  <sf-button variant="secondary" (click)="watchLive(run)">
+                  <sf-button variant="secondary" (click)="store.watchLive(run)">
                     Live log
                   </sf-button>
                   @if (permissions.canCancelRun(run)) {
@@ -114,120 +114,10 @@
               </div>
             </td>
           </tr>
-          @if (expandedRunId() === run.id) {
+          @if (store.expandedRunId() === run.id) {
             <tr class="details-row">
               <td colspan="9">
-                @let tab = visibleTab(run);
-                <div class="tabs" role="tablist" aria-label="Run details">
-                  @for (option of detailsTabsOf(run); track option) {
-                    <button
-                      type="button"
-                      role="tab"
-                      class="tabs__tab"
-                      [id]="'run-' + run.id + '-' + option + '-tab'"
-                      [attr.aria-selected]="tab === option"
-                      [attr.aria-controls]="'run-' + run.id + '-panel'"
-                      [attr.tabindex]="tab === option ? 0 : -1"
-                      (click)="selectTab(run, option)"
-                      (keydown.arrowRight)="stepTab(run, 1)"
-                      (keydown.arrowLeft)="stepTab(run, -1)"
-                    >
-                      @switch (option) {
-                        @case ('summary') { Summary }
-                        @case ('pages') { Rebuilt pages }
-                        @case ('findings') { Findings }
-                      }
-                    </button>
-                  }
-                </div>
-                <div
-                  role="tabpanel"
-                  [id]="'run-' + run.id + '-panel'"
-                  [attr.aria-labelledby]="'run-' + run.id + '-' + tab + '-tab'"
-                >
-                @if (tab === 'findings') {
-                  <sf-run-findings [projectKey]="projectKey()" [run]="run" />
-                } @else if (tab === 'pages') {
-                  @if (!run.planSummary) {
-                    <p class="details__empty">No plan is stored for this run.</p>
-                  } @else if (!run.planSummary.planAvailable) {
-                    <p class="details__empty">Plan details were pruned (retention). {{ planLine(run) }}.</p>
-                  } @else {
-                    <p class="details__plan">{{ planLine(run) }}</p>
-                    <sf-plan-entries-table
-                      [fetch]="runPlanFetch(run)"
-                      [projectKey]="projectKey()"
-                      [rootKinds]="rootKindsOf(run)"
-                      [channels]="run.planSummary.channels ?? []"
-                      emptyText="This run rebuilt nothing."
-                    />
-                  }
-                } @else {
-                <dl class="details">
-                  <dt>Started</dt>
-                  <dd>{{ run.startedAt ? (run.startedAt | date: 'medium') : '—' }}</dd>
-                  <dt>Started by</dt>
-                  <dd>{{ run.startedBy?.displayName ?? '—' }}</dd>
-                  <dt>Comment</dt>
-                  <dd>{{ run.comment ?? '—' }}</dd>
-                  <dt>Finished</dt>
-                  <dd>{{ run.finishedAt ? (run.finishedAt | date: 'medium') : '—' }}</dd>
-                  <dt>Channels</dt>
-                  <dd>{{ run.channels?.length ? run.channels!.join(', ') : 'All enabled' }}</dd>
-                  <dt>Target</dt>
-                  <dd>{{ targetLabel(run) }}</dd>
-                  <dt>Revision</dt>
-                  <dd>{{ run.revisionId ?? '—' }}</dd>
-                  <dt>Output</dt>
-                  <dd>
-                    {{ run.filesWritten ?? 0 }} written, {{ run.filesSkipped ?? 0 }} skipped,
-                    {{ run.bytesWritten ?? 0 }} bytes
-                  </dd>
-                  @if (redirectsOf(run); as redirects) {
-                    <dt>Redirects</dt>
-                    <dd>{{ redirects }}</dd>
-                  }
-                  @if (run.findingCounts) {
-                    <dt>Findings</dt>
-                    <dd>
-                      <button type="button" class="link-button" (click)="showFindings(run)">{{ findingsLine(run) }}</button>
-                    </dd>
-                  }
-                </dl>
-                @let groups = diagnosticsOf(run);
-                @let heldBack = heldBackOf(run, groups);
-                @if (groups.length === 0) {
-                  <p class="details__empty">No errors or warnings.</p>
-                } @else {
-                  <ul class="diagnostics">
-                    @for (group of groups; track $index) {
-                      @for (message of group.messages; track $index; let messageIndex = $index) {
-                        <li class="diagnostic" [class.diagnostic--error]="group.severity === 'error'">
-                          <span class="diagnostic__code">{{ group.code }}</span>{{ message }}
-                          @if (group.code === heldBackCode && heldBack[messageIndex]; as page) {
-                            <button type="button" class="link-button diagnostic__link" (click)="showHeldBack(run, page)">
-                              Show findings
-                            </button>
-                          }
-                        </li>
-                      }
-                      @if (group.pages?.length) {
-                        <li class="diagnostic-pages" [class.diagnostic-pages--error]="group.severity === 'error'">
-                          <span class="diagnostic-pages__label">Pages:</span>
-                          @for (page of group.pages; track page.uuid) {
-                            @if (pageExists(page)) {
-                              <a class="diagnostic-pages__page" [routerLink]="pageRoute(page)">{{ pageLabel(page) }}</a>
-                            } @else {
-                              <span class="diagnostic-pages__page">{{ pageLabel(page) }}</span>
-                            }
-                          }
-                        </li>
-                      }
-                    }
-                  </ul>
-                }
-                }
-                </div>
+                <sf-generation-run-details [run]="run" />
               </td>
             </tr>
           }
@@ -237,45 +127,7 @@
     </div>
   }
 
-  @if (liveActive()) {
-    <section class="live" aria-label="Live generation log">
-      <header class="live__header">
-        <strong>
-          Live log — run #{{ liveRunId() }}
-          @if (liveStatus(); as status) {
-            <span class="badge" [style.color]="statusColor(status)">{{ status }}</span>
-          }
-        </strong>
-        <div class="live__summary" aria-live="polite">
-          <span class="summary-good">
-            files: {{ liveSummary().filesWritten }}
-          </span>
-          <span [class.summary-bad]="liveSummary().errors > 0">
-            errors: {{ liveSummary().errors }}
-          </span>
-          <span [class.summary-warn]="liveSummary().warnings > 0">
-            warnings: {{ liveSummary().warnings }}
-          </span>
-          <sf-button variant="ghost" (click)="closeLive()">Close</sf-button>
-        </div>
-      </header>
-      <div class="live__log">
-        @for (line of liveLines(); track line.id) {
-          <div class="log-line">
-            <span class="log-line__stage">{{ line.stage }}</span>{{ line.message }}
-          </div>
-        }
-        @for (group of liveDiagnostics(); track $index) {
-          @for (message of group.messages; track $index) {
-            <div class="log-line" [class.log-line--error]="group.severity === 'error'" [class.log-line--warning]="group.severity === 'warning'">
-              <span class="log-line__stage">{{ group.code }}</span>{{ message }}
-            </div>
-          }
-        }
-        @if (liveLines().length === 0 && !liveStatus()) {
-          <div class="log-line">Awaiting events…</div>
-        }
-      </div>
-    </section>
+  @if (store.liveActive()) {
+    <sf-generation-live-log />
   }
 </div>

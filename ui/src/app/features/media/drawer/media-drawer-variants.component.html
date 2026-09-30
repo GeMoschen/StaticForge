@@ -1,0 +1,14 @@
+@if (core.variants().length > 0) {
+  <section class="section">
+    <h3 class="section__title">Variants</h3>
+    <ul class="variants">
+      @for (variant of core.variants(); track variant.name) {
+        <li>
+          <span>{{ variant.name }}</span>
+          <span class="meta">{{ variant.width ?? 0 }}px · {{ variant.format }}</span>
+          <button type="button" class="link-button" (click)="preview.downloadVariant(variant.name)">Download</button>
+        </li>
+      }
+    </ul>
+  </section>
+}

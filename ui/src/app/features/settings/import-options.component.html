@@ -1,0 +1,122 @@
+<label class="import__toggle">
+  <input
+    type="checkbox"
+    [checked]="sess.skipExistingImplicit()"
+    (change)="sess.requestSkipExistingImplicit($any($event.target).checked)"
+  />
+  Skip ancestor folders that already exist
+</label>
+
+@if (sess.archiveHasReleaseState() === true) {
+  <fieldset class="import-option" [disabled]="sess.committing()">
+    <legend class="import-option__legend">Release state</legend>
+    <label class="import-option__option">
+      <input
+        type="radio"
+        name="releaseMode"
+        value="KEEP"
+        [checked]="sess.releaseMode() === 'KEEP'"
+        (change)="sess.releaseMode.set('KEEP')"
+      />
+      <span class="import-option__text">
+        <span class="import-option__label">Keep release state from the archive</span>
+        <span class="import-option__hint">What was released when the archive was made is released here too.</span>
+      </span>
+    </label>
+    <label class="import-option__option">
+      <input
+        type="radio"
+        name="releaseMode"
+        value="DRAFT"
+        [checked]="sess.releaseMode() === 'DRAFT'"
+        (change)="sess.releaseMode.set('DRAFT')"
+      />
+      <span class="import-option__text">
+        <span class="import-option__label">Import everything as draft</span>
+        <span class="import-option__hint">Nothing goes live until you release it; overwritten assets keep their release state.</span>
+      </span>
+    </label>
+  </fieldset>
+} @else if (sess.archiveHasReleaseState() === false) {
+  <p class="import-option__note" role="note">
+    <sf-icon name="info" />
+    This archive has no release state — everything is imported as draft.
+  </p>
+}
+
+@if ((sess.archiveScheduleCount() ?? 0) > 0) {
+  <fieldset class="import-option" [disabled]="sess.committing()">
+    <legend class="import-option__legend">Schedules</legend>
+    <label class="import-option__option">
+      <input
+        type="radio"
+        name="importSchedules"
+        value="true"
+        [checked]="sess.importSchedules()"
+        (change)="sess.importSchedules.set(true)"
+      />
+      <span class="import-option__text">
+        <span class="import-option__label">Import the archive's {{ sess.archiveScheduleCount() }} schedule(s)</span>
+        <span class="import-option__hint">Pending and paused schedules come in as they are; the warnings list any that can't.</span>
+      </span>
+    </label>
+    <label class="import-option__option">
+      <input
+        type="radio"
+        name="importSchedules"
+        value="false"
+        [checked]="!sess.importSchedules()"
+        (change)="sess.importSchedules.set(false)"
+      />
+      <span class="import-option__text">
+        <span class="import-option__label">Don't import schedules</span>
+        <span class="import-option__hint">Nothing is scheduled here by this import.</span>
+      </span>
+    </label>
+  </fieldset>
+}
+
+@if ((sess.archiveUrlCount() ?? 0) > 0) {
+  <fieldset class="import-option" [disabled]="sess.committing()">
+    <legend class="import-option__legend">Existing URLs</legend>
+    <label class="import-option__option">
+      <input
+        type="radio"
+        name="urlRegistryMode"
+        value="ARCHIVE_WINS"
+        [checked]="sess.urlRegistryMode() === 'ARCHIVE_WINS'"
+        (change)="sess.urlRegistryMode.set('ARCHIVE_WINS')"
+      />
+      <span class="import-option__text">
+        <span class="import-option__label">Use the archive's {{ sess.archiveUrlCount() }} URL(s), keep manual URLs</span>
+        <span class="import-option__hint">Outputs keep the URLs they had in the archive; URLs someone set by hand here stay.</span>
+      </span>
+    </label>
+    <label class="import-option__option">
+      <input
+        type="radio"
+        name="urlRegistryMode"
+        value="TARGET_WINS"
+        [checked]="sess.urlRegistryMode() === 'TARGET_WINS'"
+        (change)="sess.urlRegistryMode.set('TARGET_WINS')"
+      />
+      <span class="import-option__text">
+        <span class="import-option__label">Keep this project's URLs</span>
+        <span class="import-option__hint">The archive only fills in outputs that have no URL here yet.</span>
+      </span>
+    </label>
+    <label class="import-option__option">
+      <input
+        type="radio"
+        name="urlRegistryMode"
+        value="REPLACE_ALL"
+        [checked]="sess.urlRegistryMode() === 'REPLACE_ALL'"
+        (change)="sess.urlRegistryMode.set('REPLACE_ALL')"
+      />
+      <span class="import-option__text">
+        <span class="import-option__label">Use the archive's URLs everywhere</span>
+        <span class="import-option__hint">Replaces this project's URLs, manual ones included.</span>
+      </span>
+    </label>
+  </fieldset>
+}

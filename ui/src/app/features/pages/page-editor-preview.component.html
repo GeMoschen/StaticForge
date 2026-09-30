@@ -1,0 +1,17 @@
+<div
+  class="page-editor__divider"
+  role="separator"
+  aria-orientation="vertical"
+  (pointerdown)="onDividerPointerDown($event)"
+></div>
+
+<div class="page-editor__preview" [style.flex]="editor.previewFlex()">
+  <sf-preview-frame
+    [projectKey]="editor.projectKey()"
+    [pageUuid]="editor.uuid()"
+    [revision]="editor.timeTravelRevision()"
+    [refreshKey]="editor.autosave.revision()"
+    (sectionClick)="onSectionClick($event)"
+    (viewChange)="editor.previewView.set($event)"
+  />
+</div>

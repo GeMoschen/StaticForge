@@ -1,0 +1,38 @@
+@if (store.dialog.state(); as d) {
+  <div class="dlg-scrim" (click)="store.cancelDelete()"></div>
+  <div class="dlg" role="dialog" aria-modal="true" [attr.aria-label]="d.title">
+    <header class="dlg__header">
+      <h2 class="dlg__title">{{ d.title }}</h2>
+    </header>
+    <div class="dlg__body">
+      <p class="dlg__message">{{ d.message }}</p>
+      @if (store.usages().length > 0) {
+        <ul class="dlg__usages">
+          @for (usage of store.usages(); track usage.fromUuid) {
+            <li>
+              <code>{{ usage.fromUid }}</code>
+              <span>{{ usage.fromType }}</span>
+            </li>
+          }
+        </ul>
+        <input
+          class="dlg__input"
+          type="text"
+          [value]="store.confirmText()"
+          (input)="store.onDeleteInput($event)"
+          placeholder="Type DELETE to confirm"
+        />
+      }
+    </div>
+    <footer class="dlg__footer">
+      <sf-button variant="ghost" (click)="store.cancelDelete()">Cancel</sf-button>
+      <sf-button
+        variant="danger"
+        [disabled]="!store.canConfirmDelete() || store.deleting()"
+        (click)="store.performDelete()"
+      >
+        Delete
+      </sf-button>
+    </footer>
+  </div>
+}

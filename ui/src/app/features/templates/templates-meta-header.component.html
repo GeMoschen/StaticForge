@@ -1,0 +1,129 @@
+@if (store.detail(); as d) {
+  <div class="detail__head">
+    <div>
+      <h3>{{ d.displayName ?? d.uid }}</h3>
+      <div class="detail__meta">{{ d.uid ?? '' }} · rev {{ d.revision ?? '' }}@if (d.abstract) { · abstract }</div>
+      @if (store.breadcrumb().length > 0) {
+        <nav class="inheritance__chain" aria-label="Inheritance chain">
+          @for (item of store.breadcrumb(); track item.uuid; let last = $last) {
+            @if (item.current) {
+              <span class="inheritance__crumb inheritance__crumb--current" aria-current="page">{{ item.uid }}</span>
+            } @else {
+              <button type="button" class="inheritance__crumb" (click)="store.openTemplate(item.uuid)">{{ item.uid }}</button>
+            }
+            @if (!last) {
+              <span class="inheritance__sep" aria-hidden="true">›</span>
+            }
+          }
+        </nav>
+      }
+      @if (store.childTemplates().length > 0) {
+        <div class="inheritance__children">
+          Extended by:
+          @for (child of store.childTemplates(); track child.uuid; let last = $last) {
+            <button type="button" class="inheritance__crumb" (click)="store.openTemplate(child.uuid)">{{ child.uid }}</button>@if (!last) {<span>, </span>}
+          }
+        </div>
+      }
+    </div>
+    <div class="actions">
+      @if (save.dirty() && !store.readOnly()) {
+        <span class="detail__unsaved" role="status">Unsaved changes — the definition and every channel save together.</span>
+      }
+      <sf-button variant="primary" [disabled]="save.saving() || store.readOnly() || !save.dirty()" (click)="save.saveTemplate()">
+        Save template
+      </sf-button>
+      <sf-button variant="danger" [disabled]="store.readOnly()" (click)="save.requestDelete()">Delete</sf-button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="inline">
+      <sf-field label="Display name" class="inline__field">
+        <input
+          type="text"
+          [value]="store.displayName()"
+          (input)="onDisplayNameInput($event)"
+        />
+      </sf-field>
+      <sf-field label="Category" class="inline__field">
+        <input
+          type="text"
+          [value]="store.category()"
+          (input)="onCategoryInput($event)"
+        />
+      </sf-field>
+      @if (store.isSection()) {
+        <label>
+          <input
+            type="checkbox"
+            [checked]="store.deprecated()"
+            (change)="onDeprecatedChange($event)"
+          />
+          Deprecated
+        </label>
+      } @else {
+        <label title="A layout other page templates extend. Pages can't use an abstract template.">
+          <input
+            type="checkbox"
+            [checked]="store.abstractTemplate()"
+            [disabled]="store.readOnly()"
+            (change)="onAbstractChange($event)"
+          />
+          Abstract
+        </label>
+      }
+    </div>
+    @if (store.templateInUse(); as inUse) {
+      <div class="inheritance__notice inheritance__notice--error" role="alert">
+        {{ inUse.pageCount }} {{ inUse.pageCount === 1 ? 'page uses' : 'pages use' }} this template, so it can't be made
+        abstract. Move {{ inUse.pageCount === 1 ? 'it' : 'them' }} to another template first:
+        @for (uid of inUse.pageUids; track uid; let i = $index; let last = $last) {
+          @if (inUse.pageUuids[i]; as pageUuid) {
+            <a [routerLink]="['/p', store.projectKey(), 'pages', pageUuid]">{{ uid }}</a>
+          } @else {
+            <span>{{ uid }}</span>
+          }@if (!last) {<span>, </span>}
+        }
+        @if (inUse.pageCount > inUse.pageUids.length) { <span>…</span> }
+      </div>
+    }
+    <sf-uid-rename
+      [projectKey]="store.projectKey()"
+      [uuid]="d.uuid ?? ''"
+      [uid]="d.uid ?? ''"
+      (uidChanged)="loader.onUidChanged()"
+    />
+    @if (store.showPaginationPaths()) {
+      <fieldset class="pagination-paths" aria-describedby="pagination-paths-help">
+        <legend class="pagination-paths__legend">Pagination paths</legend>
+        <p id="pagination-paths-help" class="detail__meta pagination-paths__help">
+          Where pages 2, 3, … of a paginated page are written, per channel. Leave blank to write them next to the
+          first page (<code>blog.html</code> → <code>blog-2.html</code>). Placeholders: <code>{{ '{' }}pageNumber{{ '}' }}</code>
+          (required), <code>{{ '{' }}pagePath{{ '}' }}</code> (the first page's path without extension),
+          <code>{{ '{' }}folder{{ '}' }}</code>, <code>{{ '{' }}uid{{ '}' }}</code>, <code>{{ '{' }}ext{{ '}' }}</code>.
+        </p>
+        @for (key of store.channelKeys(); track key) {
+          <label class="pagination-paths__row">
+            <span class="pagination-paths__channel">{{ key }}</span>
+            <input
+              type="text"
+              spellcheck="false"
+              [attr.aria-label]="'Pagination path for channel ' + key"
+              [attr.aria-invalid]="store.paginationPathErrors()[key] ? 'true' : null"
+              [placeholder]="defaultPaginationPath"
+              [value]="store.paginationPaths()[key] ?? ''"
+              [disabled]="store.readOnly()"
+              (input)="onPaginationPathInput(key, $event)"
+            />
+          </label>
+          @if (store.paginationPathErrors()[key]; as error) {
+            <span class="diagnostic diagnostic--error" role="alert">{{ key }}: {{ error }}</span>
+          }
+        } @empty {
+          <p class="detail__meta">Add a channel to set its pagination path.</p>
+        }
+      </fieldset>
+    }
+  </div>
+}

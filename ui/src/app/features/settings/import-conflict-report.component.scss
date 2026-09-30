@@ -1,0 +1,20 @@
+@use './import-conflicts';
+
+:host {
+  display: contents;
+}
+
+.import__error {
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+  font-size: var(--sf-text-sm);
+}
+
+.import__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-2);
+}

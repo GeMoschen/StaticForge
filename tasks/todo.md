@@ -6,7 +6,7 @@ frame, role-adaptive (permissions + developer mode), keyboard-first, per-user se
 every screen. Screen migration starts only after the style guide (M35.9) is signed off.
 
 - [x] M35.1 functional bugs from the UX run
-- [ ] M35.2 decompose large components (behaviour-preserving)
+- [x] M35.2 decompose large components (behaviour-preserving)
 - [ ] M35.3 user preferences API + client store
 - [ ] M35.4 Transloco setup + string extraction rules
 - [ ] M35.5 design tokens v2, theme (light/dark/system), density

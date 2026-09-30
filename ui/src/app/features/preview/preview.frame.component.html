@@ -42,7 +42,7 @@
         ‹
       </button>
       <label class="preview-pages__label">
-        <span class="preview-pages__visually-hidden">Page</span>
+        <span class="sf-sr-only">Page</span>
         <select class="preview-pages__select" [value]="page()" (change)="onPageSelect($event)">
           @for (number of pages(); track number) {
             <option [value]="number" [selected]="number === page()">Page {{ number }} of {{ totalPages() }}</option>
@@ -58,7 +58,7 @@
       >
         ›
       </button>
-      <span class="preview-pages__visually-hidden" aria-live="polite">Page {{ page() }} of {{ totalPages() }}</span>
+      <span class="sf-sr-only" aria-live="polite">Page {{ page() }} of {{ totalPages() }}</span>
     </div>
   }
 

@@ -1,0 +1,20 @@
+:host {
+  display: contents;
+}
+
+.uploads {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+}
+
+.upload {
+  display: flex;
+  gap: var(--sf-2);
+  font-size: var(--sf-text-sm);
+  color: var(--sf-slate);
+}
+
+.upload__err {
+  color: var(--sf-rust);
+}

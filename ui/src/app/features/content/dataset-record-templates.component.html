@@ -1,0 +1,69 @@
+<section class="panel dataset-editor__panel" aria-labelledby="dataset-rt-heading">
+  <h4 id="dataset-rt-heading" class="dataset-editor__heading">Record templates (OCTL)</h4>
+  <sf-tabs
+    label="Record templates"
+    [tabs]="store.recordTemplateTabs()"
+    [selected]="store.activeChannel() ?? ''"
+    (selectTab)="store.selectTab($event)"
+  />
+  <!-- One editor per channel, kept while another shows: its undo history never crosses channels. -->
+  @for (tab of store.channelTabs(); track tab.key) {
+    <div
+      class="dataset-editor__channel"
+      role="tabpanel"
+      [attr.aria-label]="'Record template (' + tab.key + ')'"
+      [hidden]="tab.key !== store.activeChannel()"
+    >
+      <p class="dataset-editor__hint">
+        How one record renders in the {{ tab.name }} channel wherever a record set of this dataset is rendered.
+        Fields are top-level names; <code>_index</code>, <code>_first</code>, <code>_last</code> and
+        <code>_count</code> describe the record's place among the records the set renders.
+      </p>
+      @if (!tab.enabled) {
+        <p class="dataset-editor__notice" role="status">The {{ tab.key }} channel is disabled — this template is kept but not rendered.</p>
+      }
+      @if (!store.sourceOf(tab.key).trim()) {
+        <div class="dataset-editor__empty" role="note">
+          <strong>No record template for {{ tab.key }}</strong>
+          <p>
+            <code>$CMS_VALUE(recordset:…)$</code> — and a reference editor pointing at a record set of this dataset —
+            renders nothing in this channel. <code>$CMS_FOR</code> loops over a set are not affected: they bring
+            their own markup.
+          </p>
+        </div>
+      }
+      @if (canEdit() || store.sourceOf(tab.key).trim()) {
+        <sf-octl-editor
+          [label]="'Record template for channel ' + tab.key"
+          [value]="store.sourceOf(tab.key)"
+          [diagnostics]="store.diagnosticsOf(tab.key)"
+          [readOnly]="!canEdit()"
+          [names]="store.fieldNames()"
+          [format]="store.formats()[tab.key].format"
+          [svg]="store.formats()[tab.key].svg"
+          (valueChange)="store.onRecordTemplateInput($event, tab.key)"
+        />
+      }
+      @if (canEdit()) {
+        <div class="dataset-editor__helpers" role="group" aria-label="Insert into the record template">
+          <span class="dataset-editor__helpers-label">Fields</span>
+          @for (helper of store.fieldHelpers(); track helper.name) {
+            <button type="button" class="dataset-editor__chip" [title]="helper.snippet + ' — ' + helper.description" (click)="insertHelper(helper)">
+              {{ helper.name }}
+            </button>
+          } @empty {
+            <span class="dataset-editor__hint">The schema declares no fields yet.</span>
+          }
+          <span class="dataset-editor__helpers-label">Record</span>
+          @for (helper of metaHelpers; track helper.name) {
+            <button type="button" class="dataset-editor__chip" [title]="helper.snippet + ' — ' + helper.description" (click)="insertHelper(helper)">
+              {{ helper.name }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  } @empty {
+    <p class="dataset-editor__hint">The project has no channels yet.</p>
+  }
+</section>

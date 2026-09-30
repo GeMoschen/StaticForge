@@ -1,267 +1,30 @@
-<div class="page-editor" [class.page-editor--time-travel]="readOnly()">
+<div class="page-editor" [class.page-editor--time-travel]="editor.readOnly()">
   <h1 class="sf-sr-only">
-    {{ page()?.displayName ?? page()?.uid ?? 'Page editor' }}
+    {{ editor.page()?.displayName ?? editor.page()?.uid ?? 'Page editor' }}
   </h1>
-  <header class="page-editor__top">
-    @if (page(); as p) {
-      <div class="page-editor__meta-anchor">
-        <button
-          type="button"
-          class="page-editor__title page-editor__title-button"
-          (click)="toggleMeta()"
-          aria-haspopup="true"
-          [attr.aria-expanded]="metaOpen()"
-        >
-          {{ p.displayName ?? p.uid }}
-        </button>
-        @if (metaOpen()) {
-          <div class="page-editor__meta-popover">
-            <section class="page-editor__meta-section">
-              <h3 class="page-editor__meta-title">Display name</h3>
-              @if (editingDisplayName()) {
-                <div class="page-editor__meta-row">
-                  <input
-                    class="page-editor__meta-input"
-                    type="text"
-                    [value]="displayNameDraft()"
-                    (input)="onDisplayNameInput($event)"
-                    (keydown.enter)="saveDisplayName()"
-                    (keydown.escape)="cancelEditDisplayName()"
-                    autofocus
-                  />
-                  <sf-button variant="primary" [disabled]="savingDisplayName()" (click)="saveDisplayName()">Save</sf-button>
-                  <sf-button variant="ghost" (click)="cancelEditDisplayName()">Cancel</sf-button>
-                </div>
-              } @else {
-                <div class="page-editor__meta-row">
-                  <span class="page-editor__meta-value">{{ p.displayName ?? '—' }}</span>
-                  <sf-button variant="ghost" (click)="startEditDisplayName()">Rename</sf-button>
-                </div>
-              }
-            </section>
-            <section class="page-editor__meta-section">
-              <h3 class="page-editor__meta-title">UID</h3>
-              <sf-uid-rename
-                [projectKey]="projectKey()"
-                [uuid]="uuid()"
-                [uid]="p.uid ?? ''"
-                (uidChanged)="onUidChanged($event)"
-              />
-            </section>
-            <section class="page-editor__meta-section">
-              <h3 class="page-editor__meta-title">Navigation and search</h3>
-              <sf-page-nav-settings [nav]="navOf(p)" [disabled]="readOnly()" (navChange)="onNavChange($event)" />
-            </section>
-            <div class="page-editor__meta-footer">
-              <sf-button variant="ghost" (click)="closeMeta()">Close</sf-button>
-            </div>
-          </div>
-        }
-      </div>
-    }
-    @if (translationSummary(); as summary) {
-      <span class="page-editor__translation" aria-live="polite">{{ summary }}</span>
-    }
-    <span class="page-editor__status" aria-live="polite">{{ statusLabel() }}</span>
-  </header>
+  <sf-page-editor-header />
   <sf-release-bar
     [projectKey]="projectKey()"
     [assetUuid]="uuid()"
-    [refreshKey]="releaseRefresh()"
-    (changed)="onReleaseChanged($event)"
+    [refreshKey]="editor.releaseRefresh()"
+    (changed)="editor.onReleaseChanged($event)"
   />
 
   <div class="page-editor__body">
     <div class="page-editor__main" #main>
-      <div class="page-editor__centre" [style.flex]="centreFlex()">
-        @if (loading()) {
-          <sf-spinner label="Loading page…" />
-        } @else if (error()) {
-          <sf-empty-state title="Could not load page" [description]="error() ?? ''" icon="error" />
-        } @else if (page()) {
-          @if (focusedSection(); as ctx) {
-            <!-- Section scope: only this one section. -->
-            <section class="page-editor__body" [attr.data-sf-section-scope]="ctx.section.instanceId">
-              <header class="page-editor__body-header">
-                <span class="page-editor__body-title">{{ sectionTitle(ctx.section.templateRef) }}</span>
-              </header>
-              <sf-section-editor
-                [contentDefinition]="defFor(ctx.section.templateRef)"
-                [section]="ctx.section"
-                [projectKey]="projectKey()"
-                [bodyName]="ctx.bodyName"
-                [templateUid]="uidFor(ctx.section.templateRef)"
-                [title]="sectionTitle(ctx.section.templateRef)"
-                [index]="ctx.index"
-                [count]="ctx.count"
-                [readOnly]="readOnly()"
-                [hideActions]="true"
-                [issues]="shownIssues()"
-                [rules]="readOnly() ? null : rules.hub"
-                (valueChange)="onSectionValueChange(ctx.bodyName, ctx.section.instanceId, $event)"
-                (filled)="onSectionFilled(ctx.bodyName, ctx.section.instanceId, $event)"
-                (remove)="removeSection(ctx.bodyName, ctx.section.instanceId)"
-                (moveUp)="moveSectionBy(ctx.bodyName, ctx.index, -1)"
-                (moveDown)="moveSectionBy(ctx.bodyName, ctx.index, 1)"
-              />
-            </section>
-          } @else {
-            @if (focusedBody(); as body) {
-              <!-- Body scope: only this body's sections. -->
-              <section
-                class="page-editor__body"
-                (dragover)="onBodyDragOver($event)"
-                (drop)="onBodyDrop(body, $event)"
-              >
-                <header class="page-editor__body-header">
-                  <span class="page-editor__body-title">{{ body.label ?? body.name }}</span>
-                  @if (!readOnly()) {
-                    <sf-button variant="secondary" (click)="openPalette(body)">
-                      + Section
-                    </sf-button>
-                  }
-                </header>
-
-                @if (otherBodies().length > 0) {
-                  <!-- Drag a section here to move it into another body of this page without leaving the editor. -->
-                  <div class="page-editor__body-rail">
-                    @for (other of otherBodies(); track other.name) {
-                      <button
-                        type="button"
-                        class="page-editor__body-chip"
-                        (click)="switchBody(other.name)"
-                        (dragover)="onBodyDragOver($event)"
-                        (drop)="onBodyDrop(other, $event)"
-                      >
-                        {{ other.label ?? other.name }}
-                      </button>
-                    }
-                  </div>
-                }
-
-                @for (
-                  section of sectionsFor(body.name);
-                  track trackSection($index, section)
-                ) {
-                  <sf-section-editor
-                    [contentDefinition]="defFor(section.templateRef)"
-                    [section]="section"
-                    [projectKey]="projectKey()"
-                    [pageUuid]="uuid()"
-                    [bodyName]="body.name"
-                    [templateUid]="uidFor(section.templateRef)"
-                    [title]="sectionTitle(section.templateRef)"
-                    [index]="$index"
-                    [count]="bodyCount(body.name)"
-                    [readOnly]="readOnly()"
-                    [issues]="shownIssues()"
-                    [rules]="readOnly() ? null : rules.hub"
-                    (valueChange)="onSectionValueChange(body.name, section.instanceId, $event)"
-                    (filled)="onSectionFilled(body.name, section.instanceId, $event)"
-                    (remove)="removeSection(body.name, section.instanceId)"
-                    (moveUp)="moveSectionBy(body.name, $index, -1)"
-                    (moveDown)="moveSectionBy(body.name, $index, 1)"
-                    (dragStarted)="onDragStarted(body.name, $event)"
-                    (dropOn)="onDrop(body.name, $event)"
-                    (dragEnd)="drag.set(null)"
-                  />
-                }
-              </section>
-            } @else {
-              <!-- Page scope: only the page's own fields, no bodies/sections. -->
-              @if (contentDefinition(); as def) {
-                <sf-content-form
-                  data-sf-page-fields
-                  [definition]="def"
-                  [formGroup]="fieldsForm()!"
-                  [projectKey]="projectKey()"
-                  [issues]="shownIssues()"
-                  [fieldStates]="rules.fieldStates()"
-                  [ruleHub]="readOnly() ? null : rules.hub"
-                  [editingLocale]="editingLocale()"
-                  [storedValue]="storedContent()"
-                  [localeLabels]="localeLabels()"
-                />
-              }
-              <div class="page-editor__impact">
-                <sf-asset-impact [projectKey]="projectKey()" [assetUuid]="uuid()" [refreshKey]="autosave.revision()" />
-              </div>
-              <div class="page-editor__impact">
-                <sf-asset-urls [projectKey]="projectKey()" [assetUuid]="uuid()" [refreshKey]="autosave.revision()" />
-              </div>
-            }
-          }
-        }
-        @if (!error()) {
-          <!-- Every scope: an issue opens the field or section it is about (M30.3.2). -->
-          <div class="page-editor__issues">
-            <sf-page-issues-panel
-              [projectKey]="projectKey()"
-              [pageUuid]="uuid()"
-              [revision]="timeTravelRevision()"
-              [refreshKey]="autosave.revision()"
-              [completeness]="shownIssues()"
-              [previewView]="previewView()"
-              (issueSelect)="onIssueSelect($event)"
-              (checked)="onIssuesChecked($event)"
-            />
-          </div>
+      <div class="page-editor__centre" [style.flex]="editor.centreFlex()">
+        <sf-page-editor-scope />
+        @if (!editor.error()) {
+          <sf-page-editor-issues
+            [focusRoot]="main"
+            (previewFocus)="preview.focusSection($event.instanceId, $event.selector)"
+          />
         }
       </div>
-
-      <div
-        class="page-editor__divider"
-        role="separator"
-        aria-orientation="vertical"
-        (pointerdown)="onDividerPointerDown($event)"
-      ></div>
-
-      <div class="page-editor__preview" [style.flex]="previewFlex()">
-        <sf-preview-frame
-          [projectKey]="projectKey()"
-          [pageUuid]="uuid()"
-          [revision]="timeTravelRevision()"
-          [refreshKey]="autosave.revision()"
-          (sectionClick)="onPreviewSectionClick($event)"
-          (viewChange)="previewView.set($event)"
-        />
-      </div>
+      <sf-page-editor-preview #preview [container]="main" />
     </div>
   </div>
 
-  @if (paletteBody(); as body) {
-    <div class="page-editor__overlay" (click)="paletteBody.set(null)">
-      <div
-        class="page-editor__palette"
-        (click)="$event.stopPropagation()"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="page-editor-palette-title"
-      >
-        <h3 id="page-editor-palette-title" class="page-editor__palette-title">
-          Add section to {{ body.label ?? body.name }}
-        </h3>
-        <ul class="page-editor__palette-list">
-          @for (tpl of filteredSectionTemplates(body); track tpl.uuid) {
-            <li>
-              <button type="button" (click)="addSection(body, tpl.uuid ?? '')">
-                <span>{{ tpl.displayName ?? tpl.uid }}</span>
-                <span class="page-editor__mono">{{ tpl.uid }}</span>
-              </button>
-            </li>
-          }
-        </ul>
-      </div>
-    </div>
-  }
-
-  @if (autosave.conflict(); as conflict) {
-    <sf-conflict-drawer
-      [conflict]="conflict"
-      [changedKeys]="changedKeys()"
-      (keepMine)="onResolve('mine')"
-      (takeTheirs)="onResolve('theirs')"
-      (resolve)="onResolveFields($event)"
-    />
-  }
+  <sf-section-palette />
+  <sf-page-editor-conflict />
 </div>

@@ -1,0 +1,82 @@
+:host {
+  display: contents;
+}
+
+.changes__diff {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  max-width: 34rem;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.changes__diff-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-2);
+  padding: var(--sf-2) var(--sf-3);
+  border-bottom: 1px solid var(--sf-line);
+}
+
+.changes__diff-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.changes__diff-title h2 {
+  margin: 0;
+  font-size: var(--sf-text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changes__open {
+  color: var(--sf-signal);
+  font-size: var(--sf-text-xs);
+  white-space: nowrap;
+}
+
+.changes__close {
+  border: none;
+  background: transparent;
+  color: var(--sf-slate);
+  cursor: pointer;
+}
+
+.changes__diff-body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--sf-2) var(--sf-3);
+  overflow: auto;
+}
+
+.changes__diff-legend {
+  margin-bottom: var(--sf-2);
+}
+
+.changes__muted {
+  margin: 0;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.changes__error {
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+  font-size: var(--sf-text-sm);
+}
+
+// mirrors --sf-bp-lg: below it the diff stacks under the list
+@media (max-width: 1100px) {
+  .changes__diff {
+    max-width: none;
+  }
+}

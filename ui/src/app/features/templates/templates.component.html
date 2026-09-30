@@ -1,44 +1,19 @@
-  <div class="templates">
+<div class="templates">
   <h1 class="sf-sr-only">Templates</h1>
-  <aside class="templates__tree">
-    <div class="templates__tree-head">
-      <h2>Templates</h2>
-    </div>
-    @if (loading()) {
-      <sf-spinner label="Loading templates…" />
-    }
-    <div class="templates__tree-body" role="tree">
-      @for (root of topLevelFolders(); track root.uuid) {
-        <sf-template-folder-node
-          [node]="root"
-          [depth]="0"
-          [selectedUuid]="highlightedFolder()"
-          [projectKey]="projectKey()"
-          [templateKind]="rootKind(root)"
-          [templatesByFolder]="templatesByFolder()"
-          [selectedTemplateUuid]="selectedUuid()"
-          (select)="selectFolder($event)"
-          (move)="moveItemTo($event)"
-          (selectTemplate)="select($event)"
-          (newTemplate)="newTemplate()"
-          (changed)="onTreeChanged()"
-        />
-      }
-    </div>
-  </aside>
+  <sf-templates-tree-pane (newTemplate)="newTemplate()" />
 
-  <section class="templates__detail" (keydown)="onKeydown($event)">
+  <section class="templates__detail" (keydown)="save.onKeydown($event)">
     <div class="templates__toolbar">
-      @if (readOnly()) {
-        <span class="templates__toolbar-readonly">{{ readOnlyLabel() }}</span>
+      @if (store.readOnly()) {
+        <span class="templates__toolbar-readonly">{{ store.readOnlyLabel() }}</span>
       }
       <span class="templates__toolbar-spacer"></span>
-      <sf-button variant="primary" [disabled]="readOnly()" (click)="newTemplate()">
-        {{ activeTemplateKind() === 'DATASET' ? 'New dataset' : 'New template' }}
+      <sf-button variant="primary" [disabled]="store.readOnly()" (click)="newTemplate()">
+        {{ store.activeTemplateKind() === 'DATASET' ? 'New dataset' : 'New template' }}
       </sf-button>
     </div>
 
-    @if (datasetSelected() && selectedUuid(); as datasetUuid) {
+    @if (store.datasetSelected() && store.selectedUuid(); as datasetUuid) {
       <div class="detail__scroll">
         <sf-dataset-schema-editor
           [projectKey]="projectKey()"
@@ -48,296 +23,22 @@
         />
       </div>
     } @else {
-      @if (detail(); as d) {
-      <div class="detail__scroll">
-        <div class="detail__head">
-          <div>
-            <h3>{{ d.displayName ?? d.uid }}</h3>
-            <div class="detail__meta">{{ d.uid ?? '' }} · rev {{ d.revision ?? '' }}@if (d.abstract) { · abstract }</div>
-            @if (breadcrumb().length > 0) {
-              <nav class="inheritance__chain" aria-label="Inheritance chain">
-                @for (item of breadcrumb(); track item.uuid; let last = $last) {
-                  @if (item.current) {
-                    <span class="inheritance__crumb inheritance__crumb--current" aria-current="page">{{ item.uid }}</span>
-                  } @else {
-                    <button type="button" class="inheritance__crumb" (click)="openTemplate(item.uuid)">{{ item.uid }}</button>
-                  }
-                  @if (!last) {
-                    <span class="inheritance__sep" aria-hidden="true">›</span>
-                  }
-                }
-              </nav>
-            }
-            @if (childTemplates().length > 0) {
-              <div class="inheritance__children">
-                Extended by:
-                @for (child of childTemplates(); track child.uuid; let last = $last) {
-                  <button type="button" class="inheritance__crumb" (click)="openTemplate(child.uuid)">{{ child.uid }}</button>@if (!last) {<span>, </span>}
-                }
-              </div>
-            }
-          </div>
-          <div class="actions">
-            @if (dirty() && !readOnly()) {
-              <span class="detail__unsaved" role="status">Unsaved changes — the definition and every channel save together.</span>
-            }
-            <sf-button variant="primary" [disabled]="saving() || readOnly() || !dirty()" (click)="saveTemplate()">
-              Save template
-            </sf-button>
-            <sf-button variant="danger" [disabled]="readOnly()" (click)="requestDelete()">Delete</sf-button>
-          </div>
-        </div>
+      @if (store.detail(); as d) {
+        <div class="detail__scroll">
+          <sf-template-meta-header />
+          <sf-template-save-outcomes />
 
-        <div class="panel">
-          <div class="inline">
-            <sf-field label="Display name" class="inline__field">
-              <input
-                type="text"
-                [value]="displayName()"
-                (input)="onDisplayNameInput($event)"
-              />
-            </sf-field>
-            <sf-field label="Category" class="inline__field">
-              <input
-                type="text"
-                [value]="category()"
-                (input)="onCategoryInput($event)"
-              />
-            </sf-field>
-            @if (isSection()) {
-              <label>
-                <input
-                  type="checkbox"
-                  [checked]="deprecated()"
-                  (change)="onDeprecatedChange($event)"
-                />
-                Deprecated
-              </label>
-            } @else {
-              <label title="A layout other page templates extend. Pages can't use an abstract template.">
-                <input
-                  type="checkbox"
-                  [checked]="abstractTemplate()"
-                  [disabled]="readOnly()"
-                  (change)="onAbstractChange($event)"
-                />
-                Abstract
-              </label>
-            }
+          <div class="editors">
+            <sf-template-cdl-panel />
+            <sf-template-channel-panel />
           </div>
-          @if (templateInUse(); as inUse) {
-            <div class="inheritance__notice inheritance__notice--error" role="alert">
-              {{ inUse.pageCount }} {{ inUse.pageCount === 1 ? 'page uses' : 'pages use' }} this template, so it can't be made
-              abstract. Move {{ inUse.pageCount === 1 ? 'it' : 'them' }} to another template first:
-              @for (uid of inUse.pageUids; track uid; let i = $index; let last = $last) {
-                @if (inUse.pageUuids[i]; as pageUuid) {
-                  <a [routerLink]="['/p', projectKey(), 'pages', pageUuid]">{{ uid }}</a>
-                } @else {
-                  <span>{{ uid }}</span>
-                }@if (!last) {<span>, </span>}
-              }
-              @if (inUse.pageCount > inUse.pageUids.length) { <span>…</span> }
+
+          @if (d.uuid; as templateUuid) {
+            <div class="panel">
+              <sf-asset-impact [projectKey]="projectKey()" [assetUuid]="templateUuid" [refreshKey]="d.revision" />
             </div>
           }
-          <sf-uid-rename
-            [projectKey]="projectKey()"
-            [uuid]="d.uuid ?? ''"
-            [uid]="d.uid ?? ''"
-            (uidChanged)="onUidChanged()"
-          />
-          @if (showPaginationPaths()) {
-            <fieldset class="pagination-paths" aria-describedby="pagination-paths-help">
-              <legend class="pagination-paths__legend">Pagination paths</legend>
-              <p id="pagination-paths-help" class="detail__meta pagination-paths__help">
-                Where pages 2, 3, … of a paginated page are written, per channel. Leave blank to write them next to the
-                first page (<code>blog.html</code> → <code>blog-2.html</code>). Placeholders: <code>{{ '{' }}pageNumber{{ '}' }}</code>
-                (required), <code>{{ '{' }}pagePath{{ '}' }}</code> (the first page's path without extension),
-                <code>{{ '{' }}folder{{ '}' }}</code>, <code>{{ '{' }}uid{{ '}' }}</code>, <code>{{ '{' }}ext{{ '}' }}</code>.
-              </p>
-              @for (key of channelKeys(); track key) {
-                <label class="pagination-paths__row">
-                  <span class="pagination-paths__channel">{{ key }}</span>
-                  <input
-                    type="text"
-                    spellcheck="false"
-                    [attr.aria-label]="'Pagination path for channel ' + key"
-                    [attr.aria-invalid]="paginationPathErrors()[key] ? 'true' : null"
-                    [placeholder]="defaultPaginationPath"
-                    [value]="paginationPaths()[key] ?? ''"
-                    [disabled]="readOnly()"
-                    (input)="onPaginationPathInput(key, $event)"
-                  />
-                </label>
-                @if (paginationPathErrors()[key]; as error) {
-                  <span class="diagnostic diagnostic--error" role="alert">{{ key }}: {{ error }}</span>
-                }
-              } @empty {
-                <p class="detail__meta">Add a channel to set its pagination path.</p>
-              }
-            </fieldset>
-          }
         </div>
-
-        @if (descendantProblems().length > 0) {
-          <div class="inheritance__notice inheritance__notice--error" role="alert">
-            <p>Not saved: this change would break {{ descendantProblems().length === 1 ? 'a template that extends' : 'templates that extend' }} this one.</p>
-            @for (problem of descendantProblems(); track $index) {
-              <div class="inheritance__descendant">
-                <button type="button" class="inheritance__crumb" (click)="openTemplate(problem.uuid)">{{ problem.uid }}</button>
-                <span class="detail__meta inheritance__where">{{ problem.channel ? 'channel ' + problem.channel : 'content definition' }}</span>
-                @for (diag of problem.diagnostics; track $index) {
-                  <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
-                    {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
-                  </div>
-                }
-              </div>
-            }
-          </div>
-        }
-        @if (descendantWarnings().length > 0) {
-          <div class="inheritance__notice" role="status">
-            <div class="inheritance__notice-head">
-              <p>Saved. Templates that extend this one have warnings:</p>
-              <sf-button variant="ghost" (click)="dismissDescendantWarnings()">Dismiss</sf-button>
-            </div>
-            @for (warning of descendantWarnings(); track $index) {
-              <div class="inheritance__descendant">
-                <button type="button" class="inheritance__crumb" (click)="openTemplate(warning.uuid)">{{ warning.uid }}</button>
-                <span class="detail__meta inheritance__where">{{ warning.channel ? 'channel ' + warning.channel : 'content definition' }}</span>
-                @for (diag of warning.diagnostics; track $index) {
-                  <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
-                    {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
-                  </div>
-                }
-              </div>
-            }
-          </div>
-        }
-
-        <div class="editors">
-          <section class="panel editors__panel" aria-labelledby="cdl-heading">
-            <h4 id="cdl-heading" class="editors__heading">Content definition (CDL)</h4>
-            <sf-cdl-sections-editor
-              label="Content definition (CDL)"
-              [value]="sections()"
-              [saved]="savedSections()"
-              [sections]="cdlTabs()"
-              [selected]="cdlTab()"
-              [diagnostics]="cdlDiagnostics()"
-              [readOnly]="readOnly()"
-              [names]="editorNames()"
-              [hints]="cdlHints"
-              (selectedChange)="cdlTab.set($event)"
-              (sectionChange)="onSectionInput($event)"
-            >
-              @if (inheritedEditorGroups().length > 0) {
-                <section sfCdlContent class="inheritance__inherited" aria-label="Inherited editors">
-                  <h5>Inherited editors (read-only — edit them on the template that declares them)</h5>
-                  @for (group of inheritedEditorGroups(); track group.uid) {
-                    <div class="inheritance__group">
-                      <span class="inheritance__from">from
-                        @if (group.uuid) {
-                          <button type="button" class="inheritance__crumb" (click)="openTemplate(group.uuid)">{{ group.uid }}</button>
-                        } @else {
-                          <span>{{ group.uid }}</span>
-                        }
-                      </span>
-                      <code>{{ group.editors.join(', ') }}</code>
-                    </div>
-                  }
-                </section>
-              }
-              @if (inheritedBodyGroups().length > 0) {
-                <section sfCdlBodies class="inheritance__inherited" aria-label="Inherited bodies">
-                  <h5>Inherited bodies (read-only — edit them on the template that declares them)</h5>
-                  @for (group of inheritedBodyGroups(); track group.uid) {
-                    <div class="inheritance__group">
-                      <span class="inheritance__from">from
-                        @if (group.uuid) {
-                          <button type="button" class="inheritance__crumb" (click)="openTemplate(group.uuid)">{{ group.uid }}</button>
-                        } @else {
-                          <span>{{ group.uid }}</span>
-                        }
-                      </span>
-                      <code>{{ group.bodies.join(', ') }}</code>
-                    </div>
-                  }
-                </section>
-              }
-            </sf-cdl-sections-editor>
-            <div class="actions">
-              <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>
-            </div>
-          </section>
-
-          <section class="panel editors__panel" aria-labelledby="channels-heading">
-            <h4 id="channels-heading" class="editors__heading">Channel templates (OCTL)</h4>
-            <sf-tabs
-              label="Channel templates (OCTL)"
-              [tabs]="channelTabs()"
-              [selected]="selectedChannel()"
-              (selectTab)="selectChannel($event)"
-            >
-              @if (availableChannels().length > 0) {
-                <select
-                  class="channels__select"
-                  aria-label="Add channel"
-                  [disabled]="readOnly()"
-                  (change)="onAddChannel($event)"
-                >
-                  <option value="">+ Add channel…</option>
-                  @for (channel of availableChannels(); track channel.key) {
-                    <option [value]="channel.key">{{ channel.name ?? channel.key }}</option>
-                  }
-                </select>
-              }
-            </sf-tabs>
-            <!-- One editor per channel, kept while another shows: its undo history never crosses channels. -->
-            @for (key of channelKeys(); track key) {
-              <div class="channels" role="tabpanel" [attr.aria-label]="'Channel ' + key" [hidden]="key !== selectedChannel()">
-                <span class="channels__hint">How this template renders in the {{ key }} channel.</span>
-                @for (warning of outputPathWarningsOf(key); track $index) {
-                  <p class="channels__warning" role="status" data-sf-output-path-warning>{{ warning.message }}</p>
-                }
-                <sf-octl-editor
-                  [label]="'OCTL source for channel ' + key"
-                  [value]="channelSources()[key]"
-                  [diagnostics]="channelDiagnostics(key)"
-                  [readOnly]="readOnly()"
-                  [names]="editorNames()"
-                  [format]="channelFormats()[key].format"
-                  [svg]="channelFormats()[key].svg"
-                  (valueChange)="onChannelInput($event, key)"
-                />
-                <div class="actions">
-                  <sf-button variant="ghost" [disabled]="readOnly()" (click)="removeChannel()">
-                    Remove channel
-                  </sf-button>
-                </div>
-              </div>
-            } @empty {
-              <p class="detail__meta">No channels configured.</p>
-            }
-            @if (removedChannels().length > 0) {
-              <p class="channels__removed" role="status">
-                Removed when you save:
-                @for (channel of removedChannels(); track channel) {
-                  <span class="channels__removed-item">
-                    <code>{{ channel }}</code>
-                    <button type="button" class="inheritance__crumb" [disabled]="readOnly()" (click)="restoreChannel(channel)">Undo</button>
-                  </span>
-                }
-              </p>
-            }
-          </section>
-        </div>
-
-        @if (d.uuid; as templateUuid) {
-          <div class="panel">
-            <sf-asset-impact [projectKey]="projectKey()" [assetUuid]="templateUuid" [refreshKey]="d.revision" />
-          </div>
-        }
-      </div>
       } @else {
         <sf-empty-state
           title="No template selected"
@@ -348,15 +49,15 @@
   </section>
 </div>
 
-@if (confirmDelete()) {
-  <div class="scrim" (click)="cancelDelete()"></div>
+@if (save.confirmDelete()) {
+  <div class="scrim" (click)="save.cancelDelete()"></div>
   <div class="dialog" role="dialog" aria-modal="true" aria-label="Confirm delete">
     <div class="dialog__body">
       <p>Delete this template? Existing pages using it will keep their content but may break on next generation.</p>
     </div>
     <footer class="dialog__footer">
-      <sf-button variant="ghost" (click)="cancelDelete()">Cancel</sf-button>
-      <sf-button variant="danger" (click)="confirmDeleteAction()">Delete</sf-button>
+      <sf-button variant="ghost" (click)="save.cancelDelete()">Cancel</sf-button>
+      <sf-button variant="danger" (click)="save.confirmDeleteAction()">Delete</sf-button>
     </footer>
   </div>
 }
@@ -370,12 +71,12 @@
   (closed)="closeNewTemplate()"
 />
 
-@if (pendingDiscard(); as message) {
+@if (save.pendingDiscard(); as message) {
   <div class="templates__discard" role="alertdialog" aria-label="This change discards translations">
     <p class="templates__discard-text">{{ message }}</p>
     <div class="templates__discard-actions">
-      <sf-button variant="ghost" (click)="cancelDiscard()">Keep the translations</sf-button>
-      <sf-button variant="danger" (click)="confirmDiscardAndSave()">Discard and save</sf-button>
+      <sf-button variant="ghost" (click)="save.cancelDiscard()">Keep the translations</sf-button>
+      <sf-button variant="danger" (click)="save.confirmDiscardAndSave()">Discard and save</sf-button>
     </div>
   </div>
 }

@@ -1,0 +1,12 @@
+// The host adds no box of its own: the panel stays a grid item of `.editors`.
+:host {
+  display: contents;
+}
+
+// The code tabs of both columns share one height (`--sf-code-height` on `.editors`).
+sf-cdl-sections-editor {
+  --sf-cdl-min-height: 14rem;
+  --sf-cdl-max-height: none;
+  --sf-octl-min-height: 14rem;
+  --sf-octl-max-height: none;
+}

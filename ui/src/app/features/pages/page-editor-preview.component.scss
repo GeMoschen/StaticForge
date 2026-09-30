@@ -1,0 +1,15 @@
+:host {
+  display: contents;
+}
+
+.page-editor__divider {
+  flex-shrink: 0;
+  width: 6px;
+  cursor: col-resize;
+  background: var(--sf-line);
+}
+
+.page-editor__preview {
+  min-width: 0;
+  display: flex;
+}

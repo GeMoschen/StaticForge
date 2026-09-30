@@ -28,11 +28,11 @@
         <span class="record-editor__status" role="status" aria-live="polite">{{ statusLabel() }}</span>
         @if (!readOnly() && !rec.deleted) {
           <sf-button variant="secondary" [disabled]="autosave.saveState() === 'saving'" (click)="saveNow()">Save now</sf-button>
-          <sf-button variant="secondary" (click)="openMove()">Move…</sf-button>
-          <sf-button variant="danger" (click)="deleteRecord()">Delete</sf-button>
+          <sf-button variant="secondary" (click)="actions.openMove()">Move…</sf-button>
+          <sf-button variant="danger" (click)="actions.remove()">Delete</sf-button>
         }
         @if (rec.deleted && !timeTravelling()) {
-          <sf-button variant="primary" [disabled]="readOnly()" (click)="restoreRecord()">Restore</sf-button>
+          <sf-button variant="primary" [disabled]="readOnly()" (click)="actions.restore()">Restore</sf-button>
         }
       </header>
       <sf-release-bar
@@ -82,102 +82,25 @@
           </p>
         </section>
 
-        <aside class="record-editor__side">
-          <div class="record-editor__tabs" role="tablist">
-            <button type="button" role="tab" [attr.aria-selected]="panel() === 'issues'" [class.record-editor__tab--active]="panel() === 'issues'" (click)="showPanel('issues')">
-              Checks
-              @if (counted().length > 0) {
-                <span class="record-editor__count">{{ counted().length }}</span>
-              }
-            </button>
-            <button type="button" role="tab" [attr.aria-selected]="panel() === 'history'" [class.record-editor__tab--active]="panel() === 'history'" (click)="showPanel('history')">
-              History
-            </button>
-            <button type="button" role="tab" [attr.aria-selected]="panel() === 'usages'" [class.record-editor__tab--active]="panel() === 'usages'" (click)="showPanel('usages')">
-              Used by
-              @if (usages().length > 0) {
-                <span class="record-editor__count">{{ usages().length }}</span>
-              }
-            </button>
-          </div>
-
-          @switch (panel()) {
-            @case ('issues') {
-              <div role="tabpanel" aria-label="Checks" aria-live="polite">
-                @if (listed().length === 0) {
-                  <p class="record-editor__hint">No problems found.</p>
-                } @else {
-                  <ul class="record-editor__list">
-                    @for (issue of listed(); track $index) {
-                      <li
-                        class="record-editor__issue"
-                        [class.record-editor__issue--blocking]="issue.kind === 'STRUCTURAL' || issue.severity === 'ERROR'"
-                        [attr.data-level]="issue.severity"
-                      >
-                        <code>{{ issue.path }}</code>
-                        <span>{{ issue.message }}</span>
-                      </li>
-                    }
-                  </ul>
-                }
-              </div>
-            }
-            @case ('history') {
-              <div role="tabpanel" aria-label="History">
-                <ul class="record-editor__list">
-                  @for (entry of history(); track entry.revision) {
-                    <li>
-                      <button
-                        type="button"
-                        class="record-editor__revision"
-                        [class.record-editor__revision--current]="entry.revision === rec.revision"
-                        (click)="viewRevision(entry.revision)"
-                      >
-                        <span>rev {{ entry.revision }}</span>
-                        <span>{{ entry.displayName }}@if (entry.deleted) { (deleted) }</span>
-                        <span class="record-editor__muted">{{ entry.changedAt | sfRelativeTime }}</span>
-                      </button>
-                    </li>
-                  }
-                </ul>
-              </div>
-            }
-            @case ('usages') {
-              <div role="tabpanel" aria-label="Used by">
-                @if (usages().length === 0) {
-                  <p class="record-editor__hint">No page, template or record references this record.</p>
-                } @else {
-                  <ul class="record-editor__list">
-                    @for (usage of usages(); track $index) {
-                      <li class="record-editor__usage">
-                        <span class="record-editor__badge">{{ usage.fromType }}</span>
-                        @if (usage.fromType === 'PAGE') {
-                          <a [routerLink]="['/p', projectKey(), 'pages', usage.fromUuid]">{{ usage.fromUid }}</a>
-                        } @else if (usage.fromType === 'RECORD') {
-                          <a [routerLink]="['/p', projectKey(), 'content', 'records', usage.fromUuid]">{{ usage.fromUid }}</a>
-                        } @else {
-                          <span>{{ usage.fromUid }}</span>
-                        }
-                        <code class="record-editor__muted">{{ usage.sourcePath }}</code>
-                      </li>
-                    }
-                  </ul>
-                }
-              </div>
-            }
-          }
-        </aside>
+        <sf-record-side-panel
+          [(panel)]="panel"
+          [projectKey]="projectKey()"
+          [issues]="shownIssues()"
+          [history]="history()"
+          [usages]="usages()"
+          [revision]="rec.revision"
+        />
       </div>
 
       <sf-move-target-dialog
-        [open]="moveOpen()"
+        [open]="actions.moveOpen()"
         [title]="'Move “' + (rec.displayName ?? rec.uid) + '” to…'"
         description="A record can move only to another record set of its dataset."
         emptyText="This dataset has no other record set. Create one in the Content tree first."
-        [targets]="moveTargets()"
-        [submitting]="moving()"
-        (chosen)="moveTo($event)"
-        (closed)="closeMove()"
+        [targets]="actions.moveTargets()"
+        [submitting]="actions.moving()"
+        (chosen)="actions.moveTo($event)"
+        (closed)="actions.closeMove()"
       />
 
       @if (autosave.conflict(); as conflict) {

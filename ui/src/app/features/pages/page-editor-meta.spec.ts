@@ -14,6 +14,7 @@ import { ProjectContextStore } from '../../core/project/project-context.store';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { PageEditorComponent } from './page-editor.component';
+import { PageEditorHeaderComponent } from './page-editor-header.component';
 
 type PageView = components['schemas']['PageView'];
 
@@ -41,7 +42,11 @@ async function renderEditor() {
     templateDetail: vi.fn().mockReturnValue(of({ uuid: 'tpl-1', effectiveDefinition: { editors: [], bodies: [] } })),
     translationStatus: vi.fn().mockReturnValue(of({ locales: [] })),
   };
+  // Only the header is real here: the popover lives in it.
   TestBed.overrideComponent(PageEditorComponent, {
+    set: { imports: [PageEditorHeaderComponent], schemas: [NO_ERRORS_SCHEMA] },
+  });
+  TestBed.overrideComponent(PageEditorHeaderComponent, {
     set: { imports: [SfButtonComponent], schemas: [NO_ERRORS_SCHEMA] },
   });
   const result = await render(PageEditorComponent, {

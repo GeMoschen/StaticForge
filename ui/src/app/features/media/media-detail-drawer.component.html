@@ -2,7 +2,7 @@
 
 <aside
   class="drawer"
-  [class.drawer--wide]="tab() !== 'details'"
+  [class.drawer--wide]="store.tab() !== 'details'"
   role="dialog"
   aria-modal="true"
   aria-labelledby="media-drawer-title"
@@ -10,7 +10,7 @@
   <header class="drawer__header">
     <h2 id="media-drawer-title" class="drawer__title">
       {{ media().displayName ?? media().uid ?? 'Media' }}
-      @if (processCms()) {
+      @if (store.processCms()) {
         <span class="cms-badge" title="CMS syntax is processed when the site is generated">CMS</span>
       }
     </h2>
@@ -20,40 +20,40 @@
   <sf-release-bar
     [projectKey]="projectKey()"
     [assetUuid]="media().uuid"
-    [refreshKey]="revision()"
+    [refreshKey]="store.revision()"
     (changed)="onReleaseChanged($event)"
   />
 
-  @if (textEditable()) {
+  @if (store.textEditable()) {
     <div class="tabs" role="tablist">
       <button
         type="button"
         role="tab"
-        [attr.aria-selected]="tab() === 'details'"
-        [class.tab--active]="tab() === 'details'"
-        (click)="openTab('details')"
+        [attr.aria-selected]="store.tab() === 'details'"
+        [class.tab--active]="store.tab() === 'details'"
+        (click)="text.openTab('details')"
       >
         Details
       </button>
       <button
         type="button"
         role="tab"
-        [attr.aria-selected]="tab() === 'source'"
-        [class.tab--active]="tab() === 'source'"
-        (click)="openTab('source')"
+        [attr.aria-selected]="store.tab() === 'source'"
+        [class.tab--active]="store.tab() === 'source'"
+        (click)="text.openTab('source')"
       >
         Source
-        @if (dirty()) {
+        @if (text.dirty()) {
           <span class="tab__dirty" aria-label="unsaved changes">•</span>
         }
       </button>
-      @if (processCms()) {
+      @if (store.processCms()) {
         <button
           type="button"
           role="tab"
-          [attr.aria-selected]="tab() === 'rendered'"
-          [class.tab--active]="tab() === 'rendered'"
-          (click)="openTab('rendered')"
+          [attr.aria-selected]="store.tab() === 'rendered'"
+          [class.tab--active]="store.tab() === 'rendered'"
+          (click)="text.openTab('rendered')"
         >
           Rendered
         </button>
@@ -68,327 +68,36 @@
       </div>
     }
 
-    @if (textEditable()) {
-      <section class="process" aria-label="CMS processing">
-        <label class="switch">
-          <input
-            type="checkbox"
-            role="switch"
-            [checked]="processCms()"
-            [disabled]="readOnly() || togglingProcess()"
-            (change)="onProcessToggle($event)"
-          />
-          <span>Process CMS syntax</span>
-        </label>
-        <p class="hint">
-          When on, <code>$CMS_…$</code> instructions in this file are rendered when the site is generated
-          and in preview, and <code>$$</code> is output as a single <code>$</code>.
-        </p>
-        @if (processDiagnostics().length > 0) {
-          <div class="diagnostics" aria-live="polite">
-            @for (diag of processDiagnostics(); track $index) {
-              <div
-                class="diagnostic"
-                [class.diagnostic--error]="diag.severity === 'ERROR'"
-                [class.diagnostic--warning]="diag.severity !== 'ERROR'"
-              >
-                <span class="diagnostic__code">{{ diag.code }}</span>
-                @if (positionLabel(diag); as position) {
-                  <span class="diagnostic__position">{{ position }}</span>
-                }
-                <span>{{ diag.message }}</span>
-              </div>
-            }
-          </div>
-        }
-      </section>
+    @if (store.textEditable()) {
+      <sf-media-drawer-process />
     }
 
-    @switch (tab()) {
+    @switch (store.tab()) {
       @case ('source') {
-        <section class="source" aria-label="Source">
-          @if (tooLarge()) {
-            <div class="banner banner--warning">
-              This file is too large to edit here. Download it, edit it locally and use Replace file.
-            </div>
-          } @else if (sourceLoading()) {
-            <span class="muted">Loading…</span>
-          } @else {
-            @if (!sourceUtf8()) {
-              <div class="banner banner--warning">
-                This file is not valid UTF-8. Unreadable characters are shown as �, and saving stores the
-                file as UTF-8.
-              </div>
-            }
-            @if (textLocale() !== null) {
-              <label class="text-locale">
-                <span>Language</span>
-                <select [value]="textLocale()" (change)="onTextLocaleChange($event)" aria-label="Language of the file">
-                  @for (locale of locales.locales(); track locale.code) {
-                    <option [value]="locale.code" [selected]="locale.code === textLocale()">
-                      {{ locale.label ?? locale.code }} ({{ (locale.code ?? '').toUpperCase() }})
-                    </option>
-                  }
-                </select>
-              </label>
-            }
-            @if (lineEnding() === 'MIXED') {
-              <div class="banner banner--warning">
-                This file mixes line endings; saving stores LF line endings.
-              </div>
-            }
-            <sf-code-editor
-              #sourceEditor
-              class="source__editor"
-              language="octl"
-              label="File source"
-              [value]="editorSeed()"
-              [readOnly]="readOnly()"
-              [diagnostics]="sourceDiagnostics()"
-              [indentWithTabs]="true"
-              [format]="sourceFormat().format"
-              [svg]="sourceFormat().svg"
-              (valueChange)="onSourceInput($event)"
-            />
-
-            @if (sourceDiagnostics().length > 0) {
-              <div class="diagnostics" aria-live="polite">
-                @for (diag of sourceDiagnostics(); track $index) {
-                  <button
-                    type="button"
-                    class="diagnostic diagnostic--button"
-                    [class.diagnostic--error]="diag.severity === 'ERROR'"
-                    [class.diagnostic--warning]="diag.severity !== 'ERROR'"
-                    (click)="goToDiagnostic(diag)"
-                  >
-                    <span class="diagnostic__code">{{ diag.code }}</span>
-                    @if (positionLabel(diag); as position) {
-                      <span class="diagnostic__position">{{ position }}</span>
-                    }
-                    <span>{{ diag.message }}</span>
-                  </button>
-                }
-              </div>
-            }
-
-            <div class="source__actions">
-              <sf-button variant="primary" [disabled]="!canSaveSource()" (click)="saveSource()">
-                {{ sourceSaving() ? 'Saving…' : 'Save' }}
-              </sf-button>
-              <span class="muted">
-                @if (sourceHasErrors()) {
-                  Fix the errors to save.
-                } @else if (dirty()) {
-                  Unsaved changes — saving creates a revision.
-                } @else {
-                  Every save creates a revision.
-                }
-              </span>
-            </div>
-          }
-        </section>
+        <sf-media-drawer-source />
       }
       @case ('rendered') {
-        <section class="rendered" aria-label="Rendered output">
-          <div class="rendered__toolbar">
-            <span class="muted">The saved file rendered as preview serves it, with media links as preview URLs.</span>
-            <sf-button variant="ghost" [disabled]="renderedLoading()" (click)="loadRendered()">Refresh</sf-button>
-          </div>
-          @if (renderedLoading()) {
-            <span class="muted">Rendering…</span>
-          } @else if (renderedDiagnostics().length > 0) {
-            <div class="diagnostics" aria-live="polite">
-              @for (diag of renderedDiagnostics(); track $index) {
-                <div class="diagnostic diagnostic--error">
-                  <span class="diagnostic__code">{{ diag.code }}</span>
-                  @if (positionLabel(diag); as position) {
-                    <span class="diagnostic__position">{{ position }}</span>
-                  }
-                  <span>{{ diag.message }}</span>
-                </div>
-              }
-            </div>
-          } @else if (renderedText() !== null) {
-            <pre class="rendered__output">{{ renderedText() }}</pre>
-          }
-        </section>
+        <sf-media-drawer-rendered />
       }
       @default {
-        <div class="preview">
-          <img
-            class="preview__img"
-            [src]="previewUrl()"
-            [alt]="media().altText ?? ''"
-            [style.object-position]="focalPosition()"
-          />
-        </div>
+        <sf-media-drawer-preview />
 
-        @if (showLocalization()) {
-          <section class="section localization" aria-label="Files per language">
-            <label class="switch">
-              <input
-                type="checkbox"
-                role="switch"
-                [checked]="localized()"
-                [disabled]="readOnly() || togglingLocalized()"
-                (change)="onLocalizedToggle($event)"
-              />
-              <span>Different file per language</span>
-            </label>
-            @if (discardPrompt(); as files) {
-              <div class="discard-prompt" role="alertdialog" aria-label="Discard language files">
-                <p>
-                  Only the default language's file is kept.
-                  @if (files.length > 0) {
-                    These files will be discarded: {{ discardPromptText() }}.
-                  }
-                </p>
-                <div class="discard-prompt__actions">
-                  <sf-button variant="ghost" (click)="cancelUnlocalize()">Cancel</sf-button>
-                  <sf-button variant="danger" [disabled]="togglingLocalized()" (click)="confirmUnlocalize()">
-                    Discard files
-                  </sf-button>
-                </div>
-              </div>
-            }
-            @if (fileRows().length > 0) {
-              <h3 class="section__title">Files</h3>
-              <ul class="locale-files">
-                @for (row of fileRows(); track row.locale) {
-                  <li
-                    class="locale-file"
-                    [class.locale-file--drop]="dragLocale() === row.locale"
-                    [attr.data-locale]="row.locale"
-                    (dragover)="onLocaleDragOver(row.locale, $event)"
-                    (dragleave)="onLocaleDragLeave(row.locale)"
-                    (drop)="onLocaleDrop(row.locale, $event)"
-                  >
-                    <div class="locale-file__thumb">
-                      @if (row.own && localeThumbs()[row.locale]; as thumbUrl) {
-                        <img [src]="thumbUrl" alt="" />
-                      } @else {
-                        <sf-icon [name]="row.own ? 'draft' : 'subdirectory_arrow_right'" />
-                      }
-                    </div>
-                    <div class="locale-file__info">
-                      <span class="locale-file__label">
-                        {{ row.label }}
-                        @if (row.isDefault) {
-                          <span class="muted">· default</span>
-                        }
-                      </span>
-                      @if (row.own) {
-                        <span class="locale-file__name">{{ row.fileName }} · {{ row.sizeBytes | sfFileSize }}</span>
-                      } @else {
-                        <span class="muted locale-file__fallback">{{ row.fallbackText }}</span>
-                      }
-                    </div>
-                    <div class="locale-file__actions">
-                      @if (busyLocale() === row.locale) {
-                        <span class="muted">Saving…</span>
-                      } @else {
-                        <label class="link-button" [class.link-button--disabled]="readOnly()">
-                          {{ row.own ? 'Replace' : 'Upload' }}
-                          <input
-                            class="visually-hidden"
-                            type="file"
-                            [disabled]="readOnly() || busyLocale() !== null"
-                            [attr.aria-label]="(row.own ? 'Replace ' : 'Upload ') + row.label + ' file'"
-                            (change)="onLocaleFileInput(row.locale, $event)"
-                          />
-                        </label>
-                        @if (row.own && !row.isDefault) {
-                          <button
-                            type="button"
-                            class="link-button"
-                            [disabled]="readOnly() || busyLocale() !== null"
-                            (click)="removeLocaleFile(row)"
-                          >
-                            Remove
-                          </button>
-                        }
-                      }
-                    </div>
-                  </li>
-                }
-              </ul>
-              <p class="hint">Drop a file on a language to upload it for that language.</p>
-            }
-          </section>
+        @if (store.showLocalization()) {
+          <sf-media-drawer-localization />
         }
 
-        @if (usages().length > 0) {
+        @if (usages.usages().length > 0) {
           <div class="banner banner--warning">
-            This file is referenced by {{ usages().length }} asset(s). Deleting it will
+            This file is referenced by {{ usages.usages().length }} asset(s). Deleting it will
             break those references.
           </div>
         }
 
-        <form [formGroup]="form">
-          <sf-field label="Alt text" hint="Required before publishing">
-            <input type="text" formControlName="altText" placeholder="Descriptive alt text" />
-            @if (form.controls.altText.invalid && form.controls.altText.touched) {
-              <span class="error">Alt text is required before publishing</span>
-            }
-          </sf-field>
+        <sf-media-drawer-metadata />
 
-          <sf-field label="Caption">
-            <input type="text" formControlName="caption" placeholder="Optional caption" />
-          </sf-field>
+        <sf-media-drawer-variants />
 
-          <sf-field label="Copyright">
-            <input type="text" formControlName="copyright" placeholder="© Owner (year)" />
-          </sf-field>
-
-          <div class="focal">
-            <sf-field label="Focal point X" hint="0 – 1">
-              <input type="number" formControlName="focalX" min="0" max="1" step="0.01" />
-            </sf-field>
-            <sf-field label="Focal point Y" hint="0 – 1">
-              <input type="number" formControlName="focalY" min="0" max="1" step="0.01" />
-            </sf-field>
-          </div>
-
-          <sf-button variant="primary" [disabled]="saving() || readOnly() || !metadataDirty()" (click)="save()">
-            Save metadata
-          </sf-button>
-        </form>
-
-        @if (variants().length > 0) {
-          <section class="section">
-            <h3 class="section__title">Variants</h3>
-            <ul class="variants">
-              @for (variant of variants(); track variant.name) {
-                <li>
-                  <span>{{ variant.name }}</span>
-                  <span class="meta">{{ variant.width ?? 0 }}px · {{ variant.format }}</span>
-                  <button type="button" class="link-button" (click)="downloadVariant(variant.name)">Download</button>
-                </li>
-              }
-            </ul>
-          </section>
-        }
-
-        <section class="section">
-          <h3 class="section__title">Referenced by</h3>
-          @if (usagesLoading()) {
-            <span class="muted">Loading…</span>
-          } @else if (usages().length === 0) {
-            <span class="muted">Not referenced by any asset.</span>
-          } @else {
-            <ul class="usages">
-              @for (usage of usages(); track usage.fromUuid) {
-                <li>
-                  <code>{{ usage.fromUid }}</code>
-                  <span>{{ usage.fromType }}</span>
-                  @if (usage.sourcePath) {
-                    <span class="muted">{{ usage.sourcePath }}</span>
-                  }
-                </li>
-              }
-            </ul>
-          }
-        </section>
+        <sf-media-drawer-usages />
 
         @if (media().uuid; as mediaUuid) {
           <section class="section">
@@ -407,59 +116,22 @@
       <input type="file" [disabled]="readOnly()" (change)="onReplaceFile($event)" />
     </sf-field>
     <div class="drawer__footer-actions">
-      <sf-button variant="danger" [disabled]="deleting() || readOnly()" (click)="confirmDelete()">
+      <sf-button variant="danger" [disabled]="usages.deleting() || readOnly()" (click)="confirmDelete()">
         Delete
       </sf-button>
     </div>
   </footer>
 </aside>
 
-@if (conflict(); as c) {
+@if (text.conflict(); as c) {
   <div class="conflict-overlay">
     <sf-conflict-drawer
       subject="file"
       [conflict]="c"
-      (keepMine)="keepMineAfterConflict()"
-      (takeTheirs)="takeTheirsAfterConflict()"
+      (keepMine)="text.keepMineAfterConflict()"
+      (takeTheirs)="text.takeTheirsAfterConflict()"
     />
   </div>
 }
 
-@if (dialog.state(); as d) {
-  <div class="dlg-scrim" (click)="cancelDelete()"></div>
-  <div class="dlg" role="dialog" aria-modal="true" [attr.aria-label]="d.title">
-    <header class="dlg__header">
-      <h2 class="dlg__title">{{ d.title }}</h2>
-    </header>
-    <div class="dlg__body">
-      <p class="dlg__message">{{ d.message }}</p>
-      @if (usages().length > 0) {
-        <ul class="dlg__usages">
-          @for (usage of usages(); track usage.fromUuid) {
-            <li>
-              <code>{{ usage.fromUid }}</code>
-              <span>{{ usage.fromType }}</span>
-            </li>
-          }
-        </ul>
-        <input
-          class="dlg__input"
-          type="text"
-          [value]="confirmText()"
-          (input)="onDeleteInput($event)"
-          placeholder="Type DELETE to confirm"
-        />
-      }
-    </div>
-    <footer class="dlg__footer">
-      <sf-button variant="ghost" (click)="cancelDelete()">Cancel</sf-button>
-      <sf-button
-        variant="danger"
-        [disabled]="!canConfirmDelete() || deleting()"
-        (click)="performDelete()"
-      >
-        Delete
-      </sf-button>
-    </footer>
-  </div>
-}
+<sf-media-drawer-delete-dialog />

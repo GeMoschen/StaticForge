@@ -1,255 +1,69 @@
-@if (selectedMedia(); as media) {
+@if (library.selectedMedia(); as media) {
   <sf-media-detail-drawer
     #detailDrawer
     [projectKey]="projectKey()"
     [media]="media"
-    (closed)="closeDetail()"
-    (updated)="onUpdated($event)"
-    (deleted)="onDeleted($event)"
-    (discarded)="onDiscarded($event)"
+    (closed)="library.closeDetail()"
+    (updated)="library.onUpdated($event)"
+    (deleted)="library.onDeleted($event)"
+    (discarded)="library.onDiscarded($event)"
   />
 }
 
-@if (renamingItem(); as ri) {
+@if (itemActions.renamingItem(); as ri) {
   <sf-rename-asset-dialog
     [open]="true"
     [projectKey]="projectKey()"
     [uuid]="ri.uuid ?? ''"
     [uid]="ri.uid ?? ''"
     [displayName]="ri.displayName ?? ri.uid ?? ''"
-    [submittingName]="renamingItemName()"
-    (renameDisplayName)="submitRenameItemDisplayName($event)"
-    (uidChanged)="onRenameItemUidChanged()"
-    (closed)="closeRenameItem()"
+    [submittingName]="itemActions.renamingItemName()"
+    (renameDisplayName)="itemActions.submitRenameItemDisplayName($event)"
+    (uidChanged)="library.reloadMedia()"
+    (closed)="itemActions.closeRenameItem()"
   />
 }
 
-@if (renamingFolder(); as rf) {
+@if (folders.renamingFolder(); as rf) {
   <sf-media-folder-detail
     [projectKey]="projectKey()"
     [folder]="rf"
-    [mediaCount]="renamingFolderMediaCount()"
+    [mediaCount]="folders.renamingFolderMediaCount()"
     [folderCount]="rf.children?.length ?? 0"
-    (close)="closeFolderDetail()"
-    (renamed)="onFolderDetailChanged()"
-    (deleted)="onFolderDetailChanged()"
+    (close)="folders.closeFolderDetail()"
+    (renamed)="folders.onFolderDetailChanged()"
+    (deleted)="folders.onFolderDetailChanged()"
   />
 }
 
 <div
   class="library"
   sfDropTarget
-  (dragenter)="onDragEnter($event)"
-  (dragleave)="onDragLeave()"
-  (drop)="onDrop($event)"
+  (dragenter)="uploads.onDragEnter($event)"
+  (dragleave)="uploads.onDragLeave()"
+  (drop)="uploads.onDrop($event)"
 >
   <h1 class="sf-sr-only">Media</h1>
 
-  <aside class="library__sidebar">
-    <div class="library__sidebar-head">
-      <h2>Folders</h2>
-      <button type="button" class="library__icon-btn" title="New folder" [disabled]="readOnly()" (click)="newFolder()">
-        +
-      </button>
-    </div>
-
-    <button
-      type="button"
-      class="library__clear"
-      [class.library__clear--active]="!folderUuid()"
-      (click)="selectFolder(null)"
-      (dragover)="onRootDragOver($event)"
-      (drop)="onRootDrop($event)"
-      (contextmenu)="onRootContextMenu($event)"
-    >
-      <sf-icon name="home" />
-      All media
-    </button>
-
-    <div class="library__tree-body">
-      @for (folder of topLevelFolders(); track folder.uuid) {
-        <sf-media-folder-node
-          [node]="folder"
-          [depth]="0"
-          [selectedUuid]="folderUuid()"
-          [projectKey]="projectKey()"
-          [mediaByFolder]="mediaByFolder()"
-          [selectedMediaUuid]="selectedMediaUuid()"
-          (select)="onFolderSelected($event)"
-          (move)="moveItemTo($event)"
-          (selectMedia)="onSelectMediaLeaf($event)"
-          (changed)="reloadFolders()"
-        />
-      }
-      @for (media of rootMedia(); track media.uuid) {
-        <sf-media-nav-node
-          [projectKey]="projectKey()"
-          [summary]="media"
-          [depth]="0"
-          [selected]="selectedMediaUuid() === media.uuid"
-          (select)="onSelectMediaLeaf($event)"
-          (changed)="onMediaLeafChanged()"
-        />
-      }
-    </div>
-  </aside>
+  <sf-media-library-sidebar />
 
   <div class="library__main">
-    <div class="toolbar">
-      <input
-        class="search"
-        type="search"
-        placeholder="Search media"
-        aria-label="Search media"
-        [value]="search()"
-        (input)="onSearchInput($event)"
-      />
-
-      <select
-        [value]="mimeFilter()"
-        (change)="onMimeChange($event)"
-        aria-label="Filter by media type"
-      >
-        <option value="">All types</option>
-        <option value="image/">Images</option>
-        <option value="video/">Videos</option>
-        <option value="audio/">Audio</option>
-        <option value="application/">Documents</option>
-      </select>
-
-      @if (selected().length > 0) {
-        <sf-button variant="danger" [disabled]="readOnly()" (click)="deleteSelection()">
-          Delete ({{ selected().length }})
-        </sf-button>
-      }
-
-      <span class="toolbar__spacer"></span>
-
-      @if (readOnly()) {
-        <span class="toolbar__readonly">{{ readOnlyLabel() }}</span>
-      }
-
-      <sf-button variant="secondary" [disabled]="readOnly()" (click)="fileInput.click()">Upload</sf-button>
-      <input
-        #fileInput
-        class="visually-hidden"
-        type="file"
-        multiple
-        [disabled]="readOnly()"
-        (change)="onFileInput($event)"
-      />
-    </div>
-
-    @if (loading() && items().length === 0 && currentFolderChildren().length === 0) {
-      <sf-spinner label="Loading media…" />
-    } @else if (items().length === 0 && currentFolderChildren().length === 0) {
-      <sf-empty-state
-        title="No media yet"
-        description="Drop files anywhere in this window or click Upload to add media."
-      />
-    } @else {
-      <div class="grid">
-        @for (folder of currentFolderChildren(); track folder.uuid) {
-          <div
-            class="cell cell--folder"
-            draggable="true"
-            (click)="onFolderCardClick(folder)"
-            (dragstart)="onFolderCardDragStart(folder, $event)"
-            (dragover)="onFolderCardDragOver($event)"
-            (drop)="onFolderCardDrop(folder, $event)"
-            (contextmenu)="onFolderCardContextMenu(folder, $event)"
-          >
-            <div class="cell__body">
-              <div class="cell__icon cell__icon--folder">
-                <sf-icon name="folder" />
-              </div>
-              <span class="cell__name">
-                {{ folder.displayName ?? folder.uid }}
-                <sf-release-badge [release]="folder.release" [compact]="true" />
-              </span>
-            </div>
-          </div>
-        }
-        @for (item of items(); track item.uuid) {
-          <div
-            class="cell"
-            [class.cell--selected]="isSelected(item.uuid)"
-            draggable="true"
-            (dragstart)="onItemDragStart(item.uuid, $event)"
-            (contextmenu)="onItemContextMenu(item, $event)"
-          >
-            <input
-              class="cell__check"
-              type="checkbox"
-              [checked]="isSelected(item.uuid)"
-              (click)="$event.stopPropagation()"
-              (change)="toggle(item.uuid)"
-            />
-            <button class="cell__body" type="button" (click)="openDetail(item.uuid)">
-              @if (thumb(item); as thumbUrl) {
-                <img
-                  class="cell__img"
-                  [src]="thumbUrl"
-                  [alt]="item.altText ?? item.displayName ?? ''"
-                  loading="lazy"
-                />
-              } @else {
-                <div class="cell__icon">
-                  <sf-icon [name]="mediaIconFor(item.mimeType)" />
-                </div>
-              }
-              <span class="cell__name">
-                {{ item.displayName }}
-                @if (item.processCms) {
-                  <span class="cell__badge" title="CMS syntax is processed when the site is generated">CMS</span>
-                }
-                @if (item.localized) {
-                  <span class="cell__localized" title="Different file per language">
-                    <sf-icon name="translate" />
-                    <span class="sf-sr-only">Different file per language</span>
-                  </span>
-                }
-                <sf-release-badge [release]="item.release" [scheduled]="item.scheduled" [compact]="true" />
-              </span>
-              <span class="cell__meta">
-                {{ item.mimeType }} · {{ item.sizeBytes | sfFileSize }}
-              </span>
-            </button>
-          </div>
-        }
-      </div>
-      <div #sentinel class="sentinel" aria-hidden="true"></div>
-    }
-
-    @if (uploads().length > 0) {
-      <div class="uploads">
-        @for (upload of uploads(); track upload.id) {
-          <div class="upload">
-            <span>{{ upload.fileName }}</span>
-            @if (upload.status === 'uploading') {
-              <span>Uploading…</span>
-            } @else if (upload.status === 'done') {
-              <span>Done</span>
-            } @else {
-              <span class="upload__err">{{ upload.message ?? 'Failed' }}</span>
-            }
-          </div>
-        }
-      </div>
-    }
+    <sf-media-library-toolbar />
+    <sf-media-library-grid />
+    <sf-media-library-uploads />
   </div>
 </div>
 
-@if (dragActive()) {
+@if (uploads.dragActive()) {
   <div class="drop-overlay">Drop files to upload</div>
 }
 
 <sf-create-asset-dialog
   kind="FOLDER"
   scope="MEDIA"
-  [open]="newFolderOpen()"
-  [submitting]="creatingFolder()"
+  [open]="folders.newFolderOpen()"
+  [submitting]="folders.creatingFolder()"
   [projectKey]="projectKey()"
-  (create)="submitNewFolder($event)"
-  (closed)="closeNewFolder()"
+  (create)="folders.submitNewFolder($event)"
+  (closed)="folders.closeNewFolder()"
 />

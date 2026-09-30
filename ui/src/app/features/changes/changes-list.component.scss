@@ -1,0 +1,118 @@
+:host {
+  display: contents;
+}
+
+.changes__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.changes__table-wrap {
+  /* The rows' screen-reader-only (`.sf-sr-only`) labels are absolutely positioned. Unless this box is their containing block they escape
+     its clipping and stretch the whole document to where the unscrolled table would end. */
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.changes__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sf-text-sm);
+}
+
+.changes__table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--sf-2);
+  border-bottom: 1px solid var(--sf-line);
+  background: var(--sf-surface);
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.changes__table td {
+  padding: var(--sf-1) var(--sf-2);
+  border-bottom: 1px solid var(--sf-line);
+  vertical-align: middle;
+}
+
+.changes__row {
+  cursor: pointer;
+}
+
+.changes__row:hover {
+  background: var(--sf-paper);
+}
+
+.changes__row:focus-visible {
+  outline: 2px solid var(--sf-signal);
+  outline-offset: -2px;
+}
+
+.changes__row--selected {
+  background: color-mix(in srgb, var(--sf-signal) 6%, transparent);
+}
+
+.changes__row--focused {
+  box-shadow: inset 3px 0 0 var(--sf-signal);
+}
+
+.changes__check {
+  width: 2rem;
+}
+
+.changes__name {
+  max-width: 22rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.changes__type {
+  margin-right: var(--sf-1);
+  color: var(--sf-slate);
+  vertical-align: middle;
+}
+
+.changes__label {
+  font-weight: 500;
+}
+
+.changes__uid {
+  margin-left: var(--sf-2);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.changes__by {
+  display: block;
+}
+
+.changes__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sf-3);
+  font-size: var(--sf-text-sm);
+}
+
+.changes__muted,
+.changes__summary {
+  margin: 0;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}

@@ -19,97 +19,13 @@
     <p class="changes__readonly" role="status">{{ access.readOnlyLabel() }}</p>
   }
 
-  <section class="changes__filters" aria-label="Filters">
-    <div class="changes__filter-row">
-      <label class="changes__search">
-        <sf-icon name="search" />
-        <span class="sf-sr-only">Search by name or UID</span>
-        <input type="search" placeholder="Search by name or UID…" [value]="searchDraft()" (input)="onSearch($event)" />
-      </label>
-      <label class="changes__select">
-        <span>Changed by</span>
-        <select [value]="state().changedBy ?? ''" (change)="onSelectFilter('changedBy', $event)">
-          <option value="">Anyone</option>
-          @for (member of members.members(); track member.userId) {
-            <option [value]="member.userId">{{ member.displayName || member.username }}</option>
-          }
-        </select>
-      </label>
-      <label class="changes__select">
-        <span>Folder</span>
-        <select [value]="state().folder ?? ''" (change)="onSelectFilter('folder', $event)">
-          <option value="">Everywhere</option>
-          @for (option of folderOptions(); track option.uuid) {
-            <option [value]="option.uuid">{{ option.label }}</option>
-          }
-        </select>
-      </label>
-      <label class="changes__select">
-        <span>Sort</span>
-        <select [value]="state().sort" (change)="onSelectFilter('sort', $event)">
-          @for (option of sortOptions; track option.value) {
-            <option [value]="option.value">{{ option.label }}</option>
-          }
-        </select>
-      </label>
-    </div>
-    <div class="changes__filter-row" role="group" aria-label="Type">
-      @for (option of typeOptions; track option.value) {
-        <button
-          type="button"
-          class="changes__toggle"
-          [class.changes__toggle--on]="isIn(state().type, option.value)"
-          [attr.aria-pressed]="isIn(state().type, option.value)"
-          (click)="toggleIn('type', option.value)"
-        >
-          <sf-icon [name]="option.icon" /> {{ option.label }}
-        </button>
-      }
-    </div>
-    <div class="changes__filter-row" role="group" aria-label="Status and language">
-      @for (status of statusOptions; track status) {
-        <button
-          type="button"
-          class="changes__toggle"
-          [class.changes__toggle--on]="isIn(state().status, status)"
-          [attr.aria-pressed]="isIn(state().status, status)"
-          (click)="toggleIn('status', status)"
-        >
-          {{ statusLabel(status) }}
-        </button>
-      }
-      @if (localeOptions().length > 0) {
-        <span class="changes__divider" aria-hidden="true"></span>
-        @for (option of localeOptions(); track option.value) {
-          <button
-            type="button"
-            class="changes__toggle"
-            [class.changes__toggle--on]="isIn(state().locale, option.value)"
-            [attr.aria-pressed]="isIn(state().locale, option.value)"
-            (click)="toggleIn('locale', option.value)"
-          >
-            {{ option.label }}
-          </button>
-        }
-      }
-    </div>
-    @if (chips().length > 0) {
-      <div class="changes__chips" aria-label="Active filters">
-        @for (chip of chips(); track chip.key) {
-          <button type="button" class="changes__chip" [attr.aria-label]="'Remove filter ' + chip.label" (click)="chip.remove()">
-            {{ chip.label }} <sf-icon name="close" />
-          </button>
-        }
-        <button type="button" class="changes__clear" (click)="clearAll()">Clear all</button>
-      </div>
-    }
-  </section>
+  <sf-changes-filters />
 
-  @if (permissions.canRelease() && selectedRows().length > 0) {
+  @if (permissions.canRelease() && store.selectedRows().length > 0) {
     <div class="changes__actions" role="toolbar" aria-label="Selection">
-      <span class="changes__selected" aria-live="polite">{{ selectedRows().length }} selected</span>
+      <span class="changes__selected" aria-live="polite">{{ store.selectedRows().length }} selected</span>
       <sf-button variant="primary" (click)="releaseSelected()">Release…</sf-button>
-      <sf-button variant="secondary" [disabled]="discardable().length === 0" (click)="discardSelected()">
+      <sf-button variant="secondary" [disabled]="store.discardable().length === 0" (click)="discardSelected()">
         Discard changes…
       </sf-button>
       @if (permissions.canScheduleRelease()) {
@@ -118,154 +34,14 @@
     </div>
   }
 
-  @if (error(); as message) {
+  @if (store.error(); as message) {
     <p class="changes__error" role="alert">{{ message }}</p>
   }
 
-  <div class="changes__main" [class.changes__main--split]="focusedKey() !== null">
-    <div class="changes__list">
-      @if (loading() && rows().length === 0) {
-        <sf-spinner label="Loading changes…" />
-      } @else if (rows().length === 0) {
-        <sf-empty-state
-          [title]="chips().length > 0 ? 'No changes match' : 'Everything is published'"
-          [description]="chips().length > 0 ? 'Change or clear the filters.' : 'Every page, record and file is online as it is saved.'"
-          icon="task_alt"
-        />
-      } @else {
-        <div class="changes__table-wrap">
-          <table class="changes__table" [attr.aria-busy]="loading()" [attr.aria-rowcount]="total()">
-            <caption class="sf-sr-only">
-              Unreleased changes — arrow keys move between rows, Space selects, Enter shows the diff
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col" class="changes__check">
-                  @if (permissions.canRelease()) {
-                    <input
-                      type="checkbox"
-                      aria-label="Select all on this page"
-                      [checked]="allSelected()"
-                      [indeterminate]="someSelected()"
-                      (change)="toggleAll()"
-                    />
-                  }
-                </th>
-                <th scope="col">Name</th>
-                <th scope="col">Folder</th>
-                @if (localeOptions().length > 0) {
-                  <th scope="col">Language</th>
-                }
-                <th scope="col">Status</th>
-                <th scope="col">Changed</th>
-                <th scope="col">Released</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of rows(); track keyOf(row); let rowIndex = $index) {
-                <tr
-                  #row
-                  class="changes__row"
-                  [class.changes__row--focused]="focusedKey() === keyOf(row)"
-                  [class.changes__row--selected]="isSelected(row)"
-                  [attr.tabindex]="rowIndex === activeIndex() ? 0 : -1"
-                  [attr.aria-selected]="isSelected(row)"
-                  (click)="openDiff(row, rowIndex)"
-                  (keydown)="onRowKeydown($event, row, rowIndex)"
-                  (focus)="activeIndex.set(rowIndex)"
-                >
-                  <td class="changes__check" (click)="$event.stopPropagation()">
-                    @if (permissions.canRelease()) {
-                      <input
-                        type="checkbox"
-                        tabindex="-1"
-                        [attr.aria-label]="'Select ' + name(row)"
-                        [checked]="isSelected(row)"
-                        (change)="toggleRow(row)"
-                      />
-                    }
-                  </td>
-                  <td class="changes__name">
-                    <sf-icon class="changes__type" [name]="typeInfo(row.type).icon" [attr.title]="typeInfo(row.type).label" />
-                    <span class="sf-sr-only">{{ typeInfo(row.type).label }}:</span>
-                    <span class="changes__label">{{ name(row) }}</span>
-                    <code class="changes__uid">{{ row.uid }}</code>
-                  </td>
-                  <td class="changes__muted">{{ folderText(row) }}</td>
-                  @if (localeOptions().length > 0) {
-                    <td>{{ row.locale ? localeTag(row.locale) : 'All' }}</td>
-                  }
-                  <td>
-                    <sf-release-badge [release]="releaseOf(row)" [scheduled]="row.scheduled" [locale]="row.locale ?? ''" />
-                  </td>
-                  <td class="changes__muted">
-                    {{ row.changedAt | sfRelativeTime }}
-                    @if (row.changedBy != null) {
-                      <span class="changes__by">by {{ members.nameOf(row.changedBy) }}</span>
-                    }
-                  </td>
-                  <td class="changes__muted">
-                    @if (row.releasedAt) {
-                      {{ row.releasedAt | sfRelativeTime }}
-                    } @else {
-                      —
-                    }
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        @if (totalPages() > 1) {
-          <nav class="changes__pager" aria-label="Change pages">
-            <sf-button variant="ghost" [disabled]="state().page === 0" (click)="goToPage(state().page - 1)">Previous</sf-button>
-            <span aria-live="polite">Page {{ state().page + 1 }} of {{ totalPages() }} · {{ total() }} changes</span>
-            <sf-button variant="ghost" [disabled]="state().page + 1 >= totalPages()" (click)="goToPage(state().page + 1)">Next</sf-button>
-          </nav>
-        } @else {
-          <p class="changes__summary" aria-live="polite">{{ total() }} {{ total() === 1 ? 'change' : 'changes' }}</p>
-        }
-      }
-    </div>
-
-    @if (focusedRow(); as row) {
-      <aside class="changes__diff" aria-label="Diff">
-        <header class="changes__diff-header">
-          <div class="changes__diff-title">
-            <h2>{{ name(row) }}</h2>
-            <span class="changes__muted">
-              {{ typeInfo(row.type).label }}
-              @if (row.locale) {
-                · {{ locales.labelOf(row.locale) }}
-              }
-              · {{ statusLabel(row.status) }}
-            </span>
-          </div>
-          <a class="changes__open" [routerLink]="editorRoute(row).commands" [queryParams]="editorRoute(row).queryParams">
-            Open in editor
-          </a>
-          <button type="button" class="changes__close" aria-label="Close diff" (click)="closeDiff()">
-            <sf-icon name="close" />
-          </button>
-        </header>
-        <div class="changes__diff-body">
-          @if (diffLoading() && !diff()) {
-            <sf-spinner label="Loading diff…" />
-          } @else if (diffError()) {
-            <p class="changes__error" role="alert">{{ diffError() }}</p>
-          } @else if (diff()) {
-            <p class="changes__muted changes__diff-legend">Left: released · right: draft</p>
-            @if (row.status === 'NEW') {
-              <p class="changes__muted">Never released — everything is new.</p>
-            } @else if (row.status === 'DELETION_PENDING') {
-              <p class="changes__muted">Deleted in the draft; the released version stays online until the deletion is released.</p>
-            } @else if (row.status === 'UNPUBLISHED') {
-              <p class="changes__muted">Taken offline; releasing puts the draft online again.</p>
-            }
-            <sf-diff [changes]="diff()?.changes ?? []" [localeLabels]="localeLabels()" />
-          }
-        </div>
-      </aside>
+  <div class="changes__main" [class.changes__main--split]="store.focusedKey() !== null">
+    <sf-changes-list />
+    @if (store.focusedRow()) {
+      <sf-changes-diff [projectKey]="projectKey()" />
     }
   </div>
 </div>

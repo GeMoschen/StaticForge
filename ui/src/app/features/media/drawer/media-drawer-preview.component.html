@@ -1,0 +1,8 @@
+<div class="preview">
+  <img
+    class="preview__img"
+    [src]="preview.previewUrl()"
+    [alt]="core.media().altText ?? ''"
+    [style.object-position]="focalPosition()"
+  />
+</div>

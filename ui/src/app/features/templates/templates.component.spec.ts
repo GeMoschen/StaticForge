@@ -2,11 +2,26 @@ import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { TemplatesComponent } from './templates.component';
+import { TemplatesEditing } from './templates-editing';
+import { TemplateMetaHeaderComponent } from './templates-meta-header.component';
+import { TemplatesSaveCoordinator } from './templates-save.coordinator';
+import { TemplatesStore } from './templates.store';
+
+/** The screen's state and behaviour live in services provided by the component; specs drive them through its injector. */
+function servicesOf(fixture: ComponentFixture<TemplatesComponent>) {
+  const injector = fixture.debugElement.injector;
+  return {
+    store: injector.get(TemplatesStore),
+    save: injector.get(TemplatesSaveCoordinator),
+    editing: injector.get(TemplatesEditing),
+  };
+}
 
 /**
  * The store page loads a couple of bare-array endpoints (`/channels`, `/datasets`, `/usages`) alongside the
@@ -19,6 +34,9 @@ function emptyBodyFor(url: string, paged: object = { content: [] }): object {
 describe('TemplatesComponent (time travel read-only)', () => {
   let fixture: ComponentFixture<TemplatesComponent>;
   let component: TemplatesComponent;
+  let store: TemplatesStore;
+  let save: TemplatesSaveCoordinator;
+  let editing: TemplatesEditing;
   let httpMock: HttpTestingController;
   let timeTravel: TimeTravelStore;
 
@@ -29,6 +47,7 @@ describe('TemplatesComponent (time travel read-only)', () => {
     });
     fixture = TestBed.createComponent(TemplatesComponent);
     component = fixture.componentInstance;
+    ({ store, save, editing } = servicesOf(fixture));
     httpMock = TestBed.inject(HttpTestingController);
     timeTravel = TestBed.inject(TimeTravelStore);
 
@@ -54,17 +73,15 @@ describe('TemplatesComponent (time travel read-only)', () => {
   }
 
   function setDetail(value: unknown): void {
-    (component as unknown as { detail: { set: (v: unknown) => void } }).detail.set(value);
+    (store.detail as { set: (v: unknown) => void }).set(value);
   }
 
   function setSelectedUuid(value: string | null): void {
-    (component as unknown as { selectedUuid: { set: (v: string | null) => void } }).selectedUuid.set(
-      value,
-    );
+    store.selectedUuid.set(value);
   }
 
   function readOnlyOf(): boolean {
-    return (component as unknown as { readOnly: () => boolean }).readOnly();
+    return store.readOnly();
   }
 
   it('reflects TimeTravelStore.isTimeTravel()', () => {
@@ -81,7 +98,7 @@ describe('TemplatesComponent (time travel read-only)', () => {
     setSelectedUuid('tpl-1');
     drain();
 
-    component.saveTemplate();
+    save.saveTemplate();
 
     httpMock.expectNone((req) => req.method === 'PUT');
   });
@@ -99,7 +116,7 @@ describe('TemplatesComponent (time travel read-only)', () => {
     setSelectedUuid('tpl-1');
     drain();
 
-    component.confirmDeleteAction();
+    save.confirmDeleteAction();
 
     httpMock.expectNone((req) => req.method === 'DELETE');
   });
@@ -111,7 +128,7 @@ describe('TemplatesComponent (time travel read-only)', () => {
     setSelectedUuid('tpl-1');
     drain();
 
-    component.saveTemplate();
+    save.saveTemplate();
 
     const req = httpMock.expectOne((r) => r.method === 'PUT');
     req.flush({ uuid: 'tpl-1', revision: 2 });
@@ -120,7 +137,9 @@ describe('TemplatesComponent (time travel read-only)', () => {
 
 describe('TemplatesComponent (inheritance, M20.4.1)', () => {
   let fixture: ComponentFixture<TemplatesComponent>;
-  let component: TemplatesComponent;
+  let store: TemplatesStore;
+  let save: TemplatesSaveCoordinator;
+  let editing: TemplatesEditing;
   let httpMock: HttpTestingController;
 
   const ARTICLE = {
@@ -146,7 +165,7 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     fixture = TestBed.createComponent(TemplatesComponent);
-    component = fixture.componentInstance;
+    ({ store, save, editing } = servicesOf(fixture));
     httpMock = TestBed.inject(HttpTestingController);
     fixture.componentRef.setInput('projectKey', 'proj1');
     flushAll({ content: [] });
@@ -166,7 +185,7 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
   }
 
   function selectArticle(): void {
-    component.select('a-3');
+    store.select('a-3');
     fixture.detectChanges();
     httpMock.match((r) => r.url.endsWith('/page-templates/a-3')).forEach((r) => r.flush(ARTICLE));
     httpMock.match((r) => r.url.endsWith('/usages')).forEach((r) => r.flush([]));
@@ -175,10 +194,10 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
 
   it('shows the three-level chain as a breadcrumb and inherited editors grouped by ancestor', () => {
     selectArticle();
-    expect(component.breadcrumb().map((c) => c.uid)).toEqual(['base', 'docs_layout', 'article']);
+    expect(store.breadcrumb().map((c) => c.uid)).toEqual(['base', 'docs_layout', 'article']);
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('Inherited');
-    expect(component.inheritedGroups().map((g) => [g.uid, g.editors])).toEqual([
+    expect(store.inheritedGroups().map((g) => [g.uid, g.editors])).toEqual([
       ['base', ['title']],
       ['docs_layout', ['subtitle']],
     ]);
@@ -186,27 +205,29 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
 
   it('sends the abstract flag and shows the page count when the template is in use', () => {
     selectArticle();
-    component.onAbstractChange({ target: { checked: true } } as unknown as Event);
-    component.saveTemplate();
+    fixture.debugElement
+      .query(By.directive(TemplateMetaHeaderComponent))
+      .componentInstance.onAbstractChange({ target: { checked: true } } as unknown as Event);
+    save.saveTemplate();
     const put = httpMock.expectOne((r) => r.method === 'PUT');
     expect((put.request.body as { abstract?: boolean }).abstract).toBe(true);
     put.flush(
       { code: 'SF-DOM-0122', pageCount: 2, pageUids: ['one', 'two'], pageUuids: ['p1', 'p2'], detail: 'in use' },
       { status: 422, statusText: 'Unprocessable Entity' },
     );
-    expect(component.templateInUse()?.pageCount).toBe(2);
+    expect(store.templateInUse()?.pageCount).toBe(2);
   });
 
   it('renders live OCTL diagnostics from the context-aware validate endpoint', async () => {
     vi.useFakeTimers();
     try {
       selectArticle();
-      component.onChannelInput('$CMS_EXTENDS(page_template:base)$$CMS_BLOCK(contnet)$$CMS_END_BLOCK$');
+      editing.onChannelInput('$CMS_EXTENDS(page_template:base)$$CMS_BLOCK(contnet)$$CMS_END_BLOCK$');
       vi.advanceTimersByTime(350);
       const validate = httpMock.expectOne((r) => r.url.endsWith('/octl/validate'));
       expect((validate.request.body as { templateUuid?: string }).templateUuid).toBe('a-3');
       validate.flush({ diagnostics: [{ severity: 'WARNING', code: 'SF-TPL-0157', message: "did you mean 'content'?", line: 1, column: 34 }] });
-      expect(component.activeOctlDiagnostics().map((d) => d.code)).toEqual(['SF-TPL-0157']);
+      expect(store.activeOctlDiagnostics().map((d) => d.code)).toEqual(['SF-TPL-0157']);
     } finally {
       vi.useRealTimers();
     }
@@ -214,7 +235,7 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
 
   it('lists broken descendants when a parent save is rejected', () => {
     selectArticle();
-    component.saveTemplate();
+    save.saveTemplate();
     httpMock.expectOne((r) => r.method === 'PUT').flush(
       {
         code: 'SF-DOM-0124',
@@ -223,14 +244,16 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
       { status: 422, statusText: 'Unprocessable Entity' },
     );
     fixture.detectChanges();
-    expect(component.descendantProblems().map((p) => p.uid)).toEqual(['child']);
+    expect(store.descendantProblems().map((p) => p.uid)).toEqual(['child']);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('SF-TPL-0158');
   });
 });
 
 describe('TemplatesComponent (tabs and one save, M34)', () => {
   let fixture: ComponentFixture<TemplatesComponent>;
-  let component: TemplatesComponent;
+  let store: TemplatesStore;
+  let save: TemplatesSaveCoordinator;
+  let editing: TemplatesEditing;
   let httpMock: HttpTestingController;
 
   const LAYOUT = {
@@ -255,7 +278,7 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     fixture = TestBed.createComponent(TemplatesComponent);
-    component = fixture.componentInstance;
+    ({ store, save, editing } = servicesOf(fixture));
     httpMock = TestBed.inject(HttpTestingController);
     fixture.componentRef.setInput('projectKey', 'proj1');
     fixture.detectChanges();
@@ -271,7 +294,7 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
   });
 
   function open(detail: object = LAYOUT): void {
-    component.select('t-1');
+    store.select('t-1');
     fixture.detectChanges();
     httpMock.match((r) => r.method === 'GET' && /-templates\/t-1$/.test(r.url)).forEach((r) => r.flush(detail));
     httpMock.match((r) => r.url.endsWith('/usages')).forEach((r) => r.flush([]));
@@ -280,28 +303,28 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
 
   it('loads each CDL section into its own tab; a section template has no Bodies tab', () => {
     open();
-    expect(component.sections()).toEqual({ content: LAYOUT.contentCdl, bodies: LAYOUT.bodiesCdl, rules: '' });
-    expect(component.cdlTabs()).toEqual(['content', 'bodies', 'rules']);
-    expect(component.channelTabs().map((t) => t.id)).toEqual(['html', 'md']);
-    expect(component.dirty()).toBe(false);
+    expect(store.sections()).toEqual({ content: LAYOUT.contentCdl, bodies: LAYOUT.bodiesCdl, rules: '' });
+    expect(store.cdlTabs()).toEqual(['content', 'bodies', 'rules']);
+    expect(store.channelTabs().map((t) => t.id)).toEqual(['html', 'md']);
+    expect(save.dirty()).toBe(false);
     const tabs = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="tab"]')).map((t) => t.textContent?.trim());
     expect(tabs).toEqual(expect.arrayContaining(['Content', 'Bodies', 'Rules', 'html', 'md']));
   });
 
   it('saves the CDL and every channel — edited, added and removed — in one request', () => {
     open();
-    component.onSectionInput({ section: 'rules', value: 'state title requiredWhen "true"' });
-    component.selectChannel('md');
-    component.onChannelInput('## $CMS_VALUE(title)$');
-    component.addChannel('json');
-    component.onChannelInput('{}');
-    component.selectChannel('html');
-    component.removeChannel();
-    expect(component.removedChannels()).toEqual(['html']);
-    expect(component.dirty()).toBe(true);
-    expect(component.channelTabs().find((t) => t.id === 'md')?.dirty).toBe(true);
+    editing.onSectionInput({ section: 'rules', value: 'state title requiredWhen "true"' });
+    editing.selectChannel('md');
+    editing.onChannelInput('## $CMS_VALUE(title)$');
+    editing.addChannel('json');
+    editing.onChannelInput('{}');
+    editing.selectChannel('html');
+    editing.removeChannel();
+    expect(store.removedChannels()).toEqual(['html']);
+    expect(save.dirty()).toBe(true);
+    expect(store.channelTabs().find((t) => t.id === 'md')?.dirty).toBe(true);
 
-    component.saveTemplate();
+    save.saveTemplate();
 
     const puts = httpMock.match((r) => r.method === 'PUT');
     expect(puts.length).toBe(1);
@@ -318,9 +341,9 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
 
   it('keeps every edit on a rejected save and opens the failing tabs', () => {
     open();
-    component.onSectionInput({ section: 'rules', value: 'rule x' });
-    component.selectChannel('html');
-    component.saveTemplate();
+    editing.onSectionInput({ section: 'rules', value: 'rule x' });
+    editing.selectChannel('html');
+    save.saveTemplate();
     httpMock.expectOne((r) => r.method === 'PUT').flush(
       {
         code: 'SF-API-0422',
@@ -331,21 +354,21 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
       },
       { status: 422, statusText: 'Unprocessable Entity' },
     );
-    expect(component.cdlTab()).toBe('rules');
-    expect(component.selectedChannel()).toBe('md');
-    expect(component.activeOctlDiagnostics().map((d) => d.code)).toEqual(['SF-TPL-0103']);
-    expect(component.cdlDiagnostics().map((d) => d.field)).toEqual(['rules']);
-    expect(component.sections().rules).toBe('rule x');
+    expect(store.cdlTab()).toBe('rules');
+    expect(store.selectedChannel()).toBe('md');
+    expect(store.activeOctlDiagnostics().map((d) => d.code)).toEqual(['SF-TPL-0103']);
+    expect(store.cdlDiagnostics().map((d) => d.field)).toEqual(['rules']);
+    expect(store.sections().rules).toBe('rule x');
   });
 
   it('shows no Bodies tab for a section template and never sends bodies', () => {
-    (component as unknown as { templates: { set: (v: unknown) => void } }).templates.set([
+    (store.templates as { set: (v: unknown) => void }).set([
       { uuid: 't-1', assetType: 'SECTION_TEMPLATE' },
     ]);
     open({ ...LAYOUT, assetType: 'SECTION_TEMPLATE', bodiesCdl: '' });
-    expect(component.cdlTabs()).toEqual(['content', 'rules']);
-    component.onSectionInput({ section: 'content', value: 'editor text headline { }' });
-    component.saveTemplate();
+    expect(store.cdlTabs()).toEqual(['content', 'rules']);
+    editing.onSectionInput({ section: 'content', value: 'editor text headline { }' });
+    save.saveTemplate();
     const put = httpMock.expectOne((r) => r.method === 'PUT');
     expect(put.request.url).toMatch(/\/section-templates\/t-1$/);
     expect((put.request.body as { bodiesCdl?: string }).bodiesCdl).toBe('');
@@ -354,25 +377,25 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
 
   it('keeps what is typed while the reload after a save is in flight', () => {
     open();
-    component.onSectionInput({ section: 'content', value: 'editor text headline { }' });
-    component.saveTemplate();
+    editing.onSectionInput({ section: 'content', value: 'editor text headline { }' });
+    save.saveTemplate();
     httpMock.expectOne((r) => r.method === 'PUT').flush({ ...LAYOUT, contentCdl: 'editor text headline { }', revision: 5 });
-    expect(component.dirty()).toBe(false);
+    expect(save.dirty()).toBe(false);
 
     // Typed after Save, before the follow-up reload answers.
-    component.onChannelInput('<h2>$CMS_VALUE(headline)$</h2>', 'html');
+    editing.onChannelInput('<h2>$CMS_VALUE(headline)$</h2>', 'html');
     httpMock
       .match((r) => r.method === 'GET' && /-templates\/t-1$/.test(r.url))
       .forEach((r) => r.flush({ ...LAYOUT, contentCdl: 'editor text headline { }', revision: 5 }));
 
-    expect(component.channelSources()['html']).toBe('<h2>$CMS_VALUE(headline)$</h2>');
-    expect(component.dirty()).toBe(true);
-    expect(component.detail()?.revision).toBe(5);
+    expect(store.channelSources()['html']).toBe('<h2>$CMS_VALUE(headline)$</h2>');
+    expect(save.dirty()).toBe(true);
+    expect(store.detail()?.revision).toBe(5);
   });
 
   it('saves on Ctrl+S', () => {
     open();
-    component.onSectionInput({ section: 'content', value: 'editor text headline { }' });
+    editing.onSectionInput({ section: 'content', value: 'editor text headline { }' });
     fixture.detectChanges();
     const detail = (fixture.nativeElement as HTMLElement).querySelector('.templates__detail')!;
     detail.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
@@ -416,7 +439,7 @@ describe('TemplatesComponent tree selection', () => {
     // Nothing open: the default folder is the selection.
     expect(selectedRows()).toContain('Page Templates');
 
-    fixture.componentInstance.select('tpl-1');
+    servicesOf(fixture).store.select('tpl-1');
     settle();
 
     expect(selectedRows()).not.toContain('Page Templates');
@@ -459,7 +482,7 @@ describe('TemplatesComponent output path warnings', () => {
       fixture.detectChanges();
     };
     settle();
-    fixture.componentInstance.select('tpl-1');
+    servicesOf(fixture).store.select('tpl-1');
     settle();
     settle();
     return fixture;

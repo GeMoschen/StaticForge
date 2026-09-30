@@ -1,0 +1,39 @@
+<section class="live" aria-label="Live generation log">
+  <header class="live__header">
+    <strong>
+      Live log — run #{{ store.liveRunId() }}
+      @if (store.liveStatus(); as status) {
+        <span class="badge" [style.color]="statusColor(status)">{{ status }}</span>
+      }
+    </strong>
+    <div class="live__summary" aria-live="polite">
+      <span class="summary-good">
+        files: {{ store.liveSummary().filesWritten }}
+      </span>
+      <span [class.summary-bad]="store.liveSummary().errors > 0">
+        errors: {{ store.liveSummary().errors }}
+      </span>
+      <span [class.summary-warn]="store.liveSummary().warnings > 0">
+        warnings: {{ store.liveSummary().warnings }}
+      </span>
+      <sf-button variant="ghost" (click)="store.closeLive()">Close</sf-button>
+    </div>
+  </header>
+  <div class="live__log">
+    @for (line of store.liveLines(); track line.id) {
+      <div class="log-line">
+        <span class="log-line__stage">{{ line.stage }}</span>{{ line.message }}
+      </div>
+    }
+    @for (group of store.liveDiagnostics(); track $index) {
+      @for (message of group.messages; track $index) {
+        <div class="log-line" [class.log-line--error]="group.severity === 'error'" [class.log-line--warning]="group.severity === 'warning'">
+          <span class="log-line__stage">{{ group.code }}</span>{{ message }}
+        </div>
+      }
+    }
+    @if (store.liveLines().length === 0 && !store.liveStatus()) {
+      <div class="log-line">Awaiting events…</div>
+    }
+  </div>
+</section>

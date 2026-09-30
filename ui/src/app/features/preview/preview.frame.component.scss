@@ -47,15 +47,6 @@
   font-size: var(--sf-text-xs);
 }
 
-.preview-pages__visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
 .preview-toolbar__button--active {
   background: var(--sf-signal);
   border-color: var(--sf-signal);

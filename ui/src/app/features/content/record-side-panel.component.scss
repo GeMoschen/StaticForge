@@ -1,0 +1,119 @@
+:host {
+  display: contents;
+}
+
+.record-editor__uid,
+.record-editor__muted {
+  font-family: var(--sf-font-mono, monospace);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-muted);
+}
+
+.record-editor__badge {
+  padding: 0 var(--sf-2);
+  border-radius: 999px;
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-xs);
+}
+
+.record-editor__hint {
+  margin: 0;
+  color: var(--sf-muted);
+  font-size: var(--sf-text-xs);
+}
+
+.record-editor__side {
+  border-left: 1px solid var(--sf-line);
+  padding-left: var(--sf-3);
+}
+
+.record-editor__tabs {
+  display: flex;
+  gap: var(--sf-1);
+  margin-bottom: var(--sf-2);
+  border-bottom: 1px solid var(--sf-line);
+}
+
+.record-editor__tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+  padding: var(--sf-2);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--sf-muted);
+  font-size: var(--sf-text-sm);
+  cursor: pointer;
+}
+
+.record-editor__tab--active {
+  color: var(--sf-ink) !important;
+  border-bottom-color: var(--sf-signal) !important;
+}
+
+.record-editor__count {
+  min-width: 1.25rem;
+  padding: 0 var(--sf-1);
+  border-radius: 999px;
+  background: var(--sf-surface);
+  font-size: var(--sf-text-xs);
+}
+
+.record-editor__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-editor__issue {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sf-1) var(--sf-2);
+  border-radius: var(--sf-radius-sm);
+  background: color-mix(in srgb, var(--sf-amber, #9c7a2e) 14%, transparent);
+  font-size: var(--sf-text-xs);
+}
+
+.record-editor__issue--blocking {
+  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
+  color: var(--sf-rust);
+}
+
+.record-editor__revision {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--sf-2);
+  width: 100%;
+  padding: var(--sf-1) var(--sf-2);
+  border: none;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-ink);
+  font-size: var(--sf-text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.record-editor__revision:hover,
+.record-editor__revision:focus-visible {
+  background: var(--sf-surface);
+}
+
+.record-editor__revision--current {
+  font-weight: 600;
+}
+
+.record-editor__usage {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-2);
+  flex-wrap: wrap;
+  font-size: var(--sf-text-xs);
+}

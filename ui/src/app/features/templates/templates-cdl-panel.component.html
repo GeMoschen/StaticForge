@@ -1,0 +1,54 @@
+<section class="panel editors__panel" aria-labelledby="cdl-heading">
+  <h4 id="cdl-heading" class="editors__heading">Content definition (CDL)</h4>
+  <sf-cdl-sections-editor
+    label="Content definition (CDL)"
+    [value]="store.sections()"
+    [saved]="store.savedSections()"
+    [sections]="store.cdlTabs()"
+    [selected]="store.cdlTab()"
+    [diagnostics]="store.cdlDiagnostics()"
+    [readOnly]="store.readOnly()"
+    [names]="store.editorNames()"
+    [hints]="cdlHints"
+    (selectedChange)="store.cdlTab.set($event)"
+    (sectionChange)="editing.onSectionInput($event)"
+  >
+    @if (store.inheritedEditorGroups().length > 0) {
+      <section sfCdlContent class="inheritance__inherited" aria-label="Inherited editors">
+        <h5>Inherited editors (read-only — edit them on the template that declares them)</h5>
+        @for (group of store.inheritedEditorGroups(); track group.uid) {
+          <div class="inheritance__group">
+            <span class="inheritance__from">from
+              @if (group.uuid) {
+                <button type="button" class="inheritance__crumb" (click)="store.openTemplate(group.uuid)">{{ group.uid }}</button>
+              } @else {
+                <span>{{ group.uid }}</span>
+              }
+            </span>
+            <code>{{ group.editors.join(', ') }}</code>
+          </div>
+        }
+      </section>
+    }
+    @if (store.inheritedBodyGroups().length > 0) {
+      <section sfCdlBodies class="inheritance__inherited" aria-label="Inherited bodies">
+        <h5>Inherited bodies (read-only — edit them on the template that declares them)</h5>
+        @for (group of store.inheritedBodyGroups(); track group.uid) {
+          <div class="inheritance__group">
+            <span class="inheritance__from">from
+              @if (group.uuid) {
+                <button type="button" class="inheritance__crumb" (click)="store.openTemplate(group.uuid)">{{ group.uid }}</button>
+              } @else {
+                <span>{{ group.uid }}</span>
+              }
+            </span>
+            <code>{{ group.bodies.join(', ') }}</code>
+          </div>
+        }
+      </section>
+    }
+  </sf-cdl-sections-editor>
+  <div class="actions">
+    <sf-button variant="secondary" (click)="editing.validateCdl()">Validate</sf-button>
+  </div>
+</section>

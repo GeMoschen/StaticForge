@@ -1,0 +1,118 @@
+@if (editor.loading()) {
+  <sf-spinner label="Loading page…" />
+} @else if (editor.error()) {
+  <sf-empty-state title="Could not load page" [description]="editor.error() ?? ''" icon="error" />
+} @else if (editor.page()) {
+  @if (editor.focusedSection(); as ctx) {
+    <!-- Section scope: only this one section. -->
+    <section class="page-editor__body" [attr.data-sf-section-scope]="ctx.section.instanceId">
+      <header class="page-editor__body-header">
+        <span class="page-editor__body-title">{{ sections.title(ctx.section.templateRef) }}</span>
+      </header>
+      <sf-section-editor
+        [contentDefinition]="sections.defFor(ctx.section.templateRef)"
+        [section]="ctx.section"
+        [projectKey]="editor.projectKey()"
+        [bodyName]="ctx.bodyName"
+        [templateUid]="sections.uidFor(ctx.section.templateRef)"
+        [title]="sections.title(ctx.section.templateRef)"
+        [index]="ctx.index"
+        [count]="ctx.count"
+        [readOnly]="editor.readOnly()"
+        [hideActions]="true"
+        [issues]="editor.shownIssues()"
+        [rules]="editor.readOnly() ? null : editor.fields.rules.hub"
+        (valueChange)="sections.onValueChange(ctx.bodyName, ctx.section.instanceId, $event)"
+        (filled)="sections.onFilled(ctx.bodyName, ctx.section.instanceId, $event)"
+        (remove)="sections.remove(ctx.bodyName, ctx.section.instanceId)"
+        (moveUp)="sections.moveBy(ctx.bodyName, ctx.index, -1)"
+        (moveDown)="sections.moveBy(ctx.bodyName, ctx.index, 1)"
+      />
+    </section>
+  } @else {
+    @if (editor.focusedBody(); as body) {
+      <!-- Body scope: only this body's sections. -->
+      <section
+        class="page-editor__body"
+        (dragover)="sections.onBodyDragOver($event)"
+        (drop)="sections.onBodyDrop(body, $event)"
+      >
+        <header class="page-editor__body-header">
+          <span class="page-editor__body-title">{{ body.label ?? body.name }}</span>
+          @if (!editor.readOnly()) {
+            <sf-button variant="secondary" (click)="palette.open(body)">
+              + Section
+            </sf-button>
+          }
+        </header>
+
+        @if (sections.otherBodies().length > 0) {
+          <!-- Drag a section here to move it into another body of this page without leaving the editor. -->
+          <div class="page-editor__body-rail">
+            @for (other of sections.otherBodies(); track other.name) {
+              <button
+                type="button"
+                class="page-editor__body-chip"
+                (click)="switchBody(other.name)"
+                (dragover)="sections.onBodyDragOver($event)"
+                (drop)="sections.onBodyDrop(other, $event)"
+              >
+                {{ other.label ?? other.name }}
+              </button>
+            }
+          </div>
+        }
+
+        @for (
+          section of editor.sectionsFor(body.name);
+          track sectionKey(section)
+        ) {
+          <sf-section-editor
+            [contentDefinition]="sections.defFor(section.templateRef)"
+            [section]="section"
+            [projectKey]="editor.projectKey()"
+            [pageUuid]="editor.uuid()"
+            [bodyName]="body.name"
+            [templateUid]="sections.uidFor(section.templateRef)"
+            [title]="sections.title(section.templateRef)"
+            [index]="$index"
+            [count]="editor.bodyCount(body.name)"
+            [readOnly]="editor.readOnly()"
+            [issues]="editor.shownIssues()"
+            [rules]="editor.readOnly() ? null : editor.fields.rules.hub"
+            (valueChange)="sections.onValueChange(body.name, section.instanceId, $event)"
+            (filled)="sections.onFilled(body.name, section.instanceId, $event)"
+            (remove)="sections.remove(body.name, section.instanceId)"
+            (moveUp)="sections.moveBy(body.name, $index, -1)"
+            (moveDown)="sections.moveBy(body.name, $index, 1)"
+            (dragStarted)="sections.onDragStarted(body.name, $event)"
+            (dropOn)="sections.onDrop(body.name, $event)"
+            (dragEnd)="sections.drag.set(null)"
+          />
+        }
+      </section>
+    } @else {
+      <!-- Page scope: only the page's own fields, no bodies/sections. -->
+      @if (editor.contentDefinition(); as def) {
+        <sf-content-form
+          data-sf-page-fields
+          [definition]="def"
+          [formGroup]="editor.fields.fieldsForm()!"
+          [projectKey]="editor.projectKey()"
+          [issues]="editor.shownIssues()"
+          [fieldStates]="editor.fields.rules.fieldStates()"
+          [ruleHub]="editor.readOnly() ? null : editor.fields.rules.hub"
+          [editingLocale]="editor.editingLocale()"
+          [storedValue]="editor.fields.storedContent()"
+          [localeLabels]="editor.fields.localeLabels()"
+        />
+      }
+      <div class="page-editor__impact">
+        <sf-asset-impact [projectKey]="editor.projectKey()" [assetUuid]="editor.uuid()" [refreshKey]="editor.autosave.revision()" />
+      </div>
+      <div class="page-editor__impact">
+        <sf-asset-urls [projectKey]="editor.projectKey()" [assetUuid]="editor.uuid()" [refreshKey]="editor.autosave.revision()" />
+      </div>
+    }
+  }
+}

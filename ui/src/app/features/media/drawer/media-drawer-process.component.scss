@@ -1,0 +1,20 @@
+@use 'drawer-parts';
+
+:host {
+  display: contents;
+}
+
+.process {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  flex-shrink: 0;
+}
+
+@include drawer-parts.switch;
+@include drawer-parts.hint;
+@include drawer-parts.diagnostics;
+
+.hint code {
+  font-family: var(--sf-font-mono, monospace);
+}

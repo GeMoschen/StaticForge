@@ -1,0 +1,54 @@
+<aside class="library__sidebar">
+  <div class="library__sidebar-head">
+    <h2>Folders</h2>
+    <button
+      type="button"
+      class="library__icon-btn"
+      title="New folder"
+      [disabled]="library.readOnly()"
+      (click)="folders.newFolder()"
+    >
+      +
+    </button>
+  </div>
+
+  <button
+    type="button"
+    class="library__clear"
+    [class.library__clear--active]="!library.folderUuid()"
+    (click)="library.selectFolder(null)"
+    (dragover)="folders.onRootDragOver($event)"
+    (drop)="folders.onRootDrop($event)"
+    (contextmenu)="folders.onRootContextMenu($event)"
+  >
+    <sf-icon name="home" />
+    All media
+  </button>
+
+  <div class="library__tree-body">
+    @for (folder of library.topLevelFolders(); track folder.uuid) {
+      <sf-media-folder-node
+        [node]="folder"
+        [depth]="0"
+        [selectedUuid]="library.folderUuid()"
+        [projectKey]="library.projectKey()"
+        [mediaByFolder]="library.mediaByFolder()"
+        [selectedMediaUuid]="library.selectedMediaUuid()"
+        (select)="library.selectFolderByUuid($event)"
+        (move)="folders.moveItemTo($event)"
+        (selectMedia)="library.onSelectMediaLeaf($event)"
+        (changed)="library.reloadFolders()"
+      />
+    }
+    @for (media of library.rootMedia(); track media.uuid) {
+      <sf-media-nav-node
+        [projectKey]="library.projectKey()"
+        [summary]="media"
+        [depth]="0"
+        [selected]="library.selectedMediaUuid() === media.uuid"
+        (select)="library.onSelectMediaLeaf($event)"
+        (changed)="library.reloadMedia()"
+      />
+    }
+  </div>
+</aside>
