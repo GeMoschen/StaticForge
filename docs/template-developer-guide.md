@@ -216,6 +216,8 @@ Switching off a name no ancestor defines is `SF-CDL-0118`. A child can target in
 
 OCTL renders content into a channel. One template per (template asset, channel). Design principles (§16.1): **text-first** (paste HTML and it works), **unmistakable `$CMS_…$` delimiters**, **safe by default** (channel escaping), **no arbitrary code** (total language).
 
+**In the editor.** The text around the instructions is highlighted as the channel's format — HTML (CSS and JavaScript inside), Markdown, JSON, XML/SVG/RSS, CSS, JavaScript or YAML — and only that text is parsed as it, so `<a href="$CMS_REF(page:home)$">` reads as an attribute holding an instruction. The format comes from the channel's *Highlight as* (anything but *Auto* wins), else the project's code highlighting overrides (Settings → General), else the channel's MIME type and extension; processed text media use the overrides, then the file's MIME type and extension. **Ctrl+Space** completes OCTL inside `$CMS_…$` and after `$`, and the format's own names elsewhere (HTML tags and attributes, CSS properties, JavaScript names, XML closing tags, SVG elements and attributes in SVG files).
+
 ### 2.1 Instructions (§16.2)
 
 | Construct | Meaning |

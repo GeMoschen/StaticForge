@@ -1,6 +1,6 @@
 # StaticForge CMS — API reference
 
-Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (139 paths as of M28; M30 adds `quality-rules`, `generations/{runId}/findings`, `redirects` and the draft-check endpoint `preview/pages/{uuid}/checks`; M33 adds `rules/evaluate`), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
+Human-readable summary of the REST surface. The machine-readable contract is generated from the controllers into `server/sf-app/build/openapi/openapi.json` (139 paths as of M28; M30 adds `quality-rules`, `generations/{runId}/findings`, `redirects` and the draft-check endpoint `preview/pages/{uuid}/checks`; M33 adds `rules/evaluate` and `code-highlighting`), and a TypeScript client is generated from it for the Angular app (§4.2, §23.1). The spec's normative endpoint catalogue is `cms-specification.md` §20; this page is a navigable index with the error codes appended.
 
 ## 1. Conventions
 
@@ -41,6 +41,7 @@ refresh returns a token with the current roles.
 | `GET`/`PUT` | `/projects/{key}/publish-policy` | VIEWER / PROJECT_ADMIN — what editors may publish (M28, §3.3) |
 | `POST` | `/projects/{key}/publish-policy/impact` | PROJECT_ADMIN — the schedules a proposed policy would make fail (M28, §3.3) |
 | `GET`/`PUT` | `/projects/{key}/quality-rules` | VIEWER / DEVELOPER — the build-time quality rules and the project's configuration (M30, §3.5) |
+| `PUT` | `/projects/{key}/code-highlighting` | PROJECT_ADMIN — the code editors' highlighting overrides by file extension and MIME type (M33 follow-up); returns the project detail |
 | `GET` | `/users/lookup?projectKey=&q=` | PROJECT_ADMIN of `projectKey` — up to 20 active/locked accounts `{id, username, displayName, member}`, no emails (M26) |
 | `GET` | `/projects/{key}/locales` | VIEWER |
 | `PUT` | `/projects/{key}/locales` (`?confirmDiscard=`) | PROJECT_ADMIN |

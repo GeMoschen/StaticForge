@@ -284,6 +284,8 @@
                 [diagnostics]="octlDiagnostics()"
                 [readOnly]="readOnly()"
                 [names]="editorNames()"
+                [format]="channelFormat().format"
+                [svg]="channelFormat().svg"
                 (valueChange)="onChannelInput($event)"
               />
               <div class="actions">

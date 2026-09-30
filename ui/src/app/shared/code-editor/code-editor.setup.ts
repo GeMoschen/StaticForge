@@ -3,11 +3,13 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { json } from '@codemirror/lang-json';
 import {
   HighlightStyle,
+  Language,
   bracketMatching,
   foldGutter,
   foldKeymap,
   indentOnInput,
   indentUnit,
+  languageDataProp,
   syntaxHighlighting,
 } from '@codemirror/language';
 import { Diagnostic as CmDiagnostic, lintGutter, setDiagnostics } from '@codemirror/lint';
@@ -22,20 +24,23 @@ import {
   lineNumbers,
   placeholder as placeholderExtension,
 } from '@codemirror/view';
-import { tags } from '@lezer/highlight';
+import { Highlighter, tags } from '@lezer/highlight';
+import type { CodeFormat } from './code-format';
 import type { CodeDiagnostic, CodeEditorConfig, CodeEditorController } from './code-editor.types';
 import { cdlCompletion, octlCompletion, whereCompletion } from './completions';
+import { FormatSupport, loadFormat, loadedFormat, octlCompletionEverywhere } from './formats';
 import { cdlFolding, cdlLanguage, octlFolding, octlLanguage, whereLanguage } from './languages';
 
 /**
  * The CodeMirror side of {@link SfCodeEditorComponent} (M33), loaded as its own chunk the first time an editor opens:
- * extensions, theme, languages, completion and diagnostics.
+ * extensions, theme, languages, completion and diagnostics. An OCTL editor highlights the text between its
+ * instructions as a format (HTML, Markdown, …) once that format's grammar has loaded; until then, as plain OCTL.
  */
 
 /** Marks a change that puts the host's `value` into the editor: not an edit to report back. */
 const fromHost = Annotation.define<boolean>();
 
-/** Syntax colors from the design tokens, so the editor follows the light and dark theme. */
+/** Syntax colors of CDL, OCTL, expressions and JSON, from the design tokens (light and dark theme). */
 const highlightStyle = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--sf-code-keyword)', fontWeight: '600' },
   { tag: tags.typeName, color: 'var(--sf-code-type)' },
@@ -50,6 +55,48 @@ const highlightStyle = HighlightStyle.define([
   { tag: [tags.special(tags.variableName), tags.namespace], color: 'var(--sf-code-special)' },
   { tag: [tags.tagName, tags.meta], color: 'var(--sf-code-tag)', fontWeight: '600' },
 ]);
+
+/**
+ * Syntax colors of the host format around OCTL (HTML, CSS, JavaScript, Markdown, JSON, XML, YAML): a palette of its
+ * own, so the `$CMS_…$` instructions (colored by {@link highlightStyle}) stand out from the markup around them.
+ */
+const formatStyle = HighlightStyle.define([
+  { tag: [tags.tagName, tags.angleBracket, tags.className, tags.typeName], color: 'var(--sf-code-fmt-tag)' },
+  { tag: [tags.attributeName, tags.propertyName], color: 'var(--sf-code-fmt-attr)' },
+  { tag: [tags.string, tags.attributeValue, tags.monospace], color: 'var(--sf-code-fmt-string)' },
+  {
+    tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.controlKeyword, tags.definitionKeyword],
+    color: 'var(--sf-code-fmt-keyword)',
+  },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom, tags.unit, tags.color], color: 'var(--sf-code-fmt-number)' },
+  { tag: tags.comment, color: 'var(--sf-code-fmt-comment)', fontStyle: 'italic' },
+  {
+    tag: [tags.processingInstruction, tags.documentMeta, tags.meta, tags.contentSeparator],
+    color: 'var(--sf-code-fmt-comment)',
+  },
+  { tag: [tags.punctuation, tags.operator, tags.bracket, tags.separator], color: 'var(--sf-code-fmt-punct)' },
+  { tag: tags.heading, color: 'var(--sf-code-fmt-tag)', fontWeight: '700' },
+  { tag: tags.strong, fontWeight: '700' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: [tags.link, tags.url], color: 'var(--sf-code-fmt-attr)', textDecoration: 'underline' },
+  { tag: tags.invalid, color: 'var(--sf-rust)' },
+]);
+
+/** Whether a (sub)tree is OCTL's: the instructions, colored with the CDL/OCTL palette. */
+const isOctl = (type: Parameters<NonNullable<Highlighter['scope']>>[0]) =>
+  type.prop(languageDataProp) === (octlLanguage as Language).data;
+
+/**
+ * An OCTL editor's highlighters: the instructions in the CDL/OCTL palette, every other (sub)tree — the host format
+ * and the languages nested in it (CSS and JavaScript inside HTML) — in the format palette.
+ */
+const octlHighlighters: Extension = [
+  syntaxHighlighting({ style: highlightStyle.style, scope: isOctl }),
+  syntaxHighlighting({ style: formatStyle.style, scope: (type) => !isOctl(type) }),
+  // A plain highlighter doesn't bring its style sheet the way a HighlightStyle does.
+  [highlightStyle.module, formatStyle.module].flatMap((module) => (module ? [EditorView.styleModule.of(module)] : [])),
+];
 
 const theme = EditorView.theme({
   '&': {
@@ -90,6 +137,9 @@ const theme = EditorView.theme({
 export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig): CodeEditorController {
   const editable = new Compartment();
   const placeholders = new Compartment();
+  const languages = new Compartment();
+  let destroyed = false;
+  let wanted = `${config.format}:${config.svg}`;
   const readOnlyExtension = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
   const view = new EditorView({
     parent,
@@ -97,7 +147,7 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
       doc: config.value,
       extensions: [
         baseExtensions(config),
-        languageExtensions(config),
+        languages.of(languageExtensions(config, loadedFormat(config.format, config.svg))),
         editable.of(readOnlyExtension(config.readOnly)),
         placeholders.of(config.placeholder ? placeholderExtension(config.placeholder) : []),
         EditorView.contentAttributes.of({ 'aria-label': config.label, spellcheck: 'false' }),
@@ -133,6 +183,14 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
         view.contentDOM.removeAttribute('aria-invalid');
       }
     },
+    setFormat(format, svg) {
+      const next = `${format}:${svg}`;
+      if (config.language !== 'octl' || next === wanted) {
+        return;
+      }
+      wanted = next;
+      applyFormat(format, svg);
+    },
     goTo(line, column) {
       view.dispatch({ selection: { anchor: positionOf(view.state, line, column) }, scrollIntoView: true });
       view.focus();
@@ -146,9 +204,25 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
       view.focus();
     },
     destroy() {
+      destroyed = true;
       view.destroy();
     },
   };
+  function applyFormat(format: CodeFormat, svg: boolean): void {
+    const loaded = format === 'PLAIN' ? null : loadedFormat(format, svg);
+    if (format === 'PLAIN' || loaded) {
+      view.dispatch({ effects: languages.reconfigure(languageExtensions(config, loaded)) });
+      return;
+    }
+    void loadFormat(format, svg).then((support) => {
+      if (!destroyed && wanted === `${format}:${svg}`) {
+        view.dispatch({ effects: languages.reconfigure(languageExtensions(config, support)) });
+      }
+    });
+  }
+  if (config.language === 'octl' && config.format !== 'PLAIN' && !loadedFormat(config.format, config.svg)) {
+    applyFormat(config.format, config.svg);
+  }
   controller.setDiagnostics(config.diagnostics);
   controller.setInvalid(config.invalid);
   return controller;
@@ -165,7 +239,7 @@ function baseExtensions(config: CodeEditorConfig): Extension {
     closeBrackets(),
     highlightSelectionMatches(),
     search({ top: true }),
-    syntaxHighlighting(highlightStyle),
+    config.language === 'octl' ? octlHighlighters : syntaxHighlighting(highlightStyle),
     theme,
     EditorView.lineWrapping,
     keymap.of([
@@ -180,8 +254,16 @@ function baseExtensions(config: CodeEditorConfig): Extension {
   ];
 }
 
-function languageExtensions(config: CodeEditorConfig): Extension {
+function languageExtensions(config: CodeEditorConfig, format: FormatSupport | null): Extension {
   const names = config.names;
+  if (config.language === 'octl' && format && format.format !== 'PLAIN') {
+    return [
+      format.extension,
+      octlFolding,
+      octlCompletionEverywhere(octlCompletion(names)),
+      autocompletion({ activateOnTyping: false }),
+    ];
+  }
   switch (config.language) {
     case 'cdl':
       return [cdlLanguage, cdlFolding, autocompletion({ activateOnTyping: false, override: [cdlCompletion(names)] })];

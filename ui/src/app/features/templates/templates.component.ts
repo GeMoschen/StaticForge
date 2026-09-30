@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { declaredPaths } from '../../shared/code-editor/completions';
+import { channelCodeFormat } from '../../shared/code-editor/code-format';
 import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { templateKindOfFolderPath } from '../../shared/asset-route.util';
@@ -286,6 +287,14 @@ export class TemplatesComponent {
   /**
    * The editors a channel may use, for completion (M33): the ones the unsaved CDL declares and the inherited ones.
    */
+  /** How the selected channel's source is highlighted (M33 follow-up): its "Highlight as", else detected. */
+  readonly channelFormat = computed(() =>
+    channelCodeFormat(
+      this.channels().find((channel) => channel.key === this.selectedChannel()),
+      this.store.project()?.codeHighlighting,
+    ),
+  );
+
   readonly editorNames = computed<string[]>(() => {
     const names = new Set(declaredPaths(this.contentDefinition()).filter((path) => !path.endsWith('[]')));
     const collect = (editors: { name?: string; items?: unknown[] }[] | undefined) =>

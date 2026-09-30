@@ -373,6 +373,30 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
+    @Transactional
+    public CodeHighlighting updateCodeHighlighting(String key, CodeHighlighting highlighting, RevisionContext ctx) {
+        Project project = requireByKey(key);
+        writeGuard.requireWritable(project);
+        List<String> errors = highlighting.validate();
+        if (!errors.isEmpty()) {
+            throw new InvalidCodeHighlightingException(errors);
+        }
+        CodeHighlighting before = CodeHighlighting.fromJson(project.getCodeHighlighting());
+        if (before.equals(highlighting)) {
+            return before;
+        }
+        project.setCodeHighlighting(highlighting.toJson());
+        projectRepository.save(project);
+
+        Revision revision = revisionService.allocate(project.getId(), ChangeType.UPDATE, ctx.comment(), ctx.userId());
+        revisionService.appendSummary(
+                project.getId(),
+                revision.getRevisionId(),
+                AssetChange.create("project-" + project.getId(), "PROJECT", "UPDATE", List.of("codeHighlighting")));
+        return highlighting;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<ProjectMember> members(String key) {
         Project project = requireByKey(key);

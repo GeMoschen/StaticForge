@@ -15,6 +15,7 @@ import { ContentService, etagFor, type DatasetDetailView } from './content.servi
 import { DatasetSchemaEditorComponent } from './dataset-schema-editor.component';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { codeOf, codeView, typeCode } from '../../shared/code-editor/code-editor.testing';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 
 const CDL = `content {
   editor text name { label "Name" required }
@@ -45,7 +46,7 @@ const DATASET = {
 
 const CHANNELS = [
   { key: 'html', name: 'HTML', enabled: true, position: 0 },
-  { key: 'md', name: 'Markdown', enabled: true, position: 1 },
+  { key: 'md', name: 'Markdown', enabled: true, position: 1, settings: { highlightAs: 'PLAIN' } },
   { key: 'rss', name: 'RSS', enabled: false, position: 2 },
 ];
 
@@ -77,6 +78,7 @@ async function setup(options: { role?: string; revision?: number } = {}) {
       { provide: TemplatesService, useValue: templates },
       { provide: ChannelsService, useValue: { list: vi.fn().mockReturnValue(of(CHANNELS)) } },
       { provide: ApiClient, useValue: {} },
+      { provide: ProjectContextStore, useValue: { project: () => ({ key: 'acme', codeHighlighting: {} }) } },
       { provide: AuthStore, useValue: { roleFor: () => options.role ?? 'DEVELOPER', isArchived: () => false } },
       { provide: TimeTravelStore, useValue: timeTravel },
       provideProjectPermissions({ role: () => options.role ?? 'DEVELOPER', readOnly: () => timeTravel.isTimeTravel() }),
@@ -121,6 +123,10 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     await openTab(/Record template \(html\)/);
     expect(codeOf(editor('html'))).toBe(HTML_TEMPLATE);
     expect(screen.getByRole('tab', { name: /Record template \(html\)/ }).getAttribute('aria-selected')).toBe('true');
+    // Highlighted as the channel's format (M33 follow-up): detected from the key, or the channel's own choice.
+    expect(document.querySelector('[data-format]')?.getAttribute('data-format')).toBe('HTML');
+    await openTab(/Record template \(md\)/);
+    expect(document.querySelector('[data-format]')?.getAttribute('data-format')).toBe('PLAIN');
 
     await openTab(/Record template \(rss\)/);
     expect(screen.getByText(/channel is disabled/)).toBeTruthy();

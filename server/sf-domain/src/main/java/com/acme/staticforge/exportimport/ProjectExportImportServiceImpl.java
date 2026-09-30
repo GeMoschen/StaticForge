@@ -861,6 +861,7 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         if (content.settings() != null) {
             importSettings(targetProjectId, content.settings());
             importQualityRules(targetProjectId, content.manifest(), content.settings());
+            importCodeHighlighting(targetProjectId, content.manifest(), content.settings());
         }
 
         ScheduleArchive.Result schedules = new ScheduleArchive.Result(0, 0, List.of());
@@ -1216,6 +1217,45 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
                     project.setQualityRuleConfig(known.get("rules").isEmpty() ? null : known);
                     projectRepository.save(project);
                 });
+    }
+
+    /**
+     * Adopts the archive's code highlighting overrides (M33 follow-up, protocol {@code 12}) — like the quality rules,
+     * only when the target project has none of its own. Entries this server can't read are dropped.
+     */
+    private void importCodeHighlighting(long targetProjectId, ExportManifest manifest, ExportedSettings settings) {
+        if (manifest.protocolVersion() < CODE_HIGHLIGHTING_PROTOCOL || settings.codeHighlighting() == null) {
+            return;
+        }
+        com.acme.staticforge.project.CodeHighlighting archived =
+                com.acme.staticforge.project.CodeHighlighting.fromJson(settings.codeHighlighting());
+        if (!archived.validate().isEmpty()) {
+            archived = new com.acme.staticforge.project.CodeHighlighting(
+                    validOnly(archived.extensions(), true), validOnly(archived.mimeTypes(), false));
+        }
+        if (archived.isEmpty()) {
+            return;
+        }
+        JsonNode stored = archived.toJson();
+        projectRepository.findById(targetProjectId)
+                .filter(project -> project.getCodeHighlighting() == null)
+                .ifPresent(project -> {
+                    project.setCodeHighlighting(stored);
+                    projectRepository.save(project);
+                });
+    }
+
+    private static Map<String, String> validOnly(Map<String, String> entries, boolean extensions) {
+        Map<String, String> out = new LinkedHashMap<>();
+        entries.forEach((key, format) -> {
+            com.acme.staticforge.project.CodeHighlighting single = extensions
+                    ? new com.acme.staticforge.project.CodeHighlighting(Map.of(key, format), Map.of())
+                    : new com.acme.staticforge.project.CodeHighlighting(Map.of(), Map.of(key, format));
+            if (single.validate().isEmpty()) {
+                out.put(key, format);
+            }
+        });
+        return out;
     }
 
     /**
@@ -1986,8 +2026,11 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         // The language configuration travels with the settings, so an archive restores a localized
         // project as one rather than as a single-language project holding L10N values (M24.5.1).
         com.acme.staticforge.project.LocaleConfig locales = projectLocales.forProject(projectId);
-        JsonNode qualityRules = projectRepository.findById(projectId).map(Project::getQualityRuleConfig).orElse(null);
-        return new ExportedSettings(channels, targets, locales.isLocalized() ? locales : null, qualityRules);
+        Project project = projectRepository.findById(projectId).orElse(null);
+        JsonNode qualityRules = project == null ? null : project.getQualityRuleConfig();
+        JsonNode codeHighlighting = project == null ? null : project.getCodeHighlighting();
+        return new ExportedSettings(
+                channels, targets, locales.isLocalized() ? locales : null, qualityRules, codeHighlighting);
     }
 
     /**

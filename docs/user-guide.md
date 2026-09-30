@@ -435,6 +435,7 @@ In **Channels**, each channel's form sets how its output files and links are nam
 | **Trailing slash** | off | Only available with `PRETTY`; links to pages end in `/` (`about/`) |
 | **Index page UID** | `index` | The page with this UID becomes its folder's index page. A page named "Index" gets the UID `index`, so it becomes your site's `index.html` when it sits in **All pages** |
 | **Index file name** | `index.` + extension | File name of a folder's index page, also used for pretty folder URLs; letters, digits, `.`, `-`, `_`, up to 64 |
+| **Highlight as** | Auto | How the code editors highlight this channel's templates: *Auto* detects (project overrides, then MIME type, then extension); HTML, Markdown, JSON, XML, CSS, JavaScript, YAML or Plain text always apply. Only the editors read it |
 
 An invalid value is rejected with the field named. Changing the extension or URL settings moves every page of the channel: the next generation rebuilds all pages even in incremental mode, and the channel's computed URLs are recomputed (manual overrides are kept).
 
@@ -617,6 +618,14 @@ days are gone.
 Days are counted in **UTC**, so "the end of the day" is midnight UTC, which may be early morning or late evening where
 you are.
 
+#### Code highlighting (project admins)
+
+**Settings → General → Code highlighting** tells the code editors which format a file extension (`tpl`) or MIME type
+(`text/x-template`) is: HTML, Markdown, JSON, XML, CSS, JavaScript, YAML or plain text. It applies to processed text
+files and to the templates of channels whose *Highlight as* is *Auto*; an extension entry wins over a MIME type entry,
+and without an entry the editors detect the format from the MIME type and the extension. It changes highlighting only,
+never the output, and travels with a project export.
+
 #### Compacting old history (project admins, M29)
 
 **Settings → General → Revision compaction.** Every member sees the card; only project admins can change it, and it is
@@ -660,7 +669,9 @@ In a project with several languages, the **Editing language** picker above the c
 can `Tab` to; changing it switches every editor, the preview and the search palette to that language.
 
 In the code editors (CDL, OCTL, a record set's *Where*, JSON values) `Ctrl+Space` opens completion, `Ctrl+F` searches,
-`Tab` indents — press `Esc` first to `Tab` out of the editor.
+`Tab` indents — press `Esc` first to `Tab` out of the editor. Templates and text files are highlighted as their format
+(HTML, Markdown, JSON, XML, CSS, JavaScript, YAML) in colors of their own, with the `$CMS_…$` instructions on top in the OCTL colors; in HTML, CSS, JavaScript and
+XML (SVG too) `Ctrl+Space` also completes tags, attributes, properties and closing tags.
 
 In **Changes**, `↑`/`↓` move between rows, `Space` ticks a row and `Enter` shows its changes; the preview's
 **Draft | Published** switch is a radio group (arrow keys switch).

@@ -53,7 +53,9 @@ class ChannelOutputSettingsTest {
         assertThat(ChannelOutputSettings.validate("", MAPPER.createObjectNode())).isEmpty();
         assertThat(ChannelOutputSettings.validate("htm", MAPPER.readTree(
                         "{\"indexUid\":\"home\",\"indexFileName\":\"index.html\",\"urlStrategy\":\"PRETTY\","
-                                + "\"trailingSlash\":true,\"prettyPrint\":true}")))
+                                + "\"trailingSlash\":true,\"prettyPrint\":true,\"highlightAs\":\"MARKDOWN\"}")))
+                .isEmpty();
+        assertThat(ChannelOutputSettings.validate("xml", MAPPER.readTree("{\"highlightAs\":\"AUTO\"}")))
                 .isEmpty();
     }
 
@@ -62,7 +64,8 @@ class ChannelOutputSettingsTest {
         ObjectNode settings = MAPPER.createObjectNode()
                 .put("urlStrategy", "NICE")
                 .put("indexFileName", "../index.html")
-                .put("trailingSlash", "true");
+                .put("trailingSlash", "true")
+                .put("highlightAs", "markdown");
         settings.putArray("indexUid");
 
         assertThat(ChannelOutputSettings.validate("HTML", settings))
@@ -72,6 +75,7 @@ class ChannelOutputSettingsTest {
                         "settings.urlStrategy",
                         "settings.indexFileName",
                         "settings.indexUid",
-                        "settings.trailingSlash");
+                        "settings.trailingSlash",
+                        "settings.highlightAs");
     }
 }

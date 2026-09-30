@@ -160,6 +160,13 @@ export class ApiClient {
     });
   }
 
+  /** Replaces the project's code highlighting overrides (M33 follow-up); project admins only. */
+  updateCodeHighlighting(key: string, body: S['CodeHighlightingView']): Observable<S['ProjectDetail']> {
+    return this.http.put<S['ProjectDetail']>(`${BASE}/projects/${key}/code-highlighting`, body, {
+      withCredentials: true,
+    });
+  }
+
   /** The project's content languages (M24). */
   getProjectLocales(key: string): Observable<S['ProjectLocalesView']> {
     return this.http.get<S['ProjectLocalesView']>(`${BASE}/projects/${key}/locales`, {

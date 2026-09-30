@@ -27,6 +27,8 @@ import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.comp
 import { declaredPaths } from '../../shared/code-editor/completions';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ChannelsService } from '../channels/channels.service';
+import { ProjectContextStore } from '../../core/project/project-context.store';
+import { channelCodeFormat } from '../../shared/code-editor/code-format';
 import type { ContentDefinition, EditorDefinition } from '../forms/form.model';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { sortDiagnostics } from '../templates/inheritance.util';
@@ -91,6 +93,7 @@ export class DatasetSchemaEditorComponent {
   private readonly content = inject(ContentService);
   private readonly templates = inject(TemplatesService);
   private readonly channelsService = inject(ChannelsService);
+  private readonly projectContext = inject(ProjectContextStore);
   private readonly toasts = inject(ToastService);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly injector = inject(Injector);
@@ -140,6 +143,14 @@ export class DatasetSchemaEditorComponent {
 
   protected readonly channelTabs = computed<RecordTemplateChannel[]>(() =>
     recordTemplateChannels(this.channels(), this.storedRecordTemplates()),
+  );
+
+  /** How the open channel's record template is highlighted (M33 follow-up): the channel's "Highlight as", else detected. */
+  protected readonly activeFormat = computed(() =>
+    channelCodeFormat(
+      this.channels().find((channel) => channel.key === this.activeChannel()),
+      this.projectContext.project()?.codeHighlighting,
+    ),
   );
 
   /** The open channel tab, or `null` on the schema tab. */

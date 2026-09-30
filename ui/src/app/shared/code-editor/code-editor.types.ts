@@ -1,4 +1,5 @@
 import type { EditorView } from '@codemirror/view';
+import type { CodeFormat } from './code-format';
 
 /** What a code editor edits. */
 export type CodeLanguage = 'cdl' | 'octl' | 'where' | 'json';
@@ -23,6 +24,10 @@ export interface CodeEditorConfig {
   indentWithTabs: boolean;
   invalid: boolean;
   diagnostics: readonly CodeDiagnostic[];
+  /** For `octl`: the format the text between the instructions is highlighted as (`PLAIN`: none). */
+  format: CodeFormat;
+  /** For `octl` with format `XML`: offer SVG element and attribute names. */
+  svg: boolean;
   /** The names completion offers, read when it opens. */
   names: () => readonly string[];
   onChange: (value: string) => void;
@@ -36,6 +41,8 @@ export interface CodeEditorController {
   setPlaceholder(text: string): void;
   setDiagnostics(diagnostics: readonly CodeDiagnostic[]): void;
   setInvalid(invalid: boolean): void;
+  /** Switches an `octl` editor's host format; loads the format's grammar first when needed. */
+  setFormat(format: CodeFormat, svg: boolean): void;
   goTo(line: number, column: number): void;
   insert(snippet: string, caret: number): void;
   focus(): void;

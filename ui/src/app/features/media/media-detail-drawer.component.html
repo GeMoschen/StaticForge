@@ -146,6 +146,8 @@
               [readOnly]="readOnly()"
               [diagnostics]="sourceDiagnostics()"
               [indentWithTabs]="true"
+              [format]="sourceFormat().format"
+              [svg]="sourceFormat().svg"
               (valueChange)="onSourceInput($event)"
             />
 

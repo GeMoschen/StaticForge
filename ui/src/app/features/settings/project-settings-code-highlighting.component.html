@@ -1,0 +1,86 @@
+<section class="code-highlighting" aria-labelledby="code-highlighting-title">
+  <h3 id="code-highlighting-title" class="code-highlighting__title">Code highlighting</h3>
+  <p class="code-highlighting__hint">
+    How the code editors highlight processed text files and the templates of channels set to “Auto”. An extension
+    entry wins over a MIME type entry; without an entry, the format is detected from the MIME type and extension.
+    A channel's own “Highlight as” always wins.
+  </p>
+
+  @if (rows().length === 0) {
+    <p class="code-highlighting__empty">No overrides — detection only.</p>
+  } @else {
+    <table class="code-highlighting__table">
+      <thead>
+        <tr>
+          <th scope="col">Match</th>
+          <th scope="col">Extension or MIME type</th>
+          <th scope="col">Highlight as</th>
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.id) {
+          <tr>
+            <td>{{ row.kind === 'EXTENSION' ? 'Extension' : 'MIME type' }}</td>
+            <td>
+              <input
+                class="input"
+                type="text"
+                autocomplete="off"
+                [attr.aria-label]="row.kind === 'EXTENSION' ? 'File extension' : 'MIME type'"
+                [attr.aria-invalid]="problems().get(row.id) ? 'true' : null"
+                [placeholder]="row.kind === 'EXTENSION' ? 'tpl' : 'text/x-template'"
+                [value]="row.key"
+                [disabled]="readOnly()"
+                (input)="setKey(row.id, $event)"
+              />
+              @if (problems().get(row.id); as problem) {
+                <span class="code-highlighting__problem">{{ problem }}</span>
+              }
+            </td>
+            <td>
+              <select
+                class="select"
+                [attr.aria-label]="'Highlight ' + (row.key || 'entry') + ' as'"
+                [disabled]="readOnly()"
+                (change)="setFormat(row.id, $event)"
+              >
+                @for (format of formats; track format.value) {
+                  <option [value]="format.value" [selected]="format.value === row.format">{{ format.label }}</option>
+                }
+              </select>
+            </td>
+            <td>
+              <button
+                type="button"
+                class="code-highlighting__remove"
+                [disabled]="readOnly()"
+                [attr.aria-label]="'Remove ' + (row.key || 'entry')"
+                (click)="remove(row.id)"
+              >
+                Remove
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (serverErrors().length) {
+    <ul class="code-highlighting__errors" role="alert">
+      @for (error of serverErrors(); track $index) {
+        <li>{{ error }}</li>
+      }
+    </ul>
+  }
+
+  <div class="code-highlighting__actions">
+    <sf-button variant="secondary" [disabled]="readOnly()" (click)="add('EXTENSION')">Add extension</sf-button>
+    <sf-button variant="secondary" [disabled]="readOnly()" (click)="add('MIME')">Add MIME type</sf-button>
+    <span class="code-highlighting__spacer"></span>
+    <sf-button variant="primary" [disabled]="!valid() || !changed() || saving() || readOnly()" (click)="save()">
+      {{ saving() ? 'Saving…' : 'Save code highlighting' }}
+    </sf-button>
+  </div>
+</section>

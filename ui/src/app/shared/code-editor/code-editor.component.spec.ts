@@ -1,9 +1,11 @@
 import '@angular/compiler';
 import { Component, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ensureSyntaxTree } from '@codemirror/language';
 import { forEachDiagnostic } from '@codemirror/lint';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { CodeDiagnostic, CodeLanguage, SfCodeEditorComponent } from './code-editor.component';
+import { CodeDiagnostic, CodeFormat, CodeLanguage, SfCodeEditorComponent } from './code-editor.component';
+import { loadFormat } from './formats';
 
 @Component({
   standalone: true,
@@ -14,6 +16,7 @@ import { CodeDiagnostic, CodeLanguage, SfCodeEditorComponent } from './code-edit
     label="CDL source"
     [diagnostics]="diagnostics()"
     [readOnly]="readOnly()"
+    [format]="format()"
     (valueChange)="changes.push($event); value.set($event)"
   />`,
 })
@@ -22,6 +25,7 @@ class HostComponent {
   readonly language = signal<CodeLanguage>('cdl');
   readonly diagnostics = signal<CodeDiagnostic[]>([]);
   readonly readOnly = signal(false);
+  readonly format = signal<CodeFormat>('PLAIN');
   readonly changes: string[] = [];
   readonly editor = viewChild.required(SfCodeEditorComponent);
 }
@@ -80,5 +84,39 @@ describe('SfCodeEditorComponent', () => {
     host.editor().insert('Y');
     expect(view().state.doc.line(2).text).toBe('  Xeditor text title { }');
     expect(view().state.readOnly).toBe(true);
+  });
+
+  it('highlights an OCTL template as its format once the grammar has loaded', async () => {
+    // The language is fixed when the editor is created: a fresh host for OCTL.
+    fixture.destroy();
+    fixture = TestBed.createComponent(HostComponent);
+    host = fixture.componentInstance;
+    host.language.set('octl');
+    host.value.set('<p class="x">$CMS_VALUE(title)$</p>');
+    fixture.detectChanges();
+    // The node at `class`: an HTML attribute name once HTML parses the text between the instructions.
+    const nodeAtClass = () => ensureSyntaxTree(view().state, view().state.doc.length, 5000)!.resolveInner(4, 1).name;
+    expect(nodeAtClass()).not.toBe('AttributeName');
+
+    host.format.set('HTML');
+    fixture.detectChanges();
+    await loadFormat('HTML');
+    await Promise.resolve();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-format="HTML"]')).not.toBeNull();
+    expect(nodeAtClass()).toBe('AttributeName');
+
+    // The markup has a palette of its own: the tag name and the instruction don't share a highlight class.
+    fixture.detectChanges();
+    const classOf = (text: string) =>
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.cm-line span')).find(
+        (span) => span.textContent === text,
+      )?.className;
+    expect(classOf('p')).toBeTruthy();
+    expect(classOf('$CMS_VALUE')).toBeTruthy();
+    expect(classOf('p')).not.toBe(classOf('$CMS_VALUE'));
+
+    host.format.set('PLAIN');
+    fixture.detectChanges();
+    expect(nodeAtClass()).not.toBe('AttributeName');
   });
 });

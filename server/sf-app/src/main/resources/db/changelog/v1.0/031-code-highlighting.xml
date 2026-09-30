@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M33 follow-up: code highlighting overrides per project.
+
+         project.code_highlighting   {"extensions": {"tpl": "HTML"}, "mimeTypes": {"text/x-template": "HTML"}}: the
+                                     format the code editors highlight a file as; NULL = no overrides. A JSON column
+                                     declared per dialect like project.locale_config (017). A channel's own
+                                     "Highlight as" lives in output_channel.settings (highlightAs), no column. -->
+    <changeSet id="031-code-highlighting-postgresql" author="sf" dbms="postgresql">
+        <comment>Code highlighting overrides per project — PostgreSQL (jsonb).</comment>
+        <addColumn tableName="project">
+            <column name="code_highlighting" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="031-code-highlighting-h2" author="sf" dbms="h2">
+        <comment>Code highlighting overrides per project — H2 (json).</comment>
+        <addColumn tableName="project">
+            <column name="code_highlighting" type="JSON"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

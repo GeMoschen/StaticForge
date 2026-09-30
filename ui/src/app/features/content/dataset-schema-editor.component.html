@@ -90,6 +90,8 @@
             [diagnostics]="activeDiagnostics()"
             [readOnly]="!canEdit()"
             [names]="fieldNames()"
+            [format]="activeFormat().format"
+            [svg]="activeFormat().svg"
             (valueChange)="onRecordTemplateInput($event)"
           />
         }

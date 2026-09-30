@@ -436,6 +436,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/code-highlighting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateCodeHighlighting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{id}/system-role": {
         parameters: {
             query?: never;
@@ -3181,6 +3197,14 @@ export interface components {
             description?: string;
             allowedMimeTypes?: string[];
         };
+        CodeHighlightingView: {
+            extensions?: {
+                [key: string]: string;
+            };
+            mimeTypes?: {
+                [key: string]: string;
+            };
+        };
         ProjectDetail: {
             key?: string;
             name?: string;
@@ -3195,6 +3219,7 @@ export interface components {
             permissions?: string[];
             /** Format: int64 */
             compactedThrough?: number;
+            codeHighlighting?: components["schemas"]["CodeHighlightingView"];
         };
         SetMemberRoleRequest: {
             role: string;
@@ -6100,6 +6125,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ProjectLocalesView"];
+                };
+            };
+        };
+    };
+    updateCodeHighlighting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeHighlightingView"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ProjectDetail"];
                 };
             };
         };

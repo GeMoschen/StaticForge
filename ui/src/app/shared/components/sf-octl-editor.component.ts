@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, viewChild } from '@angular/core';
 import type { components } from '../../core/api/generated/schema.d.ts';
-import { SfCodeEditorComponent } from '../code-editor/code-editor.component';
+import { CodeFormat, SfCodeEditorComponent } from '../code-editor/code-editor.component';
 
 type Diagnostic = components['schemas']['Diagnostic'];
 
@@ -33,6 +33,10 @@ export class SfOctlEditorComponent {
   readonly readOnly = input(false);
   /** What completion offers inside an instruction: the template's editors, or the dataset's fields. */
   readonly names = input<readonly string[]>([]);
+  /** The format of the text between the instructions (M33 follow-up; see `resolveCodeFormat`). */
+  readonly format = input<CodeFormat>('PLAIN');
+  /** An SVG template or file: XML completion offers SVG names. */
+  readonly svg = input(false);
 
   /** Every edit, including an {@link insert}. */
   readonly valueChange = output<string>();

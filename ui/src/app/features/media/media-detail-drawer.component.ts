@@ -46,6 +46,8 @@ import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
+import { extensionOf, resolveCodeFormat } from '../../shared/code-editor/code-format';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
 import { ReleaseBarComponent } from '../release/release-bar.component';
 import type { ReleaseMode } from '../release/release-choice.util';
@@ -214,6 +216,18 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   );
 
   private readonly sourceEditor = viewChild<SfCodeEditorComponent>('sourceEditor');
+  private readonly projectContext = inject(ProjectContextStore);
+  /**
+   * How the source is highlighted (M33 follow-up): the project's overrides for the file's extension or MIME type,
+   * else detected from them.
+   */
+  protected readonly sourceFormat = computed(() =>
+    resolveCodeFormat({
+      extension: extensionOf(this.media().fileName),
+      mimeType: this.media().mimeType,
+      overrides: this.projectContext.project()?.codeHighlighting,
+    }),
+  );
   private validateTimer: ReturnType<typeof setTimeout> | null = null;
   private validateSequence = 0;
 

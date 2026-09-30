@@ -13,16 +13,20 @@ import {
 } from '@angular/core';
 import type { EditorView } from '@codemirror/view';
 import { loadCodeEditorSetup, loadedCodeEditorSetup } from './code-editor.loader';
+import type { CodeFormat } from './code-format';
 import type { CodeDiagnostic, CodeEditorController, CodeLanguage } from './code-editor.types';
 
 export type { CodeDiagnostic, CodeLanguage } from './code-editor.types';
+export type { CodeFormat } from './code-format';
 
 /**
  * A code editor (M33) on CodeMirror 6 for CDL, OCTL, record-set expressions and JSON: syntax highlighting (in CDL
  * also inside expression strings), completion on Ctrl+Space, the host's diagnostics underlined at their position
  * with the message on hover, line numbers, bracket matching and auto-closing, folding, search (Ctrl+F) and history.
  * Tab indents; Esc then Tab moves focus on. `compact` is a one- or two-line field (a `where` expression): no gutters.
- * CodeMirror loads as its own chunk the first time an editor opens.
+ * An OCTL editor highlights the text between the instructions as its `format` (HTML with CSS and JavaScript inside,
+ * Markdown, JSON, XML, CSS, JavaScript, YAML), with that format's completion where it has one; see `formats.ts`.
+ * CodeMirror loads as its own chunk the first time an editor opens, and each format's grammar when first needed.
  *
  * <p>The host owns the text (`value` in, `valueChange` out) and the diagnostics; setting `value` changes the text
  * without reporting it back as an edit.
@@ -31,7 +35,13 @@ export type { CodeDiagnostic, CodeLanguage } from './code-editor.types';
   selector: 'sf-code-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<div #host class="sf-code-editor" [class.sf-code-editor--compact]="compact()" [attr.data-language]="language()"></div>`,
+  template: `<div
+    #host
+    class="sf-code-editor"
+    [class.sf-code-editor--compact]="compact()"
+    [attr.data-language]="language()"
+    [attr.data-format]="language() === 'octl' ? format() : null"
+  ></div>`,
   styles: `
     :host { display: block; }
     .sf-code-editor :where(.cm-editor) { min-height: var(--sf-code-min-height, 12rem); max-height: var(--sf-code-max-height, 36rem); }
@@ -55,6 +65,10 @@ export class SfCodeEditorComponent implements AfterViewInit {
   readonly invalid = input(false);
   /** Tab inserts a tab character, and indentation uses tabs (a text file's source). Default: two spaces. */
   readonly indentWithTabs = input(false);
+  /** For `octl`: the format of the text between the instructions (see `resolveCodeFormat`). */
+  readonly format = input<CodeFormat>('PLAIN');
+  /** For `octl` with format `XML`: an SVG file — completion offers SVG elements and attributes. */
+  readonly svg = input(false);
 
   readonly valueChange = output<string>();
 
@@ -82,6 +96,11 @@ export class SfCodeEditorComponent implements AfterViewInit {
     effect(() => {
       const invalid = this.invalid();
       untracked(() => this.editor?.setInvalid(invalid));
+    });
+    effect(() => {
+      const format = this.format();
+      const svg = this.svg();
+      untracked(() => this.editor?.setFormat(format, svg));
     });
     effect(() => {
       const diagnostics = this.diagnostics();
@@ -136,6 +155,8 @@ export class SfCodeEditorComponent implements AfterViewInit {
       indentWithTabs: this.indentWithTabs(),
       invalid: this.invalid(),
       diagnostics: this.diagnostics(),
+      format: this.format(),
+      svg: this.svg(),
       names: () => this.names(),
       onChange: (value) => this.valueChange.emit(value),
     });

@@ -47,6 +47,12 @@ Deviations from the plan:
       `where`, JSON; completion on Ctrl+Space only — keywords/values, editor paths, functions; expression strings
       highlighted inside CDL; squiggles + list; line numbers, brackets, folding, search; Tab indents, Esc+Tab leaves;
       live CDL validation); lazy chunk (118 kB gzipped), initial bundle 1.66 MB
+- [x] Format highlighting in OCTL editors (user decisions: HTML with CSS/JS inside, Markdown, JSON, XML/SVG/RSS, CSS,
+      JavaScript, YAML; channel "Highlight as" Auto + formats, any choice wins; applies to channel and record templates
+      and processed text media; text media from MIME type/extension with project overrides by extension and MIME type
+      on the General tab, extension before MIME, also for Auto channels; export protocol 12; completion for HTML, CSS,
+      JavaScript, XML closing tags and SVG names, none for JSON/Markdown/YAML). OCTL over the format via `parseMixed`
+      overlay; each grammar a lazy chunk; `PUT /projects/{key}/code-highlighting` (PROJECT_ADMIN)
 
 ---
 

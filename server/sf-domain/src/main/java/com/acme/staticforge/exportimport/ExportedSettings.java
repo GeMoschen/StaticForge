@@ -17,23 +17,37 @@ import java.util.List;
  *
  * <p>{@code qualityRules} is the project's quality rule configuration (M30.1.2, protocol {@code 10}) as the project
  * stores it; {@code null} when every rule is at its default, and in every archive written before M30.
+ *
+ * <p>{@code codeHighlighting} is the project's code highlighting overrides (M33 follow-up, protocol {@code 12}) as the
+ * project stores it; {@code null} when there are none, and in every archive written before protocol {@code 12}. A
+ * channel's own "Highlight as" travels inside its {@code settings}.
  */
 public record ExportedSettings(
         List<ExportedChannel> channels,
         List<ExportedGenerationTarget> targets,
         com.acme.staticforge.project.LocaleConfig locales,
-        JsonNode qualityRules) {
+        JsonNode qualityRules,
+        JsonNode codeHighlighting) {
+
+    /** Settings without code highlighting overrides — every archive written before protocol {@code 12}. */
+    public ExportedSettings(
+            List<ExportedChannel> channels,
+            List<ExportedGenerationTarget> targets,
+            com.acme.staticforge.project.LocaleConfig locales,
+            JsonNode qualityRules) {
+        this(channels, targets, locales, qualityRules, null);
+    }
 
     /** Settings without a quality rule configuration — every archive written before M30. */
     public ExportedSettings(
             List<ExportedChannel> channels,
             List<ExportedGenerationTarget> targets,
             com.acme.staticforge.project.LocaleConfig locales) {
-        this(channels, targets, locales, null);
+        this(channels, targets, locales, null, null);
     }
 
     /** Settings without a language configuration — every archive written before M24. */
     public ExportedSettings(List<ExportedChannel> channels, List<ExportedGenerationTarget> targets) {
-        this(channels, targets, null, null);
+        this(channels, targets, null, null, null);
     }
 }

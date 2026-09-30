@@ -69,6 +69,14 @@ public class Project {
     private JsonNode qualityRuleConfig;
 
     /**
+     * Code highlighting overrides (M33 follow-up): {@code {"extensions": {…}, "mimeTypes": {…}}}, read through
+     * {@link CodeHighlighting#fromJson}; {@code null} = built-in detection only.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "code_highlighting")
+    private JsonNode codeHighlighting;
+
+    /**
      * The newest revision the revision-compaction job has processed (M29.4.1), {@code null} when it never ran. Written
      * only by {@code RevisionCompactor} (JDBC), so this mapping is read-only: a project save never overwrites it.
      */
@@ -176,6 +184,14 @@ public class Project {
 
     public void setQualityRuleConfig(JsonNode qualityRuleConfig) {
         this.qualityRuleConfig = qualityRuleConfig;
+    }
+
+    public JsonNode getCodeHighlighting() {
+        return codeHighlighting;
+    }
+
+    public void setCodeHighlighting(JsonNode codeHighlighting) {
+        this.codeHighlighting = codeHighlighting;
     }
 
     public Long getCompactedThrough() {
