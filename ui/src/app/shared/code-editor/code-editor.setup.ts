@@ -109,6 +109,8 @@ const theme = EditorView.theme({
   },
   '&.cm-focused': { outline: '2px solid var(--sf-signal)', outlineOffset: '-1px' },
   '.cm-content': { caretColor: 'var(--sf-ink)', fontFamily: 'var(--sf-font-mono)' },
+  // drawSelection paints the caret itself (black by default): follow the theme's ink so it shows in dark mode.
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--sf-ink)' },
   '.cm-scroller': { fontFamily: 'var(--sf-font-mono)', lineHeight: '1.5' },
   '.cm-gutters': {
     backgroundColor: 'var(--sf-paper)',

@@ -264,7 +264,10 @@
         }
 
         <div class="panel">
-          <sf-field label="Channel templates (OCTL)" hint="Per-channel rendering source.">
+          <!-- Not an sf-field: its <label> would forward a click in the editor to the first channel tab. -->
+          <div class="channels" role="group" aria-labelledby="channels-label">
+            <span id="channels-label" class="channels__label">Channel templates (OCTL)</span>
+            <span class="channels__hint">Per-channel rendering source.</span>
             @if (channelKeys().length > 0) {
               <div class="channels__tabs">
                 @for (key of channelKeys(); track key) {
@@ -303,7 +306,7 @@
             } @else {
               <p class="detail__meta">No channels configured.</p>
             }
-          </sf-field>
+          </div>
 
           @if (availableChannels().length > 0) {
             <div class="inline">
