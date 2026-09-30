@@ -5,7 +5,7 @@ clean, enterprise-dense visual identity (Inter, blue accent, light/dark/system, 
 frame, role-adaptive (permissions + developer mode), keyboard-first, per-user server preferences, one design system on
 every screen. Screen migration starts only after the style guide (M35.9) is signed off.
 
-- [ ] M35.1 functional bugs from the UX run
+- [x] M35.1 functional bugs from the UX run
 - [ ] M35.2 decompose large components (behaviour-preserving)
 - [ ] M35.3 user preferences API + client store
 - [ ] M35.4 Transloco setup + string extraction rules

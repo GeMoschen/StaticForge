@@ -22,7 +22,7 @@
         ></textarea>
       </sf-field>
       <div class="form__actions">
-        <sf-button variant="primary" [disabled]="saving() || readOnly()" (click)="save()">
+        <sf-button variant="primary" [disabled]="saving() || readOnly() || !dirty()" (click)="save()">
           {{ saving() ? 'Saving…' : 'Save changes' }}
         </sf-button>
       </div>

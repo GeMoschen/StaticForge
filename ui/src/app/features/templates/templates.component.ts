@@ -192,6 +192,11 @@ export class TemplatesComponent {
   /** The inherited kind of `selectedFolder`, carried alongside it by `TemplateFolderSelectEvent`
    * rather than re-derived by walking the tree (see `types.ts`). */
   protected readonly selectedFolderKind = signal<TemplateAssetKind | null>(null);
+  /**
+   * The folder the tree highlights. `selectedFolder` stays put while a template is open (it scopes the list and is the
+   * target of "New template"), but a highlighted folder next to a highlighted template would read as two selections.
+   */
+  protected readonly highlightedFolder = computed(() => (this.selectedUuid() ? null : this.selectedFolder()));
 
   /**
    * Kind-toggle removal (M13.3.1 step 5): the old `kind` signal was a standalone toggle the
@@ -315,6 +320,25 @@ export class TemplatesComponent {
   /** One channel's diagnostics; none until it has been checked. */
   channelDiagnostics(channel: string): Diagnostic[] {
     return this.octlDiagnostics()[channel] ?? [];
+  }
+
+  /**
+   * The server's warnings about each channel's output path (`TemplateDetail.warnings`, field `outputPath:<channel>`):
+   * computed on every read and save, so they are what the saved template says, not a live check.
+   */
+  private readonly outputPathWarnings = computed<Record<string, Diagnostic[]>>(() => {
+    const byChannel: Record<string, Diagnostic[]> = {};
+    for (const warning of this.detail()?.warnings ?? []) {
+      const channel = warning.field?.startsWith('outputPath:') ? warning.field.slice('outputPath:'.length) : null;
+      if (channel) {
+        (byChannel[channel] ??= []).push(warning);
+      }
+    }
+    return byChannel;
+  });
+
+  outputPathWarningsOf(channel: string): Diagnostic[] {
+    return this.outputPathWarnings()[channel] ?? [];
   }
   /** Descendants a rejected save would have broken (`422 SF-DOM-0124`). */
   readonly descendantProblems = signal<DescendantProblem[]>([]);

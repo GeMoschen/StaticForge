@@ -113,6 +113,8 @@ export class GenerationComponent implements OnDestroy {
   readonly loading = signal(false);
   readonly dialogOpen = signal(false);
   readonly targets = signal<GenerationTargetView[]>([]);
+  /** Whether the targets have been read: "no targets" is only news after that. */
+  readonly targetsLoaded = signal(false);
   /** Where a run without a target goes: the default target, else the first (as the server resolves it). */
   readonly defaultTargetId = computed(() => {
     const targets = this.targets();
@@ -205,8 +207,14 @@ export class GenerationComponent implements OnDestroy {
 
   private loadTargets(): void {
     this.api.listTargets(this.projectKey()).subscribe({
-      next: (targets) => this.targets.set(targets ?? []),
-      error: () => this.targets.set([]),
+      next: (targets) => {
+        this.targets.set(targets ?? []);
+        this.targetsLoaded.set(true);
+      },
+      error: () => {
+        this.targets.set([]);
+        this.targetsLoaded.set(true);
+      },
     });
   }
 

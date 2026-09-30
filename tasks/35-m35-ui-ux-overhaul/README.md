@@ -174,7 +174,7 @@ A code audit and a screenshot run found the following. The run used a seeded pro
 
 | id | title | phase | area | depends | status |
 |---|---|---|---|---|---|
-| M35.1 | [Functional bugs from the UX run](001-functional-bugs.md) | 0 groundwork | fullstack | — | todo |
+| M35.1 | [Functional bugs from the UX run](001-functional-bugs.md) | 0 groundwork | fullstack | — | done |
 | M35.2 | [Decompose large components](002-decompose-large-components.md) | 0 groundwork | frontend | M35.1 | todo |
 | M35.3 | [User preferences API and client store](003-user-preferences.md) | 0 groundwork | fullstack | — | todo |
 | M35.4 | [Transloco setup and string extraction rules](004-i18n-transloco.md) | 0 groundwork | frontend | — | todo |

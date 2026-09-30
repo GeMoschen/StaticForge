@@ -44,6 +44,13 @@ public final class DiagnosticCodes {
      */
     public static final String GEN_RECORD_TEMPLATE_MISSING = "SF-GEN-0241";
 
+    /**
+     * Save-time warning on a page template (M35.1): a channel's output path expression has no {@code {locale}}
+     * segment while the project has several languages, so a build would fail with {@code SF-GEN-0111}. Lives here
+     * (not in {@code GenerationDiagnosticCodes}) because the API layer raises it without depending on generation.
+     */
+    public static final String GEN_OUTPUT_PATH_NOT_LOCALE_DISTINCT = "SF-GEN-0112";
+
     // OCTL template inheritance (M20). The epic proposed 0140–0149, which M19 had already taken.
     /** {@code $CMS_EXTENDS} is not the template's first instruction, is nested, or appears more than once. */
     public static final String OCTL_EXTENDS_POSITION = "SF-TPL-0150";

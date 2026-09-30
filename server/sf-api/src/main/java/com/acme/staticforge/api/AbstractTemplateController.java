@@ -8,13 +8,19 @@ import com.acme.staticforge.asset.template.TemplateHierarchy;
 import com.acme.staticforge.asset.template.TemplateListItem;
 import com.acme.staticforge.asset.template.TemplateService;
 import com.acme.staticforge.asset.template.TemplateView;
+import com.acme.staticforge.channel.OutputPathExpander;
+import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
 import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.EffectiveDefinition;
+import com.acme.staticforge.template.diagnostic.Diagnostic;
+import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
+import com.acme.staticforge.template.diagnostic.Severity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -46,6 +52,15 @@ abstract class AbstractTemplateController {
     }
 
     protected TemplateDetail toDetail(TemplateView v) {
+        return toDetail(v, List.of());
+    }
+
+    /** A page template's detail, with the warnings its output paths raise in the project's current languages. */
+    protected TemplateDetail toDetail(String projectKey, TemplateView v) {
+        return toDetail(v, outputPathWarnings(v.payload(), projectService.locales(projectKey)));
+    }
+
+    private TemplateDetail toDetail(TemplateView v, List<Diagnostic> warnings) {
         JsonNode payload = v.payload();
         EffectiveDefinition effective = v.effectiveDefinition();
         return new TemplateDetail(
@@ -71,7 +86,38 @@ abstract class AbstractTemplateController {
                 v.ancestors().stream().map(a -> new TemplateDetail.TemplateRefDto(a.uuid(), a.uid())).toList(),
                 effective == null ? null : objectMapper.valueToTree(effective.definition()),
                 effective == null ? null : new TemplateDetail.InheritedFrom(effective.editorsInheritedFrom(), effective.bodiesInheritedFrom()),
-                descendantWarnings(v));
+                descendantWarnings(v),
+                warnings);
+    }
+
+    /**
+     * {@code SF-GEN-0112} for every channel whose {@code outputPath} expression lacks {@code {locale}} in a project
+     * with several languages: a build refuses it ({@code SF-GEN-0111}) because the languages would write one file.
+     * A template without an expression for a channel uses the project default, which has the segment.
+     */
+    static List<Diagnostic> outputPathWarnings(JsonNode payload, LocaleConfig locales) {
+        JsonNode outputPath = payload == null ? null : payload.get("outputPath");
+        if (outputPath == null || !outputPath.isObject() || !LocaleConfig.orEmpty(locales).isLocalized()) {
+            return List.of();
+        }
+        List<Diagnostic> warnings = new ArrayList<>();
+        outputPath.fields().forEachRemaining(entry -> {
+            String expression = entry.getValue().asText("");
+            if (expression.isBlank() || OutputPathExpander.isLocaleDistinct(expression)) {
+                return;
+            }
+            warnings.add(new Diagnostic(
+                    Severity.WARNING,
+                    DiagnosticCodes.GEN_OUTPUT_PATH_NOT_LOCALE_DISTINCT,
+                    "Output path '" + expression + "' of channel '" + entry.getKey() + "' has no "
+                            + OutputPathExpander.LOCALE_PLACEHOLDER + " segment, but this project has several languages: "
+                            + "a build fails (SF-GEN-0111) because the languages would overwrite each other. "
+                            + "Add it, for example '" + OutputPathExpander.LOCALE_PLACEHOLDER + "/" + expression + "'.",
+                    0,
+                    0,
+                    "outputPath:" + entry.getKey()));
+        });
+        return List.copyOf(warnings);
     }
 
     protected static TemplateSummary toSummary(TemplateListItem item) {

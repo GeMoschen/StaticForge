@@ -100,7 +100,7 @@ public class PageReferenceServiceImpl implements PageReferenceService {
         if (locales.isLocalized()) {
             writeLocalizedLabel(payload, label, locales.canonicalDeclared(locale) != null
                     ? locales.canonicalDeclared(locale)
-                    : locales.defaultLocale());
+                    : locales.defaultLocale(), locales.defaultLocale());
         } else {
             writeLabel(payload, label);
         }
@@ -173,11 +173,11 @@ public class PageReferenceServiceImpl implements PageReferenceService {
      * Writes one language's label, wrapping a label stored before the project had locales as the
      * default language's translation (M24.2.2).
      */
-    private static void writeLocalizedLabel(ObjectNode payload, String label, String locale) {
+    private static void writeLocalizedLabel(ObjectNode payload, String label, String locale, String defaultLocale) {
         com.fasterxml.jackson.databind.JsonNode current = payload.get("label");
         com.fasterxml.jackson.databind.JsonNode wrapper = com.acme.staticforge.common.L10nValues.isL10n(current)
                 ? current
-                : com.acme.staticforge.common.L10nValues.wrap(current, locale);
+                : com.acme.staticforge.common.L10nValues.wrap(current, defaultLocale);
         payload.set("label", com.acme.staticforge.common.L10nValues.with(
                 wrapper,
                 locale,

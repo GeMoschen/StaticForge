@@ -50,6 +50,12 @@
   gap: var(--sf-4);
 }
 
+/* The body scrolls; its sections keep their height. A column flex item with `overflow: hidden` (the preview) would
+   otherwise shrink to a thin strip as soon as the sections below it outgrow the drawer. */
+.drawer__body > * {
+  flex-shrink: 0;
+}
+
 .preview {
   border: 1px solid var(--sf-line);
   border-radius: var(--sf-radius-md);

@@ -5,6 +5,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  HostListener,
   computed,
   effect,
   inject,
@@ -122,6 +123,8 @@ export class PageEditorComponent {
 
   protected readonly page = signal<PageView | null>(null);
   protected readonly metaOpen = signal(false);
+  /** The page the meta popover was last shown for. */
+  private metaUuid: string | null = null;
   protected readonly editingDisplayName = signal(false);
   protected readonly displayNameDraft = signal('');
   protected readonly savingDisplayName = signal(false);
@@ -323,6 +326,21 @@ export class PageEditorComponent {
     this.editingDisplayName.set(false);
   }
 
+  @HostListener('document:keydown.escape')
+  protected onEscape(): void {
+    if (this.metaOpen()) {
+      this.closeMeta();
+    }
+  }
+
+  /** A press anywhere outside the popover (and its title button) closes it — including on a button that opens a modal. */
+  @HostListener('document:mousedown', ['$event'])
+  protected onDocumentMouseDown(event: MouseEvent): void {
+    if (this.metaOpen() && !(event.target as Element | null)?.closest?.('.page-editor__meta-anchor')) {
+      this.closeMeta();
+    }
+  }
+
   protected startEditDisplayName(): void {
     this.displayNameDraft.set(this.page()?.displayName ?? '');
     this.editingDisplayName.set(true);
@@ -389,6 +407,11 @@ export class PageEditorComponent {
   // ── Loading ────────────────────────────────────────────────────────────
 
   private load(key: string, uuid: string, revision: number | null): void {
+    // The popover belongs to the page it was opened on; this component is reused when another page is opened.
+    if (uuid !== this.metaUuid) {
+      this.metaUuid = uuid;
+      this.closeMeta();
+    }
     this.loading.set(true);
     this.error.set(null);
     if (revision != null) {

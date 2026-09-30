@@ -12,7 +12,7 @@
         <sf-template-folder-node
           [node]="root"
           [depth]="0"
-          [selectedUuid]="selectedFolder()"
+          [selectedUuid]="highlightedFolder()"
           [projectKey]="projectKey()"
           [templateKind]="rootKind(root)"
           [templatesByFolder]="templatesByFolder()"
@@ -296,6 +296,9 @@
             @for (key of channelKeys(); track key) {
               <div class="channels" role="tabpanel" [attr.aria-label]="'Channel ' + key" [hidden]="key !== selectedChannel()">
                 <span class="channels__hint">How this template renders in the {{ key }} channel.</span>
+                @for (warning of outputPathWarningsOf(key); track $index) {
+                  <p class="channels__warning" role="status" data-sf-output-path-warning>{{ warning.message }}</p>
+                }
                 <sf-octl-editor
                   [label]="'OCTL source for channel ' + key"
                   [value]="channelSources()[key]"

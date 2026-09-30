@@ -419,6 +419,27 @@ class LocalizedMediaIntegrationTest {
     }
 
     @Test
+    @DisplayName("Alt text and caption sent with the upload are in the detail, with and without project languages")
+    void uploadedAltTextShowsInTheDetail() throws Exception {
+        for (Fixture fx : List.of(newFixture(), newLocalizedFixture("de", "en"))) {
+            JsonNode created = json(mvc.perform(multipart("/api/v1/projects/" + fx.project().getKey() + "/media")
+                            .file(new MockMultipartFile("file", "alt.png", "image/png", png(Color.RED)))
+                            .param("altText", "A red square")
+                            .param("caption", "Red")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(fx.editor())))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.altText").value("A red square")));
+            String uuid = created.path("uuid").asText();
+
+            mvc.perform(get("/api/v1/projects/" + fx.project().getKey() + "/media/" + uuid)
+                            .header(HttpHeaders.AUTHORIZATION, bearer(fx.viewer())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.altText").value("A red square"))
+                    .andExpect(jsonPath("$.caption").value("Red"));
+        }
+    }
+
+    @Test
     @DisplayName("GET /media/{uuid} carries the resolved per-language files, now and at an earlier revision")
     void detailCarriesLocaleFiles() throws Exception {
         Fixture fx = newLocalizedFixture("de", "en", "fr");

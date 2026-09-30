@@ -1,9 +1,11 @@
+import { ErrorHandler, effect, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../api/generated/schema.d.ts';
+import { TimeTravelStore } from '../../features/revisions/time-travel.store';
 import { ProjectContextStore } from './project-context.store';
 import { projectDetail } from './testing/project-detail.fixture';
 
@@ -91,5 +93,62 @@ describe('ProjectContextStore detail refresh (M28.3.1)', () => {
     http.expectOne('/api/v1/projects/proj').flush(projectDetail(['RELEASE', 'INCREMENTAL_BUILD']));
 
     expect(context.project()?.permissions).toEqual(['RELEASE', 'INCREMENTAL_BUILD']);
+  });
+});
+
+describe('ProjectContextStore time travel', () => {
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  it('ends time travel when another project is opened, keeps it for a reload of the same one', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([{ path: '**', children: [] }])],
+    });
+    const context = TestBed.inject(ProjectContextStore);
+    const timeTravel = TestBed.inject(TimeTravelStore);
+    context.activeProjectKey.set('proj');
+    timeTravel.enter(4);
+
+    context.loadFor('proj', true).subscribe();
+    TestBed.inject(HttpTestingController).match(() => true).forEach((request) => request.flush([]));
+    expect(timeTravel.activeRevision()).toBe(4);
+
+    context.loadFor('other').subscribe();
+    TestBed.inject(HttpTestingController).match(() => true).forEach((request) => request.flush([]));
+    expect(timeTravel.isTimeTravel()).toBe(false);
+  });
+});
+
+describe('ProjectContextStore.loadFor from an effect', () => {
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  it('is allowed there (no NG0600) and does not make the effect depend on the store', () => {
+    const handleError = vi.fn();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([{ path: '**', children: [] }]),
+        { provide: ErrorHandler, useValue: { handleError } },
+      ],
+    });
+    const context = TestBed.inject(ProjectContextStore);
+    const http = TestBed.inject(HttpTestingController);
+    const key = signal('proj');
+    let runs = 0;
+    TestBed.runInInjectionContext(() =>
+      effect(() => {
+        runs++;
+        context.loadFor(key()).subscribe();
+      }),
+    );
+
+    TestBed.flushEffects();
+    http.match(() => true).forEach((request) => request.flush([]));
+    TestBed.flushEffects();
+
+    expect(handleError).not.toHaveBeenCalled();
+    expect(context.activeProjectKey()).toBe('proj');
+    // The store's own signals (active key, project, loading) changed meanwhile; the effect only follows `key`.
+    expect(runs).toBe(1);
   });
 });

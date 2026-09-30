@@ -359,7 +359,10 @@ class LocalizedGenerationIntegrationTest {
                         false,
                         Map.of("html", "{folder}{uid}.{ext}")),
                 fx.ctx());
-        pageService.create(new CreatePageCommand("about", null, template.uuid()), fx.ctx());
+        List<String> uuids = new java.util.ArrayList<>();
+        for (String name : List.of("about", "contact", "imprint")) {
+            uuids.add(pageService.create(new CreatePageCommand(name, null, template.uuid()), fx.ctx()).uuid().toString());
+        }
 
         releaseFixtures.releaseAll(fx.project().getKey());
         GenerationRun run = generationService.start(
@@ -369,7 +372,15 @@ class LocalizedGenerationIntegrationTest {
         GenerationRun finished = awaitTerminal(fx.project().getKey(), run.getId());
 
         assertThat(finished.getStatus()).isEqualTo(RunStatus.FAILED);
-        assertThat(finished.getDiagnostics().toString()).contains("SF-GEN-0111");
+        // One finding for the shared path, naming the pages by uid, name and path instead of their UUIDs (M35.1).
+        com.fasterxml.jackson.databind.JsonNode group = finished.getDiagnostics().path("errors").get(0);
+        assertThat(group.path("code").asText()).isEqualTo("SF-GEN-0111");
+        assertThat(group.path("count").asInt()).isEqualTo(1);
+        String message = group.path("messages").get(0).asText();
+        assertThat(message)
+                .contains("'{folder}{uid}.{ext}'", "channel html", "3 pages")
+                .contains("'about' (about, /about)", "'contact' (contact, /contact)", "'imprint' (imprint, /imprint)");
+        uuids.forEach(uuid -> assertThat(message).doesNotContain(uuid));
     }
 
     @Test

@@ -978,7 +978,7 @@ export class ApiClient {
 
   listRevisions(
     projectKey: string,
-    opts?: { since?: number; userId?: number; assetUuid?: string },
+    opts?: { since?: number; userId?: number; assetUuid?: string; size?: number },
   ): Observable<S['RevisionView'][]> {
     return this.http.get<S['RevisionView'][]>(
       `${BASE}/projects/${projectKey}/revisions`,

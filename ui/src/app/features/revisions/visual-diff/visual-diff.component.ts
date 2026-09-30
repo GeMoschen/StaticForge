@@ -20,7 +20,7 @@ import {
   resolveObjectEditorPrefix,
   valueAtPath,
 } from './resolve-editor';
-import { toRenderedChange, RenderedChange } from './field-diff.model';
+import { expandL10nChange, toRenderedChange, RenderedChange } from './field-diff.model';
 import { SfFieldDiffComponent } from './field-diff.component';
 import { SfBodyDiffComponent } from './body-diff.component';
 import type { components } from '../../../core/api/generated/schema.d.ts';
@@ -169,7 +169,7 @@ export class SfVisualDiffComponent {
       }
     >();
 
-    for (const change of changes) {
+    for (const change of changes.flatMap((c) => expandL10nChange(c))) {
       const path = change.path ?? '';
       if (path.startsWith('bodies.')) {
         bodyChanges.push(change);

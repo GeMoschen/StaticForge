@@ -22,7 +22,7 @@ import {
   valueAtPath,
 } from './resolve-editor';
 import { matchSections, SectionDiff, SectionStatus } from './body-diff.util';
-import { toRenderedChange, RenderedChange } from './field-diff.model';
+import { expandL10nChange, toRenderedChange, RenderedChange } from './field-diff.model';
 import { SfFieldDiffComponent } from './field-diff.component';
 import type { components } from '../../../core/api/generated/schema.d.ts';
 
@@ -30,6 +30,8 @@ type FieldChange = components['schemas']['FieldChange'];
 
 interface RenderedSection extends SectionDiff {
   templateRef: string;
+  /** The section template's name; its uuid only while the template could not be read. */
+  templateName: string;
   def: ContentDefinition | null;
   fieldChanges: RenderedChange[];
 }
@@ -91,6 +93,7 @@ export class SfBodyDiffComponent {
   protected readonly STATUS_LABEL = STATUS_LABEL;
 
   private definitions = new Map<string, ContentDefinition | null>();
+  private names = new Map<string, string>();
 
   constructor() {
     effect(
@@ -110,6 +113,7 @@ export class SfBodyDiffComponent {
     this.loading.set(true);
     this.sections.set([]);
     this.definitions.clear();
+    this.names.clear();
 
     const raw = matchSections(change.before, change.after);
     const refs = new Set(raw.map((s) => s.templateRef).filter((r) => r.length > 0));
@@ -126,6 +130,7 @@ export class SfBodyDiffComponent {
       this.api.sectionTemplateDetail(key, ref).subscribe({
         next: (td) => {
           this.definitions.set(ref, (td.compiledDefinition ?? null) as ContentDefinition | null);
+          this.names.set(ref, td.displayName || td.uid || ref);
           if (--pending === 0) {
             this.sections.set(this.buildSections(raw));
             this.loading.set(false);
@@ -157,7 +162,7 @@ export class SfBodyDiffComponent {
       { editor: EditorDefinition; segments: string[]; before?: unknown; after?: unknown }
     >();
 
-    for (const c of section.changes) {
+    for (const c of section.changes.flatMap((change) => expandL10nChange(change))) {
       const editor = def ? resolveEditor(def, c.path) : null;
       const usable = editor && READONLY_EDITOR_TYPES.has(editor.type);
       if (usable) {
@@ -205,6 +210,7 @@ export class SfBodyDiffComponent {
       fieldChanges.push(toRenderedChange(change, editor));
     }
 
-    return { ...section, templateRef: section.templateRef, def, fieldChanges };
+    const templateName = this.names.get(section.templateRef) ?? section.templateRef;
+    return { ...section, templateRef: section.templateRef, templateName, def, fieldChanges };
   }
 }

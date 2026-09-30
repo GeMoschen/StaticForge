@@ -110,6 +110,14 @@ describe('GenerationDialogComponent', () => {
     expect(el.querySelector('.fixed')).toBeNull();
   });
 
+  it('starts the Target select on the default target, not on a blank option', () => {
+    open(true);
+    const select = fixture.nativeElement.querySelector('select[formcontrolname="targetId"]') as HTMLSelectElement;
+
+    expect(select.options[select.selectedIndex].textContent?.trim()).toBe('Live');
+    expect(start().targetId).toBe(7);
+  });
+
   it('limits the build to a folder and picked pages, in the preview and the start request alike', () => {
     open(false);
     const el = fixture.nativeElement as HTMLElement;

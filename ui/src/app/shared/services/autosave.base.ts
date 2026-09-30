@@ -67,6 +67,8 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
   private errorHandler: ((err: unknown) => void) | null = null;
 
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** Whether an edit is waiting to be written: {@link flush} sends nothing without one (an open asset is not an edit). */
+  private pending = false;
   private debounceMs = DEFAULT_DEBOUNCE_MS;
 
   private readonly onKeydownRef = (event: KeyboardEvent) => this.onKeydown(event);
@@ -104,6 +106,7 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
     this.revision.set(initialRevision);
     this.saveState.set('idle');
     this.conflict.set(null);
+    this.pending = false;
     this.debounceMs = debounceMs;
   }
 
@@ -134,6 +137,7 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
     if (this.conflict()) {
       return;
     }
+    this.pending = true;
     this.saveState.set('dirty');
     if (this.timer) {
       clearTimeout(this.timer);
@@ -141,14 +145,19 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
     this.timer = setTimeout(() => this.flush(), this.debounceMs);
   }
 
+  /**
+   * Writes the pending edit now (blur, Ctrl+S, leaving the asset). Without a pending edit it does nothing: opening an
+   * asset and leaving it again must not append a revision.
+   */
   flush(): void {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    if (!this.uuid || !this.payloadProvider || this.conflict()) {
+    if (!this.pending || !this.uuid || !this.payloadProvider || this.conflict()) {
       return;
     }
+    this.pending = false;
     this.saveState.set('saving');
     const payload = this.payloadProvider();
     const revision = this.revision();
@@ -175,6 +184,10 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
         this.revision.set(view.revision ?? null);
         this.conflict.set(null);
         this.saveState.set('idle');
+        if (mode === 'theirs') {
+          // The local edits were dropped for the server's content: nothing is left to write.
+          this.pending = false;
+        }
         this.refetchHandler?.(view, mode);
       },
       error: () => this.saveState.set('error'),
@@ -192,6 +205,8 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
   }
 
   private onFlushError(err: unknown): void {
+    // The edit is still unsaved: a retry (Ctrl+S, the next change, leaving) has to send it.
+    this.pending = true;
     if (err instanceof HttpErrorResponse && err.status === 409) {
       const body = (err.error ?? {}) as Record<string, unknown>;
       this.conflict.set({

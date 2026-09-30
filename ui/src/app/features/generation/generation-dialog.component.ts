@@ -213,13 +213,17 @@ export class GenerationDialogComponent {
       const key = this.projectKey();
       untracked(() => this.loadChannels(key));
     });
-    // Without FULL_BUILD the mode and target are fixed: incremental, to the default target.
+    // Without FULL_BUILD the mode and target are fixed: incremental, to the default target. With it the Target select
+    // starts on the default target — a `<select>` shows its first option for a value it doesn't hold, so the choice
+    // has to be the model's, not just what the select happens to display.
     effect(() => {
       const restricted = !this.fullBuild();
       const target = this.defaultTargetId();
       untracked(() => {
         if (restricted) {
           this.form.controls.mode.setValue('INCREMENTAL');
+          this.form.controls.targetId.setValue(target);
+        } else if (this.form.controls.targetId.value === null && target !== null) {
           this.form.controls.targetId.setValue(target);
         }
       });

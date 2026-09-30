@@ -6,6 +6,7 @@ import com.acme.staticforge.asset.content.ContentValidator;
 import com.acme.staticforge.asset.content.LocalizationContext;
 import com.acme.staticforge.asset.content.SectionTemplateLookup;
 import com.acme.staticforge.asset.content.SectionTemplateLookup.SectionTemplate;
+import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.rules.RuleEngine;
 import com.acme.staticforge.asset.rules.RuleOutcome;
 import com.acme.staticforge.asset.template.CompiledTemplateCache;
@@ -42,6 +43,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -274,7 +276,7 @@ public class RenderPipeline {
             return new RenderOutcome(List.of(), errors, List.of());
         }
 
-        List<Diagnostic> notLocaleDistinct = localeDistinctErrors(plan, paths);
+        List<Diagnostic> notLocaleDistinct = localeDistinctErrors(snapshot, plan, paths);
         if (!notLocaleDistinct.isEmpty()) {
             return new RenderOutcome(List.of(), notLocaleDistinct, List.of());
         }
@@ -314,35 +316,60 @@ public class RenderPipeline {
 
     }
 
+    /** How many pages a {@code SF-GEN-0111} message names before it counts the rest. */
+    private static final int LOCALE_DISTINCT_PAGES_LISTED = 5;
+
     /**
      * In a localized project every page's path expression must contain {@code {locale}}, or two
-     * languages would write the same file and one would silently win. Reported once per
-     * (page, channel) as {@code SF-GEN-0111} before anything renders (M24.3.2).
+     * languages would write the same file and one would silently win. Reported before anything renders as
+     * {@code SF-GEN-0111} (M24.3.2), once per (channel, path expression) — the pages sharing a template share the
+     * message — naming the affected pages (uid, display name and path) rather than their UUIDs (M35.1).
      */
-    private List<Diagnostic> localeDistinctErrors(BuildPlan plan, OutputPathResolver paths) {
-        if (!com.acme.staticforge.project.LocaleConfig.orEmpty(paths.locales()).isLocalized()) {
+    private List<Diagnostic> localeDistinctErrors(Snapshot snapshot, BuildPlan plan, OutputPathResolver paths) {
+        if (!LocaleConfig.orEmpty(paths.locales()).isLocalized()) {
             return List.of();
         }
-        Set<String> seen = new HashSet<>();
-        List<Diagnostic> errors = new ArrayList<>();
+        Map<PathKey, Set<UUID>> pagesByPath = new LinkedHashMap<>();
         for (PlanEntry entry : plan.entries()) {
             // Each language renders its own version of the page (M27.2.1), so one language's expression may differ.
             String expression = paths.effectiveExpression(entry.pageUuid(), entry.channel(), entry.locale());
-            if (!seen.add(entry.pageUuid() + ":" + entry.channel() + ":" + expression)) {
-                continue;
+            if (!com.acme.staticforge.channel.OutputPathExpander.isLocaleDistinct(expression)) {
+                pagesByPath
+                        .computeIfAbsent(new PathKey(entry.channel(), expression), key -> new LinkedHashSet<>())
+                        .add(entry.pageUuid());
             }
-            if (com.acme.staticforge.channel.OutputPathExpander.isLocaleDistinct(expression)) {
-                continue;
-            }
+        }
+        List<Diagnostic> errors = new ArrayList<>();
+        pagesByPath.forEach((key, pages) -> {
+            List<String> named = pages.stream().limit(LOCALE_DISTINCT_PAGES_LISTED).map(uuid -> pageLabel(snapshot, uuid)).toList();
+            String rest = pages.size() > named.size() ? " and " + (pages.size() - named.size()) + " more" : "";
             errors.add(Diagnostic.error(
                     NOT_LOCALE_DISTINCT_CODE,
-                    "Output path '" + expression + "' is not language-distinct: this project has several "
+                    "Output path '" + key.expression() + "' is not language-distinct: this project has several "
                             + "languages, so the path needs a {locale} segment or they would overwrite each other "
-                            + "(page " + entry.pageUuid() + ", channel " + entry.channel() + ").",
+                            + "(channel " + key.channel() + ", " + pages.size() + (pages.size() == 1 ? " page: " : " pages: ")
+                            + String.join(", ", named) + rest + "). Fix the page template's output path, or the "
+                            + "page's own path override.",
                     0,
                     0));
-        }
+        });
         return List.copyOf(errors);
+    }
+
+    /** A channel and the path expression a page in it is written by. */
+    private record PathKey(String channel, String expression) {}
+
+    /** {@code 'uid' (Display name, /folder/uid)} — how a run finding names a page; the uuid when the snapshot lost it. */
+    private static String pageLabel(Snapshot snapshot, UUID pageUuid) {
+        SnapshotAsset page = snapshot.assetByUuid(pageUuid);
+        if (page == null) {
+            return pageUuid.toString();
+        }
+        String folder = page.folderPath() == null ? "" : page.folderPath();
+        String root = "/" + FolderScope.PAGES_ROOT_UID;
+        folder = folder.startsWith(root) ? folder.substring(root.length()) : folder;
+        String uid = page.uid() != null ? page.uid() : pageUuid.toString();
+        return "'" + uid + "' (" + page.displayName() + ", " + (folder.endsWith("/") ? folder : folder + "/") + uid + ")";
     }
 
     /**

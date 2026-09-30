@@ -73,7 +73,7 @@ public class PageTemplateController extends AbstractTemplateController {
                 ctx(projectKey, "create page template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toDetail(view));
+                .body(toDetail(projectKey, view));
     }
 
     @GetMapping("/{uuid}")
@@ -82,7 +82,7 @@ public class PageTemplateController extends AbstractTemplateController {
         TemplateView view = templateService.get(projectId(projectKey), uuid);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toDetail(view));
+                .body(toDetail(projectKey, view));
     }
 
     @PutMapping("/{uuid}")
@@ -109,7 +109,7 @@ public class PageTemplateController extends AbstractTemplateController {
                 ctx(projectKey, "update page template"));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
-                .body(toDetail(view));
+                .body(toDetail(projectKey, view));
     }
 
     @DeleteMapping("/{uuid}")

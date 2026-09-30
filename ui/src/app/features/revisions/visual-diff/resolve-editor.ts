@@ -46,6 +46,11 @@ export function resolveEditor(
   return walk(definition.editors ?? [], segments, 0);
 }
 
+/** Whether `segments` continues at `from` with `values.<locale>`, the tail of a language-dependent path. */
+function isL10nSuffix(segments: string[], from: number, exact = true): boolean {
+  return segments[from] === 'values' && (exact ? segments.length === from + 2 : segments.length > from + 1);
+}
+
 function walk(
   editors: EditorDefinition[],
   segments: string[],
@@ -61,6 +66,10 @@ function walk(
   }
   if (editor.type === 'GROUP' || editor.type === 'LIST') {
     return walk(editor.items ?? [], segments, index + 1);
+  }
+  // A language-dependent value changes at `<field>.values.<locale>`: that is still this editor's value.
+  if (isL10nSuffix(segments, index + 1)) {
+    return editor;
   }
   return null;
 }
@@ -86,7 +95,9 @@ export function resolveObjectEditorPrefix(
     const prefix = segments.slice(0, len);
     const editor = walk(definition.editors ?? [], prefix, 0);
     if (editor && OBJECT_EDITOR_TYPES.has(editor.type)) {
-      return { editor, segments: prefix };
+      // A language-dependent object value is addressed through its language: `<field>.values.<locale>`.
+      const inLocale = isL10nSuffix(segments, len, false) ? segments.slice(0, len + 2) : prefix;
+      return { editor, segments: inLocale };
     }
   }
   return null;

@@ -523,7 +523,7 @@ The CDL of a template is sent and returned as its sections (M34, spec §14.9): `
 | `GET`/`POST` | `/projects/{projectKey}/section-templates` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/section-templates/{uuid}` |
 | `GET`/`POST` | `/projects/{projectKey}/page-templates` (list items carry `abstract` and `parentTemplateRef`; create accepts `abstract` and `paginationPath`, a channel → pattern map for pages 2..N of a paginated page that must contain `{pageNumber}`) |
-| `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/page-templates/{uuid}` (M20: `abstract` on read and update; read-only `parentTemplateRef`, `ancestors`, `effectiveDefinition`, `inheritedFrom`; a save returns `descendantWarnings`; `422 SF-DOM-0122` making a used template abstract, `422 SF-DOM-0124` with `descendants[]` when descendants would break) |
+| `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/page-templates/{uuid}` (M20: `abstract` on read and update; read-only `parentTemplateRef`, `ancestors`, `effectiveDefinition`, `inheritedFrom`; a save returns `descendantWarnings`; M35: `warnings`, `SF-GEN-0112` per channel whose `outputPath` has no `{locale}` in a project with several languages, on every read and save; `422 SF-DOM-0122` making a used template abstract, `422 SF-DOM-0124` with `descendants[]` when descendants would break) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/{templateKind}/{uuid}/channels/{channelKey}` (one channel on its own; the UI uses the template `PUT` instead) |
 | `GET`/`POST` | `/projects/{projectKey}/structures` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/structures/{uuid}` |
@@ -1192,7 +1192,8 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | Code | Severity | Meaning | Raised by |
 |---|---|---|---|
 | `SF-GEN-0110` | error | output path collision | `RenderPipeline` (`COLLISION_CODE`) |
-| `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several content languages, so two languages would write the same file (M24) | `RenderPipeline` (`NOT_LOCALE_DISTINCT_CODE`) |
+| `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several content languages, so two languages would write the same file (M24). One finding per channel and path expression, naming the affected pages as `'uid' (Display name, /folder/uid)` (first five, then a count) (M35) | `RenderPipeline` (`NOT_LOCALE_DISTINCT_CODE`) |
+| `SF-GEN-0112` | warning | save-time counterpart of `SF-GEN-0111`: a page template's `outputPath` for a channel has no `{locale}` segment while the project has several content languages, so a build would fail. Returned as `warnings[]` (`field` = `outputPath:<channel>`) of the page template detail on read and save; not persisted (M35) | `DiagnosticCodes.GEN_OUTPUT_PATH_NOT_LOCALE_DISTINCT` (`AbstractTemplateController`) |
 | `SF-GEN-0120` | error (per page) | content incomplete (a built-in or an editor rule `error` with `onGeneration holdBack`, M33); page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.validateContent`) |
 | `SF-GEN-0121` | error | an editor rule with `onGeneration fail` doesn't hold: one per page, language and rule, every page validated first; run `FAILED`, nothing rendered or published (M33) | `GenerationDiagnosticCodes.GEN_RULE_FAILED` (`RenderPipeline.validateContent`) |
 | `SF-GEN-0122` | warning / info | an editor rule's `warning` or `info` in the `generation` scope, naming rule, page and language; the page publishes; warnings count (and make the run `PARTIAL`), infos don't (M33) | `GenerationDiagnosticCodes.GEN_RULE_FINDING` |

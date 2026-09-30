@@ -246,6 +246,15 @@
   color: var(--sf-slate);
 }
 
+.channels__warning {
+  margin: 0;
+  padding: var(--sf-2) var(--sf-3);
+  border-radius: var(--sf-radius-md);
+  background: color-mix(in srgb, var(--sf-amber, #9c7a2e) 14%, transparent);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-sm);
+}
+
 /* Template editors (CDL and OCTL channels): tall enough to work in, scrolling beyond the maximum. */
 sf-code-editor,
 sf-octl-editor {

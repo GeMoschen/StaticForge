@@ -11,7 +11,7 @@
         <span class="sf-bdiff__badge sf-bdiff__badge--{{ section.status }}">
           {{ STATUS_LABEL[section.status] }}
         </span>
-        <span class="sf-bdiff__section-title">{{ section.templateRef || '—' }}</span>
+        <span class="sf-bdiff__section-title">{{ section.templateName || '—' }}</span>
         @if (section.beforeIndex !== undefined || section.afterIndex !== undefined) {
           <span class="sf-bdiff__position">
             @if (section.beforeIndex !== undefined) {
@@ -20,7 +20,7 @@
             @if (section.status === 'moved' && section.beforeIndex !== undefined && section.afterIndex !== undefined) {
               <span>→</span>
             }
-            @if (section.afterIndex !== undefined && section.status !== 'removed') {
+            @if (section.afterIndex !== undefined && section.status !== 'removed' && section.status !== 'unchanged') {
               <span>#{{ section.afterIndex + 1 }}</span>
             }
           </span>

@@ -410,6 +410,79 @@ class LocalizationMigrationIntegrationTest {
         assertThat(labelOf(fx, navRoot, reference.uuid(), List.of("fr", "de"))).isEqualTo("Startseite");
     }
 
+    @Test
+    @DisplayName("media alt text stored plain wraps as the default language: editing another language first keeps it")
+    void plainMediaAltTextBelongsToTheDefaultLanguage() {
+        Fixture fx = newFixture("l10n-plainmedia");
+        enableLocales(fx, false);
+        UUID folder = assetService.ensureMediaRootFolder(fx.project().getId(), fx.ctx()).uuid();
+        // An upload stores its alt text and caption as plain strings, whatever the project's languages.
+        AssetVersionView uploaded = mediaService.upload(fx.project().getId(), folder, "plain.txt", "text/plain",
+                "Ein Foto", "Unterschrift", "hello".getBytes(StandardCharsets.UTF_8), fx.ctx());
+        assertThat(uploaded.payload().path("altText").isTextual()).isTrue();
+
+        AssetVersionView afterEnglish = mediaService.updateMetadata(
+                uploaded.uuid(), "A photo", "Caption", null, null, "en", uploaded.validFromRevision(), fx.ctx());
+
+        assertThat(L10nValues.get(afterEnglish.payload().get("altText"), "de").asText()).isEqualTo("Ein Foto");
+        assertThat(L10nValues.get(afterEnglish.payload().get("altText"), "en").asText()).isEqualTo("A photo");
+        assertThat(L10nValues.get(afterEnglish.payload().get("caption"), "de").asText()).isEqualTo("Unterschrift");
+        assertThat(L10nValues.get(afterEnglish.payload().get("caption"), "en").asText()).isEqualTo("Caption");
+
+        // Editing the default language itself replaces the plain value, as before.
+        AssetVersionView plainAgain = mediaService.upload(fx.project().getId(), folder, "plain2.txt", "text/plain",
+                "Ein Foto", null, "hello".getBytes(StandardCharsets.UTF_8), fx.ctx());
+        AssetVersionView afterGerman = mediaService.updateMetadata(
+                plainAgain.uuid(), "Ein Bild", null, null, null, "de", plainAgain.validFromRevision(), fx.ctx());
+        assertThat(L10nValues.get(afterGerman.payload().get("altText"), "de").asText()).isEqualTo("Ein Bild");
+        assertThat(L10nValues.get(afterGerman.payload().get("altText"), "en")).isNull();
+    }
+
+    @Test
+    @DisplayName("a project without languages keeps media alt text and navigation labels plain")
+    void singleLanguageValuesStayPlain() {
+        Fixture fx = newFixture("l10n-single");
+        UUID folder = assetService.ensureMediaRootFolder(fx.project().getId(), fx.ctx()).uuid();
+        AssetVersionView uploaded = mediaService.upload(fx.project().getId(), folder, "one.txt", "text/plain",
+                "Alt", null, "hello".getBytes(StandardCharsets.UTF_8), fx.ctx());
+        AssetVersionView edited = mediaService.updateMetadata(
+                uploaded.uuid(), "New alt", null, null, null, "en", uploaded.validFromRevision(), fx.ctx());
+        assertThat(edited.payload().path("altText").asText()).isEqualTo("New alt");
+
+        TemplateView template = template(fx, PLAIN_CDL);
+        AssetVersionView page = pageService.create(new CreatePageCommand("Target", null, template.uuid()), fx.ctx());
+        AssetVersionView reference = pageReferenceService.create(
+                new CreatePageReferenceCommand(
+                        "Ref", navigationRoot(fx), PageReferenceTargetKind.PAGE, page.uuid(), "Home"),
+                fx.ctx());
+        AssetVersionView relabelled = pageReferenceService.update(
+                reference.uuid(), PageReferenceTargetKind.PAGE, page.uuid(), "Start", "en",
+                reference.validFromRevision(), fx.ctx());
+        assertThat(relabelled.payload().path("label").asText()).isEqualTo("Start");
+    }
+
+    @Test
+    @DisplayName("a navigation label stored plain wraps as the default language: editing another language first keeps it")
+    void plainNavigationLabelBelongsToTheDefaultLanguage() {
+        Fixture fx = newFixture("l10n-plainnav");
+        enableLocales(fx, false);
+        TemplateView template = template(fx, PLAIN_CDL);
+        AssetVersionView page = pageService.create(new CreatePageCommand("Target", null, template.uuid()), fx.ctx());
+        UUID navRoot = navigationRoot(fx);
+        AssetVersionView reference = pageReferenceService.create(
+                new CreatePageReferenceCommand("Ref", navRoot, PageReferenceTargetKind.PAGE, page.uuid(), "Startseite"),
+                fx.ctx());
+        assertThat(reference.payload().path("label").isTextual()).isTrue();
+
+        AssetVersionView afterEnglish = pageReferenceService.update(
+                reference.uuid(), PageReferenceTargetKind.PAGE, page.uuid(), "Home", "en",
+                reference.validFromRevision(), fx.ctx());
+
+        assertThat(L10nValues.get(afterEnglish.payload().get("label"), "de").asText()).isEqualTo("Startseite");
+        assertThat(L10nValues.get(afterEnglish.payload().get("label"), "en").asText()).isEqualTo("Home");
+        assertThat(labelOf(fx, navRoot, reference.uuid(), List.of("de"))).isEqualTo("Startseite");
+    }
+
     private UUID navigationRoot(Fixture fx) {
         return assetService.ensureNavigationRootFolder(fx.project().getId(), fx.ctx()).uuid();
     }

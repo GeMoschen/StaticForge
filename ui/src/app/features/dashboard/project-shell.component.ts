@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, untracked } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { ArchivedBannerComponent } from './archived-banner.component';
 import { NavRailComponent } from './nav-rail.component';
@@ -30,6 +30,9 @@ export class ProjectShellComponent {
   private readonly releaseEvents = inject(ReleaseEventsStore);
 
   constructor() {
+    // Time travel is a view of *this* project: leaving it (the project list, another project, sign-out) ends it —
+    // otherwise the viewed revision, its read-only banner and the write block follow the user out.
+    inject(DestroyRef).onDestroy(() => this.timeTravel.exit());
     // A release action (M27.6) is a revision, and it changes the statuses the folder trees show.
     effect(() => {
       if (this.releaseEvents.version() === 0) {

@@ -1,4 +1,4 @@
-import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable, signal, untracked } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { NavigationEnd, Router } from '@angular/router';
 import {
@@ -13,6 +13,7 @@ import {
 } from 'rxjs';
 import type { components } from '../api/generated/schema.d.ts';
 import { sortFolderTree } from '../../shared/tree-sort.util';
+import { TimeTravelStore } from '../../features/revisions/time-travel.store';
 import { ProjectAccessStore } from './project-access.store';
 
 type ProjectDetail = components['schemas']['ProjectDetail'];
@@ -28,6 +29,7 @@ const VISIBILITY_REFRESH_MS = 60_000;
 export class ProjectContextStore {
   private readonly http = inject(HttpClient);
   private readonly access = inject(ProjectAccessStore);
+  private readonly timeTravel = inject(TimeTravelStore);
   /** When the detail was last read, for the visibility throttle. */
   private detailReadAt = 0;
   /** A detail read in flight, and whether another one was asked for meanwhile. */
@@ -123,11 +125,24 @@ export class ProjectContextStore {
     }
   }
 
+  /**
+   * Loads the project, unless it is the one already loaded. Screens call this from effects on their `projectKey`
+   * input, so what it reads must not become the effect's dependencies and what it writes before the answer arrives
+   * must not throw NG0600 — hence `untracked`.
+   */
   loadFor(projectKey: string, force = false): Observable<void> {
+    return untracked(() => this.startLoad(projectKey, force));
+  }
+
+  private startLoad(projectKey: string, force: boolean): Observable<void> {
     if (!force && this.activeProjectKey() === projectKey && this.project() !== null) {
       return of(undefined);
     }
 
+    if (this.activeProjectKey() !== projectKey && this.timeTravel.isTimeTravel()) {
+      // The travelled-to revision belongs to the project it was picked in; it must not follow the user into another.
+      this.timeTravel.exit();
+    }
     this.activeProjectKey.set(projectKey);
     this.loading.set(true);
     this.error.set(null);
@@ -272,6 +287,7 @@ export class ProjectContextStore {
   }
 
   reset(): void {
+    this.timeTravel.exit();
     this.activeProjectKey.set(null);
     this.project.set(null);
     this.channels.set(['html']);

@@ -2630,6 +2630,7 @@ export interface components {
             inheritedFrom?: components["schemas"]["InheritedFrom"];
             descendantWarnings?: components["schemas"]["DescendantIssueDto"][];
             abstract?: boolean;
+            warnings?: components["schemas"]["Diagnostic"][];
         };
         TemplateRefDto: {
             /** Format: uuid */

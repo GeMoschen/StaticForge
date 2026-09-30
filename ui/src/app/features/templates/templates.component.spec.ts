@@ -4,15 +4,16 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { TemplatesComponent } from './templates.component';
 
 /**
- * The store page loads a couple of bare-array endpoints (`/channels`, `/datasets`) alongside the
+ * The store page loads a couple of bare-array endpoints (`/channels`, `/datasets`, `/usages`) alongside the
  * paged folder listings, so a blanket `flush({ content: [] })` hands `.map`/`.filter` an object.
  */
 function emptyBodyFor(url: string, paged: object = { content: [] }): object {
-  return url.endsWith('/channels') || url.endsWith('/datasets') ? [] : paged;
+  return url.endsWith('/channels') || url.endsWith('/datasets') || url.endsWith('/usages') ? [] : paged;
 }
 
 describe('TemplatesComponent (time travel read-only)', () => {
@@ -378,3 +379,107 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
     httpMock.expectOne((r) => r.method === 'PUT').flush({ ...LAYOUT, revision: 5 });
   });
 });
+
+describe('TemplatesComponent tree selection', () => {
+  it('highlights one row: the folder, or the open template — not both', () => {
+    TestBed.configureTestingModule({
+      imports: [TemplatesComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    TestBed.inject(ProjectContextStore).templateFolderTree.set([
+      {
+        uuid: 'all',
+        uid: 'templates_root',
+        displayName: 'All Templates',
+        path: '/templates_root/',
+        children: [
+          { uuid: 'pt', uid: 'page_templates', displayName: 'Page Templates', path: '/templates_root/page_templates/', children: [] },
+        ],
+      },
+    ]);
+    const fixture = TestBed.createComponent(TemplatesComponent);
+    fixture.componentRef.setInput('projectKey', 'proj1');
+    const settle = () => {
+      fixture.detectChanges();
+      for (const req of http.match(() => true)) {
+        req.flush(emptyBodyFor(req.request.url));
+      }
+      fixture.detectChanges();
+    };
+    const selectedRows = () =>
+      Array.from(fixture.nativeElement.querySelectorAll('[role="treeitem"][aria-selected="true"]') as NodeListOf<HTMLElement>).map(
+        (row) => row.querySelector('.folder-node__name')?.textContent?.trim(),
+      );
+    settle();
+
+    // Nothing open: the default folder is the selection.
+    expect(selectedRows()).toContain('Page Templates');
+
+    fixture.componentInstance.select('tpl-1');
+    settle();
+
+    expect(selectedRows()).not.toContain('Page Templates');
+  });
+});
+
+describe('TemplatesComponent output path warnings', () => {
+  const WARNING = {
+    severity: 'WARNING',
+    code: 'SF-GEN-0112',
+    field: 'outputPath:html',
+    message: 'The output path "index.html" has no {locale}: pages of 2 languages would overwrite each other. Try "{locale}/index.html".',
+  };
+
+  function open(warnings: unknown[]) {
+    TestBed.configureTestingModule({
+      imports: [TemplatesComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(TemplatesComponent);
+    fixture.componentRef.setInput('projectKey', 'proj1');
+    const settle = () => {
+      fixture.detectChanges();
+      for (const req of http.match(() => true)) {
+        const url = req.request.url;
+        req.flush(
+          url.endsWith('/page-templates/tpl-1')
+            ? {
+                uuid: 'tpl-1',
+                revision: 4,
+                displayName: 'Standard',
+                channelTemplates: { html: { source: '<p></p>' }, rss: { source: '<item/>' } },
+                outputPath: { html: 'index.html' },
+                warnings,
+              }
+            : emptyBodyFor(url),
+        );
+      }
+      fixture.detectChanges();
+    };
+    settle();
+    fixture.componentInstance.select('tpl-1');
+    settle();
+    settle();
+    return fixture;
+  }
+
+  const shown = (fixture: ComponentFixture<TemplatesComponent>) =>
+    Array.from(fixture.nativeElement.querySelectorAll('[data-sf-output-path-warning]') as NodeListOf<HTMLElement>);
+
+  it('shows the output path warning of the server in the channel it is about', () => {
+    const fixture = open([WARNING]);
+
+    const warnings = shown(fixture);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].textContent).toContain('{locale}/index.html');
+    // It sits in the html channel's panel, not the rss one.
+    expect(warnings[0].closest('[role="tabpanel"]')?.getAttribute('aria-label')).toBe('Channel html');
+  });
+
+  it('shows nothing for a template without warnings', () => {
+    expect(shown(open([]))).toHaveLength(0);
+  });
+});
+

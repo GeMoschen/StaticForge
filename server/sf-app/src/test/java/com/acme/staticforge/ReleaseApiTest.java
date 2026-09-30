@@ -12,7 +12,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -306,6 +308,61 @@ class ReleaseApiTest {
         perform(get("/api/v1/projects/{key}/search?q=lighthouse&releaseStatus=CHANGED", fx.key()), jwt.issueAccessToken(fx.admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[*].uuid", containsInAnyOrder(edited.toString())));
+    }
+
+    @Test
+    @DisplayName("an edit through the page endpoints after a release reads CHANGED; an English-only edit leaves German published")
+    void apiEditsAfterReleaseMarkTheChangedLocales() throws Exception {
+        Fixture fx = fixture("rapi-edit", true);
+        UUID page = page(fx, "Home", c -> {
+            c.set("headline", L10nValues.with(L10nValues.wrap(text("Startseite"), "de"), "en", text("Home")));
+            c.put("sku", "A");
+        });
+        releases.release(List.of(ReleaseItem.of(page, "de"), ReleaseItem.of(page, "en")), fx.ctx());
+        String token = jwt.issueAccessToken(fx.admin());
+        String url = "/api/v1/projects/{key}/pages/{uuid}";
+        assertThat(pageStatuses(fx, page, token)).containsExactly("de:PUBLISHED", "en:PUBLISHED");
+
+        // A merge-patch of the English headline only.
+        String revision = etag(perform(get(url, fx.key(), page), token));
+        perform(patch(url + "/content", fx.key(), page).header("If-Match", revision)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":{\"headline\":{\"type\":\"L10N\",\"values\":{\"en\":\"Homepage\"}}}}"), token)
+                .andExpect(status().isOk());
+        assertThat(pageStatuses(fx, page, token)).containsExactly("de:PUBLISHED", "en:CHANGED");
+
+        // A whole-page PUT that only changes the English headline.
+        ObjectNode payload = (ObjectNode) assets.requireCurrent(fx.id(), page).payload().deepCopy();
+        ObjectNode content = (ObjectNode) payload.get("content");
+        content.set("headline", L10nValues.with(content.get("headline"), "en", text("Homepage 2")));
+        revision = etag(perform(get(url, fx.key(), page), token));
+        perform(put(url, fx.key(), page).header("If-Match", revision)
+                        .contentType(MediaType.APPLICATION_JSON).content(payload.toString()), token)
+                .andExpect(status().isOk());
+        assertThat(pageStatuses(fx, page, token)).containsExactly("de:PUBLISHED", "en:CHANGED");
+
+        // A shared field changes every locale.
+        revision = etag(perform(get(url, fx.key(), page), token));
+        perform(patch(url + "/content", fx.key(), page).header("If-Match", revision)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"content\":{\"sku\":\"B\"}}"), token)
+                .andExpect(status().isOk());
+        assertThat(pageStatuses(fx, page, token)).containsExactly("de:CHANGED", "en:CHANGED");
+    }
+
+    private List<String> pageStatuses(Fixture fx, UUID page, String token) throws Exception {
+        JsonNode release = json(perform(get("/api/v1/projects/{key}/pages/{uuid}", fx.key(), page), token)).get("release");
+        List<String> out = new java.util.ArrayList<>();
+        release.fields().forEachRemaining(e -> out.add(e.getKey() + ":" + e.getValue().path("status").asText()));
+        return out;
+    }
+
+    private static String etag(ResultActions actions) throws Exception {
+        return actions.andReturn().getResponse().getHeader("ETag");
+    }
+
+    private JsonNode json(ResultActions actions) throws Exception {
+        return new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(actions.andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     // ------------------------------------------------------------------

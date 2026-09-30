@@ -27,6 +27,19 @@ export function revisionSummaryAssets(rev: RevisionView): RevisionSummaryAsset[]
   return summary?.assets ?? [];
 }
 
+/** The uuids of the assets the given revisions created (`summary.assets[].action === 'CREATE'`). */
+export function assetsCreatedIn(revisions: readonly RevisionView[]): Set<string> {
+  const created = new Set<string>();
+  for (const revision of revisions) {
+    for (const asset of revisionSummaryAssets(revision)) {
+      if (asset.action === 'CREATE' && asset.uuid) {
+        created.add(asset.uuid);
+      }
+    }
+  }
+  return created;
+}
+
 /**
  * Number of assets a revision touched. Falls back to 1 when `summary.assets` is absent
  * (e.g. an older/synthetic revision without a populated summary) so callers can treat

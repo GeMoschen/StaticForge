@@ -2,6 +2,11 @@
   display: block;
 }
 
+/* The detail pane sits flush against the tree's divider and the window edge; the sibling editors pad their own content. */
+.global-detail {
+  padding: var(--sf-4);
+}
+
 .global-detail__header {
   display: flex;
   align-items: center;

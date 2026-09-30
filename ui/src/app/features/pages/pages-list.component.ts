@@ -26,6 +26,8 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { FolderMoveEvent } from './types';
 import { sortByDisplayName } from '../../shared/tree-sort.util';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { assetsCreatedIn } from '../../shared/revision-summary.util';
+import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
@@ -73,7 +75,15 @@ export class PagesListComponent {
   private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly route = inject(ActivatedRoute);
 
-  protected readonly tree = this.store.pageFolderTree;
+  private readonly timeTravel = inject(TimeTravelStore);
+  /**
+   * Assets created after the revision being viewed (time travel). The tree and list endpoints know no revision, so the
+   * items added later are left out here instead of showing up in the past.
+   */
+  private readonly createdLater = signal<ReadonlySet<string>>(new Set());
+  protected readonly tree = computed<FolderView[]>(() =>
+    withoutCreated(this.store.pageFolderTree(), this.createdLater()),
+  );
   protected readonly pageTemplates = computed<TemplateSummary[]>(() => this.store.pageTemplates());
 
   /** The project's fixed, protected "All Pages" wrapper root (mirrors `NAVIGATION`'s own fixed
@@ -86,7 +96,11 @@ export class PagesListComponent {
 
   protected readonly selectedFolder = signal<string | null>(null);
   protected readonly search = signal('');
-  protected readonly pages = signal<AssetSummaryView[]>([]);
+  private readonly loadedPages = signal<AssetSummaryView[]>([]);
+  protected readonly pages = computed<AssetSummaryView[]>(() => {
+    const later = this.createdLater();
+    return later.size === 0 ? this.loadedPages() : this.loadedPages().filter((page) => !later.has(page.uuid ?? ''));
+  });
   protected readonly loading = signal(false);
 
   /** Pages grouped by their canonical folder path, for the unified tree. */
@@ -167,13 +181,31 @@ export class PagesListComponent {
       { allowSignalWrites: true },
     );
 
+    // Time travel: what was created after the viewed revision did not exist yet.
+    effect(
+      (onCleanup) => {
+        const key = this.projectKey();
+        const revision = this.timeTravel.activeRevision();
+        if (!key || revision === null) {
+          this.createdLater.set(new Set());
+          return;
+        }
+        const read = this.api.listRevisions(key, { since: revision, size: ALL_REVISIONS }).subscribe({
+          next: (revisions) => this.createdLater.set(assetsCreatedIn(revisions ?? [])),
+          error: () => this.createdLater.set(new Set()),
+        });
+        onCleanup(() => read.unsubscribe());
+      },
+      { allowSignalWrites: true },
+    );
+
     // An open editor's release bar read a new status: the tree row shows it at once (M27.6.1).
     effect(
       () => {
         const observed = this.releaseEvents.observed();
-        const next = untracked(() => withObservedRelease(this.pages(), observed));
+        const next = untracked(() => withObservedRelease(this.loadedPages(), observed));
         if (next) {
-          this.pages.set(next);
+          this.loadedPages.set(next);
         }
       },
       { allowSignalWrites: true },
@@ -188,7 +220,7 @@ export class PagesListComponent {
       })
       .subscribe({
         next: (pages) => {
-          this.pages.set(pages ?? []);
+          this.loadedPages.set(pages ?? []);
           this.loading.set(false);
         },
         error: () => this.loading.set(false),
@@ -350,6 +382,19 @@ export class PagesListComponent {
     this.selectedFolder.set(null);
     this.onTreeChanged();
   }
+}
+
+/** A page size no project's history reaches: the revision list is paged, and the answer needs every revision since. */
+const ALL_REVISIONS = 2000;
+
+/** The folder tree without the folders in `created` (and everything below them); the tree itself when there are none. */
+function withoutCreated(nodes: FolderView[], created: ReadonlySet<string>): FolderView[] {
+  if (created.size === 0) {
+    return nodes;
+  }
+  return nodes
+    .filter((node) => !created.has(node.uuid ?? ''))
+    .map((node) => ({ ...node, children: withoutCreated(node.children ?? [], created) }));
 }
 
 function findFolder(nodes: FolderView[], uuid: string): FolderView | null {

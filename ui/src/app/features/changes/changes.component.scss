@@ -191,6 +191,9 @@
 }
 
 .changes__table-wrap {
+  /* The rows' visually-hidden labels are absolutely positioned. Unless this box is their containing block they escape
+     its clipping and stretch the whole document to where the unscrolled table would end. */
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;

@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  effect,
   input,
   output,
   signal,
@@ -35,26 +34,24 @@ export class ConflictDrawerComponent {
 
   protected readonly fmt = formatValue;
 
-  private readonly picks = signal<Record<string, ResolveMode>>({});
+  /** The picks, with the conflict they were made for: another conflict starts with none (no effect writes them away). */
+  private readonly picked = signal<{ conflict: ConflictInfo; modes: Record<string, ResolveMode> } | null>(null);
+  private readonly picks = computed<Record<string, ResolveMode>>(() => {
+    const picked = this.picked();
+    return picked && picked.conflict === this.conflict() ? picked.modes : {};
+  });
 
   protected readonly fields = computed(() => {
     const c = this.conflict();
     return c?.base != null && c?.theirs != null ? diffFields(c.base, c.theirs) : [];
   });
 
-  constructor() {
-    effect(() => {
-      this.conflict();
-      this.picks.set({});
-    });
-  }
-
   protected pickFor(path: string): ResolveMode {
     return this.picks()[path] ?? 'mine';
   }
 
   protected choose(path: string, mode: ResolveMode): void {
-    this.picks.update((m) => ({ ...m, [path]: mode }));
+    this.picked.set({ conflict: this.conflict(), modes: { ...this.picks(), [path]: mode } });
   }
 
   protected applyAll(mode: ResolveMode): void {
@@ -62,7 +59,7 @@ export class ConflictDrawerComponent {
     for (const field of this.fields()) {
       all[field.path] = mode;
     }
-    this.picks.set(all);
+    this.picked.set({ conflict: this.conflict(), modes: all });
   }
 
   protected apply(): void {

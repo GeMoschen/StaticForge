@@ -59,7 +59,11 @@ describe('GenerationComponent publish permissions (M28.3.3)', () => {
 
   afterEach(() => http.verify());
 
-  function render(role: string, permissions: string[], options: { readOnly?: boolean } = {}): void {
+  function render(
+    role: string,
+    permissions: string[],
+    options: { readOnly?: boolean; targets?: unknown[] } = {},
+  ): void {
     TestBed.configureTestingModule({
       imports: [GenerationComponent],
       providers: [
@@ -81,7 +85,7 @@ describe('GenerationComponent publish permissions (M28.3.3)', () => {
     fixture.componentRef.setInput('projectKey', 'proj');
     fixture.detectChanges();
     http.expectOne('/api/v1/projects/proj/generations').flush(OWNED_RUNS);
-    http.expectOne('/api/v1/projects/proj/targets').flush([]);
+    http.expectOne('/api/v1/projects/proj/targets').flush(options.targets ?? []);
     fixture.detectChanges();
   }
 
@@ -137,6 +141,26 @@ describe('GenerationComponent publish permissions (M28.3.3)', () => {
     expect(hasNewGeneration()).toBe(false);
     expect(actions(13)).toEqual(['Details', 'Live log']);
     expect(actions(11)).toEqual(['Details']);
+  });
+
+  it('disables New generation, and says why, while the project has no target', () => {
+    render('DEVELOPER', ALL_PUBLISH_PERMISSIONS);
+
+    const button = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(
+      (b) => b.textContent?.trim() === 'New generation',
+    )!;
+    expect(button.disabled).toBe(true);
+    expect(text()).toContain('no generation target yet');
+  });
+
+  it('enables New generation once the project has a target', () => {
+    render('DEVELOPER', ALL_PUBLISH_PERMISSIONS, { targets: [{ id: 7, name: 'Live', isDefault: true }] });
+
+    const button = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(
+      (b) => b.textContent?.trim() === 'New generation',
+    )!;
+    expect(button.disabled).toBe(false);
+    expect(text()).not.toContain('no generation target yet');
   });
 
   it('shows neither New generation nor the note while read-only', () => {

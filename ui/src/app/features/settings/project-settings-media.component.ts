@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
@@ -34,6 +34,12 @@ export class ProjectSettingsMediaComponent implements OnInit {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly patterns = signal('');
+  /** The patterns as last loaded or saved, normalized like a save writes them. */
+  private readonly savedPatterns = signal<string[]>([]);
+  /** Unsaved edits: without them there is nothing to write. */
+  protected readonly dirty = computed(
+    () => JSON.stringify(parsePatterns(this.patterns())) !== JSON.stringify(this.savedPatterns()),
+  );
   private name = '';
   private description: string | undefined;
 
@@ -43,6 +49,7 @@ export class ProjectSettingsMediaComponent implements OnInit {
         this.name = project.name ?? '';
         this.description = project.description ?? undefined;
         this.patterns.set((project.allowedMimeTypes ?? []).join('\n'));
+        this.savedPatterns.set(parsePatterns(this.patterns()));
         this.loading.set(false);
       },
       error: () => {
@@ -57,20 +64,18 @@ export class ProjectSettingsMediaComponent implements OnInit {
   }
 
   protected save(): void {
-    if (this.saving() || this.readOnly()) {
+    if (this.saving() || this.readOnly() || !this.dirty()) {
       return;
     }
     const key = this.projectKey();
-    const allowedMimeTypes = this.patterns()
-      .split('\n')
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
+    const allowedMimeTypes = parsePatterns(this.patterns());
     this.saving.set(true);
     this.api
       .updateProject(key, { name: this.name, description: this.description, allowedMimeTypes })
       .subscribe({
         next: () => {
           this.saving.set(false);
+          this.savedPatterns.set(allowedMimeTypes);
           this.toast.show('Media settings saved', 'success');
           this.store.loadFor(key, true).subscribe();
         },
@@ -80,4 +85,12 @@ export class ProjectSettingsMediaComponent implements OnInit {
         },
       });
   }
+}
+
+/** One pattern per line, trimmed, blank lines dropped. */
+function parsePatterns(text: string): string[] {
+  return text
+    .split('\n')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
 }

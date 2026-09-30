@@ -349,7 +349,7 @@
             </sf-field>
           </div>
 
-          <sf-button variant="primary" [disabled]="saving() || readOnly()" (click)="save()">
+          <sf-button variant="primary" [disabled]="saving() || readOnly() || !metadataDirty()" (click)="save()">
             Save metadata
           </sf-button>
         </form>

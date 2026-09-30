@@ -176,6 +176,22 @@ class UrlRegistryGenerationIntegrationTest {
         assertThat(rows(site)).isEmpty();
     }
 
+    @Test
+    @DisplayName("a build renders only released pages, so a project that never released registers no URLs until it does")
+    void unreleasedPagesRegisterNothing() {
+        Site site = site("ugunreleased");
+
+        // No release yet: nothing is published, nothing is registered (M27.2.1) — the registry is not "empty by fault".
+        GenerationRun idle = build.await(site.fx(), generationService.start(
+                site.fx().project().getKey(), request(site, GenerationMode.FULL), site.fx().user().getId()).getId());
+        assertThat(build.files(site.fx(), site.target(), idle)).doesNotContainKey("home.html");
+        assertThat(rows(site)).isEmpty();
+
+        // Released pages are registered by the next build.
+        build.succeeded(generate(site, GenerationMode.FULL));
+        assertThat(rows(site)).isNotEmpty();
+    }
+
     // ------------------------------------------------------------------
     // Frozen URLs, overrides and resets
     // ------------------------------------------------------------------

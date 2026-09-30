@@ -13,6 +13,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   FormControl,
@@ -145,6 +146,14 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     focalY: new FormControl<number | null>(null),
   });
 
+  /** Bumped whenever the form's value or its pristine state changes — a `FormGroup` is not a signal. */
+  private readonly formChanged = signal(0);
+  /** Unsaved edits to alt text, caption, copyright or focal point: what makes "Save metadata" worth pressing. */
+  readonly metadataDirty = computed(() => {
+    this.formChanged();
+    return this.form.dirty;
+  });
+
   readonly variants = computed(
     () => this.media()?.variants ?? [],
   );
@@ -242,6 +251,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
   private lastEditingLocale: string | null = null;
 
   constructor() {
+    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.formChanged.update((n) => n + 1));
     effect(() => {
       const uuid = this.media()?.uuid;
       const key = this.projectKey();
@@ -280,6 +290,8 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
         if (media.uuid !== this.lastTextUuid) {
           this.lastTextUuid = media.uuid ?? null;
           this.revision.set(media.revision ?? null);
+          // The library reuses this drawer when another file is picked: the form has to follow.
+          this.seedForm(media);
           this.textLocaleChoice.set(null);
           this.processDiagnostics.set([]);
           this.resetText();
@@ -306,6 +318,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
           altText: this.localizedMetadata(media.altTextL10n, media.altText),
           caption: this.localizedMetadata(media.captionL10n, media.caption),
         });
+        this.settleForm();
       });
     });
     // Entering or leaving time travel shows the file at the viewed revision.
@@ -326,6 +339,12 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
     const media = this.media();
     this.revision.set(media.revision ?? null);
     this.lastEditingLocale = this.editingLocale.locale();
+    this.seedForm(media);
+    this.loadUsages();
+  }
+
+  /** Fills the metadata form from `media`; nothing is unsaved afterwards. */
+  private seedForm(media: MediaView): void {
     this.form.reset({
       // `altTextL10n` holds every language; the form edits the one being worked in, falling back to
       // the resolved `altText` in a project without languages.
@@ -335,7 +354,13 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
       focalX: media.focalPoint?.x ?? null,
       focalY: media.focalPoint?.y ?? null,
     });
-    this.loadUsages();
+    this.settleForm();
+  }
+
+  /** Marks what the form holds as saved: nothing to save until the next edit. */
+  private settleForm(): void {
+    this.form.markAsPristine();
+    this.formChanged.update((n) => n + 1);
   }
 
   ngOnDestroy(): void {
@@ -450,6 +475,7 @@ export class MediaDetailDrawerComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (updated) => {
           this.revision.set(updated.revision ?? null);
+          this.settleForm();
           this.toasts.show('Metadata saved', 'success');
           this.saving.set(false);
           this.updated.emit(updated);

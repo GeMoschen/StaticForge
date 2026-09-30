@@ -477,8 +477,8 @@ public class MediaServiceImpl implements MediaService {
             String target = locales.canonicalDeclared(locale) != null
                     ? locales.canonicalDeclared(locale)
                     : locales.defaultLocale();
-            setLocalized(payload, "altText", target, altText);
-            setLocalized(payload, "caption", target, caption);
+            setLocalized(payload, "altText", target, locales.defaultLocale(), altText);
+            setLocalized(payload, "caption", target, locales.defaultLocale(), caption);
         } else {
             payload.put("altText", altText);
             payload.put("caption", caption);
@@ -909,11 +909,11 @@ public class MediaServiceImpl implements MediaService {
      * Writes one language's value of a localizable media metadata field, wrapping a value stored
      * before the project had locales as the default language's translation (M24.2.2).
      */
-    private void setLocalized(ObjectNode payload, String field, String locale, String value) {
+    private void setLocalized(ObjectNode payload, String field, String locale, String defaultLocale, String value) {
         com.fasterxml.jackson.databind.JsonNode current = payload.get(field);
         com.fasterxml.jackson.databind.JsonNode wrapper = com.acme.staticforge.common.L10nValues.isL10n(current)
                 ? current
-                : com.acme.staticforge.common.L10nValues.wrap(current, locale);
+                : com.acme.staticforge.common.L10nValues.wrap(current, defaultLocale);
         payload.set(field, com.acme.staticforge.common.L10nValues.with(
                 wrapper,
                 locale,
