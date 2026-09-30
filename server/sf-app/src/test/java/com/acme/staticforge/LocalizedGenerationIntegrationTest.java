@@ -30,6 +30,7 @@ import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.release.ContentView;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -140,7 +141,7 @@ class LocalizedGenerationIntegrationTest {
                         fx.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Article",
-                        ARTICLE_CDL,
+                        CdlSources.split(ARTICLE_CDL),
                         Map.of("html", ARTICLE_HTML),
                         null,
                         false,
@@ -157,7 +158,7 @@ class LocalizedGenerationIntegrationTest {
                 template.uuid(),
                 new com.acme.staticforge.asset.template.UpdateTemplateCommand(
                         "Article",
-                        ARTICLE_CDL,
+                        CdlSources.split(ARTICLE_CDL),
                         Map.of(
                                 "html",
                                 ARTICLE_HTML.replace(
@@ -283,7 +284,7 @@ class LocalizedGenerationIntegrationTest {
                 template.uuid(),
                 new com.acme.staticforge.asset.template.UpdateTemplateCommand(
                         "Article",
-                        ARTICLE_CDL,
+                        CdlSources.split(ARTICLE_CDL),
                         Map.of("html", ARTICLE_HTML.replace("</html>", loop + "</html>")),
                         null,
                         false,
@@ -352,7 +353,7 @@ class LocalizedGenerationIntegrationTest {
                         fx.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         "Flat",
-                        "content { editor text headline { label \"Headline\" } }",
+                        CdlSources.split("content { editor text headline { label \"Headline\" } }"),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                         null,
                         false,

@@ -86,7 +86,7 @@ describe('ContentService', () => {
     record.flush({});
 
     service
-      .updateDataset('p1', 'd1', { displayName: 'Team', contentDefinition: '' }, etagFor(3))
+      .updateDataset('p1', 'd1', { displayName: 'Team', contentCdl: '' }, etagFor(3))
       .subscribe();
     const dataset = httpMock.expectOne('/api/v1/projects/p1/datasets/d1');
     expect(dataset.request.headers.get('If-Match')).toBe('"rev-3"');
@@ -94,9 +94,10 @@ describe('ContentService', () => {
   });
 
   it('validates schema CDL with the dataset restrictions', () => {
-    service.validateCdl('p1', 'content {}').subscribe();
+    service.validateCdl('p1', { content: 'editor text a { }', bodies: '', rules: '' }).subscribe();
     const req = httpMock.expectOne((r) => r.url === '/api/v1/projects/p1/cdl/validate');
     expect(req.request.params.get('kind')).toBe('DATASET');
+    expect(req.request.body).toEqual({ contentCdl: 'editor text a { }', rulesCdl: '' });
     req.flush({ diagnostics: [] });
   });
 

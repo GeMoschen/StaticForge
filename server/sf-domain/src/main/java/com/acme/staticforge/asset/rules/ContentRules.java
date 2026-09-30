@@ -17,6 +17,7 @@ import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.ProjectLocales;
 import com.acme.staticforge.template.cdl.CdlCompiler;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Severity;
@@ -154,7 +155,7 @@ public class ContentRules {
         private RuleEngine engine;
         private final Map<UUID, Optional<ContentDefinition>> pageDefinitions = new HashMap<>();
         private final Map<UUID, Optional<ContentDefinition>> datasetDefinitions = new HashMap<>();
-        private final Map<String, ContentDefinition> compiled = new HashMap<>();
+        private final Map<CdlSources, ContentDefinition> compiled = new HashMap<>();
 
         private Session(long projectId) {
             this.projectId = projectId;
@@ -171,7 +172,7 @@ public class ContentRules {
                 case RECORD -> parse(payload.path("datasetRef")).flatMap(dataset -> datasetDefinitions.computeIfAbsent(
                         dataset, uuid -> sources().datasetSchema(uuid)));
                 case GLOBAL_SET -> Optional.of(compiled.computeIfAbsent(
-                        payload.path("contentDefinition").asText(""), cdl -> cdlCompiler.compile(cdl).definition()));
+                        CdlSources.of(payload), cdl -> cdlCompiler.compile(cdl).definition()));
                 default -> Optional.empty();
             };
         }
@@ -348,7 +349,7 @@ public class ContentRules {
     }
 
     private ContentDefinition compile(JsonNode payload) {
-        return cdlCompiler.compile(payload.path("contentDefinition").asText("")).definition();
+        return cdlCompiler.compile(CdlSources.of(payload)).definition();
     }
 
     private UUID uuidOf(long projectId, AssetType type, String uid, String what) {

@@ -33,6 +33,7 @@ import com.acme.staticforge.release.ContentView;
 import com.acme.staticforge.release.ReleaseItem;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -308,7 +309,7 @@ class LocalizedMediaGenerationIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String html, String outputPath) {
         return templateService.create(
-                new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, name, "", Map.of("html", html), null, false,
+                new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(""), Map.of("html", html), null, false,
                         Map.of("html", outputPath)),
                 fx.ctx());
     }

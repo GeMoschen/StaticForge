@@ -12,6 +12,7 @@ import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.ProjectRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -220,7 +221,7 @@ class RenderPipelineRenderLimitsTest {
 
     private UUID template(AssetType type, String uid, String cdl, String htmlSource) {
         ObjectNode payload = MAPPER.createObjectNode();
-        payload.put("contentDefinition", cdl);
+        CdlSources.split(cdl).writeTo(payload);
         payload.putObject("channelTemplates").putObject("html").put("source", htmlSource);
         return add(type, uid, payload);
     }

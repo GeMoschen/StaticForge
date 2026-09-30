@@ -17,9 +17,11 @@ import com.acme.staticforge.project.ProjectRole;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -87,7 +89,7 @@ class GlobalsApiTest {
         mvc.perform(get(globals(fx) + "/" + uuid).header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken())))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ETAG, "\"rev-" + revision + "\""))
-                .andExpect(jsonPath("$.contentDefinition").value(SITE_CDL));
+                .andExpect(jsonPath("$.contentCdl").value(CdlSources.split(SITE_CDL).content()));
 
         JsonNode valued = json(putContent(fx, fx.editorToken(), uuid, revision, "{\"title\":\"Acme Outdoor\"}")
                 .andExpect(status().isOk())
@@ -204,7 +206,7 @@ class GlobalsApiTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                objectMapper.createObjectNode().put("contentDefinition", SITE_CDL))))
+                                withCdl(objectMapper.createObjectNode(), SITE_CDL))))
                 .andExpect(status().isPreconditionFailed());
 
         putContent(fx, fx.editorToken(), site.uuid().toString(), site.revision(), "{\"title\":\"First\"}")
@@ -238,11 +240,11 @@ class GlobalsApiTest {
         GlobalSetView site = site(fx);
         putSchema(fx, fx.developerToken(), site.uuid().toString(), site.revision(),
                 """
-                content { editor text title { label "Title" } }
-                bodies { body main { label "Main" allow ["*"] } }
+                content { editor text title { label "Title" } editor catalog cards { label "Cards" } }
                 """)
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.CDL_NOT_ALLOWED_IN_GLOBAL_SET));
+                .andExpect(jsonPath("$.diagnostics[0].code").value(DiagnosticCodes.CDL_NOT_ALLOWED_IN_GLOBAL_SET))
+                .andExpect(jsonPath("$.diagnostics[0].field").value("content"));
 
         // A value that is malformed for its editor is the other 422 shape: field-level `issues`.
         putContent(fx, fx.editorToken(), site.uuid().toString(), site.revision(), "{\"title\":{\"nope\":1}}")
@@ -264,7 +266,7 @@ class GlobalsApiTest {
                 content { editor text title { label "Title" } }
                 bodies { body main { label "Main" allow ["*"] } }
                 """;
-        String body = objectMapper.writeValueAsString(objectMapper.createObjectNode().put("source", withBody));
+        String body = objectMapper.writeValueAsString(withCdl(objectMapper.createObjectNode(), withBody));
 
         mvc.perform(post("/api/v1/projects/" + fx.project().getKey() + "/cdl/validate")
                         .header(HttpHeaders.AUTHORIZATION, bearer(fx.developerToken()))
@@ -300,13 +302,12 @@ class GlobalsApiTest {
                 .header(HttpHeaders.IF_MATCH, "\"rev-" + ifMatch + "\"")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        objectMapper.createObjectNode().put("contentDefinition", cdl))));
+                        withCdl(objectMapper.createObjectNode(), cdl))));
     }
 
     private String createBody(String displayName, String cdl) throws Exception {
-        return objectMapper.writeValueAsString(objectMapper.createObjectNode()
-                .put("displayName", displayName)
-                .put("contentDefinition", cdl));
+        return objectMapper.writeValueAsString(withCdl(objectMapper.createObjectNode()
+                .put("displayName", displayName), cdl));
     }
 
     private static String globals(Fixture fx) {
@@ -327,7 +328,7 @@ class GlobalsApiTest {
 
     private GlobalSetView site(Fixture fx) {
         return globalSetService.create(
-                new CreateGlobalSetCommand(fx.project().getId(), null, "Site", SITE_CDL), fx.ctx());
+                new CreateGlobalSetCommand(fx.project().getId(), null, "Site", CdlSources.split(SITE_CDL)), fx.ctx());
     }
 
     // ------------------------------------------------------------------
@@ -389,5 +390,11 @@ class GlobalsApiTest {
         String viewerToken() {
             return jwtService.issueAccessToken(viewer);
         }
+    }
+
+    /** {@code node} with the CDL sections (M34) of a whole CDL text. */
+    private static ObjectNode withCdl(ObjectNode node, String cdl) {
+        CdlSources sections = CdlSources.split(cdl);
+        return node.put("contentCdl", sections.content()).put("bodiesCdl", sections.bodies()).put("rulesCdl", sections.rules());
     }
 }

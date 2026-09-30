@@ -43,6 +43,7 @@ import com.acme.staticforge.redirect.RedirectService.AutoCandidate;
 import com.acme.staticforge.release.ReleaseItem;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.urlregistry.ResetScope;
 import com.acme.staticforge.urlregistry.UrlArea;
 import com.acme.staticforge.urlregistry.UrlRegistryService;
@@ -397,7 +398,7 @@ class RedirectDetectionIntegrationTest {
                     new CreatePageReferenceCommand("0" + i + " post", nav, PageReferenceTargetKind.PAGE, page, null), fx.ctx());
         }
         TemplateView blogTemplate = templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,
-                "Blog", "content { editor pagination posts { label \"Posts\" sources [\"nav\"] pageSize 1 } }",
+                "Blog", CdlSources.split("content { editor pagination posts { label \"Posts\" sources [\"nav\"] pageSize 1 } }"),
                 Map.of("html", "<h1>$CMS_META(pageNumber)$</h1>"), null, false, Map.of("html", DEFAULT_PATH)), fx.ctx());
         UUID news = folderService.create(null, "news", FolderScope.PAGES, fx.ctx()).uuid();
         AssetVersionView blog = pageService.create(new CreatePageCommand("blog", news, blogTemplate.uuid()), fx.ctx());
@@ -473,7 +474,7 @@ class RedirectDetectionIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String html, String outputPath) {
         return templateService.create(new CreateTemplateCommand(fx.projectId(), AssetType.PAGE_TEMPLATE,
-                name + " " + SEQ.incrementAndGet(), "", Map.of("html", html), null, false, Map.of("html", outputPath)),
+                name + " " + SEQ.incrementAndGet(), CdlSources.split(""), Map.of("html", html), null, false, Map.of("html", outputPath)),
                 fx.ctx());
     }
 

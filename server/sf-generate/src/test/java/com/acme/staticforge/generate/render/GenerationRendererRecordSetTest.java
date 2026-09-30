@@ -9,6 +9,7 @@ import com.acme.staticforge.generate.snapshot.Snapshot;
 import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.ProjectLocale;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -137,11 +138,12 @@ class GenerationRendererRecordSetTest {
     private GenerationRenderer renderer(String source, String recordTemplate) {
         Map<UUID, SnapshotAsset> byUuid = new HashMap<>();
         put(byUuid, asset(TEMPLATE, AssetType.PAGE_TEMPLATE, "tpl", "/",
-                "{\"contentDefinition\":\"content { bodies { body main { } } editor reference featured { label \\\"F\\\" } }\","
+                "{\"contentCdl\":\"editor reference featured { label \\\"F\\\" }\",\"bodiesCdl\":\"body main { }\","
                         + "\"channelTemplates\":{\"html\":{\"source\":" + MAPPER.valueToTree(source) + "}}}"));
         put(byUuid, asset(SECTION, AssetType.SECTION_TEMPLATE, "sec", "/",
                 "{\"channelTemplates\":{\"html\":{\"source\":\"<section>$CMS_VALUE(recordset:leads)$</section>\"}}}"));
-        ObjectNode team = MAPPER.createObjectNode().put("contentDefinition", TEAM_CDL);
+        ObjectNode team = MAPPER.createObjectNode();
+        CdlSources.split(TEAM_CDL).writeTo(team);
         if (recordTemplate != null) {
             team.putObject("channelTemplates").putObject("html").put("source", recordTemplate);
         }

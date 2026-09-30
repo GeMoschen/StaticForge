@@ -1,6 +1,7 @@
 import { test, expect, request as playwrightRequest, APIRequestContext, Browser, Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { cdl } from './cdl';
 
 /**
  * M28 editor publishing journey (feature `docs-e2e`, `M28.4.2`) — a project admin opens publishing to an editor step by
@@ -268,7 +269,7 @@ test.describe('M28 editor publishing journey', () => {
     await api.post('/api/v1/projects', { key: KEY, name: PROJECT_NAME });
     const template = await api.post('/page-templates', {
       displayName: 'Article',
-      contentDefinition: CDL,
+      ...cdl(CDL),
       channelSources: { html: HTML },
     });
     const pagesRoot = (await api.get('/folders?scope=PAGES&depth=1'))[0];

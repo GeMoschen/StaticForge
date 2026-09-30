@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { cdlFields, type CdlSections } from '../../shared/code-editor/cdl-sections';
 
 const BASE = '/api/v1';
 
@@ -77,37 +78,9 @@ export class TemplatesService {
     });
   }
 
-  saveChannel(
-    kind: TemplateKind,
-    key: string,
-    uuid: string,
-    channelKey: string,
-    source: string,
-    etag?: string,
-  ): Observable<S['ChannelTemplateDto']> {
-    return this.http.put<S['ChannelTemplateDto']>(
-      `${endpoint(kind, key)}/${uuid}/channels/${channelKey}`,
-      { source },
-      this.mutationOptions(etag),
-    );
-  }
-
-  deleteChannel(
-    kind: TemplateKind,
-    key: string,
-    uuid: string,
-    channelKey: string,
-    etag?: string,
-  ): Observable<void> {
-    return this.http.delete<void>(
-      `${endpoint(kind, key)}/${uuid}/channels/${channelKey}`,
-      this.mutationOptions(etag),
-    );
-  }
-
   /**
    * Validates a channel source. With `templateUuid` it is checked as that template's channel (M20.4.1): references,
-   * the inheritance chain, and names against the effective definition built from `contentDefinition` when given.
+   * the inheritance chain, and names against the effective definition built from the unsaved CDL sections when given.
    */
   validateOctl(key: string, body: S['OctlValidateRequest']): Observable<S['OctlValidateResponse']> {
     return this.http.post<S['OctlValidateResponse']>(`${BASE}/projects/${key}/octl/validate`, body, {
@@ -115,10 +88,12 @@ export class TemplatesService {
     });
   }
 
-  validateCdl(key: string, source: string): Observable<S['CdlValidateResponse']> {
+  /** Validates CDL sections (M34); `kind` applies a section template's restrictions. Each diagnostic names its section. */
+  validateCdl(key: string, sections: CdlSections, kind?: 'SECTION_TEMPLATE'): Observable<S['CdlValidateResponse']> {
+    const query = kind ? `?kind=${kind}` : '';
     return this.http.post<S['CdlValidateResponse']>(
-      `${BASE}/projects/${key}/cdl/validate`,
-      { source },
+      `${BASE}/projects/${key}/cdl/validate${query}`,
+      cdlFields(sections),
       { withCredentials: true },
     );
   }

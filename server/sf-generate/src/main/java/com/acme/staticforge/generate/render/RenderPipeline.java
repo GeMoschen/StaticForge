@@ -25,6 +25,7 @@ import com.acme.staticforge.generate.snapshot.SnapshotAsset;
 import com.acme.staticforge.project.LocaleConfig;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
@@ -239,7 +240,7 @@ public class RenderPipeline {
                 return effective.get();
             }
         }
-        return memo.definition(template.uuid(), template.payload().path("contentDefinition").asText(""));
+        return memo.definition(template.uuid(), CdlSources.of(template.payload()));
     }
 
     /**

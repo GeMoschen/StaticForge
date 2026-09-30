@@ -33,6 +33,7 @@ import com.acme.staticforge.release.ReleasePlan;
 import com.acme.staticforge.release.ReleaseService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -181,7 +182,7 @@ class ReleaseRuleCheckIntegrationTest {
         Fixture fx = newFixture("rr-glob");
         AssetVersionView folder = folderService.create(null, "Branding", FolderScope.GLOBALS, fx.ctx());
         GlobalSetView site = globalSetService.create(new CreateGlobalSetCommand(
-                fx.id(), folder.uuid(), "Site", "content { editor text title { } }"), fx.ctx());
+                fx.id(), folder.uuid(), "Site", CdlSources.split("content { editor text title { } }")), fx.ctx());
         globalSetService.updateValues(site.uuid(), mapper.createObjectNode().put("title", "Acme"), site.revision(), fx.ctx());
         TemplateView template = template(fx, """
                 content { editor text headline { } }
@@ -269,7 +270,7 @@ class ReleaseRuleCheckIntegrationTest {
 
     private TemplateView template(Fixture fx, String cdl) {
         return templateService.create(new CreateTemplateCommand(
-                        fx.id(), AssetType.PAGE_TEMPLATE, "Article" + SEQ.incrementAndGet(), cdl,
+                        fx.id(), AssetType.PAGE_TEMPLATE, "Article" + SEQ.incrementAndGet(), CdlSources.split(cdl),
                         Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"), null, false, Map.of()),
                 fx.ctx());
     }

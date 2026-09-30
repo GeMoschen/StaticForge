@@ -22,7 +22,7 @@ import java.util.List;
  *       hashes and variants stay hidden;
  *   <li>{@code PAGE_REFERENCE} — {@code label};
  *   <li>{@code GLOBAL_SET} — the property set's values ({@code payload.content}), exactly like a
- *       page; {@code contentDefinition}/{@code compiledDefinition} stay hidden so a template
+ *       page; the CDL sections and {@code compiledDefinition} stay hidden so a template
  *       reads a set's values, never its schema (M17.3.1);
  *   <li>{@code RECORD} — the record's values ({@code payload.content}), exactly like a page (M19.3.2).
  *       Renderers read records through {@code RecordValues}, which adds the record meta fields

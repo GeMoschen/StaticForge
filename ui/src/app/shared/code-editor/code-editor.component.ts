@@ -89,6 +89,10 @@ export class SfCodeEditorComponent implements AfterViewInit {
       untracked(() => this.editor?.setReadOnly(readOnly));
     });
     effect(() => {
+      const label = this.label();
+      untracked(() => this.editor?.setLabel(label));
+    });
+    effect(() => {
       const text = this.placeholder();
       untracked(() => this.editor?.setPlaceholder(text));
     });

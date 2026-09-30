@@ -14,6 +14,7 @@ import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.template.cdl.CdlSources;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
@@ -105,7 +106,8 @@ public class GlobalsController {
             @PathVariable String projectKey, @RequestBody CreateGlobalSetRequest body) {
         GlobalSetView view = globalSetService.create(
                 new CreateGlobalSetCommand(
-                        projectId(projectKey), body.parentFolderUuid(), body.displayName(), body.contentDefinition()),
+                        projectId(projectKey), body.parentFolderUuid(), body.displayName(),
+                        new CdlSources(body.contentCdl(), "", body.rulesCdl())),
                 ctx(projectKey, comment(body.comment(), "create property set")));
         return ResponseEntity.status(201)
                 .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.revision()))
@@ -120,13 +122,17 @@ public class GlobalsController {
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestParam(value = "confirmDiscard", defaultValue = "false") boolean confirmDiscard,
             @RequestBody UpdateGlobalSetSchemaRequest body) {
-        GlobalSetView view = globalSetService.updateSchema(
-                uuid,
-                body.contentDefinition(),
-                RevisionHeaders.expectedRevision(ifMatch),
-                confirmDiscard,
-                ctx(projectKey, comment(body.comment(), "update property set schema")));
-        return ok(projectKey, view);
+        boolean withValues = body.content() != null && !body.content().isNull();
+        com.acme.staticforge.asset.rules.SaveFindings.Captured<GlobalSetView> saved =
+                com.acme.staticforge.asset.rules.SaveFindings.capture(() -> globalSetService.updateSchema(
+                        uuid,
+                        new CdlSources(body.contentCdl(), "", body.rulesCdl()),
+                        withValues ? body.content() : null,
+                        RevisionHeaders.expectedRevision(ifMatch),
+                        confirmDiscard,
+                        ctx(projectKey, comment(body.comment(),
+                                withValues ? "update property set schema and values" : "update property set schema"))));
+        return ok(projectKey, saved.value(), saved.findings());
     }
 
     @PutMapping("/{uuid}/content")
@@ -175,7 +181,8 @@ public class GlobalsController {
                 v.uid(),
                 v.displayName(),
                 v.folderPath(),
-                v.contentDefinition(),
+                v.cdl().content(),
+                v.cdl().rules(),
                 v.compiledDefinition(),
                 v.content(),
                 v.revision(),

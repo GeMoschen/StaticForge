@@ -19,6 +19,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -222,15 +223,15 @@ class PageContentValidationApiIntegrationTest {
 
         TemplateView teaser = templateService.create(new CreateTemplateCommand(
                 project.getId(), AssetType.SECTION_TEMPLATE, "Teaser " + n,
-                "content { editor text headline { required } editor catalog cards { } }",
+                CdlSources.split("content { editor text headline { required } editor catalog cards { } }"),
                 Map.of("html", "<div>$CMS_VALUE(headline)$$CMS_VALUE(cards)$</div>"), null, false, null), ctx);
         TemplateView banner = templateService.create(new CreateTemplateCommand(
                 project.getId(), AssetType.SECTION_TEMPLATE, "Banner " + n,
-                "content { editor number height { } }",
+                CdlSources.split("content { editor number height { } }"),
                 Map.of("html", "<div>$CMS_VALUE(height)$</div>"), null, false, null), ctx);
         TemplateView pageTemplate = templateService.create(new CreateTemplateCommand(
                 project.getId(), AssetType.PAGE_TEMPLATE, "Page " + n,
-                """
+                CdlSources.split("""
                 content {
                   editor text title { required }
                   editor number count { }
@@ -239,7 +240,7 @@ class PageContentValidationApiIntegrationTest {
                   body main    { allow ["*"] }
                   body sidebar { allow ["%s"] }
                 }
-                """.formatted(teaser.uid()),
+                """.formatted(teaser.uid())),
                 Map.of("html", "<h1>$CMS_VALUE(title)$ $CMS_VALUE(count)$</h1>"), null, false, null), ctx);
         return new Fixture(project, admin, ctx, pageTemplate, teaser, banner);
     }

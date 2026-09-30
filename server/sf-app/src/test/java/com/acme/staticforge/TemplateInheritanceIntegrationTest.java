@@ -28,6 +28,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
@@ -102,7 +103,7 @@ class TemplateInheritanceIntegrationTest {
         Fixture fx = newFixture();
         TemplateView base = template(fx, "Base", BASE_CDL, BASE_HTML, true);
         SfException problem = assertProblem(() -> templateService.create(new CreateTemplateCommand(
-                fx.project().getId(), AssetType.SECTION_TEMPLATE, "Section", "",
+                fx.project().getId(), AssetType.SECTION_TEMPLATE, "Section", CdlSources.split(""),
                 Map.of("html", "$CMS_EXTENDS(page_template:" + base.uid() + ")$"), null, false, null), fx.ctx()), 422, null);
         assertThat(codes(problem)).contains(DiagnosticCodes.OCTL_EXTENDS_TARGET);
     }
@@ -324,14 +325,14 @@ class TemplateInheritanceIntegrationTest {
 
     private TemplateView template(Fixture fx, String name, String cdl, Map<String, String> channels, boolean abstractTemplate) {
         return templateService.create(new CreateTemplateCommand(
-                fx.project().getId(), AssetType.PAGE_TEMPLATE, name, cdl, channels, null, false,
+                fx.project().getId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl), channels, null, false,
                 Map.of("html", "{displayNameSlug}.{ext}"), null, abstractTemplate), fx.ctx());
     }
 
     private TemplateView update(Fixture fx, TemplateView template, String cdl, Map<String, String> channels, boolean abstractTemplate) {
         TemplateView current = templateService.get(fx.project().getId(), template.uuid());
         return templateService.update(template.uuid(), new UpdateTemplateCommand(
-                current.displayName(), cdl, channels, null, false, Map.of("html", "{displayNameSlug}.{ext}"), abstractTemplate),
+                current.displayName(), CdlSources.split(cdl), channels, null, false, Map.of("html", "{displayNameSlug}.{ext}"), abstractTemplate),
                 current.validFromRevision(), fx.ctx());
     }
 

@@ -1,0 +1,67 @@
+/* M34: the Save hint, and the CDL and channel panels side by side. */
+.detail__unsaved {
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+/* M34: the CDL and the channel templates side by side; they stack once the pane is too narrow for two editors. */
+.editors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--sf-4);
+  align-items: start;
+}
+
+.editors__panel {
+  min-width: 0;
+}
+
+.editors__heading {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+  font-weight: 600;
+  color: var(--sf-ink);
+}
+
+.channels__removed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-2);
+  margin: 0;
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}
+
+.channels__removed-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-1);
+}
+
+/* The code tabs of both columns share one height: at least 14rem, otherwise the page height less the chrome around them. */
+.editors {
+  --sf-code-height: max(14rem, calc(100dvh - 24rem));
+}
+
+.editors sf-cdl-sections-editor,
+.editors sf-octl-editor {
+  --sf-cdl-min-height: 14rem;
+  --sf-cdl-max-height: none;
+  --sf-octl-min-height: 14rem;
+  --sf-octl-max-height: none;
+}
+
+.channels__select {
+  margin-left: auto;
+  padding: var(--sf-1) var(--sf-2);
+  border: 1px solid var(--sf-line);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-ink);
+  font-size: var(--sf-text-xs);
+}
+
+.channels[hidden] {
+  display: none;
+}

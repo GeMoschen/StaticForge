@@ -133,3 +133,9 @@
   background: color-mix(in srgb, var(--sf-amber, #9c7a2e) 14%, transparent);
   color: var(--sf-ink);
 }
+
+.global-detail__tab-dirty {
+  margin-left: var(--sf-1);
+  color: var(--sf-signal);
+  font-weight: 700;
+}

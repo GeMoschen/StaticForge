@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.dataset;
 
+import com.acme.staticforge.template.cdl.CdlSources;
 import java.util.Map;
 import java.util.UUID;
 
@@ -15,7 +16,7 @@ public record CreateDatasetCommand(
         long projectId,
         UUID parentFolderUuid,
         String displayName,
-        String contentDefinition,
+        CdlSources cdl,
         String titleEditor,
         String description,
         Map<String, String> channelTemplates) {
@@ -25,9 +26,9 @@ public record CreateDatasetCommand(
             long projectId,
             UUID parentFolderUuid,
             String displayName,
-            String contentDefinition,
+            CdlSources cdl,
             String titleEditor,
             String description) {
-        this(projectId, parentFolderUuid, displayName, contentDefinition, titleEditor, description, null);
+        this(projectId, parentFolderUuid, displayName, cdl, titleEditor, description, null);
     }
 }

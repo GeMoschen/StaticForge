@@ -21,6 +21,7 @@ import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.template.cdl.CdlCompiler;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.query.DatasetQuery;
 import com.acme.staticforge.template.query.DatasetQueryEvaluator;
@@ -256,7 +257,7 @@ public class RecordServiceImpl implements RecordService {
         AssetVersion version = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId())
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Dataset not found.")));
         JsonNode payload = version.getPayload();
-        ContentDefinition definition = cdlCompiler.compile(payload.path("contentDefinition").asText("")).definition();
+        ContentDefinition definition = cdlCompiler.compile(CdlSources.of(payload)).definition();
         JsonNode titleEditor = payload.get("titleEditor");
         return new Dataset(
                 asset.getId(),

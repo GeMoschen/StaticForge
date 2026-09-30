@@ -1,4 +1,5 @@
 import { HttpClient } from '@angular/common/http';
+import type { CdlSections } from '../../shared/code-editor/cdl-sections';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -149,11 +150,11 @@ export class ContentService {
     return this.http.delete<void>(`${BASE}/projects/${projectKey}/datasets/${uuid}`, { withCredentials: true });
   }
 
-  /** Validates draft schema CDL with the dataset restrictions (no bodies) the save enforces. */
-  validateCdl(projectKey: string, source: string): Observable<{ diagnostics?: Diagnostic[] }> {
+  /** Validates draft schema CDL sections (M34) with the dataset restrictions the save enforces. */
+  validateCdl(projectKey: string, sections: CdlSections): Observable<{ diagnostics?: Diagnostic[] }> {
     return this.http.post<{ diagnostics?: Diagnostic[] }>(
       `${BASE}/projects/${projectKey}/cdl/validate`,
-      { source },
+      { contentCdl: sections.content, rulesCdl: sections.rules },
       { withCredentials: true, params: { kind: 'DATASET' } },
     );
   }

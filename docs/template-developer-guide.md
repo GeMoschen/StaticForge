@@ -6,7 +6,17 @@ Normative reference: `cms-specification.md` §14 and §16. This guide is a worki
 
 ## Part 1 — CDL (content definition language)
 
-CDL declares the editors a template exposes. It lives in a section template's or page template's `contentDefinition`. You edit it in the template IDE (Monaco) and can validate it live with `POST /projects/{p}/cdl/validate`.
+CDL declares the editors a template exposes. It is stored and edited as three sections (M34, spec §14.9): the text inside `content { … }` (`contentCdl`), inside `bodies { … }` (`bodiesCdl`, page templates only) and inside `rules { … }` (`rulesCdl`). The template IDE shows one tab per section — Content, Bodies, Rules — next to one tab per channel, and saves them all with one *Save template* (`Ctrl/Cmd+S`), one revision. Each tab holds only its section's body, without the keyword and braces:
+
+```
+// Content tab
+editor text title { label "Title" required }
+
+// Bodies tab
+body main { label "Main" allow ["*"] }
+```
+
+The examples in this guide show whole definitions (`content { … } bodies { … }`) for readability; in the IDE each section goes on its tab. Validate live with `POST /projects/{p}/cdl/validate` (`{contentCdl, bodiesCdl, rulesCdl}`); every diagnostic names its section in `field`, with the line inside that section.
 
 Full per-type reference — attributes, stored-value shape, and a rendering example for each of the
 19 editor types — lives in [`editors/`](editors/README.md), one file per type (`editors/text.md`,

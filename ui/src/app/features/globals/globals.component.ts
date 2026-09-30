@@ -21,10 +21,8 @@ import { etagFor, GlobalsService, type FolderView, type GlobalSetSummaryView } f
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 
-/** The CDL a newly created property set starts with — one field, so the Values tab is never blank. */
-const STARTER_CDL = `content {
-  editor text title { label "Title" required }
-}
+/** The Content CDL a newly created property set starts with — one field, so the Values tab is never blank. */
+const STARTER_CONTENT = `editor text title { label "Title" required }
 `;
 
 /**
@@ -200,7 +198,7 @@ export class GlobalsComponent {
       .create(this.projectKey(), {
         parentFolderUuid: this.targetFolderUuid(),
         displayName: value.displayName,
-        contentDefinition: STARTER_CDL,
+        contentCdl: STARTER_CONTENT,
       })
       .subscribe({
         next: (created) => {

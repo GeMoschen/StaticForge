@@ -2,6 +2,7 @@ import { test, expect, request as playwrightRequest, APIRequestContext, Locator,
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
+import { cdl } from './cdl';
 
 /**
  * M25 record sets journey (feature `docs-e2e`, `M25.6.2`) — the whole feature in the running app:
@@ -264,8 +265,9 @@ test('journey: record sets end to end', async ({ page }) => {
 
     const datasetEditor = page.locator('sf-dataset-schema-editor');
     await expect(datasetEditor.locator('h3')).toHaveText('Team');
-    await datasetEditor.locator('textarea.dataset-editor__cdl').fill(TEAM_CDL);
-    await datasetEditor.getByRole('tab', { name: /Record template \(html\)/ }).click();
+    // The Content tab beside the record templates (M34): both are on screen at once.
+    await datasetEditor.getByRole('textbox', { name: 'Record fields (CDL) — Content' }).fill(cdl(TEAM_CDL).contentCdl);
+    await datasetEditor.getByRole('tab', { name: /^html/ }).click();
     const recordTemplate = datasetEditor.getByRole('textbox', { name: 'Record template for channel html' });
     await expect(datasetEditor.getByRole('note')).toContainText('No record template for html');
     await recordTemplate.fill(RECORD_TEMPLATE);
@@ -278,7 +280,6 @@ test('journey: record sets end to end', async ({ page }) => {
     await expect(datasetEditor.locator('.octl-editor__diagnostics .diagnostic')).toHaveCount(0);
 
     // The saved schema's first text field became the title field: records are named after `name`.
-    await datasetEditor.getByRole('tab', { name: /Schema \(CDL\)/ }).click();
     await expect(datasetEditor.getByRole('combobox', { name: /^Title field/ })).toHaveValue('name');
 
     const datasets = await api.get('/datasets');
@@ -339,7 +340,7 @@ test('journey: record sets end to end', async ({ page }) => {
     // ── 3. Developer: the page template renders the set two ways ───────────
     const pageTemplate = await api.post('/page-templates', {
       displayName: 'Team page',
-      contentDefinition: PAGE_CDL,
+      ...cdl(PAGE_CDL),
       channelSources: { html: PAGE_HTML },
       outputPath: { html: '{displayNameSlug}.{ext}' },
     });
@@ -347,7 +348,7 @@ test('journey: record sets end to end', async ({ page }) => {
     // A second set of another dataset must not be offered by the `team`-restricted picker.
     const products = await api.post('/datasets', {
       displayName: 'Products',
-      contentDefinition: 'content { editor text sku { label "SKU" } }',
+      ...cdl('content { editor text sku { label "SKU" } }'),
     });
     await api.post('/record-sets', { datasetUuid: products.uuid, displayName: 'Catalogue' });
 

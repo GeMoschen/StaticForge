@@ -13,11 +13,24 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { declaredPaths } from '../../shared/code-editor/completions';
 import { channelCodeFormat } from '../../shared/code-editor/code-format';
-import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
+import {
+  EMPTY_SECTIONS,
+  errorCount,
+  firstSectionWithErrors,
+  isSaveShortcut,
+  sectionsEqual,
+  sectionsOf,
+  splitDiagnostics,
+  cdlFields,
+  type CdlSection,
+  type CdlSections,
+} from '../../shared/code-editor/cdl-sections';
+import { SfCdlSectionsEditorComponent } from '../../shared/components/sf-cdl-sections-editor.component';
+import { SfTabsComponent, type SfTab } from '../../shared/components/sf-tabs.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { templateKindOfFolderPath } from '../../shared/asset-route.util';
 import { consumeQueryParam } from '../../shared/deep-link';
-import { catchError, debounceTime, forkJoin, of, Subject, switchMap } from 'rxjs';
+import { catchError, debounceTime, forkJoin, map, of, Subject, switchMap } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -83,7 +96,6 @@ interface ChannelTemplateValue {
   compiledHash?: string;
 }
 
-const NEW_CONTENT_DEFINITION = '';
 
 /** How long channel typing pauses before the source is validated against the template's context (M20.4.1). */
 const OCTL_VALIDATE_DEBOUNCE_MS = 300;
@@ -95,14 +107,19 @@ interface OctlValidation {
   templateUuid: string;
   channelKey: string;
   source: string;
-  contentDefinition: string;
+  sections: CdlSections;
 }
 
 /** What a new dataset starts with: one field, so its first record already has something to fill in. */
-const NEW_DATASET_DEFINITION = `content {
-  editor text name { label "Name" required }
-}
+const NEW_DATASET_CONTENT = `editor text name { label "Name" required }
 `;
+
+/** The help line above each CDL tab (M34). */
+const CDL_HINTS: Partial<Record<CdlSection, string>> = {
+  content: 'The editors this template exposes: editor and group declarations.',
+  bodies: 'The bodies pages of this template fill with sections: body declarations.',
+  rules: 'Checks, required/read-only states and fills on the editors: rule, state and fill entries.',
+};
 
 @Component({
   selector: 'sf-templates',
@@ -114,7 +131,8 @@ const NEW_DATASET_DEFINITION = `content {
     SfEmptyStateComponent,
     SfFieldComponent,
     SfOctlEditorComponent,
-    SfCodeEditorComponent,
+    SfCdlSectionsEditorComponent,
+    SfTabsComponent,
     SfSpinnerComponent,
     SfUidRenameComponent,
     TemplateFolderNodeComponent,
@@ -123,7 +141,12 @@ const NEW_DATASET_DEFINITION = `content {
     SfAssetImpactComponent,
   ],
   templateUrl: './templates.component.html',
-  styleUrls: ['./templates.component.scss', './templates-inheritance.scss', './templates-pagination.scss'],
+  styleUrls: [
+    './templates.component.scss',
+    './templates-inheritance.scss',
+    './templates-pagination.scss',
+    './templates-editors.scss',
+  ],
 })
 export class TemplatesComponent {
   readonly projectKey = input.required<string>();
@@ -229,14 +252,33 @@ export class TemplatesComponent {
   readonly displayName = signal('');
   readonly category = signal('');
   readonly deprecated = signal(false);
-  readonly contentDefinition = signal('');
+  /** The CDL sections as edited (M34); the saved ones are the detail's. */
+  readonly sections = signal<CdlSections>(EMPTY_SECTIONS);
+  readonly savedSections = computed<CdlSections | null>(() => {
+    const detail = this.detail();
+    return detail ? sectionsOf(detail) : null;
+  });
+  /** The CDL tab shown. */
+  readonly cdlTab = signal<CdlSection>('content');
+  /** A section template has no bodies. */
+  readonly cdlTabs = computed<CdlSection[]>(() => (this.isSection() ? ['content', 'rules'] : ['content', 'bodies', 'rules']));
+  protected readonly cdlHints = CDL_HINTS;
   readonly saving = signal(false);
   readonly cdlDiagnostics = signal<Diagnostic[]>([]);
 
   readonly channels = signal<ChannelView[]>([]);
+  /**
+   * Every channel's source as edited (M34), keyed by channel: added channels start empty, removed ones are gone.
+   * Nothing is written until the one Save, which sends them all with the CDL — one request, one revision.
+   */
+  readonly channelSources = signal<Record<string, string>>({});
+  readonly savedChannelSources = computed<Record<string, string>>(() => this.channelSourcesOf(this.detail()));
   readonly selectedChannel = signal('');
-  readonly channelSource = signal('');
-  readonly channelSaving = signal(false);
+  readonly channelSource = computed(() => this.channelSources()[this.selectedChannel()] ?? '');
+  /** Saved channels this save removes, so the removal can be undone before saving. */
+  readonly removedChannels = computed(() =>
+    Object.keys(this.savedChannelSources()).filter((key) => !(key in this.channelSources())),
+  );
 
   readonly confirmDelete = signal(false);
 
@@ -251,7 +293,7 @@ export class TemplatesComponent {
       !this.isSection() &&
       (declaresPagination(
         (this.detail()?.effectiveDefinition as { editors?: { type?: string }[] } | null | undefined)?.editors,
-        this.contentDefinition(),
+        this.sections().content,
       ) ||
         Object.keys(paginationPathsForSave(this.paginationPaths())).length > 0),
   );
@@ -266,8 +308,14 @@ export class TemplatesComponent {
     return errors;
   });
   protected readonly defaultPaginationPath = DEFAULT_PAGINATION_PATH;
-  /** Diagnostics of the selected channel's source, validated live as that template's channel. */
-  readonly octlDiagnostics = signal<Diagnostic[]>([]);
+  /** Each channel's diagnostics: live ones for the channel being edited, a rejected save's for every channel. */
+  readonly octlDiagnostics = signal<Record<string, Diagnostic[]>>({});
+  readonly activeOctlDiagnostics = computed(() => this.channelDiagnostics(this.selectedChannel()));
+
+  /** One channel's diagnostics; none until it has been checked. */
+  channelDiagnostics(channel: string): Diagnostic[] {
+    return this.octlDiagnostics()[channel] ?? [];
+  }
   /** Descendants a rejected save would have broken (`422 SF-DOM-0124`). */
   readonly descendantProblems = signal<DescendantProblem[]>([]);
   /** Warnings a successful save produced on descendants; dismissible. */
@@ -280,23 +328,29 @@ export class TemplatesComponent {
   readonly breadcrumb = computed(() => inheritanceBreadcrumb(this.detail()));
   /** Inherited editors and bodies, grouped by the ancestor declaring them (read-only). */
   readonly inheritedGroups = computed(() => inheritedGroups(this.detail()));
+  /** The ancestors declaring inherited editors (on the Content tab) and bodies (on the Bodies tab). */
+  readonly inheritedEditorGroups = computed(() => this.inheritedGroups().filter((group) => group.editors.length > 0));
+  readonly inheritedBodyGroups = computed(() => this.inheritedGroups().filter((group) => group.bodies.length > 0));
 
   private readonly octlValidation = new Subject<OctlValidation>();
-  private readonly cdlValidation = new Subject<{ key: string; source: string }>();
+  private readonly cdlValidation = new Subject<{ key: string; sections: CdlSections; section: boolean }>();
 
   /**
    * The editors a channel may use, for completion (M33): the ones the unsaved CDL declares and the inherited ones.
    */
-  /** How the selected channel's source is highlighted (M33 follow-up): its "Highlight as", else detected. */
-  readonly channelFormat = computed(() =>
-    channelCodeFormat(
-      this.channels().find((channel) => channel.key === this.selectedChannel()),
-      this.store.project()?.codeHighlighting,
-    ),
-  );
+  /** How each channel's source is highlighted (M33 follow-up): its "Highlight as", else detected. */
+  readonly channelFormats = computed(() => {
+    const highlighting = this.store.project()?.codeHighlighting;
+    return Object.fromEntries(
+      this.channelKeys().map((key) => [
+        key,
+        channelCodeFormat(this.channels().find((channel) => channel.key === key), highlighting),
+      ]),
+    );
+  });
 
   readonly editorNames = computed<string[]>(() => {
-    const names = new Set(declaredPaths(this.contentDefinition()).filter((path) => !path.endsWith('[]')));
+    const names = new Set(declaredPaths(this.sections().content).filter((path) => !path.endsWith('[]')));
     const collect = (editors: { name?: string; items?: unknown[] }[] | undefined) =>
       (editors ?? []).forEach((editor) => {
         if (editor.name) {
@@ -308,9 +362,36 @@ export class TemplatesComponent {
     return [...names];
   });
 
-  readonly channelKeys = computed<string[]>(() => {
-    const templates = this.channelTemplatesOf(this.detail());
-    return Object.keys(templates ?? {});
+  readonly channelKeys = computed<string[]>(() => Object.keys(this.channelSources()));
+
+  /** One tab per channel, with its error count and unsaved dot (added or edited). */
+  readonly channelTabs = computed<SfTab[]>(() => {
+    const saved = this.savedChannelSources();
+    const diagnostics = this.octlDiagnostics();
+    return Object.entries(this.channelSources()).map(([key, source]) => ({
+      id: key,
+      label: key,
+      errors: errorCount(diagnostics[key] ?? []),
+      dirty: saved[key] !== source,
+    }));
+  });
+
+  /** Whether anything differs from the saved template: the Save button and the unsaved hint follow this. */
+  readonly dirty = computed(() => {
+    const detail = this.detail();
+    if (!detail) {
+      return false;
+    }
+    const sameChannels = sameRecord(this.channelSources(), this.savedChannelSources());
+    const sameMeta =
+      this.displayName() === (detail.displayName ?? '') &&
+      this.category() === (detail.category ?? '') &&
+      (this.isSection()
+        ? this.deprecated() === (detail.deprecated ?? false)
+        : this.abstractTemplate() === (detail.abstract ?? false) &&
+          sameRecord(paginationPathsForSave(this.paginationPaths()), readPaginationPaths(detail.paginationPath)));
+    const saved = this.savedSections();
+    return !sameChannels || !sameMeta || saved === null || !sectionsEqual(this.sections(), saved);
   });
 
   readonly availableChannels = computed<ChannelView[]>(() => {
@@ -329,22 +410,32 @@ export class TemplatesComponent {
               source: request.source,
               channelKey: request.channelKey,
               templateUuid: request.templateUuid,
-              contentDefinition: request.contentDefinition,
+              ...cdlFields(request.sections),
             })
-            .pipe(catchError(() => of(null))),
+            .pipe(
+              catchError(() => of(null)),
+              map((response) => ({ channelKey: request.channelKey, response })),
+            ),
         ),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((response) => {
+      .subscribe(({ channelKey, response }) => {
         if (response) {
-          this.octlDiagnostics.set(sortDiagnostics(response.diagnostics ?? []) as Diagnostic[]);
+          this.octlDiagnostics.update((all) => ({
+            ...all,
+            [channelKey]: sortDiagnostics(response.diagnostics ?? []) as Diagnostic[],
+          }));
         }
       });
 
     this.cdlValidation
       .pipe(
         debounceTime(CDL_VALIDATE_DEBOUNCE_MS),
-        switchMap((request) => this.service.validateCdl(request.key, request.source).pipe(catchError(() => of(null)))),
+        switchMap((request) =>
+          this.service
+            .validateCdl(request.key, request.sections, request.section ? 'SECTION_TEMPLATE' : undefined)
+            .pipe(catchError(() => of(null))),
+        ),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((response) => {
@@ -555,7 +646,7 @@ export class TemplatesComponent {
       this.contentService
         .createDataset(key, {
           displayName: value.displayName,
-          contentDefinition: NEW_DATASET_DEFINITION,
+          contentCdl: NEW_DATASET_CONTENT,
           titleEditor: 'name',
           parentFolderUuid: this.newTemplateParentUuid(),
         })
@@ -577,7 +668,7 @@ export class TemplatesComponent {
     this.service
       .create(this.kind(), key, {
         displayName: value.displayName,
-        contentDefinition: NEW_CONTENT_DEFINITION,
+        ...cdlFields(EMPTY_SECTIONS),
         channelSources: {},
         parentFolderUuid: this.newTemplateParentUuid(),
       })
@@ -609,18 +700,28 @@ export class TemplatesComponent {
     this.deprecated.set((event.target as HTMLInputElement).checked);
   }
 
-  onContentDefinitionInput(source: string): void {
-    this.contentDefinition.set(source);
+  onSectionInput(change: { section: CdlSection; value: string }): void {
+    this.sections.update((sections) => ({ ...sections, [change.section]: change.value }));
     // Unsaved editors change what the channel may use.
     this.requestOctlValidation();
     this.requestCdlValidation();
+  }
+
+  /** Ctrl+S / ⌘S saves the template (M34), from anywhere in the editor. */
+  protected onKeydown(event: KeyboardEvent): void {
+    if (isSaveShortcut(event)) {
+      event.preventDefault();
+      if (this.dirty() && !this.saving()) {
+        this.saveTemplate();
+      }
+    }
   }
 
   /** Live CDL diagnostics (M33): debounced, silent (the Validate button still reports with a toast). */
   private requestCdlValidation(): void {
     const key = this.projectKey();
     if (key) {
-      this.cdlValidation.next({ key, source: this.contentDefinition() });
+      this.cdlValidation.next({ key, sections: this.sections(), section: this.isSection() });
     }
   }
 
@@ -651,7 +752,6 @@ export class TemplatesComponent {
     const uuid = this.selectedUuid();
     const channelKey = this.selectedChannel();
     if (!key || !uuid || !channelKey || this.datasetSelected()) {
-      this.octlDiagnostics.set([]);
       return;
     }
     this.octlValidation.next({
@@ -659,7 +759,7 @@ export class TemplatesComponent {
       templateUuid: uuid,
       channelKey,
       source: this.channelSource(),
-      contentDefinition: this.contentDefinition(),
+      sections: this.sections(),
     });
   }
 
@@ -690,9 +790,9 @@ export class TemplatesComponent {
     if (!key) {
       return;
     }
-    this.service.validateCdl(key, this.contentDefinition()).subscribe({
+    this.service.validateCdl(key, this.sections(), this.isSection() ? 'SECTION_TEMPLATE' : undefined).subscribe({
       next: (res) => {
-        this.cdlDiagnostics.set(res.diagnostics ?? []);
+        this.cdlDiagnostics.set(sortDiagnostics(res.diagnostics ?? []) as Diagnostic[]);
         this.toast.show(
           (res.diagnostics ?? []).some((d) => d.severity === 'ERROR')
             ? 'CDL has errors'
@@ -721,14 +821,18 @@ export class TemplatesComponent {
   /** Saves again, this time authorising the discard. */
   protected confirmDiscardAndSave(): void {
     this.pendingDiscard.set(null);
-    this.saveDefinition(true);
+    this.saveTemplate(true);
   }
 
   protected cancelDiscard(): void {
     this.pendingDiscard.set(null);
   }
 
-  saveDefinition(confirmDiscard = false): void {
+  /**
+   * The one Save (M34): the metadata, the CDL sections and every channel's source — added, edited or removed — in one
+   * request, so the whole change is one revision. A rejected save keeps every edit and opens the first failing tab.
+   */
+  saveTemplate(confirmDiscard = false): void {
     const key = this.projectKey();
     const uuid = this.selectedUuid();
     const detail = this.detail();
@@ -747,10 +851,10 @@ export class TemplatesComponent {
         uuid,
         {
           displayName: this.displayName(),
-          contentDefinition: this.contentDefinition(),
+          ...cdlFields(this.isSection() ? { ...this.sections(), bodies: '' } : this.sections()),
           category: this.category(),
           deprecated: this.deprecated(),
-          channelSources: this.channelSourcesOf(detail),
+          channelSources: this.channelSources(),
           ...(this.isSection()
             ? {}
             : {
@@ -769,12 +873,13 @@ export class TemplatesComponent {
           this.toast.show('Template saved', 'success');
           this.saving.set(false);
           this.cdlDiagnostics.set([]);
+          this.octlDiagnostics.set({});
           this.descendantProblems.set([]);
           this.templateInUse.set(null);
           this.descendantWarnings.set(normalizeDescendants(updated.descendantWarnings));
           this.refreshTemplateStore();
           // Ancestors and inherited editors are derived on save; reload to show them.
-          this.reloadDetail(key, uuid, false);
+          this.reloadDetail(key, uuid, false, true);
         },
         error: (err) => {
           const problem = (err as { error?: { field?: string; detail?: string } }).error;
@@ -790,19 +895,39 @@ export class TemplatesComponent {
             this.saving.set(false);
             return;
           }
-          const shown = this.showSaveProblems(err, (diagnostics) => {
-            this.cdlDiagnostics.set(diagnostics);
-            this.toast.show(
-              'Template has compile errors — see diagnostics below. Removing content used by a channel template will break that channel until it is updated too.',
-              'error',
-            );
-          });
+          const shown = this.showSaveProblems(err, (diagnostics) => this.showSaveDiagnostics(diagnostics));
           if (!shown) {
             this.toast.show('Could not save template — someone may have edited it, try reloading.', 'error');
           }
           this.saving.set(false);
         },
       });
+  }
+
+  /** A rejected save's compile errors: each on its CDL tab or channel tab, and the first failing tab opened. */
+  private showSaveDiagnostics(diagnostics: Diagnostic[]): void {
+    const { cdl, channels } = splitDiagnostics(diagnostics);
+    this.cdlDiagnostics.set(sortDiagnostics(cdl) as Diagnostic[]);
+    this.octlDiagnostics.update((all) => {
+      const next = { ...all };
+      for (const [channel, list] of Object.entries(channels)) {
+        next[channel] = sortDiagnostics(list) as Diagnostic[];
+      }
+      return next;
+    });
+    const section = firstSectionWithErrors(cdl, this.cdlTabs());
+    if (section) {
+      this.cdlTab.set(section);
+    }
+    const failingChannel = Object.keys(channels).find((channel) => errorCount(channels[channel]) > 0);
+    if (failingChannel && failingChannel in this.channelSources()) {
+      this.selectedChannel.set(failingChannel);
+    }
+    const where = section ? `the ${section} tab` : failingChannel ? `channel ${failingChannel}` : 'the diagnostics';
+    this.toast.show(
+      `Not saved: the template has compile errors — see ${where}. Removing content a channel uses breaks that channel until it is updated too.`,
+      'error',
+    );
   }
 
   onUidChanged(): void {
@@ -818,112 +943,59 @@ export class TemplatesComponent {
 
   selectChannel(channelKey: string): void {
     this.selectedChannel.set(channelKey);
-    this.channelSource.set(this.readChannelSource(channelKey));
-    this.octlDiagnostics.set([]);
     this.requestOctlValidation();
   }
 
-  onChannelInput(source: string): void {
-    this.channelSource.set(source);
+  onChannelInput(source: string, channel = this.selectedChannel()): void {
+    if (!channel) {
+      return;
+    }
+    this.channelSources.update((sources) => ({ ...sources, [channel]: source }));
     this.requestOctlValidation();
   }
 
   onAddChannel(event: Event): void {
-    const channelKey = (event.target as HTMLSelectElement).value;
+    const select = event.target as HTMLSelectElement;
+    const channelKey = select.value;
+    select.value = '';
     if (channelKey) {
       this.addChannel(channelKey);
     }
   }
 
+  /** Adds a channel with an empty source; it is written with the next Save (M34). */
   addChannel(channelKey: string): void {
-    const key = this.projectKey();
-    const uuid = this.selectedUuid();
-    const detail = this.detail();
-    if (!key || !uuid || !detail || !channelKey || this.readOnly()) {
+    if (!channelKey || this.readOnly() || channelKey in this.channelSources()) {
       return;
     }
-    this.channelSaving.set(true);
-    this.service
-      .saveChannel(this.kind(), key, uuid, channelKey, '', this.etag(detail))
-      .subscribe({
-        next: () => {
-          this.toast.show(`Channel ${channelKey} added`, 'success');
-          this.channelSaving.set(false);
-          this.reloadDetail(key, uuid);
-          this.selectedChannel.set(channelKey);
-        },
-        error: () => {
-          this.toast.show(`Could not add channel ${channelKey} — it may already exist.`, 'error');
-          this.channelSaving.set(false);
-        },
-      });
+    this.channelSources.update((sources) => ({ ...sources, [channelKey]: this.savedChannelSources()[channelKey] ?? '' }));
+    this.selectChannel(channelKey);
   }
 
-  saveChannel(): void {
-    const key = this.projectKey();
-    const uuid = this.selectedUuid();
-    const detail = this.detail();
+  /** Removes the selected channel; the next Save deletes it (M34), until then it can be restored. */
+  removeChannel(): void {
     const channel = this.selectedChannel();
-    if (!key || !uuid || !detail || !channel || this.readOnly()) {
+    if (!channel || this.readOnly()) {
       return;
     }
-    this.channelSaving.set(true);
-    this.service
-      .saveChannel(
-        this.kind(),
-        key,
-        uuid,
-        channel,
-        this.channelSource(),
-        this.etag(detail),
-      )
-      .subscribe({
-        next: (saved) => {
-          this.toast.show(`Channel ${channel} saved`, 'success');
-          this.channelSaving.set(false);
-          this.descendantProblems.set([]);
-          this.descendantWarnings.set(normalizeDescendants(saved?.descendantWarnings));
-          this.reloadDetail(key, uuid, false);
-        },
-        error: (err) => {
-          const shown = this.showSaveProblems(err, (diagnostics) => {
-            this.octlDiagnostics.set(sortDiagnostics(diagnostics) as Diagnostic[]);
-            this.toast.show(`Channel ${channel} has compile errors — see diagnostics below.`, 'error');
-          });
-          if (!shown) {
-            this.toast.show(`Could not save channel ${channel} — check the OCTL source compiles.`, 'error');
-          }
-          this.channelSaving.set(false);
-        },
-      });
+    this.channelSources.update((sources) => {
+      const { [channel]: _removed, ...rest } = sources;
+      return rest;
+    });
+    this.octlDiagnostics.update((all) => {
+      const { [channel]: _dropped, ...rest } = all;
+      return rest;
+    });
+    const next = this.channelKeys()[0] ?? '';
+    this.selectedChannel.set(next);
+    if (next) {
+      this.requestOctlValidation();
+    }
   }
 
-  deleteChannel(): void {
-    const key = this.projectKey();
-    const uuid = this.selectedUuid();
-    const detail = this.detail();
-    const channel = this.selectedChannel();
-    if (!key || !uuid || !detail || !channel || this.readOnly()) {
-      return;
-    }
-    this.channelSaving.set(true);
-    this.service
-      .deleteChannel(this.kind(), key, uuid, channel, this.etag(detail))
-      .subscribe({
-        next: () => {
-          this.toast.show(`Channel ${channel} removed`, 'success');
-          this.channelSaving.set(false);
-          this.selectedChannel.set('');
-          this.channelSource.set('');
-          this.reloadDetail(key, uuid);
-        },
-        error: (err) => {
-          if (!this.showSaveProblems(err, () => undefined)) {
-            this.toast.show(`Could not remove channel ${channel} — try again in a moment.`, 'error');
-          }
-          this.channelSaving.set(false);
-        },
-      });
+  /** Brings back a channel removed since the last save, with its saved source. */
+  restoreChannel(channelKey: string): void {
+    this.addChannel(channelKey);
   }
 
   requestDelete(): void {
@@ -964,7 +1036,7 @@ export class TemplatesComponent {
     return (detail?.channelTemplates as Record<string, ChannelTemplateValue> | null) ?? null;
   }
 
-  private channelSourcesOf(detail: TemplateDetail): Record<string, string> {
+  private channelSourcesOf(detail: TemplateDetail | null): Record<string, string> {
     const templates = this.channelTemplatesOf(detail) ?? {};
     const out: Record<string, string> = {};
     for (const [key, value] of Object.entries(templates)) {
@@ -986,11 +1058,6 @@ export class TemplatesComponent {
       }
     }
     return out;
-  }
-
-  private readChannelSource(channelKey: string): string {
-    const templates = this.channelTemplatesOf(this.detail()) ?? {};
-    return templates[channelKey]?.source ?? '';
   }
 
   private etag(detail: TemplateDetail): string | undefined {
@@ -1050,19 +1117,30 @@ export class TemplatesComponent {
     });
   }
 
-  /** @param resetOutcomes whether to clear the last save's descendant outcomes (not when reloading after that save) */
-  private reloadDetail(key: string, uuid: string, resetOutcomes = true): void {
+  /**
+   * @param resetOutcomes whether to clear the last save's descendant outcomes (not when reloading after that save)
+   * @param keepEdits after a save: edits made while the reload was in flight stay (M34), only an unchanged form is
+   *   refreshed — the reload must never take back what the user typed after pressing Save
+   */
+  private reloadDetail(key: string, uuid: string, resetOutcomes = true, keepEdits = false): void {
     this.service.get(this.kind(), key, uuid).subscribe({
       next: (detail) => {
+        const edited = keepEdits && this.detail()?.uuid === detail.uuid && this.dirty();
         this.detail.set(detail);
-        this.displayName.set(detail.displayName ?? '');
-        this.category.set(detail.category ?? '');
-        this.deprecated.set(detail.deprecated ?? false);
-        this.abstractTemplate.set(detail.abstract ?? false);
-        this.paginationPaths.set(readPaginationPaths(detail.paginationPath));
-        this.contentDefinition.set(detail.contentDefinition ?? '');
-        this.cdlDiagnostics.set([]);
-        this.octlDiagnostics.set([]);
+        if (!edited) {
+          this.displayName.set(detail.displayName ?? '');
+          this.category.set(detail.category ?? '');
+          this.deprecated.set(detail.deprecated ?? false);
+          this.abstractTemplate.set(detail.abstract ?? false);
+          this.paginationPaths.set(readPaginationPaths(detail.paginationPath));
+          this.sections.set(sectionsOf(detail));
+          this.channelSources.set(this.channelSourcesOf(detail));
+          this.cdlDiagnostics.set([]);
+          this.octlDiagnostics.set({});
+        }
+        if (!this.cdlTabs().includes(this.cdlTab())) {
+          this.cdlTab.set('content');
+        }
         this.templateInUse.set(null);
         if (resetOutcomes) {
           this.descendantProblems.set([]);
@@ -1071,14 +1149,8 @@ export class TemplatesComponent {
         this.reloadChildTemplates(key, detail);
         const keys = this.channelKeys();
         const selected = this.selectedChannel();
-        if (selected && keys.includes(selected)) {
-          this.channelSource.set(this.readChannelSource(selected));
-        } else if (keys.length > 0) {
-          this.selectedChannel.set(keys[0]);
-          this.channelSource.set(this.readChannelSource(keys[0]));
-        } else {
-          this.selectedChannel.set('');
-          this.channelSource.set('');
+        if (!selected || !keys.includes(selected)) {
+          this.selectedChannel.set(keys[0] ?? '');
         }
         this.requestOctlValidation();
       },
@@ -1155,4 +1227,10 @@ function findFolderByUid(nodes: FolderView[], uid: string): FolderView | null {
     }
   }
   return null;
+}
+
+/** Whether two string maps hold the same entries. */
+function sameRecord(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => key in b && a[key] === b[key]);
 }

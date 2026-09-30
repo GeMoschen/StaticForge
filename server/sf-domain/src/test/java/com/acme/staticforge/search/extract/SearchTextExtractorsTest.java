@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.search.SearchDocument;
 import com.acme.staticforge.template.cdl.CdlCompiler;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -158,7 +159,7 @@ class SearchTextExtractorsTest {
     @Test
     void templateSourcesAreCodeOnly() {
         SearchDocument doc = extract(AssetType.SECTION_TEMPLATE, "teaser", "Teaser", json(
-                "{'contentDefinition':'editor text headline { label \\'Headline\\' }',"
+                "{'contentCdl':'editor text headline { label \\'Headline\\' }',"
                         + "'channelTemplates':{'html':{'source':'<h2>$CMS_VALUE(headline)$</h2>'},'md':{'source':'## md'}}}"))
                 .orElseThrow();
 
@@ -170,7 +171,7 @@ class SearchTextExtractorsTest {
     @Test
     void datasetSchemaIndexesCdlAndDescription() {
         SearchDocument doc = extract(AssetType.DATASET, "team", "Team", json(
-                "{'contentDefinition':'editor text role { label \\'Role\\' }','description':'Our people'}")).orElseThrow();
+                "{'contentCdl':'editor text role { label \\'Role\\' }','description':'Our people'}")).orElseThrow();
         assertThat(doc.text()).isEqualTo("Our people");
         assertThat(doc.source()).contains("editor text role");
     }
@@ -196,7 +197,7 @@ class SearchTextExtractorsTest {
     @Test
     void globalSetAndRecordValuesUseTheirDefinitions() {
         SearchDocument set = extract(AssetType.GLOBAL_SET, "footer", "Footer", json(
-                "{'contentDefinition':'editor text claim { label \\'Claim\\' }','content':{'claim':'Built to last','x':'stale'}}"))
+                "{'contentCdl':'editor text claim { label \\'Claim\\' }','content':{'claim':'Built to last','x':'stale'}}"))
                 .orElseThrow();
         assertThat(set.text()).isEqualTo("Built to last");
 
@@ -256,8 +257,8 @@ class SearchTextExtractorsTest {
         }
 
         @Override
-        public ContentDefinition definition(UUID owner, long revision, String cdlSource) {
-            return cdl(cdlSource == null ? "" : cdlSource);
+        public ContentDefinition definition(UUID owner, long revision, CdlSources cdlSource) {
+            return CDL.compile(cdlSource).definition();
         }
 
         @Override

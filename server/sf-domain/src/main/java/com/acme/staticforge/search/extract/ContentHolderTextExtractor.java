@@ -2,6 +2,7 @@ package com.acme.staticforge.search.extract;
 
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.search.SearchDocument;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Optional;
@@ -24,7 +25,7 @@ public class ContentHolderTextExtractor implements SearchTextExtractor {
     public Optional<SearchDocument> extract(IndexableAsset asset, ExtractionContext context) {
         JsonNode payload = asset.payload();
         Optional<ContentDefinition> definition = asset.type() == AssetType.GLOBAL_SET
-                ? Optional.of(context.definition(asset.uuid(), asset.revision(), Documents.text(payload, "contentDefinition")))
+                ? Optional.of(context.definition(asset.uuid(), asset.revision(), CdlSources.of(payload)))
                 : ContentTextWalker.uuid(payload == null ? null : payload.get("datasetRef")).flatMap(context::datasetDefinition);
         TextBuilder text = new TextBuilder(context.maxTextChars());
         JsonNode content = payload == null ? null : payload.get("content");

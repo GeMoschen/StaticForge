@@ -24,6 +24,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -79,7 +80,7 @@ class ContentCompletenessGenerationIntegrationTest {
         // The title starts optional: incomplete content can't be released (M27.1.2, SF-DOM-0150), so a page only
         // reaches a build incomplete when a template edit (templates are live) makes its released version incomplete.
         TemplateView template = templateService.create(new CreateTemplateCommand(
-                project.getId(), AssetType.PAGE_TEMPLATE, "Article", "content { editor text title }",
+                project.getId(), AssetType.PAGE_TEMPLATE, "Article", CdlSources.split("content { editor text title }"),
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, null), ctx);
         AssetVersionView complete = pageService.create(new CreatePageCommand("Complete", null, template.uuid()), ctx);
         ObjectNode completePayload = (ObjectNode) complete.payload().deepCopy();
@@ -92,7 +93,7 @@ class ContentCompletenessGenerationIntegrationTest {
         releaseFixtures.releaseAll(project.getKey());
         templateService.update(
                 template.uuid(),
-                new UpdateTemplateCommand("Article", "content { editor text title { required } }",
+                new UpdateTemplateCommand("Article", CdlSources.split("content { editor text title { required } }"),
                         Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of(), false, Map.of()),
                 templateService.get(project.getId(), template.uuid()).validFromRevision(),
                 ctx);

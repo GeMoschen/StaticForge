@@ -2,6 +2,7 @@ import { test, expect, request as playwrightRequest, APIRequestContext, Browser,
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
+import { cdl } from './cdl';
 
 /**
  * M27 release and scheduling journey (feature `docs-e2e`, `M27.7.2`) — the editorial flow of the epic in the running
@@ -346,7 +347,7 @@ test.describe('M27 release and scheduling journey', () => {
     await api.put('/locales', locales);
     const template = await api.post('/page-templates', {
       displayName: 'Article',
-      contentDefinition: CDL,
+      ...cdl(CDL),
       channelSources: { html: HTML },
       outputPath: { html: '{locale}/{uid}.{ext}' },
     });

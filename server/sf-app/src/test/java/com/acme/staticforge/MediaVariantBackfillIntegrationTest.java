@@ -42,6 +42,7 @@ import com.acme.staticforge.release.ReleaseStatus;
 import com.acme.staticforge.release.ReleaseStatusService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -275,7 +276,7 @@ class MediaVariantBackfillIntegrationTest {
 
     private void page(Fixture fx, String name, String html) {
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "T" + SEQ.incrementAndGet(), "",
+                new CreateTemplateCommand(fx.id(), AssetType.PAGE_TEMPLATE, "T" + SEQ.incrementAndGet(), CdlSources.split(""),
                         Map.of("html", html), null, false, Map.of("html", "{folder}{uid}.{ext}")),
                 fx.ctx());
         pageService.create(new CreatePageCommand(name, null, template.uuid()), fx.ctx());

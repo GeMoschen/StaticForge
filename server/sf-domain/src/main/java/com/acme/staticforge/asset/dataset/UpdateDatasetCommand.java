@@ -1,5 +1,6 @@
 package com.acme.staticforge.asset.dataset;
 
+import com.acme.staticforge.template.cdl.CdlSources;
 import java.util.Map;
 
 /**
@@ -9,13 +10,13 @@ import java.util.Map;
  */
 public record UpdateDatasetCommand(
         String displayName,
-        String contentDefinition,
+        CdlSources cdl,
         String titleEditor,
         String description,
         Map<String, String> channelTemplates) {
 
     /** An update that keeps the stored record templates. */
-    public UpdateDatasetCommand(String displayName, String contentDefinition, String titleEditor, String description) {
-        this(displayName, contentDefinition, titleEditor, description, null);
+    public UpdateDatasetCommand(String displayName, CdlSources cdl, String titleEditor, String description) {
+        this(displayName, cdl, titleEditor, description, null);
     }
 }

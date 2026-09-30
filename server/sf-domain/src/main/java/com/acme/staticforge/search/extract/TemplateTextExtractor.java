@@ -2,6 +2,7 @@ package com.acme.staticforge.search.extract;
 
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.search.SearchDocument;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +26,7 @@ public class TemplateTextExtractor implements SearchTextExtractor {
     @Override
     public Optional<SearchDocument> extract(IndexableAsset asset, ExtractionContext context) {
         JsonNode payload = asset.payload();
-        TextBuilder source = new TextBuilder(context.maxTextChars()).add(Documents.text(payload, "contentDefinition"));
+        TextBuilder source = new TextBuilder(context.maxTextChars()).add(CdlSources.of(payload).text());
         JsonNode channels = payload == null ? null : payload.get("channelTemplates");
         if (channels != null && channels.isObject()) {
             List<Map.Entry<String, JsonNode>> sorted = new ArrayList<>();

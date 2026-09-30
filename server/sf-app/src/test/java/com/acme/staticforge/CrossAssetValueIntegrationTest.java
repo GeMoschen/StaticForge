@@ -25,6 +25,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -81,12 +82,12 @@ class CrossAssetValueIntegrationTest {
         RevisionContext ctx = RevisionContext.of(projectId, user.getId(), "cross-asset values");
 
         TemplateView plain = templateService.create(
-                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Plain", "",
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Plain", CdlSources.split(""),
                         Map.of("html", "B-page"), null, false, null, null),
                 ctx);
         AssetVersionView pageB = page(projectId, ctx, "Page B", plain.uuid(), "First headline");
         TemplateView teaser = templateService.create(
-                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Teaser", "",
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Teaser", CdlSources.split(""),
                         Map.of("html", "A[$CMS_VALUE(page:" + pageB.uid() + ".headline)$]"), null, false, null, null),
                 ctx);
         AssetVersionView pageA = page(projectId, ctx, "Page A", teaser.uuid(), "unused");
@@ -142,16 +143,16 @@ class CrossAssetValueIntegrationTest {
         RevisionContext ctx = RevisionContext.of(projectId, user.getId(), "deleted targets");
 
         TemplateView plain = templateService.create(
-                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Plain", "",
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Plain", CdlSources.split(""),
                         Map.of("html", "B-page"), null, false, null, null),
                 ctx);
         AssetVersionView pageB = page(projectId, ctx, "Page B", plain.uuid(), "Kept headline");
         TemplateView box = templateService.create(
-                new CreateTemplateCommand(projectId, AssetType.SECTION_TEMPLATE, "Box", "",
+                new CreateTemplateCommand(projectId, AssetType.SECTION_TEMPLATE, "Box", CdlSources.split(""),
                         Map.of("html", "box"), null, false, null, null),
                 ctx);
         TemplateView reader = templateService.create(
-                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Reader", "",
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Reader", CdlSources.split(""),
                         Map.of("html", "A[$CMS_VALUE(page:" + pageB.uid() + ".headline)$|$CMS_REF(page:" + pageB.uid()
                                 + ")$|$CMS_INCLUDE(section_template:" + box.uid() + ")$]"),
                         null, false, null, null),

@@ -24,6 +24,7 @@ import com.acme.staticforge.redirect.RedirectRepository;
 import com.acme.staticforge.redirect.RedirectService;
 import com.acme.staticforge.redirect.RedirectService.AutoCandidate;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -206,7 +207,7 @@ class RedirectExportImportIntegrationTest {
         AppUser admin = users.create(key, key + "@example.com", "Admin", "secret-password");
         Project project = projects.create(new CreateProjectRequest(key, key, null, "redirect export"), admin.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), admin.getId(), "redirect export");
-        TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CDL,
+        TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(CDL),
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of()), ctx);
         return new Fixture(project, admin, ctx, template);
     }

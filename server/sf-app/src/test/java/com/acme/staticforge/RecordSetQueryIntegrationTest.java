@@ -25,6 +25,7 @@ import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.query.RecordSetQuery;
 import com.acme.staticforge.template.query.RecordSetQueryDiagnostic;
@@ -128,8 +129,8 @@ class RecordSetQueryIntegrationTest {
 
         DatasetView renamed = datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", TEAM_CDL.replace(
-                        "editor text role { label \"Role\" }", "editor text position { label \"Position\" renamedFrom \"role\" }"),
+                new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace(
+                        "editor text role { label \"Role\" }", "editor text position { label \"Position\" renamedFrom \"role\" }")),
                         null, null),
                 team.revision(),
                 fx.ctx());
@@ -163,7 +164,7 @@ class RecordSetQueryIntegrationTest {
 
         DatasetView saved = datasetService.update(
                 team.uuid(),
-                new UpdateDatasetCommand("Team", TEAM_CDL.replace("editor date joined { label \"Joined\" }", ""), null, null),
+                new UpdateDatasetCommand("Team", CdlSources.split(TEAM_CDL.replace("editor date joined { label \"Joined\" }", "")), null, null),
                 team.revision(),
                 fx.ctx());
 
@@ -346,7 +347,7 @@ class RecordSetQueryIntegrationTest {
     }
 
     private DatasetView team(Fixture fx) {
-        return datasetService.create(new CreateDatasetCommand(fx.projectId(), null, "Team", TEAM_CDL, "name", null), fx.ctx());
+        return datasetService.create(new CreateDatasetCommand(fx.projectId(), null, "Team", CdlSources.split(TEAM_CDL), "name", null), fx.ctx());
     }
 
     private RecordSetView set(Fixture fx, DatasetView dataset, String name, RecordSetQuery query) {

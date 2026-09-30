@@ -39,6 +39,7 @@ import com.acme.staticforge.search.SearchHit;
 import com.acme.staticforge.search.SearchIndexer;
 import com.acme.staticforge.search.SearchService;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.AppUserRepository;
 import com.acme.staticforge.user.SystemRole;
@@ -322,7 +323,7 @@ class ReleaseApiTest {
                     true, ctx);
         }
         TemplateView template = templates.create(new CreateTemplateCommand(
-                project.getId(), AssetType.PAGE_TEMPLATE, "Article", CDL, Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
+                project.getId(), AssetType.PAGE_TEMPLATE, "Article", CdlSources.split(CDL), Map.of("html", "<h1>$CMS_VALUE(headline)$</h1>"),
                 null, false, Map.of()), ctx);
         return new Fixture(project, admin, ctx, template, localized);
     }

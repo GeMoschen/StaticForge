@@ -982,7 +982,9 @@ A section template is the **smallest reusable content block**. It consists of:
 
 ```json
 {
-  "contentDefinition": "…CDL source…",
+  "contentCdl": "…the editors (CDL, §14.9)…",
+  "bodiesCdl": "",
+  "rulesCdl": "…rule, state and fill entries…",
   "compiledDefinition": { …normalized JSON AST… },
   "channelTemplates": {
     "html":     { "source": "…OCTL…", "compiledHash": "ab12…" },
@@ -1033,7 +1035,9 @@ A page template declares the frame of a page: the surrounding HTML, the `<head>`
 
 ```json
 {
-  "contentDefinition": "…CDL…",
+  "contentCdl": "…CDL: editors…",
+  "bodiesCdl": "…CDL: body declarations…",
+  "rulesCdl": "…CDL: rules…",
   "channelTemplates": {
     "html":     { "source": "…OCTL…" },
     "markdown": { "source": "…OCTL…" }
@@ -1051,7 +1055,7 @@ A page template declares the frame of a page: the surrounding HTML, the `<head>`
 
 `bodies` is authored explicitly (not only inferred from OCTL) so that allow-lists and cardinality can be declared; the compiler cross-checks it against the `$CMS_BODY` occurrences in every channel template and reports mismatches.
 
-`abstract` and `parentTemplateRef` were added by M20 and are absent (`false`/`null`) in data saved before it. `contentDefinition`, `compiledDefinition` and `bodies` are always the template's **own** definition; the inherited parts are computed (§13.3).
+`abstract` and `parentTemplateRef` were added by M20 and are absent (`false`/`null`) in data saved before it. The CDL sections (§14.9), `compiledDefinition` and `bodies` are always the template's **own** definition; the inherited parts are computed (§13.3).
 
 ### 13.3 Inheritance (M20)
 
@@ -1068,7 +1072,7 @@ A page template declares the frame of a page: the surrounding HTML, the `<head>`
 
 ### 14.1 Purpose and shape
 
-CDL declares *what an editor can fill in*. It is a small, readable, brace-based DSL. The authoring form is text (Monaco-edited, diffable, copy-pasteable); the persisted form additionally carries a normalized JSON AST for fast server-side validation.
+CDL declares *what an editor can fill in*. It is a small, readable, brace-based DSL. The authoring form is text (edited in code editors, one per section — §14.9; diffable, copy-pasteable); the persisted form additionally carries a normalized JSON AST for fast server-side validation.
 
 ### 14.2 Example
 
@@ -1321,6 +1325,21 @@ locales    = "all" | "[" "default" "]" | "[" LANG { "," LANG } "]"
 **Languages.** A rule runs once per language (with `locale` set) only when it reads a language-dependent value, `locale`, `release`, `body`, `section`, `global:` or `ref`; otherwise once. Its findings carry that `locale`. Edit and save evaluate every project language (or the requested one plus the default, §19.5); release the languages being released; generation the language being built.
 
 **Engine.** `RuleEngine` (`sf-domain`, pure) takes the effective definition, the content, a scope, the languages and a context provider and returns the outcome `{findings, fills, fieldStates}`; the built-in checks stay in `ContentValidator` and the engine adds them to its outcome, so every scope has one code path. Editors hidden by `visibleWhen` are skipped. Catalog cards are evaluated with their section templates' rules wherever a `catalog` editor sits — in a page, a body section, a record or a property set, through groups, list rows and nested catalogs: paths `<catalog>.cards[i].content.<field>`, `section` reads `page` (the enclosing top-level content), `catalog`, `index` and `template`. A `mode empty` fill whose value is empty writes nothing. The finding code of a custom rule is `rule` (with `rule` = its name); runtime codes are `rule-eval` (an evaluation error or limit, `warning`) and `read-only` (an ignored change, `info`).
+
+
+### 14.9 Sections as stored and edited (M34)
+
+A holder's CDL is stored and edited as its sections, not as one text: `contentCdl` (the text inside `content { … }`), `bodiesCdl` (inside `bodies { … }`, page templates only) and `rulesCdl` (inside `rules { … }`), each **without** its keyword and braces. Datasets and property sets have `contentCdl` and `rulesCdl`; a section template sends an empty `bodiesCdl` (a non-empty one is rejected on save: a section template has no bodies). The API, the payload (§12.1, §13.2) and `/cdl/validate` all take the three fields; there is no whole-text form.
+
+The compiler (`CdlCompiler.compile(CdlSources)`) lexes each section on its own and wraps it in its keyword and braces. A section's text can't close its own section: an unmatched `}` is `SF-CDL-0200` "Unmatched '}'" at its position (and dropped), an unclosed `{` is `SF-CDL-0200` "Missing '}'" at the end of the section. An empty bodies or rules section is left out.
+
+Every diagnostic names the source it is in with `field`: `content`, `bodies` or `rules` for a CDL section — with `line`/`column` relative to that section — and `channel:<key>` for a channel template (or a dataset's record template). A whole-definition finding without a position (e.g. a property set's catalog editor) is placed on `content`. Internally a section's lines are encoded as `section × 1 000 000 + line` in the definition's positions, which `Diagnostic` decodes, so rule diagnostics reported later (a page template's chain check) keep their section too.
+
+**One save, one revision.** The editors show the sections as tabs and save them together with everything else of the holder in one request, so one save is one revision (§7.1):
+
+- a template's single *Save template* sends the metadata, the CDL sections and **every** channel's source (`channelSources` of `PUT /{templateKind}/{uuid}`); adding or removing a channel only stages it until that save. The per-channel endpoints (`PUT`/`DELETE …/channels/{channelKey}`) remain in the API; the UI no longer uses them;
+- a dataset's *Save dataset* sends the sections and every record template (as before, M25);
+- a property set's single *Save* sends a schema change with the values edited against the stored schema (`PUT /globals/{uuid}/schema` with `content`): the values are saved as `PUT …/content` would, then migrated into the new schema, in one version. Values alone still go to `PUT …/content`, which an `EDITOR` may call.
 
 ---
 
@@ -2370,10 +2389,10 @@ Guard rails on disable, delete and system role: `409 SF-DOM-0131` (last active i
 | `GET`/`PUT`/`DELETE` | `/projects/{p}/section-templates/{uuid}` | |
 | `GET`/`POST` | `/projects/{p}/page-templates` | |
 | `GET`/`PUT`/`DELETE` | `/projects/{p}/page-templates/{uuid}` | |
-| `PUT` | `/projects/{p}/{templateKind}/{uuid}/channels/{channelKey}` | Set OCTL source |
+| `PUT` | `/projects/{p}/{templateKind}/{uuid}/channels/{channelKey}` | Set one OCTL source (the UI saves every channel with the template instead, §14.9) |
 | `DELETE` | `/projects/{p}/{templateKind}/{uuid}/channels/{channelKey}` | |
-| `POST` | `/projects/{p}/cdl/validate` | `{source}` → diagnostics |
-| `POST` | `/projects/{p}/octl/validate` | `{source, channelKey, templateUuid}` → diagnostics |
+| `POST` | `/projects/{p}/cdl/validate` | `{contentCdl, bodiesCdl?, rulesCdl?}` → diagnostics, each with its section in `field` (§14.9) |
+| `POST` | `/projects/{p}/octl/validate` | `{source, channelKey, templateUuid, contentCdl?, bodiesCdl?, rulesCdl?}` → diagnostics |
 
 **Datasets, record sets and records** (M19, M25) — full request/response shapes in `docs/api.md` §6.2–§6.3
 
@@ -3003,8 +3022,8 @@ EDITOR_REGISTRY: Map<EditorType, Type<EditorComponent>>
 
 - CodeMirror 6 with a custom OCTL language (M33): tokenizer for `$CMS_…$`, bracket matching, folding of block instructions, and completion on Ctrl+Space fed by the template's own CDL (instructions after `$`, the declared and inherited editor names inside an instruction).
 - Diagnostics: `POST /octl/validate` on a 500 ms debounce → markers with codes and quick links to the reference documentation.
-- Channel tabs across the top (`HTML | Markdown | + Add channel`); an unsaved indicator per tab.
-- Split view: CDL on the left, channel template on the right, sample-content preview below — a developer sees the effect of a declaration immediately.
+- Split view (M34): the CDL on the left, one tab per section (`Content | Bodies | Rules`; section templates have no Bodies tab), the channel templates on the right, one tab per channel (`html | md | + Add channel`); the two stack when the pane is too narrow. Every tab shows its error count and an unsaved dot; each keeps its own editor (and undo history) while another shows. Sample-content preview below is not built yet.
+- One *Save template* (and `Cmd/Ctrl+S`) writes the metadata, the CDL and every channel in one request — one revision (§14.9). Adding or removing a channel is staged until then (a removed channel can be restored before saving). A rejected save keeps every edit and opens the first failing CDL tab and channel tab. Datasets (Content | Rules beside their record templates) and property sets (Values | Schema, the schema as Content | Rules) work the same way.
 - "Where used" panel: pages and templates referencing this template, sourced from `asset_reference`.
 
 ### 23.8 Performance practices

@@ -22,6 +22,7 @@ import com.acme.staticforge.generate.GenerationTarget;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
@@ -96,7 +97,7 @@ class IncrementalPublishIntegrationTest {
 
     private void changeTemplate(Fixture fx, TemplateView template, String html) {
         TemplateView now = templateService.get(fx.projectId(), template.uuid());
-        templateService.update(template.uuid(), new UpdateTemplateCommand(now.displayName(), "", Map.of("html", html), null,
+        templateService.update(template.uuid(), new UpdateTemplateCommand(now.displayName(), CdlSources.split(""), Map.of("html", html), null,
                 false, Map.of("html", "{displayNameSlug}.{ext}"), false, Map.of()), now.validFromRevision(), fx.ctx());
     }
 

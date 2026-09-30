@@ -31,6 +31,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.scheduler.ScheduledAction;
 import com.acme.staticforge.scheduler.SchedulerEngine;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -354,7 +355,7 @@ class ScheduleApiTest {
         Project project = projects.create(new CreateProjectRequest(prefix.replace("-", "") + n, prefix + n, null, "schedule api"),
                 admin.getId());
         RevisionContext ctx = RevisionContext.of(project.getId(), admin.getId(), "schedule api");
-        TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CDL,
+        TemplateView template = templates.create(new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Page", CdlSources.split(CDL),
                 Map.of("html", "<h1>$CMS_VALUE(title)$</h1>"), null, false, Map.of()), ctx);
         GenerationTarget target;
         try {

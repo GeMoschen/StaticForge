@@ -30,6 +30,7 @@ import com.acme.staticforge.generate.insight.RebuildStep;
 import com.acme.staticforge.generate.plan.BuildPlan;
 import com.acme.staticforge.generate.plan.PlanEntry;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -175,7 +176,7 @@ class GenerationRulesIntegrationTest {
         Fixture fx = fixtures.project("m33ref");
         AssetVersionView folder = folderService.create(null, "Branding", FolderScope.GLOBALS, fx.ctx());
         GlobalSetView site = globalSetService.create(new CreateGlobalSetCommand(
-                fx.projectId(), folder.uuid(), "Site", "content { editor text title { } }"), fx.ctx());
+                fx.projectId(), folder.uuid(), "Site", CdlSources.split("content { editor text title { } }")), fx.ctx());
         globalSetService.updateValues(site.uuid(), mapper.createObjectNode().put("title", "Acme"), site.revision(), fx.ctx());
         TemplateView template = fixtures.pageTemplate(fx, "Article", """
                 content { editor text title { } }

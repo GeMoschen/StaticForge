@@ -1,6 +1,7 @@
 package com.acme.staticforge.asset.dataset;
 
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.List;
 import java.util.Optional;
@@ -72,5 +73,5 @@ public interface DatasetService {
      *
      * @throws com.acme.staticforge.common.SfException {@code 404} for a uuid that is not a dataset of the project
      */
-    List<Diagnostic> validateRecordTemplate(long projectId, UUID uuid, String channelKey, String source, String cdlSource);
+    List<Diagnostic> validateRecordTemplate(long projectId, UUID uuid, String channelKey, String source, CdlSources cdlSource);
 }

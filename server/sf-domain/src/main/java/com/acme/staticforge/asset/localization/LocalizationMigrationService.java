@@ -18,6 +18,7 @@ import com.acme.staticforge.revision.ChangeType;
 import com.acme.staticforge.revision.Revision;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -373,7 +374,7 @@ public class LocalizationMigrationService {
         }
         // Global sets store their compiled schema with their values (M17); records point at their
         // dataset's schema, which the dataset asset holds.
-        if (payload.has("contentDefinition") || payload.has("compiledDefinition")) {
+        if (CdlSources.presentIn(payload) || payload.has("compiledDefinition")) {
             return TemplateContentDefinitions.of(payload);
         }
         String schemaRef = payload.path("datasetRef").asText(null);

@@ -16,6 +16,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -60,7 +61,7 @@ class PreviewRenderLimitsIntegrationTest {
                 a.uuid(), "html", "A[$CMS_INCLUDE(section_template:" + b.uid() + ")$]", current.validFromRevision(), ctx);
 
         TemplateView pageTemplate = templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Cycle Page Template", "",
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Cycle Page Template", CdlSources.split(""),
                         Map.of("html", "<main>$CMS_INCLUDE(section_template:" + a.uid() + ")$</main>"), null, false, null, null),
                 ctx);
         ObjectNode payload = mapper.createObjectNode();
@@ -89,11 +90,11 @@ class PreviewRenderLimitsIntegrationTest {
         RevisionContext ctx = RevisionContext.of(project.getId(), user.getId(), "nested catalog preview");
         String catalogCdl = "content { editor catalog related { label \"Related\" } }";
         TemplateView card = templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.SECTION_TEMPLATE, "Card", catalogCdl,
+                new CreateTemplateCommand(project.getId(), AssetType.SECTION_TEMPLATE, "Card", CdlSources.split(catalogCdl),
                         Map.of("html", "card[$CMS_VALUE(related)$]"), null, false, null, null),
                 ctx);
         TemplateView pageTemplate = templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Cards Page Template", catalogCdl,
+                new CreateTemplateCommand(project.getId(), AssetType.PAGE_TEMPLATE, "Cards Page Template", CdlSources.split(catalogCdl),
                         Map.of("html", "<main>$CMS_VALUE(related)$</main>"), null, false, null, null),
                 ctx);
         ObjectNode innermost = mapper.createObjectNode();
@@ -119,7 +120,7 @@ class PreviewRenderLimitsIntegrationTest {
 
     private TemplateView section(Project project, RevisionContext ctx, String name, String html) {
         return templateService.create(
-                new CreateTemplateCommand(project.getId(), AssetType.SECTION_TEMPLATE, name, "",
+                new CreateTemplateCommand(project.getId(), AssetType.SECTION_TEMPLATE, name, CdlSources.split(""),
                         Map.of("html", html), null, false, null, null),
                 ctx);
     }

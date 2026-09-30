@@ -18,6 +18,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.search.SearchHit;
 import com.acme.staticforge.search.SearchIndexer;
 import com.acme.staticforge.search.SearchService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -92,20 +93,20 @@ final class SearchFixtures {
 
     TemplateView pageTemplate(Fixture fx, String name) {
         return templates.create(new CreateTemplateCommand(
-                fx.projectId(), AssetType.PAGE_TEMPLATE, name, PAGE_CDL, Map.of("html", PAGE_HTML), null, false,
+                fx.projectId(), AssetType.PAGE_TEMPLATE, name, CdlSources.split(PAGE_CDL), Map.of("html", PAGE_HTML), null, false,
                 Map.of("html", "{displayNameSlug}.{ext}")), fx.ctx());
     }
 
     TemplateView sectionTemplate(Fixture fx, String name, String cdl, String html) {
         return templates.create(new CreateTemplateCommand(
-                fx.projectId(), AssetType.SECTION_TEMPLATE, name, cdl, Map.of("html", html), null, false, null), fx.ctx());
+                fx.projectId(), AssetType.SECTION_TEMPLATE, name, CdlSources.split(cdl), Map.of("html", html), null, false, null), fx.ctx());
     }
 
     TemplateView updateTemplate(Fixture fx, UUID uuid, String cdl, String html) {
         TemplateView now = templates.get(fx.projectId(), uuid);
         return templates.update(
                 uuid,
-                new UpdateTemplateCommand(now.displayName(), cdl, Map.of("html", html), null, false, Map.of(), false, Map.of()),
+                new UpdateTemplateCommand(now.displayName(), CdlSources.split(cdl), Map.of("html", html), null, false, Map.of(), false, Map.of()),
                 now.validFromRevision(),
                 fx.ctx());
     }

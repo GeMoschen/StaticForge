@@ -98,8 +98,7 @@ npm start
 ```
 
 This boots the Angular dev server (default `http://localhost:4200`) with hot reload. Point
-it at a running backend via the environment proxy config (e.g. `ng serve --proxy-config
-proxy.conf.json`, if present).
+it at a running backend via the environment proxy config (e.g. `ng serve --proxy-config proxy.conf.json`, if present).
 
 ## Profiles
 

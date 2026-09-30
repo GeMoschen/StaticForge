@@ -2,6 +2,7 @@
   <p class="global-detail__loading">Loading property set…</p>
 } @else {
   @if (detail(); as set) {
+    <div class="global-detail" (keydown)="onKeydown($event)">
     <header class="global-detail__header">
       <div class="global-detail__title">
         <h2>{{ set.displayName ?? set.uid }}</h2>
@@ -17,8 +18,12 @@
         <sf-icon [name]="copied() ? 'check' : 'content_copy'" />
         <code>{{ usageSnippet() }}</code>
       </button>
+      <sf-button variant="primary" [disabled]="saving() || !dirty() || timeTravelling()" (click)="save()">Save</sf-button>
       <sf-button variant="secondary" (click)="close()">Close</sf-button>
     </header>
+    @if (dirty() && !timeTravelling()) {
+      <p class="global-detail__hint" role="status">Unsaved changes — values and schema save together.</p>
+    }
     <sf-release-bar
       [projectKey]="projectKey()"
       [assetUuid]="set.uuid"
@@ -41,6 +46,9 @@
         (click)="showValues()"
       >
         Values
+        @if (valuesDirty() && canEditValues()) {
+          <span class="global-detail__tab-dirty" aria-hidden="true">•</span><span class="sf-sr-only"> (unsaved)</span>
+        }
       </button>
       <button
         type="button"
@@ -50,6 +58,9 @@
         (click)="showSchema()"
       >
         Schema
+        @if (schemaDirty() && canEditSchema()) {
+          <span class="global-detail__tab-dirty" aria-hidden="true">•</span><span class="sf-sr-only"> (unsaved)</span>
+        }
       </button>
     </div>
 
@@ -83,43 +94,29 @@
           </div>
         }
 
-        <div class="actions">
-          <sf-button
-            variant="primary"
-            [disabled]="savingValues() || !canEditValues()"
-            (click)="saveValues()"
-          >
-            Save values
-          </sf-button>
-        </div>
         @if (!canEditValues() && !timeTravelling()) {
           <p class="global-detail__hint">You need the editor role to change these values.</p>
         }
       </section>
     } @else {
       <section class="panel" role="tabpanel" aria-label="Schema">
-        <sf-field
+        <p class="global-detail__hint">
+          Declares the fields this property set exposes. No bodies and no catalog editors — a set has no page.
+        </p>
+        <sf-cdl-sections-editor
           label="Content definition (CDL)"
-          hint="Declares the fields this property set exposes. No bodies and no catalog editors — a set has no page."
-        >
-          <sf-code-editor
-            language="cdl"
-            label="Content definition (CDL)"
-            [value]="contentDefinition()"
-            [diagnostics]="cdlDiagnostics()"
-            [readOnly]="!canEditSchema()"
-            (valueChange)="onContentDefinitionInput($event)"
-          />
-        </sf-field>
+          [value]="sections()"
+          [saved]="savedSections()"
+          [sections]="cdlTabs"
+          [selected]="cdlTab()"
+          [diagnostics]="cdlDiagnostics()"
+          [readOnly]="!canEditSchema()"
+          [names]="declaredNames()"
+          (selectedChange)="cdlTab.set($event)"
+          (sectionChange)="onSectionInput($event)"
+        />
         <div class="actions">
           <sf-button variant="secondary" (click)="validateCdl()">Validate</sf-button>
-          <sf-button
-            variant="primary"
-            [disabled]="savingSchema() || !canEditSchema()"
-            (click)="saveSchema()"
-          >
-            Save schema
-          </sf-button>
           <sf-button variant="secondary" [disabled]="!canEditSchema()" (click)="deleteSet()">
             Delete property set
           </sf-button>
@@ -127,25 +124,8 @@
         @if (!canEditSchema() && !timeTravelling()) {
           <p class="global-detail__hint">You need the developer role to change this schema.</p>
         }
-
-        @if (cdlDiagnostics().length > 0) {
-          <div class="diagnostics" aria-live="polite">
-            @for (diag of cdlDiagnostics(); track $index) {
-              <div
-                class="diagnostic"
-                [class.diagnostic--error]="diag.severity === 'ERROR'"
-                [class.diagnostic--warning]="diag.severity !== 'ERROR'"
-              >
-                {{ diag.severity }} {{ diag.code }}
-                @if (diag.line) {
-                  ({{ diag.line }}:{{ diag.column }})
-                }
-                — {{ diag.message }}
-              </div>
-            }
-          </div>
-        }
       </section>
     }
+    </div>
   }
 }

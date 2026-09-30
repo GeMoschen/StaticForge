@@ -54,6 +54,7 @@ import com.acme.staticforge.project.ProjectLocale;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.JwtService;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -135,7 +136,7 @@ class PaginationIntegrationTest {
 
         assertThatThrownBy(() -> templateService.create(new CreateTemplateCommand(
                         fx.project().getId(), AssetType.SECTION_TEMPLATE, "List section",
-                        "content { editor pagination posts { } }", Map.of("html", "x"), null, false, Map.of()),
+                        CdlSources.split("content { editor pagination posts { } }"), Map.of("html", "x"), null, false, Map.of()),
                 fx.ctx()))
                 .isInstanceOf(SfException.class)
                 .satisfies(e -> assertThat(diagnosticCodes((SfException) e)).containsExactly("SF-CDL-0110"));
@@ -143,7 +144,7 @@ class PaginationIntegrationTest {
                 .isInstanceOf(SfException.class)
                 .satisfies(e -> assertThat(diagnosticCodes((SfException) e)).containsExactly("SF-CDL-0111"));
         assertThatThrownBy(() -> templateService.create(new CreateTemplateCommand(
-                        fx.project().getId(), AssetType.PAGE_TEMPLATE, "Bad pattern", BLOG_CDL, Map.of("html", "x"), null, false,
+                        fx.project().getId(), AssetType.PAGE_TEMPLATE, "Bad pattern", CdlSources.split(BLOG_CDL), Map.of("html", "x"), null, false,
                         Map.of(), null, false, Map.of("html", "{pagePath}-page.{ext}")),
                 fx.ctx()))
                 .isInstanceOf(SfException.class)
@@ -174,7 +175,7 @@ class PaginationIntegrationTest {
 
         // A section template listing the items: sections inherit CMS_PAGINATION from the page.
         TemplateView listSection = templateService.create(new CreateTemplateCommand(
-                        fx.project().getId(), AssetType.SECTION_TEMPLATE, "Post list " + SEQ.incrementAndGet(), "",
+                        fx.project().getId(), AssetType.SECTION_TEMPLATE, "Post list " + SEQ.incrementAndGet(), CdlSources.split(""),
                         Map.of("html", "<ul>$CMS_FOR(post : CMS_PAGINATION.items)$<li><a class=\"item\" href=\"$CMS_VALUE(post.href)$\">"
                                 + "$CMS_VALUE(post.displayName)$</a> $CMS_VALUE(post.content.teaser)$</li>$CMS_END_FOR$</ul>"),
                         null, false, Map.of()),
@@ -325,7 +326,7 @@ class PaginationIntegrationTest {
         GenerationTarget target = createTarget(fx);
         DatasetView team = datasetService.create(new CreateDatasetCommand(
                 fx.project().getId(), null, "Team " + SEQ.incrementAndGet(),
-                "content { editor text name { label \"Name\" } }", "name", null), fx.ctx());
+                CdlSources.split("content { editor text name { label \"Name\" } }"), "name", null), fx.ctx());
         UUID members = new RecordSetFixtures(recordSetService).setFor(fx.project().getId(), team.uuid(), null, fx.ctx());
         for (String name : List.of("Cy", "Ada", "Bo")) {
             recordService.create(new CreateRecordCommand(fx.project().getId(), members,
@@ -487,7 +488,7 @@ class PaginationIntegrationTest {
 
     private TemplateView pageTemplate(Fixture fx, String name, String cdl, String html, Map<String, String> outputPath) {
         return templateService.create(
-                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, name + " " + SEQ.incrementAndGet(), cdl,
+                new CreateTemplateCommand(fx.project().getId(), AssetType.PAGE_TEMPLATE, name + " " + SEQ.incrementAndGet(), CdlSources.split(cdl),
                         Map.of("html", html), null, false, outputPath),
                 fx.ctx());
     }

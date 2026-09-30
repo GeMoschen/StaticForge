@@ -2560,7 +2560,9 @@ export interface components {
         };
         UpdateTemplateRequest: {
             displayName?: string;
-            contentDefinition?: string;
+            contentCdl?: string;
+            bodiesCdl?: string;
+            rulesCdl?: string;
             channelSources?: {
                 [key: string]: string;
             };
@@ -2590,6 +2592,7 @@ export interface components {
             line?: number;
             /** Format: int32 */
             column?: number;
+            field?: string;
         };
         InheritedFrom: {
             editors?: {
@@ -2607,7 +2610,9 @@ export interface components {
             displayName?: string;
             /** Format: int64 */
             revision?: number;
-            contentDefinition?: string;
+            contentCdl?: string;
+            bodiesCdl?: string;
+            rulesCdl?: string;
             compiledDefinition?: components["schemas"]["JsonNode"];
             channelTemplates?: components["schemas"]["JsonNode"];
             category?: string;
@@ -3044,7 +3049,9 @@ export interface components {
             confirmDiscard?: boolean;
         };
         UpdateGlobalSetSchemaRequest: {
-            contentDefinition?: string;
+            contentCdl?: string;
+            rulesCdl?: string;
+            content?: components["schemas"]["JsonNode"];
             comment?: string;
         };
         GlobalSetDetailView: {
@@ -3053,7 +3060,8 @@ export interface components {
             uid?: string;
             displayName?: string;
             folderPath?: string;
-            contentDefinition?: string;
+            contentCdl?: string;
+            rulesCdl?: string;
             compiledDefinition?: components["schemas"]["JsonNode"];
             content?: components["schemas"]["JsonNode"];
             /** Format: int64 */
@@ -3092,7 +3100,8 @@ export interface components {
         };
         UpdateDatasetRequest: {
             displayName?: string;
-            contentDefinition?: string;
+            contentCdl?: string;
+            rulesCdl?: string;
             titleEditor?: string;
             description?: string;
             channelTemplates?: {
@@ -3115,7 +3124,8 @@ export interface components {
             /** Format: uuid */
             folderUuid?: string;
             folderPath?: string;
-            contentDefinition?: string;
+            contentCdl?: string;
+            rulesCdl?: string;
             compiledDefinition?: components["schemas"]["JsonNode"];
             titleEditor?: string;
             description?: string;
@@ -3318,7 +3328,9 @@ export interface components {
         };
         CreateTemplateRequest: {
             displayName?: string;
-            contentDefinition?: string;
+            contentCdl?: string;
+            bodiesCdl?: string;
+            rulesCdl?: string;
             channelSources?: {
                 [key: string]: string;
             };
@@ -3552,7 +3564,9 @@ export interface components {
             source?: string;
             channelKey?: string;
             templateUuid?: string;
-            contentDefinition?: string;
+            contentCdl?: string;
+            bodiesCdl?: string;
+            rulesCdl?: string;
             datasetUuid?: string;
         };
         OctlValidateResponse: {
@@ -3643,7 +3657,8 @@ export interface components {
             /** Format: uuid */
             parentFolderUuid?: string;
             displayName?: string;
-            contentDefinition?: string;
+            contentCdl?: string;
+            rulesCdl?: string;
             comment?: string;
         };
         GenerationRequestDto: {
@@ -3862,7 +3877,8 @@ export interface components {
             /** Format: uuid */
             parentFolderUuid?: string;
             displayName?: string;
-            contentDefinition?: string;
+            contentCdl?: string;
+            rulesCdl?: string;
             titleEditor?: string;
             description?: string;
             channelTemplates?: {
@@ -3894,7 +3910,9 @@ export interface components {
             copyFrom?: string;
         };
         CdlValidateRequest: {
-            source?: string;
+            contentCdl?: string;
+            bodiesCdl?: string;
+            rulesCdl?: string;
         };
         CdlValidateResponse: {
             diagnostics?: components["schemas"]["Diagnostic"][];

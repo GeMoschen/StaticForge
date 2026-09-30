@@ -1,6 +1,7 @@
 package com.acme.staticforge.asset.template;
 
 import com.acme.staticforge.template.cdl.CdlCompiler;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.octl.ChainCompileMemo;
 import com.acme.staticforge.template.octl.OctlCompiler;
@@ -30,9 +31,9 @@ final class MeteredTemplateCompiler {
     }
 
     /** Compiles CDL source; like every render path, a definition with errors is used best-effort. */
-    ContentDefinition definition(String cdlSource) {
+    ContentDefinition definition(CdlSources cdlSource) {
         cdlCompiles.increment();
-        return cdlCompiler.compile(cdlSource == null ? "" : cdlSource).definition();
+        return cdlCompiler.compile(cdlSource).definition();
     }
 
     OctlResult channel(String octlSource, String channel, ReferenceResolver resolver, ContentDefinition definition) {

@@ -2,6 +2,7 @@ package com.acme.staticforge.asset.template;
 
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import java.util.List;
 import java.util.UUID;
@@ -62,7 +63,7 @@ public interface TemplateService {
      * and names are checked against its effective definition. {@code cdlSource} replaces the stored CDL when not
      * {@code null}, so unsaved editors count.
      */
-    List<Diagnostic> validateChannel(long projectId, UUID uuid, String channelKey, String source, String cdlSource);
+    List<Diagnostic> validateChannel(long projectId, UUID uuid, String channelKey, String source, CdlSources cdlSource);
 
     /** Soft-deletes the template via the asset service. */
     void delete(UUID uuid, RevisionContext ctx);

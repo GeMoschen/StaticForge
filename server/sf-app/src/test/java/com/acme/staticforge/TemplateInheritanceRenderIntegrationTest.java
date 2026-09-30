@@ -38,6 +38,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
@@ -165,7 +166,7 @@ class TemplateInheritanceRenderIntegrationTest {
     private TemplateView template(
             RevisionContext ctx, long projectId, String name, String cdl, Map<String, String> channels, boolean abstractTemplate) {
         return templateService.create(new CreateTemplateCommand(
-                projectId, AssetType.PAGE_TEMPLATE, name, cdl, channels, null, false,
+                projectId, AssetType.PAGE_TEMPLATE, name, CdlSources.split(cdl), channels, null, false,
                 Map.of("html", "{displayNameSlug}.{ext}", "markdown", "{displayNameSlug}.{ext}"), null, abstractTemplate), ctx);
     }
 
@@ -173,7 +174,7 @@ class TemplateInheritanceRenderIntegrationTest {
             RevisionContext ctx, long projectId, TemplateView template, String cdl, Map<String, String> channels, boolean abstractTemplate) {
         TemplateView current = templateService.get(projectId, template.uuid());
         templateService.update(template.uuid(), new UpdateTemplateCommand(
-                current.displayName(), cdl, channels, null, false,
+                current.displayName(), CdlSources.split(cdl), channels, null, false,
                 Map.of("html", "{displayNameSlug}.{ext}", "markdown", "{displayNameSlug}.{ext}"), abstractTemplate),
                 current.validFromRevision(), ctx);
     }

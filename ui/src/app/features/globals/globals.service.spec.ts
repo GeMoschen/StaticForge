@@ -59,13 +59,26 @@ describe('GlobalsService', () => {
    * Schema and values are separate endpoints because they carry separate permissions; a single
    * PUT would force the server to infer the role from which fields changed.
    */
-  it('puts the schema to /schema with If-Match', () => {
-    service.updateSchema('proj1', 'set-uuid', 'content { }', etagFor(4)).subscribe();
+  it('puts the schema sections to /schema with If-Match', () => {
+    service
+      .updateSchema('proj1', 'set-uuid', { content: 'editor text a { }', bodies: '', rules: '' }, undefined, etagFor(4))
+      .subscribe();
 
     const req = httpMock.expectOne('/api/v1/projects/proj1/globals/set-uuid/schema');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ contentDefinition: 'content { }' });
+    expect(req.request.body).toEqual({ contentCdl: 'editor text a { }', rulesCdl: '' });
     expect(req.request.headers.get('If-Match')).toBe('"rev-4"');
+    req.flush({});
+  });
+
+  /** M34: the detail's one Save sends edited values along with a schema change — one revision. */
+  it('sends edited values along with the schema', () => {
+    service
+      .updateSchema('proj1', 'set-uuid', { content: 'editor text a { }', bodies: '', rules: '' }, { a: 'x' }, etagFor(4))
+      .subscribe();
+
+    const req = httpMock.expectOne('/api/v1/projects/proj1/globals/set-uuid/schema');
+    expect(req.request.body).toEqual({ contentCdl: 'editor text a { }', rulesCdl: '', content: { a: 'x' } });
     req.flush({});
   });
 
@@ -81,14 +94,14 @@ describe('GlobalsService', () => {
 
   it('creates a set with its starting CDL', () => {
     service
-      .create('proj1', { displayName: 'Site', contentDefinition: 'content { }', parentFolderUuid: 'f-1' })
+      .create('proj1', { displayName: 'Site', contentCdl: 'editor text a { }', parentFolderUuid: 'f-1' })
       .subscribe();
 
     const req = httpMock.expectOne('/api/v1/projects/proj1/globals');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
       displayName: 'Site',
-      contentDefinition: 'content { }',
+      contentCdl: 'editor text a { }',
       parentFolderUuid: 'f-1',
     });
     req.flush({});
@@ -96,7 +109,7 @@ describe('GlobalsService', () => {
 
   /** Without `kind=GLOBAL_SET` the editor would green-light CDL the save then rejects. */
   it('validates CDL with the property-set restrictions applied', () => {
-    service.validateCdl('proj1', 'content { }').subscribe();
+    service.validateCdl('proj1', { content: '', bodies: '', rules: '' }).subscribe();
 
     const req = httpMock.expectOne((r) => r.url === '/api/v1/projects/proj1/cdl/validate');
     expect(req.request.method).toBe('POST');

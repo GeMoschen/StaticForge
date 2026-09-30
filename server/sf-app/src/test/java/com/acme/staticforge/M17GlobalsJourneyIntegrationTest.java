@@ -43,6 +43,7 @@ import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.revision.RevisionRepository;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -133,13 +134,13 @@ class M17GlobalsJourneyIntegrationTest {
                         fx.project().getId(),
                         null,
                         "Site",
-                        """
+                        CdlSources.split("""
                         content {
                           editor text title { label "Site title" required }
                           editor media logo { label "Logo" }
                           editor boolean showBanner { label "Show banner" default false }
                         }
-                        """),
+                        """)),
                 fx.ctx());
         assertThat(site.uid()).isEqualTo("site");
 
@@ -225,13 +226,13 @@ class M17GlobalsJourneyIntegrationTest {
         long revisionsBeforeRename = revisionCount(fx);
         GlobalSetView renamedSchema = globalSetService.updateSchema(
                 site.uuid(),
-                """
+                CdlSources.split("""
                 content {
                   editor text siteTitle { label "Site title" required renamedFrom "title" }
                   editor media logo { label "Logo" }
                   editor boolean showBanner { label "Show banner" default false }
                 }
-                """,
+                """),
                 retitled.revision(),
                 fx.ctx());
         assertThat(revisionCount(fx)).isEqualTo(revisionsBeforeRename + 1);
@@ -291,7 +292,7 @@ class M17GlobalsJourneyIntegrationTest {
                         fx.project().getId(),
                         AssetType.PAGE_TEMPLATE,
                         displayName,
-                        "",
+                        CdlSources.split(""),
                         Map.of("html", html),
                         null,
                         false,

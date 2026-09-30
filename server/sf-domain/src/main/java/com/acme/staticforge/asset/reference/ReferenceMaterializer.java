@@ -13,6 +13,7 @@ import com.acme.staticforge.asset.media.TextMediaCompiler;
 import com.acme.staticforge.asset.media.TextMediaTypes;
 import com.acme.staticforge.revision.RevisionAware;
 import com.acme.staticforge.template.cdl.CdlCompiler;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.octl.CompiledTemplate;
 import com.acme.staticforge.template.octl.OctlCompiler;
@@ -235,8 +236,8 @@ public class ReferenceMaterializer {
      * the planner walks {@code parentTemplateRef} to its children.
      */
     private List<ExtractedReference> ruleReferences(long projectId, JsonNode payload) {
-        String cdl = payload.path("contentDefinition").asText("");
-        if (!cdl.contains("global:")) {
+        CdlSources cdl = CdlSources.of(payload);
+        if (!cdl.text().contains("global:")) {
             return List.of();
         }
         ContentDefinition definition = cdlCompiler.compile(cdl).definition();

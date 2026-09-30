@@ -150,3 +150,16 @@
   user never wanted and had to be removed again.
 - **Rule:** when a plan widens the user's request (every folder instead of the one case, a new setting instead of a fix),
   name that widening as its own question in the plan and get it confirmed before building it.
+
+## A reload after a save must not take back newer edits (2026-09-30)
+- **Mistake (found by the M20 journey in M34):** the Templates screen saved, then reloaded the template and reset every
+  buffer from the reload. Anything typed between the save's answer and the reload's was silently replaced by the saved
+  text — the journey's next edit vanished and Save went grey.
+- **Rule:** a follow-up read after a save refreshes derived data but resets the form only while it is still unchanged
+  since that save (compare against the dirty state before applying). Test it: save, type, then flush the reload.
+
+## `[hidden]` loses to `display` (2026-09-30)
+- **Mistake:** per-channel panels were switched with `[hidden]`, but their class set `display: flex`, which beats the
+  UA's `[hidden] { display: none }` — every panel showed at once.
+- **Rule:** an element toggled with `hidden` whose styles set `display` needs an explicit `.x[hidden] { display: none; }`.
+

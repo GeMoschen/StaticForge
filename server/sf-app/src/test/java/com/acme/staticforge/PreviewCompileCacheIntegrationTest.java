@@ -14,6 +14,7 @@ import com.acme.staticforge.project.CreateProjectRequest;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
+import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,7 +54,7 @@ class PreviewCompileCacheIntegrationTest {
 
         AssetVersionView target = page(projectId, ctx, "Target", null);
         TemplateView template = templateService.create(
-                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Cache Template", "",
+                new CreateTemplateCommand(projectId, AssetType.PAGE_TEMPLATE, "Cache Template", CdlSources.split(""),
                         Map.of("html", "v1[$CMS_REF(page:" + target.uid() + ")$]"), null, false, null, null),
                 ctx);
         AssetVersionView home = page(projectId, ctx, "Home", template.uuid());

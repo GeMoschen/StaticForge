@@ -110,6 +110,8 @@ const theme = EditorView.theme({
     // styles: its encapsulation would need the attribute Angular never puts on CodeMirror's elements.
     minHeight: 'var(--sf-code-min-height, 12rem)',
     maxHeight: 'var(--sf-code-max-height, 36rem)',
+    // A host that wants a fixed height (the template editors side by side) sets it; otherwise the editor grows with its text.
+    height: 'var(--sf-code-height, auto)',
   },
   '&.cm-focused': { outline: '2px solid var(--sf-signal)', outlineOffset: '-1px' },
   '.cm-content': { caretColor: 'var(--sf-ink)', fontFamily: 'var(--sf-font-mono)' },
@@ -144,6 +146,7 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
   const editable = new Compartment();
   const placeholders = new Compartment();
   const languages = new Compartment();
+  const attributes = new Compartment();
   let destroyed = false;
   let wanted = `${config.format}:${config.svg}`;
   const readOnlyExtension = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
@@ -156,7 +159,7 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
         languages.of(languageExtensions(config, loadedFormat(config.format, config.svg))),
         editable.of(readOnlyExtension(config.readOnly)),
         placeholders.of(config.placeholder ? placeholderExtension(config.placeholder) : []),
-        EditorView.contentAttributes.of({ 'aria-label': config.label, spellcheck: 'false' }),
+        attributes.of(EditorView.contentAttributes.of({ 'aria-label': config.label, spellcheck: 'false' })),
         EditorView.updateListener.of((update) => {
           // Only edits are reported: text the host put in (`value`) is its own already.
           if (update.docChanged && !update.transactions.some((tr) => tr.annotation(fromHost))) {
@@ -175,6 +178,11 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
     },
     setReadOnly(readOnly) {
       view.dispatch({ effects: editable.reconfigure(readOnlyExtension(readOnly)) });
+    },
+    setLabel(label) {
+      view.dispatch({
+        effects: attributes.reconfigure(EditorView.contentAttributes.of({ 'aria-label': label, spellcheck: 'false' })),
+      });
     },
     setPlaceholder(text) {
       view.dispatch({ effects: placeholders.reconfigure(text ? placeholderExtension(text) : []) });
