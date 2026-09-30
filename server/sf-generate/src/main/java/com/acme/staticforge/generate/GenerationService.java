@@ -54,6 +54,7 @@ import com.acme.staticforge.redirect.RedirectOutputs;
 import com.acme.staticforge.redirect.RedirectService;
 import com.acme.staticforge.redirect.RedirectService.AutoCandidate;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
+import com.acme.staticforge.template.diagnostic.DiagnosticPage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -1322,7 +1323,9 @@ public class GenerationService {
      * A run's diagnostics: {@code errors} and {@code warnings} grouped by code ({@code [{code, count, messages}]}) and,
      * when the quality checks held pages back (M30.6.2), {@code heldBack}: one
      * {@code {asset, uid, channel, locale, codes}} per page, channel and language — the {@code SF-GEN-0125} errors as
-     * data, so clients can link them to the page's findings without reading the message.
+     * data, so clients can link them to the page's findings without reading the message. An entry of a code whose
+     * findings are about pages (M35.1, {@code SF-GEN-0111}) also has {@code pages}: {@code [{uuid, uid, displayName,
+     * path}]}, at most {@link Diagnostic#MAX_PAGES}; absent for the others and for runs stored before.
      */
     private JsonNode diagnosticsJson(
             List<Diagnostic> errors, List<Diagnostic> warnings, List<QualityCheckStage.HeldBackPage> heldBack) {
@@ -1346,8 +1349,12 @@ public class GenerationService {
 
     private ArrayNode groupByCode(List<Diagnostic> diagnostics) {
         Map<String, List<String>> byCode = new LinkedHashMap<>();
+        Map<String, Map<UUID, DiagnosticPage>> pagesByCode = new LinkedHashMap<>();
         for (Diagnostic diagnostic : diagnostics) {
             byCode.computeIfAbsent(diagnostic.code(), k -> new ArrayList<>()).add(diagnostic.message());
+            for (DiagnosticPage page : diagnostic.pages()) {
+                pagesByCode.computeIfAbsent(diagnostic.code(), k -> new LinkedHashMap<>()).putIfAbsent(page.uuid(), page);
+            }
         }
         ArrayNode array = mapper.createArrayNode();
         byCode.forEach((code, messages) -> {
@@ -1356,6 +1363,17 @@ public class GenerationService {
             entry.put("count", messages.size());
             ArrayNode messagesNode = entry.putArray("messages");
             messages.forEach(messagesNode::add);
+            Map<UUID, DiagnosticPage> pages = pagesByCode.get(code);
+            if (pages != null) {
+                ArrayNode pagesNode = entry.putArray("pages");
+                pages.values().stream().limit(Diagnostic.MAX_PAGES).forEach(page -> {
+                    ObjectNode node = pagesNode.addObject();
+                    node.put("uuid", page.uuid().toString());
+                    node.put("uid", page.uid());
+                    node.put("displayName", page.displayName());
+                    node.put("path", page.path());
+                });
+            }
         });
         return array;
     }

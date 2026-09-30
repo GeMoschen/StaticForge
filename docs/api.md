@@ -109,6 +109,7 @@ The response adds what the caller has to warn about:
 | `retainedValueCount` | how many translations are still stored for those languages |
 | `confirmationRequired` | nothing was written: the change would discard translations — re-send with `?confirmDiscard=true` |
 | `discardedLocaleValues` / `affectedAssets` | how many translations, in how many assets, a confirmed change discards |
+| `warnings` / `warningCount` | M35: the page template channels whose `outputPath` lacks `{locale}` once the project has languages (`SF-GEN-0112`: a build would fail with `SF-GEN-0111`), `[{code, message, templateUuid, templateUid, templateName, channel, outputPath}]` by template name, the first 50; `warningCount` counts them all. The save is **not** blocked. Empty without languages, when `confirmationRequired`, and on `GET` |
 
 ### 3.2 Translation status (M24)
 
@@ -305,13 +306,18 @@ until the deletion is released.
 
 | Method | Path |
 |---|---|
-| `GET`/`POST` | `/projects/{projectKey}/pages` |
+| `GET`/`POST` | `/projects/{projectKey}/pages` (`GET`: `?folder=`, `?templateUuid=`, `?q=`, `?revision=`) |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/pages/{uuid}` |
 | `PATCH` | `/projects/{projectKey}/pages/{uuid}/content` (JSON-Merge-Patch) |
 | `POST` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/sections` |
 | `PUT` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/order` |
 | `DELETE` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/sections/{instanceId}` |
 | `POST` | `/projects/{projectKey}/pages/{uuid}/duplicate` |
+
+`GET /pages?revision=R` (M35, time travel) lists the pages as they were at revision `R`: pages deleted since are in it, pages
+created later are not, and `displayName`, `uid`, `folderPath`, `revision` and the `release` statuses are those of `R` (a
+uid changed since shows its old one; `scheduled` is always empty). The filters apply to that state. A revision before any
+page existed answers `[]`; `X-SF-Compacted: true` marks a snapshot that holds compacted history (§11).
 
 `nav.noIndex` (M30): a boolean in the page payload (`nav: {visible, position, label, noIndex}`), default `false`;
 a non-boolean value is `422`. A `noIndex` page leaves `sitemap.xml` and is `$CMS_META(noIndex)$` to its templates
@@ -378,9 +384,15 @@ Rate limited per user on the draft-check budget (`sf.preview.rate-limit.checks-p
 
 | Method | Path |
 |---|---|
-| `GET`/`POST` | `/projects/{projectKey}/folders` (`scope` = `PAGES`, `MEDIA`, `NAVIGATION`, `TEMPLATES`, `GLOBALS` or `CONTENT`) |
+| `GET`/`POST` | `/projects/{projectKey}/folders` (`scope` = `PAGES`, `MEDIA`, `NAVIGATION`, `TEMPLATES`, `GLOBALS` or `CONTENT`; `GET`: `?depth=`, `?revision=`) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/folders/{uuid}` |
 | `POST` | `/projects/{projectKey}/folders/{uuid}/move` |
+
+`GET /folders?scope=…&revision=R` (M35, time travel) answers the tree as it was at revision `R`: folders (and, in the
+`CONTENT` scope, record sets with their record counts) deleted since are in it, those created later are not, with
+`displayName`, `uid`, `path`, parents, `revision` and the `release` statuses of `R` (`scheduled` is always empty). It is
+the same read in a fixed number of queries, whatever the size of the tree. `X-SF-Compacted: true` marks a snapshot that
+holds compacted history (§11).
 
 Every node of the folder tree (and of `GET /navigation/tree`) carries its current `revision`, the `If-Match` a rename from the tree sends back.
 
@@ -622,7 +634,11 @@ run.
 
 Every build checks its HTML outputs (spec §18.8) and stores the findings with the run. `WARNING` findings never change
 the status or `warningCount`; an `ERROR` finding on an output the run rendered holds its page back with the file
-error `SF-GEN-0125` (run `PARTIAL`). The same pages are listed as data in the run's `diagnostics.heldBack` —
+error `SF-GEN-0125` (run `PARTIAL`). An `errors` entry of a finding that is about pages (`SF-GEN-0111`, M35) also lists
+them as data: `{"code": "SF-GEN-0111", "count": 1, "messages": [...], "pages": [{"uuid": "…", "uid": "about",
+"displayName": "About", "path": "/about"}]}` — at most 50 per code, `uid`/`displayName`/`path` `null` when the page was
+not in the build's snapshot; absent for other codes and for runs stored before M35, so clients treat it as optional and
+fall back to the message. The same pages are listed as data in the run's `diagnostics.heldBack` —
 `[{"asset": "<uuid>", "uid": "about", "channel": "html", "locale": "de", "codes": ["SF-CHK-0301"]}]` (`locale` `null`
 without languages; absent when nothing was held back) — for linking to their findings (`assetUuid` + `channel` +
 `locale`). The run view's `findingCounts` counts every finding, stored or not:
@@ -852,8 +868,8 @@ and their intervals absorbed by the last version of the day. Reads say so; proje
 - `GET /assets/{uuid}/versions/{revision}` and `POST /assets/{uuid}/restore` carry `compacted: true` when the version
   served (or restored) absorbed that revision: it shows a later, end-of-day state.
 - The typed time-travel reads (`?revision=` on media, property sets, datasets, records, record sets and the record-set
-  grid), `POST /projects/{key}/restore` and the draft preview at a revision answer the header `X-SF-Compacted: true`
-  instead (absent otherwise). The preview checks only the page itself; a published preview is never compacted.
+  grid, and the folder tree and page list), `POST /projects/{key}/restore` and the draft preview at a revision answer the
+  header `X-SF-Compacted: true` instead (absent otherwise). The preview checks only the page itself; a published preview is never compacted.
 - `GET /revisions/{r}/diff` carries `compacted` and `message` (`"Exact changes of this revision were compacted; the
   state at the end of the day is kept"`, `null` otherwise); an asset whose change was absorbed has `compacted: true`,
   `changes: []` and the summary's `action`, the others diff normally.
@@ -1192,8 +1208,8 @@ Defined across `generate.GenerationDiagnosticCodes` and `generate.GenerationServ
 | Code | Severity | Meaning | Raised by |
 |---|---|---|---|
 | `SF-GEN-0110` | error | output path collision | `RenderPipeline` (`COLLISION_CODE`) |
-| `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several content languages, so two languages would write the same file (M24). One finding per channel and path expression, naming the affected pages as `'uid' (Display name, /folder/uid)` (first five, then a count) (M35) | `RenderPipeline` (`NOT_LOCALE_DISTINCT_CODE`) |
-| `SF-GEN-0112` | warning | save-time counterpart of `SF-GEN-0111`: a page template's `outputPath` for a channel has no `{locale}` segment while the project has several content languages, so a build would fail. Returned as `warnings[]` (`field` = `outputPath:<channel>`) of the page template detail on read and save; not persisted (M35) | `DiagnosticCodes.GEN_OUTPUT_PATH_NOT_LOCALE_DISTINCT` (`AbstractTemplateController`) |
+| `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several content languages, so two languages would write the same file (M24). One finding per channel and path expression, naming the affected pages as `'uid' (Display name, /folder/uid)` (first five, then a count) and listing them as `pages` in the run's `diagnostics` (M35) | `RenderPipeline` (`NOT_LOCALE_DISTINCT_CODE`) |
+| `SF-GEN-0112` | warning | save-time counterpart of `SF-GEN-0111`: a page template's `outputPath` for a channel has no `{locale}` segment while the project has several content languages, so a build would fail. Returned as `warnings[]` (`field` = `outputPath:<channel>`) of the page template detail on read and save, and, for every page template it affects, as `warnings[]` of the language setup save `PUT /projects/{key}/locales` (§3.1); not persisted (M35) | `DiagnosticCodes.GEN_OUTPUT_PATH_NOT_LOCALE_DISTINCT` (`AbstractTemplateController`) |
 | `SF-GEN-0120` | error (per page) | content incomplete (a built-in or an editor rule `error` with `onGeneration holdBack`, M33); page held back, run `PARTIAL` | `GenerationDiagnosticCodes` (`RenderPipeline.validateContent`) |
 | `SF-GEN-0121` | error | an editor rule with `onGeneration fail` doesn't hold: one per page, language and rule, every page validated first; run `FAILED`, nothing rendered or published (M33) | `GenerationDiagnosticCodes.GEN_RULE_FAILED` (`RenderPipeline.validateContent`) |
 | `SF-GEN-0122` | warning / info | an editor rule's `warning` or `info` in the `generation` scope, naming rule, page and language; the page publishes; warnings count (and make the run `PARTIAL`), infos don't (M33) | `GenerationDiagnosticCodes.GEN_RULE_FINDING` |

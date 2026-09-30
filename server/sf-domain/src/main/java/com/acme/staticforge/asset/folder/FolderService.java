@@ -20,6 +20,13 @@ public interface FolderService {
     List<FolderNode> tree(long projectId, FolderScope scope, int depth, RevisionContext ctx);
 
     /**
+     * {@link #tree} as of revision {@code revision} (time travel): the folders (and record sets) live then — those
+     * deleted since included, those created later left out — with their names, uids, paths, parents and record counts
+     * as of then.
+     */
+    List<FolderNode> treeAt(long projectId, FolderScope scope, int depth, long revision);
+
+    /**
      * Creates a folder under {@code parentFolderUuid} (root when null). {@code scope} is
      * required at the root; a subfolder inherits its parent's scope (an explicit scope that
      * disagrees with the parent's is rejected).

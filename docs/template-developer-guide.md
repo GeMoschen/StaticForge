@@ -1283,8 +1283,10 @@ Switching on **Default language without URL prefix** puts the default language b
 
 Every page's effective path expression must contain `{locale}` once the project has languages, or two languages would
 write the same file; generation refuses the run with `SF-GEN-0111` before writing anything.
-Saving or opening a page template whose `outputPath` for a channel lacks it returns the warning `SF-GEN-0112`; the
-`SF-GEN-0111` finding of a run names each affected page (uid, name and path) once per channel and path expression.
+Saving or opening a page template whose `outputPath` for a channel lacks it returns the warning `SF-GEN-0112`, and so
+does saving the project's languages (Settings → Languages) for every page template it affects; the `SF-GEN-0111`
+finding of a run names each affected page (uid, name and path) once per channel and path expression, and the run
+details link them.
 
 `$CMS_REF(page:about)$` links to the target **in the render language**, relative to the page holding the link, so
 `en/pf/p2.html` links to `../about.html`. To cross languages deliberately, name one:
@@ -1562,7 +1564,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 |---|---|---|
 | `SF-GEN-0110` | error | output path collision |
 | `SF-GEN-0111` | error | a page's output path has no `{locale}` segment in a project with several languages, so two languages would write the same file; the run fails before anything renders. One finding per channel and path expression, naming the affected pages (uid, name, path) (M24, M35) |
-| `SF-GEN-0112` | warning | save-time counterpart of `SF-GEN-0111`: a page template's `outputPath` for a channel lacks `{locale}` while the project has several languages; returned as `warnings[]` of the template detail on read and save (M35) |
+| `SF-GEN-0112` | warning | save-time counterpart of `SF-GEN-0111`: a page template's `outputPath` for a channel lacks `{locale}` while the project has several languages; returned as `warnings[]` of the template detail on read and save and of the language setup save (M35) |
 | `SF-GEN-0120` | error (per page) | content incomplete: the page has `ERROR` completeness findings (an empty required editor, a count or length out of bounds, an editor rule `error` with `onGeneration holdBack`) and is not published; the message lists `path (message)`, other pages are written and the run ends `PARTIAL` |
 | `SF-GEN-0121` | error | an editor rule with `onGeneration fail` doesn't hold: one diagnostic per page, language and rule; every page is validated first, then the run ends `FAILED` and nothing is published |
 | `SF-GEN-0122` | warning / info | an editor rule's `warning` or `info` in the `generation` scope; the page publishes; a warning makes the run `PARTIAL`, an info doesn't |

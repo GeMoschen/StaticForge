@@ -40,6 +40,13 @@ class ReleaseBlocks {
         return out;
     }
 
+    /** {@link #of(long, Collection)} as of revision {@code revision} (time travel). */
+    Map<UUID, Map<String, LocaleReleaseView>> ofAt(long projectId, Collection<UUID> uuids, long revision) {
+        Map<UUID, Map<String, LocaleReleaseView>> out = new LinkedHashMap<>();
+        statuses.ofUuidsAt(projectId, uuids, revision).forEach((uuid, locales) -> out.put(uuid, view(locales)));
+        return out;
+    }
+
     /** The pending schedules touching one asset (empty when none). */
     List<ScheduledRefView> scheduled(long projectId, UUID uuid) {
         return scheduled(projectId, List.of(uuid)).getOrDefault(uuid, List.of());

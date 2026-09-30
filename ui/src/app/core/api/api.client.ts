@@ -411,10 +411,16 @@ export class ApiClient {
 
   // ── Folders ─────────────────────────────────────────────────────────────
 
-  listFolders(projectKey: string, scope: 'PAGES' | 'MEDIA' | 'NAVIGATION', depth?: number): Observable<S['FolderView'][]> {
+  /** The folder tree of a store; `revision` reads it as it was then (time travel): later deletions in, later creations out. */
+  listFolders(
+    projectKey: string,
+    scope: 'PAGES' | 'MEDIA' | 'NAVIGATION',
+    depth?: number,
+    revision?: number,
+  ): Observable<S['FolderView'][]> {
     return this.http.get<S['FolderView'][]>(`${BASE}/projects/${projectKey}/folders`, {
       withCredentials: true,
-      params: this.params({ scope, depth }),
+      params: this.params({ scope, depth, revision }),
     });
   }
 
@@ -531,9 +537,10 @@ export class ApiClient {
 
   // ── Pages ───────────────────────────────────────────────────────────────
 
+  /** The pages; `revision` lists them as they were then (time travel): later deletions in, later creations out. */
   listPages(
     projectKey: string,
-    opts: { folder?: string; templateUuid?: string; q?: string } = {},
+    opts: { folder?: string; templateUuid?: string; q?: string; revision?: number } = {},
   ): Observable<S['AssetSummaryView'][]> {
     return this.http.get<S['AssetSummaryView'][]>(
       `${BASE}/projects/${projectKey}/pages`,
@@ -978,7 +985,7 @@ export class ApiClient {
 
   listRevisions(
     projectKey: string,
-    opts?: { since?: number; userId?: number; assetUuid?: string; size?: number },
+    opts?: { since?: number; userId?: number; assetUuid?: string },
   ): Observable<S['RevisionView'][]> {
     return this.http.get<S['RevisionView'][]>(
       `${BASE}/projects/${projectKey}/revisions`,

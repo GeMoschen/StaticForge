@@ -15,6 +15,39 @@ describe('parseDiagnostics', () => {
     ]);
   });
 
+  it('reads the pages of a group (M35.1) and leaves them out of groups without', () => {
+    const groups = parseDiagnostics({
+      errors: [
+        {
+          code: 'SF-GEN-0111',
+          count: 1,
+          messages: ['m'],
+          pages: [
+            { uuid: 'p1', uid: 'about', displayName: 'About', path: '/about' },
+            { uuid: 'p2', uid: null, displayName: null, path: null },
+            { uid: 'no-uuid' },
+            'oops',
+          ],
+        },
+        { code: 'SF-GEN-0110', count: 1, messages: ['c'], pages: [] },
+      ],
+    });
+
+    expect(groups).toEqual([
+      {
+        severity: 'error',
+        code: 'SF-GEN-0111',
+        count: 1,
+        messages: ['m'],
+        pages: [
+          { uuid: 'p1', uid: 'about', displayName: 'About', path: '/about' },
+          { uuid: 'p2', uid: null, displayName: null, path: null },
+        ],
+      },
+      { severity: 'error', code: 'SF-GEN-0110', count: 1, messages: ['c'] },
+    ]);
+  });
+
   it('returns nothing for null or non-object input', () => {
     expect(parseDiagnostics(null)).toEqual([]);
     expect(parseDiagnostics(undefined)).toEqual([]);

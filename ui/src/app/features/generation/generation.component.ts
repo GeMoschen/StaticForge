@@ -10,11 +10,13 @@ import {
   untracked,
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable, Subscription, map } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { assetRoute } from '../../shared/asset-route.util';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
@@ -26,6 +28,7 @@ import {
   HELD_BACK_CODE,
   parseDiagnostics,
   parseHeldBack,
+  type DiagnosticPage,
   type HeldBackPage,
 } from './generation-diagnostics';
 import { GenerationRunEvent } from './generation-sse';
@@ -76,6 +79,7 @@ interface LiveSummary {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe,
+    RouterLink,
     SfButtonComponent,
     SfEmptyStateComponent,
     SfSpinnerComponent,
@@ -96,6 +100,7 @@ export class GenerationComponent implements OnDestroy {
   readonly openTab = input<string | null>(null);
 
   private readonly api = inject(GenerationService);
+  private readonly pagesApi = inject(ApiClient);
   /**
    * The route whose query holds the open findings view (`?run=&tab=findings&fSeverity=…`); absent where the component
    * is rendered outside a route, and then the findings view isn't kept in the URL.
@@ -137,6 +142,17 @@ export class GenerationComponent implements OnDestroy {
   /** The open tab of a run's details (M22.3.2). */
   readonly detailsTab = signal<DetailsTab>('summary');
   protected readonly heldBackCode = HELD_BACK_CODE;
+  /**
+   * The uuids of the project's pages, read while the details of a run whose diagnostics name pages are open: a page
+   * deleted since the build is listed as text instead of a link. `null` until read (and if the read fails).
+   */
+  private readonly livePages = signal<ReadonlySet<string> | null>(null);
+  /** The expanded run, when its diagnostics name pages (the id is what the effect below follows). */
+  private readonly expandedRunNamingPages = computed<number | null>(() => {
+    const id = this.expandedRunId();
+    const run = id === null ? undefined : this.runs().find((r) => r.id === id);
+    return run && this.diagnosticsOf(run).some((group) => (group.pages?.length ?? 0) > 0) ? id : null;
+  });
   private readonly runPlanFetches = new Map<number, (query: PlanEntryQuery) => Observable<EntryPage | undefined>>();
 
   private liveSub: Subscription | null = null;
@@ -150,6 +166,13 @@ export class GenerationComponent implements OnDestroy {
       });
     });
   }
+
+  private readonly pagesEffect = effect(() => {
+    if (this.expandedRunNamingPages() === null) {
+      return;
+    }
+    untracked(() => this.loadLivePages());
+  });
 
   /** Whether the history holds {@link openRun}: a refreshed history doesn't reopen details the user closed. */
   private readonly openRunListed = computed(() => {
@@ -335,6 +358,37 @@ export class GenerationComponent implements OnDestroy {
 
   diagnosticsOf(run: GenerationRunView): DiagnosticGroup[] {
     return parseDiagnostics(run.diagnostics);
+  }
+
+  private loadLivePages(): void {
+    const key = this.projectKey();
+    this.livePages.set(null);
+    this.pagesApi.listPages(key).subscribe({
+      next: (pages) => {
+        if (this.projectKey() === key) {
+          this.livePages.set(new Set((pages ?? []).map((page) => page.uuid ?? '')));
+        }
+      },
+      error: () => {
+        /* no links: the pages stay plain text */
+      },
+    });
+  }
+
+  /** Whether the page a diagnostic names still exists — only then it is a link. */
+  pageExists(page: DiagnosticPage): boolean {
+    return this.livePages()?.has(page.uuid) ?? false;
+  }
+
+  /** The route of the page's editor. */
+  pageRoute(page: DiagnosticPage): string[] {
+    return assetRoute(this.projectKey(), { uuid: page.uuid, type: 'PAGE' }).commands;
+  }
+
+  /** How a diagnostic names a page: `Display name (/folder/uid)`; its uid, or its uuid when nothing else is known. */
+  pageLabel(page: DiagnosticPage): string {
+    const name = page.displayName ?? page.uid ?? page.uuid;
+    return page.path && page.displayName ? `${name} (${page.path})` : name;
   }
 
   targetLabel(run: GenerationRunView): string {

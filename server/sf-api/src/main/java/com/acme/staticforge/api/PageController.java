@@ -20,6 +20,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -45,33 +46,42 @@ public class PageController {
     private final PageService pageService;
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
+    private final CompactedReads compactedReads;
 
     public PageController(
             ProjectService projectService,
             PageService pageService,
             SecuritySupport securitySupport,
-            ReleaseBlocks releaseBlocks) {
+            ReleaseBlocks releaseBlocks,
+            CompactedReads compactedReads) {
         this.projectService = projectService;
         this.pageService = pageService;
         this.securitySupport = securitySupport;
         this.releaseBlocks = releaseBlocks;
+        this.compactedReads = compactedReads;
     }
 
+    /**
+     * The pages, current or (with {@code revision}) as they were at that revision — time travel: the pages deleted
+     * since are listed, those created later are not, with name, uid, folder path and release status as of then.
+     */
     @GetMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public List<AssetSummaryView> list(
+    public ResponseEntity<List<AssetSummaryView>> list(
             @PathVariable String projectKey,
             @RequestParam(required = false) UUID folder,
             @RequestParam(required = false) UUID templateUuid,
-            @RequestParam(required = false) String q) {
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Long revision) {
         long projectId = projectId(projectKey);
-        List<AssetVersionView> pages = pageService.list(projectId, new PageQuery(folder, templateUuid, q));
+        List<AssetVersionView> pages = pageService.list(projectId, new PageQuery(folder, templateUuid, q, revision));
         List<UUID> uuids = pages.stream().map(AssetVersionView::uuid).toList();
-        var release = releaseBlocks.of(projectId, uuids);
-        var scheduled = releaseBlocks.scheduled(projectId, uuids);
-        return pages.stream()
+        var release = revision == null ? releaseBlocks.of(projectId, uuids) : releaseBlocks.ofAt(projectId, uuids, revision);
+        var scheduled = revision == null ? releaseBlocks.scheduled(projectId, uuids) : Map.<UUID, List<ScheduledRefView>>of();
+        ResponseEntity<List<AssetSummaryView>> response = ResponseEntity.ok(pages.stream()
                 .map(v -> toSummary(v, release.get(v.uuid()), scheduled.getOrDefault(v.uuid(), List.of())))
-                .toList();
+                .toList());
+        return revision == null ? response : compactedReads.markSnapshot(response, projectId, revision);
     }
 
     @PostMapping

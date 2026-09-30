@@ -30,6 +30,7 @@ import com.acme.staticforge.template.cdl.CdlSources;
 import com.acme.staticforge.template.content.ContentDefinition;
 import com.acme.staticforge.template.content.EffectiveDefinition;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
+import com.acme.staticforge.template.diagnostic.DiagnosticPage;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.acme.staticforge.template.expression.ExpressionEvaluator;
 import com.acme.staticforge.template.render.RenderLimitException;
@@ -344,14 +345,18 @@ public class RenderPipeline {
             List<String> named = pages.stream().limit(LOCALE_DISTINCT_PAGES_LISTED).map(uuid -> pageLabel(snapshot, uuid)).toList();
             String rest = pages.size() > named.size() ? " and " + (pages.size() - named.size()) + " more" : "";
             errors.add(Diagnostic.error(
-                    NOT_LOCALE_DISTINCT_CODE,
-                    "Output path '" + key.expression() + "' is not language-distinct: this project has several "
-                            + "languages, so the path needs a {locale} segment or they would overwrite each other "
-                            + "(channel " + key.channel() + ", " + pages.size() + (pages.size() == 1 ? " page: " : " pages: ")
-                            + String.join(", ", named) + rest + "). Fix the page template's output path, or the "
-                            + "page's own path override.",
-                    0,
-                    0));
+                            NOT_LOCALE_DISTINCT_CODE,
+                            "Output path '" + key.expression() + "' is not language-distinct: this project has several "
+                                    + "languages, so the path needs a {locale} segment or they would overwrite each other "
+                                    + "(channel " + key.channel() + ", " + pages.size() + (pages.size() == 1 ? " page: " : " pages: ")
+                                    + String.join(", ", named) + rest + "). Fix the page template's output path, or the "
+                                    + "page's own path override.",
+                            0,
+                            0)
+                    .withPages(pages.stream()
+                            .limit(Diagnostic.MAX_PAGES)
+                            .map(uuid -> diagnosticPage(snapshot, uuid))
+                            .toList()));
         });
         return List.copyOf(errors);
     }
@@ -361,15 +366,21 @@ public class RenderPipeline {
 
     /** {@code 'uid' (Display name, /folder/uid)} — how a run finding names a page; the uuid when the snapshot lost it. */
     private static String pageLabel(Snapshot snapshot, UUID pageUuid) {
+        DiagnosticPage page = diagnosticPage(snapshot, pageUuid);
+        return page.uid() == null ? pageUuid.toString() : "'" + page.uid() + "' (" + page.displayName() + ", " + page.path() + ")";
+    }
+
+    /** The page as data for a run finding ({@link Diagnostic#pages()}); only its uuid when the snapshot lost it. */
+    private static DiagnosticPage diagnosticPage(Snapshot snapshot, UUID pageUuid) {
         SnapshotAsset page = snapshot.assetByUuid(pageUuid);
         if (page == null) {
-            return pageUuid.toString();
+            return new DiagnosticPage(pageUuid, null, null, null);
         }
         String folder = page.folderPath() == null ? "" : page.folderPath();
         String root = "/" + FolderScope.PAGES_ROOT_UID;
         folder = folder.startsWith(root) ? folder.substring(root.length()) : folder;
         String uid = page.uid() != null ? page.uid() : pageUuid.toString();
-        return "'" + uid + "' (" + page.displayName() + ", " + (folder.endsWith("/") ? folder : folder + "/") + uid + ")";
+        return new DiagnosticPage(pageUuid, uid, page.displayName(), (folder.endsWith("/") ? folder : folder + "/") + uid);
     }
 
     /**

@@ -52,6 +52,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final UserService userService;
     private final ProjectWriteGuard writeGuard;
     private final ReleaseLocaleTransition releaseLocaleTransition;
+    private final LocaleOutputPathWarnings localeOutputPathWarnings;
     /**
      * Lazily resolved: the search index is an optional companion of the project service, and a hard
      * dependency here would tie project writes to the index being constructible.
@@ -73,6 +74,7 @@ public class ProjectServiceImpl implements ProjectService {
             UserService userService,
             ProjectWriteGuard writeGuard,
             ReleaseLocaleTransition releaseLocaleTransition,
+            LocaleOutputPathWarnings localeOutputPathWarnings,
             org.springframework.beans.factory.ObjectProvider<com.acme.staticforge.search.SearchIndexer> searchIndexer) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -84,6 +86,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.userService = userService;
         this.writeGuard = writeGuard;
         this.releaseLocaleTransition = releaseLocaleTransition;
+        this.localeOutputPathWarnings = localeOutputPathWarnings;
         this.searchIndexer = searchIndexer;
         this.objectMapper = objectMapper;
         this.assetService = assetService;
@@ -223,7 +226,8 @@ public class ProjectServiceImpl implements ProjectService {
                     localizedValueCount(project.getId(), removed),
                     true,
                     preview.discardedLocaleValues(),
-                    preview.affectedAssets());
+                    preview.affectedAssets(),
+                    List.of());
         }
 
         // The settings change and the content it migrates are one logical change, so they share
@@ -263,7 +267,8 @@ public class ProjectServiceImpl implements ProjectService {
                 localizedValueCount(project.getId(), removed),
                 false,
                 applied.discardedLocaleValues(),
-                applied.affectedAssets());
+                applied.affectedAssets(),
+                localeOutputPathWarnings.forProject(project.getId(), after));
     }
 
     @Override

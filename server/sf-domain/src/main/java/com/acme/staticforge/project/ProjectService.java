@@ -76,6 +76,9 @@ public interface ProjectService {
      *     {@code confirmDiscard}
      * @param discardedLocaleValues how many translations the confirmed change drops
      * @param affectedAssets the assets whose content the change rewrites
+     * @param warnings the page template channels whose output path lacks {@code {locale}} in the saved configuration
+     *     ({@code SF-GEN-0112}: a build would fail with {@code SF-GEN-0111}), every one of them; empty when the project
+     *     has no languages after the change or when nothing was written. The save is not blocked by them.
      */
     record LocaleUpdateResult(
             LocaleConfig config,
@@ -84,7 +87,20 @@ public interface ProjectService {
             int retainedValueCount,
             boolean confirmationRequired,
             int discardedLocaleValues,
-            java.util.List<java.util.UUID> affectedAssets) {}
+            java.util.List<java.util.UUID> affectedAssets,
+            java.util.List<OutputPathWarning> warnings) {}
+
+    /**
+     * A page template's channel whose output path has no {@code {locale}} segment ({@code SF-GEN-0112}); {@code message}
+     * is the text its template warning carries too.
+     */
+    record OutputPathWarning(
+            java.util.UUID templateUuid,
+            String templateUid,
+            String templateName,
+            String channel,
+            String outputPath,
+            String message) {}
 
     /** The project's publish policy (M28), read from the row on every call: a change applies on the next check. */
     com.acme.staticforge.project.publish.PublishPolicy publishPolicy(String key);

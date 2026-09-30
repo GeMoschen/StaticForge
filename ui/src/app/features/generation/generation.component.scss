@@ -241,6 +241,22 @@
   text-decoration: underline;
 }
 
+.diagnostic-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-1) var(--sf-3);
+  color: var(--sf-amber);
+  font-family: var(--sf-font-ui);
+}
+
+.diagnostic-pages--error {
+  color: var(--sf-rust);
+}
+
+.diagnostic-pages__label {
+  font-weight: 600;
+}
+
 .diagnostic__link {
   margin-left: var(--sf-2);
   font-family: var(--sf-font-ui);

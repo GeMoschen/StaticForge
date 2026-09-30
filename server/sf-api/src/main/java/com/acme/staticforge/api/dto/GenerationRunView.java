@@ -13,7 +13,8 @@ import java.util.List;
  * findings in numbers, {@code null} for a run that stored none (before M30, or not finished). {@code diagnostics} is
  * {@code {errors, warnings}}, each {@code [{code, count, messages}]}, plus {@code heldBack}
  * ({@code [{asset, uid, channel, locale, codes}]}, M30.6.2) when the quality checks held pages back — the
- * {@code SF-GEN-0125} errors as data.
+ * {@code SF-GEN-0125} errors as data. An entry of {@code errors} about pages ({@code SF-GEN-0111}, M35) also has
+ * {@code pages} ({@code [{uuid, uid, displayName, path}]}, at most 50); absent for other codes and older runs.
  */
 public record GenerationRunView(
         Long id,

@@ -131,6 +131,16 @@ public interface AssetReleaseRepository extends JpaRepository<AssetRelease, Long
             """)
     List<ReleasedKey> findEverReleasedKeys(@Param("assetIds") Collection<Long> assetIds);
 
+    /** {@link #findEverReleasedKeys} as of revision {@code R}: the pairs released in revision {@code R} or before. */
+    @Query("""
+            SELECT DISTINCT new com.acme.staticforge.release.ReleasedKey(r.assetId, r.localeKey)
+            FROM AssetRelease r
+            WHERE r.assetId IN :assetIds
+              AND r.validFromRevision <= :revision
+            """)
+    List<ReleasedKey> findEverReleasedKeysUpTo(
+            @Param("assetIds") Collection<Long> assetIds, @Param("revision") long revision);
+
     /** Every pointer of a project, open or closed — the invariant suite and diagnostics read the full history. */
     List<AssetRelease> findByProjectIdOrderByAssetIdAscLocaleKeyAscValidFromRevisionAsc(Long projectId);
 }

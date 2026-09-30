@@ -80,6 +80,21 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
     Page<AssetVersion> search(@Param("projectId") Long projectId, @Param("type") AssetType type,
             @Param("q") String q, @Param("folderPattern") String folderPattern, Pageable pageable);
 
+    /**
+     * The non-deleted versions of {@code type} valid at revision {@code R} across a project, asset joined: what a
+     * time-travel tree or list shows, including what was deleted after {@code R} and excluding what was created later.
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset a
+            WHERE a.projectId = :projectId
+              AND a.assetType = :type
+              AND v.validFromRevision <= :revision
+              AND (v.validToRevision IS NULL OR v.validToRevision > :revision)
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findValidAtByProjectAndType(
+            @Param("projectId") Long projectId, @Param("type") AssetType type, @Param("revision") long revision);
+
     /** All open, non-deleted versions in a project (used for subtree walks and tree building). */
     @Query("""
             SELECT v FROM AssetVersion v
@@ -378,6 +393,19 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             GROUP BY v.folderId
             """)
     List<ChildCount> countCurrentRecordsPerSet(@Param("projectId") long projectId);
+
+    /** {@link #countCurrentRecordsPerSet} as of revision {@code R}: the records live then, per set. */
+    @Query("""
+            SELECT new com.acme.staticforge.asset.ChildCount(v.folderId, COUNT(v))
+            FROM AssetVersion v
+            WHERE v.asset.projectId = :projectId
+              AND v.asset.assetType = com.acme.staticforge.asset.AssetType.RECORD
+              AND v.validFromRevision <= :revision
+              AND (v.validToRevision IS NULL OR v.validToRevision > :revision)
+              AND v.deleted = false
+            GROUP BY v.folderId
+            """)
+    List<ChildCount> countRecordsPerSetAt(@Param("projectId") long projectId, @Param("revision") long revision);
 
     /**
      * Live versions of {@code folderId}'s direct children that were closed exactly at {@code revision}, asset

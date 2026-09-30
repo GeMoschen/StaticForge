@@ -381,6 +381,19 @@ class LocalizedGenerationIntegrationTest {
                 .contains("'{folder}{uid}.{ext}'", "channel html", "3 pages")
                 .contains("'about' (about, /about)", "'contact' (contact, /contact)", "'imprint' (imprint, /imprint)");
         uuids.forEach(uuid -> assertThat(message).doesNotContain(uuid));
+        // ...and as data, so a client can link each page (M35.1): {uuid, uid, displayName, path}.
+        com.fasterxml.jackson.databind.JsonNode pages = group.path("pages");
+        assertThat(pages).hasSize(3);
+        for (int i = 0; i < 3; i++) {
+            String name = List.of("about", "contact", "imprint").get(i);
+            com.fasterxml.jackson.databind.JsonNode page = java.util.stream.StreamSupport.stream(pages.spliterator(), false)
+                    .filter(p -> uuids.contains(p.path("uuid").asText()) && name.equals(p.path("uid").asText()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(page.path("displayName").asText()).isEqualTo(name);
+            assertThat(page.path("path").asText()).isEqualTo("/" + name);
+        }
+        assertThat(finished.getDiagnostics().path("warnings").toString()).doesNotContain("\"pages\"");
     }
 
     @Test

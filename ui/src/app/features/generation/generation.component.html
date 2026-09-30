@@ -211,6 +211,18 @@
                           }
                         </li>
                       }
+                      @if (group.pages?.length) {
+                        <li class="diagnostic-pages" [class.diagnostic-pages--error]="group.severity === 'error'">
+                          <span class="diagnostic-pages__label">Pages:</span>
+                          @for (page of group.pages; track page.uuid) {
+                            @if (pageExists(page)) {
+                              <a class="diagnostic-pages__page" [routerLink]="pageRoute(page)">{{ pageLabel(page) }}</a>
+                            } @else {
+                              <span class="diagnostic-pages__page">{{ pageLabel(page) }}</span>
+                            }
+                          }
+                        </li>
+                      }
                     }
                   </ul>
                 }

@@ -4,6 +4,7 @@ import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.AssetUidHistoryRepository;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
@@ -21,6 +22,7 @@ import com.acme.staticforge.template.rules.RuleScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +45,7 @@ public class PageServiceImpl implements PageService {
     private final PageContentValidation contentValidation;
     private final TemplateHierarchies hierarchies;
     private final ContentRules contentRules;
+    private final AssetUidHistoryRepository assetUidHistoryRepository;
 
     public PageServiceImpl(
             AssetRepository assetRepository,
@@ -51,7 +54,8 @@ public class PageServiceImpl implements PageService {
             BodyService bodyService,
             PageContentValidation contentValidation,
             TemplateHierarchies hierarchies,
-            ContentRules contentRules) {
+            ContentRules contentRules,
+            AssetUidHistoryRepository assetUidHistoryRepository) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
@@ -59,6 +63,7 @@ public class PageServiceImpl implements PageService {
         this.contentValidation = contentValidation;
         this.hierarchies = hierarchies;
         this.contentRules = contentRules;
+        this.assetUidHistoryRepository = assetUidHistoryRepository;
     }
 
     @Override
@@ -271,11 +276,16 @@ public class PageServiceImpl implements PageService {
         Long templateId = query.templateUuid() == null ? null : templateId(projectId, query.templateUuid());
         String q = query.q() == null ? null : query.q().toLowerCase();
 
-        return assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.PAGE).stream()
+        Long revision = query.revision();
+        List<AssetVersion> pages = revision == null
+                ? assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.PAGE)
+                : assetVersionRepository.findValidAtByProjectAndType(projectId, AssetType.PAGE, revision);
+        Map<Long, String> uids = revision == null ? Map.of() : assetUidHistoryRepository.uidsAt(projectId, revision);
+        return pages.stream()
                 .filter(v -> folderId == null || folderId.equals(v.getFolderId()))
                 .filter(v -> templateId == null || templateId.equals(v.getTemplateAssetId()))
                 .filter(v -> q == null || v.getDisplayName().toLowerCase().contains(q))
-                .map(this::toView)
+                .map(v -> toView(v, uids))
                 .toList();
     }
 
@@ -389,11 +399,16 @@ public class PageServiceImpl implements PageService {
     }
 
     private AssetVersionView toView(AssetVersion version) {
+        return toView(version, Map.of());
+    }
+
+    /** {@code uids} holds the uid to show for assets whose uid differs from the current one (a time-travel read). */
+    private AssetVersionView toView(AssetVersion version, Map<Long, String> uids) {
         Asset asset = assetRepository.findById(version.getAssetId())
                 .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset not found.")));
         return new AssetVersionView(
                 asset.getUuid(),
-                asset.getUid(),
+                uids.getOrDefault(asset.getId(), asset.getUid()),
                 asset.getAssetType(),
                 version.getDisplayName(),
                 version.getPayload(),

@@ -20,7 +20,6 @@ import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.template.diagnostic.Severity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -93,31 +92,22 @@ abstract class AbstractTemplateController {
     /**
      * {@code SF-GEN-0112} for every channel whose {@code outputPath} expression lacks {@code {locale}} in a project
      * with several languages: a build refuses it ({@code SF-GEN-0111}) because the languages would write one file.
-     * A template without an expression for a channel uses the project default, which has the segment.
+     * A template without an expression for a channel uses the project default, which has the segment. The language
+     * setup raises the same warning for every page template it affects ({@code LocaleOutputPathWarnings}).
      */
     static List<Diagnostic> outputPathWarnings(JsonNode payload, LocaleConfig locales) {
-        JsonNode outputPath = payload == null ? null : payload.get("outputPath");
-        if (outputPath == null || !outputPath.isObject() || !LocaleConfig.orEmpty(locales).isLocalized()) {
+        if (payload == null || !LocaleConfig.orEmpty(locales).isLocalized()) {
             return List.of();
         }
-        List<Diagnostic> warnings = new ArrayList<>();
-        outputPath.fields().forEachRemaining(entry -> {
-            String expression = entry.getValue().asText("");
-            if (expression.isBlank() || OutputPathExpander.isLocaleDistinct(expression)) {
-                return;
-            }
-            warnings.add(new Diagnostic(
-                    Severity.WARNING,
-                    DiagnosticCodes.GEN_OUTPUT_PATH_NOT_LOCALE_DISTINCT,
-                    "Output path '" + expression + "' of channel '" + entry.getKey() + "' has no "
-                            + OutputPathExpander.LOCALE_PLACEHOLDER + " segment, but this project has several languages: "
-                            + "a build fails (SF-GEN-0111) because the languages would overwrite each other. "
-                            + "Add it, for example '" + OutputPathExpander.LOCALE_PLACEHOLDER + "/" + expression + "'.",
-                    0,
-                    0,
-                    "outputPath:" + entry.getKey()));
-        });
-        return List.copyOf(warnings);
+        return OutputPathExpander.notLocaleDistinct(payload.get("outputPath")).stream()
+                .map(path -> new Diagnostic(
+                        Severity.WARNING,
+                        DiagnosticCodes.GEN_OUTPUT_PATH_NOT_LOCALE_DISTINCT,
+                        path.message(),
+                        0,
+                        0,
+                        "outputPath:" + path.channel()))
+                .toList();
     }
 
     protected static TemplateSummary toSummary(TemplateListItem item) {

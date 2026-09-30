@@ -4,6 +4,7 @@ import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.AssetType;
+import com.acme.staticforge.asset.AssetUidHistoryRepository;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.asset.AssetVersionView;
@@ -24,6 +25,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,7 @@ public class FolderServiceImpl implements FolderService {
     private final PathService pathService;
     private final RevisionService revisionService;
     private final ReferenceMaterializer referenceMaterializer;
+    private final AssetUidHistoryRepository assetUidHistoryRepository;
 
     public FolderServiceImpl(
             AssetRepository assetRepository,
@@ -49,25 +52,52 @@ public class FolderServiceImpl implements FolderService {
             AssetService assetService,
             PathService pathService,
             RevisionService revisionService,
-            ReferenceMaterializer referenceMaterializer) {
+            ReferenceMaterializer referenceMaterializer,
+            AssetUidHistoryRepository assetUidHistoryRepository) {
         this.assetRepository = assetRepository;
         this.assetVersionRepository = assetVersionRepository;
         this.assetService = assetService;
         this.pathService = pathService;
         this.revisionService = revisionService;
         this.referenceMaterializer = referenceMaterializer;
+        this.assetUidHistoryRepository = assetUidHistoryRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<FolderNode> tree(long projectId, FolderScope scope, int depth, RevisionContext ctx) {
-        List<AssetVersion> folders = assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.FOLDER);
+        return assemble(
+                assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.FOLDER),
+                Map.of(),
+                scope,
+                depth,
+                scope == FolderScope.CONTENT ? recordSetNodes(projectId) : Map.of());
+    }
 
-        java.util.Map<Long, FolderInfo> info = new java.util.LinkedHashMap<>();
-        java.util.Map<Long, List<Long>> children = new java.util.LinkedHashMap<>();
+    @Override
+    @Transactional(readOnly = true)
+    public List<FolderNode> treeAt(long projectId, FolderScope scope, int depth, long revision) {
+        Map<Long, String> uids = assetUidHistoryRepository.uidsAt(projectId, revision);
+        return assemble(
+                assetVersionRepository.findValidAtByProjectAndType(projectId, AssetType.FOLDER, revision),
+                uids,
+                scope,
+                depth,
+                scope == FolderScope.CONTENT ? recordSetNodesAt(projectId, revision, uids) : Map.of());
+    }
+
+    /** The tree of {@code scope} from the folder versions read; {@code uids} overrides the uid of the assets in it. */
+    private List<FolderNode> assemble(
+            List<AssetVersion> folders,
+            Map<Long, String> uids,
+            FolderScope scope,
+            int depth,
+            Map<Long, List<FolderNode>> setsByFolder) {
+        Map<Long, FolderInfo> info = new java.util.LinkedHashMap<>();
+        Map<Long, List<Long>> children = new java.util.LinkedHashMap<>();
         Long hiddenRootId = null;
         for (AssetVersion version : folders) {
-            Asset asset = assetRepository.findById(version.getAssetId()).orElse(null);
+            Asset asset = version.getAsset();
             if (asset == null) {
                 continue;
             }
@@ -75,14 +105,11 @@ public class FolderServiceImpl implements FolderService {
                 hiddenRootId = asset.getId();
             }
             info.put(asset.getId(), new FolderInfo(
-                    asset.getUuid(), asset.getUid(), version.getDisplayName(), version.getFolderPath(),
-                    FolderScope.fromPayload(version.getPayload()), FolderScope.isProtected(version.getPayload()),
-                    version.getValidFromRevision()));
+                    asset.getUuid(), uids.getOrDefault(asset.getId(), asset.getUid()), version.getDisplayName(),
+                    version.getFolderPath(), FolderScope.fromPayload(version.getPayload()),
+                    FolderScope.isProtected(version.getPayload()), version.getValidFromRevision()));
             children.put(asset.getId(), new java.util.ArrayList<>());
         }
-        java.util.Map<Long, List<FolderNode>> setsByFolder = scope == FolderScope.CONTENT
-                ? recordSetNodes(projectId)
-                : java.util.Map.of();
         List<Long> roots = new java.util.ArrayList<>();
         for (AssetVersion version : folders) {
             Long assetId = version.getAssetId();
@@ -107,20 +134,37 @@ public class FolderServiceImpl implements FolderService {
      * The Content store's record sets as leaf nodes keyed by their folder's asset id (M25), each with its
      * live record count from one grouped query — never a count per set.
      */
-    private java.util.Map<Long, List<FolderNode>> recordSetNodes(long projectId) {
-        java.util.Map<Long, Long> counts = new java.util.HashMap<>();
-        for (ChildCount count : assetVersionRepository.countCurrentRecordsPerSet(projectId)) {
+    private Map<Long, List<FolderNode>> recordSetNodes(long projectId) {
+        return recordSetNodes(
+                assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.RECORD_SET),
+                assetVersionRepository.countCurrentRecordsPerSet(projectId),
+                Map.of());
+    }
+
+    /** {@link #recordSetNodes(long)} as of revision {@code revision}: the sets and record counts live then. */
+    private Map<Long, List<FolderNode>> recordSetNodesAt(long projectId, long revision, Map<Long, String> uids) {
+        return recordSetNodes(
+                assetVersionRepository.findValidAtByProjectAndType(projectId, AssetType.RECORD_SET, revision),
+                assetVersionRepository.countRecordsPerSetAt(projectId, revision),
+                uids);
+    }
+
+    private static Map<Long, List<FolderNode>> recordSetNodes(
+            List<AssetVersion> allSets, List<ChildCount> recordCounts, Map<Long, String> uids) {
+        Map<Long, Long> counts = new java.util.HashMap<>();
+        for (ChildCount count : recordCounts) {
             counts.put(count.folderId(), count.count());
         }
-        java.util.Map<Long, List<FolderNode>> byFolder = new java.util.HashMap<>();
-        List<AssetVersion> sets = assetVersionRepository.findCurrentByProjectAndType(projectId, AssetType.RECORD_SET).stream()
+        Map<Long, List<FolderNode>> byFolder = new java.util.HashMap<>();
+        List<AssetVersion> sets = allSets.stream()
                 .sorted(java.util.Comparator.comparing(AssetVersion::getDisplayName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         for (AssetVersion set : sets) {
             Asset asset = set.getAsset();
             byFolder.computeIfAbsent(set.getFolderId(), id -> new java.util.ArrayList<>()).add(new FolderNode(
-                    asset.getUuid(), asset.getUid(), set.getDisplayName(), set.getFolderPath(), FolderScope.CONTENT,
-                    false, AssetType.RECORD_SET, counts.getOrDefault(asset.getId(), 0L), set.getValidFromRevision(), List.of()));
+                    asset.getUuid(), uids.getOrDefault(asset.getId(), asset.getUid()), set.getDisplayName(),
+                    set.getFolderPath(), FolderScope.CONTENT, false, AssetType.RECORD_SET,
+                    counts.getOrDefault(asset.getId(), 0L), set.getValidFromRevision(), List.of()));
         }
         return byFolder;
     }

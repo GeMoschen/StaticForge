@@ -1,12 +1,25 @@
 /**
+ * A page a diagnostic group is about (M35.1, `SF-GEN-0111`): an entry of the group's `pages`. The text fields are `null`
+ * when the build's snapshot no longer had the page.
+ */
+export interface DiagnosticPage {
+  uuid: string;
+  uid: string | null;
+  displayName: string | null;
+  path: string | null;
+}
+
+/**
  * One group of run diagnostics as persisted on `GenerationRunView.diagnostics` and sent with the
- * final progress event: `{ errors: [{ code, count, messages }], warnings: [...], heldBack?: [...] }`.
+ * final progress event: `{ errors: [{ code, count, messages, pages? }], warnings: [...], heldBack?: [...] }`.
+ * `pages` is absent for codes that are not about pages and for runs stored before M35.1.
  */
 export interface DiagnosticGroup {
   severity: 'error' | 'warning';
   code: string;
   count: number;
   messages: string[];
+  pages?: DiagnosticPage[];
 }
 
 /** The file error a page held back by an `ERROR` quality finding gets (M30.1.3, epic decision 5). */
@@ -67,11 +80,30 @@ function readGroups(value: unknown, severity: DiagnosticGroup['severity']): Diag
         ? entry['messages'].filter((m): m is string => typeof m === 'string')
         : [];
       const count = typeof entry['count'] === 'number' ? entry['count'] : messages.length;
+      const pages = readPages(entry['pages']);
       return {
         severity,
         code: typeof entry['code'] === 'string' ? entry['code'] : '',
         count,
         messages,
+        ...(pages.length > 0 ? { pages } : {}),
       };
     });
+}
+
+/** The pages of a group's `pages`; entries without a uuid are dropped. */
+function readPages(value: unknown): DiagnosticPage[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+  return value
+    .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object')
+    .filter((entry) => text(entry['uuid']) !== null)
+    .map((entry) => ({
+      uuid: entry['uuid'] as string,
+      uid: text(entry['uid']),
+      displayName: text(entry['displayName']),
+      path: text(entry['path']),
+    }));
 }

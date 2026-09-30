@@ -3264,6 +3264,16 @@ export interface components {
             code?: string;
             label?: string;
         };
+        LocaleWarningView: {
+            code?: string;
+            message?: string;
+            /** Format: uuid */
+            templateUuid?: string;
+            templateUid?: string;
+            templateName?: string;
+            channel?: string;
+            outputPath?: string;
+        };
         ProjectLocalesView: {
             locales?: components["schemas"]["ProjectLocaleView"][];
             defaultLocale?: string;
@@ -3279,6 +3289,9 @@ export interface components {
             /** Format: int32 */
             discardedLocaleValues?: number;
             affectedAssets?: string[];
+            warnings?: components["schemas"]["LocaleWarningView"][];
+            /** Format: int32 */
+            warningCount?: number;
         };
         SetSystemRoleRequest: {
             systemRole?: string;
@@ -6967,6 +6980,7 @@ export interface operations {
                 folder?: string;
                 templateUuid?: string;
                 q?: string;
+                revision?: number;
             };
             header?: never;
             path: {
@@ -7650,6 +7664,7 @@ export interface operations {
             query: {
                 scope: string;
                 depth?: number;
+                revision?: number;
             };
             header?: never;
             path: {

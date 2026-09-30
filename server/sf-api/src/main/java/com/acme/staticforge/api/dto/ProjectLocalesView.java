@@ -15,6 +15,9 @@ import java.util.Map;
  *     would discard translations; re-send with {@code ?confirmDiscard=true} to go ahead
  * @param discardedLocaleValues how many translations the change discards
  * @param affectedAssets the assets whose content the change rewrites
+ * @param warnings on a {@code PUT} response: the page template channels whose output path lacks {@code {locale}} now that
+ *     the project has languages (the first {@value #MAX_WARNINGS}, by template name); the save is not blocked by them
+ * @param warningCount how many there are in all
  */
 public record ProjectLocalesView(
         List<ProjectLocaleView> locales,
@@ -26,7 +29,12 @@ public record ProjectLocalesView(
         int retainedValueCount,
         boolean confirmationRequired,
         int discardedLocaleValues,
-        List<String> affectedAssets) {
+        List<String> affectedAssets,
+        List<LocaleWarningView> warnings,
+        int warningCount) {
+
+    /** How many warnings a response lists. */
+    public static final int MAX_WARNINGS = 50;
 
     /** One declared locale: a canonical BCP 47 tag and the label shown to editors. */
     public record ProjectLocaleView(String code, String label) {}

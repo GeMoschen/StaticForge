@@ -70,6 +70,39 @@ public final class OutputPathExpander {
         return expression != null && expression.contains(LOCALE_PLACEHOLDER);
     }
 
+    /**
+     * A page template's output path for one channel that is not language-distinct, with the warning text
+     * ({@code SF-GEN-0112}) every place that raises it shows.
+     */
+    public record NotLocaleDistinct(String channel, String expression, String message) {}
+
+    /**
+     * The channels of a page template's {@code outputPath} payload object whose expression lacks {@code {locale}}, in
+     * payload order. A blank expression is left out: a channel without one uses the project default, which has the
+     * segment. The caller decides whether the project is localized at all — only then is any of these a problem (its
+     * build fails with {@code SF-GEN-0111}).
+     */
+    public static java.util.List<NotLocaleDistinct> notLocaleDistinct(JsonNode outputPath) {
+        if (outputPath == null || !outputPath.isObject()) {
+            return java.util.List.of();
+        }
+        java.util.List<NotLocaleDistinct> found = new java.util.ArrayList<>();
+        outputPath.fields().forEachRemaining(entry -> {
+            String expression = entry.getValue().asText("");
+            if (expression.isBlank() || isLocaleDistinct(expression)) {
+                return;
+            }
+            found.add(new NotLocaleDistinct(
+                    entry.getKey(),
+                    expression,
+                    "Output path '" + expression + "' of channel '" + entry.getKey() + "' has no " + LOCALE_PLACEHOLDER
+                            + " segment, but this project has several languages: a build fails (SF-GEN-0111) because "
+                            + "the languages would overwrite each other. Add it, for example '" + LOCALE_PLACEHOLDER
+                            + "/" + expression + "'."));
+        });
+        return java.util.List.copyOf(found);
+    }
+
     /** The path expression that applies to {@code page} in {@code channel} (override, template, default). */
     public static String effectiveExpression(PageContext page, String channel, boolean localized) {
         return expressionFor(page, channel, localized);

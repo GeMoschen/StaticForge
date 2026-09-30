@@ -1,6 +1,7 @@
 package com.acme.staticforge.api;
 
 import com.acme.staticforge.api.dto.CodeHighlightingView;
+import com.acme.staticforge.api.dto.LocaleWarningView;
 import com.acme.staticforge.api.dto.ProjectCreateRequest;
 import com.acme.staticforge.api.dto.ProjectDetail;
 import com.acme.staticforge.api.dto.ProjectLocalesRequest;
@@ -25,6 +26,7 @@ import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.AuthenticatedUser;
 import com.acme.staticforge.security.ProjectAuthorizationService;
 import com.acme.staticforge.security.SecuritySupport;
+import com.acme.staticforge.template.diagnostic.DiagnosticCodes;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import jakarta.validation.Valid;
@@ -145,7 +147,7 @@ public class ProjectController {
         LocaleConfig config = projectService.locales(projectKey);
         return new ProjectLocalesView(
                 localeViews(config), config.defaultLocale(), config.fallbacks(), config.defaultWithoutPrefix(),
-                false, List.of(), 0, false, 0, List.of());
+                false, List.of(), 0, false, 0, List.of(), List.of(), 0);
     }
 
     @PutMapping("/{key}/locales")
@@ -192,7 +194,14 @@ public class ProjectController {
                 result.retainedValueCount(),
                 result.confirmationRequired(),
                 result.discardedLocaleValues(),
-                result.affectedAssets().stream().map(java.util.UUID::toString).collect(Collectors.toList()));
+                result.affectedAssets().stream().map(java.util.UUID::toString).collect(Collectors.toList()),
+                result.warnings().stream()
+                        .limit(ProjectLocalesView.MAX_WARNINGS)
+                        .map(w -> new LocaleWarningView(
+                                DiagnosticCodes.GEN_OUTPUT_PATH_NOT_LOCALE_DISTINCT, w.message(), w.templateUuid(),
+                                w.templateUid(), w.templateName(), w.channel(), w.outputPath()))
+                        .toList(),
+                result.warnings().size());
     }
 
     private static List<ProjectLocalesView.ProjectLocaleView> localeViews(LocaleConfig config) {

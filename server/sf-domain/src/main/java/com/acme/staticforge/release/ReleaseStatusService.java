@@ -2,6 +2,7 @@ package com.acme.staticforge.release;
 
 import com.acme.staticforge.asset.Asset;
 import com.acme.staticforge.asset.AssetRepository;
+import com.acme.staticforge.asset.AssetUidHistoryRepository;
 import com.acme.staticforge.asset.AssetVersion;
 import com.acme.staticforge.asset.AssetVersionRepository;
 import com.acme.staticforge.project.LocaleConfig;
@@ -45,16 +46,19 @@ public class ReleaseStatusService {
     private final AssetVersionRepository versionRepository;
     private final AssetReleaseRepository releaseRepository;
     private final ProjectLocales projectLocales;
+    private final AssetUidHistoryRepository uidHistory;
 
     public ReleaseStatusService(
             AssetRepository assetRepository,
             AssetVersionRepository versionRepository,
             AssetReleaseRepository releaseRepository,
-            ProjectLocales projectLocales) {
+            ProjectLocales projectLocales,
+            AssetUidHistoryRepository uidHistory) {
         this.assetRepository = assetRepository;
         this.versionRepository = versionRepository;
         this.releaseRepository = releaseRepository;
         this.projectLocales = projectLocales;
+        this.uidHistory = uidHistory;
     }
 
     /**
@@ -94,6 +98,32 @@ public class ReleaseStatusService {
     }
 
     /**
+     * {@link #ofUuids} as of revision {@code revision} (time travel): the drafts valid then against the pointers valid
+     * then, under the uids the assets had then. Same fixed number of queries whatever the count; assets that did not
+     * exist then, were deleted then, or have no release state are absent.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, Map<String, LocaleRelease>> ofUuidsAt(long projectId, Collection<UUID> uuids, long revision) {
+        if (uuids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Asset> assets = Chunks.flatMap(Set.copyOf(uuids), chunk -> assetRepository.findByProjectIdAndUuidIn(projectId, chunk))
+                .stream()
+                .collect(Collectors.toMap(Asset::getId, Function.identity()));
+        Map<Long, String> uids = uidHistory.uidsAt(projectId, revision);
+        List<Draft> drafts = Chunks.flatMap(assets.keySet(), ids -> versionRepository.findValidAtRevisionByAssetIdIn(ids, revision))
+                .stream()
+                .map(v -> {
+                    Asset asset = assets.get(v.getAssetId());
+                    return new Draft(asset, v, uids.getOrDefault(asset.getId(), asset.getUid()));
+                })
+                .toList();
+        Map<UUID, Map<String, LocaleRelease>> out = new LinkedHashMap<>();
+        of(projectId, drafts, revision).forEach((id, locales) -> out.put(assets.get(id).getUuid(), locales));
+        return out;
+    }
+
+    /**
      * The status of every releasable asset of a project, keyed by asset id, each with its locale keys in order.
      * Tombstones released nowhere are left out.
      */
@@ -116,10 +146,14 @@ public class ReleaseStatusService {
     /** The status of drafts given as (asset, open version) pairs. */
     @Transactional(readOnly = true)
     public Map<Long, Map<String, LocaleRelease>> of(long projectId, Collection<Draft> drafts) {
+        return of(projectId, drafts, null);
+    }
+
+    /** {@link #of(long, Collection)} against the pointers valid at {@code revision}; the current ones when {@code null}. */
+    private Map<Long, Map<String, LocaleRelease>> of(long projectId, Collection<Draft> drafts, Long revision) {
         LocaleConfig config = projectLocales.forProject(projectId);
         List<Draft> releasable = drafts.stream()
-                .filter(d -> ReleasableTypes.isReleasable(
-                        d.asset().getAssetType(), d.version().getPayload(), d.asset().getUid()))
+                .filter(d -> ReleasableTypes.isReleasable(d.asset().getAssetType(), d.version().getPayload(), d.uid()))
                 .toList();
         if (releasable.isEmpty()) {
             return Map.of();
@@ -127,10 +161,15 @@ public class ReleaseStatusService {
         Set<Long> assetIds = releasable.stream().map(d -> d.asset().getId()).collect(Collectors.toSet());
 
         Map<ReleasedKey, AssetRelease> open = new HashMap<>();
-        for (AssetRelease pointer : Chunks.flatMap(assetIds, releaseRepository::findByAssetIdInAndValidToRevisionIsNull)) {
+        List<AssetRelease> pointers = revision == null
+                ? Chunks.flatMap(assetIds, releaseRepository::findByAssetIdInAndValidToRevisionIsNull)
+                : Chunks.flatMap(assetIds, ids -> releaseRepository.findValidAtByAssetIdIn(ids, revision));
+        for (AssetRelease pointer : pointers) {
             open.put(new ReleasedKey(pointer.getAssetId(), pointer.getLocaleKey()), pointer);
         }
-        Set<ReleasedKey> everReleased = new HashSet<>(Chunks.flatMap(assetIds, releaseRepository::findEverReleasedKeys));
+        Set<ReleasedKey> everReleased = new HashSet<>(revision == null
+                ? Chunks.flatMap(assetIds, releaseRepository::findEverReleasedKeys)
+                : Chunks.flatMap(assetIds, ids -> releaseRepository.findEverReleasedKeysUpTo(ids, revision)));
 
         Set<Long> draftIds = releasable.stream().map(d -> d.version().getId()).collect(Collectors.toSet());
         Set<Long> releasedIds = open.values().stream()
@@ -177,7 +216,7 @@ public class ReleaseStatusService {
         if (version.isDeleted()) {
             return LocaleRelease.of(key, ReleaseStatus.DELETION_PENDING, pointer);
         }
-        String uid = draft.asset().getUid();
+        String uid = draft.uid();
         if (pointer.getReleasedVersionId().equals(version.getId()) && Objects.equals(pointer.getReleasedUid(), uid)) {
             return LocaleRelease.of(key, ReleaseStatus.PUBLISHED, pointer);
         }
@@ -193,8 +232,16 @@ public class ReleaseStatusService {
         return LocaleRelease.of(key, same ? ReleaseStatus.PUBLISHED : ReleaseStatus.CHANGED, pointer);
     }
 
-    /** An asset and its open version (the draft), possibly a tombstone. */
-    public record Draft(Asset asset, AssetVersion version) {}
+    /**
+     * An asset and its open version (the draft), possibly a tombstone; {@code uid} is the uid the draft is rendered
+     * under (the asset's current one, unless a time-travel read asks for the uid it had then).
+     */
+    public record Draft(Asset asset, AssetVersion version, String uid) {
+
+        public Draft(Asset asset, AssetVersion version) {
+            this(asset, version, asset.getUid());
+        }
+    }
 
     /** Per-call memo: every (version, uid, locale) is projected once. */
     private static final class Projections {

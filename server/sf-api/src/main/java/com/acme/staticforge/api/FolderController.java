@@ -42,33 +42,49 @@ public class FolderController {
     private final FolderService folderService;
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
+    private final CompactedReads compactedReads;
 
     public FolderController(
             ProjectService projectService,
             FolderService folderService,
             SecuritySupport securitySupport,
-            ReleaseBlocks releaseBlocks) {
+            ReleaseBlocks releaseBlocks,
+            CompactedReads compactedReads) {
         this.projectService = projectService;
         this.folderService = folderService;
         this.securitySupport = securitySupport;
         this.releaseBlocks = releaseBlocks;
+        this.compactedReads = compactedReads;
     }
 
+    /**
+     * The folder tree of {@code scope}, current or (with {@code revision}) as it was at that revision — time travel:
+     * the folders deleted since are in it, those created later are not, with name, uid, path and release status as of
+     * then (no pending schedules).
+     */
     @GetMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public List<FolderView> tree(
+    public ResponseEntity<List<FolderView>> tree(
             @PathVariable String projectKey,
             @RequestParam String scope,
-            @RequestParam(required = false) Integer depth) {
+            @RequestParam(required = false) Integer depth,
+            @RequestParam(required = false) Long revision) {
         int d = depth == null ? -1 : depth;
         long projectId = projectId(projectKey);
-        List<FolderNode> nodes = folderService.tree(projectId, parseScope(scope), d, ctx(projectKey, null));
+        FolderScope folderScope = parseScope(scope);
+        List<FolderNode> nodes = revision == null
+                ? folderService.tree(projectId, folderScope, d, ctx(projectKey, null))
+                : folderService.treeAt(projectId, folderScope, d, revision);
         // One status call for the whole tree, never one per node (M27.1.3).
         List<UUID> uuids = new java.util.ArrayList<>();
         collect(nodes, uuids);
-        Map<UUID, Map<String, LocaleReleaseView>> release = releaseBlocks.of(projectId, uuids);
-        Map<UUID, List<ScheduledRefView>> scheduled = releaseBlocks.scheduled(projectId, uuids);
-        return nodes.stream().map(node -> toView(node, release, scheduled)).toList();
+        Map<UUID, Map<String, LocaleReleaseView>> release =
+                revision == null ? releaseBlocks.of(projectId, uuids) : releaseBlocks.ofAt(projectId, uuids, revision);
+        Map<UUID, List<ScheduledRefView>> scheduled =
+                revision == null ? releaseBlocks.scheduled(projectId, uuids) : Map.of();
+        ResponseEntity<List<FolderView>> response =
+                ResponseEntity.ok(nodes.stream().map(node -> toView(node, release, scheduled)).toList());
+        return revision == null ? response : compactedReads.markSnapshot(response, projectId, revision);
     }
 
     @PostMapping

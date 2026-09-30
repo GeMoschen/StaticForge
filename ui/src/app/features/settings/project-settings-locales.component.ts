@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
+import { RouterLink } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import {
@@ -12,12 +13,14 @@ import {
 import { LocalesStore } from '../../core/project/locales.store';
 import { DialogService } from '../../core/ui/dialog.service';
 import { ToastService } from '../../core/ui/toast.service';
+import { assetRoute } from '../../shared/asset-route.util';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type ProjectLocalesView = components['schemas']['ProjectLocalesView'];
+type LocaleWarning = components['schemas']['LocaleWarningView'];
 
 /**
  * Project settings tab: "Languages" — the project's content languages (M24.1.2). Declares the
@@ -25,13 +28,15 @@ type ProjectLocalesView = components['schemas']['ProjectLocalesView'];
  * default language keeps the site root.
  *
  * <p>Enabling languages moves every generated page under a language prefix, so the tab shows the
- * concrete before/after path of a real page and asks for confirmation before saving such a change.
+ * concrete before/after path of a real page and asks for confirmation before saving such a change. A save that leaves
+ * page templates whose output path has no `{locale}` (a build would fail, `SF-GEN-0111`) still goes through and lists
+ * those templates below, until dismissed or the next save (M35.1).
  */
 @Component({
   selector: 'sf-project-settings-locales',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfFieldComponent, SfSpinnerComponent],
+  imports: [RouterLink, SfButtonComponent, SfFieldComponent, SfSpinnerComponent],
   templateUrl: './project-settings-locales.component.html',
   styleUrl: './project-settings-locales.component.scss',
 })
@@ -87,6 +92,12 @@ export class ProjectSettingsLocalesComponent implements OnInit {
   protected readonly retainedValueCount = computed(() => this.saved()?.retainedValueCount ?? 0);
 
   protected readonly removedLocales = computed(() => this.saved()?.removedLocales ?? []);
+
+  /** The page template channels the last save found without `{locale}`; empty after a dismissal or a clean save. */
+  protected readonly warnings = signal<LocaleWarning[]>([]);
+  /** How many there are in all: the server lists the first 50. */
+  protected readonly warningCount = signal(0);
+  protected readonly moreWarnings = computed(() => Math.max(0, this.warningCount() - this.warnings().length));
 
   ngOnInit(): void {
     this.api.getProjectLocales(this.projectKey()).subscribe({
@@ -325,6 +336,8 @@ export class ProjectSettingsLocalesComponent implements OnInit {
             return;
           }
           this.apply(config);
+          this.warnings.set(config.warnings ?? []);
+          this.warningCount.set(config.warningCount ?? (config.warnings ?? []).length);
           this.toasts.show('Language settings saved', 'success');
         },
         error: (error: HttpErrorResponse) => {
@@ -332,6 +345,16 @@ export class ProjectSettingsLocalesComponent implements OnInit {
           this.applyServerErrors(error);
         },
       });
+  }
+
+  protected dismissWarnings(): void {
+    this.warnings.set([]);
+    this.warningCount.set(0);
+  }
+
+  /** The Templates screen with the warned template selected. */
+  protected templateRoute(warning: LocaleWarning): { commands: string[]; queryParams: Record<string, string> } {
+    return assetRoute(this.projectKey(), { uuid: warning.templateUuid, type: 'PAGE_TEMPLATE' });
   }
 
   /** Set while a discard confirmation is open, so the dialog's confirm re-sends with the flag. */

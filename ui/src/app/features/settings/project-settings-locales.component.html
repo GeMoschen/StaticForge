@@ -166,6 +166,36 @@
       </p>
     }
 
+    @if (warnings().length > 0) {
+      <section class="locales__warnings" role="status" aria-label="Output path warnings">
+        <div class="locales__warnings-head">
+          <strong>
+            {{ warningCount() === 1 ? '1 page template has' : warningCount() + ' page templates have' }}
+            an output path without {{ '{locale}' }}
+          </strong>
+          <sf-button variant="ghost" (click)="dismissWarnings()">Dismiss</sf-button>
+        </div>
+        <p class="locales__warnings-text">
+          The languages are saved, but a build fails (SF-GEN-0111) until these paths contain {{ '{locale}' }} —
+          otherwise the languages would overwrite each other's files. For example
+          <code>{{ '{locale}' }}/{{ '{folder}{uid}.{ext}' }}</code>.
+        </p>
+        <ul class="locales__warnings-list">
+          @for (warning of warnings(); track $index) {
+            <li>
+              <a [routerLink]="templateRoute(warning).commands" [queryParams]="templateRoute(warning).queryParams">
+                {{ warning.templateName || warning.templateUid }}
+              </a>
+              — channel <code>{{ warning.channel }}</code>, path <code>{{ warning.outputPath }}</code>
+            </li>
+          }
+        </ul>
+        @if (moreWarnings() > 0) {
+          <p class="locales__warnings-text">and {{ moreWarnings() }} more.</p>
+        }
+      </section>
+    }
+
     <div class="locales__actions">
       <sf-button variant="primary" [disabled]="!canSave()" (click)="save()">
         {{ saving() ? 'Saving…' : 'Save languages' }}
