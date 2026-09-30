@@ -12,22 +12,22 @@ export type PickerType =
   | 'NAV_FOLDER'
   | 'DATASET';
 
-export const PICKER_TYPE_OPTIONS: { value: PickerType; label: string }[] = [
-  { value: 'PAGE', label: 'Pages' },
-  { value: 'MEDIA', label: 'Media' },
-  { value: 'PAGE_TEMPLATE', label: 'Page templates' },
-  { value: 'SECTION_TEMPLATE', label: 'Section templates' },
-  { value: 'RECORD', label: 'Records' },
-  { value: 'RECORD_SET', label: 'Record sets' },
+export const PICKER_TYPE_OPTIONS: { value: PickerType; labelKey: string }[] = [
+  { value: 'PAGE', labelKey: 'enum.pickerType.PAGE' },
+  { value: 'MEDIA', labelKey: 'enum.pickerType.MEDIA' },
+  { value: 'PAGE_TEMPLATE', labelKey: 'enum.pickerType.PAGE_TEMPLATE' },
+  { value: 'SECTION_TEMPLATE', labelKey: 'enum.pickerType.SECTION_TEMPLATE' },
+  { value: 'RECORD', labelKey: 'enum.pickerType.RECORD' },
+  { value: 'RECORD_SET', labelKey: 'enum.pickerType.RECORD_SET' },
 ];
 
 /** The types a `dataset "uid"` restriction applies to (M25.5.3): a dataset's records and its record sets. */
 const DATASET_BOUND_TYPES: readonly PickerType[] = ['RECORD', 'RECORD_SET'];
 
 /** Pagination sources (M21.4.1): never part of the default type switch. */
-export const SOURCE_TYPE_OPTIONS: { value: PickerType; label: string }[] = [
-  { value: 'NAV_FOLDER', label: 'Navigation folders' },
-  { value: 'DATASET', label: 'Datasets' },
+export const SOURCE_TYPE_OPTIONS: { value: PickerType; labelKey: string }[] = [
+  { value: 'NAV_FOLDER', labelKey: 'enum.pickerType.NAV_FOLDER' },
+  { value: 'DATASET', labelKey: 'enum.pickerType.DATASET' },
 ];
 
 /**
@@ -41,7 +41,7 @@ export const SOURCE_TYPE_OPTIONS: { value: PickerType; label: string }[] = [
 export function pickerTypeOptions(
   allowedTypes: readonly string[] | null | undefined,
   dataset: string | null | undefined,
-): { value: PickerType; label: string }[] {
+): { value: PickerType; labelKey: string }[] {
   if (dataset) {
     const allowed = PICKER_TYPE_OPTIONS.filter(
       (t) => DATASET_BOUND_TYPES.includes(t.value) && allowedTypes?.includes(t.value),
@@ -124,8 +124,10 @@ export function pickerRecordSets<T extends PickableRecordSet>(
   return matchingDatasets(dataset ? sets.filter((s) => s.dataset?.uid === dataset) : sets, search);
 }
 
-/** "1 record" / "12 records". */
-export function recordCountLabel(count: number | null | undefined): string {
-  const n = count ?? 0;
-  return `${n} ${n === 1 ? 'record' : 'records'}`;
+/** Looks a key up in the active language (`TranslocoService.translate`), for helpers that run outside a template. */
+export type Translator = (key: string, params?: Record<string, unknown>) => string;
+
+/** "1 record" / "12 records" (`common.count.records`). */
+export function recordCountLabel(count: number | null | undefined, translate: Translator): string {
+  return translate('common.count.records', { count: count ?? 0 });
 }

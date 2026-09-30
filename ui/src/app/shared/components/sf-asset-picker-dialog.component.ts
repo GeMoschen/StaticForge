@@ -9,6 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -75,7 +76,14 @@ export interface AssetPicked {
   selector: 'sf-asset-picker-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfEmptyStateComponent, SfIconComponent, SfSpinnerComponent, SfAssetPickerFolderNodeComponent],
+  imports: [
+    SfButtonComponent,
+    SfEmptyStateComponent,
+    SfIconComponent,
+    SfSpinnerComponent,
+    SfAssetPickerFolderNodeComponent,
+    TranslocoPipe,
+  ],
   templateUrl: './sf-asset-picker-dialog.component.html',
   styleUrl: './sf-asset-picker-dialog.component.scss',
 })
@@ -97,6 +105,7 @@ export class SfAssetPickerDialogComponent {
   private readonly search$ = new Subject<string>();
 
   protected readonly typeOptions = computed(() => pickerTypeOptions(this.allowedTypes(), this.dataset()));
+  private readonly transloco = inject(TranslocoService);
   protected readonly type = signal<PickerType>('PAGE');
   private readonly allDatasets = signal<DatasetSummaryView[]>([]);
   protected readonly datasets = computed(() => pickerDatasets(this.allDatasets(), this.dataset()));
@@ -110,21 +119,30 @@ export class SfAssetPickerDialogComponent {
   protected readonly picksSources = computed(() =>
     this.typeOptions().every((option) => option.value === 'NAV_FOLDER' || option.value === 'DATASET'),
   );
-  protected readonly title = computed(() => (this.picksSources() ? 'Choose a source' : 'Choose an asset'));
-  protected readonly emptyTitle = computed(() => {
+  protected readonly titleKey = computed(() =>
+    this.picksSources() ? 'shared.assetPicker.titleSource' : 'shared.assetPicker.titleAsset',
+  );
+  protected readonly emptyTitleKey = computed(() => {
     switch (this.type()) {
       case 'RECORD':
-        return 'No records found';
+        return 'shared.assetPicker.emptyRecord';
       case 'RECORD_SET':
-        return 'No record sets found';
+        return 'shared.assetPicker.emptyRecordSet';
       case 'NAV_FOLDER':
-        return 'No navigation folders found';
+        return 'shared.assetPicker.emptyNavFolder';
       case 'DATASET':
-        return 'No datasets found';
+        return 'shared.assetPicker.emptyDataset';
       default:
-        return 'No assets found';
+        return 'shared.assetPicker.emptyAsset';
     }
   });
+  protected readonly emptyDescriptionKey = computed(() =>
+    this.type() === 'RECORD'
+      ? 'shared.assetPicker.tryDatasetOrSearch'
+      : this.hasFolders()
+        ? 'shared.assetPicker.trySearchOrFolder'
+        : 'shared.assetPicker.trySearch',
+  );
   private navigationTree: FolderView[] | null = null;
   private recordSets: RecordSetSummaryView[] | null = null;
 
@@ -293,7 +311,7 @@ export class SfAssetPickerDialogComponent {
           type: 'RECORD_SET',
           dataset: set.dataset?.displayName ?? set.dataset?.uid,
           recordCount: set.recordCount ?? 0,
-          meta: `${recordCountLabel(set.recordCount)} · ${set.uid ?? ''}`,
+          meta: `${recordCountLabel(set.recordCount, (key, params) => this.transloco.translate(key, params))} · ${set.uid ?? ''}`,
         })),
       );
     if (this.recordSets) {

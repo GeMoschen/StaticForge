@@ -1,14 +1,14 @@
 @if (open()) {
   <div class="scrim" (click)="close()"></div>
-  <div class="dialog" #panel role="dialog" aria-modal="true" aria-label="Rename">
+  <div class="dialog" #panel role="dialog" aria-modal="true" [attr.aria-label]="'shared.renameAsset.title' | transloco">
     <header class="dialog__header">
-      <h2 class="dialog__title">Rename</h2>
-      <button type="button" class="dialog__close" aria-label="Close" (click)="close()">×</button>
+      <h2 class="dialog__title">{{ 'shared.renameAsset.title' | transloco }}</h2>
+      <button type="button" class="dialog__close" [attr.aria-label]="'common.close' | transloco" (click)="close()">×</button>
     </header>
 
     <div class="dialog__body">
       <section class="dialog__section">
-        <sf-field label="Display name">
+        <sf-field [label]="'shared.renameAsset.displayName' | transloco">
           <input
             #nameInput
             type="text"
@@ -18,22 +18,22 @@
             (keydown.enter)="saveName()"
           />
           @if (invalid() && touched()) {
-            <span class="error">A name is required</span>
+            <span class="error">{{ 'shared.renameAsset.nameRequired' | transloco }}</span>
           }
         </sf-field>
         <div class="dialog__actions">
           <sf-button type="button" variant="primary" [disabled]="submittingName()" (click)="saveName()">
             @if (submittingName()) {
-              <sf-spinner label="Saving…" />
+              <sf-spinner [label]="'common.saving' | transloco" />
             } @else {
-              Save
+              {{ 'common.save' | transloco }}
             }
           </sf-button>
         </div>
       </section>
 
       <section class="dialog__section">
-        <span class="dialog__section-label">UID</span>
+        <span class="dialog__section-label">{{ 'shared.renameAsset.uid' | transloco }}</span>
         <sf-uid-rename
           [projectKey]="projectKey()"
           [uuid]="uuid()"

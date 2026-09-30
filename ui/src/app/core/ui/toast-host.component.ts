@@ -1,5 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { Toast, ToastService } from './toast.service';
 
 /**
@@ -27,11 +28,11 @@ import { Toast, ToastService } from './toast.service';
         @if (toast.action; as action) {
           <button type="button" class="toast__action" (click)="run(toast)">{{ action.label }}</button>
         }
-        <button type="button" class="toast__close" aria-label="Dismiss" (click)="service.dismiss(toast.id)">×</button>
+        <button type="button" class="toast__close" [attr.aria-label]="'shell.toast.dismiss' | transloco" (click)="service.dismiss(toast.id)">×</button>
       </div>
     </ng-template>
   `,
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, TranslocoPipe],
   styles: `
     :host {
       position: fixed;

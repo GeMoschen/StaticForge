@@ -1,3 +1,4 @@
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
@@ -79,7 +80,7 @@ export type FolderRenameFn = (
 @Component({
   selector: 'sf-store-tree-node',
   standalone: true,
-  imports: [SfIconComponent, SfRenameAssetDialogComponent, ReleaseBadgeComponent],
+  imports: [SfIconComponent, SfRenameAssetDialogComponent, ReleaseBadgeComponent, TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sf-store-tree-node.component.html',
   styleUrl: './sf-store-tree-node.component.scss',
@@ -88,6 +89,7 @@ export class SfStoreTreeNodeComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
+  private readonly transloco = inject(TranslocoService);
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
@@ -96,8 +98,8 @@ export class SfStoreTreeNodeComponent {
   readonly depth = input<number>(0);
   readonly selectedUuid = input<string | null>(null);
   readonly projectKey = input<string>('');
-  /** What a leaf is called in toasts, e.g. "Reference" or "Property set". */
-  readonly leafNoun = input<string>('Item');
+  /** What a leaf is called in toasts, e.g. "Reference" or "Property set"; the shared "Item" when omitted. */
+  readonly leafNoun = input<string | null>(null);
   /**
    * Persists a folder rename. Defaults to the generic asset rename, which is right for every store
    * whose folders have no endpoint of their own.
@@ -198,7 +200,7 @@ export class SfStoreTreeNodeComponent {
       return;
     }
     const items: ContextMenuItem[] = [
-      { label: 'Rename', icon: 'edit', action: () => this.openRename() },
+      { label: this.transloco.translate('shared.storeTree.rename'), icon: 'edit', action: () => this.openRename() },
       ...(this.menuItems()?.(this.node()) ?? []),
     ];
     this.menu.open(event, items);
@@ -228,12 +230,15 @@ export class SfStoreTreeNodeComponent {
       next: () => {
         this.renamingName.set(false);
         this.renameOpen.set(false);
-        this.toast.show(`${this.isFolder() ? 'Folder' : this.leafNoun()} renamed`, 'success');
+        const noun = this.isFolder()
+          ? this.transloco.translate('shared.storeTree.folder')
+          : (this.leafNoun() ?? this.transloco.translate('shared.storeTree.item'));
+        this.toast.show(this.transloco.translate('shared.storeTree.renamed', { noun }), 'success');
         this.changed.emit();
       },
       error: () => {
         this.renamingName.set(false);
-        this.toast.show('Could not rename — try again in a moment.', 'error');
+        this.toast.show(this.transloco.translate('shared.storeTree.renameFailed'), 'error');
       },
     });
   }

@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import {
   AbstractControl,
   FormBuilder,
@@ -73,15 +74,16 @@ function uidOrBlank(control: AbstractControl): ValidationErrors | null {
   return !value || UID_PATTERN.test(value) ? null : { uid: true };
 }
 
-const TITLES: Record<CreateAssetKind, string> = {
-  FOLDER: 'New folder',
-  PAGE: 'New page',
-  PAGE_TEMPLATE: 'New page template',
-  SECTION_TEMPLATE: 'New section template',
-  PAGE_REFERENCE: 'New reference',
-  GLOBAL_SET: 'New property set',
-  DATASET: 'New dataset',
-  RECORD_SET: 'New record set',
+/** The heading of the dialog per kind (`shared.createAsset.title.*` in `en.json`). */
+const TITLE_KEYS: Record<CreateAssetKind, string> = {
+  FOLDER: 'shared.createAsset.title.FOLDER',
+  PAGE: 'shared.createAsset.title.PAGE',
+  PAGE_TEMPLATE: 'shared.createAsset.title.PAGE_TEMPLATE',
+  SECTION_TEMPLATE: 'shared.createAsset.title.SECTION_TEMPLATE',
+  PAGE_REFERENCE: 'shared.createAsset.title.PAGE_REFERENCE',
+  GLOBAL_SET: 'shared.createAsset.title.GLOBAL_SET',
+  DATASET: 'shared.createAsset.title.DATASET',
+  RECORD_SET: 'shared.createAsset.title.RECORD_SET',
 };
 
 /**
@@ -97,7 +99,14 @@ const TITLES: Record<CreateAssetKind, string> = {
   selector: 'sf-create-asset-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, SfAssetPickerDialogComponent, SfButtonComponent, SfFieldComponent, SfSpinnerComponent],
+  imports: [
+    ReactiveFormsModule,
+    SfAssetPickerDialogComponent,
+    SfButtonComponent,
+    SfFieldComponent,
+    SfSpinnerComponent,
+    TranslocoPipe,
+  ],
   templateUrl: './sf-create-asset-dialog.component.html',
   styleUrl: './sf-create-asset-dialog.component.scss',
 })
@@ -126,7 +135,7 @@ export class SfCreateAssetDialogComponent {
   protected readonly showPicker = signal(false);
   protected readonly targetLabel = signal('');
 
-  protected readonly title: Signal<string> = computed(() => TITLES[this.kind()]);
+  protected readonly titleKey: Signal<string> = computed(() => TITLE_KEYS[this.kind()]);
   protected readonly showTemplateField = computed(() => this.kind() === 'PAGE');
   protected readonly showTargetField = computed(() => this.kind() === 'PAGE_REFERENCE');
   protected readonly showLabelField = computed(() => this.kind() === 'PAGE_REFERENCE');

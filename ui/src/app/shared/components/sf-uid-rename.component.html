@@ -9,7 +9,7 @@
         [title]="readOnlyReason()"
         (click)="startEdit()"
       >
-        Change UID
+        {{ 'shared.uidRename.change' | transloco }}
       </button>
     </div>
   } @else {
@@ -20,7 +20,7 @@
         [value]="draft()"
         (input)="onInput($event)"
         [attr.aria-invalid]="error() ? 'true' : null"
-        placeholder="lowercase letters, numbers, underscores"
+        [placeholder]="'shared.uidRename.placeholder' | transloco"
         spellcheck="false"
         autocomplete="off"
       />
@@ -29,7 +29,7 @@
       }
       <div class="uid-rename__actions">
         <button class="uid-rename__btn" type="button" (click)="cancelEdit()">
-          Cancel
+          {{ 'common.cancel' | transloco }}
         </button>
         <button
           class="uid-rename__btn uid-rename__btn--primary"
@@ -37,7 +37,7 @@
           [disabled]="saving() || readOnly()"
           (click)="submit()"
         >
-          {{ saving() ? 'Saving…' : 'Save' }}
+          {{ (saving() ? 'common.saving' : 'common.save') | transloco }}
         </button>
       </div>
     </div>
@@ -46,8 +46,8 @@
   @if (warning(); as w) {
     <div class="uid-rename__warning" role="status">
       <p class="uid-rename__warning-text">
-        Some templates or processed media files still reference the old uid
-        <code>{{ w.oldUid }}</code> literally and need a manual fix.
+        {{ 'shared.uidRename.warningBefore' | transloco }}
+        <code>{{ w.oldUid }}</code> {{ 'shared.uidRename.warningAfter' | transloco }}
       </p>
       <ul class="uid-rename__affected">
         @for (t of w.affected; track t.assetUuid ?? t.assetUid) {

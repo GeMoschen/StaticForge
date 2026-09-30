@@ -1,8 +1,12 @@
+import { TestBed } from '@angular/core/testing';
+import { TranslocoService } from '@jsverse/transloco';
 import { describe, expect, it } from 'vitest';
 import { revisionAssetCount, revisionSummaryAssets, revisionSummaryLabel } from './revision-summary.util';
 import type { components } from '../core/api/generated/schema.d.ts';
 
 type RevisionView = components['schemas']['RevisionView'];
+
+const t = (key: string, params?: Record<string, unknown>) => TestBed.inject(TranslocoService).translate(key, params);
 
 function rev(overrides: Partial<RevisionView>): RevisionView {
   return {
@@ -19,7 +23,7 @@ describe('revision-summary.util', () => {
     const r = rev({ changeType: 'UPDATE', summary: undefined });
     expect(revisionSummaryAssets(r)).toEqual([]);
     expect(revisionAssetCount(r)).toBe(1);
-    expect(revisionSummaryLabel(r)).toBe('UPDATE');
+    expect(revisionSummaryLabel(r, t)).toBe('UPDATE');
   });
 
   it('counts a revision with summary.assets.length === 1 as 1 and renders the plain label', () => {
@@ -29,7 +33,7 @@ describe('revision-summary.util', () => {
       summary: { assets: [{ uuid: 'a-1', type: 'PAGE', action: 'UPDATE' }] } as never,
     });
     expect(revisionAssetCount(r)).toBe(1);
-    expect(revisionSummaryLabel(r)).toBe('UPDATE');
+    expect(revisionSummaryLabel(r, t)).toBe('UPDATE');
   });
 
   it('prefers comment over changeType for the base label when both are present', () => {
@@ -38,7 +42,7 @@ describe('revision-summary.util', () => {
       comment: 'Fixed typo',
       summary: { assets: [{ uuid: 'a-1' }] } as never,
     });
-    expect(revisionSummaryLabel(r)).toBe('Fixed typo');
+    expect(revisionSummaryLabel(r, t)).toBe('Fixed typo');
   });
 
   it('appends an asset-count affordance for a revision touching 8 assets (project creation)', () => {
@@ -50,6 +54,6 @@ describe('revision-summary.util', () => {
       } as never,
     });
     expect(revisionAssetCount(r)).toBe(8);
-    expect(revisionSummaryLabel(r)).toBe('CREATE · 8 assets');
+    expect(revisionSummaryLabel(r, t)).toBe('CREATE · 8 assets');
   });
 });

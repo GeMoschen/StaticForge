@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { SfIconComponent } from './sf-icon.component';
@@ -12,7 +13,7 @@ type FolderView = components['schemas']['FolderView'];
 @Component({
   selector: 'sf-asset-picker-folder-node',
   standalone: true,
-  imports: [SfIconComponent],
+  imports: [SfIconComponent, TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="node" [style.padding-left.px]="depth() * 14">
@@ -27,7 +28,7 @@ type FolderView = components['schemas']['FolderView'];
           class="node__toggle"
           [class.node__toggle--leaf]="!hasChildren()"
           (click)="toggle($event)"
-          [attr.aria-label]="hasChildren() ? 'Toggle folder' : 'Folder'"
+          [attr.aria-label]="(hasChildren() ? 'shared.assetPicker.toggleFolder' : 'shared.assetPicker.folder') | transloco"
         >
           <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
         </button>

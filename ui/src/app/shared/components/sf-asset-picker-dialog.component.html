@@ -1,22 +1,22 @@
 <div class="scrim" (click)="close()"></div>
-<div class="dialog" role="dialog" aria-modal="true" [attr.aria-label]="title()">
+<div class="dialog" role="dialog" aria-modal="true" [attr.aria-label]="titleKey() | transloco">
   <header class="dialog__header">
-    <h2 class="dialog__title">{{ title() }}</h2>
-    <button type="button" class="dialog__close" aria-label="Close" (click)="close()">
+    <h2 class="dialog__title">{{ titleKey() | transloco }}</h2>
+    <button type="button" class="dialog__close" [attr.aria-label]="'common.close' | transloco" (click)="close()">
       <sf-icon name="close" />
     </button>
   </header>
 
   <div class="dialog__toolbar">
     @if (typeOptions().length > 1) {
-      <select class="dialog__type" [value]="type()" (change)="onTypeChange($event)" [attr.aria-label]="picksSources() ? 'Source type' : 'Asset type'">
+      <select class="dialog__type" [value]="type()" (change)="onTypeChange($event)" [attr.aria-label]="(picksSources() ? 'shared.assetPicker.sourceType' : 'shared.assetPicker.assetType') | transloco">
         @for (option of typeOptions(); track option.value) {
-          <option [value]="option.value">{{ option.label }}</option>
+          <option [value]="option.value">{{ option.labelKey | transloco }}</option>
         }
       </select>
     }
     @if (type() === 'RECORD' && datasets().length > 1) {
-      <select class="dialog__type" [value]="datasetUuid()" (change)="onDatasetChange($event)" aria-label="Dataset">
+      <select class="dialog__type" [value]="datasetUuid()" (change)="onDatasetChange($event)" [attr.aria-label]="'shared.assetPicker.dataset' | transloco">
         @for (ds of datasets(); track ds.uuid) {
           <option [value]="ds.uuid">{{ ds.displayName ?? ds.uid }}</option>
         }
@@ -25,7 +25,7 @@
     <input
       type="search"
       class="dialog__search"
-      placeholder="Search…"
+      [placeholder]="'common.searchPlaceholder' | transloco"
       (input)="onSearchInput($event)"
     />
   </div>
@@ -40,7 +40,7 @@
           (click)="selectFolder(null)"
         >
           <sf-icon name="home" />
-          All
+          {{ 'shared.assetPicker.allRoot' | transloco }}
         </button>
         @for (folder of tree(); track folder.uuid) {
           <sf-asset-picker-folder-node
@@ -55,11 +55,11 @@
 
     <div class="dialog__results">
       @if (loading()) {
-        <sf-spinner label="Loading…" />
+        <sf-spinner />
       } @else if (items().length === 0) {
         <sf-empty-state
-          [title]="emptyTitle()"
-          [description]="type() === 'RECORD' ? 'Try a different search or dataset.' : hasFolders() ? 'Try a different search or folder.' : 'Try a different search.'"
+          [title]="emptyTitleKey() | transloco"
+          [description]="emptyDescriptionKey() | transloco"
         />
       } @else {
         <ul class="dialog__list">

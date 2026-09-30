@@ -17,7 +17,12 @@ export interface CdlSections {
 
 export const EMPTY_SECTIONS: CdlSections = { content: '', bodies: '', rules: '' };
 
-export const SECTION_LABELS: Record<CdlSection, string> = { content: 'Content', bodies: 'Bodies', rules: 'Rules' };
+/** The translation key of each section's name (`enum.cdlSection.*` in `en.json`). */
+export const SECTION_LABEL_KEYS: Record<CdlSection, string> = {
+  content: 'enum.cdlSection.content',
+  bodies: 'enum.cdlSection.bodies',
+  rules: 'enum.cdlSection.rules',
+};
 
 /** The sections of a detail or request body carrying `contentCdl`/`bodiesCdl`/`rulesCdl`. */
 export function sectionsOf(

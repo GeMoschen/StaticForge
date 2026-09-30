@@ -177,7 +177,7 @@ A code audit and a screenshot run found the following. The run used a seeded pro
 | M35.1 | [Functional bugs from the UX run](001-functional-bugs.md) | 0 groundwork | fullstack | — | done |
 | M35.2 | [Decompose large components](002-decompose-large-components.md) | 0 groundwork | frontend | M35.1 | done |
 | M35.3 | [User preferences API and client store](003-user-preferences.md) | 0 groundwork | fullstack | — | done |
-| M35.4 | [Transloco setup and string extraction rules](004-i18n-transloco.md) | 0 groundwork | frontend | — | todo |
+| M35.4 | [Transloco setup and string extraction rules](004-i18n-transloco.md) | 0 groundwork | frontend | — | done |
 | M35.5 | [Design tokens v2, theme and density](005-tokens-theme-density.md) | 1 design system | frontend | M35.3 | todo |
 | M35.6 | [Base components and form controls](006-base-components.md) | 1 design system | frontend | M35.5 | todo |
 | M35.7 | [Overlays: dialog, confirm, drawer, popover, menu, toast](007-overlays.md) | 1 design system | frontend | M35.5 | todo |

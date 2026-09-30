@@ -6,7 +6,7 @@
     aria-modal="true"
     aria-labelledby="sf-palette-title"
   >
-    <h2 id="sf-palette-title" class="sf-command-palette__title">Search</h2>
+    <h2 id="sf-palette-title" class="sf-command-palette__title">{{ 'shell.palette.title' | transloco }}</h2>
     <div class="sf-command-palette__field">
       <sf-icon class="sf-command-palette__field-icon" name="search" />
       <input
@@ -23,8 +23,8 @@
         [attr.aria-controls]="listboxId"
         [attr.aria-activedescendant]="activeOption()?.id ?? null"
         [attr.aria-disabled]="projectKey() === null ? 'true' : null"
-        [placeholder]="projectKey() === null ? 'Open a project to search' : 'Search pages, media, templates…'"
-        aria-label="Search this project"
+        [placeholder]="(projectKey() === null ? 'shell.palette.placeholderNoProject' : 'shell.palette.placeholderProject') | transloco"
+        [attr.aria-label]="'shell.palette.ariaLabel' | transloco"
         [value]="query()"
         (input)="onInput($event)"
         (keydown)="onKeydown($event)"
@@ -36,32 +36,32 @@
 
     @if (timeTravel.isTimeTravel()) {
       <p class="sf-command-palette__note">
-        <sf-icon name="history" /> Results reflect the current revision.
+        <sf-icon name="history" /> {{ 'shell.palette.timeTravelNote' | transloco }}
       </p>
     }
 
     <div class="sf-command-palette__results">
       @switch (state().kind) {
         @case ('no-project') {
-          <p class="sf-command-palette__hint">Open a project to search. Search covers one project at a time.</p>
+          <p class="sf-command-palette__hint">{{ 'shell.palette.hintNoProject' | transloco }}</p>
         }
         @case ('unavailable') {
           <p class="sf-command-palette__hint sf-command-palette__hint--warning">
-            Search is temporarily unavailable. An administrator can check the search index status.
+            {{ 'shell.palette.hintUnavailable' | transloco }}
           </p>
         }
         @case ('idle') {
           @if (query().trim().length > 0) {
-            <p class="sf-command-palette__hint">Type at least two characters.</p>
+            <p class="sf-command-palette__hint">{{ 'shell.palette.hintMinLength' | transloco }}</p>
           } @else {
             <p class="sf-command-palette__hint">
-              Find pages by their text, media by alt text or caption, templates by their source.
+              {{ 'shell.palette.hintIdle' | transloco }}
             </p>
           }
         }
       }
 
-      <ul class="sf-command-palette__listbox" role="listbox" [id]="listboxId" aria-label="Search results">
+      <ul class="sf-command-palette__listbox" role="listbox" [id]="listboxId" [attr.aria-label]="'shell.palette.results' | transloco">
         @for (entry of groups(); track entry.group.type) {
           <li role="presentation" class="sf-command-palette__group">
             <div class="sf-command-palette__group-heading" [id]="entry.headingId" role="presentation">
@@ -107,21 +107,21 @@
       </ul>
 
       @if (state().kind === 'results' && totalHits() === 0) {
-        <p class="sf-command-palette__hint">No results for “{{ state().q }}”.</p>
+        <p class="sf-command-palette__hint">{{ 'shell.palette.noResults' | transloco : { query: state().q } }}</p>
       }
     </div>
 
     @if (projectKey() !== null) {
       <div class="sf-command-palette__footer">
-        <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
-        <span><kbd>Enter</kbd> open</span>
+        <span><kbd>↑</kbd><kbd>↓</kbd> {{ 'shell.palette.move' | transloco }}</span>
+        <span><kbd>Enter</kbd> {{ 'shell.palette.open' | transloco }}</span>
         <button type="button" class="sf-command-palette__footer-link" (mousedown)="$event.preventDefault()" (click)="openSearchPage()">
-          <kbd>Ctrl</kbd><kbd>Enter</kbd> search page
+          <kbd>Ctrl</kbd><kbd>Enter</kbd> {{ 'shell.palette.searchPage' | transloco }}
           @if (totalHits() > 0) {
-            ({{ totalHits() }} {{ totalHits() === 1 ? 'result' : 'results' }})
+            {{ 'shell.palette.resultCount' | transloco : { count: totalHits() } }}
           }
         </button>
-        <span><kbd>Esc</kbd> close</span>
+        <span><kbd>Esc</kbd> {{ 'shell.palette.close' | transloco }}</span>
       </div>
     }
 

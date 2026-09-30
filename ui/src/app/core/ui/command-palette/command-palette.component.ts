@@ -1,3 +1,4 @@
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { EditingLocaleStore } from '../../project/editing-locale.store';
 import {
   ChangeDetectionStrategy,
@@ -51,7 +52,7 @@ interface PaletteGroup {
 @Component({
   selector: 'sf-command-palette',
   standalone: true,
-  imports: [SfAutofocusDirective, SfIconComponent],
+  imports: [SfAutofocusDirective, SfIconComponent, TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './command-palette.component.html',
   styleUrl: './command-palette.component.scss',
@@ -120,16 +121,19 @@ export class CommandPaletteComponent {
     switch (state.kind) {
       case 'results': {
         const n = this.totalHits();
-        return n === 0 ? `No results for ${state.q}` : `${n} ${n === 1 ? 'result' : 'results'}`;
+        return n === 0
+          ? this.transloco.translate('shell.palette.announceNoResults', { query: state.q })
+          : this.transloco.translate('shell.palette.announceResults', { count: n });
       }
       case 'unavailable':
-        return 'Search is temporarily unavailable';
+        return this.transloco.translate('shell.palette.announceUnavailable');
       default:
         return '';
     }
   });
 
   private readonly editingLocale = inject(EditingLocaleStore);
+  private readonly transloco = inject(TranslocoService);
 
   constructor() {
     // The palette searches the language the editor is working in (M24.4.1).
@@ -263,7 +267,12 @@ export class CommandPaletteComponent {
   }
 
   protected optionLabel(option: PaletteOption): string {
-    return option.kind === 'more' ? `See all ${option.group.total} ${option.group.label.toLowerCase()}` : '';
+    return option.kind === 'more'
+      ? this.transloco.translate('shell.palette.seeAll', {
+          total: option.group.total,
+          group: option.group.label.toLowerCase(),
+        })
+      : '';
   }
 
   /** Search always answers from the current revision: opening a result leaves time travel. */

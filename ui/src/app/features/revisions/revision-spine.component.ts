@@ -1,3 +1,4 @@
+import { TranslocoService } from '@jsverse/transloco';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -34,6 +35,7 @@ const POLL_MS = 5000;
 })
 export class RevisionSpineComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
+  private readonly transloco = inject(TranslocoService);
   private readonly auth = inject(AuthStore);
   private readonly store = inject(ProjectContextStore);
 
@@ -141,7 +143,7 @@ export class RevisionSpineComponent implements OnDestroy {
   }
 
   protected summaryFor(rev: RevisionView): string {
-    return revisionSummaryLabel(rev);
+    return revisionSummaryLabel(rev, (key, params) => this.transloco.translate(key, params));
   }
 
   protected onTick(rev: RevisionView): void {

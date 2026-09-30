@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, input, output, viewChild } from '@angular/core';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { CodeFormat, SfCodeEditorComponent } from '../code-editor/code-editor.component';
@@ -20,7 +21,7 @@ let nextId = 0;
   selector: 'sf-octl-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfCodeEditorComponent],
+  imports: [SfCodeEditorComponent, TranslocoPipe],
   templateUrl: './sf-octl-editor.component.html',
   styleUrl: './sf-octl-editor.component.scss',
 })

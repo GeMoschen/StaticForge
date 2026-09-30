@@ -4,7 +4,7 @@
       <sf-icon [name]="icon()!" size="2.5rem" />
     </span>
   }
-  <h2 class="sf-empty-state__title">{{ title() }}</h2>
+  <h2 class="sf-empty-state__title">{{ title() ?? ('common.nothingHereYet' | transloco) }}</h2>
   @if (description()) {
     <p class="sf-empty-state__description">{{ description() }}</p>
   }

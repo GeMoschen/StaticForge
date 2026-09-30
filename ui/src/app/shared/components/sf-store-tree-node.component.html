@@ -23,7 +23,7 @@
         class="store-node__toggle"
         [class.store-node__toggle--leaf]="!hasChildren()"
         (click)="toggle($event)"
-        [attr.aria-label]="hasChildren() ? 'Toggle folder' : 'Folder'"
+        [attr.aria-label]="(hasChildren() ? 'shared.storeTree.toggleFolder' : 'shared.storeTree.folder') | transloco"
       >
         <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
       </button>
@@ -53,7 +53,7 @@
       <sf-icon
         class="store-node__protected-icon"
         name="lock"
-        title="Built-in folder — can't be renamed, moved, or deleted"
+        [title]="'shared.storeTree.protectedFolder' | transloco"
       />
     }
   </div>

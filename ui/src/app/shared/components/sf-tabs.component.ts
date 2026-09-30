@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, inject, input, output } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 /** One tab: `errors` shows a count badge, `dirty` an unsaved dot, `note` a muted word such as "disabled". */
 export interface SfTab {
@@ -19,6 +20,7 @@ let nextId = 0;
 @Component({
   selector: 'sf-tabs',
   standalone: true,
+  imports: [TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="sf-tabs" role="tablist" [attr.aria-label]="label()">
@@ -40,10 +42,10 @@ let nextId = 0;
             <span class="sf-tabs__note">{{ tab.note }}</span>
           }
           @if (tab.errors) {
-            <span class="sf-tabs__errors">{{ tab.errors }}<span class="sf-sr-only"> {{ tab.errors === 1 ? 'error' : 'errors' }}</span></span>
+            <span class="sf-tabs__errors">{{ tab.errors }}<span class="sf-sr-only"> {{ 'shared.tabs.errors' | transloco: { count: tab.errors } }}</span></span>
           }
           @if (tab.dirty) {
-            <span class="sf-tabs__dirty" aria-hidden="true">•</span><span class="sf-sr-only"> (unsaved)</span>
+            <span class="sf-tabs__dirty" aria-hidden="true">•</span><span class="sf-sr-only"> {{ 'shared.tabs.unsaved' | transloco }}</span>
           }
         </button>
       }

@@ -1,3 +1,4 @@
+import { provideTranslocoTesting } from '../../core/i18n/transloco-testing';
 import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -110,6 +111,8 @@ describe('ProjectSettingsRedirectsComponent', () => {
     TestBed.configureTestingModule({
       imports: [ProjectSettingsRedirectsComponent],
       providers: [
+        // This spec resets the TestBed mid-test, which drops the global Transloco set-up of test-setup.ts.
+        provideTranslocoTesting(),
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),

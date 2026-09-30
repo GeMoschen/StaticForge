@@ -1,3 +1,4 @@
+import { TranslocoService } from '@jsverse/transloco';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -35,6 +36,7 @@ const OVERSCAN = 8;
 })
 export class RevisionsListComponent {
   private readonly service = inject(RevisionsService);
+  private readonly transloco = inject(TranslocoService);
   private readonly api = inject(ApiClient);
   private readonly auth = inject(AuthStore);
 
@@ -146,6 +148,6 @@ export class RevisionsListComponent {
   }
 
   protected summaryFor(rev: RevisionView): string {
-    return revisionSummaryLabel(rev);
+    return revisionSummaryLabel(rev, (key, params) => this.transloco.translate(key, params));
   }
 }

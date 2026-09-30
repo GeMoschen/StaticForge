@@ -1,3 +1,4 @@
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -22,6 +23,7 @@ interface UidWarning {
 @Component({
   selector: 'sf-uid-rename',
   standalone: true,
+  imports: [TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sf-uid-rename.component.html',
   styleUrl: './sf-uid-rename.component.scss',
@@ -35,6 +37,7 @@ export class SfUidRenameComponent {
 
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
+  private readonly transloco = inject(TranslocoService);
 
   private readonly access = inject(ProjectAccessStore);
 
@@ -44,9 +47,9 @@ export class SfUidRenameComponent {
   protected readonly readOnly = this.access.readOnly;
   protected readonly readOnlyReason = computed(() =>
     this.access.archived()
-      ? 'This project is archived and read-only.'
+      ? this.transloco.translate('shared.uidRename.archived')
       : this.readOnly()
-        ? 'Viewing a past revision — exit time travel to make changes'
+        ? this.transloco.translate('shared.uidRename.timeTravel')
         : '',
   );
 
@@ -84,7 +87,7 @@ export class SfUidRenameComponent {
     }
     const next = this.draft().trim();
     if (!SfUidRenameComponent.UID_PATTERN.test(next)) {
-      this.error.set('Use lowercase letters, numbers, and underscores only');
+      this.error.set(this.transloco.translate('shared.uidRename.invalid'));
       return;
     }
     if (next === this.uid()) {
@@ -98,7 +101,7 @@ export class SfUidRenameComponent {
       .subscribe({
         next: (result) => {
           const affected = result.affectedTemplates ?? [];
-          this.toasts.show('UID changed', 'success');
+          this.toasts.show(this.transloco.translate('shared.uidRename.changed'), 'success');
           this.editing.set(false);
           this.saving.set(false);
           this.draft.set('');
@@ -112,7 +115,7 @@ export class SfUidRenameComponent {
         },
         error: () => {
           this.saving.set(false);
-          this.toasts.show('Could not change UID — it may already be used by another asset.', 'error');
+          this.toasts.show(this.transloco.translate('shared.uidRename.changeFailed'), 'error');
         },
       });
   }

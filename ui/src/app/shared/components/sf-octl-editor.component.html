@@ -21,7 +21,7 @@
         <button
           type="button"
           class="diagnostic__position"
-          [attr.aria-label]="'Go to line ' + diag.line + ', column ' + (diag.column ?? 0)"
+          [attr.aria-label]="'shared.codeEditor.goToPosition' | transloco: { line: diag.line, column: diag.column ?? 0 }"
           (click)="goTo(diag)"
         >
           ({{ diag.line }}:{{ diag.column ?? 0 }})

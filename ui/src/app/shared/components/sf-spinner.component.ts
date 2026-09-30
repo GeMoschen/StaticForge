@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 /**
  * Small inline loading indicator. Replaces bare "Loading…" text and the
@@ -7,11 +8,12 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 @Component({
   selector: 'sf-spinner',
   standalone: true,
+  imports: [TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="sf-spinner" role="status">
       <span class="sf-spinner__ring" aria-hidden="true"></span>
-      <span class="sf-spinner__label">{{ label() }}</span>
+      <span class="sf-spinner__label">{{ label() ?? ('common.loading' | transloco) }}</span>
     </div>
   `,
   styles: [
@@ -39,5 +41,6 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   ],
 })
 export class SfSpinnerComponent {
-  readonly label = input('Loading…');
+  /** The visible and announced text; the shared "Loading…" when omitted. */
+  readonly label = input<string | null>(null);
 }

@@ -1,0 +1,350 @@
+{
+  "common": {
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "back": "Back",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "search": "Search",
+    "searchPlaceholder": "Search…",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK",
+    "create": "Create",
+    "creating": "Creating…",
+    "rename": "Rename",
+    "edit": "Edit",
+    "add": "Add",
+    "remove": "Remove",
+    "apply": "Apply",
+    "confirm": "Confirm",
+    "dismiss": "Dismiss",
+    "change": "Change",
+    "next": "Next",
+    "previous": "Previous",
+    "more": "More",
+    "all": "All",
+    "none": "None",
+    "name": "Name",
+    "optional": "Optional",
+    "nothingHereYet": "Nothing here yet",
+    "unsaved": "(unsaved)",
+    "time": {
+      "justNow": "just now",
+      "ago": {
+        "minute": "{n} min ago",
+        "hour": "{n} h ago",
+        "day": "{n} d ago",
+        "month": "{n} mo ago",
+        "year": "{n} y ago"
+      },
+      "fromNow": {
+        "minute": "{n} min from now",
+        "hour": "{n} h from now",
+        "day": "{n} d from now",
+        "month": "{n} mo from now",
+        "year": "{n} y from now"
+      }
+    },
+    "count": {
+      "items": "{count, plural, one {# item} other {# items}}",
+      "results": "{count, plural, one {# result} other {# results}}",
+      "errors": "{count, plural, one {# error} other {# errors}}",
+      "records": "{count, plural, one {# record} other {# records}}",
+      "assets": "{count, plural, one {# asset} other {# assets}}"
+    }
+  },
+  "enum": {
+    "assetType": {
+      "PAGE": "Page",
+      "MEDIA": "Media",
+      "SECTION_TEMPLATE": "Section template",
+      "PAGE_TEMPLATE": "Page template",
+      "FOLDER": "Folder",
+      "PAGE_REFERENCE": "Navigation reference",
+      "GLOBAL_SET": "Global set",
+      "DATASET": "Dataset",
+      "RECORD": "Record",
+      "RECORD_SET": "Record set"
+    },
+    "pickerType": {
+      "PAGE": "Pages",
+      "MEDIA": "Media",
+      "PAGE_TEMPLATE": "Page templates",
+      "SECTION_TEMPLATE": "Section templates",
+      "RECORD": "Records",
+      "RECORD_SET": "Record sets",
+      "NAV_FOLDER": "Navigation folders",
+      "DATASET": "Datasets"
+    },
+    "cdlSection": {
+      "content": "Content",
+      "bodies": "Bodies",
+      "rules": "Rules"
+    },
+    "projectRole": {
+      "VIEWER": "Viewer",
+      "EDITOR": "Editor",
+      "DEVELOPER": "Developer",
+      "PROJECT_ADMIN": "Project admin"
+    },
+    "systemRole": {
+      "USER": "User",
+      "INSTANCE_ADMIN": "Instance admin"
+    },
+    "userStatus": {
+      "ACTIVE": "Active",
+      "DISABLED": "Disabled",
+      "LOCKED": "Locked",
+      "DELETED": "Deleted"
+    },
+    "releaseStatus": {
+      "NEW": "New",
+      "PUBLISHED": "Published",
+      "CHANGED": "Changed",
+      "UNPUBLISHED": "Unpublished",
+      "DELETION_PENDING": "Deletion pending"
+    },
+    "changeType": {
+      "CREATE": "Created",
+      "UPDATE": "Updated",
+      "DELETE": "Deleted",
+      "RESTORE": "Restored",
+      "MOVE": "Moved",
+      "RENAME": "Renamed",
+      "UID_CHANGE": "UID changed",
+      "BULK": "Bulk change",
+      "IMPORT": "Imported",
+      "RELEASE": "Released",
+      "UNPUBLISH": "Unpublished",
+      "DISCARD": "Discarded"
+    },
+    "runStatus": {
+      "QUEUED": "Queued",
+      "RUNNING": "Running",
+      "SUCCESS": "Succeeded",
+      "PARTIAL": "Partial",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled"
+    },
+    "generationMode": {
+      "FULL": "Full build",
+      "INCREMENTAL": "Incremental build"
+    },
+    "targetType": {
+      "FILESYSTEM": "Folder",
+      "ZIP": "ZIP archive",
+      "S3": "S3 bucket"
+    },
+    "jobState": {
+      "RUNNING": "Running",
+      "SUCCEEDED": "Succeeded",
+      "PARTIAL": "Partial",
+      "FAILED": "Failed",
+      "SKIPPED": "Skipped"
+    },
+    "jobTrigger": {
+      "SCHEDULE": "Scheduled",
+      "MANUAL": "Manual",
+      "STARTUP": "Startup"
+    },
+    "scheduleStatus": {
+      "PENDING": "Pending",
+      "RUNNING": "Running",
+      "SUCCEEDED": "Succeeded",
+      "FAILED": "Failed",
+      "SKIPPED": "Skipped",
+      "CANCELLED": "Cancelled"
+    },
+    "publishPermission": {
+      "RELEASE": "Release",
+      "SCHEDULE_RELEASE": "Schedule a release",
+      "INCREMENTAL_BUILD": "Incremental build",
+      "FULL_BUILD": "Full build"
+    },
+    "redirectKind": {
+      "AUTO": "Automatic",
+      "MANUAL": "Manual"
+    },
+    "redirectState": {
+      "ACTIVE": "Active",
+      "SHADOWED": "Shadowed",
+      "DANGLING": "Dangling",
+      "LOOP": "Loop"
+    },
+    "searchState": {
+      "READY": "Ready",
+      "CATCHING_UP": "Catching up",
+      "REBUILDING": "Rebuilding",
+      "UNAVAILABLE": "Unavailable"
+    },
+    "severity": {
+      "ERROR": "Error",
+      "WARNING": "Warning",
+      "HINT": "Hint",
+      "INFO": "Info"
+    },
+    "auditAction": {
+      "AUTH_LOGIN": "Signed in",
+      "AUTH_LOGIN_FAILED": "Sign-in failed",
+      "CHANNEL_CREATE": "Channel created",
+      "CHANNEL_UPDATE": "Channel changed",
+      "CHANNEL_DELETE": "Channel deleted",
+      "COMPACTION_POLICY_SET": "Revision compaction policy changed",
+      "REVISIONS_COMPACTED": "Revisions compacted",
+      "GENERATION_STARTED": "Build started",
+      "GENERATION_CANCELLED": "Build cancelled",
+      "GENERATION_PROMOTED": "Build promoted",
+      "JOB_RUN": "Job run started manually",
+      "JOB_SETTINGS_SET": "Job schedule or settings changed",
+      "MEMBER_ROLE_SET": "Member role changed",
+      "MEMBER_REMOVED": "Member removed",
+      "PROJECT_ARCHIVED": "Project archived",
+      "PROJECT_UNARCHIVED": "Project restored from archive",
+      "PUBLISH_POLICY_SET": "Publish policy changed",
+      "REDIRECT_CREATED": "Redirect created",
+      "REDIRECT_UPDATED": "Redirect changed",
+      "REDIRECT_DELETED": "Redirect deleted",
+      "SCHEDULE_CREATED": "Schedule created",
+      "SCHEDULE_UPDATED": "Schedule changed",
+      "SCHEDULE_CANCELLED": "Schedule cancelled",
+      "SCHEDULE_EXECUTED": "Schedule executed",
+      "SCHEDULE_FAILED": "Schedule failed",
+      "SCHEDULE_SKIPPED": "Schedule skipped",
+      "SCHEDULE_RUN_NOW": "Schedule run now",
+      "SCHEDULE_TAKEN_OVER": "Schedule taken over",
+      "SCHEDULE_IMPORTED": "Schedule imported",
+      "TARGET_CREATE": "Target created",
+      "TARGET_UPDATE": "Target changed",
+      "TARGET_DELETE": "Target deleted",
+      "USER_CREATED": "User created",
+      "USER_UPDATED": "User changed",
+      "USER_RENAMED": "User renamed",
+      "USER_DELETED": "User deleted",
+      "USER_DISABLED": "User disabled",
+      "USER_ENABLED": "User enabled",
+      "USER_UNLOCKED": "User unlocked",
+      "USER_PASSWORD_CHANGED": "Password changed",
+      "USER_PASSWORD_RESET": "Password reset",
+      "USER_SESSIONS_REVOKED": "Sessions revoked",
+      "USER_SYSTEM_ROLE_SET": "System role changed"
+    }
+  },
+  "shared": {
+    "assetPicker": {
+      "titleAsset": "Choose an asset",
+      "titleSource": "Choose a source",
+      "sourceType": "Source type",
+      "assetType": "Asset type",
+      "dataset": "Dataset",
+      "allRoot": "All",
+      "emptyRecord": "No records found",
+      "emptyRecordSet": "No record sets found",
+      "emptyNavFolder": "No navigation folders found",
+      "emptyDataset": "No datasets found",
+      "emptyAsset": "No assets found",
+      "tryDatasetOrSearch": "Try a different search or dataset.",
+      "trySearchOrFolder": "Try a different search or folder.",
+      "trySearch": "Try a different search.",
+      "toggleFolder": "Toggle folder",
+      "folder": "Folder"
+    },
+    "createAsset": {
+      "title": {
+        "FOLDER": "New folder",
+        "PAGE": "New page",
+        "PAGE_TEMPLATE": "New page template",
+        "SECTION_TEMPLATE": "New section template",
+        "PAGE_REFERENCE": "New reference",
+        "GLOBAL_SET": "New property set",
+        "DATASET": "New dataset",
+        "RECORD_SET": "New record set"
+      },
+      "name": "Name",
+      "nameRequired": "A name is required",
+      "template": "Template",
+      "templatePlaceholder": "Select a template",
+      "templateRequired": "A template is required",
+      "uid": "UID",
+      "uidHint": "Derived from the name; templates read the set as recordset:uid.",
+      "uidInvalid": "Use lowercase letters, numbers, and underscores only",
+      "dataset": "Dataset",
+      "datasetHint": "Every record in the set has this dataset's fields. It can't be changed after the set is created.",
+      "datasetRequired": "A dataset is required",
+      "targetPage": "Target page",
+      "chooseTarget": "Choose target…",
+      "targetRequired": "A target page is required",
+      "label": "Label"
+    },
+    "renameAsset": {
+      "title": "Rename",
+      "displayName": "Display name",
+      "nameRequired": "A name is required",
+      "uid": "UID"
+    },
+    "uidRename": {
+      "change": "Change UID",
+      "placeholder": "lowercase letters, numbers, underscores",
+      "invalid": "Use lowercase letters, numbers, and underscores only",
+      "changed": "UID changed",
+      "changeFailed": "Could not change UID — it may already be used by another asset.",
+      "archived": "This project is archived and read-only.",
+      "timeTravel": "Viewing a past revision — exit time travel to make changes",
+      "warningBefore": "Some templates or processed media files still reference the old uid",
+      "warningAfter": "literally and need a manual fix."
+    },
+    "storeTree": {
+      "toggleFolder": "Toggle folder",
+      "folder": "Folder",
+      "item": "Item",
+      "protectedFolder": "Built-in folder — can't be renamed, moved, or deleted",
+      "rename": "Rename",
+      "renamed": "{noun} renamed",
+      "renameFailed": "Could not rename — try again in a moment."
+    },
+    "diff": {
+      "noChanges": "No changes in this asset."
+    },
+    "tabs": {
+      "errors": "{count, plural, one {error} other {errors}}",
+      "unsaved": "(unsaved)"
+    },
+    "codeEditor": {
+      "goToPosition": "Go to line {line}, column {column}",
+      "cdlLabel": "Content definition (CDL)"
+    },
+    "revisionSummary": {
+      "moreAssets": "{base} · {count} assets"
+    }
+  },
+  "shell": {
+    "toast": {
+      "dismiss": "Dismiss"
+    },
+    "palette": {
+      "title": "Search",
+      "ariaLabel": "Search this project",
+      "placeholderNoProject": "Open a project to search",
+      "placeholderProject": "Search pages, media, templates…",
+      "timeTravelNote": "Results reflect the current revision.",
+      "hintNoProject": "Open a project to search. Search covers one project at a time.",
+      "hintUnavailable": "Search is temporarily unavailable. An administrator can check the search index status.",
+      "hintMinLength": "Type at least two characters.",
+      "hintIdle": "Find pages by their text, media by alt text or caption, templates by their source.",
+      "results": "Search results",
+      "noResults": "No results for “{query}”.",
+      "announceNoResults": "No results for {query}",
+      "announceResults": "{count, plural, one {# result} other {# results}}",
+      "announceUnavailable": "Search is temporarily unavailable",
+      "seeAll": "See all {total} {group}",
+      "move": "move",
+      "open": "open",
+      "searchPage": "search page",
+      "close": "close",
+      "resultCount": "({count, plural, one {# result} other {# results}})"
+    }
+  }
+}

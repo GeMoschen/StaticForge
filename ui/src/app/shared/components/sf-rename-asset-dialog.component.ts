@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -35,7 +36,7 @@ import { SfUidRenameComponent } from './sf-uid-rename.component';
   selector: 'sf-rename-asset-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfFieldComponent, SfSpinnerComponent, SfUidRenameComponent],
+  imports: [SfButtonComponent, SfFieldComponent, SfSpinnerComponent, SfUidRenameComponent, TranslocoPipe],
   templateUrl: './sf-rename-asset-dialog.component.html',
   styleUrl: './sf-rename-asset-dialog.component.scss',
 })

@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { SfRelativeTimePipe } from './sf-relative-time.pipe';
 
 describe('SfRelativeTimePipe', () => {
-  const pipe = new SfRelativeTimePipe();
+  let pipe: SfRelativeTimePipe;
+  beforeEach(() => {
+    pipe = TestBed.runInInjectionContext(() => new SfRelativeTimePipe());
+  });
+
   const now = new Date('2026-08-20T12:00:00Z');
 
   it('renders "just now" for recent timestamps', () => {
@@ -21,6 +26,13 @@ describe('SfRelativeTimePipe', () => {
     expect(pipe.transform(new Date('2026-08-20T10:00:00Z'), now)).toBe(
       '2 h ago',
     );
+  });
+
+  it('renders the future and the larger units', () => {
+    expect(pipe.transform(new Date('2026-08-20T12:05:00Z'), now)).toBe('5 min from now');
+    expect(pipe.transform(new Date('2026-08-18T12:00:00Z'), now)).toBe('2 d ago');
+    expect(pipe.transform(new Date('2026-06-20T12:00:00Z'), now)).toBe('2 mo ago');
+    expect(pipe.transform(new Date('2024-08-20T12:00:00Z'), now)).toBe('2 y ago');
   });
 
   it('renders invalid input as em dash', () => {

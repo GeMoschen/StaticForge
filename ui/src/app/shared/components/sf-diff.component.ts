@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import type { components } from '../../core/api/generated/schema.d.ts';
 
@@ -50,6 +51,7 @@ export function blockKind(block: BlockChange): BlockKind {
 @Component({
   selector: 'sf-diff',
   standalone: true,
+  imports: [TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sf-diff.component.html',
   styleUrl: './sf-diff.component.scss',

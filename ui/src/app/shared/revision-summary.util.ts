@@ -1,5 +1,7 @@
 import type { components } from '../core/api/generated/schema.d.ts';
 
+import type { Translator } from './components/asset-picker.util';
+
 type RevisionView = components['schemas']['RevisionView'];
 
 /**
@@ -43,8 +45,8 @@ export function revisionAssetCount(rev: RevisionView): number {
  * terse asset-count affordance (spec §24.2's "Uploaded 3 files" precedent) appended when
  * it touched more than one.
  */
-export function revisionSummaryLabel(rev: RevisionView): string {
+export function revisionSummaryLabel(rev: RevisionView, translate: Translator): string {
   const base = rev.comment ?? rev.changeType ?? '';
   const count = revisionAssetCount(rev);
-  return count > 1 ? `${base} · ${count} assets` : base;
+  return count > 1 ? translate('shared.revisionSummary.moreAssets', { base, count }) : base;
 }

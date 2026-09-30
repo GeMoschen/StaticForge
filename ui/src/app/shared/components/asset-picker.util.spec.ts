@@ -1,3 +1,5 @@
+import { TestBed } from '@angular/core/testing';
+import { TranslocoService } from '@jsverse/transloco';
 import { describe, expect, it } from 'vitest';
 import {
   folderRows,
@@ -7,6 +9,9 @@ import {
   pickerTypeOptions,
   recordCountLabel,
 } from './asset-picker.util';
+
+/** The active language's text for a key, through the real `en.json`. */
+const t = (key: string, params?: Record<string, unknown>) => TestBed.inject(TranslocoService).translate(key, params);
 
 describe('pickerTypeOptions', () => {
   const values = (allowed: string[] | null | undefined, dataset: string | null | undefined) =>
@@ -32,7 +37,7 @@ describe('pickerTypeOptions', () => {
   it('filters by assetTypes and falls back to everything for an unknown restriction', () => {
     expect(values(['RECORD', 'PAGE'], null)).toEqual(['PAGE', 'RECORD']);
     expect(values(['RECORD_SET'], null)).toEqual(['RECORD_SET']);
-    expect(pickerTypeOptions(['RECORD_SET'], null)[0].label).toBe('Record sets');
+    expect(t(pickerTypeOptions(['RECORD_SET'], null)[0].labelKey)).toBe('Record sets');
     expect(values(['NOPE'], null)).toEqual(['PAGE', 'MEDIA', 'PAGE_TEMPLATE', 'SECTION_TEMPLATE', 'RECORD', 'RECORD_SET']);
     expect(values([], undefined)).toHaveLength(6);
   });
@@ -57,17 +62,17 @@ describe('pickerRecordSets', () => {
   });
 
   it('counts records in words', () => {
-    expect(recordCountLabel(1)).toBe('1 record');
-    expect(recordCountLabel(0)).toBe('0 records');
-    expect(recordCountLabel(undefined)).toBe('0 records');
-    expect(recordCountLabel(12)).toBe('12 records');
+    expect(recordCountLabel(1, t)).toBe('1 record');
+    expect(recordCountLabel(0, t)).toBe('0 records');
+    expect(recordCountLabel(undefined, t)).toBe('0 records');
+    expect(recordCountLabel(12, t)).toBe('12 records');
   });
 });
 
 describe('pagination sources', () => {
   it('offers navigation folders and datasets only when asked for by name', () => {
     expect(pickerTypeOptions(null, null).map((o) => o.value)).not.toContain('NAV_FOLDER');
-    expect(pickerTypeOptions(['NAV_FOLDER', 'DATASET'], null).map((o) => o.label)).toEqual(['Navigation folders', 'Datasets']);
+    expect(pickerTypeOptions(['NAV_FOLDER', 'DATASET'], null).map((o) => t(o.labelKey))).toEqual(['Navigation folders', 'Datasets']);
     expect(pickerTypeOptions(['DATASET'], null).map((o) => o.value)).toEqual(['DATASET']);
   });
 

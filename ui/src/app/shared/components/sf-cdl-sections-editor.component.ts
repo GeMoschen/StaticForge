@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, viewChildren } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, viewChildren } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import {
   diagnosticsIn,
   errorCount,
-  SECTION_LABELS,
+  SECTION_LABEL_KEYS,
   type CdlSection,
   type CdlSections,
 } from '../code-editor/cdl-sections';
@@ -27,12 +28,12 @@ let nextId = 0;
   selector: 'sf-cdl-sections-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfCodeEditorComponent, SfTabsComponent],
+  imports: [SfCodeEditorComponent, SfTabsComponent, TranslocoPipe],
   template: `
     <sf-tabs
       [tabs]="tabs()"
       [selected]="selected()"
-      [label]="label()"
+      [label]="label() ?? ('shared.codeEditor.cdlLabel' | transloco)"
       [idPrefix]="idPrefix"
       (selectTab)="selectedChange.emit($any($event))"
     />
@@ -62,7 +63,7 @@ let nextId = 0;
           class="cdl-sections__source"
           language="cdl"
           [attr.data-section]="section"
-          [label]="label() + ' — ' + sectionLabels[section]"
+          [label]="editorLabel(section)"
           [value]="value()[section]"
           [diagnostics]="byField()[section]"
           [readOnly]="readOnly()"
@@ -79,7 +80,7 @@ let nextId = 0;
                 <button
                   type="button"
                   class="diagnostic__position"
-                  [attr.aria-label]="'Go to line ' + diag.line + ', column ' + (diag.column ?? 0)"
+                  [attr.aria-label]="'shared.codeEditor.goToPosition' | transloco: { line: diag.line, column: diag.column ?? 0 }"
                   (click)="goTo(section, diag)"
                 >
                   ({{ diag.line }}:{{ diag.column ?? 0 }})
@@ -165,7 +166,7 @@ export class SfCdlSectionsEditorComponent {
   /** Editor names completion offers besides the ones the Content tab declares (inherited editors). */
   readonly names = input<readonly string[]>([]);
   /** The accessible name of the tab list, and the prefix of each editor's name. */
-  readonly label = input('Content definition (CDL)');
+  readonly label = input<string | null>(null);
   /** A short help line per section, shown above its editor. */
   readonly hints = input<Partial<Record<CdlSection, string>>>({});
   readonly placeholders = input<Partial<Record<CdlSection, string>>>({});
@@ -173,7 +174,7 @@ export class SfCdlSectionsEditorComponent {
   readonly sectionChange = output<{ section: CdlSection; value: string }>();
   readonly selectedChange = output<CdlSection>();
 
-  protected readonly sectionLabels = SECTION_LABELS;
+  private readonly transloco = inject(TranslocoService);
 
   private readonly editors = viewChildren(SfCodeEditorComponent);
   protected readonly idPrefix = `sf-cdl-sections-${nextId++}`;
@@ -193,11 +194,17 @@ export class SfCdlSectionsEditorComponent {
     const saved = this.saved();
     return this.sections().map((section) => ({
       id: section,
-      label: SECTION_LABELS[section],
+      label: this.transloco.translate(SECTION_LABEL_KEYS[section]),
       errors: this.errorCounts()[section],
       dirty: saved !== null && value[section] !== saved[section],
     }));
   });
+
+  /** The accessible name of a section's editor: the list's name and the section's. */
+  protected editorLabel(section: CdlSection): string {
+    const name = this.label() ?? this.transloco.translate('shared.codeEditor.cdlLabel');
+    return `${name} — ${this.transloco.translate(SECTION_LABEL_KEYS[section])}`;
+  }
 
   protected tabId(section: CdlSection): string {
     return tabIdOf(this.idPrefix, section);

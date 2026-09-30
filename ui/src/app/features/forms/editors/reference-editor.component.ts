@@ -1,3 +1,4 @@
+import { TranslocoService } from '@jsverse/transloco';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { ReactiveFormsModule, FormControl, FormGroup } from '@angular/forms';
@@ -68,7 +69,10 @@ export class SfReferenceEditor {
 
   protected readonly pickerOpen = signal(false);
   protected readonly resolved = signal<ResolvedReference | null>(null);
-  protected readonly recordCountLabel = recordCountLabel;
+  private readonly transloco = inject(TranslocoService);
+  protected recordCountLabel(count: number | null | undefined): string {
+    return recordCountLabel(count, (key, params) => this.transloco.translate(key, params));
+  }
   private lastResolvedUuid: string | null = null;
 
   /**

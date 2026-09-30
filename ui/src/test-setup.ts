@@ -111,6 +111,14 @@ getTestBed().initTestEnvironment(
   platformBrowserDynamicTesting(),
 );
 
+// Every spec gets Transloco with the real en.json and a missing-key handler that throws (M35.4), so components render
+// translated text and a key without a translation fails the spec. A spec's own `configureTestingModule` adds to this.
+const { TestBed } = await import('@angular/core/testing');
+const { provideTranslocoTesting } = await import('./app/core/i18n/transloco-testing');
+ambient['beforeEach'](() => {
+  TestBed.configureTestingModule({ providers: [provideTranslocoTesting()] });
+});
+
 // jsdom has no layout: CodeMirror (the code editors, M33) measures text ranges, which jsdom's Range lacks.
 if (typeof Range !== 'undefined') {
   const emptyRect = { x: 0, y: 0, top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0, toJSON: () => ({}) };
