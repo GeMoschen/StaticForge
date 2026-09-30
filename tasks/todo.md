@@ -9,7 +9,7 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
 - [x] M35.2 decompose large components (behaviour-preserving)
 - [x] M35.3 user preferences API + client store
 - [x] M35.4 Transloco setup + string extraction rules
-- [ ] M35.5 design tokens v2, theme (light/dark/system), density
+- [x] M35.5 design tokens v2, theme (light/dark/system), density
 - [ ] M35.6 base components and form controls
 - [ ] M35.7 overlays: dialog, confirm, drawer, popover, menu, toast
 - [ ] M35.8 data table, tree, splitter

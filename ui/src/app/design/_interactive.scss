@@ -1,9 +1,9 @@
 @mixin sf-interactive {
   transition:
-    background var(--sf-motion-fast) var(--sf-ease),
-    border-color var(--sf-motion-fast) var(--sf-ease),
-    box-shadow var(--sf-motion-fast) var(--sf-ease),
-    color var(--sf-motion-fast) var(--sf-ease);
+    background var(--sf-duration-fast) var(--sf-ease-standard),
+    border-color var(--sf-duration-fast) var(--sf-ease-standard),
+    box-shadow var(--sf-duration-fast) var(--sf-ease-standard),
+    color var(--sf-duration-fast) var(--sf-ease-standard);
 }
 
 // The signature "pour" — a tapered accent rule used only for active-state
@@ -21,8 +21,8 @@
     width: $width;
     background: linear-gradient(
       to bottom,
-      var(--sf-pour-color) 0%,
-      color-mix(in srgb, var(--sf-pour-color) 40%, transparent) 100%
+      var(--sf-accent) 0%,
+      color-mix(in srgb, var(--sf-accent) 40%, transparent) 100%
     );
     border-radius: var(--sf-radius-sm);
   }
@@ -39,8 +39,8 @@
     height: 2px;
     background: linear-gradient(
       to right,
-      var(--sf-pour-color) 0%,
-      color-mix(in srgb, var(--sf-pour-color) 15%, transparent) 100%
+      var(--sf-accent) 0%,
+      color-mix(in srgb, var(--sf-accent) 15%, transparent) 100%
     );
   }
 }

@@ -1,0 +1,77 @@
+// Primitive palette (M35.5). Raw ramps only — components NEVER use these directly; they use the semantic tokens in
+// _semantic.scss, which map a primitive per theme. Ramps: Tailwind-derived slate neutrals, a blue accent (600 ≈ #2563eb)
+// and green / amber / red / cyan status ramps.
+:root {
+  --sf-slate-0: #ffffff;
+  --sf-slate-50: #f8fafc;
+  --sf-slate-100: #f1f5f9;
+  --sf-slate-200: #e2e8f0;
+  --sf-slate-300: #cbd5e1;
+  --sf-slate-400: #94a3b8;
+  --sf-slate-500: #64748b;
+  --sf-slate-600: #475569;
+  --sf-slate-700: #334155;
+  --sf-slate-800: #1e293b;
+  --sf-slate-900: #0f172a;
+  --sf-slate-950: #020617;
+
+  --sf-blue-50: #eff6ff;
+  --sf-blue-100: #dbeafe;
+  --sf-blue-200: #bfdbfe;
+  --sf-blue-300: #93c5fd;
+  --sf-blue-400: #60a5fa;
+  --sf-blue-500: #3b82f6;
+  --sf-blue-600: #2563eb;
+  --sf-blue-700: #1d4ed8;
+  --sf-blue-800: #1e40af;
+  --sf-blue-900: #1e3a8a;
+  --sf-blue-950: #172554;
+
+  --sf-green-50: #f0fdf4;
+  --sf-green-100: #dcfce7;
+  --sf-green-200: #bbf7d0;
+  --sf-green-300: #86efac;
+  --sf-green-400: #4ade80;
+  --sf-green-500: #22c55e;
+  --sf-green-600: #16a34a;
+  --sf-green-700: #15803d;
+  --sf-green-800: #166534;
+  --sf-green-900: #14532d;
+  --sf-green-950: #052e16;
+
+  --sf-amber-50: #fffbeb;
+  --sf-amber-100: #fef3c7;
+  --sf-amber-200: #fde68a;
+  --sf-amber-300: #fcd34d;
+  --sf-amber-400: #fbbf24;
+  --sf-amber-500: #f59e0b;
+  --sf-amber-600: #d97706;
+  --sf-amber-700: #b45309;
+  --sf-amber-800: #92400e;
+  --sf-amber-900: #78350f;
+  --sf-amber-950: #451a03;
+
+  --sf-red-50: #fef2f2;
+  --sf-red-100: #fee2e2;
+  --sf-red-200: #fecaca;
+  --sf-red-300: #fca5a5;
+  --sf-red-400: #f87171;
+  --sf-red-500: #ef4444;
+  --sf-red-600: #dc2626;
+  --sf-red-700: #b91c1c;
+  --sf-red-800: #991b1b;
+  --sf-red-900: #7f1d1d;
+  --sf-red-950: #450a0a;
+
+  --sf-cyan-50: #ecfeff;
+  --sf-cyan-100: #cffafe;
+  --sf-cyan-200: #a5f3fc;
+  --sf-cyan-300: #67e8f9;
+  --sf-cyan-400: #22d3ee;
+  --sf-cyan-500: #06b6d4;
+  --sf-cyan-600: #0891b2;
+  --sf-cyan-700: #0e7490;
+  --sf-cyan-800: #155e75;
+  --sf-cyan-900: #164e63;
+  --sf-cyan-950: #083344;
+}

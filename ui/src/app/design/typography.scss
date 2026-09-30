@@ -4,31 +4,34 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--sf-font-display);
-  color: var(--sf-ink);
-  margin: 0 0 var(--sf-3);
-  line-height: var(--sf-lh-sm);
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-family: var(--sf-font-ui);
+  color: var(--sf-text);
+  margin: 0 0 var(--sf-space-3);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+  letter-spacing: -0.005em;
 }
 
 h1 {
-  font-size: var(--sf-text-2xl);
-  line-height: var(--sf-lh-2xl);
+  font-size: var(--sf-fs-24);
+  line-height: var(--sf-lh-24);
+  letter-spacing: -0.01em;
 }
 
 h2 {
-  font-size: var(--sf-text-xl);
-  line-height: var(--sf-lh-xl);
+  font-size: var(--sf-fs-20);
+  line-height: var(--sf-lh-20);
+  letter-spacing: -0.01em;
 }
 
 h3 {
-  font-size: var(--sf-text-lg);
-  line-height: var(--sf-lh-lg);
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
 }
 
 p {
-  margin: 0 0 var(--sf-3);
+  margin: 0 0 var(--sf-space-3);
 }
 
 code,
@@ -38,10 +41,11 @@ kbd {
 }
 
 a {
-  color: var(--sf-signal);
+  color: var(--sf-accent);
   text-decoration: none;
 }
 
 a:hover {
+  color: var(--sf-accent-hover);
   text-decoration: underline;
 }

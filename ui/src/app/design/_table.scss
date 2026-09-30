@@ -2,38 +2,42 @@
 // component's own stylesheet (not sf-table.component.scss, which stays a
 // passthrough) so the compiled rules are scoped per-component by Angular's
 // emulated encapsulation, without ::ng-deep.
+// Row heights and cell padding follow the density (data-density on <html>).
 
 @mixin sf-table-base {
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--sf-text-sm);
-    color: var(--sf-ink);
+    font-size: var(--sf-fs-13);
+    color: var(--sf-text);
   }
 
   th {
     text-align: left;
-    padding: var(--sf-2) var(--sf-3);
-    border-bottom: 1px solid var(--sf-line);
-    color: var(--sf-slate);
-    font-weight: 500;
-    font-size: var(--sf-text-xs);
+    height: var(--sf-table-row-height);
+    padding: var(--sf-pad-cell-y) var(--sf-pad-cell-x);
+    border-bottom: 1px solid var(--sf-border);
+    background: var(--sf-surface-sunken);
+    color: var(--sf-text-muted);
+    font-weight: var(--sf-weight-medium);
+    font-size: var(--sf-fs-12);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
 
   td {
-    padding: var(--sf-2) var(--sf-3);
-    border-bottom: 1px solid var(--sf-line);
+    height: var(--sf-table-row-height);
+    padding: var(--sf-pad-cell-y) var(--sf-pad-cell-x);
+    border-bottom: 1px solid var(--sf-border);
     vertical-align: middle;
   }
 
   tbody tr {
-    transition: background var(--sf-motion-fast) var(--sf-ease);
+    transition: background var(--sf-duration-fast) var(--sf-ease-standard);
   }
 
   tbody tr:hover {
-    background: color-mix(in srgb, var(--sf-ink) 3%, var(--sf-surface));
+    background: var(--sf-hover);
   }
 }
 

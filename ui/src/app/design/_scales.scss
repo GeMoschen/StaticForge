@@ -1,0 +1,140 @@
+// Non-colour scales (M35.5): type, spacing, radius, elevation, motion, z-index, layout and density.
+
+:root {
+  // ── Type ─────────────────────────────────────────────────────────────────────
+  --sf-font-ui: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sf-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  // Inter scale 12/13/14/16/18/20/24/30 px, each with its line height.
+  --sf-fs-12: 0.75rem;
+  --sf-lh-12: 1rem;
+  --sf-fs-13: 0.8125rem;
+  --sf-lh-13: 1.125rem;
+  --sf-fs-14: 0.875rem;
+  --sf-lh-14: 1.25rem;
+  --sf-fs-16: 1rem;
+  --sf-lh-16: 1.5rem;
+  --sf-fs-18: 1.125rem;
+  --sf-lh-18: 1.625rem;
+  --sf-fs-20: 1.25rem;
+  --sf-lh-20: 1.75rem;
+  --sf-fs-24: 1.5rem;
+  --sf-lh-24: 2rem;
+  --sf-fs-30: 1.875rem;
+  --sf-lh-30: 2.375rem;
+
+  --sf-weight-regular: 400;
+  --sf-weight-medium: 500;
+  --sf-weight-semibold: 600;
+
+  // ── Spacing: a 4px grid, --sf-space-N = N × 4px ──────────────────────────────
+  --sf-space-0: 0;
+  --sf-space-1: 4px;
+  --sf-space-2: 8px;
+  --sf-space-3: 12px;
+  --sf-space-4: 16px;
+  --sf-space-5: 20px;
+  --sf-space-6: 24px;
+  --sf-space-8: 32px;
+  --sf-space-10: 40px;
+  --sf-space-12: 48px;
+  --sf-space-16: 64px;
+
+  // ── Radius ───────────────────────────────────────────────────────────────────
+  --sf-radius-sm: 4px;
+  --sf-radius-md: 6px;
+  --sf-radius-lg: 8px;
+  --sf-radius-pill: 9999px;
+
+  // ── Elevation 0–3 (light) ────────────────────────────────────────────────────
+  --sf-elevation-0: none;
+  --sf-elevation-1: 0 1px 2px rgb(15 23 42 / 0.08), 0 0 0 1px rgb(15 23 42 / 0.03);
+  --sf-elevation-2: 0 4px 12px rgb(15 23 42 / 0.12), 0 1px 3px rgb(15 23 42 / 0.08);
+  --sf-elevation-3: 0 12px 32px rgb(15 23 42 / 0.2), 0 2px 6px rgb(15 23 42 / 0.1);
+
+  // ── Motion ───────────────────────────────────────────────────────────────────
+  --sf-duration-fast: 100ms;
+  --sf-duration-base: 160ms;
+  --sf-duration-slow: 260ms;
+  --sf-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --sf-ease-enter: cubic-bezier(0, 0, 0, 1);
+  --sf-ease-exit: cubic-bezier(0.3, 0, 1, 1);
+
+  // ── z-index scale: components use these, never a raw number ──────────────────
+  --sf-z-base: 0;
+  --sf-z-sticky: 100;
+  --sf-z-dropdown: 200;
+  --sf-z-drawer: 300;
+  --sf-z-modal: 400;
+  --sf-z-popover: 500;
+  --sf-z-toast: 600;
+  --sf-z-tooltip: 700;
+
+  // ── Layout ───────────────────────────────────────────────────────────────────
+  --sf-topbar-height: 48px;
+  --sf-rail-width-collapsed: 52px;
+  --sf-rail-width-expanded: 232px;
+  --sf-tree-width: 280px;
+
+  --sf-bp-sm: 640px;
+  --sf-bp-md: 960px;
+  --sf-bp-lg: 1280px;
+
+  // ── Density: compact is the default; data-density="comfortable" on <html> loosens it ─
+  --sf-control-height-sm: 28px;
+  --sf-control-height: 32px;
+  --sf-row-height: 28px; // lists, tree rows, menu items
+  --sf-table-row-height: 32px;
+  --sf-pad-control-x: 8px;
+  --sf-pad-cell-x: 8px;
+  --sf-pad-cell-y: 4px;
+  --sf-pad-panel: 12px;
+  --sf-gap: 8px;
+}
+
+:root[data-density='comfortable'] {
+  --sf-control-height-sm: 32px;
+  --sf-control-height: 40px;
+  --sf-row-height: 36px;
+  --sf-table-row-height: 44px;
+  --sf-pad-control-x: 12px;
+  --sf-pad-cell-x: 12px;
+  --sf-pad-cell-y: 8px;
+  --sf-pad-panel: 16px;
+  --sf-gap: 12px;
+}
+
+// Dark surfaces swallow soft shadows, so dark elevation is deeper and leans on a light hairline for separation.
+@mixin sf-dark-elevation {
+  --sf-elevation-1: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --sf-elevation-2: 0 6px 16px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --sf-elevation-3: 0 16px 40px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+:root[data-theme='dark'] {
+  @include sf-dark-elevation;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    @include sf-dark-elevation;
+  }
+}
+
+// Reduced motion: every duration collapses, and the catch-all stops anything that hard-codes a time.
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sf-duration-fast: 0.01ms;
+    --sf-duration-base: 0.01ms;
+    --sf-duration-slow: 0.01ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

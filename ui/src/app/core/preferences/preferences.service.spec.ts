@@ -50,7 +50,7 @@ describe('PreferencesService', () => {
   it('serves the defaults before anything is loaded', () => {
     const { prefs } = setup();
     expect(prefs.theme()).toBe('system');
-    expect(prefs.density()).toBe('comfortable');
+    expect(prefs.density()).toBe('compact');
     expect(prefs.developerMode()).toBe(false);
     expect(prefs.railCollapsed()).toBe(false);
     expect(prefs.previewView()).toBe('draft');
@@ -222,10 +222,10 @@ describe('PreferencesService', () => {
     prefs.setTheme('dark');
     vi.advanceTimersByTime(500);
     const inFlight = http.expectOne(URL);
-    prefs.setDensity('compact');
+    prefs.setDensity('comfortable');
     prefs.reset();
     expect(prefs.theme()).toBe('system');
-    expect(prefs.density()).toBe('comfortable');
+    expect(prefs.density()).toBe('compact');
     inFlight.flush({ schemaVersion: 1, theme: 'dark' });
     vi.advanceTimersByTime(60000);
     http.expectNone(URL);

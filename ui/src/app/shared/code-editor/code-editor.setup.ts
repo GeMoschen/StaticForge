@@ -80,7 +80,7 @@ const formatStyle = HighlightStyle.define([
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
   { tag: [tags.link, tags.url], color: 'var(--sf-code-fmt-attr)', textDecoration: 'underline' },
-  { tag: tags.invalid, color: 'var(--sf-rust)' },
+  { tag: tags.invalid, color: 'var(--sf-danger)' },
 ]);
 
 /** Whether a (sub)tree is OCTL's: the instructions, colored with the CDL/OCTL palette. */
@@ -101,10 +101,10 @@ const octlHighlighters: Extension = [
 const theme = EditorView.theme({
   '&': {
     fontFamily: 'var(--sf-font-mono)',
-    fontSize: 'var(--sf-text-sm)',
-    color: 'var(--sf-ink)',
-    backgroundColor: 'var(--sf-surface)',
-    border: '1px solid var(--sf-line)',
+    fontSize: 'var(--sf-fs-13)',
+    color: 'var(--sf-code-fg)',
+    backgroundColor: 'var(--sf-code-bg)',
+    border: '1px solid var(--sf-border-strong)',
     borderRadius: 'var(--sf-radius-sm)',
     // Set by the host (a template editor asks for more); the compact field lowers them. Not in the component's own
     // styles: its encapsulation would need the attribute Angular never puts on CodeMirror's elements.
@@ -113,32 +113,32 @@ const theme = EditorView.theme({
     // A host that wants a fixed height (the template editors side by side) sets it; otherwise the editor grows with its text.
     height: 'var(--sf-code-height, auto)',
   },
-  '&.cm-focused': { outline: '2px solid var(--sf-signal)', outlineOffset: '-1px' },
-  '.cm-content': { caretColor: 'var(--sf-ink)', fontFamily: 'var(--sf-font-mono)' },
+  '&.cm-focused': { outline: '2px solid var(--sf-focus-ring)', outlineOffset: '-1px' },
+  '.cm-content': { caretColor: 'var(--sf-code-fg)', fontFamily: 'var(--sf-font-mono)' },
   // drawSelection paints the caret itself (black by default): follow the theme's ink so it shows in dark mode.
-  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--sf-ink)' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--sf-code-fg)' },
   '.cm-scroller': { fontFamily: 'var(--sf-font-mono)', lineHeight: '1.5', overflow: 'auto' },
   '.cm-gutters': {
-    backgroundColor: 'var(--sf-paper)',
-    color: 'var(--sf-slate)',
-    borderRight: '1px solid var(--sf-line)',
+    backgroundColor: 'var(--sf-code-gutter-bg)',
+    color: 'var(--sf-code-gutter-fg)',
+    borderRight: '1px solid var(--sf-border)',
   },
-  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'color-mix(in srgb, var(--sf-line) 35%, transparent)' },
+  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'var(--sf-code-active-line)' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
-    backgroundColor: 'color-mix(in srgb, var(--sf-signal) 45%, transparent) !important',
+    backgroundColor: 'var(--sf-code-selection) !important',
   },
   '.cm-tooltip': {
-    backgroundColor: 'var(--sf-surface)',
-    color: 'var(--sf-ink)',
-    border: '1px solid var(--sf-line)',
-    boxShadow: 'var(--sf-shadow-2)',
+    backgroundColor: 'var(--sf-surface-raised)',
+    color: 'var(--sf-text)',
+    border: '1px solid var(--sf-border)',
+    boxShadow: 'var(--sf-elevation-2)',
   },
   '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
-    backgroundColor: 'color-mix(in srgb, var(--sf-signal) 18%, transparent)',
-    color: 'var(--sf-ink)',
+    backgroundColor: 'var(--sf-selection)',
+    color: 'var(--sf-text)',
   },
-  '.cm-panels': { backgroundColor: 'var(--sf-paper)', color: 'var(--sf-ink)' },
-  '.cm-matchingBracket': { backgroundColor: 'color-mix(in srgb, var(--sf-jade) 25%, transparent)' },
+  '.cm-panels': { backgroundColor: 'var(--sf-surface-sunken)', color: 'var(--sf-text)' },
+  '.cm-matchingBracket': { backgroundColor: 'color-mix(in srgb, var(--sf-success) 25%, transparent)' },
 });
 
 /** Creates an editor in `parent`; the controller is how the component drives it. */

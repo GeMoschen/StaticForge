@@ -1,0 +1,222 @@
+{
+  "src/app/core/ui/command-palette/command-palette.component.scss": {
+    "colors": 1,
+    "zIndex": 2
+  },
+  "src/app/features/account/user-menu.component.scss": {
+    "colors": 0,
+    "zIndex": 1
+  },
+  "src/app/features/admin/admin-audit.component.scss": {
+    "colors": 0,
+    "zIndex": 1
+  },
+  "src/app/features/auth/login.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/changes/changes-list.component.scss": {
+    "colors": 0,
+    "zIndex": 1
+  },
+  "src/app/features/channels/channels.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/content/dataset-schema-editor.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/content/record-editor.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/content/record-grid.component.scss": {
+    "colors": 1,
+    "zIndex": 1
+  },
+  "src/app/features/content/record-side-panel.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/dashboard/dashboard.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/dashboard/nav-rail.component.scss": {
+    "colors": 2,
+    "zIndex": 0
+  },
+  "src/app/features/forms/editors/boolean-editor.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/forms/editors/catalog-editor.component.scss": {
+    "colors": 2,
+    "zIndex": 1
+  },
+  "src/app/features/forms/sf-content-form.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/generation/findings/sf-run-findings.component.scss": {
+    "colors": 0,
+    "zIndex": 1
+  },
+  "src/app/features/generation/generation-dialog.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/generation/generation-live-log.component.scss": {
+    "colors": 4,
+    "zIndex": 0
+  },
+  "src/app/features/globals/global-set-detail.component.scss": {
+    "colors": 2,
+    "zIndex": 0
+  },
+  "src/app/features/media/drawer/_drawer-parts.scss": {
+    "colors": 2,
+    "zIndex": 0
+  },
+  "src/app/features/media/drawer/media-drawer-delete-dialog.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/media/library/media-library-grid.component.scss": {
+    "colors": 0,
+    "zIndex": 1
+  },
+  "src/app/features/media/media-detail-drawer.component.scss": {
+    "colors": 2,
+    "zIndex": 3
+  },
+  "src/app/features/media/media-folder-detail.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/media/media-folder-node.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/media/media-library.component.scss": {
+    "colors": 2,
+    "zIndex": 1
+  },
+  "src/app/features/navigation/nav-reference-detail.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/pages/conflict-drawer.component.scss": {
+    "colors": 3,
+    "zIndex": 0
+  },
+  "src/app/features/pages/folder-node.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/pages/page-editor-header.component.scss": {
+    "colors": 2,
+    "zIndex": 1
+  },
+  "src/app/features/pages/section-palette.component.scss": {
+    "colors": 2,
+    "zIndex": 0
+  },
+  "src/app/features/preview/preview.frame.component.scss": {
+    "colors": 2,
+    "zIndex": 1
+  },
+  "src/app/features/release/release-plan.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/revisions/revision-diff.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/revisions/revision-spine.component.scss": {
+    "colors": 0,
+    "zIndex": 1
+  },
+  "src/app/features/revisions/time-travel-banner.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/schedules/schedule-history.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/search/search-page.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/settings/project-settings-compaction.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/settings/project-settings-locales.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/settings/project-settings-members.component.scss": {
+    "colors": 0,
+    "zIndex": 1
+  },
+  "src/app/features/settings/project-settings-publish-policy.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/settings/project-settings-targets.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/settings/project-settings-url-registry.component.scss": {
+    "colors": 2,
+    "zIndex": 2
+  },
+  "src/app/features/templates/template-folder-node.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/templates/templates-channel-panel.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/templates/templates-save-outcomes.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/features/templates/templates.component.scss": {
+    "colors": 4,
+    "zIndex": 3
+  },
+  "src/app/shared/components/sf-asset-picker-dialog.component.scss": {
+    "colors": 3,
+    "zIndex": 2
+  },
+  "src/app/shared/components/sf-asset-picker-folder-node.component.ts": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/shared/components/sf-button.component.scss": {
+    "colors": 4,
+    "zIndex": 0
+  },
+  "src/app/shared/components/sf-context-menu.component.scss": {
+    "colors": 0,
+    "zIndex": 1
+  },
+  "src/app/shared/components/sf-octl-editor.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  },
+  "src/app/shared/components/sf-store-tree-node.component.scss": {
+    "colors": 2,
+    "zIndex": 0
+  },
+  "src/app/shared/components/sf-uid-rename.component.scss": {
+    "colors": 1,
+    "zIndex": 0
+  }
+}

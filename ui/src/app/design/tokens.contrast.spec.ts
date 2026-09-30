@@ -3,45 +3,80 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * Contrast matrix (§24.7 / M7.1.2): verifies the design-token colour pairs in
- * tokens.scss against WCAG 2.x relative-luminance thresholds, computed inline
- * (no dependency). The token values are read directly from the source of
- * truth — `tokens.scss` — so a token edit that drops a pair below threshold
- * fails CI here rather than only surfacing in a manual review.
+ * Contrast matrix (§24.7 / M7.1.2, rebuilt for the v2 tokens in M35.5).
  *
- * Thresholds:
- *   - Body text (`--sf-ink`) on its canvases ≥ 7:1 (AAA).
- *   - UI / large text accents (`--sf-signal`, `--sf-jade`, `--sf-rust`) ≥ 4.5:1
- *     on their surfaces (AA large-text / UI components).
+ * The token values are read from the source of truth — `_primitives.scss` and the light / dark mixins in
+ * `_semantic.scss` — and `var(--x)` references are resolved, so a token edit that drops a pair below its threshold fails
+ * CI here instead of surfacing in a manual review. Contrast is computed inline (WCAG 2.x relative luminance).
+ *
+ * Thresholds, in both themes:
+ *   - text / background pairs                         >= 4.5:1
+ *   - UI boundaries (control borders, focus ring,
+ *     status and accent colours as icons / fills)      >= 3:1
+ * Deliberately exempt (WCAG 1.4.3 / 1.4.11): `--sf-disabled-text` (disabled controls) and the decorative `--sf-border`
+ * (dividers, cards). The disabled pair is still held to 2:1 so it stays legible.
  */
 
-const TOKENS_PATH = resolve(process.cwd(), 'src/app/design/tokens.scss');
-const SOURCE = readFileSync(TOKENS_PATH, 'utf8');
+const DESIGN_DIR = resolve(process.cwd(), 'src/app/design');
+const read = (file: string): string => readFileSync(resolve(DESIGN_DIR, file), 'utf8');
 
 type TokenMap = Record<string, string>;
 
-/** Split the light (`:root`) block from the `[data-theme="dark"]` block. */
-function parseThemeBlock(block: string): TokenMap {
+function parseDeclarations(block: string): TokenMap {
   const map: TokenMap = {};
-  const re = /(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})/g;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(block)) !== null) {
-    map[match[1]] = match[2].toLowerCase();
+  for (const m of block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+    map[m[1]] = m[2].trim();
   }
   return map;
 }
 
-const [lightBlock, darkBlock] = SOURCE.split('[data-theme="dark"]');
-const light = parseThemeBlock(lightBlock);
-const dark = parseThemeBlock(darkBlock);
+/** The text between the braces of `@mixin <name> {`. */
+function mixinBody(source: string, name: string): string {
+  const start = source.indexOf(`@mixin ${name}`);
+  if (start < 0) {
+    throw new Error(`mixin ${name} not found`);
+  }
+  const open = source.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}' && --depth === 0) {
+      return source.slice(open + 1, i);
+    }
+  }
+  throw new Error(`mixin ${name} is not closed`);
+}
+
+const primitives = parseDeclarations(read('_primitives.scss'));
+const semantic = read('_semantic.scss');
+
+function resolveTheme(mixin: string): TokenMap {
+  const all: TokenMap = { ...primitives, ...parseDeclarations(mixinBody(semantic, mixin)) };
+  const resolveValue = (value: string, seen: string[] = []): string => {
+    const ref = /^var\((--[\w-]+)\)$/.exec(value);
+    if (!ref) {
+      return value;
+    }
+    if (seen.includes(ref[1]) || !(ref[1] in all)) {
+      throw new Error(`cannot resolve ${value} (${seen.join(' -> ')})`);
+    }
+    return resolveValue(all[ref[1]], [...seen, ref[1]]);
+  };
+  const out: TokenMap = {};
+  for (const [name, value] of Object.entries(all)) {
+    out[name] = resolveValue(value);
+  }
+  return out;
+}
+
+const themes: Array<[name: string, tokens: TokenMap]> = [
+  ['light', resolveTheme('sf-light-colors')],
+  ['dark', resolveTheme('sf-dark-colors')],
+];
 
 function hexToRgb(hex: string): [number, number, number] {
   const value = hex.replace('#', '');
-  return [
-    parseInt(value.slice(0, 2), 16),
-    parseInt(value.slice(2, 4), 16),
-    parseInt(value.slice(4, 6), 16),
-  ];
+  return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
 }
 
 function srgbChannel(value: number): number {
@@ -49,87 +84,91 @@ function srgbChannel(value: number): number {
   return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
 }
 
-/** WCAG 2.x relative luminance of a 6-digit hex colour. */
 function relativeLuminance(hex: string): number {
   const [r, g, b] = hexToRgb(hex);
   return 0.2126 * srgbChannel(r) + 0.7152 * srgbChannel(g) + 0.0722 * srgbChannel(b);
 }
 
-/** WCAG contrast ratio between two 6-digit hex colours (1..21). */
 function contrastRatio(foreground: string, background: string): number {
   const fg = relativeLuminance(foreground);
   const bg = relativeLuminance(background);
-  const lighter = Math.max(fg, bg);
-  const darker = Math.min(fg, bg);
-  return (lighter + 0.05) / (darker + 0.05);
+  return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
 }
 
+function check(tokens: TokenMap, fg: string, bg: string, min: number): void {
+  const a = tokens[`--sf-${fg}`];
+  const b = tokens[`--sf-${bg}`];
+  expect(a, `--sf-${fg}`).toMatch(/^#[0-9a-f]{6}$/i);
+  expect(b, `--sf-${bg}`).toMatch(/^#[0-9a-f]{6}$/i);
+  expect(contrastRatio(a, b), `${fg} ${a} on ${bg} ${b}`).toBeGreaterThanOrEqual(min);
+}
+
+/** [foreground, background, minimum] triples, asserted in both themes. */
+const pairs: Array<[string, string, number]> = [];
+const add = (fgs: string[], bgs: string[], min: number): void => {
+  for (const fg of fgs) for (const bg of bgs) pairs.push([fg, bg, min]);
+};
+
+const SURFACES = ['bg', 'surface', 'surface-raised', 'surface-sunken'];
+// Text on every surface.
+add(['text', 'text-muted', 'text-subtle'], SURFACES, 4.5);
+// Text on interactive states.
+add(['text', 'text-muted'], ['hover', 'selection', 'disabled-bg'], 4.5);
+// Accent: as text / link on surfaces, and as a fill behind its label.
+add(['accent', 'accent-hover'], ['bg', 'surface', 'surface-raised', 'accent-subtle'], 4.5);
+add(['on-accent'], ['accent', 'accent-hover'], 4.5);
+// Status text on its tinted background and on the plain surfaces.
+for (const status of ['success', 'warning', 'danger', 'info']) {
+  add([`${status}-text`], [`${status}-subtle`, 'bg', 'surface', 'surface-raised'], 4.5);
+}
+// A label on a solid status fill (warning is amber, too light for a label: it is only used as a tint plus its -text).
+add(['text-inverse'], ['success', 'danger', 'info'], 4.5);
+// Code editor.
+const SYNTAX = [
+  'keyword', 'type', 'attr', 'atom', 'string', 'number', 'comment', 'function', 'special', 'operator', 'tag',
+  'fmt-tag', 'fmt-attr', 'fmt-string', 'fmt-keyword', 'fmt-number', 'fmt-comment', 'fmt-punct',
+].map((n) => `code-${n}`);
+add(SYNTAX, ['code-bg'], 4.5);
+add(['code-fg'], ['code-bg', 'code-active-line', 'code-selection'], 4.5);
+add(['code-gutter-fg'], ['code-gutter-bg'], 4.5);
+
+const boundaries: Array<[string, string, number]> = [];
+const addBoundary = (fgs: string[], bgs: string[]): void => {
+  for (const fg of fgs) for (const bg of bgs) boundaries.push([fg, bg, 3]);
+};
+addBoundary(['border-strong'], ['bg', 'surface', 'surface-raised', 'surface-sunken']);
+addBoundary(['focus-ring'], ['bg', 'surface', 'surface-raised', 'surface-sunken']);
+addBoundary(['accent', 'success', 'warning', 'danger', 'info'], ['bg', 'surface', 'surface-raised']);
+
 describe('design-token contrast matrix', () => {
-  it('parses the light and dark token blocks', () => {
-    expect(light['--sf-paper']).toBe('#f1eee8');
-    expect(dark['--sf-paper']).toBe('#17140f');
-    expect(light['--sf-ink']).toBe('#161311');
-    expect(dark['--sf-ink']).toBe('#efeae2');
+  it('resolves the light and dark themes down to hex', () => {
+    expect(themes[0][1]['--sf-accent']).toBe('#2563eb');
+    expect(themes[0][1]['--sf-surface']).toBe('#ffffff');
+    expect(themes[1][1]['--sf-bg']).toBe('#0f172a');
   });
 
-  describe('body text (AAA ≥ 7:1)', () => {
-    const pairs: Array<[theme: string, map: TokenMap]> = [
-      ['light', light],
-      ['dark', dark],
+  it('defines every semantic token in both themes', () => {
+    const required = [
+      'bg', 'surface', 'surface-raised', 'surface-sunken', 'overlay',
+      'text', 'text-muted', 'text-subtle', 'text-inverse', 'border', 'border-strong',
+      'accent', 'accent-hover', 'accent-subtle', 'on-accent',
+      'success', 'success-subtle', 'success-text', 'warning', 'warning-subtle', 'warning-text',
+      'danger', 'danger-subtle', 'danger-text', 'info', 'info-subtle', 'info-text',
+      'focus-ring', 'selection', 'hover', 'disabled-bg', 'disabled-text',
     ];
-
-    it.each(pairs)('%s: --sf-ink on --sf-paper', (_theme, tokens) => {
-      expect(contrastRatio(tokens['--sf-ink'], tokens['--sf-paper'])).toBeGreaterThanOrEqual(7);
-    });
-
-    it.each(pairs)('%s: --sf-ink on --sf-surface', (_theme, tokens) => {
-      expect(contrastRatio(tokens['--sf-ink'], tokens['--sf-surface'])).toBeGreaterThanOrEqual(7);
-    });
-
-    it.each(pairs)('%s: --sf-slate (secondary text) on --sf-surface', (_theme, tokens) => {
-      expect(contrastRatio(tokens['--sf-slate'], tokens['--sf-surface'])).toBeGreaterThanOrEqual(4.5);
-    });
-  });
-
-  describe('UI / large text accents (AA ≥ 4.5:1)', () => {
-    const accents = ['--sf-signal', '--sf-jade', '--sf-rust'] as const;
-    const themes: Array<[theme: string, map: TokenMap]> = [
-      ['light', light],
-      ['dark', dark],
-    ];
-
-    for (const theme of themes) {
-      for (const accent of accents) {
-        it(`${theme[0]}: ${accent} on --sf-surface`, () => {
-          expect(contrastRatio(theme[1][accent], theme[1]['--sf-surface'])).toBeGreaterThanOrEqual(4.5);
-        });
+    const light = Object.keys(themes[0][1]).filter((n) => !/-\d+$/.test(n));
+    const dark = Object.keys(themes[1][1]).filter((n) => !/-\d+$/.test(n));
+    expect(dark.sort()).toEqual(light.sort());
+    for (const [, tokens] of themes) {
+      for (const name of required) {
+        expect(tokens[`--sf-${name}`], name).toBeDefined();
       }
     }
-
-    it('dark: --sf-amber on --sf-surface', () => {
-      expect(contrastRatio(dark['--sf-amber'], dark['--sf-surface'])).toBeGreaterThanOrEqual(4.5);
-    });
   });
 
-  describe('--sf-amber (reserved "not on the record" signal)', () => {
-    // Dark-theme amber passes AA (≥ 4.5:1). The light-theme token is
-    // spec-verbatim (`#C77A0A`, §24.3) and yields ~3.4:1 on white — it meets
-    // the large-text / graphical-object AA floor of 3:1 but not 4.5:1, so it
-    // is asserted against 3:1 and flagged here as a known deviation.
-    it('light: --sf-amber holds the large-text/graphical AA floor (≥ 3:1)', () => {
-      expect(contrastRatio(light['--sf-amber'], light['--sf-surface'])).toBeGreaterThanOrEqual(3);
-    });
-    it('light: --sf-amber holds 3:1 on --sf-paper', () => {
-      expect(contrastRatio(light['--sf-amber'], light['--sf-paper'])).toBeGreaterThanOrEqual(3);
-    });
-  });
-
-  describe('button labels (white text on accent fills)', () => {
-    it('light: white on --sf-signal', () => {
-      expect(contrastRatio('#ffffff', light['--sf-signal'])).toBeGreaterThanOrEqual(4.5);
-    });
-    it('light: white on --sf-rust', () => {
-      expect(contrastRatio('#ffffff', light['--sf-rust'])).toBeGreaterThanOrEqual(4.5);
-    });
+  describe.each(themes)('%s theme', (_name, tokens) => {
+    it.each(pairs)('text/fill pair %s on %s >= %s:1', (fg, bg, min) => check(tokens, fg, bg, min));
+    it.each(boundaries)('UI boundary %s on %s >= %s:1', (fg, bg, min) => check(tokens, fg, bg, min));
+    it('disabled text stays legible (>= 2:1; exempt from 4.5:1)', () => check(tokens, 'disabled-text', 'disabled-bg', 2));
   });
 });

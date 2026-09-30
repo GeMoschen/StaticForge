@@ -1,0 +1,167 @@
+// Semantic colour tokens (M35.5) — the ONLY colours components may use. Each has a light and a dark value.
+//
+// Theme selection (set on <html> by ThemeService):
+//   data-theme="light" | "dark"   explicit (resolved from the preference system | light | dark)
+//   no data-theme attribute       follows prefers-color-scheme (covers the moment before the app boots: no flash)
+// The dark values live in ONE mixin, used for the explicit attribute and for the no-attribute media query.
+
+@mixin sf-light-colors {
+  color-scheme: light;
+
+  // Surfaces
+  --sf-bg: var(--sf-slate-50);
+  --sf-surface: var(--sf-slate-0);
+  --sf-surface-raised: var(--sf-slate-0);
+  --sf-surface-sunken: var(--sf-slate-100);
+  --sf-overlay: rgb(15 23 42 / 0.5);
+
+  // Text
+  --sf-text: var(--sf-slate-900);
+  --sf-text-muted: var(--sf-slate-600);
+  --sf-text-subtle: #5f6f86; // between slate-500 and 600: slate-500 is 4.3:1 on surface-sunken
+  --sf-text-inverse: var(--sf-slate-0);
+
+  // Borders: `border` is decorative (dividers, cards); `border-strong` bounds controls (≥ 3:1 against the surface).
+  --sf-border: var(--sf-slate-200);
+  --sf-border-strong: #748399;
+
+  // Accent
+  --sf-accent: var(--sf-blue-600);
+  --sf-accent-hover: var(--sf-blue-700);
+  --sf-accent-subtle: var(--sf-blue-50);
+  --sf-on-accent: var(--sf-slate-0);
+
+  // Status: the colour (icons, borders, fills), its tinted background and the text colour to use on that background.
+  --sf-success: var(--sf-green-700);
+  --sf-success-subtle: var(--sf-green-50);
+  --sf-success-text: var(--sf-green-800);
+  --sf-warning: var(--sf-amber-600);
+  --sf-warning-subtle: var(--sf-amber-50);
+  --sf-warning-text: var(--sf-amber-800);
+  --sf-danger: var(--sf-red-600);
+  --sf-danger-subtle: var(--sf-red-50);
+  --sf-danger-text: var(--sf-red-700);
+  --sf-info: var(--sf-cyan-700);
+  --sf-info-subtle: var(--sf-cyan-50);
+  --sf-info-text: var(--sf-cyan-800);
+
+  // States
+  --sf-focus-ring: var(--sf-blue-600);
+  --sf-selection: var(--sf-blue-100);
+  --sf-hover: var(--sf-slate-100);
+  --sf-disabled-bg: var(--sf-slate-100);
+  --sf-disabled-text: var(--sf-slate-400);
+
+  // Code editor palette (CDL / OCTL / expressions / JSON)
+  --sf-code-bg: var(--sf-slate-0);
+  --sf-code-fg: var(--sf-slate-900);
+  --sf-code-gutter-bg: var(--sf-slate-50);
+  --sf-code-gutter-fg: var(--sf-slate-500);
+  --sf-code-active-line: var(--sf-slate-100);
+  --sf-code-selection: var(--sf-blue-100);
+  --sf-code-keyword: #7a3e9d;
+  --sf-code-type: #1f6f8b;
+  --sf-code-attr: #8a5a12;
+  --sf-code-atom: #a33b2e;
+  --sf-code-string: #2f6a52;
+  --sf-code-number: #b0501f;
+  --sf-code-comment: #667085;
+  --sf-code-function: #2f5fa8;
+  --sf-code-special: #9c3a6b;
+  --sf-code-operator: #475569;
+  --sf-code-tag: #b0401a;
+  // The host format around OCTL (HTML, Markdown, JSON, …): a cooler palette, so instructions stand out.
+  --sf-code-fmt-tag: #1b6e9e;
+  --sf-code-fmt-attr: #0f7c74;
+  --sf-code-fmt-string: #5d6d12;
+  --sf-code-fmt-keyword: #b03a7a;
+  --sf-code-fmt-number: #8f5a12;
+  --sf-code-fmt-comment: #6b6f85;
+  --sf-code-fmt-punct: #5b6472;
+}
+
+@mixin sf-dark-colors {
+  color-scheme: dark;
+
+  --sf-bg: var(--sf-slate-900);
+  --sf-surface: var(--sf-slate-800);
+  --sf-surface-raised: #27354c;
+  --sf-surface-sunken: var(--sf-slate-950);
+  --sf-overlay: rgb(2 6 23 / 0.7);
+
+  --sf-text: var(--sf-slate-100);
+  --sf-text-muted: var(--sf-slate-300);
+  --sf-text-subtle: var(--sf-slate-400);
+  --sf-text-inverse: var(--sf-slate-900);
+
+  --sf-border: var(--sf-slate-700);
+  --sf-border-strong: #7486a0;
+
+  --sf-accent: var(--sf-blue-400);
+  --sf-accent-hover: var(--sf-blue-300);
+  --sf-accent-subtle: var(--sf-blue-950);
+  --sf-on-accent: var(--sf-slate-950);
+
+  --sf-success: var(--sf-green-400);
+  --sf-success-subtle: var(--sf-green-950);
+  --sf-success-text: var(--sf-green-300);
+  --sf-warning: var(--sf-amber-400);
+  --sf-warning-subtle: var(--sf-amber-950);
+  --sf-warning-text: var(--sf-amber-300);
+  --sf-danger: var(--sf-red-400);
+  --sf-danger-subtle: var(--sf-red-950);
+  --sf-danger-text: var(--sf-red-300);
+  --sf-info: var(--sf-cyan-400);
+  --sf-info-subtle: var(--sf-cyan-950);
+  --sf-info-text: var(--sf-cyan-300);
+
+  --sf-focus-ring: var(--sf-blue-400);
+  --sf-selection: var(--sf-blue-900);
+  --sf-hover: var(--sf-slate-700);
+  --sf-disabled-bg: var(--sf-slate-700);
+  --sf-disabled-text: var(--sf-slate-500);
+
+  --sf-code-bg: var(--sf-slate-900);
+  --sf-code-fg: var(--sf-slate-100);
+  --sf-code-gutter-bg: var(--sf-slate-800);
+  --sf-code-gutter-fg: var(--sf-slate-400);
+  --sf-code-active-line: var(--sf-slate-800);
+  --sf-code-selection: var(--sf-blue-900);
+  --sf-code-keyword: #c99be0;
+  --sf-code-type: #6cc0d9;
+  --sf-code-attr: #e0b062;
+  --sf-code-atom: #ee8a78;
+  --sf-code-string: #8fcbae;
+  --sf-code-number: #f0a070;
+  --sf-code-comment: #8b9ab0;
+  --sf-code-function: #8db4f0;
+  --sf-code-special: #e594bd;
+  --sf-code-operator: #b8c2d0;
+  --sf-code-tag: #f08a5d;
+  --sf-code-fmt-tag: #7fb8e8;
+  --sf-code-fmt-attr: #6fd1c4;
+  --sf-code-fmt-string: #c4d67a;
+  --sf-code-fmt-keyword: #ee8fc4;
+  --sf-code-fmt-number: #e8c06a;
+  --sf-code-fmt-comment: #8d97ab;
+  --sf-code-fmt-punct: #9aa3b2;
+}
+
+:root {
+  @include sf-light-colors;
+}
+
+:root[data-theme='light'] {
+  @include sf-light-colors;
+}
+
+// Before ThemeService has set an attribute: follow the system.
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    @include sf-dark-colors;
+  }
+}
+
+:root[data-theme='dark'] {
+  @include sf-dark-colors;
+}

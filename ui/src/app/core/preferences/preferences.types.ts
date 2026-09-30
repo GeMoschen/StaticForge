@@ -48,7 +48,7 @@ export interface PreferencesDocument {
 }
 
 export const DEFAULT_THEME: ThemePreference = 'system';
-export const DEFAULT_DENSITY: DensityPreference = 'comfortable';
+export const DEFAULT_DENSITY: DensityPreference = 'compact';
 export const DEFAULT_PREVIEW_VIEW: PreviewViewPreference = 'draft';
 export const RECENTS_CAP = 20;
 export const PREFERENCES_SCHEMA_VERSION = 1;

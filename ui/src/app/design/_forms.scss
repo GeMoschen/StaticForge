@@ -1,32 +1,46 @@
 // Shared form-control visual language, `@use`d from feature components that
 // own their own <input>/<select>/<textarea> markup (sf-field is a thin
 // label wrapper and doesn't style the control itself).
+// Height and padding follow the density (data-density on <html>).
 
 @mixin sf-form-control {
   width: 100%;
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
+  min-height: var(--sf-control-height);
+  padding: var(--sf-space-1) var(--sf-pad-control-x);
+  border: 1px solid var(--sf-border-strong);
   border-radius: var(--sf-radius-md);
   background: var(--sf-surface);
-  color: var(--sf-ink);
+  color: var(--sf-text);
   font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
   box-sizing: border-box;
   transition:
-    border-color var(--sf-motion-fast) var(--sf-ease),
-    box-shadow var(--sf-motion-fast) var(--sf-ease);
+    border-color var(--sf-duration-fast) var(--sf-ease-standard),
+    box-shadow var(--sf-duration-fast) var(--sf-ease-standard);
+
+  &::placeholder {
+    color: var(--sf-text-subtle);
+  }
 
   &:hover {
-    border-color: color-mix(in srgb, var(--sf-signal) 40%, var(--sf-line));
+    border-color: var(--sf-text-subtle);
   }
 
   &:focus-visible {
-    border-color: var(--sf-signal);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--sf-signal) 18%, transparent);
+    border-color: var(--sf-focus-ring);
+    box-shadow: 0 0 0 2px var(--sf-focus-ring);
+    outline: none;
+  }
+
+  &:disabled,
+  &[readonly] {
+    background: var(--sf-disabled-bg);
+    color: var(--sf-text-muted);
   }
 
   &:disabled {
-    opacity: 0.55;
+    color: var(--sf-disabled-text);
     cursor: not-allowed;
   }
 }

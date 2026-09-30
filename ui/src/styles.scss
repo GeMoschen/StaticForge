@@ -8,6 +8,11 @@
   box-sizing: border-box;
 }
 
+html {
+  // Native controls, scrollbars and the canvas follow the theme (tokens set color-scheme).
+  background: var(--sf-bg);
+}
+
 html,
 body {
   margin: 0;
@@ -15,11 +20,11 @@ body {
 }
 
 body {
-  background: var(--sf-paper);
-  color: var(--sf-ink);
+  background: var(--sf-bg);
+  color: var(--sf-text);
   font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-md);
-  line-height: var(--sf-lh-md);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
   -webkit-font-smoothing: antialiased;
 
   & > sf-root {
@@ -30,7 +35,7 @@ body {
 
 /* Accessibility — visible focus ring for keyboard users only (§24.7). */
 :focus-visible {
-  outline: 2px solid var(--sf-signal);
+  outline: 2px solid var(--sf-focus-ring);
   outline-offset: 2px;
 }
 
@@ -43,10 +48,10 @@ body {
   position: absolute;
   top: -100px;
   left: var(--sf-3);
-  z-index: 2000;
+  z-index: var(--sf-z-tooltip);
   padding: var(--sf-2) var(--sf-3);
-  background: var(--sf-signal);
-  color: #fff;
+  background: var(--sf-accent);
+  color: var(--sf-on-accent);
   font-family: var(--sf-font-ui);
   font-size: var(--sf-text-sm);
   border-radius: var(--sf-radius-md);
@@ -87,3 +92,8 @@ body {
   border: 0;
 }
 
+
+::selection {
+  background: var(--sf-selection);
+  color: var(--sf-text);
+}

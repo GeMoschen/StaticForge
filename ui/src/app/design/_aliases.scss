@@ -1,0 +1,63 @@
+// Legacy token names (pre-M35.5), kept so existing screens still render until they migrate to the semantic tokens.
+// Every line is an alias — remove in M35.27. New code must NOT use these.
+//
+// The second group used to be referenced but never defined; they are now defined here as aliases too.
+
+:root {
+  // alias — remove in M35.27
+  --sf-paper: var(--sf-bg);
+  --sf-ink: var(--sf-text);
+  --sf-slate: var(--sf-text-muted);
+  --sf-line: var(--sf-border);
+  --sf-signal: var(--sf-accent);
+  --sf-amber: var(--sf-warning-text);
+  --sf-jade: var(--sf-success);
+  --sf-rust: var(--sf-danger);
+  --sf-font-display: var(--sf-font-ui); // Fraunces is gone
+  --sf-pour-color: var(--sf-accent);
+  --sf-pour-width: 3px;
+
+  // alias — remove in M35.27 (type sizes; the old names keep their meaning, mapped onto the new scale)
+  --sf-text-xs: var(--sf-fs-12);
+  --sf-lh-xs: var(--sf-lh-12);
+  --sf-text-sm: var(--sf-fs-13);
+  --sf-lh-sm: var(--sf-lh-13);
+  --sf-text-md: var(--sf-fs-14);
+  --sf-lh-md: var(--sf-lh-14);
+  --sf-text-lg: var(--sf-fs-16);
+  --sf-lh-lg: var(--sf-lh-16);
+  --sf-text-xl: var(--sf-fs-24);
+  --sf-lh-xl: var(--sf-lh-24);
+  --sf-text-2xl: var(--sf-fs-30);
+  --sf-lh-2xl: var(--sf-lh-30);
+  --sf-text-2xs: var(--sf-fs-12); // alias — remove in M35.27 (the scale has no size below 12px)
+
+  // alias — remove in M35.27 (spacing)
+  --sf-1: var(--sf-space-1);
+  --sf-2: var(--sf-space-2);
+  --sf-3: var(--sf-space-3);
+  --sf-4: var(--sf-space-4);
+  --sf-5: var(--sf-space-6);
+  --sf-6: var(--sf-space-8);
+  --sf-7: var(--sf-space-12);
+  --sf-8: var(--sf-space-16);
+
+  // alias — remove in M35.27 (motion, shadow)
+  --sf-motion-fast: var(--sf-duration-fast);
+  --sf-motion-base: var(--sf-duration-base);
+  --sf-ease: var(--sf-ease-standard);
+  --sf-shadow-1: var(--sf-elevation-1);
+  --sf-shadow-2: var(--sf-elevation-2);
+
+  // alias — remove in M35.27 (formerly used but undefined)
+  --sf-radius: var(--sf-radius-md);
+  --sf-muted: var(--sf-text-muted);
+  --sf-canvas: var(--sf-bg);
+  --sf-panel: var(--sf-surface);
+  --sf-ink-soft: var(--sf-text-muted);
+  --sf-surface-muted: var(--sf-surface-sunken);
+  --sf-signal-muted: var(--sf-accent-subtle);
+  --sf-shadow-md: var(--sf-elevation-2);
+  --sf-shadow-lg: var(--sf-elevation-3);
+  --sf-amber-700: var(--sf-warning-text);
+}

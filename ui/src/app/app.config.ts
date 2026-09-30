@@ -13,12 +13,14 @@ import { errorInterceptor } from './core/api/error.interceptor';
 import { etagInterceptor } from './core/api/etag.interceptor';
 import { readonlyInterceptor } from './core/api/readonly.interceptor';
 import { provideI18n } from './core/i18n/i18n.providers';
+import { provideAppearance } from './core/ui/appearance.providers';
 import { providePreferencesSync } from './core/preferences/preferences-sync';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideExperimentalZonelessChangeDetection(),
     providePreferencesSync(),
+    provideAppearance(),
     provideI18n(),
     provideRouter(routes, withComponentInputBinding(), withRouterConfig({ paramsInheritanceStrategy: 'always' })),
     provideHttpClient(
