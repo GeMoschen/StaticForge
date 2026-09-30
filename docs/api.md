@@ -26,6 +26,23 @@ While `mustChangePassword` is set, every other authenticated call answers `428 S
 role and status changes revoke access tokens at once through the token epoch (spec §9.2): the next call is `401`, and a
 refresh returns a token with the current roles.
 
+### 2.1 Preferences (M35.3)
+
+One JSON document per user for UI preferences (theme, density, pane sizes, recents, …). There is no user id in the
+path: everyone reads and writes only their own document, and the endpoint needs a signed-in user (`401` otherwise; a
+pending `mustChangePassword` answers `428` like every other call). The document is not part of exports or revisions and
+goes when the account is deleted.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/me/preferences` | the document; `{"schemaVersion": 1}` until something is stored |
+| `PUT` | `/api/v1/me/preferences` | replaces the document; the body must be a JSON object, `schemaVersion` defaults to `1` |
+| `PATCH` | `/api/v1/me/preferences` | RFC 7386 JSON merge patch (`application/json` or `application/merge-patch+json`): `null` removes a key, objects merge recursively, everything else (arrays included) replaces. Atomic per user (the account row is locked), so concurrent tabs patching disjoint keys lose nothing |
+
+Every call answers `200` with the full document. The serialized document (after the merge, for `PATCH`) is capped at
+64 KB (65536 bytes): `413 SF-DOM-0133`. A body that isn't a JSON object, or a `schemaVersion` that isn't a positive
+integer or is greater than the current version (`1`): `422 SF-DOM-0134`.
+
 ## 3. Projects & membership
 
 | Method | Path | Role |
@@ -1138,6 +1155,8 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0130` | 422 | page reference folder target has no page in its subtree — `PageReferenceServiceImpl` (a section template outside a body's `allow` list is `SF-API-0422` with an `allow` issue) |
 | `SF-DOM-0131` | 409 | the last active instance admin can't be disabled, deleted or demoted — `UserAdministrationService` |
 | `SF-DOM-0132` | 409 | an admin can't disable, delete or demote themselves — `UserAdministrationService` |
+| `SF-DOM-0133` | 413 | the user's preferences document is larger than 64 KB (65536 bytes) serialized — `UserPreferencesService` (M35.3) |
+| `SF-DOM-0134` | 422 | the preferences body isn't a JSON object, or its `schemaVersion` isn't a positive integer or is newer than the supported version (1) — `UserPreferencesService` (M35.3) |
 | `SF-DOM-0140` | 409 | project key already exists — *implemented addition* |
 | `SF-DOM-0141` | 409 | project is archived: every write is refused (M26) — `ArchivedProjectInterceptor`, `RevisionService.allocate`, `ProjectWriteGuard` |
 | `SF-DOM-0150` | 422 | content incomplete: releasing (or pinning a scheduled release of) content with `release`-scope `error` findings — built-ins and editor rules (M33); `assets[{uuid, locale, issues}]` (M27) — `ReleaseProblems`, `ReleaseServiceImpl`, `ReleaseActionHandler` |

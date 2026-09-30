@@ -452,6 +452,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_4"];
+        put: operations["replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["patch"];
+        trace?: never;
+    };
     "/api/v1/admin/users/{id}/system-role": {
         parameters: {
             query?: never;
@@ -1005,7 +1021,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["replace"];
+        post: operations["replace_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2629,8 +2645,8 @@ export interface components {
             effectiveDefinition?: components["schemas"]["JsonNode"];
             inheritedFrom?: components["schemas"]["InheritedFrom"];
             descendantWarnings?: components["schemas"]["DescendantIssueDto"][];
-            abstract?: boolean;
             warnings?: components["schemas"]["Diagnostic"][];
+            abstract?: boolean;
         };
         TemplateRefDto: {
             /** Format: uuid */
@@ -3260,10 +3276,6 @@ export interface components {
             };
             defaultWithoutPrefix?: boolean;
         };
-        ProjectLocaleView: {
-            code?: string;
-            label?: string;
-        };
         LocaleWarningView: {
             code?: string;
             message?: string;
@@ -3273,6 +3285,10 @@ export interface components {
             templateName?: string;
             channel?: string;
             outputPath?: string;
+        };
+        ProjectLocaleView: {
+            code?: string;
+            label?: string;
         };
         ProjectLocalesView: {
             locales?: components["schemas"]["ProjectLocaleView"][];
@@ -4162,6 +4178,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -4171,20 +4189,18 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
+            unpaged?: boolean;
             paged?: boolean;
             /** Format: int32 */
-            pageNumber?: number;
-            /** Format: int32 */
             pageSize?: number;
-            unpaged?: boolean;
+            /** Format: int32 */
+            pageNumber?: number;
         };
         SortObject: {
             direction?: string;
@@ -4224,6 +4240,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -4233,8 +4251,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -4483,6 +4499,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -4492,8 +4510,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -4645,6 +4661,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -4654,8 +4672,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -6187,6 +6203,75 @@ export interface operations {
             };
         };
     };
+    get_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["JsonNode"];
+                };
+            };
+        };
+    };
+    replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonNode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["JsonNode"];
+                };
+            };
+        };
+    };
+    patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonNode"];
+                "application/merge-patch+json": components["schemas"]["JsonNode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["JsonNode"];
+                };
+            };
+        };
+    };
     setSystemRole: {
         parameters: {
             query?: never;
@@ -7302,7 +7387,7 @@ export interface operations {
             };
         };
     };
-    replace: {
+    replace_1: {
         parameters: {
             query?: never;
             header?: never;

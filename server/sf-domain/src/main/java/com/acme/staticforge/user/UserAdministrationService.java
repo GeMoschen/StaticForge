@@ -3,6 +3,7 @@ package com.acme.staticforge.user;
 import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.preferences.UserPreferencesRepository;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectMember;
 import com.acme.staticforge.project.ProjectMemberRepository;
@@ -62,6 +63,7 @@ public class UserAdministrationService {
     private final ProjectRepository projects;
     private final ProjectMemberRepository members;
     private final RefreshTokenRepository refreshTokens;
+    private final UserPreferencesRepository preferences;
     private final AuditService auditService;
 
     public UserAdministrationService(
@@ -73,6 +75,7 @@ public class UserAdministrationService {
             ProjectRepository projects,
             ProjectMemberRepository members,
             RefreshTokenRepository refreshTokens,
+            UserPreferencesRepository preferences,
             AuditService auditService) {
         this.users = users;
         this.userService = userService;
@@ -82,6 +85,7 @@ public class UserAdministrationService {
         this.projects = projects;
         this.members = members;
         this.refreshTokens = refreshTokens;
+        this.preferences = preferences;
         this.auditService = auditService;
     }
 
@@ -353,6 +357,8 @@ public class UserAdministrationService {
         user.setStatus(UserStatus.DELETED);
         users.save(user);
         revokeSessions(user);
+        // The row stays (anonymized), so the preferences document does not cascade away with it.
+        preferences.deleteByUserId(userId);
 
         auditService.anonymizeUser(userId, target(user));
         auditService.record(null, actorId, "USER_DELETED", target(user), UserService.userDetail(userId));

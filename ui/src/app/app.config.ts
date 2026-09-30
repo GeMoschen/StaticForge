@@ -12,10 +12,12 @@ import { compactedReadInterceptor } from './core/api/compacted-read.interceptor'
 import { errorInterceptor } from './core/api/error.interceptor';
 import { etagInterceptor } from './core/api/etag.interceptor';
 import { readonlyInterceptor } from './core/api/readonly.interceptor';
+import { providePreferencesSync } from './core/preferences/preferences-sync';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideExperimentalZonelessChangeDetection(),
+    providePreferencesSync(),
     provideRouter(routes, withComponentInputBinding(), withRouterConfig({ paramsInheritanceStrategy: 'always' })),
     provideHttpClient(
       withInterceptors([

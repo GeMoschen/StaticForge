@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M35.3: one preferences document per user.
+
+         user_preferences.document    a JSON object carrying a schemaVersion, capped at 64 KB by the service. The
+                                      column is declared per dialect like project.locale_config (017). The row goes
+                                      with the user's account (ON DELETE CASCADE) and is not part of exports or
+                                      revisions. -->
+    <changeSet id="032-user-preferences-postgresql" author="sf" dbms="postgresql">
+        <comment>User preferences - PostgreSQL (jsonb).</comment>
+        <createTable tableName="user_preferences">
+            <column name="user_id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false" foreignKeyName="fk_user_preferences_user"
+                             references="app_user(id)" deleteCascade="true"/>
+            </column>
+            <column name="document" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="032-user-preferences-h2" author="sf" dbms="h2">
+        <comment>User preferences - H2 (json).</comment>
+        <createTable tableName="user_preferences">
+            <column name="user_id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false" foreignKeyName="fk_user_preferences_user"
+                             references="app_user(id)" deleteCascade="true"/>
+            </column>
+            <column name="document" type="JSON">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>

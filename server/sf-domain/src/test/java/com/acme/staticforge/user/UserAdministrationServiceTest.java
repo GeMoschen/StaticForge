@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.acme.staticforge.audit.AuditService;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.preferences.UserPreferencesRepository;
 import com.acme.staticforge.project.ProjectMemberRepository;
 import com.acme.staticforge.project.ProjectRepository;
 import com.acme.staticforge.project.ProjectService;
@@ -40,6 +41,7 @@ class UserAdministrationServiceTest {
     @Mock ProjectRepository projects;
     @Mock ProjectMemberRepository members;
     @Mock RefreshTokenRepository refreshTokens;
+    @Mock UserPreferencesRepository preferences;
     @Mock AuditService auditService;
 
     UserAdministrationService service;
@@ -49,7 +51,7 @@ class UserAdministrationServiceTest {
     void setUp() {
         service = new UserAdministrationService(
                 users, userService, passwords, passwordPolicy, projectService, projects, members, refreshTokens,
-                auditService);
+                preferences, auditService);
         target = new AppUser("target", "target@example.com", Instant.now());
         ReflectionTestUtils.setField(target, "id", TARGET);
         target.setSystemRole(SystemRole.INSTANCE_ADMIN);

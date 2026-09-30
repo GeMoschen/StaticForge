@@ -3588,6 +3588,8 @@ Same content. Two channels. No duplication.
 | `SF-DOM-0130` | 422 | Page reference folder target has no page in its subtree (a section template outside the body's `allow` list is `SF-API-0422` with an `allow` issue, §10.5) |
 | `SF-DOM-0131` | 409 | The last active instance admin can't be disabled, deleted or demoted (§8.2) |
 | `SF-DOM-0132` | 409 | An admin can't disable, delete or demote their own account (§8.2) |
+| `SF-DOM-0133` | 413 | The user's preferences document exceeds 64 KB (M35.3) |
+| `SF-DOM-0134` | 422 | The preferences body isn't a JSON object, or its `schemaVersion` isn't a positive integer or is newer than the supported version (M35.3) |
 | `SF-DOM-0141` | 409 | Project is archived: every write to an archived project is refused (M26); only `unarchive` and read-only requests (dry runs, validations, previews, exports) pass |
 | `SF-DOM-0150` | 422 | Content incomplete: a release (or a pinned scheduled release) of content with `release`-scope `error` findings (built-ins and editor rules); `assets[{uuid, locale, issues}]` lists them (M27, M33) |
 | `SF-DOM-0151` | 422 | Release item can't be resolved: unknown asset, a language the asset doesn't have, or a live (non-releasable) type (M27) |
