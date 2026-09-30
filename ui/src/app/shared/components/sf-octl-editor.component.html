@@ -1,14 +1,16 @@
-<textarea
-  #area
+<sf-code-editor
   class="octl-editor__source"
-  spellcheck="false"
+  [class.octl-editor__source--invalid]="hasErrors()"
+  language="octl"
   [value]="value()"
+  [label]="label()"
+  [diagnostics]="diagnostics()"
   [readOnly]="readOnly()"
-  [attr.aria-label]="label()"
-  [attr.aria-invalid]="hasErrors() ? true : null"
+  [names]="names()"
+  [invalid]="hasErrors()"
   [attr.aria-describedby]="diagnosticsId"
-  (input)="onInput($event)"
-></textarea>
+  (valueChange)="valueChange.emit($event)"
+/>
 <div [id]="diagnosticsId" class="octl-editor__diagnostics" aria-live="polite">
   @for (diag of diagnostics(); track $index) {
     <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">

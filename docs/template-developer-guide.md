@@ -81,6 +81,8 @@ rules {
 }
 ```
 
+**Catalog cards.** A section template's rules also run for its catalog cards, wherever the `catalog` editor sits (a page, a section, a record, a property set): findings at `<catalog>.cards[i].content.<field>`, and `section.page` is the enclosing content, `section.catalog` the catalog's name, `section.index` the card's position.
+
 **The whole page and its sections.** `on page` (in a page template) targets the whole definition; `body.<name>` is the list of the body's section instances, each with `template` (the section template's uid) and `content`, and `sections(body, templateUid)` filters it:
 
 ```
@@ -208,7 +210,7 @@ Switching off a name no ancestor defines is `SF-CDL-0118`. A child can target in
 
 **Property sets in rules.** A rule may read `global:<set>.<field>`. Saving the template (or dataset, section template, property set) records the sets its rules read as `RULE_REFERENCE` references: the set then counts as used by the template (it can't be deleted while used), and a change to it rebuilds the template's pages in the next incremental build — the rebuild reason reads "has editor rules reading".
 
-**Diagnostics.** `SF-CDL-0113`–`0119` (§3.2) while editing the CDL; at runtime findings with codes `rule` (your rules), the built-in codes (`required`, `maxLength`, …), `rule-eval` and `read-only`; at build `SF-GEN-0120`–`0122` (§3.3). The CDL editor shows `rules {}` as plain text — no highlighting or completion for it yet.
+**Diagnostics.** `SF-CDL-0113`–`0119` (§3.2) while editing the CDL; at runtime findings with codes `rule` (your rules), the built-in codes (`required`, `maxLength`, …), `rule-eval` and `read-only`; at build `SF-GEN-0120`–`0122` (§3.3). The CDL editor highlights `rules {}` — expressions inside `assert`, `when`, `value`, `visibleWhen`, `requiredWhen` and `readOnlyWhen` strings too — and completes keywords, editor paths and functions on **Ctrl+Space**; diagnostics are underlined as you type.
 
 ## Part 2 — OCTL (output channel template language)
 

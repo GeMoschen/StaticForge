@@ -15,6 +15,7 @@ import { catchError, EMPTY, map, of, Subject, switchMap, timer, type Observable 
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
+import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
 import type { ContentDefinition } from '../forms/form.model';
 import {
   ContentService,
@@ -84,7 +85,7 @@ type PreviewOutcome = { ok: true; view: RecordSetQueryPreviewView } | { ok: fals
   selector: 'sf-record-set-query-panel',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfIconComponent],
+  imports: [SfButtonComponent, SfCodeEditorComponent, SfIconComponent],
   templateUrl: './record-set-query-panel.component.html',
   styleUrl: './record-set-query-panel.component.scss',
 })
@@ -187,6 +188,29 @@ export class RecordSetQueryPanelComponent {
     return options;
   });
 
+  /** The fields a `where` reads, for completion (M33): meta fields and the schema's editors. */
+  protected readonly whereFields = computed(() => {
+    const definition = this.dataset()?.compiledDefinition as unknown as ContentDefinition | undefined;
+    const names = new Set<string>(META_SORT_OPTIONS.map((option) => option.field));
+    const collect = (editors: ContentDefinition['editors'] | undefined) =>
+      (editors ?? []).forEach((editor) => {
+        if (editor.type === 'GROUP') {
+          collect(editor.items);
+        } else {
+          names.add(editor.name);
+        }
+      });
+    collect(definition?.editors);
+    return [...names];
+  });
+
+  /** The `where` diagnostics, underlined in the field (they carry a column in the expression). */
+  protected readonly whereDiagnostics = computed(() =>
+    this.diagnostics()
+      .filter((d) => d.field === 'where')
+      .map((d) => ({ ...d, line: 1, column: (d.line ?? 1) === 1 ? (d.column ?? 1) : 1 })),
+  );
+
   protected readonly canAddSortKey = computed(() => this.sortOptions().some((o) => !this.isSorted(o.field)));
 
   constructor() {
@@ -246,8 +270,8 @@ export class RecordSetQueryPanelComponent {
     this.expanded.update((v) => !v);
   }
 
-  protected onWhereInput(event: Event): void {
-    this.edit({ ...this.draft(), where: (event.target as HTMLTextAreaElement).value });
+  protected onWhereInput(where: string): void {
+    this.edit({ ...this.draft(), where });
   }
 
   protected onLimitInput(event: Event): void {

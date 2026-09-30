@@ -23,6 +23,8 @@ import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfOctlEditorComponent } from '../../shared/components/sf-octl-editor.component';
+import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
+import { declaredPaths } from '../../shared/code-editor/completions';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { ChannelsService } from '../channels/channels.service';
 import type { ContentDefinition, EditorDefinition } from '../forms/form.model';
@@ -74,7 +76,7 @@ interface RecordTemplateValidation {
   selector: 'sf-dataset-schema-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SfButtonComponent, SfFieldComponent, SfOctlEditorComponent, SfUidRenameComponent],
+  imports: [RouterLink, SfButtonComponent, SfCodeEditorComponent, SfFieldComponent, SfOctlEditorComponent, SfUidRenameComponent],
   templateUrl: './dataset-schema-editor.component.html',
   styleUrl: './dataset-schema-editor.component.scss',
 })
@@ -104,7 +106,16 @@ export class DatasetSchemaEditorComponent {
   protected readonly diagnostics = signal<Diagnostic[]>([]);
   protected readonly saving = signal(false);
   protected readonly validating = signal(false);
+  /** The dataset's fields, for record template completion (M33). */
+  protected readonly fieldNames = computed(() =>
+    declaredPaths(this.contentDefinition()).filter((path) => !path.endsWith('[]')),
+  );
   private validateTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly clearValidateTimer = inject(DestroyRef).onDestroy(() => {
+    if (this.validateTimer) {
+      clearTimeout(this.validateTimer);
+    }
+  });
 
   /** The project's channels (for the record template tabs). */
   private readonly channels = signal<ChannelView[]>([]);
@@ -276,8 +287,8 @@ export class DatasetSchemaEditorComponent {
   }
 
   /** Live validation while typing, debounced; the same restrictions the save enforces. */
-  protected onCdlInput(event: Event): void {
-    this.contentDefinition.set((event.target as HTMLTextAreaElement).value);
+  protected onCdlInput(source: string): void {
+    this.contentDefinition.set(source);
     if (this.validateTimer) {
       clearTimeout(this.validateTimer);
     }

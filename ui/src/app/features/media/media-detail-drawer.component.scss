@@ -385,7 +385,6 @@ input[type='number'] {
   gap: var(--sf-3);
 }
 
-.source__editor,
 .rendered__output {
   box-sizing: border-box;
   width: 100%;
@@ -403,9 +402,8 @@ input[type='number'] {
 }
 
 .source__editor {
-  resize: vertical;
-  white-space: pre;
-  overflow: auto;
+  // A code editor (M33): its own border and scrolling; tall like the rendered output.
+  --sf-code-min-height: 24rem;
 }
 
 .rendered__output {

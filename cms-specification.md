@@ -179,7 +179,7 @@ Because rendering is fully separated from content, the same content can be emitt
 | Build | Gradle 8 (Kotlin DSL), multi-module | Fast incremental builds |
 | Frontend | Angular 18+ standalone, signals | Required |
 | Frontend build | Angular CLI + esbuild, Vitest, Playwright | Modern toolchain |
-| Editor component | Monaco Editor | CDL/OCTL syntax highlighting, diagnostics |
+| Editor component | CodeMirror 6 (M33) | CDL/OCTL/expression/JSON highlighting, completion, diagnostics |
 | Rich text | TipTap (ProseMirror) | Schema-constrained rich text, no `contenteditable` soup |
 | API contract | OpenAPI 3.1 generated from controllers; TS client generated for Angular | Single source of truth |
 
@@ -1320,7 +1320,7 @@ locales    = "all" | "[" "default" "]" | "[" LANG { "," LANG } "]"
 
 **Languages.** A rule runs once per language (with `locale` set) only when it reads a language-dependent value, `locale`, `release`, `body`, `section`, `global:` or `ref`; otherwise once. Its findings carry that `locale`. Edit and save evaluate every project language (or the requested one plus the default, §19.5); release the languages being released; generation the language being built.
 
-**Engine.** `RuleEngine` (`sf-domain`, pure) takes the effective definition, the content, a scope, the languages and a context provider and returns the outcome `{findings, fills, fieldStates}`; the built-in checks stay in `ContentValidator` and the engine adds them to its outcome, so every scope has one code path. Editors hidden by `visibleWhen` are skipped. The finding code of a custom rule is `rule` (with `rule` = its name); runtime codes are `rule-eval` (an evaluation error or limit, `warning`) and `read-only` (an ignored change, `info`).
+**Engine.** `RuleEngine` (`sf-domain`, pure) takes the effective definition, the content, a scope, the languages and a context provider and returns the outcome `{findings, fills, fieldStates}`; the built-in checks stay in `ContentValidator` and the engine adds them to its outcome, so every scope has one code path. Editors hidden by `visibleWhen` are skipped. Catalog cards are evaluated with their section templates' rules wherever a `catalog` editor sits — in a page, a body section, a record or a property set, through groups, list rows and nested catalogs: paths `<catalog>.cards[i].content.<field>`, `section` reads `page` (the enclosing top-level content), `catalog`, `index` and `template`. A `mode empty` fill whose value is empty writes nothing. The finding code of a custom rule is `rule` (with `rule` = its name); runtime codes are `rule-eval` (an evaluation error or limit, `warning`) and `read-only` (an ignored change, `info`).
 
 ---
 
@@ -2891,7 +2891,7 @@ public class AssetVersion {
 | Styling | SCSS + CSS custom properties design tokens; no UI kit dependency for core surfaces |
 | Components | Angular CDK (overlay, drag-drop, a11y, virtual scroll) — behaviour without visual opinions |
 | Rich text | TipTap with a schema derived from the editor's `features` list |
-| Code editing | Monaco with custom CDL/OCTL languages (tokenizer, completion, diagnostics) |
+| Code editing | CodeMirror 6 with CDL/OCTL/expression stream languages (tokenizer, completion, diagnostics; M33, §24.5 item 21) |
 | i18n | Angular i18n, en + de at launch |
 | Testing | Vitest + Testing Library, Playwright for E2E |
 
@@ -2971,7 +2971,7 @@ EDITOR_REGISTRY: Map<EditorType, Type<EditorComponent>>
   - **Field states.** Required, read-only and computed markers on top-level editors; a field read-only by rule has its control disabled, and a rule never re-enables a field the definition makes read-only.
   - **Findings.** Shown at their field, styled by level — error, warning, info, and hint muted (hints only at the field) — filtered to the language being edited, the message in the UI language. Client-side validators remain only for instant format feedback (the definition's `validate … message`, else i18n defaults); server findings are authoritative.
   - **Rejected saves.** A save or autosave refused by the rule gate (`422 SF-API-0422` with `issues`) keeps the local edits, shows the findings and sets the status to "Not saved — fix N errors"; the next change saves again.
-  - **Limits.** Edit-scope fills and field states apply to a page's own fields, records and property sets, not inside section instances (section findings still show, and save fills apply on the server).
+  - **Nested forms.** The page's body sections and every catalog card — in a page, a section, a record or a property set — take their fills and field states from the same evaluation by their path prefix (`bodies.main[1].content`, `content.teasers.cards[0].content`), blank their own last live fills before the next request, and pass a filled value up without counting it as an edit.
 - **Autosave**: dirty state is debounced 1.5 s and flushed on blur, section switch, and `Ctrl/Cmd+S`. Each flush is one revision with an automatic comment ("Edited *Headline* in *Teaser*"). A `Saved 12:04` indicator with a revision link sits in the editor header.
 
 ### 23.6 Page editor layout
@@ -2998,7 +2998,7 @@ EDITOR_REGISTRY: Map<EditorType, Type<EditorComponent>>
 
 ### 23.7 Template IDE
 
-- Monaco with a custom OCTL language: tokenizer for `$CMS_…$`, bracket matching for block instructions, folding, and completion providers fed by the template's own CDL (`$CMS_VALUE(` offers the declared editor names, `$CMS_REF(page:` offers UIDs from the project index).
+- CodeMirror 6 with a custom OCTL language (M33): tokenizer for `$CMS_…$`, bracket matching, folding of block instructions, and completion on Ctrl+Space fed by the template's own CDL (instructions after `$`, the declared and inherited editor names inside an instruction).
 - Diagnostics: `POST /octl/validate` on a 500 ms debounce → markers with codes and quick links to the reference documentation.
 - Channel tabs across the top (`HTML | Markdown | + Add channel`); an unsaved indicator per tab.
 - Split view: CDL on the left, channel template on the right, sample-content preview below — a developer sees the effect of a declaration immediately.
@@ -3149,10 +3149,10 @@ Breakpoints: 1600 / 1280 / 1100 / 840 / 600. Below 840 px the app is **review-or
 20. **Navigation root (M31).** *All navigation* selects the Navigation root and opens its folder drawer — also from its context menu's *Folder settings…* — so its *Entry page* (`startNode`) can be set (a bug before M31: the root wasn't selectable). It can't be renamed, moved or deleted.
 21. **Editor rules (M33).**
     - **Forms** (page fields, record, property set): findings at their fields with level styling (error, warning, info; hints muted and only at the field), in the language being edited; required, read-only and computed markers from the rules; live fills (§23.5). A save refused by a rule shows "Not saved — fix N errors" and keeps the edits.
-    - **Issues panel** (page editor): findings ordered by level, errors first; hints hidden; infos listed but not counted in the badge. There is no scope filter.
+    - **Issues panel** (page editor): findings ordered by level, errors first; hints hidden; infos listed but not counted in the badge. Scope chips **Edit · Save · Release · Generation** (all on by default, at least one stays on, remembered per browser) filter the findings: a finding shows when one of its scopes is on; the draft's output (quality) findings count as *Generation*.
     - **Release dialog**: errors block the release; warnings are listed and need the checkbox **Release with warnings** (sends `acceptWarnings`); infos sit in a collapsed *Notes* list; planned fills are listed under "Filled in on release". The schedule dialog lists warnings without a checkbox ("recorded when the release runs").
     - **Generate → runs**: `SF-GEN-0121` and `SF-GEN-0122` show among the run diagnostics like `SF-GEN-0120`, naming rule, page and language; the build insight labels the `RULE_REFERENCE` edge "has editor rules reading".
-    - **CDL editors** (template, dataset, property set): `rules {}` is plain text — no syntax highlighting or completion yet; diagnostics come from `/cdl/validate` as for the rest of the CDL.
+    - **Code editors** (CodeMirror 6, loaded as its own chunk on first use): CDL (template, dataset, property set), OCTL (channel and record templates, processed text media), a record set's `where` and JSON editor values. Highlighting — in CDL also inside expression strings (`assert`, `when`, `value` in a fill, `visibleWhen`, `requiredWhen`, `readOnlyWhen`); completion on **Ctrl+Space** only (CDL keywords, types, attributes, levels, scopes and modes by position, the declared and inherited editor paths, expression functions with signatures and context names; OCTL instructions after `$`, the template's editors or the dataset's fields inside an instruction; a `where` offers the dataset's fields); diagnostics underlined in place with the message on hover, next to the list below the editor; line numbers, bracket matching and auto-closing, folding (CDL blocks, OCTL block instructions), search (**Ctrl+F**), history. **Tab** indents (a text file's source indents with tab characters); **Esc** then **Tab** moves focus on. The CDL is validated live, 500 ms after the last keystroke; *Validate* still reports with a message.
 
 ### 24.6 Interaction rules
 

@@ -134,7 +134,7 @@ Liquibase owns the schema (`ddl-auto: validate` in every profile); see `infra/RE
 
 ## 10. Frontend
 
-Angular 18+ standalone, zoneless + signals. The dynamic form engine (`sf-content-form` + `FormBuilderService` + `EDITOR_REGISTRY`) renders a form from the `ContentDefinition`; since M33 a `RuleBinding` per form calls `POST /rules/evaluate` debounced and applies the server's fills, field states and findings (spec §23.5), `visibleWhen` being the only expression evaluated in the browser; the revision spine is the signature UX element (§24.2). See the [user guide](user-guide.md) and `ui/src/app/features/` for the feature layout.
+Angular 18+ standalone, zoneless + signals. The dynamic form engine (`sf-content-form` + `FormBuilderService` + `EDITOR_REGISTRY`) renders a form from the `ContentDefinition`; since M33 a `RuleBinding` per form calls `POST /rules/evaluate` debounced and applies the server's fills, field states and findings (spec §23.5), `visibleWhen` being the only expression evaluated in the browser; the binding's `RuleHub` hands each answer to the forms nested in the asset (body sections, catalog cards, `NestedRules`). Code is edited in `SfCodeEditorComponent` (`shared/code-editor`, CodeMirror 6): stream languages for CDL, OCTL and expressions (`languages.ts`), completion sources (`completions.ts`), all CodeMirror code in `code-editor.setup.ts`, loaded as a lazy chunk by `code-editor.loader.ts`; the revision spine is the signature UX element (§24.2). See the [user guide](user-guide.md) and `ui/src/app/features/` for the feature layout.
 
 ## 11. Content languages (M24)
 

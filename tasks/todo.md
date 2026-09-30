@@ -34,8 +34,19 @@ Deviations from the plan:
   Rule findings are run diagnostics, not a `RULE` type in the findings API.
 - Plan view fields are `warningFindings` / `infoFindings` / `fills` (the existing `warnings` strings stay). Release fills
   aren't applied to pinned versions.
-- UI not done: `rules {}` highlighting/completion (CDL editor is a textarea), live fills/states inside section
-  instances, Issues-panel scope filter.
+- ~~UI not done: `rules {}` highlighting/completion, live fills/states inside section instances, Issues-panel scope
+  filter~~ — built in the follow-up below.
+
+## Follow-up (2026-09-30, user)
+
+- [x] Engine: section-template rules run for catalog cards (pages, sections, records, property sets; groups, list rows,
+      nested catalogs) in every scope; an empty `mode empty` fill writes nothing
+- [x] Live fills and field states in body sections and catalog cards (`RuleHub`, `NestedRules`)
+- [x] Issues panel scope chips (Edit · Save · Release · Generation, remembered per browser)
+- [x] Code editors on CodeMirror 6 (user decisions: CodeMirror; CDL and OCTL plus text-media source, record-set
+      `where`, JSON; completion on Ctrl+Space only — keywords/values, editor paths, functions; expression strings
+      highlighted inside CDL; squiggles + list; line numbers, brackets, folding, search; Tab indents, Esc+Tab leaves;
+      live CDL validation); lazy chunk (118 kB gzipped), initial bundle 1.66 MB
 
 ---
 

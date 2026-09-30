@@ -110,3 +110,14 @@ getTestBed().initTestEnvironment(
   BrowserDynamicTestingModule,
   platformBrowserDynamicTesting(),
 );
+
+// jsdom has no layout: CodeMirror (the code editors, M33) measures text ranges, which jsdom's Range lacks.
+if (typeof Range !== 'undefined') {
+  const emptyRect = { x: 0, y: 0, top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0, toJSON: () => ({}) };
+  Range.prototype.getBoundingClientRect ??= () => emptyRect as DOMRect;
+  Range.prototype.getClientRects ??= () =>
+    ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as unknown as DOMRectList;
+}
+
+// The code editors load CodeMirror as a lazy chunk; preloaded here, editors are created synchronously in specs.
+await (await import('./app/shared/code-editor/code-editor.loader')).loadCodeEditorSetup();

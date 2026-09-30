@@ -78,8 +78,9 @@ problems show at their fields. Your edits stay in the form; fix them and the nex
 **Filled-in and computed fields.** Some fields fill themselves in: a slug that follows the title until you type your
 own, a date set when the page is released. A field marked **computed** is always calculated from other fields and
 can't be edited. A field can also become **read-only** or **required** because of another value — for example, an id
-that is locked once the page is published. If you change a read-only or computed value anyway (for example through
-the API), the save keeps the stored value and tells you with a note.
+that is locked once the page is published. This works in the page's sections and in catalog cards too. If you change
+a read-only or computed value anyway (for example through the API), the save keeps the stored value and tells you
+with a note.
 
 ### Sections
 
@@ -480,7 +481,9 @@ internet.
 **While you edit.** At the foot of the page editor, below the fields and sections, the **Issues** panel shows a
 count in its header (marked when it includes errors). *Content* lists what the release would refuse or warn about —
 an empty required field, too many items, a template rule — ordered errors, warnings, notes; notes aren't counted in
-the badge and hints show only at their fields (M33). The same problems show on their fields. *Output* lists what the checks
+the badge and hints show only at their fields (M33). The chips **Edit · Save · Release · Generation** narrow the list
+to the problems that matter at that step — for example only what blocks a release; *Output* counts as *Generation*.
+The panel remembers your choice. The same problems show on their fields. *Output* lists what the checks
 find on the page's **draft** as it would be built (the HTML channel): each with the rule, severity, message and where
 it is usually fixed ("Fix in content", "Fix in template", "Fix in content or template"); errors come first. The panel
 checks again shortly after each save, when you switch language and when you look at an older revision ("checked at
@@ -655,6 +658,9 @@ Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` search (see [Se
 
 In a project with several languages, the **Editing language** picker above the content area is an ordinary select you
 can `Tab` to; changing it switches every editor, the preview and the search palette to that language.
+
+In the code editors (CDL, OCTL, a record set's *Where*, JSON values) `Ctrl+Space` opens completion, `Ctrl+F` searches,
+`Tab` indents — press `Esc` first to `Tab` out of the editor.
 
 In **Changes**, `↑`/`↓` move between rows, `Space` ticks a row and `Enter` shows its changes; the preview's
 **Draft | Published** switch is a radio group (arrow keys switch).

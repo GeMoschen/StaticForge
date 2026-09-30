@@ -14,6 +14,7 @@ import { TemplatesService } from '../templates/templates.service';
 import { ContentService, etagFor, type DatasetDetailView } from './content.service';
 import { DatasetSchemaEditorComponent } from './dataset-schema-editor.component';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
+import { codeOf, codeView, typeCode } from '../../shared/code-editor/code-editor.testing';
 
 const CDL = `content {
   editor text name { label "Name" required }
@@ -100,8 +101,8 @@ async function openTab(name: RegExp): Promise<void> {
   await screen.findByRole('tabpanel', { name: /Record template/ });
 }
 
-function editor(channel: string): HTMLTextAreaElement {
-  return screen.getByRole('textbox', { name: `Record template for channel ${channel}` }) as HTMLTextAreaElement;
+function editor(channel: string): HTMLElement {
+  return screen.getByRole('textbox', { name: `Record template for channel ${channel}` });
 }
 
 describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
@@ -118,7 +119,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     expect(screen.getByRole('tab', { name: /Schema/ }).getAttribute('aria-selected')).toBe('true');
 
     await openTab(/Record template \(html\)/);
-    expect(editor('html').value).toBe(HTML_TEMPLATE);
+    expect(codeOf(editor('html'))).toBe(HTML_TEMPLATE);
     expect(screen.getByRole('tab', { name: /Record template \(html\)/ }).getAttribute('aria-selected')).toBe('true');
 
     await openTab(/Record template \(rss\)/);
@@ -130,7 +131,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     await openTab(/Record template \(md\)/);
     expect(screen.getByText('No record template for md')).toBeTruthy();
     expect(screen.getByRole('note').textContent).toContain('$CMS_VALUE(recordset:…)$');
-    expect(editor('md').value).toBe('');
+    expect(codeOf(editor('md'))).toBe('');
   });
 
   it('tracks dirty state across the schema and the templates, and saves both in one request', async () => {
@@ -138,18 +139,18 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     expect(saveButton().disabled).toBe(true);
 
     await openTab(/Record template \(md\)/);
-    fireEvent.input(editor('md'), { target: { value: '- $CMS_VALUE(name)$' } });
+    typeCode(editor('md'), '- $CMS_VALUE(name)$');
     await waitFor(() => expect(saveButton().disabled).toBe(false));
     expect(screen.getByRole('tab', { name: /Record template \(md\)/ }).textContent).toContain('(unsaved)');
 
     // Back to its stored (empty) state: nothing to save again.
-    fireEvent.input(editor('md'), { target: { value: '  ' } });
+    typeCode(editor('md'), '  ');
     await waitFor(() => expect(saveButton().disabled).toBe(true));
 
-    fireEvent.input(editor('md'), { target: { value: '- $CMS_VALUE(name)$' } });
+    typeCode(editor('md'), '- $CMS_VALUE(name)$');
     fireEvent.click(screen.getByRole('tab', { name: /Schema/ }));
-    const cdl = (await screen.findByRole('textbox', { name: /Record fields/ })) as HTMLTextAreaElement;
-    fireEvent.input(cdl, { target: { value: CDL.replace('role', 'title') } });
+    const cdl = await screen.findByRole('textbox', { name: /Record fields/ });
+    typeCode(cdl, CDL.replace('role', 'title'));
     await waitFor(() => expect(screen.getByRole('tab', { name: /Schema/ }).textContent).toContain('(unsaved)'));
 
     content.updateDataset.mockReturnValue(
@@ -179,7 +180,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     const { content } = await setup();
     await openTab(/Record template \(html\)/);
     const broken = '<li>\n  $CMS_VALUE(nme)$\n</li>';
-    fireEvent.input(editor('html'), { target: { value: broken } });
+    typeCode(editor('html'), broken);
     const diagnostic = { severity: 'ERROR', code: 'SF-TPL-0103', message: 'Unknown editor name: nme', line: 2, column: 14 };
     content.updateDataset.mockReturnValue(
       throwError(
@@ -196,12 +197,12 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     fireEvent.click(saveButton());
 
     const area = await screen.findByRole('textbox', { name: 'Record template for channel html' });
-    expect((area as HTMLTextAreaElement).value).toBe(broken);
+    expect(codeOf(area)).toBe(broken);
     expect(screen.getByText(/SF-TPL-0103/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Go to line 2, column 14' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: /Record template \(html\)/ }).textContent).toMatch(/1\s*errors/);
     // The caret moves once the tab switch has rendered (an after-render hook of the application tick).
-    await waitFor(() => expect((area as HTMLTextAreaElement).selectionStart).toBe(broken.indexOf('nme')));
+    await waitFor(() => expect(codeView(area).state.selection.main.head).toBe(broken.indexOf('nme')));
     expect(document.activeElement).toBe(area);
     // Still unsaved: the rejected edit can be fixed and saved again.
     expect(saveButton().disabled).toBe(false);
@@ -210,7 +211,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
   it('shows schema errors of a rejected save under the CDL, not in a template tab', async () => {
     const { content } = await setup();
     await openTab(/Record template \(html\)/);
-    fireEvent.input(editor('html'), { target: { value: '<p/>' } });
+    typeCode(editor('html'), '<p/>');
     content.updateDataset.mockReturnValue(
       throwError(
         () =>
@@ -228,7 +229,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
   it('lists the record sets a save broke, each linking to its set, and shows template warnings', async () => {
     const { content } = await setup();
     await openTab(/Record template \(html\)/);
-    fireEvent.input(editor('html'), { target: { value: '<li>$CMS_VALUE(role)$</li>' } });
+    typeCode(editor('html'), '<li>$CMS_VALUE(role)$</li>');
     content.updateDataset.mockReturnValue(
       of({
         ...DATASET,
@@ -262,9 +263,9 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     await setup();
     await openTab(/Record template \(md\)/);
     fireEvent.click(screen.getByRole('button', { name: 'role' }));
-    await waitFor(() => expect(editor('md').value).toBe('$CMS_VALUE(role)$'));
+    await waitFor(() => expect(codeOf(editor('md'))).toBe('$CMS_VALUE(role)$'));
     fireEvent.click(screen.getByRole('button', { name: '_first' }));
-    await waitFor(() => expect(editor('md').value).toBe('$CMS_VALUE(role)$$CMS_IF(_first)$$CMS_END_IF$'));
+    await waitFor(() => expect(codeOf(editor('md'))).toBe('$CMS_VALUE(role)$$CMS_IF(_first)$$CMS_END_IF$'));
     for (const meta of ['_uid', '_displayName', '_index', '_last', '_count']) {
       expect(screen.getByRole('button', { name: meta })).toBeTruthy();
     }
@@ -279,7 +280,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
       templates.validateOctl.mockReturnValue(
         of({ diagnostics: [{ severity: 'ERROR', code: 'SF-TPL-0001', message: 'Unclosed', line: 1, column: 1 }] }),
       );
-      fireEvent.input(editor('md'), { target: { value: '$CMS_IF(x)$' } });
+      typeCode(editor('md'), '$CMS_IF(x)$');
       vi.advanceTimersByTime(350);
       fixture.detectChanges();
       expect(templates.validateOctl).toHaveBeenCalledWith('proj', {
@@ -305,7 +306,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
       templates.validateOctl.mockReturnValue(of(unknownSquad));
       fireEvent.click(screen.getByRole('tab', { name: /Record template \(html\)/ }));
       fixture.detectChanges();
-      fireEvent.input(editor('html'), { target: { value: '$CMS_VALUE(squad)$' } });
+      typeCode(editor('html'), '$CMS_VALUE(squad)$');
       vi.advanceTimersByTime(350);
       fixture.detectChanges();
       expect(screen.getByText(/Unknown editor: squad/)).toBeTruthy();
@@ -314,7 +315,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
       const withSquad = CDL.replace('content {', 'content {\n  editor text squad { label "Squad" }');
       fireEvent.click(screen.getByRole('tab', { name: /Schema \(CDL\)/ }));
       fixture.detectChanges();
-      fireEvent.input(screen.getByLabelText(/Record fields \(CDL\)/), { target: { value: withSquad } });
+      typeCode(screen.getByLabelText(/Record fields \(CDL\)/), withSquad);
       templates.validateOctl.mockReturnValue(of({ diagnostics: [] }));
       fireEvent.click(screen.getByRole('tab', { name: /Record template \(html\)/ }));
       vi.advanceTimersByTime(350);
@@ -336,7 +337,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     const { templates } = await setup({ role: 'EDITOR' });
     expect(screen.getByText(/Only a developer can change/)).toBeTruthy();
     await openTab(/Record template \(html\)/);
-    expect(editor('html').readOnly).toBe(true);
+    expect(codeView(editor('html')).state.readOnly).toBe(true);
     expect(screen.queryByRole('group', { name: /Insert/ })).toBeNull();
     expect(saveButton().disabled).toBe(true);
 
@@ -351,7 +352,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     const { content } = await setup({ revision: 4 });
     expect(content.getDataset).toHaveBeenCalledWith('proj', 'ds-team', 4);
     await openTab(/Record template \(html\)/);
-    expect(editor('html').readOnly).toBe(true);
+    expect(codeView(editor('html')).state.readOnly).toBe(true);
     expect(screen.queryByRole('group', { name: /Insert/ })).toBeNull();
     expect(saveButton().disabled).toBe(true);
   });

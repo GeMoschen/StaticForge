@@ -5,6 +5,7 @@ import { of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ContentService, type DatasetDetailView, type RecordSetDetailView } from './content.service';
 import { RecordSetQueryPanelComponent } from './record-set-query-panel.component';
+import { codeOf, codeView, typeCode } from '../../shared/code-editor/code-editor.testing';
 
 const SET: RecordSetDetailView = {
   uuid: 'set-uuid',
@@ -76,7 +77,7 @@ describe('RecordSetQueryPanelComponent', () => {
 
     expect(content.previewSetQuery).toHaveBeenCalledWith('proj', 'set-uuid', { where: "role == 'lead'", sort: '-joined' });
     expect(await screen.findByText('4 of 12 records match · the set shows 3')).toBeTruthy();
-    expect((screen.getByLabelText('Where') as HTMLTextAreaElement).value).toBe("role == 'lead'");
+    expect(codeOf(screen.getByLabelText('Where'))).toBe("role == 'lead'");
   });
 
   it('checks a burst of edits once, after the debounce', async () => {
@@ -86,9 +87,10 @@ describe('RecordSetQueryPanelComponent', () => {
     vi.useFakeTimers();
 
     const where = screen.getByLabelText('Where');
-    fireEvent.input(where, { target: { value: 'role' } });
-    fireEvent.input(where, { target: { value: "role == 'le" } });
-    fireEvent.input(where, { target: { value: "role == 'staff'" } });
+    typeCode(where, 'role');
+    typeCode(where, "role == 'le");
+    typeCode(where, "role == 'staff'");
+    fixture.detectChanges();
     expect(screen.getByText('Checking the query…')).toBeTruthy();
 
     vi.advanceTimersByTime(399);
@@ -116,7 +118,7 @@ describe('RecordSetQueryPanelComponent', () => {
       }),
     );
 
-    fireEvent.input(screen.getByLabelText('Where'), { target: { value: 'rank > 2' } });
+    typeCode(screen.getByLabelText('Where'), 'rank > 2');
 
     expect(await screen.findByText('Unknown dataset field in where: rank')).toBeTruthy();
     expect(screen.getByText('SF-TPL-0141')).toBeTruthy();
@@ -161,7 +163,7 @@ describe('RecordSetQueryPanelComponent', () => {
     await setup(content);
     await screen.findByText('4 of 12 records match');
 
-    fireEvent.input(screen.getByLabelText('Where'), { target: { value: "  role == 'lead'  " } });
+    typeCode(screen.getByLabelText('Where'), "  role == 'lead'  ");
 
     await waitFor(() => expect(content.previewSetQuery).toHaveBeenCalledTimes(2));
     expect(saveButton().disabled).toBe(true);
@@ -256,7 +258,7 @@ describe('RecordSetQueryPanelComponent', () => {
     fixture.componentInstance.adopt("role == 'staff'", [{ field: 'name', direction: 'asc' }]);
     fixture.detectChanges();
 
-    expect((screen.getByLabelText('Where') as HTMLTextAreaElement).value).toBe("role == 'staff'");
+    expect(codeOf(screen.getByLabelText('Where'))).toBe("role == 'staff'");
     expect((screen.getByLabelText('Sort key 1 field') as HTMLSelectElement).value).toBe('name');
     expect(screen.getByText('Unsaved')).toBeTruthy();
     expect(content.updateRecordSet).not.toHaveBeenCalled();
@@ -274,7 +276,7 @@ describe('RecordSetQueryPanelComponent', () => {
     });
 
     expect(await screen.findByText('Unknown dataset field in where: role')).toBeTruthy();
-    expect((screen.getByLabelText('Where') as HTMLTextAreaElement).disabled).toBe(true);
+    expect(codeView(screen.getByLabelText('Where')).state.readOnly).toBe(true);
     expect(screen.queryByRole('button', { name: 'Save query' })).toBeNull();
     expect(content.previewSetQuery).not.toHaveBeenCalled();
   });

@@ -20,6 +20,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfContentFormComponent } from '../forms/sf-content-form.component';
+import { SfCodeEditorComponent } from '../../shared/code-editor/code-editor.component';
 import { FormBuilderService } from '../forms/form-builder.service';
 import type { ContentDefinition } from '../forms/form.model';
 import type { EditingLocale } from '../forms/l10n.util';
@@ -60,7 +61,7 @@ interface ContentIssue {
   selector: 'sf-global-set-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
+  imports: [SfCodeEditorComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
   templateUrl: './global-set-detail.component.html',
   styleUrl: './global-set-detail.component.scss',
 })
@@ -139,6 +140,9 @@ export class GlobalSetDetailComponent {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
+      if (this.cdlTimer) {
+        clearTimeout(this.cdlTimer);
+      }
       this.rulesSub?.unsubscribe();
       this.rules.dispose();
     });
@@ -209,8 +213,33 @@ export class GlobalSetDetailComponent {
     this.tab.set('schema');
   }
 
-  protected onContentDefinitionInput(event: Event): void {
-    this.contentDefinition.set((event.target as HTMLTextAreaElement).value);
+  protected onContentDefinitionInput(source: string): void {
+    this.contentDefinition.set(source);
+    this.scheduleCdlValidation();
+  }
+
+  private cdlTimer: ReturnType<typeof setTimeout> | null = null;
+  private cdlSequence = 0;
+
+  /** Live CDL diagnostics (M33): 500 ms after the last keystroke, silently; only the latest answer counts. */
+  private scheduleCdlValidation(): void {
+    if (this.cdlTimer) {
+      clearTimeout(this.cdlTimer);
+    }
+    this.cdlTimer = setTimeout(() => {
+      this.cdlTimer = null;
+      const id = ++this.cdlSequence;
+      this.globals.validateCdl(this.projectKey(), this.contentDefinition()).subscribe({
+        next: (res) => {
+          if (id === this.cdlSequence) {
+            this.cdlDiagnostics.set(res.diagnostics ?? []);
+          }
+        },
+        error: () => {
+          // Live checks are best effort; Validate and save still report.
+        },
+      });
+    }, 500);
   }
 
   protected copySnippet(): void {

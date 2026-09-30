@@ -204,11 +204,15 @@
             label="Content definition (CDL)"
             hint="Declares the editors this template exposes."
           >
-            <textarea
+            <sf-code-editor
+              language="cdl"
+              label="Content definition (CDL)"
               [value]="contentDefinition()"
-              (input)="onContentDefinitionInput($event)"
-              spellcheck="false"
-            ></textarea>
+              [diagnostics]="cdlDiagnostics()"
+              [readOnly]="readOnly()"
+              [names]="editorNames()"
+              (valueChange)="onContentDefinitionInput($event)"
+            />
           </sf-field>
           @if (showPaginationPaths()) {
             <fieldset class="pagination-paths" aria-describedby="pagination-paths-help">
@@ -279,6 +283,7 @@
                 [value]="channelSource()"
                 [diagnostics]="octlDiagnostics()"
                 [readOnly]="readOnly()"
+                [names]="editorNames()"
                 (valueChange)="onChannelInput($event)"
               />
               <div class="actions">

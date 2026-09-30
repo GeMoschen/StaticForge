@@ -137,18 +137,17 @@
                 This file mixes line endings; saving stores LF line endings.
               </div>
             }
-            <textarea
-              #sourceArea
+            <sf-code-editor
+              #sourceEditor
               class="source__editor"
+              language="octl"
+              label="File source"
               [value]="editorSeed()"
               [readOnly]="readOnly()"
-              (input)="onSourceInput($event)"
-              (keydown)="onSourceKeydown($event)"
-              spellcheck="false"
-              autocapitalize="off"
-              autocomplete="off"
-              aria-label="File source"
-            ></textarea>
+              [diagnostics]="sourceDiagnostics()"
+              [indentWithTabs]="true"
+              (valueChange)="onSourceInput($event)"
+            />
 
             @if (sourceDiagnostics().length > 0) {
               <div class="diagnostics" aria-live="polite">

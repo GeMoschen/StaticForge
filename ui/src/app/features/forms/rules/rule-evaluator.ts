@@ -51,7 +51,13 @@ export class RuleEvaluator {
       return;
     }
     const id = ++this.sequence;
-    this.inFlight = this.send(request).subscribe({
+    let answer: Observable<RuleEvaluationView>;
+    try {
+      answer = this.send(request);
+    } catch {
+      return; // like a failed request: the last good answer stays
+    }
+    this.inFlight = answer.subscribe({
       next: (view) => {
         if (id === this.sequence) {
           this.result.set(view);
