@@ -272,3 +272,12 @@
   font-size: var(--sf-text-xs);
   color: var(--sf-slate);
 }
+
+/* Template editors (CDL and OCTL channels): tall enough to work in, scrolling beyond the maximum. */
+sf-code-editor,
+sf-octl-editor {
+  --sf-code-min-height: 14rem;
+  --sf-code-max-height: 32rem;
+  --sf-octl-min-height: 14rem;
+  --sf-octl-max-height: 32rem;
+}

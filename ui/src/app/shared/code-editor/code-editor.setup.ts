@@ -106,12 +106,16 @@ const theme = EditorView.theme({
     backgroundColor: 'var(--sf-surface)',
     border: '1px solid var(--sf-line)',
     borderRadius: 'var(--sf-radius-sm)',
+    // Set by the host (a template editor asks for more); the compact field lowers them. Not in the component's own
+    // styles: its encapsulation would need the attribute Angular never puts on CodeMirror's elements.
+    minHeight: 'var(--sf-code-min-height, 12rem)',
+    maxHeight: 'var(--sf-code-max-height, 36rem)',
   },
   '&.cm-focused': { outline: '2px solid var(--sf-signal)', outlineOffset: '-1px' },
   '.cm-content': { caretColor: 'var(--sf-ink)', fontFamily: 'var(--sf-font-mono)' },
   // drawSelection paints the caret itself (black by default): follow the theme's ink so it shows in dark mode.
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--sf-ink)' },
-  '.cm-scroller': { fontFamily: 'var(--sf-font-mono)', lineHeight: '1.5' },
+  '.cm-scroller': { fontFamily: 'var(--sf-font-mono)', lineHeight: '1.5', overflow: 'auto' },
   '.cm-gutters': {
     backgroundColor: 'var(--sf-paper)',
     color: 'var(--sf-slate)',
@@ -119,7 +123,7 @@ const theme = EditorView.theme({
   },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'color-mix(in srgb, var(--sf-line) 35%, transparent)' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
-    backgroundColor: 'color-mix(in srgb, var(--sf-signal) 22%, transparent) !important',
+    backgroundColor: 'color-mix(in srgb, var(--sf-signal) 45%, transparent) !important',
   },
   '.cm-tooltip': {
     backgroundColor: 'var(--sf-surface)',

@@ -52,6 +52,20 @@ describe('SfCodeEditorComponent', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('.cm-lineNumbers')).not.toBeNull();
   });
 
+  it('cancels a click in the text so an enclosing label cannot forward it to another control', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const click = (target: Element) => {
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(click(root.querySelector('.cm-content')!)).toBe(true);
+    // A real control inside the editor (the search panel's buttons and checkboxes) keeps its behavior.
+    const control = document.createElement('input');
+    root.querySelector('.cm-editor')!.append(control);
+    expect(click(control)).toBe(false);
+  });
+
   it('reports edits, and an echoed value changes nothing', () => {
     view().dispatch({ changes: { from: 0, insert: '// top\n' } });
     fixture.detectChanges();

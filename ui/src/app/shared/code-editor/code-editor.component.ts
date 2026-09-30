@@ -41,12 +41,11 @@ export type { CodeFormat } from './code-format';
     [class.sf-code-editor--compact]="compact()"
     [attr.data-language]="language()"
     [attr.data-format]="language() === 'octl' ? format() : null"
+    (click)="keepInsideEditor($event)"
   ></div>`,
   styles: `
     :host { display: block; }
-    .sf-code-editor :where(.cm-editor) { min-height: var(--sf-code-min-height, 12rem); max-height: var(--sf-code-max-height, 36rem); }
-    .sf-code-editor--compact :where(.cm-editor) { min-height: 0; max-height: 8rem; }
-    .sf-code-editor :where(.cm-scroller) { overflow: auto; }
+    .sf-code-editor--compact { --sf-code-min-height: 0; --sf-code-max-height: 8rem; }
   `,
 })
 export class SfCodeEditorComponent implements AfterViewInit {
@@ -118,6 +117,17 @@ export class SfCodeEditorComponent implements AfterViewInit {
           this.create(module);
         }
       });
+    }
+  }
+
+  /**
+   * A click in the text area would otherwise reach an enclosing `<label>` (an `sf-field`), which forwards it to
+   * the label's first control and takes the focus away. Clicks on real controls (the search panel) are left alone.
+   */
+  protected keepInsideEditor(event: MouseEvent): void {
+    const target = event.target as Element | null;
+    if (!target?.closest('input, button, select, textarea, a[href], summary')) {
+      event.preventDefault();
     }
   }
 

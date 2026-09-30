@@ -5,7 +5,8 @@
 }
 
 .octl-editor__source {
-  --sf-code-min-height: 9rem;
+  --sf-code-min-height: var(--sf-octl-min-height, 9rem);
+  --sf-code-max-height: var(--sf-octl-max-height, 36rem);
 }
 
 .octl-editor__source--invalid {
