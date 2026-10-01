@@ -26,7 +26,20 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
   - [x] Verification: `npx vitest run`, `npx ng build`, `npm run lint`, components checked in a browser (themes, densities, popups in a clipping box)
   - [x] Follow-up (user): slider, and a custom date/time picker (calendar dialog + time list) instead of the native pickers
   - Review: see `35-m35-ui-ux-overhaul/006-base-components.md` (1,437 tests green, build + lint green, checked in Chrome)
-- [ ] M35.7 overlays: dialog, confirm, drawer, popover, menu, toast
+- [x] M35.7 overlays: dialog, confirm, drawer, popover, menu, toast
+  - [x] Overlay core `OverlayStack` (in-house, no CDK): focus trap + restore, scroll lock, `inert` background, Escape,
+        stacking on the z-index scale; used by created dialogs and declarative drawers/popovers
+  - [x] `DialogService.open(component, data)` → typed `SfDialogRef`, `sf-dialog` chrome (sizes, h2 title, scroll body,
+        footer), `ConfirmService.confirm()` (tone, typeToConfirm, details, irreversible note); old `DialogService`
+        consumers (media usages, revision diff, locales, URL registry) migrated, old API removed
+  - [x] `sf-drawer` (right, modal/non-modal, keyboard-resizable edge until M35.8's splitter), `sf-popover` (click/focus
+        trigger, Escape, outside click, route change)
+  - [x] `sf-menu`: submenus, shortcut hints, disabled with reason, groups; `ContextMenuService` with a keyboard anchor
+        (Shift+F10 / Menu key `contextmenu` anchors to the element), `sf-context-menu` on the menu panel
+  - [x] Toasts: max visible + queue, Undo with countdown, pause on hover/focus, lifetime from text and action
+  - [x] `lint:dialogs` script (warning; error in M35.27) + list of remaining `window.*` calls for the screen tasks
+  - [x] Verification: vitest, ng build, lint, check in Chrome
+  - Review: see `35-m35-ui-ux-overhaul/007-overlays.md` (1,512 tests green, build + lint green, checked in Chrome)
 - [ ] M35.8 data table, tree, splitter
 - [ ] M35.9 style guide + **design gate (user sign-off)**
 - [ ] M35.10 app frame: top bar, rail, developer mode, titles

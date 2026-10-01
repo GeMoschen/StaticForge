@@ -8,7 +8,6 @@ import {
   output,
   untracked,
 } from '@angular/core';
-import { DialogService } from '../../core/ui/dialog.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfAssetImpactComponent } from '../generation/insight/sf-asset-impact.component';
@@ -17,7 +16,6 @@ import { ReleaseBarComponent } from '../release/release-bar.component';
 import type { ReleaseMode } from '../release/release-choice.util';
 import { SfAssetUrlsComponent } from '../settings/asset-urls.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
-import { MediaDrawerDeleteDialogComponent } from './drawer/media-drawer-delete-dialog.component';
 import { MediaDrawerFilesStore } from './drawer/media-drawer-files.store';
 import { MediaDrawerLocalizationComponent } from './drawer/media-drawer-localization.component';
 import { MediaDrawerMetadataComponent } from './drawer/media-drawer-metadata.component';
@@ -59,7 +57,6 @@ export type { MediaDrawerTab } from './drawer/media-drawer.store';
     MediaDrawerMetadataComponent,
     MediaDrawerVariantsComponent,
     MediaDrawerUsagesComponent,
-    MediaDrawerDeleteDialogComponent,
   ],
   providers: [
     MediaDrawerStore,
@@ -89,7 +86,6 @@ export class MediaDetailDrawerComponent implements OnInit {
   protected readonly files = inject(MediaDrawerFilesStore);
   protected readonly usages = inject(MediaDrawerUsagesStore);
   private readonly timeTravel = inject(TimeTravelStore);
-  protected readonly dialog = inject(DialogService);
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = this.store.readOnly;
   protected readonly readOnlyLabel = this.store.readOnlyLabel;
@@ -217,7 +213,7 @@ export class MediaDetailDrawerComponent implements OnInit {
   }
 
   confirmDelete(): void {
-    this.usages.confirmDelete();
+    void this.usages.confirmDelete();
   }
 
   protected onReleaseChanged(mode: ReleaseMode): void {

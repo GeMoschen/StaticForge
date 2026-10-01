@@ -73,15 +73,16 @@ describe('RevisionDiffComponent', () => {
     });
 
     (await screen.findByRole('button', { name: 'Roll back project' })).click();
-    // `fireEvent` runs change detection after the event — the confirm button stays `[disabled]`
-    // until the typed token has been re-read into the template.
-    fireEvent.input(await screen.findByPlaceholderText('Type ROLLBACK to confirm'), {
+    // A typed confirmation: the button stays disabled until ROLLBACK is typed.
+    const rollBack = await screen.findByRole('button', { name: 'Roll back' });
+    expect(rollBack).toBeDisabled();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type ROLLBACK to confirm' }), {
       target: { value: 'ROLLBACK' },
     });
+    await waitFor(() => expect(rollBack).toBeEnabled());
+    fireEvent.click(rollBack);
 
-    (await screen.findByRole('button', { name: 'Roll back' })).click();
-
-    expect(api.restoreProject).toHaveBeenCalledWith('proj', { toRevision: 1 });
+    await waitFor(() => expect(api.restoreProject).toHaveBeenCalledWith('proj', { toRevision: 1 }));
   });
 
   describe('compacted revision', () => {

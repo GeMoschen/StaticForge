@@ -3,12 +3,31 @@
  * element, flipped to the other side when they don't fit the viewport and clamped inside it. M35.7's overlay layer
  * builds on this.
  */
-export type AnchorSide = 'bottom' | 'top';
+/**
+ * `bottom`/`top` place the panel below/above the anchor; `end`/`start` beside it (right/left — the UI is LTR), as
+ * submenus are.
+ */
+export type AnchorSide = 'bottom' | 'top' | 'end' | 'start';
 export type AnchorAlign = 'start' | 'end' | 'center';
 
+/** What a panel is anchored to: an element, or anything with a rectangle (a pointer position, see {@link pointAnchor}). */
+export interface AnchorRef {
+  getBoundingClientRect(): DOMRect;
+}
+
+/** A zero-sized anchor at a viewport position: a context menu opened by the pointer. */
+export function pointAnchor(x: number, y: number): AnchorRef {
+  const rect = { left: x, right: x, top: y, bottom: y, width: 0, height: 0, x, y };
+  return { getBoundingClientRect: () => ({ ...rect, toJSON: () => rect }) as DOMRect };
+}
+
 export interface AnchorOptions {
-  /** The preferred side; the other one is used when the panel fits only there. */
+  /** The preferred side; the opposite one is used when the panel fits only there (or has more room there). */
   side?: AnchorSide;
+  /**
+   * Along the anchor's edge: for `bottom`/`top` the panel's left (`start`) or right (`end`) edge lines up with the
+   * anchor's; for `end`/`start` its top (`start`) or bottom (`end`) edge does.
+   */
   align?: AnchorAlign;
   /** Gap between anchor and panel, in px. */
   offset?: number;
@@ -39,6 +58,9 @@ export function computeAnchorPlacement(
   options: AnchorOptions = {},
 ): AnchorPlacement {
   const { side = 'bottom', align = 'start', offset = 4, matchWidth = false, margin = 8 } = options;
+  if (side === 'end' || side === 'start') {
+    return computeInlinePlacement(anchor, panel, viewport, side, align, offset, margin);
+  }
   const width = matchWidth ? Math.max(panel.width, anchor.width) : panel.width;
 
   const spaceBelow = viewport.height - anchor.bottom - offset - margin;
@@ -69,6 +91,44 @@ export function computeAnchorPlacement(
   return { top, left, side: chosen, minWidth: matchWidth ? anchor.width : null, maxHeight };
 }
 
+/** Beside the anchor (`end` = to its right), flipped to the other side when it fits only there; clamped vertically. */
+function computeInlinePlacement(
+  anchor: DOMRect,
+  panel: Size,
+  viewport: Size,
+  side: 'end' | 'start',
+  align: AnchorAlign,
+  offset: number,
+  margin: number,
+): AnchorPlacement {
+  const spaceEnd = viewport.width - anchor.right - offset - margin;
+  const spaceStart = anchor.left - offset - margin;
+  let chosen: AnchorSide = side;
+  if (side === 'end' && panel.width > spaceEnd && spaceStart > spaceEnd) {
+    chosen = 'start';
+  } else if (side === 'start' && panel.width > spaceStart && spaceEnd > spaceStart) {
+    chosen = 'end';
+  }
+  const left = chosen === 'end' ? anchor.right + offset : anchor.left - offset - panel.width;
+
+  const maxHeight = Math.max(0, viewport.height - 2 * margin);
+  const height = Math.min(panel.height, maxHeight);
+  let top: number;
+  switch (align) {
+    case 'end':
+      top = anchor.bottom - height;
+      break;
+    case 'center':
+      top = anchor.top + anchor.height / 2 - height / 2;
+      break;
+    default:
+      top = anchor.top;
+  }
+  top = Math.min(Math.max(top, margin), Math.max(margin, viewport.height - margin - height));
+
+  return { top, left: Math.max(margin, left), side: chosen, minWidth: null, maxHeight };
+}
+
 /**
  * Places `panel` (already `position: fixed` and rendered) next to `anchor` and keeps it there while the page scrolls
  * or resizes. Returns the function that stops following.
@@ -78,7 +138,7 @@ export function computeAnchorPlacement(
  * Stopping removes it from `<body>` — Angular removes only the top nodes of a destroyed view, so a panel inside a
  * destroyed subtree would otherwise stay on screen.
  */
-export function anchorPanel(anchor: HTMLElement, panel: HTMLElement, options: AnchorOptions = {}): () => void {
+export function anchorPanel(anchor: AnchorRef, panel: HTMLElement, options: AnchorOptions = {}): () => void {
   const body = panel.ownerDocument.body;
   if (panel.parentElement !== body) {
     body.appendChild(panel);

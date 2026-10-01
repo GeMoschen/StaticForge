@@ -203,21 +203,3 @@
     </div>
   }
 </div>
-
-@if (dialog.state(); as d) {
-  <div class="scrim" (click)="cancel()"></div>
-  <div class="dialog" role="dialog" aria-modal="true" [attr.aria-label]="d.title">
-    <header class="dialog__header">
-      <h2 class="dialog__title">{{ d.title }}</h2>
-    </header>
-    <div class="dialog__body">
-      <p>{{ d.message }}</p>
-    </div>
-    <footer class="dialog__footer">
-      <sf-button variant="ghost" (click)="cancel()">{{ d.cancelLabel ?? 'Cancel' }}</sf-button>
-      <sf-button variant="danger" [disabled]="saving()" (click)="confirm()">
-        {{ d.confirmLabel ?? 'Confirm' }}
-      </sf-button>
-    </footer>
-  </div>
-}

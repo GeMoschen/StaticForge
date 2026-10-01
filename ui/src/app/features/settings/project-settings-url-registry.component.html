@@ -64,15 +64,15 @@
     <div class="filters__actions">
       <sf-button
         variant="secondary"
-        [disabled]="!filterChannel() || readOnly()"
+        [disabled]="!filterChannel() || readOnly() || resetting()"
         (click)="requestResetChannel()"
       >
         Reset channel
       </sf-button>
-      <sf-button variant="secondary" [disabled]="!filterArea() || readOnly()" (click)="requestResetArea()">
+      <sf-button variant="secondary" [disabled]="!filterArea() || readOnly() || resetting()" (click)="requestResetArea()">
         Reset area
       </sf-button>
-      <sf-button variant="danger" [disabled]="readOnly()" (click)="requestResetAll()">Reset all</sf-button>
+      <sf-button variant="danger" [disabled]="readOnly() || resetting()" (click)="requestResetAll()">Reset all</sf-button>
     </div>
   </div>
 
@@ -163,10 +163,10 @@
                   </sf-button>
                 } @else {
                   <sf-button variant="ghost" [disabled]="readOnly()" (click)="startEdit(entry)">Override</sf-button>
-                  <sf-button variant="danger" [disabled]="readOnly()" (click)="requestResetEntry(entry)">Reset</sf-button>
+                  <sf-button variant="danger" [disabled]="readOnly() || resetting()" (click)="requestResetEntry(entry)">Reset</sf-button>
                   <sf-button
                     variant="ghost"
-                    [disabled]="readOnly()"
+                    [disabled]="readOnly() || resetting()"
                     tooltip="Reset every URL of this asset"
                     (click)="requestResetAsset(entry)"
                   >
@@ -191,21 +191,3 @@
     </div>
   }
 </div>
-
-@if (dialog.state(); as d) {
-  <div class="scrim" (click)="cancelReset()"></div>
-  <div class="dialog" role="dialog" aria-modal="true" [attr.aria-label]="d.title">
-    <header class="dialog__header">
-      <h2 class="dialog__title">{{ d.title }}</h2>
-    </header>
-    <div class="dialog__body">
-      <p>{{ d.message }}</p>
-    </div>
-    <footer class="dialog__footer">
-      <sf-button variant="ghost" (click)="cancelReset()">{{ d.cancelLabel ?? 'Cancel' }}</sf-button>
-      <sf-button variant="danger" [disabled]="resetting() || readOnly()" (click)="confirmReset()">
-        {{ resetting() ? 'Resetting…' : (d.confirmLabel ?? 'Reset') }}
-      </sf-button>
-    </footer>
-  </div>
-}

@@ -54,10 +54,6 @@ describe('MediaDetailDrawerComponent (time travel read-only)', () => {
     return (component as unknown as { readOnly: () => boolean }).readOnly();
   }
 
-  function dialogStateOf(): unknown {
-    return (component as unknown as { dialog: { state: () => unknown } }).dialog.state();
-  }
-
   it('reflects TimeTravelStore.isTimeTravel()', () => {
     expect(readOnlyOf()).toBe(false);
     timeTravel.enter(5);
@@ -89,7 +85,36 @@ describe('MediaDetailDrawerComponent (time travel read-only)', () => {
 
     component.confirmDelete();
 
-    expect(dialogStateOf()).toBeNull();
+    expect(document.querySelector('sf-confirm-dialog')).toBeNull();
+  });
+});
+
+describe('MediaDetailDrawerComponent (delete confirmation)', () => {
+  it('asks only once the usages are known, and then asks for DELETE when the file is referenced', async () => {
+    TestBed.configureTestingModule({
+      imports: [MediaDetailDrawerComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const fixture = TestBed.createComponent(MediaDetailDrawerComponent);
+    const httpMock = TestBed.inject(HttpTestingController);
+    fixture.componentRef.setInput('projectKey', 'proj1');
+    fixture.componentRef.setInput('media', MEDIA);
+    fixture.detectChanges();
+    const usagesRequest = httpMock.expectOne((req) => req.url.endsWith('/usages'));
+
+    // Usages still loading: no confirmation yet (it couldn't know whether to ask for DELETE).
+    fixture.componentInstance.confirmDelete();
+    expect(document.querySelector('sf-confirm-dialog')).toBeNull();
+
+    usagesRequest.flush([{ fromUuid: 'page-1', fromUid: 'home', fromType: 'PAGE' }]);
+    fixture.detectChanges();
+    fixture.componentInstance.confirmDelete();
+    expect(await screen.findByRole('textbox', { name: 'Type DELETE to confirm' })).toBeInTheDocument();
+    expect(screen.getByText('home (PAGE)')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    for (const pending of httpMock.match(() => true)) {
+      pending.flush(pending.request.responseType === 'blob' ? new Blob() : []);
+    }
   });
 });
 

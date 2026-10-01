@@ -116,7 +116,7 @@
       <input type="file" [disabled]="readOnly()" (change)="onReplaceFile($event)" />
     </sf-field>
     <div class="drawer__footer-actions">
-      <sf-button variant="danger" [disabled]="usages.deleting() || readOnly()" (click)="confirmDelete()">
+      <sf-button variant="danger" [disabled]="usages.deleting() || usages.usagesLoading() || readOnly()" (click)="confirmDelete()">
         Delete
       </sf-button>
     </div>
@@ -134,4 +134,3 @@
   </div>
 }
 
-<sf-media-drawer-delete-dialog />

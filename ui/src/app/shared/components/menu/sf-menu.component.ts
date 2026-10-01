@@ -5,47 +5,35 @@ import {
   Component,
   ElementRef,
   OnDestroy,
+  computed,
   inject,
   input,
   output,
   signal,
   viewChild,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { anchorPanel } from '../../overlay/anchored-position';
+import { AnchorOptions } from '../../overlay/anchored-position';
 import { SfButtonComponent, SfButtonSize, SfButtonVariant } from '../sf-button.component';
-import { SfIconComponent } from '../sf-icon.component';
 import { sfUniqueId } from '../forms/sf-field-context';
+import { SfMenuItem } from './sf-menu-item';
+import { SfMenuCloseReason, SfMenuPanelComponent } from './sf-menu-panel.component';
 
-export interface SfMenuItem {
-  id: string;
-  label: string;
-  icon?: string;
-  /** Shown but not choosable (`aria-disabled`); stays reachable with the arrow keys. */
-  disabled?: boolean;
-  /** Destructive action: danger colour. */
-  danger?: boolean;
-  /** A separator above this item. */
-  separatorBefore?: boolean;
-  /** A router link: the item is an `<a>`. */
-  link?: string | unknown[];
-}
-
-const TYPEAHEAD_RESET_MS = 500;
+export type { SfMenuItem } from './sf-menu-item';
 
 /**
- * A menu button (M35.6, minimal; M35.7 adds context menus, submenus and shortcut hints): a trigger with
- * `aria-haspopup=menu` that opens a `role=menu` of items.
+ * A menu button (M35.6; M35.7 moved the panel into {@link SfMenuPanelComponent}, shared with the context menu, and added
+ * submenus, groups, shortcut hints and disabled reasons): a trigger with `aria-haspopup=menu` that opens a `role=menu`
+ * of items.
  *
- * Keyboard (WAI-ARIA menu button): `Enter`/`Space`/`↓` open on the first item, `↑` on the last; `↑`/`↓` move (wrapping),
- * `Home`/`End`, type-ahead on the labels; `Enter`/`Space` choose; `Escape` closes and returns focus to the trigger;
- * `Tab` closes (focus returns to the trigger, then moves on). A click outside closes. The open panel lives in `<body>`
- * (see {@link anchorPanel}), so no dialog transform or overflow can offset or clip it.
+ * Keyboard (WAI-ARIA menu button): `Enter`/`Space`/`↓` open on the first item, `↑` on the last; inside the menu see
+ * {@link SfMenuPanelComponent}. `Escape` closes and returns focus to the trigger; `Tab` closes (focus returns to the
+ * trigger, then moves on). A click outside closes. The open panel lives in `<body>`, so no dialog transform or overflow
+ * can offset or clip it.
  */
 @Component({
   selector: 'sf-menu',
   standalone: true,
-  imports: [RouterLink, SfButtonComponent, SfIconComponent],
+  imports: [SfButtonComponent, SfMenuPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sf-menu.component.html',
   styleUrl: './sf-menu.component.scss',
@@ -62,28 +50,32 @@ export class SfMenuComponent implements OnDestroy {
   readonly disabled = input(false);
   readonly align = input<'start' | 'end'>('end');
 
+  /** A leaf item was chosen (from the menu or a submenu); its `action` runs too. */
   readonly itemSelected = output<SfMenuItem>();
 
   protected readonly open = signal(false);
+  protected readonly initialFocus = signal<'first' | 'last'>('first');
   protected readonly menuId = sfUniqueId('sf-menu');
+  protected readonly anchorOptions = computed<AnchorOptions>(() => ({ align: this.align() }));
 
   private readonly trigger = viewChild.required(SfButtonComponent);
   private readonly triggerHost = viewChild.required('trigger', { read: ElementRef });
-  private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
+  private readonly panel = viewChild(SfMenuPanelComponent);
   private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly document = inject(DOCUMENT);
-  private stopAnchor: (() => void) | null = null;
-  private typeahead = '';
-  private typeaheadTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly onDocumentPointerDown = (event: Event) => {
     const target = event.target as Node | null;
-    const inside =
-      target && (this.panel()?.nativeElement.contains(target) || this.triggerHost().nativeElement.contains(target));
+    const inside = this.panel()?.containsNode(target) || (target && this.triggerHost().nativeElement.contains(target));
     if (!inside) {
       this.close(false);
     }
   };
+
+  /** The trigger's element: what the panel is anchored to. */
+  protected triggerElement(): HTMLElement {
+    return this.triggerHost().nativeElement;
+  }
 
   /** Whether the menu is open (for hosts and tests). */
   isOpen(): boolean {
@@ -110,17 +102,13 @@ export class SfMenuComponent implements OnDestroy {
       return;
     }
     if (this.open()) {
-      this.focusItem(focus === 'first' ? 0 : this.itemElements().length - 1);
+      this.panel()?.focusItem(focus);
       return;
     }
+    this.initialFocus.set(focus);
     this.open.set(true);
-    // Render the panel now, so it can be placed and focused in this same task.
+    // Render the panel now: it places itself and focuses its item in this same task.
     this.changeDetector.detectChanges();
-    const panel = this.panel()?.nativeElement;
-    if (panel) {
-      this.stopAnchor = anchorPanel(this.triggerHost().nativeElement, panel, { align: this.align() });
-      this.focusItem(focus === 'first' ? 0 : this.itemElements().length - 1);
-    }
     this.document.addEventListener('pointerdown', this.onDocumentPointerDown, true);
   }
 
@@ -129,96 +117,28 @@ export class SfMenuComponent implements OnDestroy {
       return;
     }
     this.open.set(false);
-    this.stopAnchor?.();
-    this.stopAnchor = null;
+    // Remove the panel (and its submenus) from <body> now.
+    this.changeDetector.detectChanges();
     this.document.removeEventListener('pointerdown', this.onDocumentPointerDown, true);
     if (restoreFocus) {
       this.trigger().focus();
     }
   }
 
-  protected choose(item: SfMenuItem, event: Event): void {
-    if (item.disabled) {
-      event.preventDefault();
-      return;
-    }
+  protected onActivated(item: SfMenuItem): void {
     this.close(true);
     this.itemSelected.emit(item);
+    item.action?.();
   }
 
-  protected onMenuKeydown(event: KeyboardEvent): void {
-    const items = this.itemElements();
-    const index = items.indexOf(this.document.activeElement as HTMLElement);
-    switch (event.key) {
-      case 'ArrowDown':
-        this.focusItem((index + 1) % items.length);
-        break;
-      case 'ArrowUp':
-        this.focusItem((index - 1 + items.length) % items.length);
-        break;
-      case 'Home':
-        this.focusItem(0);
-        break;
-      case 'End':
-        this.focusItem(items.length - 1);
-        break;
-      case 'Escape':
-        this.close(true);
-        break;
-      case 'Tab':
-        // The panel lives in <body>: put focus back on the trigger, then let Tab move on from there.
-        this.close(true);
-        return;
-      case ' ':
-        // Buttons activate on Space natively; a link item doesn't (the page would scroll instead).
-        if (items[index]?.tagName === 'A') {
-          items[index].click();
-          break;
-        }
-        return;
-      default:
-        if (event.key.length === 1 && /\S/.test(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
-          this.typeAhead(event.key, index);
-          break;
-        }
-        return;
+  protected onCloseRequest(reason: SfMenuCloseReason): void {
+    if (reason !== 'back') {
+      this.close(true);
     }
-    event.preventDefault();
-    event.stopPropagation();
   }
 
   ngOnDestroy(): void {
-    this.close(false);
-    if (this.typeaheadTimer) {
-      clearTimeout(this.typeaheadTimer);
-    }
-  }
-
-  private typeAhead(char: string, from: number): void {
-    this.typeahead += char.toLowerCase();
-    if (this.typeaheadTimer) {
-      clearTimeout(this.typeaheadTimer);
-    }
-    this.typeaheadTimer = setTimeout(() => (this.typeahead = ''), TYPEAHEAD_RESET_MS);
-    const labels = this.items().map((item) => item.label.toLowerCase());
-    // A repeated single letter cycles through the items starting with it; longer input matches from the current item.
-    const repeated = this.typeahead.length > 1 && [...this.typeahead].every((c) => c === this.typeahead[0]);
-    const prefix = repeated ? this.typeahead[0] : this.typeahead;
-    const start = this.typeahead.length === 1 || repeated ? from + 1 : Math.max(from, 0);
-    for (let step = 0; step < labels.length; step++) {
-      const candidate = (start + step) % labels.length;
-      if (labels[candidate].startsWith(prefix)) {
-        this.focusItem(candidate);
-        return;
-      }
-    }
-  }
-
-  private itemElements(): HTMLElement[] {
-    return Array.from(this.panel()?.nativeElement.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-  }
-
-  private focusItem(index: number): void {
-    this.itemElements()[index]?.focus();
+    // The panel is destroyed with this view (and leaves <body> then); only the listener needs removing.
+    this.document.removeEventListener('pointerdown', this.onDocumentPointerDown, true);
   }
 }

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  Injector,
   computed,
   effect,
   inject,
@@ -8,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
-import { DialogService } from '../../core/ui/dialog.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
@@ -22,6 +23,9 @@ import { COMPACTED_ASSET_RESTORE_NOTICE, COMPACTED_RESTORE_NOTICE } from './comp
 type RevisionDiff = components['schemas']['RevisionDiff'];
 type AssetDiff = components['schemas']['AssetDiff'];
 
+/** What the user types to confirm a project rollback. */
+const ROLLBACK_TOKEN = 'ROLLBACK';
+
 @Component({
   selector: 'sf-revision-diff',
   standalone: true,
@@ -32,7 +36,8 @@ type AssetDiff = components['schemas']['AssetDiff'];
 })
 export class RevisionDiffComponent {
   private readonly api = inject(ApiClient);
-  protected readonly dialog = inject(DialogService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly injector = inject(Injector);
   private readonly toast = inject(ToastService);
   /** Restoring writes a revision: not in an archived project (M26). */
   protected readonly archived = inject(ProjectAccessStore).archived;
@@ -40,7 +45,6 @@ export class RevisionDiffComponent {
   readonly projectKey = input.required<string>();
   readonly revisionId = input.required<string>();
 
-  protected readonly ROLLBACK_TOKEN = 'ROLLBACK';
 
   protected readonly diff = signal<RevisionDiff | null>(null);
   protected readonly assets = computed<AssetDiff[]>(() => this.diff()?.assets ?? []);
@@ -52,7 +56,6 @@ export class RevisionDiffComponent {
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly restoring = signal(false);
-  protected readonly confirmText = signal('');
   /** The compacted asset whose restore waits for confirmation. */
   protected readonly assetToConfirm = signal<AssetDiff | null>(null);
   protected readonly compactedAssetRestoreNotice = COMPACTED_ASSET_RESTORE_NOTICE;
@@ -142,31 +145,24 @@ export class RevisionDiffComponent {
       });
   }
 
-  protected requestRollback(): void {
-    this.confirmText.set('');
-    this.dialog.open({
+  protected async requestRollback(): Promise<void> {
+    const confirmed = await this.confirms.confirm({
       title: `Roll back to revision ${this.revisionId()}`,
       message:
-        'Rolling back appends a new revision restoring the project state at this revision. Existing history is never rewritten. ' +
-        (this.diff()?.compacted ? COMPACTED_RESTORE_NOTICE + ' ' : '') +
-        'Type ROLLBACK to confirm.',
+        'Rolling back appends a new revision restoring the project state at this revision. Existing history is never rewritten.' +
+        (this.diff()?.compacted ? ' ' + COMPACTED_RESTORE_NOTICE : ''),
       confirmLabel: 'Roll back',
-      cancelLabel: 'Cancel',
-      kind: 'danger',
+      tone: 'danger',
+      typeToConfirm: ROLLBACK_TOKEN,
+      injector: this.injector,
     });
+    if (confirmed) {
+      this.rollBack();
+    }
   }
 
-  protected cancelRollback(): void {
-    this.dialog.close();
-    this.confirmText.set('');
-  }
-
-  protected onConfirmInput(event: Event): void {
-    this.confirmText.set((event.target as HTMLInputElement).value);
-  }
-
-  protected confirmRollback(): void {
-    if (this.confirmText().trim() !== this.ROLLBACK_TOKEN || this.restoring()) {
+  private rollBack(): void {
+    if (this.restoring()) {
       return;
     }
     this.restoring.set(true);
@@ -175,8 +171,6 @@ export class RevisionDiffComponent {
       .subscribe({
         next: () => {
           this.restoring.set(false);
-          this.dialog.close();
-          this.confirmText.set('');
           this.toast.show('A new revision was created', 'success');
         },
         error: () => {

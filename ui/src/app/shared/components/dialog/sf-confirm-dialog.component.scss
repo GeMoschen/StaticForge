@@ -1,0 +1,32 @@
+.sf-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+}
+
+.sf-confirm__message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+
+  p {
+    margin: 0;
+  }
+}
+
+.sf-confirm__details {
+  max-height: 10rem;
+  margin: 0;
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-2) var(--sf-space-6);
+  overflow: auto;
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-sunken);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.sf-confirm__irreversible {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+}

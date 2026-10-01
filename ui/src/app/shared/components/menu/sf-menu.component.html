@@ -15,41 +15,14 @@
 >
 
 @if (open()) {
-  <div #panel class="sf-menu" role="menu" [id]="menuId" [attr.aria-label]="label()" (keydown)="onMenuKeydown($event)">
-    @for (item of items(); track item.id; let first = $first) {
-      @if (item.separatorBefore && !first) {
-        <div class="sf-menu__separator" role="separator"></div>
-      }
-      @if (item.link && !item.disabled) {
-        <a
-          class="sf-menu__item"
-          [class.sf-menu__item--danger]="item.danger"
-          role="menuitem"
-          tabindex="-1"
-          [routerLink]="item.link"
-          (click)="choose(item, $event)"
-        >
-          @if (item.icon) {
-            <sf-icon class="sf-menu__icon" [name]="item.icon" />
-          }
-          <span class="sf-menu__label">{{ item.label }}</span>
-        </a>
-      } @else {
-        <button
-          type="button"
-          class="sf-menu__item"
-          [class.sf-menu__item--danger]="item.danger"
-          role="menuitem"
-          tabindex="-1"
-          [attr.aria-disabled]="item.disabled || null"
-          (click)="choose(item, $event)"
-        >
-          @if (item.icon) {
-            <sf-icon class="sf-menu__icon" [name]="item.icon" />
-          }
-          <span class="sf-menu__label">{{ item.label }}</span>
-        </button>
-      }
-    }
-  </div>
+  <sf-menu-panel
+    [items]="items()"
+    [label]="label()"
+    [panelId]="menuId"
+    [anchor]="triggerElement()"
+    [anchorOptions]="anchorOptions()"
+    [initialFocus]="initialFocus()"
+    (activated)="onActivated($event)"
+    (closeRequest)="onCloseRequest($event)"
+  />
 }

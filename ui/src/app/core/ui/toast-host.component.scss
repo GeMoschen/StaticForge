@@ -1,0 +1,122 @@
+// The toast stack (M35.7): semantic tokens only, a status colour and icon per kind.
+
+// Bottom centre: drawers open on the right edge and keep their actions in a bottom-right footer, which a corner stack
+// would cover.
+:host {
+  position: fixed;
+  inset-inline-start: 50%;
+  inset-block-end: var(--sf-space-4);
+  transform: translateX(-50%);
+  z-index: var(--sf-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  inline-size: min(28rem, calc(100vw - 2 * var(--sf-space-4)));
+  pointer-events: none;
+}
+
+.toasts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.toast {
+  --toast-tone: var(--sf-info);
+  --toast-tone-subtle: var(--sf-info-subtle);
+  --toast-tone-text: var(--sf-info-text);
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  overflow: hidden;
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-2) var(--sf-space-3);
+  border: 1px solid var(--sf-border);
+  border-inline-start: var(--sf-space-1) solid var(--toast-tone);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-2);
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  pointer-events: auto;
+}
+
+.toast--success {
+  --toast-tone: var(--sf-success);
+  --toast-tone-subtle: var(--sf-success-subtle);
+  --toast-tone-text: var(--sf-success-text);
+}
+
+.toast--warning {
+  --toast-tone: var(--sf-warning);
+  --toast-tone-subtle: var(--sf-warning-subtle);
+  --toast-tone-text: var(--sf-warning-text);
+}
+
+.toast--error {
+  --toast-tone: var(--sf-danger);
+  --toast-tone-subtle: var(--sf-danger-subtle);
+  --toast-tone-text: var(--sf-danger-text);
+}
+
+.toast__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--toast-tone-text);
+  font-size: var(--sf-fs-18);
+  line-height: 1;
+}
+
+.toast__message {
+  flex: 1;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast__countdown {
+  flex: none;
+  min-inline-size: 2ch;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.toast__action,
+.toast__close {
+  flex: none;
+}
+
+.toast__bar {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: calc(var(--sf-space-1) / 2);
+  background: var(--toast-tone-subtle);
+}
+
+.toast__bar-fill {
+  display: block;
+  block-size: 100%;
+  background: var(--toast-tone);
+  transform-origin: left center;
+  transition: transform var(--sf-duration-base) linear;
+
+  :host-context([dir='rtl']) & {
+    transform-origin: right center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast__bar-fill {
+    transition: none;
+  }
+}

@@ -114,15 +114,6 @@
   color: var(--sf-ink);
 }
 
-.diff__dialog-input {
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-}
-
 .diff__dialog-footer {
   display: flex;
   justify-content: flex-end;

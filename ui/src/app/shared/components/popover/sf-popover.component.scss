@@ -1,0 +1,22 @@
+// Lives in <body> while open (anchorPanel), so every rule keys on its own class.
+.sf-popover {
+  position: fixed;
+  z-index: var(--sf-z-popover);
+  min-width: 12rem;
+  max-width: min(28rem, calc(100vw - var(--sf-space-4)));
+  padding: var(--sf-pad-panel);
+  overflow: auto;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface-raised);
+  color: var(--sf-text);
+  box-shadow: var(--sf-elevation-2);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 2px;
+  }
+}

@@ -67,7 +67,7 @@
 
 .sf-combobox__panel {
   position: fixed;
-  z-index: var(--sf-z-dropdown);
+  z-index: var(--sf-z-popover); // above dialogs and drawers, which the control may sit in
   display: flex;
   flex-direction: column;
   max-width: min(32rem, calc(100vw - var(--sf-space-4)));

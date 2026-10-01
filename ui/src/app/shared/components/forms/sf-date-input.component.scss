@@ -65,7 +65,7 @@
 // Popups: they move into <body> while open (anchorPanel), so every rule keys on their own classes.
 .sf-date-input__panel {
   position: fixed;
-  z-index: var(--sf-z-dropdown);
+  z-index: var(--sf-z-popover); // above dialogs and drawers, which the control may sit in
   border: 1px solid var(--sf-border);
   border-radius: var(--sf-radius-md);
   background: var(--sf-surface-raised);

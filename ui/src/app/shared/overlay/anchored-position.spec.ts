@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchorPanel, computeAnchorPlacement } from './anchored-position';
+import { anchorPanel, computeAnchorPlacement, pointAnchor } from './anchored-position';
 
 const rect = (left: number, top: number, width: number, height: number) =>
   ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top }) as DOMRect;
@@ -38,6 +38,47 @@ describe('computeAnchorPlacement', () => {
     });
 
     expect(placement.minWidth).toBe(300);
+  });
+
+  it('places beside the anchor at its end, top edges aligned (submenus)', () => {
+    const placement = computeAnchorPlacement(rect(100, 200, 160, 32), { width: 180, height: 120 }, viewport, {
+      side: 'end',
+      offset: 0,
+    });
+
+    expect(placement).toMatchObject({ top: 200, left: 260, side: 'end', maxHeight: 800 - 16 });
+  });
+
+  it('flips to the start side when the end has no room, and clamps vertically', () => {
+    const placement = computeAnchorPlacement(rect(700, 750, 200, 32), { width: 180, height: 120 }, viewport, {
+      side: 'end',
+      offset: 0,
+    });
+
+    expect(placement.side).toBe('start');
+    expect(placement.left).toBe(700 - 180);
+    expect(placement.top).toBe(800 - 8 - 120);
+  });
+
+  it('keeps the start side when it fits', () => {
+    const placement = computeAnchorPlacement(rect(500, 100, 100, 30), { width: 180, height: 50 }, viewport, {
+      side: 'start',
+      align: 'end',
+      offset: 2,
+    });
+
+    expect(placement).toMatchObject({ side: 'start', left: 500 - 2 - 180, top: 130 - 50 });
+  });
+});
+
+describe('pointAnchor', () => {
+  it('is a zero-sized rectangle at the point, placing a panel right below it', () => {
+    const anchor = pointAnchor(120, 80);
+    const placement = computeAnchorPlacement(anchor.getBoundingClientRect(), { width: 200, height: 100 }, viewport, {
+      offset: 0,
+    });
+
+    expect(placement).toMatchObject({ top: 80, left: 120, side: 'bottom' });
   });
 });
 

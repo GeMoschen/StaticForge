@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injector, OnInit, computed, inject, input, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
@@ -11,7 +11,7 @@ import {
   validateLocales,
 } from './project-settings-locales.util';
 import { LocalesStore } from '../../core/project/locales.store';
-import { DialogService } from '../../core/ui/dialog.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { assetRoute } from '../../shared/asset-route.util';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
@@ -46,7 +46,8 @@ export class ProjectSettingsLocalesComponent implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
   private readonly locales = inject(LocalesStore);
-  protected readonly dialog = inject(DialogService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly injector = inject(Injector);
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
@@ -264,39 +265,26 @@ export class ProjectSettingsLocalesComponent implements OnInit {
     return withoutPrefix ? `${uid}.html` : `${locale}/${uid}.html`;
   }
 
-  protected save(): void {
+  protected async save(): Promise<void> {
     if (!this.canSave()) {
       return;
     }
     if (urlsWillChange(this.saved(), this.rows(), this.defaultWithoutPrefix())) {
       const example = this.urlExample();
-      this.dialog.open({
+      const confirmed = await this.confirms.confirm({
         title: 'This changes every page URL',
         message:
           `Generated pages move from "${example.before}" to "${example.after}". ` +
           'Links people have already shared, and search engine results, will point at the old paths until they are redirected.',
         confirmLabel: 'Save and change URLs',
-        cancelLabel: 'Cancel',
-        kind: 'danger',
+        tone: 'danger',
+        injector: this.injector,
       });
-      return;
+      if (!confirmed) {
+        return;
+      }
     }
     this.send(false);
-  }
-
-  /** The dialog's confirm button: either "yes, change the URLs" or "yes, discard translations". */
-  protected confirm(): void {
-    if (this.pendingDiscard()) {
-      this.confirmDiscard();
-      return;
-    }
-    this.dialog.close();
-    this.send(false);
-  }
-
-  protected cancel(): void {
-    this.dialog.close();
-    this.pendingDiscard.set(false);
   }
 
   private send(confirmDiscard: boolean): void {
@@ -323,16 +311,7 @@ export class ProjectSettingsLocalesComponent implements OnInit {
           this.saving.set(false);
           if (config.confirmationRequired) {
             // Nothing was written: the change would reduce translated values to one language.
-            this.dialog.open({
-              title: 'This discards translations',
-              message:
-                `Turning languages off keeps only the default language: ${config.discardedLocaleValues} ` +
-                `translation(s) in ${config.affectedAssets?.length ?? 0} item(s) will be dropped. This cannot be undone.`,
-              confirmLabel: 'Discard translations and save',
-              cancelLabel: 'Keep languages',
-              kind: 'danger',
-            });
-            this.pendingDiscard.set(true);
+            void this.confirmDiscard(config.discardedLocaleValues ?? 0, config.affectedAssets?.length ?? 0);
             return;
           }
           this.apply(config);
@@ -357,13 +336,22 @@ export class ProjectSettingsLocalesComponent implements OnInit {
     return assetRoute(this.projectKey(), { uuid: warning.templateUuid, type: 'PAGE_TEMPLATE' });
   }
 
-  /** Set while a discard confirmation is open, so the dialog's confirm re-sends with the flag. */
-  protected readonly pendingDiscard = signal(false);
-
-  private confirmDiscard(): void {
-    this.dialog.close();
-    this.pendingDiscard.set(false);
-    this.send(true);
+  /** The server refused because translations would be dropped: ask, and re-send with the flag when confirmed. */
+  private async confirmDiscard(values: number, items: number): Promise<void> {
+    const confirmed = await this.confirms.confirm({
+      title: 'This discards translations',
+      message:
+        `Turning languages off keeps only the default language: ${values} ` +
+        `translation(s) in ${items} item(s) will be dropped.`,
+      confirmLabel: 'Discard translations and save',
+      cancelLabel: 'Keep languages',
+      tone: 'danger',
+      irreversible: true,
+      injector: this.injector,
+    });
+    if (confirmed) {
+      this.send(true);
+    }
   }
 
   private applyServerErrors(error: HttpErrorResponse): void {

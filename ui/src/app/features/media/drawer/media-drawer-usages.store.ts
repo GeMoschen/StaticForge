@@ -1,23 +1,24 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, Injector, inject, signal } from '@angular/core';
 import type { components } from '../../../core/api/generated/schema.d.ts';
-import { DialogService } from '../../../core/ui/dialog.service';
+import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import { STAYS_ONLINE_NOTE, deleteQuestion, isOnline } from '../../release/release-status.util';
 import { MediaDrawerStore } from './media-drawer.store';
 
 type UsageDto = components['schemas']['UsageDto'];
 
+/** What the user types to delete a file other assets still reference. */
+const DELETE_TOKEN = 'DELETE';
+
 /** What references the file, and deleting it — which asks for a typed confirmation while it is referenced. */
 @Injectable()
 export class MediaDrawerUsagesStore {
   private readonly core = inject(MediaDrawerStore);
-  readonly dialog = inject(DialogService);
-
-  readonly DELETE_TOKEN = 'DELETE';
+  private readonly confirms = inject(ConfirmService);
+  private readonly injector = inject(Injector);
 
   readonly usages = signal<UsageDto[]>([]);
   readonly usagesLoading = signal(false);
   readonly deleting = signal(false);
-  readonly confirmText = signal('');
 
   loadUsages(): void {
     const uuid = this.core.media()?.uuid;
@@ -34,43 +35,37 @@ export class MediaDrawerUsagesStore {
     });
   }
 
-  confirmDelete(): void {
+  /** Asks before deleting; while other assets reference the file, the user must type DELETE. */
+  async confirmDelete(): Promise<void> {
     const uuid = this.core.media()?.uuid;
-    if (!uuid || this.core.readOnly()) {
+    // Whether the file is referenced decides the typed DELETE gate: never ask before the usages have loaded.
+    if (!uuid || this.core.readOnly() || this.usagesLoading()) {
       return;
     }
-    const referenced = this.usages().length > 0;
+    const usages = this.usages();
+    const referenced = usages.length > 0;
     const release = this.core.media()?.release;
-    this.confirmText.set('');
-    this.dialog.open({
+    const confirmed = await this.confirms.confirm({
       title: 'Delete media',
       message: referenced
-        ? `This file is referenced by ${this.usages().length} asset(s). Deleting it will break those references.` +
-          (isOnline(release) ? ` ${STAYS_ONLINE_NOTE}` : '') +
-          ' Type DELETE to confirm.'
-        : deleteQuestion('Delete this media file? This cannot be undone.', release),
+        ? `This file is referenced by ${usages.length} asset(s). Deleting it will break those references.` +
+          (isOnline(release) ? ` ${STAYS_ONLINE_NOTE}` : '')
+        : deleteQuestion('Delete this media file?', release),
+      details: usages.map((usage) => `${usage.fromUid} (${usage.fromType})`),
       confirmLabel: 'Delete',
-      cancelLabel: 'Cancel',
-      kind: 'danger',
+      tone: 'danger',
+      typeToConfirm: referenced ? DELETE_TOKEN : undefined,
+      irreversible: true,
+      injector: this.injector,
     });
+    if (confirmed) {
+      this.performDelete();
+    }
   }
 
-  canConfirmDelete(): boolean {
-    return this.usages().length === 0 || this.confirmText().trim() === this.DELETE_TOKEN;
-  }
-
-  onDeleteInput(event: Event): void {
-    this.confirmText.set((event.target as HTMLInputElement).value);
-  }
-
-  cancelDelete(): void {
-    this.dialog.close();
-    this.confirmText.set('');
-  }
-
-  performDelete(): void {
+  private performDelete(): void {
     const uuid = this.core.media()?.uuid;
-    if (!uuid || !this.canConfirmDelete() || this.deleting() || this.core.readOnly()) {
+    if (!uuid || this.deleting() || this.core.readOnly()) {
       return;
     }
     this.deleting.set(true);
@@ -78,8 +73,6 @@ export class MediaDrawerUsagesStore {
       next: () => {
         this.core.toasts.show('Media deleted', 'success');
         this.deleting.set(false);
-        this.dialog.close();
-        this.confirmText.set('');
         this.core.emitDeleted(uuid);
       },
       error: () => {

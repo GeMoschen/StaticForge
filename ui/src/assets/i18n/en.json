@@ -421,6 +421,31 @@
         "time24": "hh:mm",
         "time12": "hh:mm AM"
       }
+    },
+    "dialog": {
+      "close": "Close"
+    },
+    "confirm": {
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "irreversible": "This cannot be undone.",
+      "typeToConfirm": "Type {value} to confirm",
+      "typeLabel": "Confirmation"
+    },
+    "drawer": {
+      "close": "Close",
+      "resize": "Resize panel"
+    },
+    "popover": {
+      "close": "Close"
+    },
+    "menu": {
+      "contextLabel": "Actions",
+      "unavailable": "Unavailable: {reason}"
+    },
+    "toast": {
+      "undo": "Undo",
+      "countdown": "{seconds, plural, one {# second} other {# seconds}} left"
     }
   },
   "shell": {

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  Injector,
   effect,
   inject,
   input,
@@ -9,7 +10,7 @@ import {
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ChannelsService } from '../channels/channels.service';
-import { DialogService } from '../../core/ui/dialog.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
@@ -30,7 +31,7 @@ import { LocalesStore } from '../../core/project/locales.store';
 
 const PAGE_SIZE = 20;
 
-/** What a pending reset confirmation will delete — drives both the dialog copy and the actual request. */
+/** What a reset deletes — drives both the confirmation copy and the request. */
 type ResetScope =
   | { kind: 'entry'; entry: UrlRegistryEntryView }
   | { kind: 'asset'; entry: UrlRegistryEntryView }
@@ -64,7 +65,8 @@ export class ProjectSettingsUrlRegistryComponent {
   private readonly api = inject(UrlRegistryService);
   private readonly channelsApi = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
-  protected readonly dialog = inject(DialogService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly injector = inject(Injector);
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
@@ -93,7 +95,6 @@ export class ProjectSettingsUrlRegistryComponent {
   protected readonly editUrl = signal('');
   protected readonly saving = signal(false);
 
-  protected readonly pendingReset = signal<ResetScope | null>(null);
   protected readonly resetting = signal(false);
 
   constructor() {
@@ -250,13 +251,10 @@ export class ProjectSettingsUrlRegistryComponent {
     if (this.readOnly()) {
       return;
     }
-    this.pendingReset.set({ kind: 'entry', entry });
-    this.dialog.open({
+    void this.askReset({ kind: 'entry', entry }, {
       title: 'Reset this URL',
       message: `Delete the URL of "${this.targetText(entry)}"${entry.channelKey ? ` on channel "${entry.channelKey}"` : ''} (${entry.area})? The next build or preview assigns its current computed URL, and a build moves the output there.`,
       confirmLabel: 'Reset',
-      cancelLabel: 'Cancel',
-      kind: 'danger',
     });
   }
 
@@ -264,13 +262,10 @@ export class ProjectSettingsUrlRegistryComponent {
     if (this.readOnly()) {
       return;
     }
-    this.pendingReset.set({ kind: 'asset', entry });
-    this.dialog.open({
+    void this.askReset({ kind: 'asset', entry }, {
       title: 'Reset all URLs of this asset',
       message: `Delete every URL of "${entry.targetLabel ?? entry.targetUuid}" — every channel, language, area, variant and page? The next build or preview assigns its current computed URLs.`,
       confirmLabel: 'Reset asset',
-      cancelLabel: 'Cancel',
-      kind: 'danger',
     });
   }
 
@@ -279,13 +274,10 @@ export class ProjectSettingsUrlRegistryComponent {
     if (!channelKey || this.readOnly()) {
       return;
     }
-    this.pendingReset.set({ kind: 'channel', channelKey });
-    this.dialog.open({
+    void this.askReset({ kind: 'channel', channelKey }, {
       title: 'Reset channel URLs',
       message: `Delete every cached URL for channel "${channelKey}" across the whole project? The next build or preview assigns their current computed URLs, and a build moves the outputs there.`,
       confirmLabel: 'Reset channel',
-      cancelLabel: 'Cancel',
-      kind: 'danger',
     });
   }
 
@@ -294,13 +286,10 @@ export class ProjectSettingsUrlRegistryComponent {
     if (!area || this.readOnly()) {
       return;
     }
-    this.pendingReset.set({ kind: 'area', area });
-    this.dialog.open({
+    void this.askReset({ kind: 'area', area }, {
       title: 'Reset area URLs',
       message: `Delete every cached URL in the "${area}" area, across all channels? The next build or preview assigns their current computed URLs, and a build moves the outputs there.`,
       confirmLabel: 'Reset area',
-      cancelLabel: 'Cancel',
-      kind: 'danger',
     });
   }
 
@@ -308,25 +297,25 @@ export class ProjectSettingsUrlRegistryComponent {
     if (this.readOnly()) {
       return;
     }
-    this.pendingReset.set({ kind: 'project' });
-    this.dialog.open({
+    void this.askReset({ kind: 'project' }, {
       title: 'Reset all URLs',
       message:
         'Delete every cached URL in this project — every channel, every area? The next build or preview assigns their current computed URLs, and a build moves the outputs there.',
       confirmLabel: 'Reset all',
-      cancelLabel: 'Cancel',
-      kind: 'danger',
     });
   }
 
-  cancelReset(): void {
-    this.dialog.close();
-    this.pendingReset.set(null);
+  /** Asks before a reset (destructive, no undo); a confirmed one runs at once. */
+  private async askReset(scope: ResetScope, options: { title: string; message: string; confirmLabel: string }): Promise<void> {
+    const confirmed = await this.confirms.confirm({ ...options, tone: 'danger', irreversible: true, injector: this.injector });
+    if (confirmed) {
+      this.runReset(scope);
+    }
   }
 
-  confirmReset(): void {
-    const scope = this.pendingReset();
-    if (!scope || this.resetting() || this.readOnly()) {
+  /** Runs a confirmed reset; the reset buttons are disabled meanwhile, so only one runs at a time. */
+  private runReset(scope: ResetScope): void {
+    if (this.resetting() || this.readOnly()) {
       return;
     }
     const req =
@@ -343,8 +332,6 @@ export class ProjectSettingsUrlRegistryComponent {
     this.api.reset(this.projectKey(), req).subscribe({
       next: () => {
         this.resetting.set(false);
-        this.dialog.close();
-        this.pendingReset.set(null);
         this.toasts.show(
           'Reset complete — the next build or preview assigns the current computed URLs.',
           'success',
@@ -354,8 +341,6 @@ export class ProjectSettingsUrlRegistryComponent {
       },
       error: () => {
         this.resetting.set(false);
-        this.dialog.close();
-        this.pendingReset.set(null);
         this.toasts.show('Could not reset those URLs — try again in a moment.', 'error');
       },
     });

@@ -66,33 +66,4 @@
       </footer>
     </div>
   }
-
-  @if (dialog.state(); as d) {
-    <div class="diff__scrim" (click)="cancelRollback()"></div>
-    <div class="diff__dialog" role="dialog" aria-modal="true" [attr.aria-label]="d.title">
-      <header class="diff__dialog-header">
-        <h2 class="diff__dialog-title">{{ d.title }}</h2>
-      </header>
-      <div class="diff__dialog-body">
-        <p class="diff__dialog-message">{{ d.message }}</p>
-        <input
-          class="diff__dialog-input"
-          type="text"
-          [value]="confirmText()"
-          (input)="onConfirmInput($event)"
-          placeholder="Type ROLLBACK to confirm"
-        />
-      </div>
-      <footer class="diff__dialog-footer">
-        <sf-button variant="ghost" (click)="cancelRollback()">Cancel</sf-button>
-        <sf-button
-          variant="danger"
-          [disabled]="confirmText().trim() !== ROLLBACK_TOKEN || restoring()"
-          (click)="confirmRollback()"
-        >
-          Roll back
-        </sf-button>
-      </footer>
-    </div>
-  }
 </div>

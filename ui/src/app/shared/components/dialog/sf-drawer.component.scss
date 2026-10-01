@@ -1,0 +1,111 @@
+// Non-modal: the host is just the panel's positioning box on the right edge, the page beside it stays usable.
+:host {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  display: flex;
+  justify-content: flex-end;
+  max-width: 100vw;
+}
+
+// Modal: the host covers the viewport, with a backdrop.
+:host(.sf-drawer-host--modal) {
+  inset: 0;
+}
+
+.sf-drawer__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--sf-overlay);
+}
+
+.sf-drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-width: 100vw;
+  height: 100%;
+  border-inline-start: 1px solid var(--sf-border);
+  background: var(--sf-surface-raised);
+  color: var(--sf-text);
+  box-shadow: var(--sf-elevation-3);
+  font-family: var(--sf-font-ui);
+  animation: sf-drawer-in var(--sf-duration-slow) var(--sf-ease-enter);
+}
+
+// The resize handle: a thin strip over the left border, wider to grab than it looks.
+.sf-drawer__handle {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(-1 * var(--sf-space-1));
+  z-index: calc(var(--sf-z-base) + 1); // above the header, within the drawer
+  width: var(--sf-space-2);
+  cursor: col-resize;
+  touch-action: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(var(--sf-space-1) - 1px);
+    width: 2px;
+    background: transparent;
+    transition: background var(--sf-duration-fast) var(--sf-ease-standard);
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    background: var(--sf-accent);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.sf-drawer__header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-height: var(--sf-topbar-height);
+  padding: 0 var(--sf-space-2) 0 var(--sf-space-4);
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.sf-drawer__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.sf-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--sf-pad-panel);
+  overflow: auto;
+}
+
+.sf-drawer__footer {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-3) var(--sf-space-4);
+  border-top: 1px solid var(--sf-border);
+
+  &:empty {
+    display: none;
+  }
+}
+
+@keyframes sf-drawer-in {
+  from {
+    transform: translateX(var(--sf-space-8));
+    opacity: 0;
+  }
+}

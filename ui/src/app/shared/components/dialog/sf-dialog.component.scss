@@ -1,0 +1,107 @@
+// The host is the overlay pane: it covers the viewport and centres the panel. Its z-index comes from the OverlayStack.
+:host {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sf-space-6);
+  box-sizing: border-box;
+}
+
+.sf-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--sf-overlay);
+  animation: sf-dialog-fade var(--sf-duration-base) var(--sf-ease-enter);
+}
+
+.sf-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 100%;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface-raised);
+  color: var(--sf-text);
+  box-shadow: var(--sf-elevation-3);
+  font-family: var(--sf-font-ui);
+  overflow: hidden;
+  animation: sf-dialog-in var(--sf-duration-base) var(--sf-ease-enter);
+}
+
+.sf-dialog--sm {
+  max-width: 26rem;
+}
+
+.sf-dialog--md {
+  max-width: 36rem;
+}
+
+.sf-dialog--lg {
+  max-width: 52rem;
+}
+
+.sf-dialog--full {
+  max-width: none;
+  height: 100%;
+}
+
+.sf-dialog__header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-3) var(--sf-space-3) var(--sf-space-3) var(--sf-space-4);
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.sf-dialog__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.sf-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--sf-space-4);
+  overflow: auto;
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+}
+
+// Actions on the right, the primary one last (rightmost).
+.sf-dialog__footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-3) var(--sf-space-4);
+  border-top: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+
+  &:empty {
+    display: none;
+  }
+}
+
+@keyframes sf-dialog-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sf-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--sf-space-2)) scale(0.98);
+  }
+}

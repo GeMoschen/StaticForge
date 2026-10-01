@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { HttpErrorResponse } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelsService } from '../channels/channels.service';
 import { LocalesStore } from '../../core/project/locales.store';
@@ -190,7 +190,7 @@ describe('ProjectSettingsUrlRegistryComponent', () => {
     const confirmButtons = screen.getAllByText(/^Reset$/);
     confirmButtons[confirmButtons.length - 1].click();
 
-    expect(api.reset).toHaveBeenCalledWith('proj', { entryId: 1 });
+    await waitFor(() => expect(api.reset).toHaveBeenCalledWith('proj', { entryId: 1 }));
     await waitFor(() => expect(screen.queryByText('Reset this URL')).toBeNull());
   });
 
@@ -223,7 +223,7 @@ describe('ProjectSettingsUrlRegistryComponent', () => {
     const confirmButtons = screen.getAllByRole('button', { name: 'Reset channel' });
     confirmButtons[confirmButtons.length - 1].click();
 
-    expect(api.reset).toHaveBeenCalledWith('proj', { channelKey: 'html' });
+    await waitFor(() => expect(api.reset).toHaveBeenCalledWith('proj', { channelKey: 'html' }));
   });
 
   it('requires confirmation before a per-area reset', async () => {
@@ -253,7 +253,7 @@ describe('ProjectSettingsUrlRegistryComponent', () => {
     const confirmButtons = screen.getAllByRole('button', { name: 'Reset area' });
     confirmButtons[confirmButtons.length - 1].click();
 
-    expect(api.reset).toHaveBeenCalledWith('proj', { area: 'GENERATED' });
+    await waitFor(() => expect(api.reset).toHaveBeenCalledWith('proj', { area: 'GENERATED' }));
   });
 
   it('requires confirmation before a project-wide reset all', async () => {
@@ -274,7 +274,35 @@ describe('ProjectSettingsUrlRegistryComponent', () => {
     const confirmButtons = screen.getAllByText(/Reset all/);
     confirmButtons[confirmButtons.length - 1].click();
 
-    expect(api.reset).toHaveBeenCalledWith('proj', {});
+    await waitFor(() => expect(api.reset).toHaveBeenCalledWith('proj', {}));
+  });
+
+  it('disables every reset while one runs, so a second confirmed reset cannot get lost', async () => {
+    const pending = new Subject<void>();
+    const api = makeApiStub({ reset: vi.fn().mockReturnValue(pending) });
+    await render(ProjectSettingsUrlRegistryComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: UrlRegistryService, useValue: api },
+        { provide: ChannelsService, useValue: makeChannelsStub() },
+        { provide: LocalesStore, useValue: { locales: signal([]) } },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText('Home')).toBeTruthy());
+
+    screen.getByText('Reset all').click();
+    await waitFor(() => expect(screen.getByText('Reset all URLs')).toBeTruthy());
+    const confirmButtons = screen.getAllByText(/Reset all/);
+    confirmButtons[confirmButtons.length - 1].click();
+    await waitFor(() => expect(api.reset).toHaveBeenCalledTimes(1));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reset all' })).toBeDisabled());
+    for (const button of screen.getAllByRole('button', { name: 'Reset' })) {
+      expect(button).toBeDisabled();
+    }
+    pending.next();
+    pending.complete();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reset all' })).toBeEnabled());
   });
 
   it('filters by target type and searches by name or URL on Enter', async () => {
@@ -375,6 +403,6 @@ describe('ProjectSettingsUrlRegistryComponent', () => {
     const confirm = screen.getAllByRole('button', { name: 'Reset asset' });
     confirm[confirm.length - 1].click();
 
-    expect(api.reset).toHaveBeenCalledWith('proj', { targetUuid: 'page-a' });
+    await waitFor(() => expect(api.reset).toHaveBeenCalledWith('proj', { targetUuid: 'page-a' }));
   });
 });

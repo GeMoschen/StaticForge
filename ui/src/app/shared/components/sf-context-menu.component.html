@@ -1,29 +1,11 @@
-@if (menu.state(); as state) {
-  <div
-    #panel
-    class="sf-context-menu"
-    role="menu"
-    [style.left.px]="state.x"
-    [style.top.px]="state.y"
-  >
-    @for (item of state.items; track $index) {
-      @if (item.separator) {
-        <div class="sf-context-menu__separator"></div>
-      } @else {
-        <button
-          type="button"
-          class="sf-context-menu__item"
-          [class.sf-context-menu__item--danger]="item.danger"
-          [disabled]="item.disabled"
-          role="menuitem"
-          (click)="select(item.action)"
-        >
-          @if (item.icon) {
-            <sf-icon class="sf-context-menu__icon" [name]="item.icon" />
-          }
-          <span>{{ item.label }}</span>
-        </button>
-      }
-    }
-  </div>
+@for (entry of open(); track entry.state) {
+  <sf-menu-panel
+    [items]="entry.state.items"
+    [label]="'shared.menu.contextLabel' | transloco"
+    [anchor]="entry.anchor"
+    [anchorOptions]="entry.options"
+    initialFocus="first"
+    (activated)="onActivated($event)"
+    (closeRequest)="onCloseRequest($event)"
+  />
 }

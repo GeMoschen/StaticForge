@@ -79,10 +79,6 @@
     "colors": 2,
     "zIndex": 0
   },
-  "src/app/features/media/drawer/media-drawer-delete-dialog.component.scss": {
-    "colors": 2,
-    "zIndex": 2
-  },
   "src/app/features/media/library/media-library-grid.component.scss": {
     "colors": 0,
     "zIndex": 1
@@ -198,10 +194,6 @@
   "src/app/shared/components/sf-asset-picker-folder-node.component.ts": {
     "colors": 1,
     "zIndex": 0
-  },
-  "src/app/shared/components/sf-context-menu.component.scss": {
-    "colors": 0,
-    "zIndex": 1
   },
   "src/app/shared/components/sf-octl-editor.component.scss": {
     "colors": 1,

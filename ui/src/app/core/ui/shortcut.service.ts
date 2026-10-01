@@ -1,4 +1,5 @@
-import { Injectable, OnDestroy, signal } from '@angular/core';
+import { Injectable, OnDestroy, inject, signal } from '@angular/core';
+import { OverlayStack } from '../../shared/overlay/overlay-stack';
 
 export interface ShortcutOptions {
   mod?: boolean;
@@ -19,6 +20,7 @@ export class ShortcutService implements OnDestroy {
   }> = [];
 
   private pendingPrefix: string | null = null;
+  private readonly overlays = inject(OverlayStack);
 
   private readonly onKeydownRef = (event: KeyboardEvent) =>
     this.onKeydown(event);
@@ -55,7 +57,8 @@ export class ShortcutService implements OnDestroy {
   }
 
   private onKeydown(event: KeyboardEvent): void {
-    if (event.defaultPrevented) {
+    // Behind a modal dialog the page is inert; its shortcuts (navigation, the palette) must not fire either.
+    if (event.defaultPrevented || this.overlays.hasModal) {
       return;
     }
 
