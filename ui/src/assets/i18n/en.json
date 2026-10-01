@@ -574,6 +574,137 @@
       "resultCount": "({count, plural, one {# result} other {# results}})"
     }
   },
+  "frame": {
+    "region": {
+      "skipLink": "Skip to content"
+    },
+    "section": {
+      "dashboard": "Projects",
+      "account": "My account",
+      "admin": "Administration",
+      "home": "Home",
+      "pages": "Pages",
+      "content": "Content",
+      "media": "Media",
+      "navigation": "Navigation",
+      "globals": "Globals",
+      "templates": "Templates",
+      "search": "Search",
+      "changes": "Changes",
+      "schedules": "Schedules",
+      "settings": "Settings"
+    },
+    "sub": {
+      "settings": {
+        "general": "General",
+        "members": "Members",
+        "generation": "Generation",
+        "quality": "Quality",
+        "redirects": "Redirects",
+        "revisions": "Revisions",
+        "url-registry": "URL registry",
+        "import-export": "Import / export"
+      },
+      "admin": {
+        "users": "Users",
+        "projects": "Projects",
+        "jobs": "Jobs",
+        "audit": "Audit"
+      }
+    },
+    "title": {
+      "login": "Sign in",
+      "setPassword": "Set password"
+    },
+    "topbar": {
+      "home": "StaticForge home",
+      "breadcrumb": "Location",
+      "breadcrumbMore": "Show the hidden folders",
+      "search": "Search or jump to…",
+      "language": "Editing language",
+      "history": "Project history",
+      "appearance": "Appearance",
+      "theme": "Theme",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "themeSystem": "System",
+      "density": "Density",
+      "compact": "Compact",
+      "comfortable": "Comfortable",
+      "developerMode": "Developer mode",
+      "developerModeHint": "Shows templates, UIDs and paths. Off is the editor view.",
+      "shortcuts": "Keyboard shortcuts",
+      "userMenu": "Account menu for {name}",
+      "account": "My account",
+      "administration": "Administration",
+      "signOut": "Sign out"
+    },
+    "build": {
+        "none": "No builds yet",
+      "running": "Building…",
+      "success": "Published",
+      "partial": "Published with warnings",
+      "failed": "Build failed",
+      "cancelled": "Build cancelled",
+      "unknown": "Build",
+      "recent": "Recent builds",
+      "files": "{count, plural, one {# file} other {# files}}",
+    "runningReason": "A build is already running.",
+      "allRuns": "All builds",
+      "now": "Build now",
+      "starting": "Build started.",
+      "progress": "Show progress"
+    },
+    "switcher": {
+      "label": "Switch project",
+      "search": "Find a project…",
+      "searchLabel": "Find a project",
+      "favorites": "Favorites",
+      "recent": "Recent",
+      "all": "All projects",
+      "allProjects": "All projects",
+      "noMatches": "No project matches “{query}”.",
+      "loadFailed": "The projects could not be loaded.",
+      "addFavorite": "Add {name} to favorites",
+      "removeFavorite": "Remove {name} from favorites",
+      "archived": "Archived"
+    },
+    "rail": {
+      "project": "Project navigation",
+      "admin": "Administration navigation",
+      "group": {
+        "content": "Content",
+        "publish": "Publish",
+        "develop": "Develop",
+        "admin": "Administration"
+      },
+      "item": {
+        "home": "Home",
+        "pages": "Pages",
+        "media": "Media",
+        "content": "Content",
+        "navigation": "Navigation",
+        "globals": "Globals",
+        "changes": "Changes",
+        "publishing": "Publishing",
+        "schedules": "Schedules",
+        "templates": "Templates",
+        "settings": "Settings",
+        "users": "Users",
+        "projects": "Projects",
+        "jobs": "Jobs",
+        "audit": "Audit"
+      },
+      "withCount": "{name} ({count})",
+      "collapse": "Collapse sidebar",
+      "expand": "Expand sidebar"
+    },
+    "shortcuts": {
+      "title": "Keyboard shortcuts",
+      "search": "Search or jump to",
+      "sheet": "Show this list"
+    }
+  },
   "styleguide": {
     "page": {
       "title": "Style guide",

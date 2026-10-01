@@ -3,10 +3,6 @@
     "colors": 1,
     "zIndex": 2
   },
-  "src/app/features/account/user-menu.component.scss": {
-    "colors": 0,
-    "zIndex": 1
-  },
   "src/app/features/admin/admin-audit.component.scss": {
     "colors": 0,
     "zIndex": 1
@@ -41,10 +37,6 @@
   },
   "src/app/features/dashboard/dashboard.component.scss": {
     "colors": 1,
-    "zIndex": 0
-  },
-  "src/app/features/dashboard/nav-rail.component.scss": {
-    "colors": 2,
     "zIndex": 0
   },
   "src/app/features/forms/editors/boolean-editor.component.scss": {

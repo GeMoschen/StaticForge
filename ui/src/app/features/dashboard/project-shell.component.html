@@ -1,35 +1,10 @@
-<div class="shell">
-  <a class="sf-skip-link" href="#sf-main-content">Skip to content</a>
-  <sf-revision-spine
-    class="shell__spine"
-    [projectKey]="projectKey()"
-    [revisions]="store.revisions()"
-    [currentRevision]="store.currentRevision()"
-    (tickSelected)="onTick($event)"
-  />
-  <sf-nav-rail class="shell__rail" />
-  <main
-    id="sf-main-content"
-    class="shell__content"
-    [class.shell__content--time-travel]="timeTravel.isTimeTravel()"
-  >
-    @if (locales.isLocalized()) {
-      <div class="shell__languages">
-        <label class="shell__languages-label" for="sf-editing-locale">Editing language</label>
-        <select
-          id="sf-editing-locale"
-          class="shell__languages-select"
-          [value]="editingLocale.locale() ?? ''"
-          (change)="switchLocale($any($event.target).value)"
-        >
-          @for (locale of locales.locales(); track locale.code) {
-            <option [value]="locale.code">{{ locale.label || locale.code }}</option>
-          }
-        </select>
-      </div>
-    }
-    <sf-archived-banner [projectKey]="projectKey()" />
-    <sf-time-travel-banner [revisions]="store.revisions()" (back)="backToNow()" />
-    <router-outlet />
-  </main>
+<sf-revision-spine
+  class="shell__spine"
+  [projectKey]="projectKey()"
+  [revisions]="store.revisions()"
+  [currentRevision]="store.currentRevision()"
+  (tickSelected)="onTick($event)"
+/>
+<div class="shell__content">
+  <router-outlet />
 </div>

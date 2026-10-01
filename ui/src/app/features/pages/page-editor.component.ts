@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input } from '@angular/core';
+import { useFrameItem } from '../../core/frame/use-frame-item';
 import { ReleaseBarComponent } from '../release/release-bar.component';
 import { PageAutosaveService } from './autosave.service';
 import { PageEditorConflictComponent } from './page-editor-conflict.component';
@@ -64,5 +65,12 @@ export class PageEditorComponent {
     effect(() => this.editor.syncExternalMutation(), { allowSignalWrites: true });
 
     effect(() => this.editor.syncEditingLocale(), { allowSignalWrites: true });
+
+    // The breadcrumb ends with the open page and the document title starts with it (M35.10).
+    useFrameItem(() => {
+      const page = this.editor.page();
+      const label = page?.displayName || page?.uid;
+      return label ? { label } : null;
+    });
   }
 }

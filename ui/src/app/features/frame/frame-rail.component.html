@@ -1,0 +1,52 @@
+<nav class="rail" [attr.aria-label]="(isAdmin() ? 'frame.rail.admin' : 'frame.rail.project') | transloco">
+  <div class="rail__groups">
+    @for (group of groups(); track group.id) {
+      <div class="rail__group" role="group" [attr.aria-labelledby]="group.id === 'home' ? null : 'frame-rail-' + group.id">
+        @if (group.id !== 'home') {
+          <span class="rail__heading" [id]="'frame-rail-' + group.id">{{ 'frame.rail.group.' + group.id | transloco }}</span>
+        }
+        <ul class="rail__list">
+          @for (item of group.items; track item.id) {
+            <li>
+              <ng-container *ngTemplateOutlet="entry; context: { $implicit: item }" />
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+
+  <div class="rail__footer">
+    @if (settings(); as item) {
+      <ng-container *ngTemplateOutlet="entry; context: { $implicit: item }" />
+    }
+    <sf-button
+      class="rail__collapse"
+      variant="ghost"
+      size="sm"
+      [icon]="collapsed() ? 'left_panel_open' : 'left_panel_close'"
+      [label]="(collapsed() ? 'frame.rail.expand' : 'frame.rail.collapse') | transloco"
+      [aria-expanded]="!collapsed()"
+      (click)="toggle()"
+    />
+  </div>
+</nav>
+
+<ng-template #entry let-item>
+  <a
+    class="rail__item"
+    [routerLink]="link(item)"
+    [class.is-active]="active() === item.id"
+    [attr.aria-current]="active() === item.id ? 'page' : null"
+    [attr.aria-label]="collapsed() ? fullName(item) : null"
+    [sfTooltip]="collapsed() ? fullName(item) : ''"
+    [sfTooltipDescribes]="false"
+    sfTooltipSide="end"
+  >
+    <sf-icon class="rail__icon" [name]="item.icon" />
+    <span class="rail__label">{{ name(item) }}</span>
+    @if (count(item) > 0) {
+      <sf-badge class="rail__badge" tone="accent">{{ count(item) }}</sf-badge>
+    }
+  </a>
+</ng-template>

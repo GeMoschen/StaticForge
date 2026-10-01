@@ -12,6 +12,8 @@ const GO_KEYS = ['p', 'm', 't', 'r'] as const;
 @Injectable({ providedIn: 'root' })
 export class ShortcutService implements OnDestroy {
   readonly commandPaletteOpen = signal(false);
+  /** The `?` sheet that lists the shortcuts (M35.10; M35.14 fills it from a registry). */
+  readonly shortcutSheetOpen = signal(false);
 
   private readonly bindings: Array<{
     key: string;
@@ -30,7 +32,7 @@ export class ShortcutService implements OnDestroy {
       document.addEventListener('keydown', this.onKeydownRef);
     }
     this.register('k', { mod: true }, () => this.commandPaletteOpen.set(true));
-    this.register('?', { shift: true }, () => this.commandPaletteOpen.set(true));
+    this.register('?', { shift: true }, () => this.shortcutSheetOpen.set(true));
   }
 
   ngOnDestroy(): void {

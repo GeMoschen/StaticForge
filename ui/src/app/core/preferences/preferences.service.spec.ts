@@ -47,11 +47,22 @@ describe('PreferencesService', () => {
     localStorage.clear();
   });
 
+  it('keeps recent projects newest first, without duplicates, capped', () => {
+    const { prefs } = setup();
+    for (const key of ['a', 'b', 'c', 'd', 'e', 'f']) {
+      prefs.addRecentProject(key);
+    }
+    prefs.addRecentProject('d');
+    expect(prefs.recentProjects()).toEqual(['d', 'f', 'e', 'c', 'b']);
+  });
+
   it('serves the defaults before anything is loaded', () => {
     const { prefs } = setup();
     expect(prefs.theme()).toBe('system');
     expect(prefs.density()).toBe('compact');
-    expect(prefs.developerMode()).toBe(false);
+    expect(prefs.developerMode()).toBeUndefined();
+    expect(prefs.favoriteProjects()).toEqual([]);
+    expect(prefs.recentProjects()).toEqual([]);
     expect(prefs.railCollapsed()).toBe(false);
     expect(prefs.previewView()).toBe('draft');
     expect(prefs.issueScopes()).toEqual([]);

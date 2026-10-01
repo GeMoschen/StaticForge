@@ -50,6 +50,10 @@ export interface PreferencesDocument {
   density?: DensityPreference;
   developerMode?: boolean;
   railCollapsed?: boolean;
+  /** Project keys the user starred in the project switcher. */
+  favoriteProjects?: string[];
+  /** Project keys opened last, newest first. */
+  recentProjects?: string[];
   /** Pane sizes (px or ratio, as the pane defines) by pane id. */
   paneSizes?: Record<string, number>;
   previewView?: PreviewViewPreference;
@@ -63,6 +67,7 @@ export const DEFAULT_THEME: ThemePreference = 'system';
 export const DEFAULT_DENSITY: DensityPreference = 'compact';
 export const DEFAULT_PREVIEW_VIEW: PreviewViewPreference = 'draft';
 export const RECENTS_CAP = 20;
+export const RECENT_PROJECTS_CAP = 5;
 export const PREFERENCES_SCHEMA_VERSION = 1;
 
 /** A JSON merge patch (RFC 7386): `null` deletes a key, objects merge recursively, anything else replaces. */

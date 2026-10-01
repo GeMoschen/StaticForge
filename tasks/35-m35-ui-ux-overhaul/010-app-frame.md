@@ -1,6 +1,6 @@
 ---
 id: M35.10
-status: todo
+status: done
 depends: [M35.2, M35.4, M35.9]
 epic: m35-ui-ux-overhaul
 feature: frame
@@ -52,12 +52,12 @@ area: frontend
 
 ## Acceptance criteria
 
-- [ ] Every screen reachable before is reachable from the frame. From inside a project you can reach the project list
+- [x] Every screen reachable before is reachable from the frame. From inside a project you can reach the project list
       and switch project.
-- [ ] Editor view (developer mode off, or an `EDITOR` account) shows no developer item or identifier in the frame.
-- [ ] Vitest: breadcrumb building, switcher, visibility matrix per role, titles.
-- [ ] Screenshots of the frame in each state reviewed (see README definition of done).
-- [ ] `npx vitest run` and `npx ng build` green.
+- [x] Editor view (developer mode off, or an `EDITOR` account) shows no developer item or identifier in the frame.
+- [x] Vitest: breadcrumb building, switcher, visibility matrix per role, titles.
+- [x] Screenshots of the frame in each state reviewed (see README definition of done).
+- [x] `npx vitest run` and `npx ng build` green (229 files, 1,930 tests; build and lint green).
 
 ## Out of scope
 
@@ -67,3 +67,42 @@ area: frontend
 ## Notes / hazards
 
 - Once the new frame exists, journeys will break. That is expected until M35.31; don't fix them here.
+
+## Review (2026-10-01)
+
+- **Frame:** `AppFrameComponent` is the parent route of dashboard, account, admin and project (auth guards moved onto it;
+  login, set-password and the style guide stay outside). Header (top bar) / banner region / `nav` rail / `main#sf-main-content`;
+  skip link targets `main`. The rail is left out on the project list and the account page.
+- **Top bar** follows the signed-off sample: mark, project switcher (search, favorites, recents, all projects, "All
+  projects" → `/`), breadcrumb (collapses the middle into "…"), search (opens the palette), editing language (codes, only
+  with more than one language), build status (spinner while running, recent builds popover) + *Build now* (by
+  `canIncrementalBuild`, disabled with a reason while a build runs), History, appearance (theme, density, developer mode —
+  only with developer rights), `?` sheet, user menu. Old `sf-nav-rail` and `sf-user-menu` are deleted.
+- **Rail:** `railGroups()` (pure) — Home, Content, Publish (Changes badge), Develop (developer mode only), Settings in the
+  footer; administration shows Users / Projects / Jobs / Audit. Collapsed state is the `railCollapsed` preference
+  (52 / 232 px tokens), tooltips and accessible names when collapsed.
+- **Developer mode:** `DeveloperModeService` (available = developer/admin of the *open project*, or anywhere outside one;
+  on until switched off, so `PreferencesService.developerMode()` is now `boolean | undefined`) and `*sfDevOnly`.
+- **Titles:** `AppTitleStrategy` collects route titles, `DocumentTitleService` composes "Item · Section · Project —
+  StaticForge". `useFrameItem()` lets a screen report its open item; the page editor does (name only).
+- **Preferences:** new `favoriteProjects` and `recentProjects` (cap 5). The legacy `sf-nav-rail-expanded` key has no
+  reader any more; `MIGRATION_REMOVES_LOCAL_KEYS` stays `false` (the page editor split, record grid, issues and preview
+  still read `localStorage`).
+- **Bugs the specs caught:** the title strategy and the frame context formed a DI cycle through the router (the strategy
+  now looks the store up on use); the build-status refresh coalescing wrote a stale answer over the follow-up read.
+- **Checked in a browser** (headless Chrome against a seeded dev backend; light/dark, compact/comfortable, rail
+  collapsed, developer mode off, 1440 and 1024; instance admin and an editor account): titles, breadcrumb, switcher,
+  appearance and user menus, `?` sheet, admin and account inside the frame, no console errors, no page-level horizontal
+  scroll at 1024.
+- **Left for later tasks (by design):**
+  - *Home* links to the project root, which still redirects to Pages (the project home is M35.28).
+  - *Publishing* opens Settings → Generation (M35.11); *History* opens Settings → Revisions (M35.12). The revision spine
+    stays beside the screen until M35.12 removes it.
+  - The breadcrumb for items shows area › item; folder segments need folder URLs (M35.18, and the other screens report
+    their items as they migrate). Only the page editor reports an item so far.
+  - The `?` sheet lists the two shortcuts that exist; M35.14 fills it from a registry.
+  - Hiding controls inside screens by permission (instead of disabling them) belongs to the screen tasks.
+  - At 1024 px the page editor's preview is still clipped (screen layout, M35.18 / M35.27).
+  - Dashboard and account keep their own content layout (M35.16, M35.28); the account page lost its back link and user
+    menu, admin lost its tabs and centering.
+  - Drawers still cover the top bar (open question from M35.9, decide before M35.19).

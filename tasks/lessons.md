@@ -181,3 +181,11 @@
 - **Rule:** fix it at the source — absolutely positioned helpers that must not affect layout get explicit offsets
   (`top: 0; left: 0`). When a scroll bug shows up, list every element with `scrollTop > 0` and every scroll
   container's overflow before patching one container.
+
+## Never end a command with an exploratory `git stash` (2026-10-01)
+- **Mistake (M35.10):** I appended `git stash -q 2>/dev/null; echo skip` to a lint command while "checking something". It
+  stashed every tracked edit of the working tree (untracked files stayed), so the tree silently reverted to HEAD. I
+  popped it at once and lost nothing, but a failed pop would have cost the session's work.
+- **Rule:** no `git stash`, `checkout --`, `reset` or `clean` unless the step is the point of the command and the tree
+  state is known. Compare with the old code through `git show HEAD:path` or a worktree. Keep lint/build commands free of
+  trailing "just in case" commands.

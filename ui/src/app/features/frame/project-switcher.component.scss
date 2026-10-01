@@ -1,0 +1,106 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.switcher__trigger {
+  max-width: 16rem;
+}
+
+.switcher__current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--sf-weight-semibold);
+}
+
+// The panel renders in <body>, so it uses the normal surface tokens.
+.switcher {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  width: 20rem;
+  max-height: min(28rem, 70vh);
+}
+
+.switcher__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.switcher__heading {
+  margin: 0;
+  padding: 0 var(--sf-space-2);
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.switcher__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.switcher__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  border-radius: var(--sf-radius-md);
+
+  &:hover {
+    background: var(--sf-hover);
+  }
+}
+
+.switcher__link {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+  min-height: var(--sf-control-height);
+  padding: 0 var(--sf-space-2);
+  border-radius: var(--sf-radius-md);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  text-decoration: none;
+
+  &[aria-current='true'] {
+    font-weight: var(--sf-weight-semibold);
+    color: var(--sf-accent);
+  }
+}
+
+.switcher__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcher__meta {
+  flex-shrink: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+}
+
+.switcher__note {
+  margin: 0;
+  padding: var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  list-style: none;
+}
+
+.switcher__footer {
+  display: flex;
+  padding-top: var(--sf-space-2);
+  border-top: 1px solid var(--sf-border);
+}

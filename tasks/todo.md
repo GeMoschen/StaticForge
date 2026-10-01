@@ -65,7 +65,21 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
   - Review: signed off 2026-10-01 (gallery v4, 198 shots / 45 screens); 218 test files / 1,863 tests, build + lint
     green; design-system review found 12 defects, all fixed with specs. Open: palette pick (before M35.21), drawers
     over the top bar (before M35.19) — see 009 notes.
-- [ ] M35.10 app frame: top bar, rail, developer mode, titles
+- [x] M35.10 app frame: top bar, rail, developer mode, titles
+  - [x] Core (pure, specced): frame location from URL, breadcrumb builder (collapse middle), rail visibility matrix,
+        document title composer + `TitleStrategy`, `DeveloperModeService` + `*sfDevOnly`, `FrameContextStore` (item trail)
+  - [x] Preferences: `developerMode` unset = on for developers; `favoriteProjects`, `recentProjects`; rail state from
+        preferences (not `localStorage`)
+  - [x] Frame components (`features/frame`): app frame (header / nav / banner region / main), top bar (mark, project
+        switcher, breadcrumb, search, editing language, build status + Build now, History, appearance, `?`, user menu),
+        rail (Home, Content, Publish, Develop, Settings; admin sections), shortcut sheet (minimal, M35.14 extends)
+  - [x] Routes: one frame parent for dashboard / account / admin / project; every route gets a `title`; project shell
+        reduced to project effects; admin + account lose their own bar, tabs and centering; old rail / user menu removed
+  - [x] i18n `frame.*`, specs (breadcrumb, switcher, visibility matrix per role, titles), vitest + ng build + lint,
+        manual check in Chrome with screenshots (light/dark, compact/comfortable, rail collapsed, editor view)
+  - Review: 229 test files / 1,930 tests, build + lint green; checked in headless Chrome against a seeded backend
+    (admin + editor, light/dark, compact/comfortable, collapsed rail, dev mode off, 1440/1024). Open items for later
+    tasks are listed in the 010 task file.
 - [ ] M35.11 IA: Publishing area, Settings side menu + split
 - [ ] M35.12 history drawer, full history, time-travel banner (spine removed)
 - [ ] M35.13 save UX, unsaved guards, confirm + undo

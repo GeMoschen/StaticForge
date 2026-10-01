@@ -1,0 +1,113 @@
+<header class="topbar sf-chrome">
+  <sf-button class="topbar__home" variant="ghost" link="/" [aria-label]="'frame.topbar.home' | transloco">
+    <sf-logo class="topbar__logo" />
+  </sf-button>
+
+  <sf-project-switcher class="topbar__project" />
+
+  <sf-frame-breadcrumb class="topbar__crumbs" [crumbs]="crumbs()" />
+
+  <sf-button
+    class="topbar__search"
+    variant="secondary"
+    icon="search"
+    aria-keyshortcuts="Control+K"
+    [aria-label]="'frame.topbar.search' | transloco"
+    (click)="openSearch()"
+  >
+    <span class="topbar__search-text">{{ 'frame.topbar.search' | transloco }}</span>
+    <sf-kbd class="topbar__search-kbd" keys="Mod+K" />
+  </sf-button>
+
+  @if (inProject()) {
+    <div class="topbar__group">
+      @if (languageOptions(); as options) {
+        <sf-select
+          class="topbar__lang"
+          [options]="options"
+          [value]="editingLocale.locale()"
+          [aria-label]="'frame.topbar.language' | transloco"
+          (valueChange)="switchLocale($event)"
+        />
+      }
+      <sf-build-status />
+    </div>
+  }
+
+  <div class="topbar__group topbar__group--icons">
+    @if (inProject()) {
+      <sf-button variant="ghost" icon="history" [link]="historyLink()" [label]="'frame.topbar.history' | transloco" />
+    }
+    <sf-button
+      variant="ghost"
+      icon="contrast"
+      [label]="'frame.topbar.appearance' | transloco"
+      [sfPopoverTrigger]="appearance"
+    />
+    <sf-popover #appearance [label]="'frame.topbar.appearance' | transloco" align="end">
+      <div class="appearance">
+        <sf-field [label]="'frame.topbar.theme' | transloco">
+          <sf-segmented
+            size="sm"
+            [options]="themeOptions()"
+            [value]="theme.preference()"
+            (valueChange)="$event && theme.set($event)"
+          />
+        </sf-field>
+        <sf-field [label]="'frame.topbar.density' | transloco">
+          <sf-segmented
+            size="sm"
+            [options]="densityOptions()"
+            [value]="density.density()"
+            (valueChange)="$event && density.set($event)"
+          />
+        </sf-field>
+        @if (developerMode.available()) {
+          <sf-field [hint]="'frame.topbar.developerModeHint' | transloco">
+            <sf-switch [value]="developerMode.enabled()" (valueChange)="developerMode.set($event)">{{
+              'frame.topbar.developerMode' | transloco
+            }}</sf-switch>
+          </sf-field>
+        }
+      </div>
+    </sf-popover>
+    <sf-button
+      variant="ghost"
+      icon="keyboard"
+      aria-keyshortcuts="Shift+?"
+      [label]="'frame.topbar.shortcuts' | transloco"
+      (click)="openShortcuts()"
+    />
+    <sf-button
+      class="topbar__user"
+      variant="ghost"
+      [aria-label]="'frame.topbar.userMenu' | transloco: { name: name() }"
+      [tooltip]="name()"
+      [sfPopoverTrigger]="userMenu"
+    >
+      <sf-avatar size="sm" decorative [name]="name()" />
+    </sf-button>
+    <sf-popover #userMenu [label]="'frame.topbar.userMenu' | transloco: { name: name() }" align="end">
+      <div class="user">
+        <div class="user__card">
+          <sf-avatar size="lg" decorative [name]="name()" />
+          <span class="user__name">{{ name() }}</span>
+          <span class="user__email">&#64;{{ username() }}</span>
+        </div>
+        <div class="user__actions">
+          <sf-button variant="secondary" size="sm" icon="person" link="/account">{{
+            'frame.topbar.account' | transloco
+          }}</sf-button>
+          @if (isInstanceAdmin()) {
+            <sf-button variant="secondary" size="sm" icon="admin_panel_settings" link="/admin">{{
+              'frame.topbar.administration' | transloco
+            }}</sf-button>
+          }
+        </div>
+        <sf-button class="user__signout" variant="ghost" icon="logout" (click)="signOut()">{{
+          'frame.topbar.signOut' | transloco
+        }}</sf-button>
+      </div>
+    </sf-popover>
+  </div>
+</header>

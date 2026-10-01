@@ -2,7 +2,7 @@ import {
   ApplicationConfig,
   provideExperimentalZonelessChangeDetection,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
+import { TitleStrategy, provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { routes } from './app.routes';
 import { jwtInterceptor } from './core/auth/jwt.interceptor';
@@ -12,6 +12,7 @@ import { compactedReadInterceptor } from './core/api/compacted-read.interceptor'
 import { errorInterceptor } from './core/api/error.interceptor';
 import { etagInterceptor } from './core/api/etag.interceptor';
 import { readonlyInterceptor } from './core/api/readonly.interceptor';
+import { AppTitleStrategy } from './core/frame/app-title.strategy';
 import { provideI18n } from './core/i18n/i18n.providers';
 import { provideAppearance } from './core/ui/appearance.providers';
 import { providePreferencesSync } from './core/preferences/preferences-sync';
@@ -22,6 +23,7 @@ export const appConfig: ApplicationConfig = {
     providePreferencesSync(),
     provideAppearance(),
     provideI18n(),
+    { provide: TitleStrategy, useExisting: AppTitleStrategy },
     provideRouter(routes, withComponentInputBinding(), withRouterConfig({ paramsInheritanceStrategy: 'always' })),
     provideHttpClient(
       withInterceptors([

@@ -1,0 +1,137 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+// The dark bar. The design-system components read the semantic tokens, so the bar re-points those at the chrome
+// tokens: buttons, the select, key caps and the breadcrumb come out light-on-dark with a visible focus ring.
+.topbar {
+  --sf-text: var(--sf-chrome-text);
+  --sf-text-muted: var(--sf-chrome-text-muted);
+  --sf-text-subtle: var(--sf-chrome-text-muted);
+  --sf-hover: var(--sf-chrome-hover);
+  --sf-bg: var(--sf-chrome-hover);
+  --sf-surface: var(--sf-chrome-hover);
+  --sf-surface-sunken: var(--sf-chrome-bg);
+  --sf-border: var(--sf-chrome-border);
+  --sf-border-strong: var(--sf-chrome-border);
+  --sf-focus-ring: var(--sf-chrome-accent);
+
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  height: var(--sf-topbar-height);
+  padding: 0 var(--sf-space-3) 0 var(--sf-space-2);
+  overflow: hidden;
+  background: var(--sf-chrome-bg);
+  color: var(--sf-chrome-text);
+  border-bottom: 1px solid var(--sf-chrome-border);
+  color-scheme: dark;
+}
+
+.topbar__home {
+  flex-shrink: 0;
+}
+
+.topbar__logo {
+  color: var(--sf-chrome-text);
+}
+
+.topbar__project {
+  flex-shrink: 0;
+}
+
+.topbar__crumbs {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: var(--sf-space-2);
+  border-left: 1px solid var(--sf-chrome-border);
+}
+
+.topbar__search {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.topbar__search-text {
+  min-width: 10rem;
+  color: var(--sf-chrome-text-muted);
+  font-weight: var(--sf-weight-regular);
+  text-align: start;
+}
+
+.topbar__group {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--sf-space-1);
+}
+
+.topbar__group--icons {
+  gap: 0;
+}
+
+.topbar__lang {
+  width: 4.75rem;
+}
+
+// Below the large breakpoint the search keeps its icon only (its name stays on the button).
+@media (max-width: 1279px) {
+  .topbar__search-text,
+  .topbar__search-kbd {
+    display: none;
+  }
+}
+
+// ── Popovers (rendered in <body>, so they use the normal surface tokens) ────────────────────────────────────────
+.appearance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  width: 18rem;
+}
+
+.user {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  width: 16rem;
+}
+
+.user__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sf-space-1);
+  padding-top: var(--sf-space-2);
+  text-align: center;
+}
+
+.user__name {
+  margin-top: var(--sf-space-1);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.user__email {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  text-overflow: ellipsis;
+}
+
+.user__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--sf-space-2);
+}
+
+.user__signout {
+  display: flex;
+  padding-top: var(--sf-space-2);
+  border-top: 1px solid var(--sf-border);
+}

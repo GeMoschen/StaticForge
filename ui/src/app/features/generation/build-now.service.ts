@@ -1,8 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
+import { Subject } from 'rxjs';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { GenerationService } from './generation.service';
+import type { GenerationRunView } from './generation.store';
 
 /**
  * "Build now" after a release (M28.3.3, epic decision 14). A release only changes what the next build renders; this
@@ -15,6 +17,9 @@ export class BuildNowService {
   private readonly permissions = inject(ProjectPermissionsStore);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+
+  /** Emits each run this service started, so the top bar's build status can show it at once. */
+  readonly started = new Subject<GenerationRunView>();
 
   /** Shows `message` as a success toast, with "Build now" when the caller may start an incremental build. */
   announceRelease(projectKey: string, message: string): void {
@@ -29,13 +34,15 @@ export class BuildNowService {
   }
 
   /** Starts the incremental build to the default target and offers its progress. */
-  start(projectKey: string): void {
-    this.generation.start(projectKey, { mode: 'INCREMENTAL', comment: 'Build after release' }).subscribe({
-      next: (run) =>
+  start(projectKey: string, comment = 'Build after release'): void {
+    this.generation.start(projectKey, { mode: 'INCREMENTAL', comment }).subscribe({
+      next: (run) => {
+        this.started.next(run);
         this.toasts.show(`Build #${run.id} started.`, 'success', {
           label: 'Show progress',
           run: () => void this.router.navigate(['/p', projectKey, 'settings', 'generation'], { queryParams: { run: run.id } }),
-        }),
+        });
+      },
       error: () => {
         /* the error interceptor toasts why: a build already running (409) or a permission lost meanwhile (403) */
       },

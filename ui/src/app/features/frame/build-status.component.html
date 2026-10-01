@@ -1,0 +1,55 @@
+<sf-button
+  class="build__status"
+  variant="ghost"
+  size="sm"
+  [sfPopoverTrigger]="recent"
+>
+  @if (running()) {
+    <sf-spinner size="sm" inline />
+  } @else {
+    <sf-icon [class]="'build__icon build__icon--' + status.state()" [name]="icon()" />
+  }
+  <span class="build__text">
+    {{ 'frame.build.' + status.state() | transloco }}
+    @if (when() && !running() && status.state() !== 'none') {
+      <sf-relative-time [value]="when()" />
+    }
+  </span>
+</sf-button>
+
+<sf-popover #recent [label]="'frame.build.recent' | transloco" align="end">
+  <div class="runs">
+    <h2 class="runs__heading">{{ 'frame.build.recent' | transloco }}</h2>
+    @if (status.runs().length === 0) {
+      <p class="runs__empty">{{ 'frame.build.none' | transloco }}</p>
+    } @else {
+      <ul class="runs__list">
+        @for (run of status.runs(); track run.id) {
+          <li class="runs__item">
+            <sf-status size="sm" [tone]="toneOf(stateOfRun(run))" [label]="'frame.build.' + stateOfRun(run) | transloco" />
+            <span class="runs__meta">
+              {{ 'frame.build.files' | transloco: { count: run.filesWritten ?? 0 } }} ·
+              <sf-relative-time [value]="run.finishedAt ?? run.startedAt" />
+            </span>
+          </li>
+        }
+      </ul>
+    }
+    <sf-button class="runs__all" variant="ghost" size="sm" [link]="generationLink()">
+      {{ 'frame.build.allRuns' | transloco }}
+    </sf-button>
+  </div>
+</sf-popover>
+
+@if (permissions.canIncrementalBuild()) {
+  <sf-button
+    variant="secondary"
+    size="sm"
+    icon="rocket_launch"
+    [disabled]="running()"
+    [disabledReason]="running() ? ('frame.build.runningReason' | transloco) : null"
+    (click)="buildNow()"
+  >
+    {{ 'frame.build.now' | transloco }}
+  </sf-button>
+}

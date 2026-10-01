@@ -8,8 +8,6 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ALL_PUBLISH_PERMISSIONS, projectDetail } from '../../core/project/testing/project-detail.fixture';
-import { NavRailComponent } from '../dashboard/nav-rail.component';
-import { ReleaseEventsStore } from '../release/release-events.store';
 import { ChangesComponent } from './changes.component';
 import { paramsFromState, pendingCount, queryFromState, stateFromParams } from './changes-query.util';
 
@@ -167,29 +165,5 @@ describe('ChangesComponent', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.changes__diff')?.textContent).toContain('Open in editor');
     expect(fixture.nativeElement.querySelector('.changes__diff')?.textContent).toContain('New');
-  });
-});
-
-describe('NavRailComponent changes count', () => {
-  it('re-reads the count after a release action', () => {
-    TestBed.configureTestingModule({
-      imports: [NavRailComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
-    });
-    const http = TestBed.inject(HttpTestingController);
-    TestBed.inject(ProjectContextStore).activeProjectKey.set('proj');
-    const fixture = TestBed.createComponent(NavRailComponent);
-    fixture.detectChanges();
-    http.expectOne(`${BASE}/changes/count`).flush({ NEW: 1, CHANGED: 2, total: 3 });
-    fixture.detectChanges();
-    const link = () => fixture.nativeElement.querySelector('a[href="/p/proj/changes"]') as HTMLElement;
-    expect(link().getAttribute('aria-label')).toBe('Changes, 3 unreleased changes');
-
-    TestBed.inject(ReleaseEventsStore).changed();
-    fixture.detectChanges();
-    http.expectOne(`${BASE}/changes/count`).flush({ NEW: 1, total: 1 });
-    fixture.detectChanges();
-    expect(link().getAttribute('aria-label')).toBe('Changes, 1 unreleased change');
-    http.verify();
   });
 });

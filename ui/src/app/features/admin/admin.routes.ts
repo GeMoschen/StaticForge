@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { routeTitle } from '../../core/frame/route-title';
 import { AdminAuditComponent } from './admin-audit.component';
 import { AdminJobDetailComponent } from './admin-job-detail.component';
 import { AdminJobsComponent } from './admin-jobs.component';
@@ -14,12 +15,12 @@ export const ADMIN_ROUTES: Routes = [
     component: AdminShellComponent,
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'users' },
-      { path: 'users', component: AdminUsersComponent },
-      { path: 'users/:id', component: AdminUserDetailComponent },
-      { path: 'projects', component: AdminProjectsComponent },
-      { path: 'jobs', component: AdminJobsComponent },
-      { path: 'jobs/:key', component: AdminJobDetailComponent },
-      { path: 'audit', component: AdminAuditComponent },
+      { path: 'users', component: AdminUsersComponent, title: routeTitle('frame.sub.admin.users') },
+      { path: 'users/:id', component: AdminUserDetailComponent, title: routeTitle('frame.sub.admin.users') },
+      { path: 'projects', component: AdminProjectsComponent, title: routeTitle('frame.sub.admin.projects') },
+      { path: 'jobs', component: AdminJobsComponent, title: routeTitle('frame.sub.admin.jobs') },
+      { path: 'jobs/:key', component: AdminJobDetailComponent, title: routeTitle('frame.sub.admin.jobs') },
+      { path: 'audit', component: AdminAuditComponent, title: routeTitle('frame.sub.admin.audit') },
     ],
   },
 ];

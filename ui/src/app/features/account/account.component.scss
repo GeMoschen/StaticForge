@@ -6,29 +6,7 @@
 
 .account {
   max-width: 44rem;
-  margin: 0 auto;
-  padding: var(--sf-5) var(--sf-6) var(--sf-7);
-}
-
-.account__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sf-3);
-  margin-bottom: var(--sf-4);
-}
-
-.account__back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sf-1);
-  color: var(--sf-slate);
-  font-size: var(--sf-text-sm);
-  text-decoration: none;
-
-  &:hover {
-    color: var(--sf-ink);
-  }
+  padding: var(--sf-5) var(--sf-6) var(--sf-8);
 }
 
 .account__title {

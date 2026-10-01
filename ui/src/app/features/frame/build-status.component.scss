@@ -1,0 +1,84 @@
+:host {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--sf-space-1);
+}
+
+.build__icon {
+  font-size: var(--sf-fs-16);
+}
+
+.build__icon--success {
+  color: var(--sf-success);
+}
+
+.build__icon--partial {
+  color: var(--sf-warning);
+}
+
+// Red is for a failure; the dark bar needs the lighter danger tone to stay readable.
+.build__icon--failed {
+  color: var(--sf-danger);
+}
+
+.build__text {
+  color: var(--sf-chrome-text-muted);
+  font-weight: var(--sf-weight-regular);
+  white-space: nowrap;
+}
+
+// Below the large breakpoint the status keeps its icon only (the full state stays in the popover).
+@media (max-width: 1279px) {
+  .build__text {
+    display: none;
+  }
+}
+
+// The popover renders in <body>, so it uses the normal surface tokens.
+.runs {
+  width: 22rem;
+}
+
+.runs__heading {
+  margin: 0 0 var(--sf-space-2);
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.runs__empty {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+}
+
+.runs__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.runs__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2) 0;
+  border-top: 1px solid var(--sf-border);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.runs__meta {
+  flex: 1 1 auto;
+  color: var(--sf-text-muted);
+}
+
+.runs__all {
+  display: flex;
+  padding-top: var(--sf-space-2);
+  border-top: 1px solid var(--sf-border);
+}

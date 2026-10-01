@@ -1,19 +1,22 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, untracked } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
-import { ArchivedBannerComponent } from './archived-banner.component';
-import { NavRailComponent } from './nav-rail.component';
 import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { RevisionSpineComponent } from '../revisions/revision-spine.component';
-import { TimeTravelBannerComponent } from '../revisions/time-travel-banner.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ReleaseEventsStore } from '../release/release-events.store';
 
+/**
+ * The open project inside the app frame (M35.10): loads what every content screen reads synchronously (the project's
+ * languages and the language last edited), refreshes the folder trees after release actions, ends time travel when the
+ * user leaves, and hosts the revision spine (until M35.12 replaces it with the history drawer) beside the screen. The
+ * top bar, rail and banners are the frame's.
+ */
 @Component({
   selector: 'sf-project-shell',
   standalone: true,
-  imports: [RouterOutlet, NavRailComponent, RevisionSpineComponent, ArchivedBannerComponent, TimeTravelBannerComponent],
+  imports: [RouterOutlet, RevisionSpineComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-shell.component.html',
   styleUrl: './project-shell.component.scss',
@@ -23,8 +26,8 @@ export class ProjectShellComponent {
   protected readonly store = inject(ProjectContextStore);
   protected readonly timeTravel = inject(TimeTravelStore);
 
-  protected readonly locales = inject(LocalesStore);
-  protected readonly editingLocale = inject(EditingLocaleStore);
+  private readonly locales = inject(LocalesStore);
+  private readonly editingLocale = inject(EditingLocaleStore);
 
   protected readonly projectKey = this.store.activeProjectKey;
   private readonly releaseEvents = inject(ReleaseEventsStore);
@@ -66,14 +69,6 @@ export class ProjectShellComponent {
     );
   }
 
-  /** Switches the language every content editor, the preview and the search palette work in. */
-  protected switchLocale(locale: string): void {
-    const key = this.projectKey();
-    if (key) {
-      this.editingLocale.set(key, locale);
-    }
-  }
-
   protected onTick(revision: number): void {
     const key = this.store.activeProjectKey();
     if (!key) {
@@ -81,11 +76,5 @@ export class ProjectShellComponent {
     }
     this.timeTravel.enter(revision);
     this.router.navigate(['/p', key, 'settings', 'revisions', revision]);
-  }
-
-  protected backToNow(): void {
-    const key = this.store.activeProjectKey();
-    this.timeTravel.exit();
-    this.router.navigate(['/p', key ?? '']);
   }
 }

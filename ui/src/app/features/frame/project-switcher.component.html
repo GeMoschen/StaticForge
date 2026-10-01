@@ -1,0 +1,67 @@
+<sf-button
+  class="switcher__trigger"
+  variant="ghost"
+  iconTrailing="expand_more"
+  [tooltip]="'frame.switcher.label' | transloco"
+  [sfPopoverTrigger]="switcher"
+>
+  <span class="switcher__current">{{ currentName() ?? ('frame.section.dashboard' | transloco) }}</span>
+</sf-button>
+
+<sf-popover #switcher [label]="'frame.switcher.label' | transloco" align="start">
+  <div class="switcher" (keydown)="onKeydown($event)">
+    <sf-search-input
+      [placeholder]="'frame.switcher.search' | transloco"
+      [aria-label]="'frame.switcher.searchLabel' | transloco"
+      [(value)]="query"
+    />
+
+    @if (loading() && projects().length === 0) {
+      <sf-spinner size="sm" [label]="'common.loading' | transloco" />
+    } @else if (failed()) {
+      <p class="switcher__note" role="alert">{{ 'frame.switcher.loadFailed' | transloco }}</p>
+    } @else {
+      @for (group of groups(); track group.id) {
+        <section class="switcher__group" [attr.aria-labelledby]="'switcher-' + group.id">
+          <h2 class="switcher__heading" [class.sf-sr-only]="group.id === 'results'" [id]="'switcher-' + group.id">
+            {{ (group.id === 'results' ? 'common.search' : 'frame.switcher.' + group.id) | transloco }}
+          </h2>
+          <ul class="switcher__list">
+            @for (project of group.projects; track project.key) {
+              <li class="switcher__row">
+                <a
+                  class="switcher__link"
+                  [routerLink]="['/p', project.key, 'pages']"
+                  [attr.aria-current]="project.key === current() ? 'true' : null"
+                >
+                  <span class="switcher__name">{{ nameOf(project) }}</span>
+                  @if (project.archived) {
+                    <span class="switcher__meta">{{ 'frame.switcher.archived' | transloco }}</span>
+                  }
+                </a>
+                <sf-button
+                  class="switcher__star"
+                  variant="ghost"
+                  size="sm"
+                  [icon]="isFavorite(project.key) ? 'star' : 'star_border'"
+                  [aria-pressed]="isFavorite(project.key)"
+                  [label]="
+                    (isFavorite(project.key) ? 'frame.switcher.removeFavorite' : 'frame.switcher.addFavorite')
+                      | transloco: { name: nameOf(project) }
+                  "
+                  (click)="toggleFavorite(project.key)"
+                />
+              </li>
+            } @empty {
+              <li class="switcher__note">{{ 'frame.switcher.noMatches' | transloco: { query: query() } }}</li>
+            }
+          </ul>
+        </section>
+      }
+    }
+
+    <div class="switcher__footer">
+      <sf-button variant="ghost" size="sm" icon="apps" link="/">{{ 'frame.switcher.allProjects' | transloco }}</sf-button>
+    </div>
+  </div>
+</sf-popover>

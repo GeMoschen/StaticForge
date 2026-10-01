@@ -19,9 +19,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
-import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { OwnPasswordFormComponent } from './own-password-form.component';
-import { UserMenuComponent } from './user-menu.component';
 
 type UpdateMeRequest = components['schemas']['UpdateMeRequest'];
 
@@ -41,9 +39,7 @@ const PROFILE_FIELDS: readonly string[] = ['displayName', 'username', 'email', '
     RouterLink,
     SfButtonComponent,
     SfFieldComponent,
-    SfIconComponent,
     OwnPasswordFormComponent,
-    UserMenuComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './account.component.html',

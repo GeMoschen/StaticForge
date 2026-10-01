@@ -1,18 +1,12 @@
+// Fills the frame's main region: the revision spine on the left, the screen beside it.
 :host {
-  display: block;
-  height: 100%;
-}
-
-.shell {
   display: flex;
-  height: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 .shell__spine {
-  flex-shrink: 0;
-}
-
-.shell__rail {
   flex-shrink: 0;
 }
 
@@ -22,36 +16,4 @@
   display: flex;
   flex-direction: column;
   overflow: auto;
-}
-
-.shell__content--time-travel {
-  outline: 2px solid var(--sf-amber);
-  outline-offset: -2px;
-}
-
-/* The editing-language switcher (M24.4.1); absent in a project without languages. */
-.shell__languages {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-2);
-  padding: var(--sf-2) var(--sf-4);
-  border-bottom: 1px solid var(--sf-line);
-  background: var(--sf-surface);
-}
-
-.shell__languages-label {
-  font-size: var(--sf-text-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--sf-slate);
-}
-
-.shell__languages-select {
-  font: inherit;
-  font-size: var(--sf-text-sm);
-  padding: 0.15em 0.4em;
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius);
-  background: var(--sf-surface);
-  color: var(--sf-ink);
 }

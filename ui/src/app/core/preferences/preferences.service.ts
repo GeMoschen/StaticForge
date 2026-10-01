@@ -18,6 +18,7 @@ import {
   PreferencesDocument,
   PreviewViewPreference,
   RECENTS_CAP,
+  RECENT_PROJECTS_CAP,
   RecentEntry,
   TableColumnsPreference,
   ThemePreference,
@@ -84,11 +85,14 @@ export class PreferencesService {
   // Typed instance-wide accessors.
   readonly theme = computed<ThemePreference>(() => this.document().theme ?? DEFAULT_THEME);
   readonly density = computed<DensityPreference>(() => this.document().density ?? DEFAULT_DENSITY);
-  readonly developerMode = computed(() => this.document().developerMode ?? false);
+  /** The stored developer-mode choice; `undefined` until the user makes one (the frame then defaults it on for developers). */
+  readonly developerMode = computed<boolean | undefined>(() => this.document().developerMode);
   readonly railCollapsed = computed(() => this.document().railCollapsed ?? false);
   readonly paneSizes = computed<Record<string, number>>(() => this.document().paneSizes ?? {});
   readonly previewView = computed<PreviewViewPreference>(() => this.document().previewView ?? DEFAULT_PREVIEW_VIEW);
   readonly issueScopes = computed<string[]>(() => this.document().issueScopes ?? []);
+  readonly favoriteProjects = computed<string[]>(() => this.document().favoriteProjects ?? []);
+  readonly recentProjects = computed<string[]>(() => this.document().recentProjects ?? []);
 
   setTheme(value: ThemePreference): void {
     this.set(['theme'], value);
@@ -101,6 +105,17 @@ export class PreferencesService {
   }
   setRailCollapsed(value: boolean): void {
     this.set(['railCollapsed'], value);
+  }
+  setFavoriteProjects(value: string[]): void {
+    this.set(['favoriteProjects'], value);
+  }
+  /** Puts a project first in the recently opened projects (dropping an earlier visit, capping the list). */
+  addRecentProject(projectKey: string): void {
+    const recent = this.recentProjects();
+    if (recent[0] === projectKey) {
+      return;
+    }
+    this.set(['recentProjects'], [projectKey, ...recent.filter((key) => key !== projectKey)].slice(0, RECENT_PROJECTS_CAP));
   }
   setPreviewView(value: PreviewViewPreference): void {
     this.set(['previewView'], value);

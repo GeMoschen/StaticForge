@@ -1,0 +1,46 @@
+// The frame fills the viewport: the top bar and the banners across, the rail and the main region below. Only the
+// regions scroll, never the frame.
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sf-bg);
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+}
+
+.frame__topbar {
+  flex-shrink: 0;
+}
+
+.frame__banners {
+  flex-shrink: 0;
+}
+
+.frame__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.frame__rail {
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.frame__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+
+// Time travel keeps a calm accent around the working area.
+.frame__main--time-travel {
+  outline: 2px solid var(--sf-warning);
+  outline-offset: -2px;
+}
